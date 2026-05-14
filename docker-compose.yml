@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mittshopflow_postgres
+    environment:
+      POSTGRES_USER: mittshop
+      POSTGRES_PASSWORD: mittshop
+      POSTGRES_DB: mittshopflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mittshopflow
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mittshop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mittshopflow_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - mittshopflow
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# NOTE: The backend service has been removed so you can use Supabase for DB/auth instead.
+# If you want to keep the backend locally for development, re-add the service block:
+#   backend:
+#     build:
+#       context: ./backend
+#       dockerfile: Dockerfile
+#     container_name: mittshopflow_backend
+#     env_file:
+#       - ./backend/.env.development
+#     ports:
+#       - "3000:3000"
+#       - "3001:3001"
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#       redis:
+#         condition: service_healthy
+#     volumes:
+#       - ./backend:/app
+#     networks:
+#       - mittshopflow
+#     command: npm run start:prod
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  mittshopflow:
+    driver: bridge
