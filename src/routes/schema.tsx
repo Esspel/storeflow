@@ -26,6 +26,8 @@ export const Route = createFileRoute("/schema")({
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type BreakWindow = { start: string; minutes: number };
+
 type XmlShift = {
   shiftName: string;
   startTime: string;
@@ -33,6 +35,8 @@ type XmlShift = {
   color: string;
   grossMinutes: number;
   netMinutes: number;
+  breakMinutes: number;
+  breakWindows: BreakWindow[];
   deviationCause: string;
   totalCost: number;
   isLended: boolean;
@@ -95,6 +99,8 @@ type ScheduleShift = {
   color: string;
   gross_minutes: number;
   net_minutes: number;
+  break_minutes: number;
+  break_windows: BreakWindow[];
   deviation_cause: string;
   is_absence_day: boolean;
   is_lended: boolean;
@@ -266,13 +272,31 @@ function parseXml(xmlText: string): ParsedSchedule | null {
         const sName = getText(sEl, "ShiftName");
         const xmlCol = getText(sEl, "Color") ? `#${getText(sEl, "Color")}` : "#4CAF50";
         const lendedRaw = getText(sEl, "ShiftLended") || sEl.getAttribute("ShiftLended") || "0";
+        const grossMinutes = parseInt(getText(sEl, "ShiftGrossTimeMinutes") || "0", 10);
+        // Extract total break duration
+        const breakMinutes = parseInt(getText(sEl, "ScheduleBreakTime") || "0", 10);
+        // net = gross - breaks (use XML value if provided, otherwise calculate)
+        const xmlNet = parseInt(getText(sEl, "ShiftNetTimeMinutes") || "0", 10);
+        const netMinutes = xmlNet > 0 ? xmlNet : Math.max(0, grossMinutes - breakMinutes);
+        // Extract individual break windows (ScheduleBreak1Start/Minutes, ScheduleBreak2Start/Minutes, ...)
+        const breakWindows: BreakWindow[] = [];
+        for (let bIdx = 1; bIdx <= 5; bIdx++) {
+          const bStartRaw = getText(sEl, `ScheduleBreak${bIdx}Start`) || getText(sEl, `ScheduleBreakXStart`);
+          const bMins = parseInt(getText(sEl, `ScheduleBreak${bIdx}Minutes`) || getText(sEl, `ScheduleBreakXMinutes`) || "0", 10);
+          if (bStartRaw && bMins > 0) {
+            breakWindows.push({ start: parseTime(bStartRaw), minutes: bMins });
+            break; // only use the first generic ScheduleBreakXStart/Minutes pair
+          }
+        }
         return {
           shiftName: sName,
           startTime: parseTime(getText(sEl, "ShiftStartTime")),
           stopTime: parseTime(getText(sEl, "ShiftStopTime")),
           color: shiftColor(sName, xmlCol),
-          grossMinutes: parseInt(getText(sEl, "ShiftGrossTimeMinutes") || "0", 10),
-          netMinutes: parseInt(getText(sEl, "ShiftNetTimeMinutes") || "0", 10),
+          grossMinutes,
+          netMinutes,
+          breakMinutes,
+          breakWindows,
           deviationCause: getText(sEl, "ShiftTimeDeviationCauseName"),
           totalCost: parseFloat((getText(sEl, "ShiftTotalCost") || "0").replace(",", ".")),
           isLended: lendedRaw === "1" || lendedRaw.toLowerCase() === "true",
@@ -720,8 +744,8 @@ function SchemaPage() {
         if (empErr || !empData) continue;
         const empId = (empData as ScheduleEmployee).id;
         const rows = emp.days.flatMap((day) => {
-          if (day.shifts.length > 0) return day.shifts.map((s) => ({ schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate, start_time: s.startTime || null, stop_time: s.stopTime || null, shift_name: s.shiftName, color: s.color, gross_minutes: s.grossMinutes, net_minutes: s.netMinutes, deviation_cause: s.deviationCause, is_absence_day: day.isAbsenceDay || day.isSemester, is_lended: s.isLended }));
-          if (day.isAbsenceDay || day.isSemester) return [{ schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate, start_time: null, stop_time: null, shift_name: day.isSemester ? "Semester" : "", color: day.isSemester ? "#fca5a5" : "#e0e0e0", gross_minutes: 0, net_minutes: 0, deviation_cause: day.isSemester ? "Semester" : "", is_absence_day: true, is_lended: false }];
+          if (day.shifts.length > 0) return day.shifts.map((s) => ({ schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate, start_time: s.startTime || null, stop_time: s.stopTime || null, shift_name: s.shiftName, color: s.color, gross_minutes: s.grossMinutes, net_minutes: s.netMinutes, break_minutes: s.breakMinutes, break_windows: s.breakWindows, deviation_cause: s.deviationCause, is_absence_day: day.isAbsenceDay || day.isSemester, is_lended: s.isLended }));
+          if (day.isAbsenceDay || day.isSemester) return [{ schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate, start_time: null, stop_time: null, shift_name: day.isSemester ? "Semester" : "", color: day.isSemester ? "#fca5a5" : "#e0e0e0", gross_minutes: 0, net_minutes: 0, break_minutes: 0, break_windows: [], deviation_cause: day.isSemester ? "Semester" : "", is_absence_day: true, is_lended: false }];
           return [];
         });
         if (rows.length > 0) await supabase.from("schedule_shifts").insert(rows);
@@ -760,7 +784,7 @@ function SchemaPage() {
       const absenceShift = dayShifts.find((s) => s.is_absence_day);
       const mapping = mappings.find((m) => m.employee_nr === emp.employee_nr);
       const appUser = mapping?.app_user_id ? appUsers.find((u) => u.id === mapping.app_user_id) : null;
-      const weekMinutes = allShifts.filter((s) => !s.is_absence_day).reduce((sum, s) => sum + (s.gross_minutes || 0), 0);
+      const weekMinutes = allShifts.filter((s) => !s.is_absence_day && s.start_time).reduce((sum, s) => sum + (s.net_minutes > 0 ? s.net_minutes : Math.max(0, s.gross_minutes - s.break_minutes)), 0);
       const initials = (appUser?.display_name ?? emp.employee_name).split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase();
       return { emp, dayShifts, workShifts, absenceShift, appUser, weekMinutes, initials };
     });
@@ -1051,7 +1075,13 @@ function SchemaPage() {
                                 <div key={shift.id}
                                   className="absolute top-1.5 bottom-1.5 flex items-center gap-1 overflow-hidden rounded-lg px-2 text-[11px] font-semibold shadow-sm cursor-default select-none transition-opacity hover:opacity-90"
                                   style={{ left: `${Math.max(0, left)}%`, width: `${Math.max(width, 1.5)}%`, minWidth: "36px", backgroundColor: col, color: light ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.92)", borderLeft: `2px solid ${light ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.3)"}` }}
-                                  title={`${shift.shift_name || emp.employee_name}: ${shift.start_time} – ${shift.stop_time}\n${minsToHours(shift.gross_minutes)}${shift.is_lended ? "\n↔ Utlånad/inlånad" : ""}`}>
+                                  title={[
+                                    `${shift.shift_name || emp.employee_name}: ${shift.start_time} – ${shift.stop_time}`,
+                                    `Brutto: ${minsToHours(shift.gross_minutes)}`,
+                                    shift.break_minutes > 0 ? `Rast: ${shift.break_minutes} min` : null,
+                                    `Netto: ${minsToHours(shift.net_minutes > 0 ? shift.net_minutes : Math.max(0, shift.gross_minutes - shift.break_minutes))}`,
+                                    shift.is_lended ? "↔ Utlånad/inlånad" : null,
+                                  ].filter(Boolean).join("\n")}>
                                   {shift.is_lended && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
                                   <span className="truncate leading-tight">
                                     {shift.shift_name ? <>{shift.shift_name}<br /><span className="opacity-70">{shift.start_time}–{shift.stop_time}</span></> : `${shift.start_time}–${shift.stop_time}`}
@@ -1504,59 +1534,134 @@ function SchemaPage() {
   );
 }
 
-// ─── PDF text extraction (no external deps) ──────────────────────────────────
+// ─── PDF text extraction (handles FlateDecode compressed streams) ──────────────
 
-async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
-  const bytes = new Uint8Array(buffer);
-  const decoder = new TextDecoder("latin1");
-  const raw = decoder.decode(bytes);
+async function decompressZlib(data: Uint8Array): Promise<Uint8Array> {
+  try {
+    // Strip 2-byte zlib header (0x78 0x9C / 0xDA / 0x01) before deflate
+    const stripped = data[0] === 0x78 ? data.slice(2) : data;
+    const ds = new DecompressionStream("deflate-raw");
+    const writer = ds.writable.getWriter();
+    const reader = ds.readable.getReader();
+    writer.write(stripped);
+    writer.close();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    const total = chunks.reduce((s, c) => s + c.length, 0);
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const c of chunks) { out.set(c, offset); offset += c.length; }
+    return out;
+  } catch {
+    return data;
+  }
+}
 
-  // Collect text objects with their Y position so we can group by row
-  type TextObj = { y: number; text: string };
-  const objects: TextObj[] = [];
-
+function extractTextFromPdfOps(ops: string): Array<{ y: number; text: string }> {
+  const objects: Array<{ y: number; text: string }> = [];
   const btEtRe = /BT([\s\S]*?)ET/g;
   let m;
-  while ((m = btEtRe.exec(raw)) !== null) {
+  while ((m = btEtRe.exec(ops)) !== null) {
     const block = m[1];
-    // Extract y-position from Td/TD/Tm operators
     let y = 0;
     const tmMatch = block.match(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+Tm/);
     const tdMatch = block.match(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+T[dD]/);
     if (tmMatch) y = parseFloat(tmMatch[2]);
     else if (tdMatch) y = parseFloat(tdMatch[2]);
 
-    const strRe = /\(([^)]*)\)|<([0-9a-fA-F]+)>/g;
+    const strRe = /\(([^)]*)\)|<([0-9a-fA-F]{2,})>/g;
     let sm;
     const parts: string[] = [];
     while ((sm = strRe.exec(block)) !== null) {
       if (sm[1] !== undefined) {
-        const decoded = sm[1]
-          .replace(/\\n/g, " ")
-          .replace(/\\\(/g, "(")
-          .replace(/\\\)/g, ")")
-          .replace(/\\r/g, " ")
-          // Fix common latin1 Swedish chars in PDF encoding
-          .replace(/\xc3\xa5/g, "å").replace(/\xc3\xa4/g, "ä").replace(/\xc3\xb6/g, "ö")
-          .replace(/\xc3\x85/g, "Å").replace(/\xc3\x84/g, "Ä").replace(/\xc3\x96/g, "Ö");
-        if (decoded.trim()) parts.push(decoded.trim());
+        const s = sm[1]
+          .replace(/\\n/g, " ").replace(/\\r/g, " ")
+          .replace(/\\\(/g, "(").replace(/\\\)/g, ")")
+          .replace(/\\\\/, "\\");
+        if (s.trim()) parts.push(s.trim());
       } else if (sm[2]) {
         const hex = sm[2];
-        let s = "";
-        for (let i = 0; i < hex.length; i += 2) {
-          s += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16));
+        // Try UTF-16BE decode (common in modern PDFs)
+        if (hex.length % 4 === 0 && hex.startsWith("FEFF")) {
+          let s = "";
+          for (let i = 4; i < hex.length; i += 4) {
+            const cp = parseInt(hex.slice(i, i + 4), 16);
+            s += String.fromCharCode(cp);
+          }
+          if (s.trim()) parts.push(s.trim());
+        } else {
+          // Latin-1 / single-byte decode
+          let s = "";
+          for (let i = 0; i < hex.length; i += 2) {
+            const code = parseInt(hex.slice(i, i + 2), 16);
+            s += String.fromCharCode(code);
+          }
+          if (s.trim()) parts.push(s.trim());
         }
-        if (s.trim()) parts.push(s.trim());
       }
     }
     if (parts.length > 0) objects.push({ y, text: parts.join(" ") });
   }
+  return objects;
+}
 
-  if (objects.length === 0) return "";
+async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
+  const raw = new Uint8Array(buffer);
+  const latin1 = new TextDecoder("latin1").decode(raw);
 
-  // Group by Y position (same row = within 3 units) and sort rows top-to-bottom
+  // Find all stream...endstream blocks, decompress if FlateDecode
+  const allOps: string[] = [];
+
+  // First try uncompressed BT/ET blocks directly in the raw file
+  const directObjects = extractTextFromPdfOps(latin1);
+  if (directObjects.length > 0) {
+    const rows: Map<number, string[]> = new Map();
+    for (const obj of directObjects) {
+      let key = obj.y;
+      for (const existingY of rows.keys()) {
+        if (Math.abs(existingY - obj.y) < 4) { key = existingY; break; }
+      }
+      if (!rows.has(key)) rows.set(key, []);
+      rows.get(key)!.push(obj.text);
+    }
+    const sortedRows = [...rows.entries()].sort((a, b) => b[0] - a[0]);
+    const result = sortedRows.map(([, parts]) => parts.join(" ")).join("\n");
+    // Only return if we got meaningful delivery-plan-like content
+    if (result.length > 50) return result;
+  }
+
+  // Fall back: decompress FlateDecode streams
+  const streamHeaderRe = /<<([\s\S]*?)>>\s*stream\r?\n/g;
+  let sh: RegExpExecArray | null;
+  while ((sh = streamHeaderRe.exec(latin1)) !== null) {
+    const header = sh[1];
+    if (!header.includes("FlateDecode") && !header.includes("Flate")) continue;
+    const streamStart = sh.index + sh[0].length;
+    // Find endstream
+    const endIdx = latin1.indexOf("endstream", streamStart);
+    if (endIdx < 0) continue;
+    const streamBytes = raw.slice(streamStart, endIdx);
+    try {
+      const decompressed = await decompressZlib(streamBytes);
+      const text = new TextDecoder("latin1").decode(decompressed);
+      allOps.push(text);
+    } catch { /* skip */ }
+  }
+
+  if (allOps.length === 0) return "";
+
+  const allObjects: Array<{ y: number; text: string }> = [];
+  for (const ops of allOps) {
+    allObjects.push(...extractTextFromPdfOps(ops));
+  }
+  if (allObjects.length === 0) return allOps.join("\n");
+
   const rows: Map<number, string[]> = new Map();
-  for (const obj of objects) {
+  for (const obj of allObjects) {
     let key = obj.y;
     for (const existingY of rows.keys()) {
       if (Math.abs(existingY - obj.y) < 4) { key = existingY; break; }
@@ -1564,8 +1669,6 @@ async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
     if (!rows.has(key)) rows.set(key, []);
     rows.get(key)!.push(obj.text);
   }
-
-  // Sort rows descending by Y (PDF Y increases upward, so higher Y = higher on page)
   const sortedRows = [...rows.entries()].sort((a, b) => b[0] - a[0]);
   return sortedRows.map(([, parts]) => parts.join(" ")).join("\n");
 }
