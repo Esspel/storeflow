@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks,
-  Plus, Repeat, Store, X, Search, FileText,
+  Plus, Repeat, Store, X, Search, FileText, Users, Image as ImageIcon,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -16,7 +16,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase, type Task, type TaskStep, type Store as StoreType, type ChecklistTemplate, type ChecklistTemplateItem, logAudit, createNotification } from "@/lib/supabase";
+import {
+  supabase, type Task, type TaskStep, type Store as StoreType, type AppUser,
+  type ChecklistTemplate, type ChecklistTemplateItem, type TaskAssignee, type TaskImage, type UserGroup,
+  logAudit, createNotification, notifyUsers, uploadAttachment, getPublicUrl,
+} from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +55,12 @@ function statusBadge(s: string) {
   return <Badge variant="secondary">Ej påbörjad</Badge>;
 }
 
-type TaskWithSteps = Task & { steps: TaskStep[]; store?: StoreType };
+type TaskFull = Task & {
+  steps: TaskStep[];
+  store?: StoreType;
+  assignees?: (TaskAssignee & { user?: AppUser; group?: UserGroup })[];
+  images?: TaskImage[];
+};
 
 const emptyForm = (storeId: string) => ({
   title: "",
@@ -66,13 +75,17 @@ const emptyForm = (storeId: string) => ({
   recurrence_start: "",
   recurrence_end: "",
   steps: [""] as string[],
+  assigneeUserIds: [] as string[],
+  assigneeGroupIds: [] as string[],
 });
 
 function TasksPage() {
   const { user, activeStore, userStores } = useAuth();
   const isManager = user?.role === "manager" || user?.role === "admin";
 
-  const [tasks, setTasks] = useState<TaskWithSteps[]>([]);
+  const [tasks, setTasks] = useState<TaskFull[]>([]);
+  const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
+  const [groups, setGroups] = useState<UserGroup[]>([]);
   const [stores, setStores] = useState<StoreType[]>([]);
   const [templates, setTemplates] = useState<(ChecklistTemplate & { items: ChecklistTemplateItem[] })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,12 +95,13 @@ function TasksPage() {
   const [newTask, setNewTask] = useState(emptyForm(activeStore?.id ?? ""));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchTasks = async () => {
-    // Always filter by activeStore if set; fallback to all user stores
     let q = supabase
       .from("tasks")
-      .select("*, store:stores(*), steps:task_steps(*)")
+      .select("*, store:stores(*), steps:task_steps(*), assignees:task_assignees(*, user:app_users(id,display_name,username), group:user_groups(id,name)), images:task_images(*)")
       .order("created_at", { ascending: false });
 
     if (activeStore) {
@@ -97,40 +111,40 @@ function TasksPage() {
     }
 
     const { data } = await q;
-    if (data) setTasks(data as TaskWithSteps[]);
+    if (data) setTasks(data as TaskFull[]);
     setLoading(false);
   };
 
   useEffect(() => {
     setLoading(true);
     fetchTasks();
-    // Load stores for the create dialog
+
     const storeQ = user?.role === "admin"
       ? supabase.from("stores").select("*").eq("is_active", true)
       : supabase.from("stores").select("*").in("id", userStores.map((s) => s.id));
     storeQ.then(({ data }) => { if (data) setStores(data as StoreType[]); });
 
-    // Load templates for current store
-    const tmplQ = supabase
-      .from("checklist_templates")
-      .select("*, items:checklist_template_items(*)");
-    tmplQ.then(({ data }) => {
+    supabase.from("checklist_templates").select("*, items:checklist_template_items(*)").then(({ data }) => {
       if (data) setTemplates(data as (ChecklistTemplate & { items: ChecklistTemplateItem[] })[]);
     });
 
-    // Reset form store_id to active store
+    // Load users for this store
+    if (activeStore) {
+      supabase.from("user_stores").select("user_id, user:app_users(*)").eq("store_id", activeStore.id)
+        .then(({ data }) => {
+          if (data) setStoreUsers((data as { user: AppUser }[]).map(d => d.user).filter(Boolean));
+        });
+      supabase.from("user_groups").select("*").eq("store_id", activeStore.id)
+        .then(({ data }) => { if (data) setGroups(data as UserGroup[]); });
+    } else {
+      supabase.from("app_users").select("*").eq("is_active", true)
+        .then(({ data }) => { if (data) setStoreUsers(data as AppUser[]); });
+      supabase.from("user_groups").select("*")
+        .then(({ data }) => { if (data) setGroups(data as UserGroup[]); });
+    }
+
     setNewTask(emptyForm(activeStore?.id ?? ""));
   }, [activeStore, user]);
-
-  // Realtime updates
-  useEffect(() => {
-    const channel = supabase
-      .channel("tasks-realtime-" + (activeStore?.id ?? "all"))
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => fetchTasks())
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_steps" }, () => fetchTasks())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [activeStore]);
 
   const applyTemplate = (templateId: string) => {
     const tmpl = templates.find((t) => t.id === templateId);
@@ -156,7 +170,7 @@ function TasksPage() {
     );
   };
 
-  const completeTask = async (task: TaskWithSteps) => {
+  const completeTask = async (task: TaskFull) => {
     const isDone = task.status === "done";
     const newStatus = isDone ? "todo" : "done";
     await supabase.from("tasks").update({
@@ -166,9 +180,11 @@ function TasksPage() {
     if (newStatus === "done") {
       await supabase.from("task_steps").update({ is_done: true }).eq("task_id", task.id);
       logAudit(user?.id ?? null, "task.complete", "tasks", task.id, { title: task.title });
-      if (task.assigned_to && task.assigned_to !== user?.id) {
-        createNotification(task.assigned_to, "task_done", `Uppgift klar: ${task.title}`, "", "/uppgifter");
-      }
+      // Notify creator and assignees
+      const notifyIds = new Set<string>();
+      if (task.created_by && task.created_by !== user?.id) notifyIds.add(task.created_by);
+      task.assignees?.forEach(a => { if (a.user_id && a.user_id !== user?.id) notifyIds.add(a.user_id); });
+      notifyUsers([...notifyIds], "task_done", `Uppgift klar: ${task.title}`, `Slutförd av ${user?.display_name}`, "/uppgifter");
     } else {
       await supabase.from("task_steps").update({ is_done: false }).eq("task_id", task.id);
     }
@@ -195,7 +211,7 @@ function TasksPage() {
       recurrence_start: newTask.recurrence_start || null,
       recurrence_end: newTask.recurrence_end || null,
       created_by: user?.id,
-      assigned_to: user?.id,
+      assigned_to: newTask.assigneeUserIds[0] ?? user?.id,
       status: "todo",
     }).select().maybeSingle();
 
@@ -206,6 +222,7 @@ function TasksPage() {
     }
 
     if (task) {
+      // Steps
       const validSteps = newTask.steps.filter((s) => s.trim());
       if (validSteps.length > 0) {
         await supabase.from("task_steps").insert(
@@ -217,25 +234,65 @@ function TasksPage() {
           }))
         );
       }
+
+      // Assignees
+      const assigneeRows: { task_id: string; user_id?: string; group_id?: string }[] = [];
+      newTask.assigneeUserIds.forEach(uid => assigneeRows.push({ task_id: task.id, user_id: uid }));
+      newTask.assigneeGroupIds.forEach(gid => assigneeRows.push({ task_id: task.id, group_id: gid }));
+      if (assigneeRows.length > 0) {
+        await supabase.from("task_assignees").insert(assigneeRows);
+      }
+
+      // Images
+      if (uploadFiles.length > 0) {
+        for (const file of uploadFiles) {
+          const path = await uploadAttachment(file, `tasks/${task.id}`);
+          if (path) {
+            await supabase.from("task_images").insert({ task_id: task.id, storage_path: path, uploaded_by: user?.id });
+          }
+        }
+      }
+
       logAudit(user?.id ?? null, "task.create", "tasks", task.id, { title: task.title });
+
+      // Notify assigned users
+      const notifyIds = new Set<string>();
+      newTask.assigneeUserIds.forEach(uid => { if (uid !== user?.id) notifyIds.add(uid); });
+      // Expand groups to get member user IDs
+      if (newTask.assigneeGroupIds.length > 0) {
+        const { data: members } = await supabase
+          .from("user_group_members")
+          .select("user_id")
+          .in("group_id", newTask.assigneeGroupIds);
+        members?.forEach(m => { if (m.user_id !== user?.id) notifyIds.add(m.user_id); });
+      }
+      if (notifyIds.size > 0) {
+        notifyUsers([...notifyIds], "task_assigned", `Ny uppgift tilldelad: ${task.title}`, `Tilldelad av ${user?.display_name}`, "/uppgifter");
+      }
     }
 
     await fetchTasks();
     setSaving(false);
     setShowCreate(false);
     setNewTask(emptyForm(activeStore?.id ?? ""));
+    setUploadFiles([]);
   };
 
   const exportCSV = () => {
     const rows = [
-      ["Titel", "Kategori", "Prioritet", "Status", "Butik", "Förfallodatum", "Skapad"],
+      ["Titel", "Beskrivning", "Kategori", "Prioritet", "Status", "Butik", "Tilldelade", "Förfallodatum", "Återkommande", "Checkpoints", "Slutförd", "Skapad"],
       ...tasks.map((t) => [
         t.title,
+        t.description ?? "",
         t.category,
         t.priority,
         t.status,
         t.store?.name ?? "",
+        t.assignees?.map(a => a.user?.display_name ?? a.group?.name ?? "").filter(Boolean).join(", ") || "",
         t.due_date ? new Date(t.due_date).toLocaleDateString("sv-SE") : "",
+        RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label ?? "",
+        t.steps?.map(s => `${s.is_done ? "[x]" : "[ ]"} ${s.label}`).join(" | ") || "",
+        t.completed_at ? new Date(t.completed_at).toLocaleDateString("sv-SE") : "",
         new Date(t.created_at).toLocaleDateString("sv-SE"),
       ]),
     ];
@@ -263,8 +320,7 @@ function TasksPage() {
     return true;
   });
 
-  // Templates available for the active store (or global ones)
-  const availableTemplates = templates.filter(() => true); // All templates shown for now
+  const availableTemplates = templates;
 
   return (
     <div className="mx-auto max-w-[1400px] px-5 py-8 md:px-8 md:py-10">
@@ -352,10 +408,25 @@ function TasksPage() {
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       {t.store && <span className="inline-flex items-center gap-1"><Store className="h-3.5 w-3.5" />{t.store.name}</span>}
                       {t.due_date && <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{new Date(t.due_date).toLocaleDateString("sv-SE")}</span>}
+                      {t.assignees && t.assignees.length > 0 && (
+                        <span className="inline-flex items-center gap-1">
+                          <Users className="h-3.5 w-3.5" />
+                          {t.assignees.map(a => a.user?.display_name ?? a.group?.name).filter(Boolean).join(", ")}
+                        </span>
+                      )}
                     </div>
                   </div>
                   {statusBadge(t.status)}
                 </header>
+
+                {/* Images */}
+                {t.images && t.images.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto px-5 pt-3">
+                    {t.images.map(img => (
+                      <img key={img.id} src={getPublicUrl(img.storage_path)} alt="" className="h-16 w-16 rounded-lg object-cover border border-border/60" />
+                    ))}
+                  </div>
+                )}
 
                 {totalSteps > 0 && (
                   <div className="p-5">
@@ -369,9 +440,9 @@ function TasksPage() {
                           <Checkbox checked={step.is_done} onCheckedChange={() => toggleStep(t.id, step.id, step.is_done)} className="mt-0.5" />
                           <span className={cn("flex-1 text-sm", step.is_done && "text-muted-foreground line-through")}>{step.label}</span>
                           {step.requires_photo && (
-                            <button type="button" className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-primary-soft hover:text-primary">
-                              <ImagePlus className="h-3 w-3" /> Verifiera
-                            </button>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">
+                              <ImagePlus className="h-3 w-3" /> Foto
+                            </span>
                           )}
                         </li>
                       ))}
@@ -413,7 +484,7 @@ function TasksPage() {
       )}
 
       {/* CREATE DIALOG */}
-      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setSaveError(""); }}>
+      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setSaveError(""); setUploadFiles([]); } }}>
         <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
           <DialogHeader><DialogTitle>Ny uppgift</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
@@ -440,6 +511,11 @@ function TasksPage() {
               <Input placeholder="Uppgiftens titel" value={newTask.title}
                 onChange={(e) => setNewTask(p => ({ ...p, title: e.target.value }))} />
             </div>
+            <div className="space-y-1.5">
+              <Label>Beskrivning</Label>
+              <Input placeholder="Valfri beskrivning" value={newTask.description}
+                onChange={(e) => setNewTask(p => ({ ...p, description: e.target.value }))} />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Kategori</Label>
@@ -463,9 +539,10 @@ function TasksPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Butik</Label>
-                <Select value={newTask.store_id} onValueChange={(v) => setNewTask(p => ({ ...p, store_id: v }))}>
+                <Select value={newTask.store_id || "__none"} onValueChange={(v) => setNewTask(p => ({ ...p, store_id: v === "__none" ? "" : v }))}>
                   <SelectTrigger><SelectValue placeholder="Välj butik" /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="__none">Ingen</SelectItem>
                     {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -476,6 +553,53 @@ function TasksPage() {
                   onChange={(e) => setNewTask(p => ({ ...p, due_date: e.target.value }))} />
               </div>
             </div>
+
+            {/* Assignees */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Tilldela personer</Label>
+              <div className="max-h-32 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
+                {storeUsers.map(u => (
+                  <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
+                    <Checkbox
+                      checked={newTask.assigneeUserIds.includes(u.id)}
+                      onCheckedChange={() => {
+                        setNewTask(p => ({
+                          ...p,
+                          assigneeUserIds: p.assigneeUserIds.includes(u.id)
+                            ? p.assigneeUserIds.filter(id => id !== u.id)
+                            : [...p.assigneeUserIds, u.id]
+                        }));
+                      }}
+                    />
+                    <span className="text-sm">{u.display_name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {groups.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Tilldela grupper</Label>
+                <div className="max-h-24 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
+                  {groups.map(g => (
+                    <label key={g.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
+                      <Checkbox
+                        checked={newTask.assigneeGroupIds.includes(g.id)}
+                        onCheckedChange={() => {
+                          setNewTask(p => ({
+                            ...p,
+                            assigneeGroupIds: p.assigneeGroupIds.includes(g.id)
+                              ? p.assigneeGroupIds.filter(id => id !== g.id)
+                              : [...p.assigneeGroupIds, g.id]
+                          }));
+                        }}
+                      />
+                      <span className="text-sm">{g.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Recurrence */}
             <div className="space-y-1.5">
@@ -551,6 +675,29 @@ function TasksPage() {
                   <Plus className="mr-1 h-3.5 w-3.5" /> Lägg till checkpoint
                 </Button>
               </div>
+            </div>
+
+            {/* File upload */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" /> Bilder</Label>
+              <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
+                onChange={(e) => { if (e.target.files) setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]); }} />
+              <Button variant="outline" size="sm" className="w-full rounded-full" onClick={() => fileInputRef.current?.click()}>
+                <Plus className="mr-1 h-3.5 w-3.5" /> Välj bilder
+              </Button>
+              {uploadFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {uploadFiles.map((f, i) => (
+                    <div key={i} className="relative">
+                      <img src={URL.createObjectURL(f)} alt="" className="h-14 w-14 rounded-lg object-cover border border-border/60" />
+                      <button type="button" className="absolute -top-1 -right-1 rounded-full bg-destructive p-0.5 text-white"
+                        onClick={() => setUploadFiles(prev => prev.filter((_, idx) => idx !== i))}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {saveError && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{saveError}</p>}

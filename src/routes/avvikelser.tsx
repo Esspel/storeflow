@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  TriangleAlert as AlertTriangle, Clock, Download, MessageSquare, Paperclip,
-  Plus, Search, Send, Store, X,
+  TriangleAlert as AlertTriangle, Clock, Download, MessageSquare,
+  Plus, Search, Send, Store, X, User, Image as ImageIcon,
 } from "lucide-react";
 
 import { PageHeader, StatCard } from "@/components/page-header";
@@ -15,7 +15,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase, type Incident, type IncidentComment, type Store as StoreType, logAudit, createNotification } from "@/lib/supabase";
+import {
+  supabase, type Incident, type IncidentComment, type IncidentImage,
+  type Store as StoreType, type AppUser, logAudit, createNotification, notifyUsers,
+  uploadAttachment, getPublicUrl,
+} from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
@@ -40,7 +44,12 @@ function statusBadge(s: string) {
   return <Badge variant="secondary">Ny</Badge>;
 }
 
-type IncidentWithStore = Incident & { store?: StoreType; comments?: IncidentComment[] };
+type IncidentFull = Incident & {
+  store?: StoreType;
+  reporter?: AppUser;
+  responsible?: AppUser;
+  images?: IncidentImage[];
+};
 
 const STATUS_TRANSITIONS: Record<string, string[]> = {
   open: ["in_progress", "escalated", "resolved"],
@@ -59,15 +68,17 @@ function IssuesPage() {
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "manager" || isAdmin;
 
-  const [incidents, setIncidents] = useState<IncidentWithStore[]>([]);
+  const [incidents, setIncidents] = useState<IncidentFull[]>([]);
   const [stores, setStores] = useState<StoreType[]>([]);
+  const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [showDetail, setShowDetail] = useState<IncidentWithStore | null>(null);
+  const [showDetail, setShowDetail] = useState<IncidentFull | null>(null);
   const [comments, setComments] = useState<(IncidentComment & { author?: { display_name: string } })[]>([]);
+  const [detailImages, setDetailImages] = useState<IncidentImage[]>([]);
   const [newComment, setNewComment] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
   const [newIncident, setNewIncident] = useState({
@@ -76,19 +87,23 @@ function IssuesPage() {
     category: "Drift",
     store_id: activeStore?.id ?? "",
     priority: "Medel",
+    responsible_user_id: "",
   });
   const [saving, setSaving] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchIncidents = async () => {
-    let q = supabase.from("incidents").select("*, store:stores(*)").order("created_at", { ascending: false });
+    let q = supabase.from("incidents")
+      .select("*, store:stores(*), reporter:app_users!reported_by(id,display_name,username), responsible:app_users!responsible_user_id(id,display_name,username), images:incident_images(*)")
+      .order("created_at", { ascending: false });
     if (activeStore) {
       q = q.eq("store_id", activeStore.id);
     } else if (userStores.length > 0) {
       q = q.in("store_id", userStores.map((s) => s.id));
     }
     const { data } = await q;
-    if (data) setIncidents(data as IncidentWithStore[]);
+    if (data) setIncidents(data as IncidentFull[]);
     setLoading(false);
   };
 
@@ -101,23 +116,36 @@ function IssuesPage() {
     if (data) setComments(data as (IncidentComment & { author?: { display_name: string } })[]);
   };
 
+  const fetchDetailImages = async (incidentId: string) => {
+    const { data } = await supabase
+      .from("incident_images")
+      .select("*")
+      .eq("incident_id", incidentId)
+      .order("created_at");
+    if (data) setDetailImages(data as IncidentImage[]);
+  };
+
   useEffect(() => {
+    setLoading(true);
     fetchIncidents();
     const storeQ = isAdmin
       ? supabase.from("stores").select("*").eq("is_active", true)
       : supabase.from("stores").select("*").in("id", userStores.map(s => s.id));
     storeQ.then(({ data }) => { if (data) setStores(data); });
+
+    // Load users for assignment
+    if (activeStore) {
+      supabase.from("user_stores").select("user:app_users(*)").eq("store_id", activeStore.id)
+        .then(({ data }) => {
+          if (data) setStoreUsers((data as { user: AppUser }[]).map(d => d.user).filter(Boolean));
+        });
+    } else {
+      supabase.from("app_users").select("*").eq("is_active", true)
+        .then(({ data }) => { if (data) setStoreUsers(data as AppUser[]); });
+    }
+
     setNewIncident(p => ({ ...p, store_id: activeStore?.id ?? "" }));
   }, [activeStore, user]);
-
-  // Realtime
-  useEffect(() => {
-    const channel = supabase
-      .channel("incidents-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "incidents" }, () => fetchIncidents())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [activeStore]);
 
   const createIncident = async () => {
     if (!newIncident.title.trim()) return;
@@ -129,35 +157,75 @@ function IssuesPage() {
       store_id: newIncident.store_id || null,
       priority: newIncident.priority,
       reported_by: user?.id,
+      responsible_user_id: newIncident.responsible_user_id || null,
       status: "open",
     }).select().maybeSingle();
 
     if (inc) {
-      logAudit(user?.id ?? null, "incident.create", "incidents", inc.id, { title: inc.title });
-      // Notify managers
-      if (user?.role === "employee") {
-        const { data: managers } = await supabase
-          .from("app_users")
-          .select("id")
-          .in("role", ["admin", "manager"])
-          .eq("is_active", true);
-        (managers ?? []).forEach((m: { id: string }) => {
-          createNotification(m.id, "incident_new", `Ny avvikelse: ${inc.title}`, "", "/avvikelser");
-        });
+      // Upload images
+      if (uploadFiles.length > 0) {
+        for (const file of uploadFiles) {
+          const path = await uploadAttachment(file, `incidents/${inc.id}`);
+          if (path) {
+            await supabase.from("incident_images").insert({ incident_id: inc.id, storage_path: path, uploaded_by: user?.id });
+          }
+        }
       }
+
+      logAudit(user?.id ?? null, "incident.create", "incidents", inc.id, { title: inc.title });
+
+      // Notify responsible user
+      if (newIncident.responsible_user_id && newIncident.responsible_user_id !== user?.id) {
+        createNotification(newIncident.responsible_user_id, "incident_assigned", `Ny avvikelse tilldelad: ${inc.title}`, `Tilldelad av ${user?.display_name}`, "/avvikelser");
+      }
+
+      // Notify managers
+      const notifyIds = new Set<string>();
+      const { data: managers } = await supabase
+        .from("app_users")
+        .select("id")
+        .in("role", ["admin", "manager"])
+        .eq("is_active", true);
+      managers?.forEach((m: { id: string }) => { if (m.id !== user?.id) notifyIds.add(m.id); });
+      notifyUsers([...notifyIds], "incident_new", `Ny avvikelse: ${inc.title}`, `Rapporterad av ${user?.display_name}`, "/avvikelser");
+
       await fetchIncidents();
     }
     setSaving(false);
     setShowCreate(false);
-    setNewIncident({ title: "", description: "", category: "Drift", store_id: activeStore?.id ?? "", priority: "Medel" });
+    setUploadFiles([]);
+    setNewIncident({ title: "", description: "", category: "Drift", store_id: activeStore?.id ?? "", priority: "Medel", responsible_user_id: "" });
   };
 
   const updateStatus = async (id: string, newStatus: string) => {
     await supabase.from("incidents").update({ status: newStatus, ...(newStatus === "resolved" ? { resolved_at: new Date().toISOString() } : {}) }).eq("id", id);
     logAudit(user?.id ?? null, "incident.status", "incidents", id, { status: newStatus });
+
+    // Notify reporter and responsible
+    const inc = incidents.find(i => i.id === id);
+    if (inc) {
+      const notifyIds = new Set<string>();
+      if (inc.reported_by && inc.reported_by !== user?.id) notifyIds.add(inc.reported_by);
+      if (inc.responsible_user_id && inc.responsible_user_id !== user?.id) notifyIds.add(inc.responsible_user_id);
+      notifyUsers([...notifyIds], "incident_status", `Avvikelse uppdaterad: ${inc.title}`, `Status: ${STATUS_LABELS[newStatus]}`, "/avvikelser");
+    }
+
     await fetchIncidents();
     if (showDetail?.id === id) {
       setShowDetail((p) => p ? { ...p, status: newStatus as Incident["status"] } : null);
+    }
+  };
+
+  const assignResponsible = async (incId: string, userId: string) => {
+    await supabase.from("incidents").update({ responsible_user_id: userId || null }).eq("id", incId);
+    if (userId && userId !== user?.id) {
+      const inc = incidents.find(i => i.id === incId);
+      createNotification(userId, "incident_assigned", `Du är nu ansvarig för: ${inc?.title ?? "avvikelse"}`, `Tilldelad av ${user?.display_name}`, "/avvikelser");
+    }
+    await fetchIncidents();
+    if (showDetail?.id === incId) {
+      const responsible = storeUsers.find(u => u.id === userId);
+      setShowDetail(p => p ? { ...p, responsible_user_id: userId || null, responsible: responsible ?? undefined } : null);
     }
   };
 
@@ -175,9 +243,9 @@ function IssuesPage() {
     setSendingComment(false);
   };
 
-  const openDetail = async (inc: IncidentWithStore) => {
+  const openDetail = async (inc: IncidentFull) => {
     setShowDetail(inc);
-    await fetchComments(inc.id);
+    await Promise.all([fetchComments(inc.id), fetchDetailImages(inc.id)]);
   };
 
   const visible = incidents.filter((i) => {
@@ -193,14 +261,19 @@ function IssuesPage() {
 
   const exportCSV = () => {
     const rows = [
-      ["Ref", "Titel", "Kategori", "Prioritet", "Status", "Butik", "Skapad"],
+      ["Ref", "Titel", "Beskrivning", "Kategori", "Prioritet", "Status", "Butik", "Rapporterad av", "Ansvarig", "SLA", "Löst datum", "Skapad"],
       ...incidents.map((i) => [
         i.ref_number,
         i.title,
+        i.description ?? "",
         i.category,
         i.priority,
-        i.status,
+        STATUS_LABELS[i.status] ?? i.status,
         i.store?.name ?? "",
+        i.reporter?.display_name ?? "",
+        i.responsible?.display_name ?? "",
+        i.sla_deadline ? new Date(i.sla_deadline).toLocaleDateString("sv-SE") : "",
+        i.resolved_at ? new Date(i.resolved_at).toLocaleDateString("sv-SE") : "",
         new Date(i.created_at).toLocaleDateString("sv-SE"),
       ]),
     ];
@@ -218,14 +291,12 @@ function IssuesPage() {
     <div className="mx-auto max-w-[1400px] px-5 py-8 md:px-8 md:py-10">
       <PageHeader
         title="Avvikelser"
-        description="Rapportera och följ upp ärenden i butiken."
+        description={activeStore ? `Avvikelser för ${activeStore.name}` : "Rapportera och följ upp ärenden."}
         actions={
           <div className="flex gap-2">
-            {incidents.length > 0 && (
-              <Button variant="outline" className="rounded-full" onClick={exportCSV}>
-                <Download className="mr-2 h-4 w-4" /> Exportera CSV
-              </Button>
-            )}
+            <Button variant="outline" className="rounded-full" onClick={exportCSV}>
+              <Download className="mr-2 h-4 w-4" /> Exportera CSV
+            </Button>
             <Button className="rounded-full" onClick={() => setShowCreate(true)}>
               <Plus className="mr-2 h-4 w-4" /> Ny avvikelse
             </Button>
@@ -277,6 +348,7 @@ function IssuesPage() {
               <tr className="border-b border-border/60">
                 <th className="px-5 py-3.5 text-left text-xs font-medium text-muted-foreground">Avvikelse</th>
                 <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground md:table-cell">Butik</th>
+                <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground lg:table-cell">Ansvarig</th>
                 <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground sm:table-cell">Prioritet</th>
                 <th className="px-5 py-3.5 text-center text-xs font-medium text-muted-foreground">Status</th>
                 <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground lg:table-cell">Datum</th>
@@ -299,6 +371,11 @@ function IssuesPage() {
                       <span className="inline-flex items-center gap-1"><Store className="h-3.5 w-3.5" />{inc.store.name}</span>
                     ) : "—"}
                   </td>
+                  <td className="hidden px-5 py-3.5 text-xs text-muted-foreground lg:table-cell">
+                    {inc.responsible ? (
+                      <span className="inline-flex items-center gap-1"><User className="h-3.5 w-3.5" />{inc.responsible.display_name}</span>
+                    ) : "—"}
+                  </td>
                   <td className="hidden px-5 py-3.5 sm:table-cell">
                     <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", priorityClass(inc.priority))}>{inc.priority}</span>
                   </td>
@@ -314,8 +391,8 @@ function IssuesPage() {
       )}
 
       {/* CREATE DIALOG */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setUploadFiles([]); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Ny avvikelse</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -348,14 +425,50 @@ function IssuesPage() {
                 </Select>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Butik</Label>
+                <Select value={newIncident.store_id || "__none"} onValueChange={(v) => setNewIncident(p => ({ ...p, store_id: v === "__none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue placeholder="Välj butik" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Ingen</SelectItem>
+                    {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Ansvarig</Label>
+                <Select value={newIncident.responsible_user_id || "__none"} onValueChange={(v) => setNewIncident(p => ({ ...p, responsible_user_id: v === "__none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue placeholder="Välj person" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Ingen</SelectItem>
+                    {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* File upload */}
             <div className="space-y-1.5">
-              <Label>Butik</Label>
-              <Select value={newIncident.store_id} onValueChange={(v) => setNewIncident(p => ({ ...p, store_id: v }))}>
-                <SelectTrigger><SelectValue placeholder="Välj butik" /></SelectTrigger>
-                <SelectContent>
-                  {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label className="flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" /> Bilder</Label>
+              <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
+                onChange={(e) => { if (e.target.files) setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]); }} />
+              <Button variant="outline" size="sm" className="w-full rounded-full" onClick={() => fileInputRef.current?.click()}>
+                <Plus className="mr-1 h-3.5 w-3.5" /> Välj bilder
+              </Button>
+              {uploadFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {uploadFiles.map((f, i) => (
+                    <div key={i} className="relative">
+                      <img src={URL.createObjectURL(f)} alt="" className="h-14 w-14 rounded-lg object-cover border border-border/60" />
+                      <button type="button" className="absolute -top-1 -right-1 rounded-full bg-destructive p-0.5 text-white"
+                        onClick={() => setUploadFiles(prev => prev.filter((_, idx) => idx !== i))}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -398,6 +511,41 @@ function IssuesPage() {
                 <p className="text-sm text-muted-foreground">{showDetail.description}</p>
               )}
 
+              {/* Responsible user */}
+              {isManager && (
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5 text-xs"><User className="h-3.5 w-3.5" /> Ansvarig person</Label>
+                  <Select value={showDetail.responsible_user_id ?? "__none"} onValueChange={(v) => assignResponsible(showDetail.id, v === "__none" ? "" : v)}>
+                    <SelectTrigger className="h-9 rounded-full text-sm"><SelectValue placeholder="Ingen" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Ingen</SelectItem>
+                      {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {!isManager && showDetail.responsible && (
+                <div className="flex items-center gap-2 text-sm">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span>Ansvarig: <strong>{showDetail.responsible.display_name}</strong></span>
+                </div>
+              )}
+
+              {/* Images */}
+              {detailImages.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">Bilder ({detailImages.length})</p>
+                  <div className="flex flex-wrap gap-2">
+                    {detailImages.map(img => (
+                      <a key={img.id} href={getPublicUrl(img.storage_path)} target="_blank" rel="noopener noreferrer">
+                        <img src={getPublicUrl(img.storage_path)} alt="" className="h-20 w-20 rounded-lg object-cover border border-border/60 hover:opacity-80 transition-opacity" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Status actions */}
               {isManager && STATUS_TRANSITIONS[showDetail.status]?.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -405,7 +553,7 @@ function IssuesPage() {
                   {STATUS_TRANSITIONS[showDetail.status].map((s) => (
                     <Button key={s} size="sm" variant="outline" className="rounded-full text-xs"
                       onClick={() => updateStatus(showDetail.id, s)}>
-                      → {STATUS_LABELS[s]}
+                      {STATUS_LABELS[s]}
                     </Button>
                   ))}
                 </div>

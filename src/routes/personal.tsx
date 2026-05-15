@@ -8,6 +8,7 @@ import {
   Plus,
   Trash2,
   UserCog,
+  Users,
   X,
 } from "lucide-react";
 
@@ -37,7 +38,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase, type AppUser, type Store, logAudit } from "@/lib/supabase";
+import { supabase, type AppUser, type Store, type UserGroup, type UserGroupMember, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/personal")({
@@ -76,6 +77,13 @@ function AccountsPage() {
   const [deleteStore, setDeleteStore] = useState<Store | null>(null);
   const [newStore, setNewStore] = useState({ name: "", city: "", region: "", address: "", phone: "", email: "" });
 
+  // Groups
+  const [groups, setGroups] = useState<(UserGroup & { members?: (UserGroupMember & { user?: AppUser })[] })[]>([]);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [newGroup, setNewGroup] = useState({ name: "", store_id: "", memberIds: [] as string[] });
+  const [editGroup, setEditGroup] = useState<(UserGroup & { memberIds: string[] }) | null>(null);
+  const [deleteGroup, setDeleteGroup] = useState<UserGroup | null>(null);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -99,6 +107,7 @@ function AccountsPage() {
     setUsers(usersWithStores);
     setStores((storesRes.data ?? []) as Store[]);
     setLoading(false);
+    loadGroups();
   }
 
   async function fetchUsers() {
@@ -237,6 +246,59 @@ function AccountsPage() {
     setSaving(false);
   };
 
+  // --- Groups ---
+  async function loadGroups() {
+    const { data } = await supabase
+      .from("user_groups")
+      .select("*, members:user_group_members(*, user:app_users(id, display_name, username))")
+      .order("name");
+    setGroups((data ?? []) as typeof groups);
+  }
+
+  async function createGroup() {
+    setError("");
+    if (!newGroup.name.trim()) { setError("Gruppnamn obligatoriskt."); return; }
+    setSaving(true);
+    const { data: created } = await supabase.from("user_groups").insert({
+      name: newGroup.name.trim(),
+      store_id: newGroup.store_id || null,
+    }).select("id").maybeSingle();
+    if (created?.id && newGroup.memberIds.length > 0) {
+      await supabase.from("user_group_members").insert(
+        newGroup.memberIds.map((uid) => ({ group_id: created.id, user_id: uid }))
+      );
+    }
+    logAudit(currentUser?.id ?? null, "group.create", "user_groups", created?.id ?? null, { name: newGroup.name });
+    await loadGroups();
+    setSaving(false);
+    setShowCreateGroup(false);
+    setNewGroup({ name: "", store_id: "", memberIds: [] });
+  }
+
+  async function saveEditGroup() {
+    if (!editGroup) return;
+    setSaving(true);
+    await supabase.from("user_groups").update({ name: editGroup.name }).eq("id", editGroup.id);
+    await supabase.from("user_group_members").delete().eq("group_id", editGroup.id);
+    if (editGroup.memberIds.length > 0) {
+      await supabase.from("user_group_members").insert(
+        editGroup.memberIds.map((uid) => ({ group_id: editGroup.id, user_id: uid }))
+      );
+    }
+    logAudit(currentUser?.id ?? null, "group.edit", "user_groups", editGroup.id, {});
+    await loadGroups();
+    setSaving(false);
+    setEditGroup(null);
+  }
+
+  async function confirmDeleteGroup() {
+    if (!deleteGroup) return;
+    await supabase.from("user_groups").delete().eq("id", deleteGroup.id);
+    logAudit(currentUser?.id ?? null, "group.delete", "user_groups", deleteGroup.id, { name: deleteGroup.name });
+    setGroups((prev) => prev.filter((g) => g.id !== deleteGroup.id));
+    setDeleteGroup(null);
+  }
+
   if (currentUser?.role !== "admin") return null;
 
   return (
@@ -250,6 +312,9 @@ function AccountsPage() {
           </TabsTrigger>
           <TabsTrigger value="stores" className="rounded-full px-5 data-[state=active]:bg-card data-[state=active]:shadow-sm">
             Butiker
+          </TabsTrigger>
+          <TabsTrigger value="groups" className="rounded-full px-5 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+            Grupper
           </TabsTrigger>
         </TabsList>
 
@@ -337,6 +402,59 @@ function AccountsPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* GROUPS TAB */}
+        <TabsContent value="groups" className="mt-6">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Användargrupper</h2>
+              <p className="text-sm text-muted-foreground">{groups.length} grupper</p>
+            </div>
+            <Button className="rounded-full" onClick={() => { setShowCreateGroup(true); setError(""); }}>
+              <Plus className="mr-2 h-4 w-4" /> Ny grupp
+            </Button>
+          </div>
+          {groups.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
+              <Users className="mb-3 h-10 w-10 text-muted-foreground/40" />
+              <p className="text-sm font-medium text-muted-foreground">Inga grupper skapade</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {groups.map((g) => (
+                <div key={g.id} className="overflow-hidden rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{g.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {stores.find((s) => s.id === g.store_id)?.name ?? "Alla butiker"} — {g.members?.length ?? 0} medlemmar
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="rounded-full text-xs"
+                        onClick={() => setEditGroup({ ...g, memberIds: g.members?.map((m) => m.user_id) ?? [] })}>
+                        Redigera
+                      </Button>
+                      <Button variant="ghost" size="icon" className="rounded-full text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeleteGroup(g)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                  {g.members && g.members.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {g.members.map((m) => (
+                        <span key={m.id} className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs">
+                          {m.user?.display_name ?? m.user_id}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </TabsContent>
@@ -592,6 +710,112 @@ function AccountsPage() {
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDeleteStore}>
               Ta bort butik
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* CREATE GROUP DIALOG */}
+      <Dialog open={showCreateGroup} onOpenChange={(o) => { setShowCreateGroup(o); if (!o) setError(""); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Ny grupp</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Gruppnamn *</Label>
+              <Input placeholder="T.ex. Morgonpersonal" value={newGroup.name}
+                onChange={(e) => setNewGroup(p => ({ ...p, name: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Butik (valfritt)</Label>
+              <Select value={newGroup.store_id || "__none"} onValueChange={(v) => setNewGroup(p => ({ ...p, store_id: v === "__none" ? "" : v }))}>
+                <SelectTrigger><SelectValue placeholder="Alla butiker" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Alla butiker</SelectItem>
+                  {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Medlemmar</Label>
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
+                {users.filter(u => u.is_active).map(u => (
+                  <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
+                    <Checkbox
+                      checked={newGroup.memberIds.includes(u.id)}
+                      onCheckedChange={() => {
+                        setNewGroup(p => ({
+                          ...p,
+                          memberIds: p.memberIds.includes(u.id) ? p.memberIds.filter(id => id !== u.id) : [...p.memberIds, u.id]
+                        }));
+                      }}
+                    />
+                    <span className="text-sm">{u.display_name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowCreateGroup(false); setError(""); }}>Avbryt</Button>
+            <Button onClick={createGroup} disabled={saving}>{saving ? "Skapar..." : "Skapa grupp"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* EDIT GROUP DIALOG */}
+      <Dialog open={!!editGroup} onOpenChange={(o) => { if (!o) { setEditGroup(null); setError(""); } }}>
+        {editGroup && (
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>Redigera grupp</DialogTitle></DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label>Gruppnamn</Label>
+                <Input value={editGroup.name}
+                  onChange={(e) => setEditGroup(g => g ? { ...g, name: e.target.value } : null)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Medlemmar</Label>
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
+                  {users.filter(u => u.is_active).map(u => (
+                    <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
+                      <Checkbox
+                        checked={editGroup.memberIds.includes(u.id)}
+                        onCheckedChange={() => {
+                          setEditGroup(g => g ? {
+                            ...g,
+                            memberIds: g.memberIds.includes(u.id) ? g.memberIds.filter(id => id !== u.id) : [...g.memberIds, u.id]
+                          } : null);
+                        }}
+                      />
+                      <span className="text-sm">{u.display_name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setEditGroup(null); setError(""); }}>Avbryt</Button>
+              <Button onClick={saveEditGroup} disabled={saving}>{saving ? "Sparar..." : "Spara"}</Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* DELETE GROUP CONFIRM */}
+      <AlertDialog open={!!deleteGroup} onOpenChange={(o) => !o && setDeleteGroup(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort grupp</AlertDialogTitle>
+            <AlertDialogDescription>
+              Är du säker på att du vill ta bort gruppen <strong>{deleteGroup?.name}</strong>?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDeleteGroup}>
+              Ta bort
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

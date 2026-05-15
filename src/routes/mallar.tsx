@@ -139,13 +139,15 @@ function MallarPage() {
 
   const exportCSV = () => {
     const rows = [
-      ["Titel", "Kategori", "Beskrivning", "Antal steg", "Butiker"],
+      ["Titel", "Kategori", "Beskrivning", "Antal steg", "Steg (detaljer)", "Butiker", "Skapad"],
       ...templates.map((t) => [
         t.title,
         t.category,
         t.description,
         t.items?.length ?? 0,
+        (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it, idx) => `${idx + 1}. ${it.label}${it.requires_photo ? " [foto]" : ""}`).join(" | "),
         t.storeIds.map((sid) => allStores.find(s => s.id === sid)?.name ?? sid).join(", "),
+        t.created_at ? new Date(t.created_at).toLocaleDateString("sv-SE") : "",
       ]),
     ];
     const csv = rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
@@ -153,7 +155,7 @@ function MallarPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `mallar-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `mallar-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -165,11 +167,9 @@ function MallarPage() {
         description="Återanvändbara checklistor och rutiners mallar."
         actions={
           <div className="flex gap-2">
-            {templates.length > 0 && (
-              <Button variant="outline" className="rounded-full" onClick={exportCSV}>
-                <Download className="mr-2 h-4 w-4" /> Exportera CSV
-              </Button>
-            )}
+            <Button variant="outline" className="rounded-full" onClick={exportCSV}>
+              <Download className="mr-2 h-4 w-4" /> Exportera CSV
+            </Button>
             {isManager && (
               <Button className="rounded-full" onClick={() => { setShowCreate(true); setError(""); }}>
                 <Plus className="mr-2 h-4 w-4" /> Ny mall

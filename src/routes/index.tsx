@@ -79,7 +79,7 @@ function HubPage() {
 
   useEffect(() => {
     const load = async () => {
-      const storeFilter = user?.role === "admin" ? null : activeStore?.id ?? null;
+      const storeFilter = activeStore?.id ?? null;
 
       let tasksQ = supabase.from("tasks").select("status");
       if (storeFilter) tasksQ = tasksQ.eq("store_id", storeFilter);

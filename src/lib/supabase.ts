@@ -97,6 +97,7 @@ export type Incident = {
   store_id: string | null;
   reported_by: string | null;
   assigned_to: string | null;
+  responsible_user_id: string | null;
   priority: "Låg" | "Medel" | "Hög" | "Kritisk";
   status: "open" | "in_progress" | "escalated" | "resolved" | "closed";
   sla_deadline: string | null;
@@ -105,6 +106,7 @@ export type Incident = {
   created_at: string;
   store?: Store;
   reporter?: AppUser;
+  responsible?: AppUser;
   comments?: IncidentComment[];
   images?: IncidentImage[];
 };
@@ -157,6 +159,40 @@ export type Notification = {
   created_at: string;
 };
 
+export type UserGroup = {
+  id: string;
+  name: string;
+  store_id: string | null;
+  created_at: string;
+  members?: UserGroupMember[];
+};
+
+export type UserGroupMember = {
+  id: string;
+  group_id: string;
+  user_id: string;
+  created_at: string;
+  user?: AppUser;
+};
+
+export type TaskAssignee = {
+  id: string;
+  task_id: string;
+  user_id: string | null;
+  group_id: string | null;
+  created_at: string;
+  user?: AppUser;
+  group?: UserGroup;
+};
+
+export type TaskImage = {
+  id: string;
+  task_id: string;
+  storage_path: string;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
 export type AuditLog = {
   id: string;
   actor_id: string | null;
@@ -190,8 +226,35 @@ export function createNotification(
   body = "",
   link = "",
 ) {
-  supabase
+  return supabase
     .from("notifications")
     .insert({ user_id: userId, type, title, body, link })
     .then(() => {});
+}
+
+// Helper: notify multiple users
+export function notifyUsers(
+  userIds: string[],
+  type: string,
+  title: string,
+  body = "",
+  link = "",
+) {
+  if (userIds.length === 0) return;
+  const rows = userIds.map((uid) => ({ user_id: uid, type, title, body, link }));
+  supabase.from("notifications").insert(rows).then(() => {});
+}
+
+// Helper: get public URL for a storage path
+export function getPublicUrl(path: string) {
+  return supabase.storage.from("attachments").getPublicUrl(path).data.publicUrl;
+}
+
+// Helper: upload file to attachments bucket
+export async function uploadAttachment(file: File, folder: string): Promise<string | null> {
+  const ext = file.name.split(".").pop() ?? "bin";
+  const path = `${folder}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from("attachments").upload(path, file);
+  if (error) return null;
+  return path;
 }

@@ -53,7 +53,7 @@ export function AppShell() {
     };
 
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 15000);
+    const interval = setInterval(fetchNotifications, 5000);
     const onVisible = () => { if (document.visibilityState === "visible") fetchNotifications(); };
     document.addEventListener("visibilitychange", onVisible);
 
