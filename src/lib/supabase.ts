@@ -3,7 +3,23 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Mutable session token used to stamp every PostgREST request header
+let _sessionToken: string | null = null;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    fetch: (url, options = {}) => {
+      const headers = new Headers((options.headers as HeadersInit) ?? {});
+      if (_sessionToken) headers.set("x-session-token", _sessionToken);
+      return fetch(url, { ...options, headers });
+    },
+  },
+});
+
+// Call after login / on session restore so RLS policies can validate the caller
+export function setSessionToken(token: string | null) {
+  _sessionToken = token;
+}
 
 export type AppUser = {
   id: string;

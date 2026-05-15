@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { type AppUser, type Store, supabase } from "./supabase";
+import { type AppUser, type Store, supabase, setSessionToken } from "./supabase";
 import { getStoredSession, storeSession, clearSession, login as doLogin, logout as doLogout, validateSession } from "./auth";
 
 type AuthContextType = {
@@ -66,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     validateSession(stored.token).then(async (validUser) => {
       if (validUser) {
+        setSessionToken(stored.token);
         setUser(validUser);
         setToken(stored.token);
         const stores = await loadUserStores(validUser.id, validUser);
@@ -86,6 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (username: string, password: string) => {
     const result = await doLogin(username, password);
     if ("error" in result) return { error: result.error };
+    setSessionToken(result.token);
     setUser(result.user);
     setToken(result.token);
     storeSession(result.token, result.user);
@@ -101,6 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     if (token) await doLogout(token);
+    setSessionToken(null);
     setUser(null);
     setToken(null);
     setUserStores([]);
