@@ -468,6 +468,15 @@ function addDays(dateStr: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Convert any ISO timestamp to local YYYY-MM-DD so UTC-offset dates match the schedule day
+function toLocalDateStr(isoStr: string): string {
+  const d = new Date(isoStr);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function fmtDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
 }
@@ -560,15 +569,17 @@ function SchemaPage() {
 
   useEffect(() => {
     if (!storeId || !activeImport) return;
-    const weekEnd = addDays(activeImport.week_start_date, 6);
+    // Fetch one day before and after the week to catch tasks stored in UTC that shift ±1 day in local time
+    const queryStart = addDays(activeImport.week_start_date, -1);
+    const queryEnd = addDays(activeImport.week_start_date, 7);
     supabase
       .from("tasks")
       .select("id, title, due_date, assigned_to, status, priority")
       .eq("store_id", storeId)
       .not("status", "eq", "done")
       .not("status", "eq", "cancelled")
-      .gte("due_date", activeImport.week_start_date)
-      .lte("due_date", weekEnd)
+      .gte("due_date", queryStart)
+      .lte("due_date", queryEnd)
       .then(async ({ data }) => {
         const tasks = (data ?? []) as Task[];
         setScheduleTasks(tasks);
@@ -890,7 +901,7 @@ function SchemaPage() {
       const initials = (appUser?.display_name ?? emp.employee_name).split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase();
       const dayTasks = appUser
         ? scheduleTasks.filter((t) => {
-            if (!t.due_date || t.due_date.slice(0, 10) !== currentDate) return false;
+            if (!t.due_date || toLocalDateStr(t.due_date) !== currentDate) return false;
             if (t.assigned_to === appUser.id) return true;
             return scheduleTaskAssignees.some(a => a.task_id === t.id && a.user_id === appUser.id);
           })
