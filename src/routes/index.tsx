@@ -1,9 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { TriangleAlert as AlertTriangle, ArrowRight, ChartBar as BarChart3, ListChecks, Monitor, Store } from "lucide-react";
+import { TriangleAlert as AlertTriangle, ArrowRight, ChartBar as BarChart3, ListChecks, Store } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-context";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/")({
   component: HubPage,
@@ -27,7 +30,6 @@ const primary: Action[] = [
     cta: "Till uppgifter",
     icon: ListChecks,
     tone: "pink",
-    badge: "26 idag",
   },
   {
     to: "/avvikelser",
@@ -36,19 +38,10 @@ const primary: Action[] = [
     cta: "Till avvikelser",
     icon: AlertTriangle,
     tone: "mint",
-    badge: "7 öppna",
   },
 ];
 
 const secondary: Action[] = [
-  {
-    to: "/butiker",
-    title: "Butiker",
-    desc: "Översikt och driftstatus per butik",
-    cta: "Till butiker",
-    icon: Store,
-    tone: "amber",
-  },
   {
     to: "/rapporter",
     title: "Rapporter",
@@ -56,14 +49,6 @@ const secondary: Action[] = [
     cta: "Till rapporter",
     icon: BarChart3,
     tone: "blue",
-  },
-  {
-    to: "/styrtavlor",
-    title: "Styrtavlor",
-    desc: "Live-vy för skärmar i butik och HQ",
-    cta: "Öppna styrtavla",
-    icon: Monitor,
-    tone: "mint",
   },
 ];
 
@@ -116,7 +101,7 @@ function ActionCard({ a, large = false }: { a: Action; large?: boolean }) {
       )}
 
       <div className="mt-auto w-full pt-6">
-        <span className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-sm)] transition-colors group-hover:bg-primary/90">
+        <span className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-sm)] transition-[...]
           {a.cta}
           <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
         </span>
@@ -126,10 +111,31 @@ function ActionCard({ a, large = false }: { a: Action; large?: boolean }) {
 }
 
 function HubPage() {
+  const { user } = useAuth();
+  const [storeName, setStoreName] = useState("Laddar...");
+  const [storeRegion, setStoreRegion] = useState("Laddar...");
+
+  useEffect(() => {
+    const loadUserStore = async () => {
+      if (user?.store_id) {
+        const { data } = await supabase
+          .from("stores")
+          .select("name, region")
+          .eq("id", user.store_id)
+          .maybeSingle();
+        if (data) {
+          setStoreName(data.name);
+          setStoreRegion(data.region || "");
+        }
+      }
+    };
+    loadUserStore();
+  }, [user]);
+
   return (
     <div className="mx-auto w-full max-w-[1400px] px-5 py-12 md:px-8 md:py-20">
       <div className="text-center">
-        <p className="text-sm font-medium text-primary">Coop Östra Torget Torshälla · Region Syd</p>
+        <p className="text-sm font-medium text-primary">{storeName} {storeRegion && `· ${storeRegion}`}</p>
         <h1 className="mt-2 text-4xl font-black tracking-tight text-foreground md:text-6xl">
           Vad ska du göra idag?
         </h1>
@@ -157,24 +163,6 @@ function HubPage() {
           ))}
         </div>
       </div>
-
-      <div className="mx-auto mt-12 grid max-w-5xl grid-cols-2 gap-4 rounded-3xl bg-card p-6 shadow-[var(--shadow-card)] md:grid-cols-4 md:p-8">
-        {[
-          { v: "91%", l: "Compliance idag" },
-          { v: "142/168", l: "Uppgifter klara" },
-          { v: "7", l: "Öppna avvikelser" },
-          { v: "86", l: "Aktiv personal" },
-        ].map((s) => (
-          <div key={s.l} className="text-center">
-            <p className="text-2xl font-black tracking-tight text-primary md:text-3xl">{s.v}</p>
-            <p className="mt-1 text-xs font-medium text-muted-foreground md:text-sm">{s.l}</p>
-          </div>
-        ))}
-      </div>
-
-      <p className="mt-10 text-center text-xs text-muted-foreground">
-        Inloggad som Emma Andersson · Regionchef
-      </p>
     </div>
   );
 }
