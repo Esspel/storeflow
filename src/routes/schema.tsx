@@ -607,7 +607,11 @@ function SchemaPage() {
     const { data } = await supabase.from("schedule_imports").select("*").eq("store_id", storeId).order("week_start_date", { ascending: false });
     const rows = (data ?? []) as ImportRow[];
     setImports(rows);
-    if (rows.length > 0 && !activeImport) setActiveImport(rows[0]);
+    if (rows.length > 0 && !activeImport) {
+      const todayWeekStart = getWeekStartDate(getCurrentISOWeek(), new Date().getFullYear());
+      const current = rows.find((r) => r.week_start_date === todayWeekStart) ?? rows[0];
+      setActiveImport(current);
+    }
   }
 
   async function loadAppUsers() {
@@ -1204,9 +1208,12 @@ function SchemaPage() {
                               {bws.map((bw, bi) => {
                                 const bLeft = ((timeToPercent(bw.start) - left) / width) * 100;
                                 const bWidth = ((bw.minutes / (TOTAL_HOURS * 60)) * 100 / width) * 100;
+                                // Skip break windows that fall outside this shift's bounds
+                                if (bLeft < 0 || bLeft >= 100) return null;
+                                const clampedWidth = Math.min(bWidth, 100 - bLeft);
                                 return (
                                   <div key={bi} className="absolute top-0 bottom-0 z-20 pointer-events-none"
-                                    style={{ left: `${Math.max(0, bLeft)}%`, width: `${Math.max(bWidth, 1)}%` }}
+                                    style={{ left: `${bLeft}%`, width: `${Math.max(clampedWidth, 1)}%` }}
                                     title={`Rast ${bw.start}, ${bw.minutes} min`}>
                                     <div className="absolute inset-0 rounded-sm bg-black/25 backdrop-brightness-75" />
                                   </div>
@@ -1711,6 +1718,10 @@ function getISOWeek(date: Date): number {
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
+function getCurrentISOWeek(): number {
+  return getISOWeek(new Date());
+}
+
 function getWeekStartDate(week: number, year: number): string {
   // ISO 8601: week 1 is the week containing the first Thursday of the year
   const jan4 = new Date(year, 0, 4);
@@ -1718,7 +1729,11 @@ function getWeekStartDate(week: number, year: number): string {
   mondayOfWeek1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
   const start = new Date(mondayOfWeek1);
   start.setDate(mondayOfWeek1.getDate() + (week - 1) * 7);
-  return start.toISOString().slice(0, 10);
+  // Use local date to avoid UTC offset shifting
+  const y = start.getFullYear();
+  const m = String(start.getMonth() + 1).padStart(2, "0");
+  const d = String(start.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 // ─── StatPill ─────────────────────────────────────────────────────────────────
