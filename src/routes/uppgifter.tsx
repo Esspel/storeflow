@@ -260,22 +260,23 @@ function TasksPage() {
     }
 
     const recurringTasks = taskList.filter(
-      (t) => t.recurrence_rule && !t.parent_task_id && t.due_date
+      (t) => t.recurrence_rule && !t.parent_task_id
     );
     if (recurringTasks.length === 0) { spawnRef.current = false; return; }
 
     // Compute all period-start dates from day-after-originDue up through simToday
-    // startDate: the floor — no periods before this date (defaults to day after originDue)
+    // startDate: explicit floor for periods. If null, defaults to day after originDue.
     function allPeriodStarts(originDue: Date, rule: string, weekdays: number[] | null, startDate: Date | null, endDate: Date | null): Date[] {
       const ceil = endDate
         ? (midnight(new Date(endDate)) < simToday ? midnight(new Date(endDate)) : simToday)
         : simToday;
-      // floor: whichever is later — day after originDue, or explicit startDate
-      const dayAfterOrigin = midnight(new Date(originDue));
-      dayAfterOrigin.setDate(dayAfterOrigin.getDate() + 1);
-      const floor = startDate && midnight(new Date(startDate)) > dayAfterOrigin
-        ? midnight(new Date(startDate))
-        : dayAfterOrigin;
+      let floor: Date;
+      if (startDate) {
+        floor = midnight(new Date(startDate));
+      } else {
+        floor = midnight(new Date(originDue));
+        floor.setDate(floor.getDate() + 1);
+      }
       const results: Date[] = [];
 
       if (rule === "weekly" && weekdays && weekdays.length > 0) {
@@ -347,13 +348,20 @@ function TasksPage() {
     let didSpawn = false;
 
     for (const t of recurringTasks) {
-      // Duration the original task had from creation → due date
-      const durationMs = Math.max(0,
-        new Date(t.due_date!).getTime() - new Date(t.created_at).getTime()
-      );
+      // Origin used for period calculation: recurrence_start > due_date > created_at
+      const originDate: Date = t.recurrence_start
+        ? midnight(new Date(t.recurrence_start))
+        : t.due_date
+          ? midnight(new Date(t.due_date))
+          : midnight(new Date(t.created_at));
+
+      // How long after the period start the child task is due (0 = same day = no deadline offset)
+      const durationMs = t.due_date
+        ? Math.max(0, midnight(new Date(t.due_date)).getTime() - originDate.getTime())
+        : 0;
 
       const periodStarts = allPeriodStarts(
-        new Date(t.due_date!),
+        originDate,
         t.recurrence_rule!,
         t.recurrence_days ?? null,
         t.recurrence_start ? new Date(t.recurrence_start) : null,
@@ -366,7 +374,7 @@ function TasksPage() {
         const psKey = localDateStr(ps);
         if (covered.has(psKey)) continue;
 
-        const childDue = new Date(ps.getTime() + durationMs);
+        const childDue = t.due_date ? new Date(ps.getTime() + durationMs) : null;
 
         const { data: child } = await supabase.from("tasks").insert({
           title: t.title,
@@ -374,7 +382,7 @@ function TasksPage() {
           category: t.category,
           priority: t.priority,
           store_id: t.store_id,
-          due_date: childDue.toISOString(),
+          due_date: childDue ? childDue.toISOString() : null,
           recurrence_rule: t.recurrence_rule,
           recurrence_days: t.recurrence_days,
           recurrence_period_start: psKey,
@@ -666,9 +674,16 @@ function TasksPage() {
   const simTodayEnd = new Date(simNow);
   simTodayEnd.setHours(23, 59, 59, 999);
 
+  // Set of parent IDs that have at least one child in the visible list
+  const parentIdsWithChildren = new Set(
+    visibleTasks.filter(t => t.parent_task_id).map(t => t.parent_task_id!)
+  );
+
   // "Today" tab: tasks due today and not already done
+  // Recurring parents are hidden once children exist (children are the actionable instances)
   const isDueToday = (t: TaskFull) => {
     if (t.status === "done") return false;
+    if (t.recurrence_rule && !t.parent_task_id && parentIdsWithChildren.has(t.id)) return false;
     if (!t.due_date) return true;
     const d = new Date(t.due_date);
     return d >= simTodayStart && d <= simTodayEnd;
