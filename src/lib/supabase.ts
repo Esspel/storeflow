@@ -72,6 +72,7 @@ export type Task = {
   recurrence_start: string | null;
   recurrence_end: string | null;
   parent_task_id: string | null;
+  last_spawned_at: string | null;
   completed_at: string | null;
   created_at: string;
   store?: Store;
@@ -153,6 +154,7 @@ export type ChecklistTemplateQuestion = {
   id: string;
   template_id: string;
   label: string;
+  question_type: "text" | "yes_no";
   is_required: boolean;
   sort_order: number;
 };
@@ -162,6 +164,7 @@ export type TaskQuestion = {
   task_id: string;
   label: string;
   answer: string;
+  question_type: "text" | "yes_no";
   is_required: boolean;
   sort_order: number;
   answered_by: string | null;

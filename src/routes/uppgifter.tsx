@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, TriangleAlert as AlertTriangle, ZoomIn } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -84,7 +85,7 @@ type TaskFull = Task & {
   images?: TaskImage[];
 };
 
-type FormQuestion = { label: string; is_required: boolean };
+type FormQuestion = { label: string; question_type: "text" | "yes_no"; is_required: boolean };
 
 const emptyForm = (storeId: string) => ({
   title: "",
@@ -104,32 +105,28 @@ const emptyForm = (storeId: string) => ({
   assigneeGroupIds: [] as string[],
 });
 
-// Image lightbox component
+// Image lightbox — rendered into document.body via portal so it sits completely
+// outside the Radix Dialog DOM tree. This prevents pointer/touch events from
+// ever reaching the dialog backdrop underneath.
 function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
+      if (e.key === "Escape") { e.stopPropagation(); onClose(); }
     };
-    // capture phase so we intercept before Radix Dialog's keydown handler
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
   }, [onClose]);
-  return (
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4"
-      onClick={(e) => { e.stopPropagation(); onClose(); }}
-      onPointerDown={(e) => e.stopPropagation()}
-      onPointerUp={(e) => e.stopPropagation()}
-      onTouchStart={(e) => e.stopPropagation()}
-      onTouchEnd={(e) => e.stopPropagation()}
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4"
+      onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }}
     >
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); onClose(); }}
-        className="absolute right-4 top-4 z-10 rounded-full bg-black/40 p-2 text-white/80 backdrop-blur-sm transition-colors hover:bg-black/60 hover:text-white"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={onClose}
+        className="absolute right-4 top-4 rounded-full bg-black/40 p-2 text-white/80 backdrop-blur-sm transition-colors hover:bg-black/60 hover:text-white"
         aria-label="Stäng"
       >
         <X className="h-5 w-5" />
@@ -138,13 +135,10 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
         src={src}
         alt=""
         className="max-h-[90vh] max-w-full rounded-xl shadow-2xl object-contain"
-        onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
-        onPointerUp={(e) => e.stopPropagation()}
-        onTouchStart={(e) => e.stopPropagation()}
-        onTouchEnd={(e) => e.stopPropagation()}
       />
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -160,7 +154,8 @@ function TasksPage() {
   const [templates, setTemplates] = useState<(ChecklistTemplate & { items: ChecklistTemplateItem[]; questions: ChecklistTemplateQuestion[] })[]>([]);
   const [userGroupIds, setUserGroupIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("all");
+  const [tab, setTab] = useState("today");
+  const [showAllDates, setShowAllDates] = useState(false);
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [newTask, setNewTask] = useState(emptyForm(activeStore?.id ?? ""));
@@ -243,6 +238,120 @@ function TasksPage() {
     return () => { supabase.removeChannel(channel); };
   }, [activeStore, fetchTasks]);
 
+  // Spawn new child tasks for recurring tasks when simulated time passes their due_date
+  const spawnRecurringTasks = useCallback(async (taskList: TaskFull[]) => {
+    if (!isManager) return;
+    const now = getSimulatedNow();
+
+    const recurringTasks = taskList.filter(
+      (t) =>
+        t.recurrence_rule &&
+        !t.parent_task_id && // only original tasks, not already-spawned children
+        t.due_date &&
+        new Date(t.due_date).getTime() <= now
+    );
+
+    if (recurringTasks.length === 0) return;
+
+    const unitMs: Record<string, number> = {
+      daily: 86_400_000,
+      every_other_day: 2 * 86_400_000,
+      weekly: 7 * 86_400_000,
+      monthly: 30 * 86_400_000,
+      yearly: 365 * 86_400_000,
+    };
+
+    let didSpawn = false;
+    for (const t of recurringTasks) {
+      const intervalMs = unitMs[t.recurrence_rule!] ?? 86_400_000;
+      // How many intervals have passed since due_date?
+      const elapsed = now - new Date(t.due_date!).getTime();
+      const periods = Math.floor(elapsed / intervalMs);
+      if (periods < 1) continue;
+
+      // Check if we already spawned for the latest period
+      const expectedSpawnPeriod = periods; // 1-based
+      const lastSpawnedAt = t.last_spawned_at ? new Date(t.last_spawned_at).getTime() : 0;
+      const periodStartMs = new Date(t.due_date!).getTime() + (periods - 1) * intervalMs;
+      if (lastSpawnedAt >= periodStartMs) continue; // already spawned this period
+
+      // Check recurrence_end
+      if (t.recurrence_end) {
+        const nextDue = new Date(t.due_date!).getTime() + periods * intervalMs;
+        if (nextDue > new Date(t.recurrence_end).getTime()) continue;
+      }
+
+      const nextDueDate = new Date(new Date(t.due_date!).getTime() + expectedSpawnPeriod * intervalMs).toISOString();
+
+      // Create child task
+      const { data: child } = await supabase.from("tasks").insert({
+        title: t.title,
+        description: t.description,
+        category: t.category,
+        priority: t.priority,
+        store_id: t.store_id,
+        due_date: nextDueDate,
+        recurrence_rule: null, // children don't recur themselves
+        parent_task_id: t.id,
+        created_by: t.created_by,
+        assigned_to: t.assigned_to,
+        status: "todo",
+      }).select().maybeSingle();
+
+      if (child) {
+        // Copy steps (unchecked)
+        const steps = (t.steps ?? []).map((s) => ({
+          task_id: child.id,
+          label: s.label,
+          sort_order: s.sort_order,
+          requires_photo: s.requires_photo,
+          is_done: false,
+        }));
+        if (steps.length > 0) await supabase.from("task_steps").insert(steps);
+
+        // Copy questions (no answers, no user-uploaded data)
+        const questions = (t.questions ?? []).map((q) => ({
+          task_id: child.id,
+          label: q.label,
+          question_type: q.question_type ?? "text",
+          is_required: q.is_required,
+          sort_order: q.sort_order,
+        }));
+        if (questions.length > 0) await supabase.from("task_questions").insert(questions);
+
+        // Copy creator-uploaded images (images uploaded by task creator, not by employees)
+        const creatorImages = (t.images ?? []).filter(img => img.uploaded_by === t.created_by);
+        if (creatorImages.length > 0) {
+          await supabase.from("task_images").insert(
+            creatorImages.map((img) => ({ task_id: child.id, storage_path: img.storage_path, uploaded_by: img.uploaded_by }))
+          );
+        }
+
+        // Copy assignees
+        const assignees = (t.assignees ?? []).map((a) => ({
+          task_id: child.id,
+          user_id: a.user_id,
+          group_id: a.group_id,
+        }));
+        if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
+
+        // Update parent's last_spawned_at
+        await supabase.from("tasks").update({ last_spawned_at: new Date(now).toISOString() }).eq("id", t.id);
+
+        logAudit(user?.id ?? null, "task.recurrence.spawn", "tasks", child.id, { parent_id: t.id });
+        didSpawn = true;
+      }
+    }
+
+    if (didSpawn) await fetchTasks();
+  }, [isManager, user, fetchTasks]);
+
+  useEffect(() => {
+    if (tasks.length > 0) {
+      void spawnRecurringTasks(tasks);
+    }
+  }, [tasks, spawnRecurringTasks]);
+
   // Filter tasks by role visibility
   const visibleTasks = tasks.filter((t) => {
     if (!isEmployee) return true; // managers/admins see all
@@ -259,7 +368,7 @@ function TasksPage() {
       .map((it) => ({ label: it.label, requires_photo: it.requires_photo }));
     const questions = (tmpl.questions ?? [])
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((q) => ({ label: q.label, is_required: q.is_required }));
+      .map((q) => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required }));
     setNewTask((p) => ({
       ...p,
       title: p.title || tmpl.title,
@@ -406,7 +515,7 @@ function TasksPage() {
       if (validQuestions.length > 0) {
         await supabase.from("task_questions").insert(
           validQuestions.map((q, i) => ({
-            task_id: task.id, label: q.label, is_required: q.is_required, sort_order: i,
+            task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: i,
           }))
         );
       }
@@ -474,6 +583,7 @@ function TasksPage() {
   };
 
   const filters = [
+    { value: "today", label: "Idag" },
     { value: "all", label: "Alla" },
     { value: "todo", label: "Ej påbörjad" },
     { value: "progress", label: "Pågående" },
@@ -481,8 +591,18 @@ function TasksPage() {
     { value: "late", label: "Försenad" },
   ];
 
+  const simNow = getSimulatedNow();
+  const todayEnd = new Date(simNow);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const isDueToday = (t: TaskFull) => {
+    if (!t.due_date) return true; // no due date → always show
+    return new Date(t.due_date).getTime() <= todayEnd.getTime();
+  };
+
   const filtered = visibleTasks.filter((t) => {
-    if (tab !== "all" && effectiveStatus(t) !== tab) return false;
+    if (tab === "today" && !isDueToday(t)) return false;
+    if (tab !== "all" && tab !== "today" && effectiveStatus(t) !== tab) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -526,7 +646,7 @@ function TasksPage() {
                 className="gap-2 rounded-full px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm text-xs">
                 {f.label}
                 <span className="rounded-full bg-background/70 px-1.5 text-[10px] font-medium text-muted-foreground">
-                  {f.value === "all" ? visibleTasks.length : visibleTasks.filter((t) => effectiveStatus(t) === f.value).length}
+                  {f.value === "all" ? visibleTasks.length : f.value === "today" ? visibleTasks.filter(isDueToday).length : visibleTasks.filter((t) => effectiveStatus(t) === f.value).length}
                 </span>
               </TabsTrigger>
             ))}
@@ -687,19 +807,46 @@ function TasksPage() {
                         {q.label}
                         {q.is_required && <span className="ml-1 text-destructive">*</span>}
                       </Label>
-                      <Textarea
-                        value={answerDraft[q.id] ?? q.answer ?? ""}
-                        onChange={(e) => setAnswerDraft(p => ({ ...p, [q.id]: e.target.value }))}
-                        onBlur={() => {
-                          const val = answerDraft[q.id] ?? "";
-                          if (val !== (q.answer ?? "")) {
-                            void saveAnswer(detailTask, q, val);
-                          }
-                        }}
-                        placeholder="Skriv ditt svar..."
-                        rows={2}
-                        className="resize-none text-sm"
-                      />
+                      {q.question_type === "yes_no" ? (
+                        <div className="flex gap-2">
+                          {(["Ja", "Nej"] as const).map((opt) => {
+                            const current = answerDraft[q.id] ?? q.answer ?? "";
+                            const active = current === opt;
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                className={cn(
+                                  "rounded-full border px-5 py-1.5 text-sm font-medium transition-colors",
+                                  active
+                                    ? opt === "Ja" ? "bg-success/20 border-success text-success" : "bg-destructive/15 border-destructive/50 text-destructive"
+                                    : "border-border/60 text-muted-foreground hover:border-primary/50"
+                                )}
+                                onClick={() => {
+                                  setAnswerDraft(p => ({ ...p, [q.id]: opt }));
+                                  void saveAnswer(detailTask, q, opt);
+                                }}
+                              >
+                                {opt}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <Textarea
+                          value={answerDraft[q.id] ?? q.answer ?? ""}
+                          onChange={(e) => setAnswerDraft(p => ({ ...p, [q.id]: e.target.value }))}
+                          onBlur={() => {
+                            const val = answerDraft[q.id] ?? "";
+                            if (val !== (q.answer ?? "")) {
+                              void saveAnswer(detailTask, q, val);
+                            }
+                          }}
+                          placeholder="Skriv ditt svar..."
+                          rows={2}
+                          className="resize-none text-sm"
+                        />
+                      )}
                     </div>
                   ))}
                 </div>
@@ -972,26 +1119,42 @@ function TasksPage() {
 
             {/* Questions */}
             <div className="space-y-1.5">
-              <Label>Frågor (textfält)</Label>
+              <Label>Frågor</Label>
               <div className="space-y-2">
                 {newTask.questions.map((q, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <Input placeholder={`Fråga ${i + 1}`} value={q.label}
-                      onChange={(e) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, label: e.target.value } : qr) }))}
-                      className="flex-1" />
-                    <label className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
-                      <Checkbox checked={q.is_required}
-                        onCheckedChange={(v) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, is_required: !!v } : qr) }))} />
-                      Obligatorisk
-                    </label>
-                    <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8"
-                      onClick={() => setNewTask(p => ({ ...p, questions: p.questions.filter((_, idx) => idx !== i) }))}>
-                      <X className="h-4 w-4" />
-                    </Button>
+                  <div key={i} className="flex flex-col gap-1.5 rounded-lg border border-border/60 p-2.5">
+                    <div className="flex items-center gap-2">
+                      <Input placeholder={`Fråga ${i + 1}`} value={q.label}
+                        onChange={(e) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, label: e.target.value } : qr) }))}
+                        className="flex-1 h-8 text-sm" />
+                      <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8"
+                        onClick={() => setNewTask(p => ({ ...p, questions: p.questions.filter((_, idx) => idx !== i) }))}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex gap-1">
+                        <button type="button"
+                          className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors", q.question_type === "text" ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                          onClick={() => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, question_type: "text" } : qr) }))}>
+                          Text
+                        </button>
+                        <button type="button"
+                          className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors", q.question_type === "yes_no" ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                          onClick={() => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, question_type: "yes_no" } : qr) }))}>
+                          Ja/Nej
+                        </button>
+                      </div>
+                      <label className="ml-auto flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+                        <Checkbox checked={q.is_required}
+                          onCheckedChange={(v) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, is_required: !!v } : qr) }))} />
+                        Obligatorisk
+                      </label>
+                    </div>
                   </div>
                 ))}
                 <Button variant="outline" size="sm" className="w-full rounded-full"
-                  onClick={() => setNewTask(p => ({ ...p, questions: [...p.questions, { label: "", is_required: false }] }))}>
+                  onClick={() => setNewTask(p => ({ ...p, questions: [...p.questions, { label: "", question_type: "text", is_required: false }] }))}>
                   <Plus className="mr-1 h-3.5 w-3.5" />Lägg till fråga
                 </Button>
               </div>

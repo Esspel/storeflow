@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, X } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase, type ChecklistTemplate, type ChecklistTemplateItem, type ChecklistTemplateQuestion, type Store, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/mallar")({
   component: MallarPage,
@@ -43,7 +44,7 @@ function MallarPage() {
     category: "",
     storeIds: [] as string[],
     items: [{ label: "", requires_photo: false }] as { label: string; requires_photo: boolean }[],
-    questions: [] as { label: string; is_required: boolean }[],
+    questions: [] as { label: string; question_type: "text" | "yes_no"; is_required: boolean }[],
   });
 
   useEffect(() => { load(); }, [user, activeStore]);
@@ -128,6 +129,7 @@ function MallarPage() {
         validQuestions.map((q, idx) => ({
           template_id: tmpl.id,
           label: q.label.trim(),
+          question_type: q.question_type ?? "text",
           is_required: q.is_required,
           sort_order: idx,
         }))
@@ -138,7 +140,7 @@ function MallarPage() {
     await load();
     setSaving(false);
     setShowCreate(false);
-    setForm({ title: "", description: "", category: "", storeIds: [], items: [{ label: "", requires_photo: false }], questions: [] });
+    setForm({ title: "", description: "", category: "", storeIds: [], items: [{ label: "", requires_photo: false }], questions: [] as { label: string; question_type: "text" | "yes_no"; is_required: boolean }[] });
   }
 
   async function deleteTemplate() {
@@ -261,6 +263,7 @@ function MallarPage() {
                           <li key={q.id} className="flex items-center gap-2.5 text-sm">
                             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-medium text-primary">{idx + 1}</span>
                             <span>{q.label}</span>
+                            {q.question_type === "yes_no" && <Badge variant="secondary" className="text-xs">Ja/Nej</Badge>}
                             {q.is_required && <Badge variant="secondary" className="text-xs text-destructive">Obligatorisk</Badge>}
                           </li>
                         ))}
@@ -346,33 +349,49 @@ function MallarPage() {
 
             {/* Questions */}
             <div className="space-y-1.5">
-              <Label>Frågor (textfält)</Label>
+              <Label>Frågor</Label>
               <div className="space-y-2">
                 {form.questions.map((q, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Input placeholder={`Fråga ${idx + 1}`} value={q.label}
-                      onChange={(e) => {
-                        const qs = [...form.questions];
-                        qs[idx] = { ...qs[idx], label: e.target.value };
-                        setForm(p => ({ ...p, questions: qs }));
-                      }} className="flex-1" />
-                    <label className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
-                      <Checkbox checked={q.is_required}
-                        onCheckedChange={(v) => {
+                  <div key={idx} className="flex flex-col gap-1.5 rounded-lg border border-border/60 p-2.5">
+                    <div className="flex items-center gap-2">
+                      <Input placeholder={`Fråga ${idx + 1}`} value={q.label}
+                        onChange={(e) => {
                           const qs = [...form.questions];
-                          qs[idx] = { ...qs[idx], is_required: !!v };
+                          qs[idx] = { ...qs[idx], label: e.target.value };
                           setForm(p => ({ ...p, questions: qs }));
-                        }} />
-                      Obligatorisk
-                    </label>
-                    <Button variant="ghost" size="icon" className="shrink-0 rounded-full text-muted-foreground hover:text-destructive"
-                      onClick={() => setForm(p => ({ ...p, questions: p.questions.filter((_, i) => i !== idx) }))}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                        }} className="flex-1 h-8 text-sm" />
+                      <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8 rounded-full text-muted-foreground hover:text-destructive"
+                        onClick={() => setForm(p => ({ ...p, questions: p.questions.filter((_, i) => i !== idx) }))}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex gap-1">
+                        <button type="button"
+                          className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors", (q.question_type ?? "text") === "text" ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                          onClick={() => { const qs = [...form.questions]; qs[idx] = { ...qs[idx], question_type: "text" }; setForm(p => ({ ...p, questions: qs })); }}>
+                          Text
+                        </button>
+                        <button type="button"
+                          className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors", (q.question_type ?? "text") === "yes_no" ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                          onClick={() => { const qs = [...form.questions]; qs[idx] = { ...qs[idx], question_type: "yes_no" }; setForm(p => ({ ...p, questions: qs })); }}>
+                          Ja/Nej
+                        </button>
+                      </div>
+                      <label className="ml-auto flex shrink-0 items-center gap-1 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                        <Checkbox checked={q.is_required}
+                          onCheckedChange={(v) => {
+                            const qs = [...form.questions];
+                            qs[idx] = { ...qs[idx], is_required: !!v };
+                            setForm(p => ({ ...p, questions: qs }));
+                          }} />
+                        Obligatorisk
+                      </label>
+                    </div>
                   </div>
                 ))}
                 <Button variant="outline" size="sm" className="rounded-full"
-                  onClick={() => setForm(p => ({ ...p, questions: [...p.questions, { label: "", is_required: false }] }))}>
+                  onClick={() => setForm(p => ({ ...p, questions: [...p.questions, { label: "", question_type: "text", is_required: false }] }))}>
                   <Plus className="mr-1.5 h-3.5 w-3.5" /> Lägg till fråga
                 </Button>
               </div>
