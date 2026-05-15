@@ -41,22 +41,26 @@ export function AppShell() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(20)
-      .then(({ data }) => setNotifications((data ?? []) as Notification[]));
 
-    const channel = supabase
-      .channel("notifications:" + user.id)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
-        (payload) => setNotifications((prev) => [payload.new as Notification, ...prev].slice(0, 20))
-      )
-      .subscribe();
+    const fetchNotifications = () => {
+      supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20)
+        .then(({ data }) => { if (data) setNotifications(data as Notification[]); });
+    };
 
-    return () => { supabase.removeChannel(channel); };
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 15000);
+    const onVisible = () => { if (document.visibilityState === "visible") fetchNotifications(); };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [user]);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;

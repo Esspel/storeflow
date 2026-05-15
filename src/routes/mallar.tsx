@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, Trash2, ChevronDown, ChevronUp, GripVertical } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -137,17 +137,45 @@ function MallarPage() {
 
   const displayStores = user?.role === "admin" ? allStores : userStores;
 
+  const exportCSV = () => {
+    const rows = [
+      ["Titel", "Kategori", "Beskrivning", "Antal steg", "Butiker"],
+      ...templates.map((t) => [
+        t.title,
+        t.category,
+        t.description,
+        t.items?.length ?? 0,
+        t.storeIds.map((sid) => allStores.find(s => s.id === sid)?.name ?? sid).join(", "),
+      ]),
+    ];
+    const csv = rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mallar-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="mx-auto max-w-[1400px] px-5 py-8 md:px-8 md:py-10">
       <PageHeader
         title="Mallar"
         description="Återanvändbara checklistor och rutiners mallar."
         actions={
-          isManager ? (
-            <Button className="rounded-full" onClick={() => { setShowCreate(true); setError(""); }}>
-              <Plus className="mr-2 h-4 w-4" /> Ny mall
-            </Button>
-          ) : undefined
+          <div className="flex gap-2">
+            {templates.length > 0 && (
+              <Button variant="outline" className="rounded-full" onClick={exportCSV}>
+                <Download className="mr-2 h-4 w-4" /> Exportera CSV
+              </Button>
+            )}
+            {isManager && (
+              <Button className="rounded-full" onClick={() => { setShowCreate(true); setError(""); }}>
+                <Plus className="mr-2 h-4 w-4" /> Ny mall
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -166,11 +194,11 @@ function MallarPage() {
         <div className="mt-6 space-y-3">
           {templates.map((t) => (
             <div key={t.id} className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
-              <button
-                className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-muted/20"
-                onClick={() => setExpanded(expanded === t.id ? null : t.id)}
-              >
-                <div className="flex items-center gap-3">
+              <div className="flex w-full items-center justify-between hover:bg-muted/20">
+                <button
+                  className="flex flex-1 items-center gap-3 px-5 py-4 text-left"
+                  onClick={() => setExpanded(expanded === t.id ? null : t.id)}
+                >
                   {expanded === t.id ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                   <div>
                     <p className="font-medium">{t.title}</p>
@@ -179,18 +207,18 @@ function MallarPage() {
                       <span className="text-xs text-muted-foreground">{t.items?.length ?? 0} steg</span>
                     </div>
                   </div>
-                </div>
+                </button>
                 {isManager && (
                   <Button
                     variant="ghost" size="icon"
-                    className="rounded-full text-muted-foreground hover:text-destructive"
-                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(t); }}
+                    className="mr-3 rounded-full text-muted-foreground hover:text-destructive"
+                    onClick={() => setDeleteTarget(t)}
                     aria-label="Ta bort"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 )}
-              </button>
+              </div>
 
               {expanded === t.id && (
                 <div className="border-t border-border/60 px-5 py-4">

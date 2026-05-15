@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  TriangleAlert as AlertTriangle, Clock, MessageSquare, Paperclip,
+  TriangleAlert as AlertTriangle, Clock, Download, MessageSquare, Paperclip,
   Plus, Search, Send, Store, X,
 } from "lucide-react";
 
@@ -191,15 +191,45 @@ function IssuesPage() {
   const escalated = incidents.filter((i) => i.status === "escalated").length;
   const resolved = incidents.filter((i) => i.status === "resolved").length;
 
+  const exportCSV = () => {
+    const rows = [
+      ["Ref", "Titel", "Kategori", "Prioritet", "Status", "Butik", "Skapad"],
+      ...incidents.map((i) => [
+        i.ref_number,
+        i.title,
+        i.category,
+        i.priority,
+        i.status,
+        i.store?.name ?? "",
+        new Date(i.created_at).toLocaleDateString("sv-SE"),
+      ]),
+    ];
+    const csv = rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `avvikelser-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="mx-auto max-w-[1400px] px-5 py-8 md:px-8 md:py-10">
       <PageHeader
         title="Avvikelser"
         description="Rapportera och följ upp ärenden i butiken."
         actions={
-          <Button className="rounded-full" onClick={() => setShowCreate(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Ny avvikelse
-          </Button>
+          <div className="flex gap-2">
+            {incidents.length > 0 && (
+              <Button variant="outline" className="rounded-full" onClick={exportCSV}>
+                <Download className="mr-2 h-4 w-4" /> Exportera CSV
+              </Button>
+            )}
+            <Button className="rounded-full" onClick={() => setShowCreate(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Ny avvikelse
+            </Button>
+          </div>
         }
       />
 

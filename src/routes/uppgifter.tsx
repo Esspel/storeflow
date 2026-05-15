@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  CircleCheck as CheckCircle2, Circle, Clock, ImagePlus, ListChecks,
+  CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks,
   Plus, Repeat, Store, X, Search, FileText,
 } from "lucide-react";
 
@@ -226,6 +226,29 @@ function TasksPage() {
     setNewTask(emptyForm(activeStore?.id ?? ""));
   };
 
+  const exportCSV = () => {
+    const rows = [
+      ["Titel", "Kategori", "Prioritet", "Status", "Butik", "Förfallodatum", "Skapad"],
+      ...tasks.map((t) => [
+        t.title,
+        t.category,
+        t.priority,
+        t.status,
+        t.store?.name ?? "",
+        t.due_date ? new Date(t.due_date).toLocaleDateString("sv-SE") : "",
+        new Date(t.created_at).toLocaleDateString("sv-SE"),
+      ]),
+    ];
+    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `uppgifter-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const filters = [
     { value: "all", label: "Alla" },
     { value: "todo", label: "Ej påbörjad" },
@@ -249,11 +272,18 @@ function TasksPage() {
         title="Uppgifter & Checklistor"
         description={activeStore ? `Uppgifter för ${activeStore.name}` : "Standardiserade rutiner för alla butiker."}
         actions={
-          isManager ? (
-            <Button className="rounded-full" onClick={() => { setShowCreate(true); setSaveError(""); }}>
-              <Plus className="mr-2 h-4 w-4" /> Ny uppgift
-            </Button>
-          ) : undefined
+          <div className="flex gap-2">
+            {tasks.length > 0 && (
+              <Button variant="outline" className="rounded-full" onClick={exportCSV}>
+                <Download className="mr-2 h-4 w-4" /> Exportera CSV
+              </Button>
+            )}
+            {isManager && (
+              <Button className="rounded-full" onClick={() => { setShowCreate(true); setSaveError(""); }}>
+                <Plus className="mr-2 h-4 w-4" /> Ny uppgift
+              </Button>
+            )}
+          </div>
         }
       />
 
