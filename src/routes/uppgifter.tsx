@@ -60,7 +60,7 @@ function statusBadge(s: string) {
 }
 
 // Returns the start-of-day timestamp for a simulated "today"
-function simTodayStart(): number {
+function getSimTodayStartMs(): number {
   const d = new Date(getSimulatedNow());
   d.setHours(0, 0, 0, 0);
   return d.getTime();
@@ -79,7 +79,7 @@ function isOverdue(due_date: string | null, status: string): boolean {
   if (!due_date || status === "done" || status === "cancelled") return false;
   const dueDay = new Date(due_date);
   dueDay.setHours(0, 0, 0, 0);
-  return dueDay.getTime() < simTodayStart();
+  return dueDay.getTime() < getSimTodayStartMs();
 }
 
 // Returns effective status considering simulated time
@@ -255,18 +255,27 @@ function TasksPage() {
   }, [activeStore, fetchTasks]);
 
   // --- Recurring task spawning ---
-  // Called after tasks load. For each original recurring task, we compute every
-  // occurrence date up to and including today, then spawn one child per missing date.
   //
-  // Rules per recurrence_rule:
-  //   daily          — every calendar day after the original due_date
-  //   every_other_day — every 2nd calendar day
-  //   weekly          — every 7 days; if recurrence_days set, only on those weekdays
-  //   monthly         — same day-of-month each month (clamped if month is shorter)
-  //   yearly          — same month+day each year
+  // Design:
+  //   Each recurring parent task spawns exactly ONE child per recurrence period.
+  //   When the simulated clock passes the start of the next period, the child is
+  //   created. Only ONE pending child exists at a time — we do NOT back-fill missed
+  //   periods (that would create noise). The most-recent incomplete period gets
+  //   one child.
   //
-  // "today" = start-of-day in simulated time. Children use the same wall-clock
-  // time-of-day as the parent's due_date so they're never immediately overdue.
+  //   Due-date of child = periodStart + (parent.due_date - parent.created_at)
+  //   i.e. the same "window" duration the parent had, applied from the period start.
+  //   This means the child always has the same amount of time as the original task.
+  //
+  //   Children inherit recurrence_rule from the parent so badges render correctly.
+  //
+  //   Period boundaries per rule:
+  //     daily          — period = 1 day,  starts every calendar day
+  //     every_other_day — period = 2 days
+  //     weekly          — period = 7 days
+  //     monthly         — period = 1 calendar month, same start-day
+  //     yearly          — period = 1 calendar year, same start-day
+  //     (weekly + recurrence_days) — one period per matching weekday within the week
   const spawnRef = useRef(false);
 
   const spawnRecurringTasks = useCallback(async (taskList: TaskFull[]) => {
@@ -274,21 +283,19 @@ function TasksPage() {
     spawnRef.current = true;
 
     const nowMs = getSimulatedNow();
-    // Simulated "today" as a plain Date at midnight
     const simToday = new Date(nowMs);
     simToday.setHours(0, 0, 0, 0);
 
-    // All existing child task parent_ids → Set of iso-date strings already spawned per parent
-    const childrenByParent = new Map<string, Set<string>>();
+    // Build set of already-spawned period-start dates per parent (day precision)
+    const spawnedPeriods = new Map<string, Set<string>>();
     for (const t of taskList) {
       if (!t.parent_task_id) continue;
-      if (!childrenByParent.has(t.parent_task_id)) {
-        childrenByParent.set(t.parent_task_id, new Set());
-      }
+      if (!spawnedPeriods.has(t.parent_task_id)) spawnedPeriods.set(t.parent_task_id, new Set());
       if (t.due_date) {
+        // Store the ISO date string at day precision for dedup
         const d = new Date(t.due_date);
         d.setHours(0, 0, 0, 0);
-        childrenByParent.get(t.parent_task_id)!.add(d.toISOString());
+        spawnedPeriods.get(t.parent_task_id)!.add(d.toISOString());
       }
     }
 
@@ -297,133 +304,147 @@ function TasksPage() {
     );
     if (recurringTasks.length === 0) { spawnRef.current = false; return; }
 
-    // Returns every occurrence date from firstOccurrence up to and including simToday
-    function getOccurrences(
+    // Given a parent's created_at and due_date, returns the child's due_date
+    // when the child's period starts at `periodStart`.
+    function childDueDate(createdAt: string, parentDue: string, periodStart: Date): Date {
+      const created = new Date(createdAt).getTime();
+      const due = new Date(parentDue).getTime();
+      const durationMs = Math.max(0, due - created); // how long the parent had
+      return new Date(periodStart.getTime() + durationMs);
+    }
+
+    // Returns the period-start dates that SHOULD have a child by now, working
+    // backwards from simToday. We only spawn if there is NO existing child for
+    // that period-start day. Returns at most one missing period (the latest one).
+    function getMissingPeriodStart(
       originDue: Date,
       rule: string,
       weekdays: number[] | null,
       endDate: Date | null,
-    ): Date[] {
-      const results: Date[] = [];
-      const ceiling = endDate && endDate < simToday ? endDate : simToday;
+      alreadySpawned: Set<string>,
+    ): Date | null {
+      const ceiling = endDate
+        ? (new Date(endDate) < simToday ? new Date(endDate) : simToday)
+        : simToday;
+      ceiling.setHours(0, 0, 0, 0);
 
-      // Advance date by one recurrence unit
-      const advance = (d: Date): Date => {
-        const n = new Date(d);
-        if (rule === "daily") { n.setDate(n.getDate() + 1); }
-        else if (rule === "every_other_day") { n.setDate(n.getDate() + 2); }
-        else if (rule === "weekly") { n.setDate(n.getDate() + 7); }
-        else if (rule === "monthly") {
-          const day = originDue.getDate();
-          n.setMonth(n.getMonth() + 1);
-          // Clamp to last day of new month if needed
-          const daysInMonth = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
-          n.setDate(Math.min(day, daysInMonth));
-        } else if (rule === "yearly") {
-          n.setFullYear(n.getFullYear() + 1);
-        }
-        return n;
-      };
+      // Collect all period starts up to ceiling
+      const periodStarts: Date[] = [];
 
-      // For weekly with specific weekdays: advance day by day and collect matching weekdays
       if (rule === "weekly" && weekdays && weekdays.length > 0) {
-        // Start from day after the origin
+        // Each matching weekday within each week is its own period
         const cur = new Date(originDue);
-        cur.setDate(cur.getDate() + 1);
         cur.setHours(0, 0, 0, 0);
+        cur.setDate(cur.getDate() + 1); // start day after the parent's due_date
         while (cur <= ceiling) {
-          // JS: 0=Sun,1=Mon...6=Sat; our WEEKDAYS array is 0=Mon..6=Sun
-          const jsDay = cur.getDay();
-          const ourDay = jsDay === 0 ? 6 : jsDay - 1; // convert to Mon=0
-          if (weekdays.includes(ourDay)) {
-            const occ = new Date(originDue);
-            occ.setFullYear(cur.getFullYear(), cur.getMonth(), cur.getDate());
-            results.push(new Date(occ));
-          }
+          const jsDay = cur.getDay(); // 0=Sun
+          const ourDay = jsDay === 0 ? 6 : jsDay - 1; // Mon=0, Sun=6
+          if (weekdays.includes(ourDay)) periodStarts.push(new Date(cur));
           cur.setDate(cur.getDate() + 1);
         }
-        return results;
+      } else {
+        // Fixed-interval rules
+        const advance = (d: Date): Date => {
+          const n = new Date(d);
+          if (rule === "daily") { n.setDate(n.getDate() + 1); }
+          else if (rule === "every_other_day") { n.setDate(n.getDate() + 2); }
+          else if (rule === "weekly") { n.setDate(n.getDate() + 7); }
+          else if (rule === "monthly") {
+            const origDay = originDue.getDate();
+            n.setMonth(n.getMonth() + 1);
+            const daysInNewMonth = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
+            n.setDate(Math.min(origDay, daysInNewMonth));
+          } else if (rule === "yearly") {
+            n.setFullYear(n.getFullYear() + 1);
+          }
+          n.setHours(0, 0, 0, 0);
+          return n;
+        };
+
+        let cur = advance(new Date(originDue));
+        while (cur <= ceiling) {
+          periodStarts.push(new Date(cur));
+          cur = advance(new Date(cur));
+        }
       }
 
-      // For all other rules: step through intervals
-      let cur = advance(new Date(originDue));
-      cur.setHours(0, 0, 0, 0);
-      while (cur <= ceiling) {
-        // Preserve the wall-clock time from originDue so the task isn't immediately overdue
-        const occ = new Date(originDue);
-        occ.setFullYear(cur.getFullYear(), cur.getMonth(), cur.getDate());
-        results.push(occ);
-        cur = advance(new Date(cur));
-        cur.setHours(0, 0, 0, 0);
+      // Find the LATEST period that doesn't already have a child
+      for (let i = periodStarts.length - 1; i >= 0; i--) {
+        const ps = periodStarts[i];
+        ps.setHours(0, 0, 0, 0);
+        if (!alreadySpawned.has(ps.toISOString())) return ps;
       }
-      return results;
+      return null;
     }
 
     let didSpawn = false;
 
     for (const t of recurringTasks) {
+      if (t.recurrence_end) {
+        const end = new Date(t.recurrence_end);
+        if (simToday > end) continue;
+      }
+
+      const alreadySpawned = spawnedPeriods.get(t.id) ?? new Set<string>();
       const originDue = new Date(t.due_date!);
-      const endDate = t.recurrence_end ? new Date(t.recurrence_end) : null;
-      const occurrences = getOccurrences(
+      const missingPeriodStart = getMissingPeriodStart(
         originDue,
         t.recurrence_rule!,
         t.recurrence_days ?? null,
-        endDate,
+        t.recurrence_end ? new Date(t.recurrence_end) : null,
+        alreadySpawned,
       );
 
-      const alreadySpawned = childrenByParent.get(t.id) ?? new Set<string>();
+      if (!missingPeriodStart) continue; // all periods covered
 
-      for (const occDate of occurrences) {
-        const occDay = new Date(occDate);
-        occDay.setHours(0, 0, 0, 0);
-        if (alreadySpawned.has(occDay.toISOString())) continue; // already exists
+      const dueDate = childDueDate(t.created_at, t.due_date!, missingPeriodStart);
 
-        const { data: child } = await supabase.from("tasks").insert({
-          title: t.title,
-          description: t.description,
-          category: t.category,
-          priority: t.priority,
-          store_id: t.store_id,
-          due_date: occDate.toISOString(),
-          recurrence_rule: null,
-          parent_task_id: t.id,
-          created_by: t.created_by,
-          assigned_to: t.assigned_to,
-          status: "todo",
-        }).select().maybeSingle();
+      const { data: child } = await supabase.from("tasks").insert({
+        title: t.title,
+        description: t.description,
+        category: t.category,
+        priority: t.priority,
+        store_id: t.store_id,
+        due_date: dueDate.toISOString(),
+        recurrence_rule: t.recurrence_rule, // inherit so badge renders
+        recurrence_days: t.recurrence_days,
+        parent_task_id: t.id,
+        created_by: t.created_by,
+        assigned_to: t.assigned_to,
+        status: "todo",
+      }).select().maybeSingle();
 
-        if (child) {
-          const steps = (t.steps ?? []).map((s) => ({
-            task_id: child.id, label: s.label,
-            sort_order: s.sort_order, requires_photo: s.requires_photo, is_done: false,
-          }));
-          if (steps.length > 0) await supabase.from("task_steps").insert(steps);
+      if (child) {
+        const steps = (t.steps ?? []).map((s) => ({
+          task_id: child.id, label: s.label,
+          sort_order: s.sort_order, requires_photo: s.requires_photo, is_done: false,
+        }));
+        if (steps.length > 0) await supabase.from("task_steps").insert(steps);
 
-          const questions = (t.questions ?? []).map((q) => ({
-            task_id: child.id, label: q.label,
-            question_type: q.question_type ?? "text",
-            is_required: q.is_required, sort_order: q.sort_order,
-          }));
-          if (questions.length > 0) await supabase.from("task_questions").insert(questions);
+        const questions = (t.questions ?? []).map((q) => ({
+          task_id: child.id, label: q.label,
+          question_type: q.question_type ?? "text",
+          is_required: q.is_required, sort_order: q.sort_order,
+        }));
+        if (questions.length > 0) await supabase.from("task_questions").insert(questions);
 
-          const creatorImages = (t.images ?? []).filter(img => img.uploaded_by === t.created_by);
-          if (creatorImages.length > 0) {
-            await supabase.from("task_images").insert(
-              creatorImages.map((img) => ({ task_id: child.id, storage_path: img.storage_path, uploaded_by: img.uploaded_by }))
-            );
-          }
-
-          const assignees = (t.assignees ?? []).map((a) => ({
-            task_id: child.id, user_id: a.user_id, group_id: a.group_id,
-          }));
-          if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
-
-          await supabase.from("tasks")
-            .update({ last_spawned_at: new Date(nowMs).toISOString() })
-            .eq("id", t.id);
-          logAudit(user?.id ?? null, "task.recurrence.spawn", "tasks", child.id, { parent_id: t.id });
-          didSpawn = true;
+        const creatorImages = (t.images ?? []).filter(img => img.uploaded_by === t.created_by);
+        if (creatorImages.length > 0) {
+          await supabase.from("task_images").insert(
+            creatorImages.map((img) => ({ task_id: child.id, storage_path: img.storage_path, uploaded_by: img.uploaded_by }))
+          );
         }
+
+        const assignees = (t.assignees ?? []).map((a) => ({
+          task_id: child.id, user_id: a.user_id, group_id: a.group_id,
+        }));
+        if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
+
+        await supabase.from("tasks")
+          .update({ last_spawned_at: new Date(nowMs).toISOString() })
+          .eq("id", t.id);
+        logAudit(user?.id ?? null, "task.recurrence.spawn", "tasks", child.id, { parent_id: t.id });
+        didSpawn = true;
       }
     }
 
@@ -677,12 +698,16 @@ function TasksPage() {
   ];
 
   const simNow = getSimulatedNow();
-  const todayEnd = new Date(simNow);
-  todayEnd.setHours(23, 59, 59, 999);
+  const simTodayStart = new Date(simNow);
+  simTodayStart.setHours(0, 0, 0, 0);
+  const simTodayEnd = new Date(simNow);
+  simTodayEnd.setHours(23, 59, 59, 999);
 
+  // "Today" tab: tasks due strictly today (not overdue, not future)
   const isDueToday = (t: TaskFull) => {
-    if (!t.due_date) return true; // no due date → always show
-    return new Date(t.due_date).getTime() <= todayEnd.getTime();
+    if (!t.due_date) return true;
+    const d = new Date(t.due_date);
+    return d >= simTodayStart && d <= simTodayEnd;
   };
 
   const filtered = visibleTasks.filter((t) => {
