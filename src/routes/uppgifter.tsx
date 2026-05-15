@@ -765,35 +765,52 @@ function TasksPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {filtered.map((t) => {
             const overdue = isOverdue(t.due_date, t.status);
             const dueSoon = isDueSoon(t.due_date);
+            const done = effectiveStatus(t) === "done";
+            const stepsDone = t.steps?.filter((s) => s.is_done).length ?? 0;
+            const stepsTotal = t.steps?.length ?? 0;
+            const progress = stepsTotal > 0 ? stepsDone / stepsTotal : done ? 1 : 0;
+            const isKritisk = t.priority === "Kritisk";
+            const weekdayShort = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
             return (
               <article
                 key={t.id}
                 className={cn(
-                  "cursor-pointer overflow-hidden rounded-2xl border bg-card shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)]",
-                  overdue ? "border-destructive/40" : "border-border/60"
+                  "cursor-pointer overflow-hidden rounded-xl border bg-card shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)]",
+                  done ? "opacity-60 border-border/40" : overdue ? "border-destructive/40" : "border-border/60"
                 )}
                 onClick={() => openDetail(t)}
               >
-                <header className="flex items-start justify-between gap-3 p-4 md:p-5">
+                <div className="flex items-start gap-3 px-4 pt-4 pb-3">
+                  {/* Priority indicator */}
+                  <div className={cn(
+                    "mt-1 h-2 w-2 shrink-0 rounded-full",
+                    isKritisk ? "bg-destructive" : overdue ? "bg-destructive/60" : "bg-muted-foreground/30"
+                  )} />
+
                   <div className="min-w-0 flex-1">
-                    <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                      <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", priorityClass(t.priority))}>{t.priority}</span>
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{t.category}</span>
-                      {t.recurrence_rule && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-medium text-primary">
-                          <Repeat className="h-3 w-3" />{RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label}
+                    <h3 className={cn("text-sm font-semibold leading-snug", done && "line-through text-muted-foreground")}>
+                      {t.title}
+                    </h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                      {t.due_date && (
+                        <span className={cn("inline-flex items-center gap-1", overdue && "text-destructive font-medium")}>
+                          <Clock className="h-3 w-3" />
+                          {new Date(t.due_date).toLocaleDateString("sv-SE", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </span>
                       )}
-                      {overdue && <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive"><AlertTriangle className="h-3 w-3" />Försenad</span>}
-                      {dueSoon && !overdue && <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning-foreground"><Clock className="h-3 w-3" />Snart</span>}
-                    </div>
-                    <h3 className="text-sm font-semibold leading-tight md:text-base">{t.title}</h3>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      {t.due_date && <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{new Date(t.due_date).toLocaleDateString("sv-SE")}</span>}
+                      {t.recurrence_rule && (
+                        <span className="inline-flex items-center gap-1">
+                          <Repeat className="h-3 w-3" />
+                          {t.recurrence_rule === "weekly" && t.recurrence_days && t.recurrence_days.length > 0
+                            ? `${RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label} ${[...t.recurrence_days].sort((a, b) => a - b).map(d => weekdayShort[d]).join(", ")}`
+                            : RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label
+                          }
+                        </span>
+                      )}
                       {t.assignees && t.assignees.length > 0 && (
                         <span className="inline-flex items-center gap-1">
                           <Users className="h-3 w-3" />
@@ -803,22 +820,34 @@ function TasksPage() {
                       )}
                     </div>
                   </div>
-                  <div className="shrink-0">{statusBadge(effectiveStatus(t))}</div>
-                </header>
-                {/* Progress bar for steps */}
-                {t.steps && t.steps.length > 0 && (
-                  <div className="px-4 pb-3 md:px-5">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <div className="flex-1 rounded-full bg-muted h-1.5 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-primary transition-all"
-                          style={{ width: `${Math.round((t.steps.filter(s => s.is_done).length / t.steps.length) * 100)}%` }}
-                        />
-                      </div>
-                      <span>{t.steps.filter(s => s.is_done).length}/{t.steps.length}</span>
-                    </div>
+
+                  {/* Status / done indicator */}
+                  <div className="shrink-0">
+                    {done
+                      ? <CheckCircle2 className="h-5 w-5 text-success" />
+                      : dueSoon
+                        ? <Clock className="h-4 w-4 text-warning-foreground" />
+                        : overdue
+                          ? <AlertTriangle className="h-4 w-4 text-destructive" />
+                          : <Circle className="h-5 w-5 text-muted-foreground/30" />
+                    }
                   </div>
-                )}
+                </div>
+
+                {/* Progress bar — always shown, shows completion */}
+                <div className="px-4 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 overflow-hidden rounded-full bg-muted h-1.5">
+                      <div
+                        className={cn("h-full rounded-full transition-all", done ? "bg-success" : "bg-primary")}
+                        style={{ width: `${Math.round(progress * 100)}%` }}
+                      />
+                    </div>
+                    {stepsTotal > 0 && (
+                      <span className="text-[11px] text-muted-foreground tabular-nums">{stepsDone}/{stepsTotal}</span>
+                    )}
+                  </div>
+                </div>
               </article>
             );
           })}
@@ -899,29 +928,44 @@ function TasksPage() {
                         {q.is_required && <span className="ml-1 text-destructive">*</span>}
                       </Label>
                       {q.question_type === "yes_no" ? (
-                        <div className="flex gap-2">
+                        <div className="flex items-center gap-3">
                           {(["Ja", "Nej"] as const).map((opt) => {
                             const current = answerDraft[q.id] ?? q.answer ?? "";
                             const active = current === opt;
+                            const isYes = opt === "Ja";
                             return (
                               <button
                                 key={opt}
                                 type="button"
+                                aria-label={opt}
                                 className={cn(
-                                  "rounded-full border px-5 py-1.5 text-sm font-medium transition-colors",
+                                  "flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all",
                                   active
-                                    ? opt === "Ja" ? "bg-success/20 border-success text-success" : "bg-destructive/15 border-destructive/50 text-destructive"
-                                    : "border-border/60 text-muted-foreground hover:border-primary/50"
+                                    ? isYes
+                                      ? "border-success bg-success/15 text-success scale-110"
+                                      : "border-destructive bg-destructive/15 text-destructive scale-110"
+                                    : "border-border/60 text-muted-foreground/50 hover:border-muted-foreground/40 hover:scale-105"
                                 )}
                                 onClick={() => {
                                   setAnswerDraft(p => ({ ...p, [q.id]: opt }));
                                   void saveAnswer(detailTask, q, opt);
                                 }}
                               >
-                                {opt}
+                                {isYes
+                                  ? <CheckCircle2 className="h-5 w-5" />
+                                  : <X className="h-5 w-5" />
+                                }
                               </button>
                             );
                           })}
+                          {(answerDraft[q.id] ?? q.answer) && (
+                            <span className={cn(
+                              "text-sm font-medium",
+                              (answerDraft[q.id] ?? q.answer) === "Ja" ? "text-success" : "text-destructive"
+                            )}>
+                              {answerDraft[q.id] ?? q.answer}
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <Textarea
