@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase, type AppUser } from "@/lib/supabase";
+import { supabase, type AppUser, type Task } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 
@@ -326,60 +326,28 @@ type ParsedDelivery = {
   supplier: string;
 };
 
-function parsePdfText(text: string): ParsedDelivery[] {
+function parseCsvDelivery(text: string): ParsedDelivery[] {
   const results: ParsedDelivery[] = [];
   const dayNames = new Set(Object.keys(DAY_TO_INDEX));
-  const timeRe = /^\d{2}:\d{2}$/;
-
-  // Split into lines, then within each line split on 2+ spaces to get columns
-  // pdfjs emits one row per line, each cell already separated
-  const lines = text.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean);
-
+  // Strip BOM and split lines
+  const lines = text.replace(/^\uFEFF/, "").split(/[\r\n]+/).filter(Boolean);
   for (const line of lines) {
-    // Each line should look like: "Måndag 13:50 Söndag 11:35 Standard ARLA FOODS AB..."
-    // Split on whitespace to get tokens within the line
-    const tokens = line.split(/\s+/);
-    if (tokens.length < 5) continue;
-
-    // First token must be a day name
-    if (!dayNames.has(tokens[0].toLowerCase())) continue;
-
-    // Find pattern: Day Time Day Time FlowName ...Supplier
-    // tokens[0] = DelivDay, tokens[1] = DelivTime, tokens[2] = OrderDay, tokens[3] = StopTime, tokens[4] = FlowName, rest = Supplier
-    if (timeRe.test(tokens[1]) && dayNames.has(tokens[2]?.toLowerCase()) && timeRe.test(tokens[3])) {
-      const flowName = tokens[4] ?? "";
-      // Supplier ends before the trailing " 1" page number if present
-      const supplierTokens = tokens.slice(5).filter((t) => t !== "1" && !/^\d+$/.test(t));
-      results.push({
-        deliveryDay: tokens[0],
-        deliveryTime: tokens[1],
-        orderDay: tokens[2],
-        stopTime: tokens[3],
-        flowName,
-        supplier: supplierTokens.join(" "),
-      });
-      continue;
+    // Parse CSV fields (quoted or unquoted)
+    const fields: string[] = [];
+    let cur = "";
+    let inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQuote = !inQuote; }
+      else if (ch === "," && !inQuote) { fields.push(cur.trim()); cur = ""; }
+      else { cur += ch; }
     }
-
-    // Fallback: scan for two times within the line
-    const timeIdxs: number[] = [];
-    for (let j = 0; j < tokens.length; j++) {
-      if (timeRe.test(tokens[j])) timeIdxs.push(j);
-    }
-    if (timeIdxs.length < 2) continue;
-    const deliveryTime = tokens[timeIdxs[0]];
-    const stopTime = tokens[timeIdxs[1]];
-    // Find order day between the two times
-    let orderDay = "";
-    for (let j = timeIdxs[0] + 1; j < timeIdxs[1]; j++) {
-      if (dayNames.has(tokens[j]?.toLowerCase())) { orderDay = tokens[j]; break; }
-    }
-    const afterStop = tokens.slice(timeIdxs[1] + 1);
-    const flowName = afterStop[0] ?? "";
-    const supplier = afterStop.slice(1).filter((t) => t !== "1" && !/^\d+$/.test(t)).join(" ");
-    if (flowName) {
-      results.push({ deliveryDay: tokens[0], deliveryTime, orderDay, stopTime, flowName, supplier });
-    }
+    fields.push(cur.trim());
+    if (fields.length < 6) continue;
+    const [deliveryDay, deliveryTime, orderDay, stopTime, flowName, supplier] = fields;
+    if (!dayNames.has(deliveryDay.toLowerCase())) continue;
+    if (!/^\d{2}:\d{2}$/.test(deliveryTime)) continue;
+    results.push({ deliveryDay, deliveryTime, orderDay, stopTime, flowName, supplier });
   }
   return results;
 }
@@ -483,6 +451,7 @@ function SchemaPage() {
   const [importFiles, setImportFiles] = useState<File[]>([]);
   const [importProcessing, setImportProcessing] = useState(false);
   const [pdfPreviews, setPdfPreviews] = useState<Record<string, ParsedDelivery[]>>({});
+  const [scheduleTasks, setScheduleTasks] = useState<Task[]>([]);
 
   const importInputRef = useRef<HTMLInputElement>(null);
   const storeId = activeStore?.id ?? user?.store_id ?? null;
@@ -491,13 +460,12 @@ function SchemaPage() {
   async function addImportFiles(newFiles: File[]) {
     const merged = [...importFiles, ...newFiles].filter((f, i, arr) => arr.findIndex((x) => x.name === f.name) === i);
     setImportFiles(merged);
-    // Parse PDFs immediately for preview
+    // Parse CSVs immediately for preview
     for (const f of newFiles) {
-      if (!f.name.endsWith(".pdf") || pdfPreviews[f.name] !== undefined) continue;
+      if (!f.name.toLowerCase().endsWith(".csv") || pdfPreviews[f.name] !== undefined) continue;
       try {
-        const buf = await f.arrayBuffer();
-        const text = await extractPdfText(buf);
-        const entries = parsePdfText(text);
+        const text = await f.text();
+        const entries = parseCsvDelivery(text);
         setPdfPreviews((p) => ({ ...p, [f.name]: entries }));
       } catch {
         setPdfPreviews((p) => ({ ...p, [f.name]: [] }));
@@ -522,6 +490,20 @@ function SchemaPage() {
     if (!activeImport) return;
     loadScheduleData(activeImport.id);
   }, [activeImport]);
+
+  useEffect(() => {
+    if (!storeId || !activeImport) return;
+    const weekEnd = addDays(activeImport.week_start_date, 6);
+    supabase
+      .from("tasks")
+      .select("id, title, due_date, assigned_to, status, priority")
+      .eq("store_id", storeId)
+      .not("status", "eq", "done")
+      .not("status", "eq", "cancelled")
+      .gte("due_date", activeImport.week_start_date)
+      .lte("due_date", weekEnd)
+      .then(({ data }) => setScheduleTasks((data ?? []) as Task[]));
+  }, [storeId, activeImport]);
 
   async function loadImports() {
     if (!storeId) return;
@@ -606,14 +588,13 @@ function SchemaPage() {
           setPdfPreviews({});
           setMappingOpen(true);
           return; // XML opens mapping dialog; only handle first XML
-        } else if (ext === "pdf") {
+        } else if (ext === "csv") {
           try {
             // Re-use already-parsed preview if available
             let entries = pdfPreviews[file.name];
             if (entries === undefined) {
-              const arrayBuffer = await file.arrayBuffer();
-              const text = await extractPdfText(arrayBuffer);
-              entries = parsePdfText(text);
+              const text = await file.text();
+              entries = parseCsvDelivery(text);
             }
             if (entries.length === 0) {
               toast.error(`Inga leveranser hittades i ${file.name}`);
@@ -639,7 +620,7 @@ function SchemaPage() {
             console.error(err);
           }
         } else {
-          toast.error(`Okänt filformat: ${file.name}. Ladda upp .xml (schema) eller .pdf (leveransplan).`);
+          toast.error(`Okänt filformat: ${file.name}. Ladda upp .xml (schema) eller .csv (leveransplan).`);
         }
       }
       setImportDialogOpen(false);
@@ -784,7 +765,10 @@ function SchemaPage() {
       const appUser = mapping?.app_user_id ? appUsers.find((u) => u.id === mapping.app_user_id) : null;
       const weekMinutes = allShifts.filter((s) => !s.is_absence_day && s.start_time).reduce((sum, s) => sum + (s.net_minutes > 0 ? s.net_minutes : Math.max(0, s.gross_minutes - s.break_minutes)), 0);
       const initials = (appUser?.display_name ?? emp.employee_name).split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase();
-      return { emp, dayShifts, workShifts, absenceShift, appUser, weekMinutes, initials };
+      const dayTasks = appUser
+        ? scheduleTasks.filter((t) => t.assigned_to === appUser.id && t.due_date && t.due_date.slice(0, 10) === currentDate)
+        : [];
+      return { emp, dayShifts, workShifts, absenceShift, appUser, weekMinutes, initials, dayTasks };
     });
 
   const workingToday = employeeRows.filter((r) => r.workShifts.length > 0).length;
@@ -841,7 +825,7 @@ function SchemaPage() {
                 Enbart visning
               </div>
             )}
-            <input ref={importInputRef} type="file" accept=".xml,.pdf" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length) addImportFiles(files); e.target.value = ""; }} />
+            <input ref={importInputRef} type="file" accept=".xml,.csv" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length) addImportFiles(files); e.target.value = ""; }} />
           </div>
         </div>
       </div>
@@ -1029,10 +1013,10 @@ function SchemaPage() {
                   <p className="text-sm text-muted-foreground">Inga pass schemalagda denna dag</p>
                 </div>
               ) : (
-                employeeRows.map(({ emp, workShifts, absenceShift, appUser, weekMinutes, initials }) => {
+                employeeRows.map(({ emp, workShifts, absenceShift, appUser, weekMinutes, initials, dayTasks }) => {
                   const isSemesterDay = absenceShift?.deviation_cause?.toLowerCase().includes("semester") || absenceShift?.shift_name?.toLowerCase() === "semester";
                   return (
-                  <div key={emp.id} className={["group flex border-b border-border/20 last:border-b-0 transition-colors", isSemesterDay ? "bg-red-50/60 hover:bg-red-50/80 dark:bg-red-950/20" : "hover:bg-muted/20"].join(" ")}>
+                  <div key={emp.id} className={["group flex border-b border-border/20 last:border-b-0 transition-colors", isSemesterDay ? "bg-red-50/60 hover:bg-red-50/80 dark:bg-red-950/20" : "hover:bg-muted/20"].join(" ")} style={{ minHeight: dayTasks.length > 0 ? "56px" : undefined }}>
                     <div className={["flex w-48 shrink-0 items-center gap-2.5 border-r px-4 py-3", isSemesterDay ? "border-red-200/60 dark:border-red-800/40" : "border-border/30"].join(" ")}>
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
                         style={{ background: isSemesterDay ? "#fca5a5" : appUser ? "oklch(0.5 0.16 148)" : "oklch(0.88 0.02 145)", color: isSemesterDay ? "#7f1d1d" : appUser ? "white" : "oklch(0.4 0.05 145)" }}>
@@ -1044,52 +1028,78 @@ function SchemaPage() {
                       </div>
                     </div>
                     <div className="relative flex-1 py-2.5" style={{ minWidth: `${TOTAL_HOURS * 60}px` }}>
-                      {isSemesterDay && (
-                        <div className="absolute inset-0 flex items-center px-4">
+                      <div className="absolute inset-0 flex pointer-events-none">
+                        {hourMarkers.map((h) => <div key={h} className="flex-1 border-r border-border/15 last:border-r-0" />)}
+                      </div>
+                      {currentNowPercent >= 0 && (
+                        <div className="absolute top-0 bottom-0 z-10 w-px bg-destructive/70 pointer-events-none" style={{ left: `${currentNowPercent}%` }} />
+                      )}
+                      {isSemesterDay ? (
+                        <div className="absolute top-1.5 bottom-1.5 flex items-center" style={{ left: currentNowPercent >= 0 ? `calc(${currentNowPercent}% + 4px)` : "12px" }}>
                           <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-100/60 px-3 py-1.5 dark:border-red-800/40 dark:bg-red-900/20">
                             <span className="text-[11px] font-medium text-red-600 dark:text-red-400">Semester</span>
                           </div>
                         </div>
-                      )}
-                      {!isSemesterDay && (
-                        <>
-                          <div className="absolute inset-0 flex pointer-events-none">
-                            {hourMarkers.map((h) => <div key={h} className="flex-1 border-r border-border/15 last:border-r-0" />)}
-                          </div>
-                          {currentNowPercent >= 0 && (
-                            <div className="absolute top-0 bottom-0 z-10 w-px bg-destructive/70 pointer-events-none" style={{ left: `${currentNowPercent}%` }} />
-                          )}
-                          {workShifts.length === 0 ? (
-                            <div className="flex h-full items-center px-3">
-                              <span className="text-[11px] italic text-muted-foreground/40">{absenceShift?.deviation_cause || "Ledig"}</span>
+                      ) : workShifts.length === 0 ? (
+                        <div className="flex h-full items-center px-3">
+                          <span className="text-[11px] italic text-muted-foreground/40">{absenceShift?.deviation_cause || "Ledig"}</span>
+                        </div>
+                      ) : (
+                        workShifts.map((shift) => {
+                          const left = timeToPercent(shift.start_time!);
+                          const width = shiftWidthPercent(shift.start_time!, shift.stop_time!);
+                          const col = shiftColor(shift.shift_name, shift.color);
+                          const light = isLightColor(col);
+                          const bws: BreakWindow[] = Array.isArray(shift.break_windows) ? shift.break_windows : [];
+                          return (
+                            <div key={shift.id} className="absolute top-1.5 bottom-1.5" style={{ left: `${Math.max(0, left)}%`, width: `${Math.max(width, 1.5)}%`, minWidth: "36px" }}>
+                              <div
+                                className="absolute inset-0 flex items-center gap-1 overflow-hidden rounded-lg px-2 text-[11px] font-semibold shadow-sm cursor-default select-none transition-opacity hover:opacity-90"
+                                style={{ backgroundColor: col, color: light ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.92)", borderLeft: `2px solid ${light ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.3)"}` }}
+                                title={[
+                                  `${shift.shift_name || emp.employee_name}: ${shift.start_time} – ${shift.stop_time}`,
+                                  `Brutto: ${minsToHours(shift.gross_minutes)}`,
+                                  shift.break_minutes > 0 ? `Rast: ${shift.break_minutes} min` : null,
+                                  `Netto: ${minsToHours(shift.net_minutes > 0 ? shift.net_minutes : Math.max(0, shift.gross_minutes - shift.break_minutes))}`,
+                                  shift.is_lended ? "↔ Utlånad/inlånad" : null,
+                                ].filter(Boolean).join("\n")}>
+                                {shift.is_lended && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
+                                <span className="truncate leading-tight">
+                                  {shift.shift_name ? <>{shift.shift_name}<br /><span className="opacity-70">{shift.start_time}–{shift.stop_time}</span></> : `${shift.start_time}–${shift.stop_time}`}
+                                </span>
+                              </div>
+                              {bws.map((bw, bi) => {
+                                const bLeft = ((timeToPercent(bw.start) - left) / width) * 100;
+                                const bWidth = ((bw.minutes / (TOTAL_HOURS * 60)) * 100 / width) * 100;
+                                return (
+                                  <div key={bi} className="absolute top-0 bottom-0 z-20 pointer-events-none"
+                                    style={{ left: `${Math.max(0, bLeft)}%`, width: `${Math.max(bWidth, 1)}%` }}
+                                    title={`Rast ${bw.start}, ${bw.minutes} min`}>
+                                    <div className="absolute inset-0 rounded-sm bg-black/25 backdrop-brightness-75" />
+                                  </div>
+                                );
+                              })}
                             </div>
-                          ) : (
-                            workShifts.map((shift) => {
-                              const left = timeToPercent(shift.start_time!);
-                              const width = shiftWidthPercent(shift.start_time!, shift.stop_time!);
-                              const col = shiftColor(shift.shift_name, shift.color);
-                              const light = isLightColor(col);
-                              return (
-                                <div key={shift.id}
-                                  className="absolute top-1.5 bottom-1.5 flex items-center gap-1 overflow-hidden rounded-lg px-2 text-[11px] font-semibold shadow-sm cursor-default select-none transition-opacity hover:opacity-90"
-                                  style={{ left: `${Math.max(0, left)}%`, width: `${Math.max(width, 1.5)}%`, minWidth: "36px", backgroundColor: col, color: light ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.92)", borderLeft: `2px solid ${light ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.3)"}` }}
-                                  title={[
-                                    `${shift.shift_name || emp.employee_name}: ${shift.start_time} – ${shift.stop_time}`,
-                                    `Brutto: ${minsToHours(shift.gross_minutes)}`,
-                                    shift.break_minutes > 0 ? `Rast: ${shift.break_minutes} min` : null,
-                                    `Netto: ${minsToHours(shift.net_minutes > 0 ? shift.net_minutes : Math.max(0, shift.gross_minutes - shift.break_minutes))}`,
-                                    shift.is_lended ? "↔ Utlånad/inlånad" : null,
-                                  ].filter(Boolean).join("\n")}>
-                                  {shift.is_lended && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
-                                  <span className="truncate leading-tight">
-                                    {shift.shift_name ? <>{shift.shift_name}<br /><span className="opacity-70">{shift.start_time}–{shift.stop_time}</span></> : `${shift.start_time}–${shift.stop_time}`}
-                                  </span>
-                                </div>
-                              );
-                            })
-                          )}
-                        </>
+                          );
+                        })
                       )}
+                      {dayTasks.map((task) => {
+                        if (!task.due_date) return null;
+                        const dueTime = new Date(task.due_date).toTimeString().slice(0, 5);
+                        const dueH = parseInt(dueTime.split(":")[0]);
+                        if (dueH < TIMELINE_START || dueH > TIMELINE_END) return null;
+                        const dueLeft = timeToPercent(dueTime);
+                        const isLate = task.status === "late" || new Date(task.due_date) < new Date();
+                        return (
+                          <div key={task.id} className="absolute bottom-0.5 z-30 -translate-x-1/2 pointer-events-auto" style={{ left: `${dueLeft}%` }} title={`${task.title}\nKlar senast: ${dueTime}\nPrioritet: ${task.priority}`}>
+                            <div className={["flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold shadow-sm whitespace-nowrap", isLate ? "bg-destructive text-destructive-foreground" : "bg-amber-500 text-white"].join(" ")}>
+                              <Timer className="h-2.5 w-2.5 shrink-0" />
+                              <span className="truncate max-w-[80px]">{task.title}</span>
+                              <span className="opacity-80">{dueTime}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                   );
@@ -1262,7 +1272,7 @@ function SchemaPage() {
               onDrop={(e) => {
                 e.preventDefault();
                 setImportDragOver(false);
-                const dropped = Array.from(e.dataTransfer.files).filter((f) => f.name.endsWith(".xml") || f.name.endsWith(".pdf"));
+                const dropped = Array.from(e.dataTransfer.files).filter((f) => f.name.endsWith(".xml") || f.name.toLowerCase().endsWith(".csv"));
                 if (dropped.length) addImportFiles(dropped);
               }}
               onClick={() => importInputRef.current?.click()}
@@ -1272,7 +1282,7 @@ function SchemaPage() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">Dra och släpp filer här</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">eller klicka för att välja · .xml och .pdf</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">eller klicka för att välja · .xml och .csv</p>
               </div>
             </div>
 
@@ -1280,23 +1290,23 @@ function SchemaPage() {
             {importFiles.length > 0 && (
               <div className="space-y-3">
                 {importFiles.map((f) => {
-                  const isPdf = f.name.endsWith(".pdf");
+                  const isCsv = f.name.toLowerCase().endsWith(".csv");
                   const preview = pdfPreviews[f.name];
                   return (
                     <div key={f.name} className="rounded-xl border border-border/60 bg-card overflow-hidden">
                       {/* File header row */}
                       <div className="flex items-center gap-2.5 px-3 py-2.5">
-                        {isPdf ? <FileText className="h-4 w-4 shrink-0 text-info" /> : <FileCode2 className="h-4 w-4 shrink-0 text-primary" />}
+                        {isCsv ? <FileText className="h-4 w-4 shrink-0 text-info" /> : <FileCode2 className="h-4 w-4 shrink-0 text-primary" />}
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-xs font-medium text-foreground">{f.name}</p>
                           <p className="text-[10px] text-muted-foreground">
-                            {isPdf ? "Leveransplan PDF" : "Schema XML"} · {(f.size / 1024).toFixed(0)} KB
-                            {isPdf && preview !== undefined && (
+                            {isCsv ? "Leveransplan CSV" : "Schema XML"} · {(f.size / 1024).toFixed(0)} KB
+                            {isCsv && preview !== undefined && (
                               <span className={preview.length > 0 ? " · text-success" : " · text-warning"}>
                                 {preview.length > 0 ? ` · ${preview.length} leveranser hittade` : " · inga leveranser hittades"}
                               </span>
                             )}
-                            {isPdf && preview === undefined && <span className="text-muted-foreground"> · läser…</span>}
+                            {isCsv && preview === undefined && <span className="text-muted-foreground"> · läser…</span>}
                           </p>
                         </div>
                         <button className="shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-destructive transition-colors" onClick={(e) => { e.stopPropagation(); removeImportFile(f.name); }} aria-label="Ta bort">
@@ -1532,41 +1542,6 @@ function SchemaPage() {
   );
 }
 
-// ─── PDF text extraction via pdfjs-dist ──────────────────────────────────────
-
-async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
-  const pdfjsLib = await import("pdfjs-dist");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.mjs",
-    import.meta.url,
-  ).toString();
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer), useSystemFonts: true });
-  const pdf = await loadingTask.promise;
-  const pageTexts: string[] = [];
-
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
-    const content = await page.getTextContent();
-    // Group items by their Y position to reconstruct rows
-    const rows: Map<number, string[]> = new Map();
-    for (const item of content.items) {
-      if (!("str" in item)) continue;
-      const str = (item as { str: string; transform: number[] }).str;
-      if (!str.trim()) continue;
-      const y = Math.round((item as { str: string; transform: number[] }).transform[5]);
-      let key = y;
-      for (const ey of rows.keys()) {
-        if (Math.abs(ey - y) <= 3) { key = ey; break; }
-      }
-      if (!rows.has(key)) rows.set(key, []);
-      rows.get(key)!.push(str);
-    }
-    // Sort rows top-to-bottom (higher y = higher on page in PDF coords)
-    const sorted = [...rows.entries()].sort((a, b) => b[0] - a[0]);
-    pageTexts.push(sorted.map(([, parts]) => parts.join(" ")).join("\n"));
-  }
-  return pageTexts.join("\n");
-}
 
 function getISOWeek(date: Date): number {
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
