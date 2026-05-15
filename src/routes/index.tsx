@@ -64,7 +64,6 @@ type Stats = {
   overdueTasks: number;
   openIncidents: number;
   completionRate: number;
-  recentIncidents: { id: string; title: string; status: string; created_at: string }[];
 };
 
 function HubPage() {
@@ -86,7 +85,7 @@ function HubPage() {
       if (storeFilter) tasksQ = tasksQ.eq("store_id", storeFilter);
       const { data: tasks } = await tasksQ;
 
-      let incQ = supabase.from("incidents").select("id, title, status, created_at").order("created_at", { ascending: false }).limit(5);
+      let incQ = supabase.from("incidents").select("status");
       if (storeFilter) incQ = incQ.eq("store_id", storeFilter);
       const { data: incidents } = await incQ;
 
@@ -97,10 +96,10 @@ function HubPage() {
       const total = all.length;
       const completionRate = total > 0 ? Math.round((done / total) * 100) : 0;
 
-      const inc = (incidents ?? []) as { id: string; title: string; status: string; created_at: string }[];
+      const inc = (incidents ?? []) as { status: string }[];
       const openIncidents = inc.filter((i) => ["open", "in_progress", "escalated"].includes(i.status)).length;
 
-      setStats({ openTasks, overdueTasks, openIncidents, completionRate, recentIncidents: inc.slice(0, 3) });
+      setStats({ openTasks, overdueTasks, openIncidents, completionRate });
     };
     load();
   }, [user, activeStore]);
@@ -148,28 +147,6 @@ function HubPage() {
         </div>
       )}
 
-      {/* Recent incidents */}
-      {stats && stats.recentIncidents.length > 0 && (
-        <div className="mx-auto mt-8 max-w-5xl">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Senaste avvikelser</h2>
-            <Link to="/avvikelser" className="text-sm font-medium text-primary hover:underline">Visa alla</Link>
-          </div>
-          <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
-            {stats.recentIncidents.map((inc, i) => (
-              <div key={inc.id} className={cn("flex items-center justify-between px-5 py-3.5", i > 0 && "border-t border-border/40")}>
-                <div>
-                  <p className="text-sm font-medium">{inc.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(inc.created_at).toLocaleDateString("sv-SE")}
-                  </p>
-                </div>
-                <IncidentStatusBadge status={inc.status} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -192,14 +169,3 @@ function StatTile({ icon: Icon, label, value, tone }: { icon: LucideIcon; label:
   );
 }
 
-function IncidentStatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    open: { label: "Ny", cls: "bg-info/15 text-info" },
-    in_progress: { label: "Pågår", cls: "bg-warning/15 text-warning-foreground" },
-    escalated: { label: "Eskalerad", cls: "bg-destructive/10 text-destructive" },
-    resolved: { label: "Löst", cls: "bg-success/15 text-success" },
-    closed: { label: "Stängt", cls: "bg-muted text-muted-foreground" },
-  };
-  const s = map[status] ?? { label: status, cls: "bg-muted text-muted-foreground" };
-  return <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium", s.cls)}>{s.label}</span>;
-}
