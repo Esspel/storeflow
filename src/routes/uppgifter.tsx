@@ -339,8 +339,6 @@ function TasksPage() {
     let didSpawn = false;
 
     for (const t of recurringTasks) {
-      if (t.recurrence_end && simToday > midnight(new Date(t.recurrence_end))) continue;
-
       // Duration the original task had from creation → due date
       const durationMs = Math.max(0,
         new Date(t.due_date!).getTime() - new Date(t.created_at).getTime()
