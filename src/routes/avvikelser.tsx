@@ -2,8 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   TriangleAlert as AlertTriangle, Clock, Download, MessageSquare,
-  Plus, Search, Send, Store, X, User, Image as ImageIcon,
+  Plus, Search, Send, Store, X, User, Image as ImageIcon, ZoomIn,
 } from "lucide-react";
+import { PhotoViewer } from "@/components/photo-viewer";
 
 import { PageHeader, StatCard } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -91,6 +92,7 @@ function IssuesPage() {
   });
   const [saving, setSaving] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [viewerIdx, setViewerIdx] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchIncidents = async () => {
@@ -537,10 +539,18 @@ function IssuesPage() {
                 <div className="space-y-1.5">
                   <p className="text-xs font-medium text-muted-foreground">Bilder ({detailImages.length})</p>
                   <div className="flex flex-wrap gap-2">
-                    {detailImages.map(img => (
-                      <a key={img.id} href={getPublicUrl(img.storage_path)} target="_blank" rel="noopener noreferrer">
-                        <img src={getPublicUrl(img.storage_path)} alt="" className="h-20 w-20 rounded-lg object-cover border border-border/60 hover:opacity-80 transition-opacity" />
-                      </a>
+                    {detailImages.map((img, i) => (
+                      <button
+                        key={img.id}
+                        type="button"
+                        className="group relative overflow-hidden rounded-lg border border-border/60 shrink-0"
+                        onClick={() => setViewerIdx(i)}
+                      >
+                        <img src={getPublicUrl(img.storage_path)} alt="" className="h-20 w-20 object-cover transition-transform group-hover:scale-105" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+                          <ZoomIn className="h-5 w-5 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                        </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -590,6 +600,15 @@ function IssuesPage() {
           </DialogContent>
         )}
       </Dialog>
+
+      {/* Photo viewer — native <dialog>, sits above all Radix modals */}
+      {viewerIdx !== null && detailImages.length > 0 && (
+        <PhotoViewer
+          images={detailImages.map(img => getPublicUrl(img.storage_path))}
+          initialIndex={viewerIdx}
+          onClose={() => setViewerIdx(null)}
+        />
+      )}
     </div>
   );
 }

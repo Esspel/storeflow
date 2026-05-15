@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, TriangleAlert as AlertTriangle, ZoomIn } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
+import { PhotoViewer } from "@/components/photo-viewer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -116,48 +116,6 @@ const emptyForm = (storeId: string) => ({
   assigneeGroupIds: [] as string[],
 });
 
-// Image lightbox — rendered into document.body via portal so it sits above
-// everything. The Dialog's onOpenChange is blocked while lightboxSrc is truthy,
-// so no event ever causes the dialog to close unintentionally.
-// We avoid all stopPropagation trickery — the guard in onOpenChange is enough.
-function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handler, true);
-    return () => window.removeEventListener("keydown", handler, true);
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.85)", padding: "16px" }}
-      onClick={onClose}
-    >
-      {/* Close button */}
-      <button
-        type="button"
-        style={{ position: "absolute", top: 16, right: 16, zIndex: 10000, background: "rgba(0,0,0,0.5)", border: "none", borderRadius: "50%", padding: 8, cursor: "pointer", color: "white", display: "flex", alignItems: "center", justifyContent: "center" }}
-        onClick={onClose}
-        aria-label="Stäng"
-      >
-        <X style={{ width: 20, height: 20 }} />
-      </button>
-      {/* Image — clicking it does NOT close */}
-      <img
-        src={src}
-        alt=""
-        style={{ maxHeight: "90vh", maxWidth: "100%", borderRadius: 12, boxShadow: "0 25px 50px rgba(0,0,0,0.5)", objectFit: "contain" }}
-        onClick={(e) => e.stopPropagation()}
-      />
-    </div>,
-    document.body,
-  );
-}
 
 function TasksPage() {
   const { user, activeStore, userStores } = useAuth();
@@ -256,26 +214,18 @@ function TasksPage() {
 
   // --- Recurring task spawning ---
   //
-  // Design:
-  //   Each recurring parent task spawns exactly ONE child per recurrence period.
-  //   When the simulated clock passes the start of the next period, the child is
-  //   created. Only ONE pending child exists at a time — we do NOT back-fill missed
-  //   periods (that would create noise). The most-recent incomplete period gets
-  //   one child.
+  // For each parent recurring task we compute EVERY period that should exist
+  // between the parent's due_date and today, then create all missing children
+  // in one pass (no looping over re-fetches).
   //
-  //   Due-date of child = periodStart + (parent.due_date - parent.created_at)
-  //   i.e. the same "window" duration the parent had, applied from the period start.
-  //   This means the child always has the same amount of time as the original task.
+  // Dedup key: period-start ISO day string stored on the child as a plain tag.
+  // We derive the period-start from the child's due_date by reversing the
+  // duration offset: periodStart = childDue - (parentDue - parentCreated).
   //
-  //   Children inherit recurrence_rule from the parent so badges render correctly.
+  // Child due_date = periodStart + (parentDue - parentCreated)
+  // — each child gets the same window the parent had.
   //
-  //   Period boundaries per rule:
-  //     daily          — period = 1 day,  starts every calendar day
-  //     every_other_day — period = 2 days
-  //     weekly          — period = 7 days
-  //     monthly         — period = 1 calendar month, same start-day
-  //     yearly          — period = 1 calendar year, same start-day
-  //     (weekly + recurrence_days) — one period per matching weekday within the week
+  // Children inherit recurrence_rule so the badge renders.
   const spawnRef = useRef(false);
 
   const spawnRecurringTasks = useCallback(async (taskList: TaskFull[]) => {
@@ -286,17 +236,23 @@ function TasksPage() {
     const simToday = new Date(nowMs);
     simToday.setHours(0, 0, 0, 0);
 
-    // Build set of already-spawned period-start dates per parent (day precision)
-    const spawnedPeriods = new Map<string, Set<string>>();
+    // day(d) — normalise a Date to midnight, returns a new Date
+    const day = (d: Date): Date => { const n = new Date(d); n.setHours(0,0,0,0); return n; };
+    const dayKey = (d: Date): string => day(d).toISOString();
+
+    // Build per-parent set of period-start keys that are already covered.
+    // We reconstruct period-start from each child: periodStart = childDue - duration
+    const coveredByParent = new Map<string, Set<string>>();
     for (const t of taskList) {
-      if (!t.parent_task_id) continue;
-      if (!spawnedPeriods.has(t.parent_task_id)) spawnedPeriods.set(t.parent_task_id, new Set());
-      if (t.due_date) {
-        // Store the ISO date string at day precision for dedup
-        const d = new Date(t.due_date);
-        d.setHours(0, 0, 0, 0);
-        spawnedPeriods.get(t.parent_task_id)!.add(d.toISOString());
-      }
+      if (!t.parent_task_id || !t.due_date) continue;
+      // Find the parent to get the duration
+      const parent = taskList.find(p => p.id === t.parent_task_id);
+      if (!parent || !parent.due_date) continue;
+      const durationMs = Math.max(0, new Date(parent.due_date).getTime() - new Date(parent.created_at).getTime());
+      const childDueMs = new Date(t.due_date).getTime();
+      const periodStartMs = childDueMs - durationMs;
+      if (!coveredByParent.has(t.parent_task_id)) coveredByParent.set(t.parent_task_id, new Set());
+      coveredByParent.get(t.parent_task_id)!.add(dayKey(new Date(periodStartMs)));
     }
 
     const recurringTasks = taskList.filter(
@@ -304,147 +260,126 @@ function TasksPage() {
     );
     if (recurringTasks.length === 0) { spawnRef.current = false; return; }
 
-    // Given a parent's created_at and due_date, returns the child's due_date
-    // when the child's period starts at `periodStart`.
-    function childDueDate(createdAt: string, parentDue: string, periodStart: Date): Date {
-      const created = new Date(createdAt).getTime();
-      const due = new Date(parentDue).getTime();
-      const durationMs = Math.max(0, due - created); // how long the parent had
-      return new Date(periodStart.getTime() + durationMs);
-    }
-
-    // Returns the period-start dates that SHOULD have a child by now, working
-    // backwards from simToday. We only spawn if there is NO existing child for
-    // that period-start day. Returns at most one missing period (the latest one).
-    function getMissingPeriodStart(
-      originDue: Date,
-      rule: string,
-      weekdays: number[] | null,
-      endDate: Date | null,
-      alreadySpawned: Set<string>,
-    ): Date | null {
-      const ceiling = endDate
-        ? (new Date(endDate) < simToday ? new Date(endDate) : simToday)
-        : simToday;
-      ceiling.setHours(0, 0, 0, 0);
-
-      // Collect all period starts up to ceiling
-      const periodStarts: Date[] = [];
+    // Returns all period-start Dates from day-after-originDue up to simToday
+    function allPeriodStarts(originDue: Date, rule: string, weekdays: number[] | null, endDate: Date | null): Date[] {
+      const ceiling = endDate ? (day(new Date(endDate)) < simToday ? day(new Date(endDate)) : simToday) : simToday;
+      const results: Date[] = [];
 
       if (rule === "weekly" && weekdays && weekdays.length > 0) {
-        // Each matching weekday within each week is its own period
-        const cur = new Date(originDue);
-        cur.setHours(0, 0, 0, 0);
-        cur.setDate(cur.getDate() + 1); // start day after the parent's due_date
+        const cur = day(new Date(originDue));
+        cur.setDate(cur.getDate() + 1);
         while (cur <= ceiling) {
-          const jsDay = cur.getDay(); // 0=Sun
-          const ourDay = jsDay === 0 ? 6 : jsDay - 1; // Mon=0, Sun=6
-          if (weekdays.includes(ourDay)) periodStarts.push(new Date(cur));
+          const jsDay = cur.getDay();
+          const ourDay = jsDay === 0 ? 6 : jsDay - 1; // Mon=0 Sun=6
+          if (weekdays.includes(ourDay)) results.push(new Date(cur));
           cur.setDate(cur.getDate() + 1);
         }
-      } else {
-        // Fixed-interval rules
-        const advance = (d: Date): Date => {
-          const n = new Date(d);
-          if (rule === "daily") { n.setDate(n.getDate() + 1); }
-          else if (rule === "every_other_day") { n.setDate(n.getDate() + 2); }
-          else if (rule === "weekly") { n.setDate(n.getDate() + 7); }
-          else if (rule === "monthly") {
-            const origDay = originDue.getDate();
-            n.setMonth(n.getMonth() + 1);
-            const daysInNewMonth = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
-            n.setDate(Math.min(origDay, daysInNewMonth));
-          } else if (rule === "yearly") {
-            n.setFullYear(n.getFullYear() + 1);
-          }
-          n.setHours(0, 0, 0, 0);
-          return n;
-        };
+        return results;
+      }
 
-        let cur = advance(new Date(originDue));
-        while (cur <= ceiling) {
-          periodStarts.push(new Date(cur));
-          cur = advance(new Date(cur));
+      const advance = (d: Date): Date => {
+        const n = new Date(d);
+        if (rule === "daily") { n.setDate(n.getDate() + 1); }
+        else if (rule === "every_other_day") { n.setDate(n.getDate() + 2); }
+        else if (rule === "weekly") { n.setDate(n.getDate() + 7); }
+        else if (rule === "monthly") {
+          const origDay = originDue.getDate();
+          n.setMonth(n.getMonth() + 1);
+          const daysInMonth = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
+          n.setDate(Math.min(origDay, daysInMonth));
+        } else if (rule === "yearly") {
+          n.setFullYear(n.getFullYear() + 1);
         }
+        n.setHours(0,0,0,0);
+        return n;
+      };
+
+      let cur = advance(day(new Date(originDue)));
+      while (cur <= ceiling) {
+        results.push(new Date(cur));
+        cur = advance(new Date(cur));
+      }
+      return results;
+    }
+
+    // Helper to copy a parent task's related rows to a new child
+    async function copyChildData(childId: string, t: TaskFull) {
+      const steps = (t.steps ?? []).map(s => ({
+        task_id: childId, label: s.label, sort_order: s.sort_order,
+        requires_photo: s.requires_photo, is_done: false,
+      }));
+      if (steps.length > 0) await supabase.from("task_steps").insert(steps);
+
+      const questions = (t.questions ?? []).map(q => ({
+        task_id: childId, label: q.label,
+        question_type: q.question_type ?? "text",
+        is_required: q.is_required, sort_order: q.sort_order,
+      }));
+      if (questions.length > 0) await supabase.from("task_questions").insert(questions);
+
+      const creatorImages = (t.images ?? []).filter(img => img.uploaded_by === t.created_by);
+      if (creatorImages.length > 0) {
+        await supabase.from("task_images").insert(
+          creatorImages.map(img => ({ task_id: childId, storage_path: img.storage_path, uploaded_by: img.uploaded_by }))
+        );
       }
 
-      // Find the LATEST period that doesn't already have a child
-      for (let i = periodStarts.length - 1; i >= 0; i--) {
-        const ps = periodStarts[i];
-        ps.setHours(0, 0, 0, 0);
-        if (!alreadySpawned.has(ps.toISOString())) return ps;
-      }
-      return null;
+      const assignees = (t.assignees ?? []).map(a => ({
+        task_id: childId, user_id: a.user_id, group_id: a.group_id,
+      }));
+      if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
     }
 
     let didSpawn = false;
 
     for (const t of recurringTasks) {
-      if (t.recurrence_end) {
-        const end = new Date(t.recurrence_end);
-        if (simToday > end) continue;
-      }
+      if (t.recurrence_end && simToday > day(new Date(t.recurrence_end))) continue;
 
-      const alreadySpawned = spawnedPeriods.get(t.id) ?? new Set<string>();
-      const originDue = new Date(t.due_date!);
-      const missingPeriodStart = getMissingPeriodStart(
-        originDue,
+      const durationMs = Math.max(0,
+        new Date(t.due_date!).getTime() - new Date(t.created_at).getTime()
+      );
+
+      const periodStarts = allPeriodStarts(
+        new Date(t.due_date!),
         t.recurrence_rule!,
         t.recurrence_days ?? null,
         t.recurrence_end ? new Date(t.recurrence_end) : null,
-        alreadySpawned,
       );
 
-      if (!missingPeriodStart) continue; // all periods covered
+      const covered = coveredByParent.get(t.id) ?? new Set<string>();
 
-      const dueDate = childDueDate(t.created_at, t.due_date!, missingPeriodStart);
+      for (const ps of periodStarts) {
+        if (covered.has(dayKey(ps))) continue; // already spawned this period
 
-      const { data: child } = await supabase.from("tasks").insert({
-        title: t.title,
-        description: t.description,
-        category: t.category,
-        priority: t.priority,
-        store_id: t.store_id,
-        due_date: dueDate.toISOString(),
-        recurrence_rule: t.recurrence_rule, // inherit so badge renders
-        recurrence_days: t.recurrence_days,
-        parent_task_id: t.id,
-        created_by: t.created_by,
-        assigned_to: t.assigned_to,
-        status: "todo",
-      }).select().maybeSingle();
+        const childDue = new Date(ps.getTime() + durationMs);
 
-      if (child) {
-        const steps = (t.steps ?? []).map((s) => ({
-          task_id: child.id, label: s.label,
-          sort_order: s.sort_order, requires_photo: s.requires_photo, is_done: false,
-        }));
-        if (steps.length > 0) await supabase.from("task_steps").insert(steps);
+        const { data: child } = await supabase.from("tasks").insert({
+          title: t.title,
+          description: t.description,
+          category: t.category,
+          priority: t.priority,
+          store_id: t.store_id,
+          due_date: childDue.toISOString(),
+          recurrence_rule: t.recurrence_rule,
+          recurrence_days: t.recurrence_days,
+          parent_task_id: t.id,
+          created_by: t.created_by,
+          assigned_to: t.assigned_to,
+          status: "todo",
+        }).select().maybeSingle();
 
-        const questions = (t.questions ?? []).map((q) => ({
-          task_id: child.id, label: q.label,
-          question_type: q.question_type ?? "text",
-          is_required: q.is_required, sort_order: q.sort_order,
-        }));
-        if (questions.length > 0) await supabase.from("task_questions").insert(questions);
-
-        const creatorImages = (t.images ?? []).filter(img => img.uploaded_by === t.created_by);
-        if (creatorImages.length > 0) {
-          await supabase.from("task_images").insert(
-            creatorImages.map((img) => ({ task_id: child.id, storage_path: img.storage_path, uploaded_by: img.uploaded_by }))
-          );
+        if (child) {
+          await copyChildData(child.id, t);
+          covered.add(dayKey(ps)); // prevent duplicates within this pass
+          didSpawn = true;
         }
+      }
 
-        const assignees = (t.assignees ?? []).map((a) => ({
-          task_id: child.id, user_id: a.user_id, group_id: a.group_id,
-        }));
-        if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
-
+      if (didSpawn) {
         await supabase.from("tasks")
           .update({ last_spawned_at: new Date(nowMs).toISOString() })
           .eq("id", t.id);
-        logAudit(user?.id ?? null, "task.recurrence.spawn", "tasks", child.id, { parent_id: t.id });
-        didSpawn = true;
+        logAudit(user?.id ?? null, "task.recurrence.spawn", "tasks", t.id, { periods: periodStarts.length });
       }
     }
 
@@ -748,24 +683,26 @@ function TasksPage() {
       />
 
       {/* Filters */}
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="rounded-full bg-muted/60 p-1">
-            {filters.map((f) => (
-              <TabsTrigger key={f.value} value={f.value}
-                className="gap-2 rounded-full px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm text-xs">
-                {f.label}
-                <span className="rounded-full bg-background/70 px-1.5 text-[10px] font-medium text-muted-foreground">
-                  {f.value === "all" ? visibleTasks.length : f.value === "today" ? visibleTasks.filter(isDueToday).length : visibleTasks.filter((t) => effectiveStatus(t) === f.value).length}
-                </span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-        <div className="ml-auto relative">
+      <div className="mb-5 space-y-2">
+        <div className="overflow-x-auto pb-1 -mx-1 px-1">
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="rounded-full bg-muted/60 p-1 w-max">
+              {filters.map((f) => (
+                <TabsTrigger key={f.value} value={f.value}
+                  className="gap-1.5 rounded-full px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm text-xs whitespace-nowrap">
+                  {f.label}
+                  <span className="rounded-full bg-background/70 px-1.5 text-[10px] font-medium text-muted-foreground">
+                    {f.value === "all" ? visibleTasks.length : f.value === "today" ? visibleTasks.filter(isDueToday).length : visibleTasks.filter((t) => effectiveStatus(t) === f.value).length}
+                  </span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Sök..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="h-9 rounded-full pl-9 text-sm w-40" />
+          <Input placeholder="Sök uppgifter..." value={search} onChange={(e) => setSearch(e.target.value)}
+            className="h-9 rounded-full pl-9 text-sm w-full" />
         </div>
       </div>
 
@@ -846,7 +783,7 @@ function TasksPage() {
 
       {/* DETAIL MODAL */}
       {detailTask && (
-        <Dialog open={!!detailTask} onOpenChange={(o) => { if (!o && !lightboxSrc) setDetailTask(null); }}>
+        <Dialog open={!!detailTask} onOpenChange={(o) => { if (!o) setDetailTask(null); }}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-start justify-between gap-2 pr-6">
@@ -1287,8 +1224,14 @@ function TasksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Lightbox */}
-      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
+      {/* Photo viewer — uses native <dialog> so it sits above Radix modals */}
+      {lightboxSrc && (
+        <PhotoViewer
+          images={detailTask ? detailTask.images?.map(img => getPublicUrl(img.storage_path)).filter(Boolean) ?? [lightboxSrc] : [lightboxSrc]}
+          initialIndex={detailTask?.images ? detailTask.images.findIndex(img => getPublicUrl(img.storage_path) === lightboxSrc) : 0}
+          onClose={() => setLightboxSrc(null)}
+        />
+      )}
     </div>
   );
 }
