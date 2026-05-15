@@ -420,9 +420,13 @@ function deliveryDateForDay(dayName: string, weekStartDate: string): string | nu
   if (!weekStartDate) return null;
   const idx = DAY_TO_INDEX[dayName.toLowerCase()];
   if (idx === undefined) return null;
-  const base = new Date(weekStartDate);
-  base.setDate(base.getDate() + idx);
-  return base.toISOString().slice(0, 10);
+  // Parse YYYY-MM-DD as local date to avoid UTC offset shifting the date
+  const [y, m, d] = weekStartDate.split("-").map(Number);
+  const base = new Date(y, m - 1, d + idx);
+  const yr = base.getFullYear();
+  const mo = String(base.getMonth() + 1).padStart(2, "0");
+  const dy = String(base.getDate()).padStart(2, "0");
+  return `${yr}-${mo}-${dy}`;
 }
 
 // ─── Time utils ───────────────────────────────────────────────────────────────
@@ -463,9 +467,12 @@ const DAY_NAMES = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag"
 const DAY_SHORT = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 
 function addDays(dateStr: string, n: number): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const result = new Date(y, m - 1, d + n);
+  const yr = result.getFullYear();
+  const mo = String(result.getMonth() + 1).padStart(2, "0");
+  const dy = String(result.getDate()).padStart(2, "0");
+  return `${yr}-${mo}-${dy}`;
 }
 
 // Convert any ISO timestamp to local YYYY-MM-DD so UTC-offset dates match the schedule day
