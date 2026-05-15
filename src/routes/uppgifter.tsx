@@ -66,6 +66,14 @@ function getSimTodayStartMs(): number {
   return d.getTime();
 }
 
+// Local-timezone YYYY-MM-DD string for a Date
+function localDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 // A task is due soon if its due_date is within today (but not yet past end of today)
 function isDueSoon(due_date: string | null): boolean {
   if (!due_date) return false;
@@ -239,24 +247,15 @@ function TasksPage() {
 
     // Normalise a Date to midnight local time, return new Date
     const midnight = (d: Date): Date => { const n = new Date(d); n.setHours(0,0,0,0); return n; };
-    // YYYY-MM-DD in LOCAL timezone (not UTC) — critical for correct dedup in non-UTC locales
-    const dateStr = (d: Date): string => {
-      const m = midnight(d);
-      const y = m.getFullYear();
-      const mo = String(m.getMonth() + 1).padStart(2, "0");
-      const day = String(m.getDate()).padStart(2, "0");
-      return `${y}-${mo}-${day}`;
-    };
 
     // Build per-parent set of period-start date strings that already have a child
     const coveredByParent = new Map<string, Set<string>>();
     for (const t of taskList) {
       if (!t.parent_task_id) continue;
       if (!coveredByParent.has(t.parent_task_id)) coveredByParent.set(t.parent_task_id, new Set());
-      // Use stored recurrence_period_start if available, fall back to due_date day
       const key = t.recurrence_period_start
         ? t.recurrence_period_start.slice(0, 10)
-        : (t.due_date ? dateStr(new Date(t.due_date)) : null);
+        : (t.due_date ? localDateStr(midnight(new Date(t.due_date))) : null);
       if (key) coveredByParent.get(t.parent_task_id)!.add(key);
     }
 
@@ -266,15 +265,21 @@ function TasksPage() {
     if (recurringTasks.length === 0) { spawnRef.current = false; return; }
 
     // Compute all period-start dates from day-after-originDue up through simToday
-    function allPeriodStarts(originDue: Date, rule: string, weekdays: number[] | null, endDate: Date | null): Date[] {
+    // startDate: the floor — no periods before this date (defaults to day after originDue)
+    function allPeriodStarts(originDue: Date, rule: string, weekdays: number[] | null, startDate: Date | null, endDate: Date | null): Date[] {
       const ceil = endDate
         ? (midnight(new Date(endDate)) < simToday ? midnight(new Date(endDate)) : simToday)
         : simToday;
+      // floor: whichever is later — day after originDue, or explicit startDate
+      const dayAfterOrigin = midnight(new Date(originDue));
+      dayAfterOrigin.setDate(dayAfterOrigin.getDate() + 1);
+      const floor = startDate && midnight(new Date(startDate)) > dayAfterOrigin
+        ? midnight(new Date(startDate))
+        : dayAfterOrigin;
       const results: Date[] = [];
 
       if (rule === "weekly" && weekdays && weekdays.length > 0) {
-        const cur = midnight(new Date(originDue));
-        cur.setDate(cur.getDate() + 1);
+        const cur = new Date(floor);
         while (cur <= ceil) {
           const jsDay = cur.getDay();
           const ourDay = jsDay === 0 ? 6 : jsDay - 1; // Mon=0 Sun=6
@@ -301,7 +306,10 @@ function TasksPage() {
         return n;
       };
 
-      let cur = advance(midnight(new Date(originDue)));
+      // Start at the first period >= floor
+      let cur = midnight(new Date(originDue));
+      cur = advance(cur);
+      while (cur < floor) cur = advance(cur);
       while (cur <= ceil) {
         results.push(new Date(cur));
         cur = advance(new Date(cur));
@@ -348,13 +356,14 @@ function TasksPage() {
         new Date(t.due_date!),
         t.recurrence_rule!,
         t.recurrence_days ?? null,
+        t.recurrence_start ? new Date(t.recurrence_start) : null,
         t.recurrence_end ? new Date(t.recurrence_end) : null,
       );
 
       const covered = coveredByParent.get(t.id) ?? new Set<string>();
 
       for (const ps of periodStarts) {
-        const psKey = dateStr(ps);
+        const psKey = localDateStr(ps);
         if (covered.has(psKey)) continue;
 
         const childDue = new Date(ps.getTime() + durationMs);
@@ -657,8 +666,9 @@ function TasksPage() {
   const simTodayEnd = new Date(simNow);
   simTodayEnd.setHours(23, 59, 59, 999);
 
-  // "Today" tab: tasks due strictly today (not overdue, not future)
+  // "Today" tab: tasks due today and not already done
   const isDueToday = (t: TaskFull) => {
+    if (t.status === "done") return false;
     if (!t.due_date) return true;
     const d = new Date(t.due_date);
     return d >= simTodayStart && d <= simTodayEnd;
@@ -1101,7 +1111,15 @@ function TasksPage() {
             {/* Recurrence */}
             <div className="space-y-1.5">
               <Label>Återkommande</Label>
-              <Select value={newTask.recurrence_rule || "__none"} onValueChange={(v) => setNewTask(p => ({ ...p, recurrence_rule: v === "__none" ? "" : v }))}>
+              <Select value={newTask.recurrence_rule || "__none"} onValueChange={(v) => {
+                  const rule = v === "__none" ? "" : v;
+                  setNewTask(p => ({
+                    ...p,
+                    recurrence_rule: rule,
+                    // Default start date to simulated today when a rule is first chosen
+                    recurrence_start: rule && !p.recurrence_start ? localDateStr(new Date(getSimulatedNow())) : p.recurrence_start,
+                  }));
+                }}>
                 <SelectTrigger><SelectValue placeholder="Ingen" /></SelectTrigger>
                 <SelectContent>
                   {RECURRENCE_OPTIONS.map(o => <SelectItem key={o.value || "__none"} value={o.value || "__none"}>{o.label}</SelectItem>)}
