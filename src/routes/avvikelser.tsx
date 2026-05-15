@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -392,91 +392,132 @@ function IssuesPage() {
         </div>
       )}
 
-      {/* CREATE DIALOG */}
+      {/* CREATE DIALOG — two-panel layout */}
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setUploadFiles([]); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Ny avvikelse</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label>Titel *</Label>
-              <Input placeholder="Kortfattad beskrivning" value={newIncident.title}
-                onChange={(e) => setNewIncident(p => ({ ...p, title: e.target.value }))} />
+        <DialogContent className="max-h-[92vh] w-full max-w-3xl overflow-hidden p-0 gap-0">
+          {/* Header bar */}
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-muted-foreground">Ny avvikelse</span>
+            {newIncident.title && <span className="text-sm font-semibold text-foreground truncate max-w-xs">{newIncident.title}</span>}
+            <div className="ml-auto flex items-center gap-2">
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setShowCreate(false)}>Avbryt</Button>
+              <Button size="sm" className="rounded-full" onClick={createIncident} disabled={saving || !newIncident.title}>
+                {saving ? "Sparar..." : "Skapa avvikelse"}
+              </Button>
             </div>
-            <div className="space-y-1.5">
-              <Label>Beskrivning</Label>
-              <Textarea placeholder="Beskriv avvikelsen..." value={newIncident.description}
-                onChange={(e) => setNewIncident(p => ({ ...p, description: e.target.value }))} rows={3} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Kategori</Label>
-                <Select value={newIncident.category} onValueChange={(v) => setNewIncident(p => ({ ...p, category: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["Drift", "Säkerhet", "Kundärende", "Skada", "Stöld", "Övrigt"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Prioritet</Label>
-                <Select value={newIncident.priority} onValueChange={(v) => setNewIncident(p => ({ ...p, priority: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["Låg", "Medel", "Hög", "Kritisk"].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Butik</Label>
-                <Select value={newIncident.store_id || "__none"} onValueChange={(v) => setNewIncident(p => ({ ...p, store_id: v === "__none" ? "" : v }))}>
-                  <SelectTrigger><SelectValue placeholder="Välj butik" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">Ingen</SelectItem>
-                    {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Ansvarig</Label>
-                <Select value={newIncident.responsible_user_id || "__none"} onValueChange={(v) => setNewIncident(p => ({ ...p, responsible_user_id: v === "__none" ? "" : v }))}>
-                  <SelectTrigger><SelectValue placeholder="Välj person" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">Ingen</SelectItem>
-                    {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+          </div>
+
+          <div className="flex overflow-hidden" style={{ maxHeight: "calc(92vh - 56px)" }}>
+            {/* LEFT: Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 min-w-0">
+              <input
+                placeholder="Titel på avvikelsen..."
+                value={newIncident.title}
+                onChange={(e) => setNewIncident(p => ({ ...p, title: e.target.value }))}
+                className="w-full border-0 bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground/50 outline-none focus:outline-none"
+              />
+              <Textarea
+                placeholder="Beskriv avvikelsen — vad hände, var, när?"
+                value={newIncident.description}
+                onChange={(e) => setNewIncident(p => ({ ...p, description: e.target.value }))}
+                rows={5}
+                className="resize-none border-0 bg-transparent px-0 text-sm text-muted-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 shadow-none"
+              />
+
+              {/* Images */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Bilder</p>
+                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
+                  onChange={(e) => { if (e.target.files) setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]); }} />
+                {uploadFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {uploadFiles.map((f, i) => (
+                      <div key={i} className="relative">
+                        <img src={URL.createObjectURL(f)} alt="" className="h-14 w-14 rounded-lg object-cover border border-border/60" />
+                        <button type="button" className="absolute -top-1 -right-1 rounded-full bg-destructive p-0.5 text-white"
+                          onClick={() => setUploadFiles(prev => prev.filter((_, idx) => idx !== i))}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImageIcon className="h-3.5 w-3.5" /> Välj bilder
+                </button>
               </div>
             </div>
 
-            {/* File upload */}
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" /> Bilder</Label>
-              <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
-                onChange={(e) => { if (e.target.files) setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]); }} />
-              <Button variant="outline" size="sm" className="w-full rounded-full" onClick={() => fileInputRef.current?.click()}>
-                <Plus className="mr-1 h-3.5 w-3.5" /> Välj bilder
-              </Button>
-              {uploadFiles.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {uploadFiles.map((f, i) => (
-                    <div key={i} className="relative">
-                      <img src={URL.createObjectURL(f)} alt="" className="h-14 w-14 rounded-lg object-cover border border-border/60" />
-                      <button type="button" className="absolute -top-1 -right-1 rounded-full bg-destructive p-0.5 text-white"
-                        onClick={() => setUploadFiles(prev => prev.filter((_, idx) => idx !== i))}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
+            {/* RIGHT: Properties sidebar */}
+            <div className="w-64 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/30">
+              <div className="divide-y divide-border/50">
+
+                {/* Prioritet */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Prioritet</span>
+                  <Select value={newIncident.priority} onValueChange={(v) => setNewIncident(p => ({ ...p, priority: v }))}>
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs font-medium shadow-none focus:ring-0 justify-end">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["Låg", "Medel", "Hög", "Kritisk"].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
+
+                {/* Kategori */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <Store className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Kategori</span>
+                  <Select value={newIncident.category} onValueChange={(v) => setNewIncident(p => ({ ...p, category: v }))}>
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["Drift", "Säkerhet", "Kundärende", "Skada", "Stöld", "Övrigt"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Butik */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <Store className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Butik</span>
+                  <Select value={newIncident.store_id || "__none"} onValueChange={(v) => setNewIncident(p => ({ ...p, store_id: v === "__none" ? "" : v }))}>
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
+                      <SelectValue placeholder="Ingen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Ingen</SelectItem>
+                      {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Ansvarig */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <User className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Ansvarig</span>
+                  <Select value={newIncident.responsible_user_id || "__none"} onValueChange={(v) => setNewIncident(p => ({ ...p, responsible_user_id: v === "__none" ? "" : v }))}>
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
+                      <SelectValue placeholder="Ingen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Ingen</SelectItem>
+                      {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+              </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Avbryt</Button>
-            <Button onClick={createIncident} disabled={saving || !newIncident.title}>{saving ? "Sparar..." : "Skapa avvikelse"}</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

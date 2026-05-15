@@ -1238,21 +1238,23 @@ function TasksPage() {
             </div>
 
             {/* RIGHT: Properties sidebar */}
-            <div className="w-72 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/20">
+            <div className="w-72 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/30">
 
               {/* Property rows — Coop-inspired: label left, value/control right */}
               <div className="divide-y divide-border/50">
 
                 {/* Förfallodatum */}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Förfallodatum</span>
-                  <Input
-                    type="datetime-local"
-                    value={newTask.due_date}
-                    onChange={(e) => setNewTask(p => ({ ...p, due_date: e.target.value }))}
-                    className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0 text-right"
-                  />
+                <div className="flex items-start gap-3 px-4 py-3">
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <div className="flex flex-col gap-1 min-w-0 flex-1">
+                    <span className="text-xs text-muted-foreground">Förfallodatum</span>
+                    <input
+                      type="datetime-local"
+                      value={newTask.due_date}
+                      onChange={(e) => setNewTask(p => ({ ...p, due_date: e.target.value }))}
+                      className="w-full rounded border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    />
+                  </div>
                 </div>
 
                 {/* Prioritet */}
