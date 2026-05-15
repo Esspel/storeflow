@@ -1,5 +1,5 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
-import { Bell, ChevronDown, LogOut, Menu, Settings, User, X } from "lucide-react";
+import { Bell, ChevronDown, FlaskConical, LogOut, Menu, Settings, User, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -201,6 +201,14 @@ export function AppShell() {
                     <Link to="/personal" className="cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
                       Administration
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+                {isAdmin && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/testpanel" className="cursor-pointer">
+                      <FlaskConical className="mr-2 h-4 w-4" />
+                      Testpanel
                     </Link>
                   </DropdownMenuItem>
                 )}

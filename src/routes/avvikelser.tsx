@@ -82,9 +82,9 @@ function IssuesPage() {
 
   const fetchIncidents = async () => {
     let q = supabase.from("incidents").select("*, store:stores(*)").order("created_at", { ascending: false });
-    if (!isAdmin && activeStore) {
+    if (activeStore) {
       q = q.eq("store_id", activeStore.id);
-    } else if (!isAdmin && userStores.length > 0) {
+    } else if (userStores.length > 0) {
       q = q.in("store_id", userStores.map((s) => s.id));
     }
     const { data } = await q;

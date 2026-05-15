@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   CircleCheck as CheckCircle2, Circle, Clock, ImagePlus, ListChecks,
-  Plus, Repeat, Store, X, Search, AlertTriangle,
+  Plus, Repeat, Store, X, Search, FileText,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -16,7 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase, type Task, type TaskStep, type Store as StoreType, logAudit, createNotification } from "@/lib/supabase";
+import { supabase, type Task, type TaskStep, type Store as StoreType, type ChecklistTemplate, type ChecklistTemplateItem, logAudit, createNotification } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
@@ -53,65 +53,98 @@ function statusBadge(s: string) {
 
 type TaskWithSteps = Task & { steps: TaskStep[]; store?: StoreType };
 
+const emptyForm = (storeId: string) => ({
+  title: "",
+  description: "",
+  category: "Drift",
+  priority: "Medel",
+  store_id: storeId,
+  due_date: "",
+  recurrence_rule: "",
+  recurrence_days: [] as number[],
+  recurrence_interval: 1,
+  recurrence_start: "",
+  recurrence_end: "",
+  steps: [""] as string[],
+});
+
 function TasksPage() {
   const { user, activeStore, userStores } = useAuth();
   const isManager = user?.role === "manager" || user?.role === "admin";
-  const isAdmin = user?.role === "admin";
 
   const [tasks, setTasks] = useState<TaskWithSteps[]>([]);
   const [stores, setStores] = useState<StoreType[]>([]);
+  const [templates, setTemplates] = useState<(ChecklistTemplate & { items: ChecklistTemplateItem[] })[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
-  const [filterStore, setFilterStore] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
-  const [newTask, setNewTask] = useState({
-    title: "",
-    description: "",
-    category: "Drift",
-    priority: "Medel",
-    store_id: activeStore?.id ?? "",
-    due_date: "",
-    recurrence_rule: "",
-    recurrence_days: [] as number[],
-    recurrence_interval: 1,
-    recurrence_start: "",
-    recurrence_end: "",
-    steps: [""],
-  });
+  const [newTask, setNewTask] = useState(emptyForm(activeStore?.id ?? ""));
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const fetchTasks = async () => {
-    let q = supabase.from("tasks").select("*, store:stores(*), steps:task_steps(*)").order("created_at", { ascending: false });
-    if (!isAdmin && activeStore) {
+    // Always filter by activeStore if set; fallback to all user stores
+    let q = supabase
+      .from("tasks")
+      .select("*, store:stores(*), steps:task_steps(*)")
+      .order("created_at", { ascending: false });
+
+    if (activeStore) {
       q = q.eq("store_id", activeStore.id);
-    } else if (!isAdmin && userStores.length > 0) {
+    } else if (userStores.length > 0) {
       q = q.in("store_id", userStores.map((s) => s.id));
     }
+
     const { data } = await q;
     if (data) setTasks(data as TaskWithSteps[]);
     setLoading(false);
   };
 
   useEffect(() => {
+    setLoading(true);
     fetchTasks();
-    const storeList = isAdmin
+    // Load stores for the create dialog
+    const storeQ = user?.role === "admin"
       ? supabase.from("stores").select("*").eq("is_active", true)
       : supabase.from("stores").select("*").in("id", userStores.map((s) => s.id));
-    storeList.then(({ data }) => { if (data) setStores(data); });
-    // Reset store filter on activeStore change
-    setNewTask((p) => ({ ...p, store_id: activeStore?.id ?? "" }));
+    storeQ.then(({ data }) => { if (data) setStores(data as StoreType[]); });
+
+    // Load templates for current store
+    const tmplQ = supabase
+      .from("checklist_templates")
+      .select("*, items:checklist_template_items(*)");
+    tmplQ.then(({ data }) => {
+      if (data) setTemplates(data as (ChecklistTemplate & { items: ChecklistTemplateItem[] })[]);
+    });
+
+    // Reset form store_id to active store
+    setNewTask(emptyForm(activeStore?.id ?? ""));
   }, [activeStore, user]);
 
   // Realtime updates
   useEffect(() => {
     const channel = supabase
-      .channel("tasks-realtime")
+      .channel("tasks-realtime-" + (activeStore?.id ?? "all"))
       .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => fetchTasks())
       .on("postgres_changes", { event: "*", schema: "public", table: "task_steps" }, () => fetchTasks())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [activeStore]);
+
+  const applyTemplate = (templateId: string) => {
+    const tmpl = templates.find((t) => t.id === templateId);
+    if (!tmpl) return;
+    const steps = (tmpl.items ?? [])
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((it) => it.label);
+    setNewTask((p) => ({
+      ...p,
+      title: p.title || tmpl.title,
+      category: tmpl.category || p.category,
+      steps: steps.length > 0 ? steps : [""],
+    }));
+  };
 
   const toggleStep = async (taskId: string, stepId: string, current: boolean) => {
     await supabase.from("task_steps").update({ is_done: !current }).eq("id", stepId);
@@ -133,7 +166,6 @@ function TasksPage() {
     if (newStatus === "done") {
       await supabase.from("task_steps").update({ is_done: true }).eq("task_id", task.id);
       logAudit(user?.id ?? null, "task.complete", "tasks", task.id, { title: task.title });
-      // Notify assigned user
       if (task.assigned_to && task.assigned_to !== user?.id) {
         createNotification(task.assigned_to, "task_done", `Uppgift klar: ${task.title}`, "", "/uppgifter");
       }
@@ -144,10 +176,12 @@ function TasksPage() {
   };
 
   const createTask = async () => {
-    if (!newTask.title.trim()) return;
-    if (!isManager) return; // employees can't create
+    setSaveError("");
+    if (!newTask.title.trim()) { setSaveError("Titel är obligatorisk."); return; }
+    if (!isManager) return;
     setSaving(true);
-    const { data: task } = await supabase.from("tasks").insert({
+
+    const { data: task, error } = await supabase.from("tasks").insert({
       title: newTask.title.trim(),
       description: newTask.description.trim(),
       category: newTask.category,
@@ -165,19 +199,31 @@ function TasksPage() {
       status: "todo",
     }).select().maybeSingle();
 
+    if (error) {
+      setSaveError("Kunde inte spara uppgiften. Försök igen.");
+      setSaving(false);
+      return;
+    }
+
     if (task) {
       const validSteps = newTask.steps.filter((s) => s.trim());
       if (validSteps.length > 0) {
         await supabase.from("task_steps").insert(
-          validSteps.map((label, i) => ({ task_id: task.id, label, sort_order: i, requires_photo: label.toLowerCase().includes("foto") }))
+          validSteps.map((label, i) => ({
+            task_id: task.id,
+            label,
+            sort_order: i,
+            requires_photo: label.toLowerCase().includes("foto"),
+          }))
         );
       }
       logAudit(user?.id ?? null, "task.create", "tasks", task.id, { title: task.title });
-      await fetchTasks();
     }
+
+    await fetchTasks();
     setSaving(false);
     setShowCreate(false);
-    setNewTask({ title: "", description: "", category: "Drift", priority: "Medel", store_id: activeStore?.id ?? "", due_date: "", recurrence_rule: "", recurrence_days: [], recurrence_interval: 1, recurrence_start: "", recurrence_end: "", steps: [""] });
+    setNewTask(emptyForm(activeStore?.id ?? ""));
   };
 
   const filters = [
@@ -190,19 +236,21 @@ function TasksPage() {
 
   const visible = tasks.filter((t) => {
     if (tab !== "all" && t.status !== tab) return false;
-    if (filterStore !== "all" && t.store_id !== filterStore) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  // Templates available for the active store (or global ones)
+  const availableTemplates = templates.filter(() => true); // All templates shown for now
 
   return (
     <div className="mx-auto max-w-[1400px] px-5 py-8 md:px-8 md:py-10">
       <PageHeader
         title="Uppgifter & Checklistor"
-        description="Standardiserade rutiner för alla butiker."
+        description={activeStore ? `Uppgifter för ${activeStore.name}` : "Standardiserade rutiner för alla butiker."}
         actions={
           isManager ? (
-            <Button className="rounded-full" onClick={() => setShowCreate(true)}>
+            <Button className="rounded-full" onClick={() => { setShowCreate(true); setSaveError(""); }}>
               <Plus className="mr-2 h-4 w-4" /> Ny uppgift
             </Button>
           ) : undefined
@@ -237,15 +285,6 @@ function TasksPage() {
               className="h-9 rounded-full pl-9 text-sm w-44"
             />
           </div>
-          {(isAdmin || userStores.length > 1) && stores.length > 1 && (
-            <Select value={filterStore} onValueChange={setFilterStore}>
-              <SelectTrigger className="h-9 w-44 rounded-full text-sm"><SelectValue placeholder="Alla butiker" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alla butiker</SelectItem>
-                {stores.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
         </div>
       </div>
 
@@ -346,10 +385,28 @@ function TasksPage() {
       )}
 
       {/* CREATE DIALOG */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setSaveError(""); }}>
         <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
           <DialogHeader><DialogTitle>Ny uppgift</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
+
+            {/* Template selector */}
+            {availableTemplates.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Använd mall</Label>
+                <Select onValueChange={applyTemplate}>
+                  <SelectTrigger><SelectValue placeholder="Välj mall att fylla i från..." /></SelectTrigger>
+                  <SelectContent>
+                    {availableTemplates.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.title} {t.category ? `(${t.category})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label>Titel *</Label>
               <Input placeholder="Uppgiftens titel" value={newTask.title}
@@ -398,7 +455,7 @@ function TasksPage() {
               <Select value={newTask.recurrence_rule} onValueChange={(v) => setNewTask(p => ({ ...p, recurrence_rule: v }))}>
                 <SelectTrigger><SelectValue placeholder="Ingen" /></SelectTrigger>
                 <SelectContent>
-                  {RECURRENCE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  {RECURRENCE_OPTIONS.map(o => <SelectItem key={o.value || "__none"} value={o.value}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -467,10 +524,12 @@ function TasksPage() {
                 </Button>
               </div>
             </div>
+
+            {saveError && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{saveError}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Avbryt</Button>
-            <Button onClick={createTask} disabled={saving || !newTask.title}>{saving ? "Sparar..." : "Skapa uppgift"}</Button>
+            <Button onClick={createTask} disabled={saving || !newTask.title.trim()}>{saving ? "Sparar..." : "Skapa uppgift"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -7,25 +7,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { supabase, type Task, type Incident, type Store as StoreType } from "@/lib/supabase";
+import { supabase, type Task, type Incident } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/rapporter")({
   component: ReportsPage,
 });
 
-type StoreStat = {
-  store: StoreType;
-  tasksDone: number;
-  tasksMissed: number;
-  tasksTotal: number;
-  incidentsOpen: number;
-  incidentsResolved: number;
-};
-
 function ReportsPage() {
-  const { user, activeStore, userStores } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const { user, activeStore } = useAuth();
+
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   if (user && user.role === "employee") {
     return (
@@ -35,26 +31,21 @@ function ReportsPage() {
     );
   }
 
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [stores, setStores] = useState<StoreType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const load = async () => {
-      let tQ = supabase.from("tasks").select("*");
-      let iQ = supabase.from("incidents").select("*");
+      setLoading(true);
 
-      if (!isAdmin && activeStore) {
-        tQ = tQ.eq("store_id", activeStore.id);
-        iQ = iQ.eq("store_id", activeStore.id);
-      } else if (!isAdmin && userStores.length > 0) {
-        const ids = userStores.map((s) => s.id);
-        tQ = tQ.in("store_id", ids);
-        iQ = iQ.in("store_id", ids);
+      // Always filter strictly by activeStore — no fallback to multi-store
+      if (!activeStore) {
+        setTasks([]);
+        setIncidents([]);
+        setLoading(false);
+        return;
       }
+
+      let tQ = supabase.from("tasks").select("*").eq("store_id", activeStore.id);
+      let iQ = supabase.from("incidents").select("*").eq("store_id", activeStore.id);
 
       if (dateFrom) {
         tQ = tQ.gte("created_at", dateFrom);
@@ -65,17 +56,10 @@ function ReportsPage() {
         iQ = iQ.lte("created_at", dateTo + "T23:59:59");
       }
 
-      const [tasksRes, incidentsRes, storesRes] = await Promise.all([
-        tQ,
-        iQ,
-        isAdmin
-          ? supabase.from("stores").select("*").eq("is_active", true)
-          : supabase.from("stores").select("*").in("id", userStores.map((s) => s.id)),
-      ]);
+      const [tasksRes, incidentsRes] = await Promise.all([tQ, iQ]);
 
       setTasks((tasksRes.data ?? []) as Task[]);
       setIncidents((incidentsRes.data ?? []) as Incident[]);
-      setStores((storesRes.data ?? []) as StoreType[]);
       setLoading(false);
     };
     load();
@@ -87,52 +71,60 @@ function ReportsPage() {
   const openIncidents = incidents.filter((i) => ["open", "in_progress", "escalated"].includes(i.status)).length;
   const compliance = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
-  const storeStats: StoreStat[] = stores.map((store) => {
-    const st = tasks.filter((t) => t.store_id === store.id);
-    const si = incidents.filter((i) => i.store_id === store.id);
-    return {
-      store,
-      tasksDone: st.filter((t) => t.status === "done").length,
-      tasksMissed: st.filter((t) => t.status === "late").length,
-      tasksTotal: st.length,
-      incidentsOpen: si.filter((i) => ["open", "in_progress", "escalated"].includes(i.status)).length,
-      incidentsResolved: si.filter((i) => i.status === "resolved").length,
-    };
-  });
-
-  function exportCSV() {
+  function exportTasksCSV() {
     const rows = [
-      ["Butik", "Uppgifter totalt", "Klara", "Missade", "Compliance %", "Öppna avv.", "Lösta avv."],
-      ...storeStats.map((s) => [
-        s.store.name,
-        s.tasksTotal,
-        s.tasksDone,
-        s.tasksMissed,
-        s.tasksTotal > 0 ? Math.round((s.tasksDone / s.tasksTotal) * 100) : 0,
-        s.incidentsOpen,
-        s.incidentsResolved,
+      ["Titel", "Kategori", "Prioritet", "Status", "Förfallodatum", "Skapad"],
+      ...tasks.map((t) => [
+        t.title,
+        t.category,
+        t.priority,
+        t.status,
+        t.due_date ? new Date(t.due_date).toLocaleDateString("sv-SE") : "",
+        new Date(t.created_at).toLocaleDateString("sv-SE"),
       ]),
     ];
-    const csv = rows.map((r) => r.join(";")).join("\n");
+    downloadCSV(rows, `uppgifter-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
+  }
+
+  function exportIncidentsCSV() {
+    const rows = [
+      ["Ref", "Titel", "Kategori", "Prioritet", "Status", "Skapad"],
+      ...incidents.map((i) => [
+        i.ref_number,
+        i.title,
+        i.category,
+        i.priority,
+        i.status,
+        new Date(i.created_at).toLocaleDateString("sv-SE"),
+      ]),
+    ];
+    downloadCSV(rows, `avvikelser-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
+  }
+
+  function downloadCSV(rows: (string | number)[][], filename: string) {
+    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `storeflow-rapport-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  if (!activeStore) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center px-5 py-20 text-center">
+        <p className="text-sm font-medium text-muted-foreground">Välj en butik för att se rapporter.</p>
+      </div>
+    );
   }
 
   return (
     <div className="mx-auto max-w-[1400px] px-5 py-8 md:px-8 md:py-10">
       <PageHeader
         title="Rapporter"
-        description="KPI:er, trender och insikter."
-        actions={
-          <Button variant="outline" className="rounded-full" onClick={exportCSV}>
-            <Download className="mr-2 h-4 w-4" /> Exportera CSV
-          </Button>
-        }
+        description={`KPI:er och insikter för ${activeStore.name}.`}
       />
 
       {/* Date filter */}
@@ -162,50 +154,18 @@ function ReportsPage() {
       {loading ? (
         <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-20 animate-pulse rounded-2xl bg-card" />)}</div>
       ) : (
-        <Tabs defaultValue="stores">
+        <Tabs defaultValue="tasks">
           <TabsList className="rounded-full bg-muted/60 p-1">
-            <TabsTrigger value="stores" className="rounded-full px-5 data-[state=active]:bg-card data-[state=active]:shadow-sm">Per butik</TabsTrigger>
             <TabsTrigger value="tasks" className="rounded-full px-5 data-[state=active]:bg-card data-[state=active]:shadow-sm">Uppgifter</TabsTrigger>
             <TabsTrigger value="incidents" className="rounded-full px-5 data-[state=active]:bg-card data-[state=active]:shadow-sm">Avvikelser</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="stores" className="mt-6">
-            <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/60">
-                    <th className="px-5 py-3.5 text-left text-xs font-medium text-muted-foreground">Butik</th>
-                    <th className="px-5 py-3.5 text-center text-xs font-medium text-muted-foreground">Uppgifter</th>
-                    <th className="px-5 py-3.5 text-center text-xs font-medium text-muted-foreground">Compliance</th>
-                    <th className="hidden px-5 py-3.5 text-center text-xs font-medium text-muted-foreground md:table-cell">Missade</th>
-                    <th className="px-5 py-3.5 text-center text-xs font-medium text-muted-foreground">Öppna avv.</th>
-                    <th className="hidden px-5 py-3.5 text-center text-xs font-medium text-muted-foreground sm:table-cell">Lösta avv.</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {storeStats.map(({ store, tasksDone, tasksMissed, tasksTotal, incidentsOpen, incidentsResolved }) => {
-                    const comp = tasksTotal > 0 ? Math.round((tasksDone / tasksTotal) * 100) : 0;
-                    return (
-                      <tr key={store.id} className="hover:bg-muted/30">
-                        <td className="px-5 py-3.5 font-medium">{store.name}</td>
-                        <td className="px-5 py-3.5 text-center">{tasksDone}/{tasksTotal}</td>
-                        <td className="px-5 py-3.5 text-center">
-                          <span className={`font-semibold ${comp >= 80 ? "text-success" : comp >= 60 ? "text-warning-foreground" : "text-destructive"}`}>
-                            {comp}%
-                          </span>
-                        </td>
-                        <td className="hidden px-5 py-3.5 text-center text-muted-foreground md:table-cell">{tasksMissed}</td>
-                        <td className="px-5 py-3.5 text-center">{incidentsOpen > 0 ? <span className="text-destructive font-medium">{incidentsOpen}</span> : 0}</td>
-                        <td className="hidden px-5 py-3.5 text-center text-muted-foreground sm:table-cell">{incidentsResolved}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </TabsContent>
-
           <TabsContent value="tasks" className="mt-6">
+            <div className="mb-3 flex justify-end">
+              <Button variant="outline" size="sm" className="rounded-full" onClick={exportTasksCSV}>
+                <Download className="mr-1.5 h-3.5 w-3.5" /> Exportera CSV
+              </Button>
+            </div>
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {[
                 { label: "Ej påbörjad", value: tasks.filter(t => t.status === "todo").length, cls: "text-muted-foreground" },
@@ -219,19 +179,29 @@ function ReportsPage() {
                 </div>
               ))}
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3">
-              {Object.entries(
-                tasks.reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + 1; return acc; }, {} as Record<string, number>)
-              ).map(([cat, count]) => (
-                <div key={cat} className="flex items-center justify-between rounded-2xl bg-card px-5 py-4 shadow-[var(--shadow-sm)]">
-                  <span className="text-sm font-medium">{cat}</span>
-                  <span className="text-sm font-semibold text-primary">{count}</span>
-                </div>
-              ))}
-            </div>
+            {tasks.length > 0 && (
+              <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3">
+                {Object.entries(
+                  tasks.reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + 1; return acc; }, {} as Record<string, number>)
+                ).map(([cat, count]) => (
+                  <div key={cat} className="flex items-center justify-between rounded-2xl bg-card px-5 py-4 shadow-[var(--shadow-sm)]">
+                    <span className="text-sm font-medium">{cat}</span>
+                    <span className="text-sm font-semibold text-primary">{count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {tasks.length === 0 && (
+              <p className="mt-8 text-center text-sm text-muted-foreground">Inga uppgifter för vald period.</p>
+            )}
           </TabsContent>
 
           <TabsContent value="incidents" className="mt-6">
+            <div className="mb-3 flex justify-end">
+              <Button variant="outline" size="sm" className="rounded-full" onClick={exportIncidentsCSV}>
+                <Download className="mr-1.5 h-3.5 w-3.5" /> Exportera CSV
+              </Button>
+            </div>
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
               {[
                 { label: "Ny", value: incidents.filter(i => i.status === "open").length, cls: "text-muted-foreground" },
@@ -253,6 +223,9 @@ function ReportsPage() {
                 </div>
               ))}
             </div>
+            {incidents.length === 0 && (
+              <p className="mt-8 text-center text-sm text-muted-foreground">Inga avvikelser för vald period.</p>
+            )}
           </TabsContent>
         </Tabs>
       )}

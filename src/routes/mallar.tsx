@@ -62,13 +62,14 @@ function MallarPage() {
       storeIds: storeAssignments.filter((a) => a.template_id === t.id).map((a) => a.store_id),
     }));
 
-    // Filter for non-admins: only show templates assigned to their stores
-    const filtered = user?.role === "admin"
-      ? withStores
-      : withStores.filter((t) =>
-          t.storeIds.length === 0 ||
-          t.storeIds.some((sid) => userStores.some((us) => us.id === sid))
-        );
+    // Filter templates by active store: show templates assigned to active store OR global templates (no store assignment)
+    const filtered = withStores.filter((t) => {
+      if (t.storeIds.length === 0) return true; // global template
+      if (activeStore && t.storeIds.includes(activeStore.id)) return true;
+      if (!activeStore && user?.role === "admin") return true;
+      if (!activeStore && userStores.some((us) => t.storeIds.includes(us.id))) return true;
+      return false;
+    });
 
     setTemplates(filtered);
     setAllStores((storesRes.data ?? []) as Store[]);
