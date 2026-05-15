@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import * as pdfjsLib from "pdfjs-dist";
 import { Calendar, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -329,59 +330,57 @@ type ParsedDelivery = {
 function parsePdfText(text: string): ParsedDelivery[] {
   const results: ParsedDelivery[] = [];
   const dayNames = new Set(Object.keys(DAY_TO_INDEX));
-  const timeRe = /\d{2}:\d{2}/;
+  const timeRe = /^\d{2}:\d{2}$/;
 
-  // Collect all non-empty tokens from extracted text
-  const tokens = text.split(/[\n\r]+/).flatMap((l) => l.trim().split(/\s{2,}/).map((t) => t.trim())).filter(Boolean);
+  // Split into lines, then within each line split on 2+ spaces to get columns
+  // pdfjs emits one row per line, each cell already separated
+  const lines = text.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean);
 
-  // Sliding window: look for pattern [Day] [HH:MM] [Day] [HH:MM] [FlowName] [Supplier...]
-  let i = 0;
-  while (i < tokens.length) {
-    const t = tokens[i];
-    if (dayNames.has(t.toLowerCase())) {
-      // Try to match: DelivDay, DelivTime, OrderDay, StopTime, FlowName, ...Supplier
-      const t1 = tokens[i + 1] ?? "";
-      const t2 = tokens[i + 2] ?? "";
-      const t3 = tokens[i + 3] ?? "";
-      const t4 = tokens[i + 4] ?? "";
-      if (timeRe.test(t1) && dayNames.has(t2.toLowerCase()) && timeRe.test(t3)) {
-        const supplier = tokens.slice(i + 5).slice(0, 8).join(" ").split(/(?=[A-ZÅÄÖ]{3,})/)[0]?.trim() ?? "";
-        results.push({
-          deliveryDay: t,
-          deliveryTime: t1,
-          orderDay: t2,
-          stopTime: t3,
-          flowName: t4,
-          supplier: tokens.slice(i + 5).filter((_, j) => j < 6).join(" "),
-        });
-        i += 5;
-        continue;
-      }
-      // Fallback: try combining current + next line (tokens may be split differently)
-      const combined = tokens.slice(i, i + 12).join(" ");
-      const times = [...combined.matchAll(/\d{2}:\d{2}/g)].map((m) => m[0]);
-      if (times.length >= 2) {
-        const parts = combined.split(/\s+/);
-        const deliveryDay = parts[0] ?? "";
-        const deliveryTime = times[0];
-        let orderDayIdx = -1;
-        for (let j = 1; j < parts.length; j++) {
-          if (dayNames.has(parts[j]?.toLowerCase())) { orderDayIdx = j; break; }
-        }
-        const orderDay = orderDayIdx >= 0 ? parts[orderDayIdx] : "";
-        const stopTime = times[1];
-        const afterStopIdx = combined.lastIndexOf(stopTime) + stopTime.length;
-        const afterStop = combined.slice(afterStopIdx).trim().split(/\s+/);
-        const flowName = afterStop[0] ?? "";
-        const supplier = afterStop.slice(1).join(" ");
-        if (deliveryDay && deliveryTime && flowName) {
-          results.push({ deliveryDay, deliveryTime, orderDay, stopTime, flowName, supplier });
-        }
-        i += 6;
-        continue;
-      }
+  for (const line of lines) {
+    // Each line should look like: "Måndag 13:50 Söndag 11:35 Standard ARLA FOODS AB..."
+    // Split on whitespace to get tokens within the line
+    const tokens = line.split(/\s+/);
+    if (tokens.length < 5) continue;
+
+    // First token must be a day name
+    if (!dayNames.has(tokens[0].toLowerCase())) continue;
+
+    // Find pattern: Day Time Day Time FlowName ...Supplier
+    // tokens[0] = DelivDay, tokens[1] = DelivTime, tokens[2] = OrderDay, tokens[3] = StopTime, tokens[4] = FlowName, rest = Supplier
+    if (timeRe.test(tokens[1]) && dayNames.has(tokens[2]?.toLowerCase()) && timeRe.test(tokens[3])) {
+      const flowName = tokens[4] ?? "";
+      // Supplier ends before the trailing " 1" page number if present
+      const supplierTokens = tokens.slice(5).filter((t) => t !== "1" && !/^\d+$/.test(t));
+      results.push({
+        deliveryDay: tokens[0],
+        deliveryTime: tokens[1],
+        orderDay: tokens[2],
+        stopTime: tokens[3],
+        flowName,
+        supplier: supplierTokens.join(" "),
+      });
+      continue;
     }
-    i++;
+
+    // Fallback: scan for two times within the line
+    const timeIdxs: number[] = [];
+    for (let j = 0; j < tokens.length; j++) {
+      if (timeRe.test(tokens[j])) timeIdxs.push(j);
+    }
+    if (timeIdxs.length < 2) continue;
+    const deliveryTime = tokens[timeIdxs[0]];
+    const stopTime = tokens[timeIdxs[1]];
+    // Find order day between the two times
+    let orderDay = "";
+    for (let j = timeIdxs[0] + 1; j < timeIdxs[1]; j++) {
+      if (dayNames.has(tokens[j]?.toLowerCase())) { orderDay = tokens[j]; break; }
+    }
+    const afterStop = tokens.slice(timeIdxs[1] + 1);
+    const flowName = afterStop[0] ?? "";
+    const supplier = afterStop.slice(1).filter((t) => t !== "1" && !/^\d+$/.test(t)).join(" ");
+    if (flowName) {
+      results.push({ deliveryDay: tokens[0], deliveryTime, orderDay, stopTime, flowName, supplier });
+    }
   }
   return results;
 }
@@ -1534,143 +1533,41 @@ function SchemaPage() {
   );
 }
 
-// ─── PDF text extraction (handles FlateDecode compressed streams) ──────────────
+// ─── PDF text extraction via pdfjs-dist ──────────────────────────────────────
 
-async function decompressZlib(data: Uint8Array): Promise<Uint8Array> {
-  try {
-    // Strip 2-byte zlib header (0x78 0x9C / 0xDA / 0x01) before deflate
-    const stripped = data[0] === 0x78 ? data.slice(2) : data;
-    const ds = new DecompressionStream("deflate-raw");
-    const writer = ds.writable.getWriter();
-    const reader = ds.readable.getReader();
-    writer.write(stripped);
-    writer.close();
-    const chunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-    }
-    const total = chunks.reduce((s, c) => s + c.length, 0);
-    const out = new Uint8Array(total);
-    let offset = 0;
-    for (const c of chunks) { out.set(c, offset); offset += c.length; }
-    return out;
-  } catch {
-    return data;
-  }
-}
-
-function extractTextFromPdfOps(ops: string): Array<{ y: number; text: string }> {
-  const objects: Array<{ y: number; text: string }> = [];
-  const btEtRe = /BT([\s\S]*?)ET/g;
-  let m;
-  while ((m = btEtRe.exec(ops)) !== null) {
-    const block = m[1];
-    let y = 0;
-    const tmMatch = block.match(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+Tm/);
-    const tdMatch = block.match(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+T[dD]/);
-    if (tmMatch) y = parseFloat(tmMatch[2]);
-    else if (tdMatch) y = parseFloat(tdMatch[2]);
-
-    const strRe = /\(([^)]*)\)|<([0-9a-fA-F]{2,})>/g;
-    let sm;
-    const parts: string[] = [];
-    while ((sm = strRe.exec(block)) !== null) {
-      if (sm[1] !== undefined) {
-        const s = sm[1]
-          .replace(/\\n/g, " ").replace(/\\r/g, " ")
-          .replace(/\\\(/g, "(").replace(/\\\)/g, ")")
-          .replace(/\\\\/, "\\");
-        if (s.trim()) parts.push(s.trim());
-      } else if (sm[2]) {
-        const hex = sm[2];
-        // Try UTF-16BE decode (common in modern PDFs)
-        if (hex.length % 4 === 0 && hex.startsWith("FEFF")) {
-          let s = "";
-          for (let i = 4; i < hex.length; i += 4) {
-            const cp = parseInt(hex.slice(i, i + 4), 16);
-            s += String.fromCharCode(cp);
-          }
-          if (s.trim()) parts.push(s.trim());
-        } else {
-          // Latin-1 / single-byte decode
-          let s = "";
-          for (let i = 0; i < hex.length; i += 2) {
-            const code = parseInt(hex.slice(i, i + 2), 16);
-            s += String.fromCharCode(code);
-          }
-          if (s.trim()) parts.push(s.trim());
-        }
-      }
-    }
-    if (parts.length > 0) objects.push({ y, text: parts.join(" ") });
-  }
-  return objects;
-}
+// Point pdfjs worker at the bundled file served from node_modules
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.mjs",
+  import.meta.url,
+).toString();
 
 async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
-  const raw = new Uint8Array(buffer);
-  const latin1 = new TextDecoder("latin1").decode(raw);
+  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer), useSystemFonts: true });
+  const pdf = await loadingTask.promise;
+  const pageTexts: string[] = [];
 
-  // Find all stream...endstream blocks, decompress if FlateDecode
-  const allOps: string[] = [];
-
-  // First try uncompressed BT/ET blocks directly in the raw file
-  const directObjects = extractTextFromPdfOps(latin1);
-  if (directObjects.length > 0) {
+  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const content = await page.getTextContent();
+    // Group items by their Y position to reconstruct rows
     const rows: Map<number, string[]> = new Map();
-    for (const obj of directObjects) {
-      let key = obj.y;
-      for (const existingY of rows.keys()) {
-        if (Math.abs(existingY - obj.y) < 4) { key = existingY; break; }
+    for (const item of content.items) {
+      if (!("str" in item)) continue;
+      const str = (item as { str: string; transform: number[] }).str;
+      if (!str.trim()) continue;
+      const y = Math.round((item as { str: string; transform: number[] }).transform[5]);
+      let key = y;
+      for (const ey of rows.keys()) {
+        if (Math.abs(ey - y) <= 3) { key = ey; break; }
       }
       if (!rows.has(key)) rows.set(key, []);
-      rows.get(key)!.push(obj.text);
+      rows.get(key)!.push(str);
     }
-    const sortedRows = [...rows.entries()].sort((a, b) => b[0] - a[0]);
-    const result = sortedRows.map(([, parts]) => parts.join(" ")).join("\n");
-    // Only return if we got meaningful delivery-plan-like content
-    if (result.length > 50) return result;
+    // Sort rows top-to-bottom (higher y = higher on page in PDF coords)
+    const sorted = [...rows.entries()].sort((a, b) => b[0] - a[0]);
+    pageTexts.push(sorted.map(([, parts]) => parts.join(" ")).join("\n"));
   }
-
-  // Fall back: decompress FlateDecode streams
-  const streamHeaderRe = /<<([\s\S]*?)>>\s*stream\r?\n/g;
-  let sh: RegExpExecArray | null;
-  while ((sh = streamHeaderRe.exec(latin1)) !== null) {
-    const header = sh[1];
-    if (!header.includes("FlateDecode") && !header.includes("Flate")) continue;
-    const streamStart = sh.index + sh[0].length;
-    // Find endstream
-    const endIdx = latin1.indexOf("endstream", streamStart);
-    if (endIdx < 0) continue;
-    const streamBytes = raw.slice(streamStart, endIdx);
-    try {
-      const decompressed = await decompressZlib(streamBytes);
-      const text = new TextDecoder("latin1").decode(decompressed);
-      allOps.push(text);
-    } catch { /* skip */ }
-  }
-
-  if (allOps.length === 0) return "";
-
-  const allObjects: Array<{ y: number; text: string }> = [];
-  for (const ops of allOps) {
-    allObjects.push(...extractTextFromPdfOps(ops));
-  }
-  if (allObjects.length === 0) return allOps.join("\n");
-
-  const rows: Map<number, string[]> = new Map();
-  for (const obj of allObjects) {
-    let key = obj.y;
-    for (const existingY of rows.keys()) {
-      if (Math.abs(existingY - obj.y) < 4) { key = existingY; break; }
-    }
-    if (!rows.has(key)) rows.set(key, []);
-    rows.get(key)!.push(obj.text);
-  }
-  const sortedRows = [...rows.entries()].sort((a, b) => b[0] - a[0]);
-  return sortedRows.map(([, parts]) => parts.join(" ")).join("\n");
+  return pageTexts.join("\n");
 }
 
 function getISOWeek(date: Date): number {
