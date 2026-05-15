@@ -47,6 +47,7 @@ export function AppShell() {
   const nav = [
     { to: "/", label: "Översikt" },
     { to: "/uppgifter", label: "Uppgifter" },
+    { to: "/schema", label: "Schema" },
     { to: "/avvikelser", label: "Avvikelser" },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter" }] : []),
     { to: "/mallar", label: "Mallar" },
