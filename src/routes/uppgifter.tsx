@@ -116,13 +116,17 @@ const emptyForm = (storeId: string) => ({
   assigneeGroupIds: [] as string[],
 });
 
-// Image lightbox — rendered into document.body via portal so it sits completely
-// outside the Radix Dialog DOM tree. This prevents pointer/touch events from
-// ever reaching the dialog backdrop underneath.
+// Image lightbox — rendered into document.body via portal.
+// The Dialog's onOpenChange is blocked while lightboxSrc is set, so Escape/clicks
+// only affect the lightbox, never the dialog behind it.
 function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        onClose();
+      }
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
@@ -131,12 +135,12 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4"
-      onPointerDown={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onMouseDown={(e) => e.stopPropagation()}
     >
       <button
         type="button"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={onClose}
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
         className="absolute right-4 top-4 rounded-full bg-black/40 p-2 text-white/80 backdrop-blur-sm transition-colors hover:bg-black/60 hover:text-white"
         aria-label="Stäng"
       >
@@ -146,7 +150,7 @@ function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
         src={src}
         alt=""
         className="max-h-[90vh] max-w-full rounded-xl shadow-2xl object-contain"
-        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       />
     </div>,
     document.body,
@@ -166,7 +170,6 @@ function TasksPage() {
   const [userGroupIds, setUserGroupIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("today");
-  const [showAllDates, setShowAllDates] = useState(false);
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [newTask, setNewTask] = useState(emptyForm(activeStore?.id ?? ""));
@@ -249,50 +252,68 @@ function TasksPage() {
     return () => { supabase.removeChannel(channel); };
   }, [activeStore, fetchTasks]);
 
-  // Spawn new child tasks for recurring tasks when simulated time passes their due_date
+  // Spawn new child tasks for recurring tasks when simulated time shows a new day.
+  // Uses day-level arithmetic so tasks created for "today" always spawn correctly
+  // regardless of what time-of-day the due_date was set to.
+  const spawnRef = useRef(false);
   const spawnRecurringTasks = useCallback(async (taskList: TaskFull[]) => {
-    if (!isManager) return;
-    const now = getSimulatedNow();
+    if (!isManager || spawnRef.current) return;
+
+    const nowMs = getSimulatedNow();
+    const todayStart = new Date(nowMs);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayMs = todayStart.getTime();
 
     const recurringTasks = taskList.filter(
       (t) =>
         t.recurrence_rule &&
-        !t.parent_task_id && // only original tasks, not already-spawned children
-        t.due_date &&
-        new Date(t.due_date).getTime() <= now
+        !t.parent_task_id &&
+        t.due_date
     );
 
     if (recurringTasks.length === 0) return;
 
-    const unitMs: Record<string, number> = {
-      daily: 86_400_000,
-      every_other_day: 2 * 86_400_000,
-      weekly: 7 * 86_400_000,
-      monthly: 30 * 86_400_000,
-      yearly: 365 * 86_400_000,
+    const daysBetween = (a: Date, b: Date) => {
+      const aDay = new Date(a); aDay.setHours(0, 0, 0, 0);
+      const bDay = new Date(b); bDay.setHours(0, 0, 0, 0);
+      return Math.floor((bDay.getTime() - aDay.getTime()) / 86_400_000);
     };
 
+    const intervalDays: Record<string, number> = {
+      daily: 1,
+      every_other_day: 2,
+      weekly: 7,
+      monthly: 30,
+      yearly: 365,
+    };
+
+    spawnRef.current = true;
     let didSpawn = false;
+
     for (const t of recurringTasks) {
-      const intervalMs = unitMs[t.recurrence_rule!] ?? 86_400_000;
-      // How many intervals have passed since due_date?
-      const elapsed = now - new Date(t.due_date!).getTime();
-      const periods = Math.floor(elapsed / intervalMs);
-      if (periods < 1) continue;
+      const interval = intervalDays[t.recurrence_rule!] ?? 1;
+      const dueDate = new Date(t.due_date!);
+      const daysSinceDue = daysBetween(dueDate, todayStart);
 
-      // Check if we already spawned for the latest period
-      const expectedSpawnPeriod = periods; // 1-based
-      const lastSpawnedAt = t.last_spawned_at ? new Date(t.last_spawned_at).getTime() : 0;
-      const periodStartMs = new Date(t.due_date!).getTime() + (periods - 1) * intervalMs;
-      if (lastSpawnedAt >= periodStartMs) continue; // already spawned this period
+      if (daysSinceDue < interval) continue; // not yet time for next occurrence
 
-      // Check recurrence_end
-      if (t.recurrence_end) {
-        const nextDue = new Date(t.due_date!).getTime() + periods * intervalMs;
-        if (nextDue > new Date(t.recurrence_end).getTime()) continue;
+      // How many occurrences should exist by now
+      const totalOccurrences = Math.floor(daysSinceDue / interval);
+
+      // Check what was last spawned
+      if (t.last_spawned_at) {
+        const lastSpawnDate = new Date(t.last_spawned_at);
+        const daysSinceLastSpawn = daysBetween(dueDate, lastSpawnDate);
+        const lastSpawnedOccurrence = Math.floor(daysSinceLastSpawn / interval);
+        if (lastSpawnedOccurrence >= totalOccurrences) continue; // already up to date
       }
 
-      const nextDueDate = new Date(new Date(t.due_date!).getTime() + expectedSpawnPeriod * intervalMs).toISOString();
+      // Check recurrence_end
+      if (t.recurrence_end && todayMs > new Date(t.recurrence_end).getTime()) continue;
+
+      // Calculate the due_date for the latest occurrence
+      const nextDueDate = new Date(dueDate);
+      nextDueDate.setDate(nextDueDate.getDate() + totalOccurrences * interval);
 
       // Create child task
       const { data: child } = await supabase.from("tasks").insert({
@@ -301,8 +322,8 @@ function TasksPage() {
         category: t.category,
         priority: t.priority,
         store_id: t.store_id,
-        due_date: nextDueDate,
-        recurrence_rule: null, // children don't recur themselves
+        due_date: nextDueDate.toISOString(),
+        recurrence_rule: null,
         parent_task_id: t.id,
         created_by: t.created_by,
         assigned_to: t.assigned_to,
@@ -310,7 +331,6 @@ function TasksPage() {
       }).select().maybeSingle();
 
       if (child) {
-        // Copy steps (unchecked)
         const steps = (t.steps ?? []).map((s) => ({
           task_id: child.id,
           label: s.label,
@@ -320,7 +340,6 @@ function TasksPage() {
         }));
         if (steps.length > 0) await supabase.from("task_steps").insert(steps);
 
-        // Copy questions (no answers, no user-uploaded data)
         const questions = (t.questions ?? []).map((q) => ({
           task_id: child.id,
           label: q.label,
@@ -330,7 +349,6 @@ function TasksPage() {
         }));
         if (questions.length > 0) await supabase.from("task_questions").insert(questions);
 
-        // Copy creator-uploaded images (images uploaded by task creator, not by employees)
         const creatorImages = (t.images ?? []).filter(img => img.uploaded_by === t.created_by);
         if (creatorImages.length > 0) {
           await supabase.from("task_images").insert(
@@ -338,7 +356,6 @@ function TasksPage() {
           );
         }
 
-        // Copy assignees
         const assignees = (t.assignees ?? []).map((a) => ({
           task_id: child.id,
           user_id: a.user_id,
@@ -346,14 +363,13 @@ function TasksPage() {
         }));
         if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
 
-        // Update parent's last_spawned_at
-        await supabase.from("tasks").update({ last_spawned_at: new Date(now).toISOString() }).eq("id", t.id);
-
+        await supabase.from("tasks").update({ last_spawned_at: new Date(nowMs).toISOString() }).eq("id", t.id);
         logAudit(user?.id ?? null, "task.recurrence.spawn", "tasks", child.id, { parent_id: t.id });
         didSpawn = true;
       }
     }
 
+    spawnRef.current = false;
     if (didSpawn) await fetchTasks();
   }, [isManager, user, fetchTasks]);
 
@@ -747,7 +763,7 @@ function TasksPage() {
 
       {/* DETAIL MODAL */}
       {detailTask && (
-        <Dialog open={!!detailTask} onOpenChange={(o) => !o && setDetailTask(null)}>
+        <Dialog open={!!detailTask} onOpenChange={(o) => { if (!o && !lightboxSrc) setDetailTask(null); }}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-start justify-between gap-2 pr-6">

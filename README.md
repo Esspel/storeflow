@@ -1,62 +1,146 @@
-# MittShopFlow
+# StoreFlow
 
-MittShopFlow är en lättviktslösning för drift- och avvikelsehantering i detaljhandel. Projektet består av en React/TypeScript-front-end byggd med TanStack React Start och en databasstruktur + migrations i `supabase/migrations`. Auth och datalagring hanteras via Supabase (Postgres + RLS + pgcrypto för bcrypt).
+StoreFlow is a Swedish-language retail operations management platform for coordinating tasks, tracking deviations/incidents, managing staff, and monitoring store performance across multiple locations.
 
-Status
-- Frontend: React + Vite + TypeScript.
-- Databas/migrationer: i `supabase/migrations` (tabeller, RLS-policys och pgcrypto-funktioner).
-- Backend-koden (tidigare i `backend/`) är markerad som oanvänd/arkiverad. Om du vill använda Supabase behöver du inte köra en separat backend — frontend pratar direkt mot Supabase.
-- Docker-compose innehåller lokala DB-servicar. Backend-servicen kan tas bort (eller är redan borttagen i main).
+## Tech Stack
 
-Kort översikt
-- Frontend använder `@supabase/supabase-js` för att prata mot Supabase (auth, RPC, CRUD).
-- Migrationerna skapar tabeller som `app_users`, `app_sessions`, `tasks`, `incidents` m.fl., samt funktioner för hashing/verifiering (`pgcrypto`) och RLS-policys.
-- Seed-data finns i migrationsfilerna (ta bort/ändra i produktion).
+- **Frontend:** React 19, TanStack Router/Start, TypeScript
+- **Styling:** Tailwind CSS 4.2, Radix UI primitives, shadcn/ui components
+- **Database:** Supabase (PostgreSQL with Row-Level Security)
+- **Auth:** Custom session-based auth with bcrypt (pgcrypto), role-based access
+- **Build:** Vite 7
+- **Charts:** Recharts
+- **Dates:** date-fns
+- **Forms:** React Hook Form + Zod
 
-Kom igång (rekommenderad: använd Supabase-hosting)
-1. Skapa ett Supabase-projekt via https://app.supabase.com.
-2. Hämta SUPABASE_URL och SUPABASE_ANON_KEY från projektinställningarna.
-3. Kör migrationerna mot din Supabase-databas:
-   - Antingen via Supabase SQL-editor (kopiera + kör SQL-filerna),
-   - Eller via psql:
-     PGPASSWORD="YOUR_DB_PASSWORD" psql "host=db.YOURPROJECT.supabase.co port=5432 dbname=postgres user=postgres" -f supabase/migrations/20260514144603_create_app_users_and_core_tables.sql
-     PGPASSWORD="YOUR_DB_PASSWORD" psql "host=db.YOURPROJECT.supabase.co port=5432 dbname=postgres user=postgres" -f supabase/migrations/20260514144643_add_password_verification_function.sql
-   - Obs: `CREATE EXTENSION pgcrypto` kräver tillräckliga rättigheter — Supabase-hosting stödjer pgcrypto; om du self-hostar Postgres se till att köra som superuser.
-4. Lägg till miljövariabler i frontend (Vite kräver oftast prefix `VITE_` för att exponera variabler till klienten):
-   - I projektets rot skapa `.env`:
-     VITE_SUPABASE_URL=https://your-project.supabase.co
-     VITE_SUPABASE_ANON_KEY=your-anon-key
-     (om du har servernycklar: SUPABASE_SERVICE_ROLE_KEY — Spara DEN aldrig i klienten)
-5. Starta frontend:
-   - npm install
-   - npm run dev
-6. Öppna appen i webbläsaren (vanligtvis http://localhost:5173).
+## Features
 
-Alternativ: kör lokalt med Supabase-docker eller lokal Postgres
-- Om du vill köra en lokal Supabase-stack: installera Supabase CLI och kör `supabase start` (se Supabase-dokumentation).
-- Eller kör lokal Postgres via docker-compose (repo innehåller en `docker-compose.yml` med postgres och redis). Applicera migrationerna mot den lokala DB:n.
+### Task Management (Uppgifter)
+- Create, assign, and track tasks with checkpoints, questions (text or yes/no), and image attachments
+- Recurring tasks (daily, weekly, monthly, etc.) that automatically spawn fresh copies each period
+- Template-based task creation from reusable checklist templates
+- Group and individual assignment with notification support
+- Progress tracking with completion percentages
+- CSV export
 
-Säkerhet och produktion
-- Byt seed-lösenord (migrationerna uppdaterar admin-lösenord i exempel).
-- Undvik att lägga service_role-nycklar i klientkod eller publika repos.
-- TLS/HTTPS och riktig secrets-hantering i produktionsmiljö rekommenderas.
+### Incident/Deviation Reporting (Avvikelser)
+- Report incidents with priority levels, categories, and image evidence
+- Comments and discussion threads per incident
+- SLA deadline tracking
+- Status workflow: open, in progress, escalated, resolved, closed
 
-Vanliga uppgifter
-- Applicera migrationer: kör SQL-filerna i `supabase/migrations`.
-- Hitta logik i frontend: sök efter `@supabase/supabase-js` för att se var anrop görs.
-- Ta bort backend-kod permanent: `git rm -r backend && git commit -m "Remove backend (archived)"`.
+### Staff & Roles (Personal)
+- User management with three roles: admin, manager, employee
+- User groups for team-based task assignment
+- Multi-store user associations
 
-Projektstruktur (viktigt)
-- /src — frontend-kod (React, TanStack)
-- /supabase/migrations — SQL-migrationer (tabeller, RLS, pgcrypto)
-- /docker-compose.yml — lokala service-definitioner (postgres/redis). Backend-service är valfri/kan tas bort.
-- /backend — (arkiverad/valfri) Nest/Prisma-projekt (om du tidigare använde eget backend)
+### Templates (Mallar)
+- Reusable checklist templates with ordered steps and questions
+- Per-store template assignment or global availability
+- Question types: free text and yes/no
 
-Bidra
-- Öppna issues eller skicka PR:ar. För större ändringar: skapa en branch, skriv kort beskrivning och skapa PR mot `main`.
+### Reports (Rapporter)
+- Analytics dashboard (manager/admin only)
 
-Licens
-- MIT (se repo-licensfil om finns)
+### Real-time
+- Supabase Realtime subscriptions for live task and incident updates
 
-Kontakt
-- För frågor: öppna issue i repo:t eller kontakta projektägaren.
+### Time Simulation (Testpanel)
+- Developer tool for simulating time passage to test recurring tasks, overdue logic, and SLA deadlines
+- Spawned tasks are automatically cleaned up when simulation resets
+
+## Project Structure
+
+```
+src/
+  routes/           Page components (file-based routing via TanStack Router)
+    index.tsx       Dashboard / hub
+    uppgifter.tsx   Task management
+    avvikelser.tsx  Incident reporting
+    mallar.tsx      Templates
+    personal.tsx    Staff management
+    rapporter.tsx   Reports (restricted to managers/admins)
+    installningar.tsx  Settings
+    testpanel.tsx   Developer time simulation & test tools
+    login.tsx       Authentication
+  components/
+    app-shell.tsx   Layout wrapper (header, sidebar, notifications)
+    app-sidebar.tsx Navigation sidebar
+    ui/             shadcn/ui component library
+  lib/
+    supabase.ts     Supabase client, types, and helper functions
+    auth.ts         Session login/logout logic
+    auth-context.tsx React context for auth state & active store
+    time-simulation.ts Simulated clock offset utilities
+    utils.ts        Shared utilities (cn, etc.)
+  hooks/
+    use-mobile.tsx  Responsive breakpoint hook
+
+supabase/
+  migrations/       SQL migration files (schema, RLS policies, functions)
+```
+
+## Getting Started
+
+### Prerequisites
+- Node.js 18+
+- A Supabase project (create one at https://app.supabase.com)
+
+### Setup
+
+1. Clone the repository
+2. Copy `.env.example` to `.env` and fill in your Supabase credentials:
+   ```
+   VITE_SUPABASE_URL=https://your-project.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-anon-key
+   ```
+3. Apply database migrations via the Supabase SQL editor or CLI (files in `supabase/migrations/`, run in order)
+4. Install dependencies and start:
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+### Default Accounts (from seed data)
+After running migrations, a default admin account is available. Check the first migration file for credentials.
+
+## Authentication
+
+StoreFlow uses a custom session-based auth system:
+- Passwords are hashed with bcrypt via pgcrypto
+- Sessions are stored in `app_sessions` with 7-day expiry
+- Roles: `admin` (full access), `manager` (store management), `employee` (task execution)
+- Row-Level Security enforces data access per user/store
+
+## Database
+
+All tables use RLS. Key tables:
+- `app_users`, `app_sessions` — authentication
+- `stores`, `user_stores` — multi-store associations
+- `tasks`, `task_steps`, `task_questions`, `task_images`, `task_assignees` — task system
+- `incidents`, `incident_comments`, `incident_images` — incident reporting
+- `checklist_templates`, `checklist_template_items`, `checklist_template_questions` — templates
+- `user_groups`, `user_group_members` — team grouping
+- `notifications` — in-app notifications
+- `audit_log` — action audit trail
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Production build |
+| `npm run preview` | Preview production build |
+| `npm run lint` | Run ESLint |
+| `npm run format` | Format with Prettier |
+
+## Security Notes
+
+- Never expose `SUPABASE_SERVICE_ROLE_KEY` in client code
+- Change default seed passwords before production use
+- All data access is enforced via RLS policies
+- Sessions expire after 7 days of inactivity
+
+## License
+
+MIT
