@@ -103,20 +103,12 @@ export function AppShell() {
                   </Link>
                 </DropdownMenuItem>
                 {user?.role === "admin" && (
-                  <>
-                    <DropdownMenuItem asChild>
-                      <Link to="/personal" className="cursor-pointer">
-                        <User className="mr-2 h-4 w-4" />
-                        Hantera konton
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/admin/butiker" className="cursor-pointer">
-                        <Settings className="mr-2 h-4 w-4" />
-                        Hantera butiker
-                      </Link>
-                    </DropdownMenuItem>
-                  </>
+                  <DropdownMenuItem asChild>
+                    <Link to="/personal" className="cursor-pointer">
+                      <User className="mr-2 h-4 w-4" />
+                      Administration
+                    </Link>
+                  </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem

@@ -1,11 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { TriangleAlert as AlertTriangle, ArrowRight, ChartBar as BarChart3, ListChecks, Store } from "lucide-react";
+import { TriangleAlert as AlertTriangle, ArrowRight, ChartBar as BarChart3, ListChecks } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
-import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/")({
@@ -19,7 +18,6 @@ type Action = {
   cta: string;
   icon: LucideIcon;
   tone: "pink" | "mint" | "blue" | "amber";
-  badge?: string;
 };
 
 const primary: Action[] = [
@@ -94,14 +92,8 @@ function ActionCard({ a, large = false }: { a: Action; large?: boolean }) {
       </h3>
       <p className="mt-1.5 max-w-[28ch] text-sm text-muted-foreground">{a.desc}</p>
 
-      {a.badge && (
-        <span className="mt-3 inline-flex items-center rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary">
-          {a.badge}
-        </span>
-      )}
-
       <div className="mt-auto w-full pt-6">
-        <span className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-sm)] transition-[...]
+        <span className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-sm)] transition-colors group-hover:bg-primary/90">
           {a.cta}
           <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
         </span>
@@ -112,30 +104,32 @@ function ActionCard({ a, large = false }: { a: Action; large?: boolean }) {
 
 function HubPage() {
   const { user } = useAuth();
-  const [storeName, setStoreName] = useState("Laddar...");
-  const [storeRegion, setStoreRegion] = useState("Laddar...");
+  const [storeName, setStoreName] = useState<string | null>(null);
+  const [storeRegion, setStoreRegion] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadUserStore = async () => {
-      if (user?.store_id) {
-        const { data } = await supabase
-          .from("stores")
-          .select("name, region")
-          .eq("id", user.store_id)
-          .maybeSingle();
+    if (!user?.store_id) return;
+    supabase
+      .from("stores")
+      .select("name, region")
+      .eq("id", user.store_id)
+      .maybeSingle()
+      .then(({ data }) => {
         if (data) {
           setStoreName(data.name);
-          setStoreRegion(data.region || "");
+          setStoreRegion(data.region || null);
         }
-      }
-    };
-    loadUserStore();
+      });
   }, [user]);
 
   return (
     <div className="mx-auto w-full max-w-[1400px] px-5 py-12 md:px-8 md:py-20">
       <div className="text-center">
-        <p className="text-sm font-medium text-primary">{storeName} {storeRegion && `· ${storeRegion}`}</p>
+        {storeName && (
+          <p className="text-sm font-medium text-primary">
+            {storeName}{storeRegion ? ` · ${storeRegion}` : ""}
+          </p>
+        )}
         <h1 className="mt-2 text-4xl font-black tracking-tight text-foreground md:text-6xl">
           Vad ska du göra idag?
         </h1>

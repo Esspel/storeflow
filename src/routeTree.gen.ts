@@ -10,30 +10,16 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UppgifterRouteImport } from './routes/uppgifter'
-import { Route as StyrtavlorRouteImport } from './routes/styrtavlor'
-import { Route as RevisionerRouteImport } from './routes/revisioner'
 import { Route as RapporterRouteImport } from './routes/rapporter'
 import { Route as PersonalRouteImport } from './routes/personal'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as KommunikationRouteImport } from './routes/kommunikation'
 import { Route as InstallningarRouteImport } from './routes/installningar'
-import { Route as ButikerRouteImport } from './routes/butiker'
 import { Route as AvvikelserRouteImport } from './routes/avvikelser'
 import { Route as IndexRouteImport } from './routes/index'
 
 const UppgifterRoute = UppgifterRouteImport.update({
   id: '/uppgifter',
   path: '/uppgifter',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const StyrtavlorRoute = StyrtavlorRouteImport.update({
-  id: '/styrtavlor',
-  path: '/styrtavlor',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RevisionerRoute = RevisionerRouteImport.update({
-  id: '/revisioner',
-  path: '/revisioner',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RapporterRoute = RapporterRouteImport.update({
@@ -51,19 +37,9 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const KommunikationRoute = KommunikationRouteImport.update({
-  id: '/kommunikation',
-  path: '/kommunikation',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const InstallningarRoute = InstallningarRouteImport.update({
   id: '/installningar',
   path: '/installningar',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ButikerRoute = ButikerRouteImport.update({
-  id: '/butiker',
-  path: '/butiker',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AvvikelserRoute = AvvikelserRouteImport.update({
@@ -80,41 +56,29 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
-  '/butiker': typeof ButikerRoute
   '/installningar': typeof InstallningarRoute
-  '/kommunikation': typeof KommunikationRoute
   '/login': typeof LoginRoute
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
-  '/revisioner': typeof RevisionerRoute
-  '/styrtavlor': typeof StyrtavlorRoute
   '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
-  '/butiker': typeof ButikerRoute
   '/installningar': typeof InstallningarRoute
-  '/kommunikation': typeof KommunikationRoute
   '/login': typeof LoginRoute
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
-  '/revisioner': typeof RevisionerRoute
-  '/styrtavlor': typeof StyrtavlorRoute
   '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
-  '/butiker': typeof ButikerRoute
   '/installningar': typeof InstallningarRoute
-  '/kommunikation': typeof KommunikationRoute
   '/login': typeof LoginRoute
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
-  '/revisioner': typeof RevisionerRoute
-  '/styrtavlor': typeof StyrtavlorRoute
   '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRouteTypes {
@@ -122,54 +86,38 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/avvikelser'
-    | '/butiker'
     | '/installningar'
-    | '/kommunikation'
     | '/login'
     | '/personal'
     | '/rapporter'
-    | '/revisioner'
-    | '/styrtavlor'
     | '/uppgifter'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/avvikelser'
-    | '/butiker'
     | '/installningar'
-    | '/kommunikation'
     | '/login'
     | '/personal'
     | '/rapporter'
-    | '/revisioner'
-    | '/styrtavlor'
     | '/uppgifter'
   id:
     | '__root__'
     | '/'
     | '/avvikelser'
-    | '/butiker'
     | '/installningar'
-    | '/kommunikation'
     | '/login'
     | '/personal'
     | '/rapporter'
-    | '/revisioner'
-    | '/styrtavlor'
     | '/uppgifter'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AvvikelserRoute: typeof AvvikelserRoute
-  ButikerRoute: typeof ButikerRoute
   InstallningarRoute: typeof InstallningarRoute
-  KommunikationRoute: typeof KommunikationRoute
   LoginRoute: typeof LoginRoute
   PersonalRoute: typeof PersonalRoute
   RapporterRoute: typeof RapporterRoute
-  RevisionerRoute: typeof RevisionerRoute
-  StyrtavlorRoute: typeof StyrtavlorRoute
   UppgifterRoute: typeof UppgifterRoute
 }
 
@@ -180,20 +128,6 @@ declare module '@tanstack/react-router' {
       path: '/uppgifter'
       fullPath: '/uppgifter'
       preLoaderRoute: typeof UppgifterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/styrtavlor': {
-      id: '/styrtavlor'
-      path: '/styrtavlor'
-      fullPath: '/styrtavlor'
-      preLoaderRoute: typeof StyrtavlorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/revisioner': {
-      id: '/revisioner'
-      path: '/revisioner'
-      fullPath: '/revisioner'
-      preLoaderRoute: typeof RevisionerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rapporter': {
@@ -217,25 +151,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/kommunikation': {
-      id: '/kommunikation'
-      path: '/kommunikation'
-      fullPath: '/kommunikation'
-      preLoaderRoute: typeof KommunikationRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/installningar': {
       id: '/installningar'
       path: '/installningar'
       fullPath: '/installningar'
       preLoaderRoute: typeof InstallningarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/butiker': {
-      id: '/butiker'
-      path: '/butiker'
-      fullPath: '/butiker'
-      preLoaderRoute: typeof ButikerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/avvikelser': {
@@ -258,14 +178,10 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AvvikelserRoute: AvvikelserRoute,
-  ButikerRoute: ButikerRoute,
   InstallningarRoute: InstallningarRoute,
-  KommunikationRoute: KommunikationRoute,
   LoginRoute: LoginRoute,
   PersonalRoute: PersonalRoute,
   RapporterRoute: RapporterRoute,
-  RevisionerRoute: RevisionerRoute,
-  StyrtavlorRoute: StyrtavlorRoute,
   UppgifterRoute: UppgifterRoute,
 }
 export const routeTree = rootRouteImport

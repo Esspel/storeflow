@@ -1,6 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, Trash2, UserCog, X } from "lucide-react";
+import {
+  Building2,
+  Mail,
+  MapPin,
+  Phone,
+  Plus,
+  Trash2,
+  UserCog,
+  X,
+} from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -26,6 +35,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase, type AppUser, type Store } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 
@@ -42,10 +52,14 @@ function roleBadge(role: string) {
 function AccountsPage() {
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
+
+  // Users state
   const [users, setUsers] = useState<AppUser[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
+
+  // User dialogs
+  const [showCreateUser, setShowCreateUser] = useState(false);
   const [editUser, setEditUser] = useState<AppUser | null>(null);
   const [deleteUser, setDeleteUser] = useState<AppUser | null>(null);
   const [newUser, setNewUser] = useState({
@@ -56,6 +70,19 @@ function AccountsPage() {
     store_id: "",
   });
   const [resetPw, setResetPw] = useState("");
+
+  // Store dialogs
+  const [showCreateStore, setShowCreateStore] = useState(false);
+  const [deleteStore, setDeleteStore] = useState<Store | null>(null);
+  const [newStore, setNewStore] = useState({
+    name: "",
+    city: "",
+    region: "",
+    address: "",
+    phone: "",
+    email: "",
+  });
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -66,7 +93,7 @@ function AccountsPage() {
     }
     Promise.all([
       supabase.from("app_users").select("*").order("created_at"),
-      supabase.from("stores").select("*").eq("is_active", true).order("name"),
+      supabase.from("stores").select("*").order("name"),
     ]).then(([usersRes, storesRes]) => {
       setUsers((usersRes.data ?? []) as AppUser[]);
       setStores((storesRes.data ?? []) as Store[]);
@@ -79,14 +106,21 @@ function AccountsPage() {
     if (data) setUsers(data as AppUser[]);
   };
 
+  const fetchStores = async () => {
+    const { data } = await supabase.from("stores").select("*").order("name");
+    if (data) setStores(data as Store[]);
+  };
+
+  // ── User CRUD ────────────────────────────────────────────────────────────
+
   const createUser = async () => {
     setError("");
-    if (!newUser.username || !newUser.password || !newUser.display_name) {
+    if (!newUser.username.trim() || !newUser.password || !newUser.display_name.trim()) {
       setError("Fyll i alla obligatoriska fält.");
       return;
     }
-    if (newUser.password.length < 6) {
-      setError("Lösenordet måste vara minst 6 tecken.");
+    if (newUser.password.length < 8) {
+      setError("Lösenordet måste vara minst 8 tecken.");
       return;
     }
     setSaving(true);
@@ -94,7 +128,7 @@ function AccountsPage() {
     const { data: existing } = await supabase
       .from("app_users")
       .select("id")
-      .eq("username", newUser.username)
+      .eq("username", newUser.username.toLowerCase().trim())
       .maybeSingle();
 
     if (existing) {
@@ -108,28 +142,31 @@ function AccountsPage() {
     await supabase.from("app_users").insert({
       username: newUser.username.toLowerCase().trim(),
       password_hash: hash,
-      display_name: newUser.display_name,
+      display_name: newUser.display_name.trim(),
       role: newUser.role,
       store_id: newUser.store_id || null,
     });
 
     await fetchUsers();
     setSaving(false);
-    setShowCreate(false);
+    setShowCreateUser(false);
     setNewUser({ username: "", password: "", display_name: "", role: "employee", store_id: "" });
   };
 
   const updateUser = async () => {
     if (!editUser) return;
+    if (resetPw && resetPw.length < 8) {
+      setError("Nytt lösenord måste vara minst 8 tecken.");
+      return;
+    }
     setSaving(true);
-    const updates: Partial<AppUser> = {
-      display_name: editUser.display_name,
+    await supabase.from("app_users").update({
+      display_name: editUser.display_name.trim(),
       role: editUser.role,
       store_id: editUser.store_id,
-    };
-    await supabase.from("app_users").update(updates).eq("id", editUser.id);
+    }).eq("id", editUser.id);
 
-    if (resetPw.length >= 6) {
+    if (resetPw.length >= 8) {
       const { data: hash } = await supabase.rpc("hash_password", { plain_password: resetPw });
       await supabase.from("app_users").update({ password_hash: hash }).eq("id", editUser.id);
     }
@@ -138,6 +175,7 @@ function AccountsPage() {
     setSaving(false);
     setEditUser(null);
     setResetPw("");
+    setError("");
   };
 
   const toggleUserActive = async (id: string, current: boolean) => {
@@ -145,11 +183,43 @@ function AccountsPage() {
     setUsers((prev) => prev.map((u) => u.id === id ? { ...u, is_active: !current } : u));
   };
 
-  const confirmDelete = async () => {
+  const confirmDeleteUser = async () => {
     if (!deleteUser) return;
     await supabase.from("app_users").delete().eq("id", deleteUser.id);
     setUsers((prev) => prev.filter((u) => u.id !== deleteUser.id));
     setDeleteUser(null);
+  };
+
+  // ── Store CRUD ───────────────────────────────────────────────────────────
+
+  const createStore = async () => {
+    setError("");
+    if (!newStore.name.trim()) {
+      setError("Butiksnamn är obligatoriskt.");
+      return;
+    }
+    setSaving(true);
+    await supabase.from("stores").insert({
+      name: newStore.name.trim(),
+      city: newStore.city.trim(),
+      region: newStore.region.trim(),
+      address: newStore.address.trim(),
+      phone: newStore.phone.trim(),
+      email: newStore.email.trim(),
+    });
+    await fetchStores();
+    setSaving(false);
+    setShowCreateStore(false);
+    setNewStore({ name: "", city: "", region: "", address: "", phone: "", email: "" });
+  };
+
+  const confirmDeleteStore = async () => {
+    if (!deleteStore) return;
+    setSaving(true);
+    await supabase.from("stores").delete().eq("id", deleteStore.id);
+    setStores((prev) => prev.filter((s) => s.id !== deleteStore.id));
+    setDeleteStore(null);
+    setSaving(false);
   };
 
   if (currentUser?.role !== "admin") return null;
@@ -157,89 +227,200 @@ function AccountsPage() {
   return (
     <div className="mx-auto max-w-[1400px] px-5 py-8 md:px-8 md:py-10">
       <PageHeader
-        title="Hantera konton"
-        description="Administrera användarkonton för hela systemet."
-        actions={
-          <Button className="rounded-full" onClick={() => setShowCreate(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Nytt konto
-          </Button>
-        }
+        title="Administration"
+        description="Hantera användarkonton och butiker."
       />
 
-      {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded-2xl bg-card" />
-          ))}
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/60">
-                <th className="px-5 py-3.5 text-left text-xs font-medium text-muted-foreground">Konto</th>
-                <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground md:table-cell">Butik</th>
-                <th className="px-5 py-3.5 text-center text-xs font-medium text-muted-foreground">Roll</th>
-                <th className="px-5 py-3.5 text-center text-xs font-medium text-muted-foreground">Aktiv</th>
-                <th className="px-5 py-3.5 text-right text-xs font-medium text-muted-foreground">Åtgärder</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {users.map((u) => (
-                <tr key={u.id} className="hover:bg-muted/30">
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
-                        {u.display_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
-                      </div>
-                      <div>
-                        <p className="font-medium">{u.display_name}</p>
-                        <p className="text-xs text-muted-foreground font-mono">{u.username}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="hidden px-5 py-3.5 text-muted-foreground md:table-cell">
-                    {stores.find((s) => s.id === u.store_id)?.name ?? <span className="text-muted-foreground/50">—</span>}
-                  </td>
-                  <td className="px-5 py-3.5 text-center">{roleBadge(u.role)}</td>
-                  <td className="px-5 py-3.5 text-center">
-                    <Switch
-                      checked={u.is_active}
-                      onCheckedChange={() => u.id !== currentUser?.id && toggleUserActive(u.id, u.is_active)}
-                      disabled={u.id === currentUser?.id}
-                    />
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="rounded-full text-xs"
-                        onClick={() => { setEditUser(u); setResetPw(""); }}
-                      >
-                        <UserCog className="mr-1.5 h-3.5 w-3.5" /> Redigera
-                      </Button>
-                      {u.id !== currentUser?.id && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="rounded-full text-muted-foreground hover:text-destructive"
-                          onClick={() => setDeleteUser(u)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Tabs defaultValue="users" className="mt-6">
+        <TabsList className="rounded-full bg-muted/60 p-1">
+          <TabsTrigger value="users" className="rounded-full px-5 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+            Användarkonton
+          </TabsTrigger>
+          <TabsTrigger value="stores" className="rounded-full px-5 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+            Butiker
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Create Dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        {/* ── USERS TAB ── */}
+        <TabsContent value="users" className="mt-6">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Användarkonton</h2>
+              <p className="text-sm text-muted-foreground">Administrera alla användarkonton</p>
+            </div>
+            <Button className="rounded-full" onClick={() => { setShowCreateUser(true); setError(""); }}>
+              <Plus className="mr-2 h-4 w-4" /> Nytt konto
+            </Button>
+          </div>
+
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-16 animate-pulse rounded-2xl bg-card" />
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/60">
+                    <th className="px-5 py-3.5 text-left text-xs font-medium text-muted-foreground">Konto</th>
+                    <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground md:table-cell">Butik</th>
+                    <th className="px-5 py-3.5 text-center text-xs font-medium text-muted-foreground">Roll</th>
+                    <th className="px-5 py-3.5 text-center text-xs font-medium text-muted-foreground">Aktiv</th>
+                    <th className="px-5 py-3.5 text-right text-xs font-medium text-muted-foreground">Åtgärder</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {users.map((u) => (
+                    <tr key={u.id} className="hover:bg-muted/30">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
+                            {u.display_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
+                          </div>
+                          <div>
+                            <p className="font-medium">{u.display_name}</p>
+                            <p className="font-mono text-xs text-muted-foreground">{u.username}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="hidden px-5 py-3.5 text-muted-foreground md:table-cell">
+                        {stores.find((s) => s.id === u.store_id)?.name ?? (
+                          <span className="text-muted-foreground/50">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5 text-center">{roleBadge(u.role)}</td>
+                      <td className="px-5 py-3.5 text-center">
+                        <Switch
+                          checked={u.is_active}
+                          onCheckedChange={() => u.id !== currentUser?.id && toggleUserActive(u.id, u.is_active)}
+                          disabled={u.id === currentUser?.id}
+                        />
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="rounded-full text-xs"
+                            onClick={() => { setEditUser(u); setResetPw(""); setError(""); }}
+                          >
+                            <UserCog className="mr-1.5 h-3.5 w-3.5" /> Redigera
+                          </Button>
+                          {u.id !== currentUser?.id && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="rounded-full text-muted-foreground hover:text-destructive"
+                              onClick={() => setDeleteUser(u)}
+                              aria-label="Ta bort konto"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── STORES TAB ── */}
+        <TabsContent value="stores" className="mt-6">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Butiker</h2>
+              <p className="text-sm text-muted-foreground">Hantera alla butiker i kedjan</p>
+            </div>
+            <Button className="rounded-full" onClick={() => { setShowCreateStore(true); setError(""); }}>
+              <Plus className="mr-2 h-4 w-4" /> Ny butik
+            </Button>
+          </div>
+
+          {loading ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-44 animate-pulse rounded-2xl bg-card" />
+              ))}
+            </div>
+          ) : stores.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
+              <Building2 className="mb-3 h-10 w-10 text-muted-foreground/40" />
+              <p className="text-sm font-medium text-muted-foreground">Inga butiker tillagda</p>
+              <Button className="mt-4 rounded-full" size="sm" onClick={() => setShowCreateStore(true)}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Lägg till butik
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {stores.map((store) => (
+                <div
+                  key={store.id}
+                  className="relative overflow-hidden rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)]"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                      <Building2 className="h-5 w-5" />
+                    </div>
+                    <Badge
+                      className={
+                        store.is_active
+                          ? "bg-success/15 text-success hover:bg-success/20"
+                          : "bg-muted text-muted-foreground"
+                      }
+                    >
+                      {store.is_active ? "Aktiv" : "Inaktiv"}
+                    </Badge>
+                  </div>
+
+                  <h3 className="mt-3 text-base font-semibold">{store.name}</h3>
+                  {store.region && (
+                    <p className="text-xs font-medium text-primary">{store.region}</p>
+                  )}
+
+                  <div className="mt-3 space-y-1.5 text-xs text-muted-foreground">
+                    {store.address && (
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 shrink-0" />
+                        <span>{store.address}{store.city && `, ${store.city}`}</span>
+                      </div>
+                    )}
+                    {store.phone && (
+                      <div className="flex items-center gap-1.5">
+                        <Phone className="h-3.5 w-3.5 shrink-0" />
+                        <span>{store.phone}</span>
+                      </div>
+                    )}
+                    {store.email && (
+                      <div className="flex items-center gap-1.5">
+                        <Mail className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{store.email}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-3 top-3 rounded-full text-muted-foreground hover:text-destructive"
+                    onClick={() => setDeleteStore(store)}
+                    aria-label="Ta bort butik"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* ── Create User Dialog ── */}
+      <Dialog open={showCreateUser} onOpenChange={(o) => { setShowCreateUser(o); if (!o) setError(""); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Nytt konto</DialogTitle>
@@ -251,6 +432,7 @@ function AccountsPage() {
                 placeholder="t.ex. anna.svensson"
                 value={newUser.username}
                 onChange={(e) => setNewUser((p) => ({ ...p, username: e.target.value }))}
+                autoComplete="off"
               />
             </div>
             <div className="space-y-1.5">
@@ -265,15 +447,19 @@ function AccountsPage() {
               <Label>Lösenord *</Label>
               <Input
                 type="password"
-                placeholder="Minst 6 tecken"
+                placeholder="Minst 8 tecken"
                 value={newUser.password}
                 onChange={(e) => setNewUser((p) => ({ ...p, password: e.target.value }))}
+                autoComplete="new-password"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Roll</Label>
-                <Select value={newUser.role} onValueChange={(v) => setNewUser((p) => ({ ...p, role: v as "admin" | "manager" | "employee" }))}>
+                <Select
+                  value={newUser.role}
+                  onValueChange={(v) => setNewUser((p) => ({ ...p, role: v as "admin" | "manager" | "employee" }))}
+                >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="employee">Anställd</SelectItem>
@@ -284,7 +470,10 @@ function AccountsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Butik</Label>
-                <Select value={newUser.store_id} onValueChange={(v) => setNewUser((p) => ({ ...p, store_id: v }))}>
+                <Select
+                  value={newUser.store_id}
+                  onValueChange={(v) => setNewUser((p) => ({ ...p, store_id: v }))}
+                >
                   <SelectTrigger><SelectValue placeholder="Välj..." /></SelectTrigger>
                   <SelectContent>
                     {stores.map((s) => (
@@ -299,7 +488,7 @@ function AccountsPage() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCreate(false); setError(""); }}>Avbryt</Button>
+            <Button variant="outline" onClick={() => { setShowCreateUser(false); setError(""); }}>Avbryt</Button>
             <Button onClick={createUser} disabled={saving}>
               {saving ? "Skapar..." : "Skapa konto"}
             </Button>
@@ -307,8 +496,8 @@ function AccountsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
-      <Dialog open={!!editUser} onOpenChange={(o) => !o && setEditUser(null)}>
+      {/* ── Edit User Dialog ── */}
+      <Dialog open={!!editUser} onOpenChange={(o) => { if (!o) { setEditUser(null); setError(""); } }}>
         {editUser && (
           <DialogContent className="max-w-md">
             <DialogHeader>
@@ -361,14 +550,18 @@ function AccountsPage() {
                 <Label>Nytt lösenord (lämna tomt för att behålla)</Label>
                 <Input
                   type="password"
-                  placeholder="Minst 6 tecken"
+                  placeholder="Minst 8 tecken"
                   value={resetPw}
                   onChange={(e) => setResetPw(e.target.value)}
+                  autoComplete="new-password"
                 />
               </div>
+              {error && (
+                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+              )}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setEditUser(null)}>
+              <Button variant="outline" onClick={() => { setEditUser(null); setError(""); }}>
                 <X className="mr-1.5 h-3.5 w-3.5" /> Avbryt
               </Button>
               <Button onClick={updateUser} disabled={saving}>
@@ -379,7 +572,80 @@ function AccountsPage() {
         )}
       </Dialog>
 
-      {/* Delete Confirm */}
+      {/* ── Create Store Dialog ── */}
+      <Dialog open={showCreateStore} onOpenChange={(o) => { setShowCreateStore(o); if (!o) setError(""); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Lägg till butik</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Butiksnamn *</Label>
+              <Input
+                placeholder="T.ex. Stockholm City"
+                value={newStore.name}
+                onChange={(e) => setNewStore((p) => ({ ...p, name: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Stad</Label>
+                <Input
+                  placeholder="Stockholm"
+                  value={newStore.city}
+                  onChange={(e) => setNewStore((p) => ({ ...p, city: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Region</Label>
+                <Input
+                  placeholder="Region Stockholm"
+                  value={newStore.region}
+                  onChange={(e) => setNewStore((p) => ({ ...p, region: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Adress</Label>
+              <Input
+                placeholder="Gatuadress"
+                value={newStore.address}
+                onChange={(e) => setNewStore((p) => ({ ...p, address: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Telefon</Label>
+                <Input
+                  placeholder="08-123 456"
+                  value={newStore.phone}
+                  onChange={(e) => setNewStore((p) => ({ ...p, phone: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>E-post</Label>
+                <Input
+                  type="email"
+                  placeholder="butik@example.com"
+                  value={newStore.email}
+                  onChange={(e) => setNewStore((p) => ({ ...p, email: e.target.value }))}
+                />
+              </div>
+            </div>
+            {error && (
+              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowCreateStore(false); setError(""); }}>Avbryt</Button>
+            <Button onClick={createStore} disabled={saving || !newStore.name}>
+              {saving ? "Sparar..." : "Lägg till"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete User Confirm ── */}
       <AlertDialog open={!!deleteUser} onOpenChange={(o) => !o && setDeleteUser(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -393,9 +659,34 @@ function AccountsPage() {
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmDelete}
+              onClick={confirmDeleteUser}
             >
               Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Delete Store Confirm ── */}
+      <AlertDialog open={!!deleteStore} onOpenChange={(o) => !o && setDeleteStore(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort butik</AlertDialogTitle>
+            <AlertDialogDescription>
+              Är du säker på att du vill permanent ta bort butiken{" "}
+              <strong>{deleteStore?.name}</strong>?
+              <span className="mt-2 block text-xs">
+                Relaterade uppgifter, avvikelser och användarkopplingar kan påverkas. Åtgärden kan inte ångras.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDeleteStore}
+            >
+              Ta bort butik
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
