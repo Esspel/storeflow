@@ -1,17 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import {
-  LayoutDashboard,
-  ListChecks,
-  AlertTriangle,
-  MessageSquare,
-  ClipboardCheck,
-  BarChart3,
-  Monitor,
-  Users,
-  Store,
-  Settings,
-  Sparkles,
-} from "lucide-react";
+import { LayoutDashboard, ListChecks, TriangleAlert as AlertTriangle, MessageSquare, ClipboardCheck, ChartBar as BarChart3, Monitor, Users, Store, Settings, Sparkles, CalendarDays } from "lucide-react";
 
 import {
   Sidebar,
@@ -29,6 +17,7 @@ import {
 const main = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Uppgifter", url: "/uppgifter", icon: ListChecks },
+  { title: "Schema", url: "/schema", icon: CalendarDays },
   { title: "Avvikelser", url: "/avvikelser", icon: AlertTriangle },
   { title: "Kommunikation", url: "/kommunikation", icon: MessageSquare },
 ];

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UppgifterRouteImport } from './routes/uppgifter'
 import { Route as TestpanelRouteImport } from './routes/testpanel'
+import { Route as SchemaRouteImport } from './routes/schema'
 import { Route as RapporterRouteImport } from './routes/rapporter'
 import { Route as PersonalRouteImport } from './routes/personal'
 import { Route as MallarRouteImport } from './routes/mallar'
@@ -27,6 +28,11 @@ const UppgifterRoute = UppgifterRouteImport.update({
 const TestpanelRoute = TestpanelRouteImport.update({
   id: '/testpanel',
   path: '/testpanel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SchemaRoute = SchemaRouteImport.update({
+  id: '/schema',
+  path: '/schema',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RapporterRoute = RapporterRouteImport.update({
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
+  '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
@@ -84,6 +91,7 @@ export interface FileRoutesByTo {
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
+  '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
@@ -96,6 +104,7 @@ export interface FileRoutesById {
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
+  '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
     | '/mallar'
     | '/personal'
     | '/rapporter'
+    | '/schema'
     | '/testpanel'
     | '/uppgifter'
   fileRoutesByTo: FileRoutesByTo
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
     | '/mallar'
     | '/personal'
     | '/rapporter'
+    | '/schema'
     | '/testpanel'
     | '/uppgifter'
   id:
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
     | '/mallar'
     | '/personal'
     | '/rapporter'
+    | '/schema'
     | '/testpanel'
     | '/uppgifter'
   fileRoutesById: FileRoutesById
@@ -143,6 +155,7 @@ export interface RootRouteChildren {
   MallarRoute: typeof MallarRoute
   PersonalRoute: typeof PersonalRoute
   RapporterRoute: typeof RapporterRoute
+  SchemaRoute: typeof SchemaRoute
   TestpanelRoute: typeof TestpanelRoute
   UppgifterRoute: typeof UppgifterRoute
 }
@@ -161,6 +174,13 @@ declare module '@tanstack/react-router' {
       path: '/testpanel'
       fullPath: '/testpanel'
       preLoaderRoute: typeof TestpanelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/schema': {
+      id: '/schema'
+      path: '/schema'
+      fullPath: '/schema'
+      preLoaderRoute: typeof SchemaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rapporter': {
@@ -223,6 +243,7 @@ const rootRouteChildren: RootRouteChildren = {
   MallarRoute: MallarRoute,
   PersonalRoute: PersonalRoute,
   RapporterRoute: RapporterRoute,
+  SchemaRoute: SchemaRoute,
   TestpanelRoute: TestpanelRoute,
   UppgifterRoute: UppgifterRoute,
 }
