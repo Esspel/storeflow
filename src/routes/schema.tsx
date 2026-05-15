@@ -409,10 +409,33 @@ function SchemaPage() {
   const [importDragOver, setImportDragOver] = useState(false);
   const [importFiles, setImportFiles] = useState<File[]>([]);
   const [importProcessing, setImportProcessing] = useState(false);
+  const [pdfPreviews, setPdfPreviews] = useState<Record<string, ParsedDelivery[]>>({});
 
   const importInputRef = useRef<HTMLInputElement>(null);
   const storeId = activeStore?.id ?? user?.store_id ?? null;
   const todayStr = new Date().toISOString().slice(0, 10);
+
+  async function addImportFiles(newFiles: File[]) {
+    const merged = [...importFiles, ...newFiles].filter((f, i, arr) => arr.findIndex((x) => x.name === f.name) === i);
+    setImportFiles(merged);
+    // Parse PDFs immediately for preview
+    for (const f of newFiles) {
+      if (!f.name.endsWith(".pdf") || pdfPreviews[f.name] !== undefined) continue;
+      try {
+        const buf = await f.arrayBuffer();
+        const text = await extractPdfText(buf);
+        const entries = parsePdfText(text);
+        setPdfPreviews((p) => ({ ...p, [f.name]: entries }));
+      } catch {
+        setPdfPreviews((p) => ({ ...p, [f.name]: [] }));
+      }
+    }
+  }
+
+  function removeImportFile(name: string) {
+    setImportFiles((p) => p.filter((f) => f.name !== name));
+    setPdfPreviews((p) => { const n = { ...p }; delete n[name]; return n; });
+  }
 
   useEffect(() => {
     if (!storeId) return;
@@ -507,13 +530,18 @@ function SchemaPage() {
           setMatchedEmployees(matched);
           setImportDialogOpen(false);
           setImportFiles([]);
+          setPdfPreviews({});
           setMappingOpen(true);
           return; // XML opens mapping dialog; only handle first XML
         } else if (ext === "pdf") {
           try {
-            const arrayBuffer = await file.arrayBuffer();
-            const text = await extractPdfText(arrayBuffer);
-            const entries = parsePdfText(text);
+            // Re-use already-parsed preview if available
+            let entries = pdfPreviews[file.name];
+            if (entries === undefined) {
+              const arrayBuffer = await file.arrayBuffer();
+              const text = await extractPdfText(arrayBuffer);
+              entries = parsePdfText(text);
+            }
             if (entries.length === 0) {
               toast.error(`Inga leveranser hittades i ${file.name}`);
               continue;
@@ -543,6 +571,7 @@ function SchemaPage() {
       }
       setImportDialogOpen(false);
       setImportFiles([]);
+      setPdfPreviews({});
       await loadDeliveryPlans();
     } finally {
       setImportProcessing(false);
@@ -728,7 +757,7 @@ function SchemaPage() {
               </Button>
             )}
             {isAdmin && (
-              <Button size="sm" className="gap-1.5" onClick={() => { setImportFiles([]); setImportDialogOpen(true); }}>
+              <Button size="sm" className="gap-1.5" onClick={() => { setImportFiles([]); setPdfPreviews({}); setImportDialogOpen(true); }}>
                 <Upload className="h-4 w-4" />
                 Importera
               </Button>
@@ -739,7 +768,7 @@ function SchemaPage() {
                 Enbart visning
               </div>
             )}
-            <input ref={importInputRef} type="file" accept=".xml,.pdf" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length) setImportFiles((p) => [...p, ...files].filter((f, i, arr) => arr.findIndex((x) => x.name === f.name) === i)); e.target.value = ""; }} />
+            <input ref={importInputRef} type="file" accept=".xml,.pdf" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length) addImportFiles(files); e.target.value = ""; }} />
           </div>
         </div>
       </div>
@@ -791,7 +820,7 @@ function SchemaPage() {
             </p>
           </div>
           {isAdmin && (
-            <Button className="gap-2" onClick={() => { setImportFiles([]); setImportDialogOpen(true); }}>
+            <Button className="gap-2" onClick={() => { setImportFiles([]); setPdfPreviews({}); setImportDialogOpen(true); }}>
               <Upload className="h-4 w-4" />
               Importera schema
             </Button>
@@ -1088,9 +1117,9 @@ function SchemaPage() {
       )}
 
       {/* Unified import dialog */}
-      <Dialog open={importDialogOpen} onOpenChange={(o) => { if (!importProcessing) { setImportDialogOpen(o); if (!o) setImportFiles([]); } }}>
-        <DialogContent className="flex max-h-[90vh] max-w-lg flex-col p-0 gap-0 overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
+      <Dialog open={importDialogOpen} onOpenChange={(o) => { if (!importProcessing) { setImportDialogOpen(o); if (!o) { setImportFiles([]); setPdfPreviews({}); } } }}>
+        <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col p-0 gap-0 overflow-hidden">
+          <div className="flex shrink-0 items-center gap-3 border-b border-border/60 px-5 py-4">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-soft">
               <Upload className="h-4 w-4 text-primary" />
             </div>
@@ -1098,7 +1127,7 @@ function SchemaPage() {
               <h2 className="text-sm font-semibold">Importera filer</h2>
               <p className="text-xs text-muted-foreground">Schema (XML) och/eller leveransplan (PDF)</p>
             </div>
-            <button className="rounded-md p-1.5 text-muted-foreground hover:bg-muted transition-colors" onClick={() => { if (!importProcessing) { setImportDialogOpen(false); setImportFiles([]); } }}>
+            <button className="rounded-md p-1.5 text-muted-foreground hover:bg-muted transition-colors" onClick={() => { if (!importProcessing) { setImportDialogOpen(false); setImportFiles([]); setPdfPreviews({}); } }}>
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -1125,7 +1154,7 @@ function SchemaPage() {
             {/* Drop zone */}
             <div
               className={[
-                "relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed py-10 px-6 text-center transition-colors cursor-pointer select-none",
+                "relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed py-8 px-6 text-center transition-colors cursor-pointer select-none",
                 importDragOver ? "border-primary bg-primary-soft/40" : "border-border/60 bg-muted/20 hover:border-primary/50 hover:bg-muted/40",
               ].join(" ")}
               onDragOver={(e) => { e.preventDefault(); setImportDragOver(true); }}
@@ -1134,35 +1163,84 @@ function SchemaPage() {
                 e.preventDefault();
                 setImportDragOver(false);
                 const dropped = Array.from(e.dataTransfer.files).filter((f) => f.name.endsWith(".xml") || f.name.endsWith(".pdf"));
-                if (dropped.length) setImportFiles((p) => [...p, ...dropped].filter((f, i, arr) => arr.findIndex((x) => x.name === f.name) === i));
+                if (dropped.length) addImportFiles(dropped);
               }}
               onClick={() => importInputRef.current?.click()}
             >
-              <div className={["flex h-12 w-12 items-center justify-center rounded-2xl transition-colors", importDragOver ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"].join(" ")}>
-                <FilePlus2 className="h-6 w-6" />
+              <div className={["flex h-10 w-10 items-center justify-center rounded-2xl transition-colors", importDragOver ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"].join(" ")}>
+                <FilePlus2 className="h-5 w-5" />
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">Dra och släpp filer här</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">eller klicka för att välja</p>
-                <p className="mt-1 text-[11px] text-muted-foreground/60">.xml och .pdf stöds</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">eller klicka för att välja · .xml och .pdf</p>
               </div>
             </div>
 
-            {/* File list */}
+            {/* File list with PDF previews */}
             {importFiles.length > 0 && (
-              <div className="space-y-1.5">
+              <div className="space-y-3">
                 {importFiles.map((f) => {
                   const isPdf = f.name.endsWith(".pdf");
+                  const preview = pdfPreviews[f.name];
                   return (
-                    <div key={f.name} className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-card px-3 py-2">
-                      {isPdf ? <FileText className="h-4 w-4 shrink-0 text-info" /> : <FileCode2 className="h-4 w-4 shrink-0 text-primary" />}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium text-foreground">{f.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{isPdf ? "Leveransplan PDF" : "Schema XML"} · {(f.size / 1024).toFixed(0)} KB</p>
+                    <div key={f.name} className="rounded-xl border border-border/60 bg-card overflow-hidden">
+                      {/* File header row */}
+                      <div className="flex items-center gap-2.5 px-3 py-2.5">
+                        {isPdf ? <FileText className="h-4 w-4 shrink-0 text-info" /> : <FileCode2 className="h-4 w-4 shrink-0 text-primary" />}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-medium text-foreground">{f.name}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {isPdf ? "Leveransplan PDF" : "Schema XML"} · {(f.size / 1024).toFixed(0)} KB
+                            {isPdf && preview !== undefined && (
+                              <span className={preview.length > 0 ? " · text-success" : " · text-warning"}>
+                                {preview.length > 0 ? ` · ${preview.length} leveranser hittade` : " · inga leveranser hittades"}
+                              </span>
+                            )}
+                            {isPdf && preview === undefined && <span className="text-muted-foreground"> · läser…</span>}
+                          </p>
+                        </div>
+                        <button className="shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-destructive transition-colors" onClick={(e) => { e.stopPropagation(); removeImportFile(f.name); }} aria-label="Ta bort">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
                       </div>
-                      <button className="shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-destructive transition-colors" onClick={(e) => { e.stopPropagation(); setImportFiles((p) => p.filter((x) => x.name !== f.name)); }} aria-label="Ta bort">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
+
+                      {/* PDF delivery preview table */}
+                      {isPdf && preview && preview.length > 0 && (
+                        <div className="border-t border-border/40">
+                          <div className="grid grid-cols-[1fr_auto_auto_auto_1fr] gap-0 text-[10px]">
+                            <div className="col-span-5 grid grid-cols-[1fr_auto_auto_auto_1fr] bg-muted/40 px-3 py-1.5 font-semibold uppercase tracking-wide text-muted-foreground">
+                              <span>Leveransdag</span>
+                              <span className="px-3">Tid</span>
+                              <span className="px-3">Beställ</span>
+                              <span className="px-3">Stopp</span>
+                              <span>Flöde / Leverantör</span>
+                            </div>
+                            {preview.map((d, i) => {
+                              const c = flowColor(d.flowName);
+                              return (
+                                <div key={i} className="col-span-5 grid grid-cols-[1fr_auto_auto_auto_1fr] items-center border-t border-border/20 px-3 py-1.5 hover:bg-muted/20 transition-colors">
+                                  <span className="font-medium text-foreground capitalize">{d.deliveryDay}</span>
+                                  <span className="px-3 font-mono text-foreground">{d.deliveryTime}</span>
+                                  <span className="px-3 text-muted-foreground capitalize">{d.orderDay}</span>
+                                  <span className="px-3 font-mono text-muted-foreground">{d.stopTime}</span>
+                                  <span className="flex items-center gap-1.5 min-w-0">
+                                    <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: c.bg, color: c.text }}>{d.flowName || "–"}</span>
+                                    <span className="truncate text-muted-foreground">{d.supplier}</span>
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* No deliveries found warning */}
+                      {isPdf && preview && preview.length === 0 && (
+                        <div className="border-t border-border/40 flex items-center gap-2 px-3 py-2.5 bg-warning/5">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0 text-warning" />
+                          <p className="text-[11px] text-warning">Kunde inte läsa leveranser från denna PDF. Kontrollera att det är en korrekt leveransplan.</p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1171,7 +1249,7 @@ function SchemaPage() {
           </div>
 
           <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-4">
-            <Button variant="outline" size="sm" onClick={() => { setImportDialogOpen(false); setImportFiles([]); }} disabled={importProcessing}>Avbryt</Button>
+            <Button variant="outline" size="sm" onClick={() => { setImportDialogOpen(false); setImportFiles([]); setPdfPreviews({}); }} disabled={importProcessing}>Avbryt</Button>
             <Button size="sm" onClick={() => processImportFiles(importFiles)} disabled={importFiles.length === 0 || importProcessing} className="gap-1.5">
               <Upload className="h-3.5 w-3.5" />
               {importProcessing ? "Importerar…" : `Importera${importFiles.length > 0 ? ` (${importFiles.length})` : ""}`}
