@@ -283,6 +283,11 @@ function parseXml(xmlText: string): ParsedSchedule | null {
       const absenceName = getAttrOrText(dayEl, "AbsencePayrollProductName");
       if (dayNr === 1 && scheduleDate && !weekStartDate) weekStartDate = scheduleDate;
 
+      // Day-level lended-out detection: ShiftLink (GUID) + ScheduleTotalCost = 0 + NOT absence
+      const dayShiftLink = getAttrOrText(dayEl, "ShiftLink") || "";
+      const dayScheduleCost = parseFloat((getAttrOrText(dayEl, "ScheduleTotalCost") || "-1").replace(",", "."));
+      const isDayLendedOut = !isAbsenceDay && dayShiftLink.length > 8 && dayScheduleCost === 0;
+
       // Day-level break windows (ScheduleBreak1Start..ScheduleBreak4Start)
       const dayBreakWindows: BreakWindow[] = [];
       for (let bIdx = 1; bIdx <= 4; bIdx++) {
@@ -308,27 +313,22 @@ function parseXml(xmlText: string): ParsedSchedule | null {
         // Color may be 6-char hex without #
         const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "";
         const netMins = parseInt(getAttrOrText(dayEl, `${prefix}NetTimeMinutes`) || "0", 10);
-        const lendedRaw = getAttrOrText(dayEl, `${prefix}Lended`) || "0";
         const deviationCause = getAttrOrText(dayEl, `${prefix}TimeDeviationCauseName`) || absenceName;
-        const shiftLink = getAttrOrText(dayEl, `${prefix}Link`) || "";
-        const totalCostRaw = parseFloat((getAttrOrText(dayEl, `${prefix}TotalCost`) || "0").replace(",", "."));
-        // Borrowed: linked to another unit (non-empty GUID in ShiftLink) AND cost is exactly 0
-        const isBorrowed = shiftLink.length > 8 && totalCostRaw === 0;
         shifts.push({
           shiftName: sName,
           startTime: parseTime(sStartRaw),
           stopTime: parseTime(sStopRaw),
-          // Prefer XML color directly; fall back to name-based lookup
           color: xmlCol && xmlCol !== "#000000" && xmlCol !== "#FFFFFF" && xmlCol !== "#ffffff" ? xmlCol : shiftColor(sName, xmlCol),
           grossMinutes: netMins + (sIdx === 1 ? dayBreakTotal : 0),
           netMinutes: netMins,
           breakMinutes: sIdx === 1 ? dayBreakTotal : 0,
           breakWindows: sIdx === 1 ? dayBreakWindows : [],
           deviationCause,
-          totalCost: totalCostRaw,
-          isLended: lendedRaw === "1" || lendedRaw.toLowerCase() === "true",
-          shiftLink,
-          isBorrowed,
+          totalCost: dayScheduleCost,
+          // Lended OUT: day-level ShiftLink present + ScheduleTotalCost=0 + not absence
+          isLended: isDayLendedOut,
+          shiftLink: dayShiftLink,
+          isBorrowed: false,
         });
       }
 
@@ -341,9 +341,6 @@ function parseXml(xmlText: string): ParsedSchedule | null {
           const grossMinutes = parseInt(getText(sEl, "ShiftGrossTimeMinutes") || "0", 10);
           const xmlNet = parseInt(getText(sEl, "ShiftNetTimeMinutes") || "0", 10);
           const netMinutes = xmlNet > 0 ? xmlNet : Math.max(0, grossMinutes - dayBreakTotal);
-          const lendedRaw = getText(sEl, "ShiftLended") || getAttrOrText(sEl, "ShiftLended") || "0";
-          const fbLink = getText(sEl, "ShiftLink") || getAttrOrText(sEl, "ShiftLink") || "";
-          const fbCost = parseFloat((getText(sEl, "ShiftTotalCost") || "0").replace(",", "."));
           shifts.push({
             shiftName: sName,
             startTime: parseTime(getText(sEl, "ShiftStartTime")),
@@ -354,10 +351,10 @@ function parseXml(xmlText: string): ParsedSchedule | null {
             breakMinutes: dayBreakTotal,
             breakWindows: dayBreakWindows,
             deviationCause: absenceName || getText(sEl, "ShiftTimeDeviationCauseName"),
-            totalCost: fbCost,
-            isLended: lendedRaw === "1" || lendedRaw.toLowerCase() === "true",
-            shiftLink: fbLink,
-            isBorrowed: fbLink.length > 8 && fbCost === 0,
+            totalCost: dayScheduleCost,
+            isLended: isDayLendedOut,
+            shiftLink: dayShiftLink,
+            isBorrowed: false,
           });
         });
       }
@@ -1186,13 +1183,9 @@ function SchemaPage() {
                                   `Brutto: ${minsToHours(shift.gross_minutes)}`,
                                   shift.break_minutes > 0 ? `Rast: ${shift.break_minutes} min` : null,
                                   `Netto: ${minsToHours(shift.net_minutes > 0 ? shift.net_minutes : Math.max(0, shift.gross_minutes - shift.break_minutes))}`,
-                                  shift.is_lended ? "↔ Utlånad/inlånad" : null,
-                                  shift.is_borrowed ? "! Inlånad från annan enhet (Remote Unit Assignment)" : null,
+                                  shift.is_lended ? "↔ Utlånad till annan enhet" : null,
                                 ].filter(Boolean).join("\n")}>
-                                {shift.is_borrowed && (
-                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white text-[9px] font-bold leading-none">!</span>
-                                )}
-                                {!shift.is_borrowed && shift.is_lended && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
+                                {shift.is_lended && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
                                 <span className="truncate leading-tight">
                                   {shift.shift_name ? <>{shift.shift_name}<br /><span className="opacity-70">{shift.start_time}–{shift.stop_time}</span></> : `${shift.start_time}–${shift.stop_time}`}
                                 </span>
@@ -1294,9 +1287,8 @@ function SchemaPage() {
                             return (
                               <div key={s.id} className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-semibold truncate"
                                 style={{ backgroundColor: col + "55", borderLeft: `2px solid ${col}`, color: isLightColor(col) ? "oklch(0.25 0.05 145)" : "oklch(0.15 0.05 145)" }}
-                                title={s.is_borrowed ? "Inlånad från annan enhet (Remote Unit Assignment)" : s.is_lended ? "Utlånad/inlånad" : undefined}>
-                                {s.is_borrowed && <span className="flex h-3 w-3 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none">!</span>}
-                                {!s.is_borrowed && s.is_lended && <ArrowLeftRight className="h-2 w-2 shrink-0" />}
+                                title={s.is_lended ? "↔ Utlånad till annan enhet" : undefined}>
+                                {s.is_lended && <ArrowLeftRight className="h-2 w-2 shrink-0" />}
                                 <span className="truncate">{s.start_time}–{s.stop_time}</span>
                               </div>
                             );
