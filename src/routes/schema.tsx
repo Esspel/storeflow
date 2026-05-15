@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Calendar, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2 } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,12 +35,14 @@ type XmlShift = {
   netMinutes: number;
   deviationCause: string;
   totalCost: number;
+  isLended: boolean;
 };
 
 type XmlDay = {
   dayNr: number;
   scheduleDate: string;
   isAbsenceDay: boolean;
+  isSemester: boolean;
   shifts: XmlShift[];
 };
 
@@ -95,6 +97,7 @@ type ScheduleShift = {
   net_minutes: number;
   deviation_cause: string;
   is_absence_day: boolean;
+  is_lended: boolean;
 };
 
 type DeliveryPlan = {
@@ -129,28 +132,60 @@ type MatchedEmployee = {
   newPassword: string;
 };
 
-// ─── Shift colour mapping (from image reference) ──────────────────────────────
+// ─── Shift colour mapping ─────────────────────────────────────────────────────
 
 const SHIFT_COLORS: Record<string, { bg: string; label: string }> = {
-  kassa:         { bg: "#b5c9a1", label: "Kassa" },
-  "kassa reserv": { bg: "#b5c9a1", label: "Kassa Reserv" },
+  kassa:            { bg: "#b5c9a1", label: "Kassa" },
+  "kassa reserv":   { bg: "#b5c9a1", label: "Kassa Reserv" },
   "kassa reserv 1": { bg: "#b5c9a1", label: "Kassa Reserv 1" },
-  förbutik:      { bg: "#c8d4b0", label: "Förbutik" },
-  teamplock:     { bg: "#7d6547", label: "Teamplock" },
-  butikskök:     { bg: "#4a7c4e", label: "Butikskök" },
-  butik:         { bg: "#b5c9a1", label: "Butik" },
-  lager:         { bg: "#9aab85", label: "Lager" },
-  städning:      { bg: "#aec6b0", label: "Städning" },
-  standard:      { bg: "#b0b0b0", label: "Standard" },
+  förbutik:         { bg: "#f0c87a", label: "Förbutik" },
+  teamplock:        { bg: "#7d6547", label: "Teamplock" },
+  butikskök:        { bg: "#4a7c4e", label: "Butikskök" },
+  butik:            { bg: "#b5c9a1", label: "Butik" },
+  lager:            { bg: "#9aab85", label: "Lager" },
+  städning:         { bg: "#aec6b0", label: "Städning" },
+  standard:         { bg: "#b0b0b0", label: "Standard" },
 };
+
+// Dynamic colors for unknown shift types — persisted in localStorage
+const DYNAMIC_SHIFT_COLORS_KEY = "sf_dynamic_shift_colors";
+function getDynamicShiftColors(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(DYNAMIC_SHIFT_COLORS_KEY) ?? "{}"); } catch { return {}; }
+}
+function saveDynamicShiftColor(key: string, color: string) {
+  const d = getDynamicShiftColors();
+  d[key] = color;
+  localStorage.setItem(DYNAMIC_SHIFT_COLORS_KEY, JSON.stringify(d));
+}
+// Deterministic palette for new shift types (distinct, readable)
+const UNKNOWN_SHIFT_PALETTE = [
+  "#e8a87c", "#a78bca", "#7ec8c8", "#e88a8a", "#8abce8", "#c8c87e",
+  "#e8c88a", "#8ae8b4", "#c88ab4", "#8ab4e8", "#e8e48a", "#b4e88a",
+];
+function assignUnknownShiftColor(key: string): string {
+  const existing = getDynamicShiftColors();
+  if (existing[key]) return existing[key];
+  const idx = Object.keys(existing).length % UNKNOWN_SHIFT_PALETTE.length;
+  const color = UNKNOWN_SHIFT_PALETTE[idx];
+  saveDynamicShiftColor(key, color);
+  return color;
+}
 
 function shiftColor(name: string, xmlColor: string): string {
   const key = name.toLowerCase().trim();
+  // Check known colors first
   for (const k of Object.keys(SHIFT_COLORS)) {
     if (key.includes(k)) return SHIFT_COLORS[k].bg;
   }
-  // Fall back to XML color if it's not the default green
-  if (xmlColor && xmlColor !== "#4CAF50") return xmlColor;
+  // Check dynamic saved colors
+  const dynamic = getDynamicShiftColors();
+  for (const k of Object.keys(dynamic)) {
+    if (key.includes(k)) return dynamic[k];
+  }
+  // Fall back to XML color if it looks custom (not the default green or white)
+  if (xmlColor && xmlColor !== "#4CAF50" && xmlColor !== "#ffffff" && xmlColor !== "#FFFFFF") return xmlColor;
+  // Assign and save a new color for this unknown type
+  if (key) return assignUnknownShiftColor(key);
   return SHIFT_COLORS["kassa"].bg;
 }
 
@@ -230,6 +265,7 @@ function parseXml(xmlText: string): ParsedSchedule | null {
       const shifts: XmlShift[] = Array.from(dayEl.querySelectorAll("Shifts")).map((sEl) => {
         const sName = getText(sEl, "ShiftName");
         const xmlCol = getText(sEl, "Color") ? `#${getText(sEl, "Color")}` : "#4CAF50";
+        const lendedRaw = getText(sEl, "ShiftLended") || sEl.getAttribute("ShiftLended") || "0";
         return {
           shiftName: sName,
           startTime: parseTime(getText(sEl, "ShiftStartTime")),
@@ -239,9 +275,11 @@ function parseXml(xmlText: string): ParsedSchedule | null {
           netMinutes: parseInt(getText(sEl, "ShiftNetTimeMinutes") || "0", 10),
           deviationCause: getText(sEl, "ShiftTimeDeviationCauseName"),
           totalCost: parseFloat((getText(sEl, "ShiftTotalCost") || "0").replace(",", ".")),
+          isLended: lendedRaw === "1" || lendedRaw.toLowerCase() === "true",
         };
       });
-      return { dayNr, scheduleDate, isAbsenceDay, shifts };
+      const isSemester = shifts.some((s) => s.deviationCause.toLowerCase().includes("semester"));
+      return { dayNr, scheduleDate, isAbsenceDay, isSemester, shifts };
     });
     return { employeeNr, employeeName, employeeGroup, days };
   });
@@ -266,44 +304,57 @@ type ParsedDelivery = {
 
 function parsePdfText(text: string): ParsedDelivery[] {
   const results: ParsedDelivery[] = [];
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-  // Find rows: each row has a day name as the first token
   const dayNames = new Set(Object.keys(DAY_TO_INDEX));
+  const timeRe = /\d{2}:\d{2}/;
 
+  // Collect all non-empty tokens from extracted text
+  const tokens = text.split(/[\n\r]+/).flatMap((l) => l.trim().split(/\s{2,}/).map((t) => t.trim())).filter(Boolean);
+
+  // Sliding window: look for pattern [Day] [HH:MM] [Day] [HH:MM] [FlowName] [Supplier...]
   let i = 0;
-  while (i < lines.length) {
-    const firstWord = lines[i].split(/\s+/)[0]?.toLowerCase();
-    if (dayNames.has(firstWord)) {
-      // Try to parse a delivery row from one or two lines
-      // Pattern: "Måndag 13:50 Söndag 11:35 Standard ARLA FOODS..." (single line)
-      // or split across two lines
-      const combined = lines[i] + " " + (lines[i + 1] ?? "");
-      const timeRe = /(\d{2}:\d{2})/g;
-      const times = [...combined.matchAll(timeRe)].map((m) => m[1]);
+  while (i < tokens.length) {
+    const t = tokens[i];
+    if (dayNames.has(t.toLowerCase())) {
+      // Try to match: DelivDay, DelivTime, OrderDay, StopTime, FlowName, ...Supplier
+      const t1 = tokens[i + 1] ?? "";
+      const t2 = tokens[i + 2] ?? "";
+      const t3 = tokens[i + 3] ?? "";
+      const t4 = tokens[i + 4] ?? "";
+      if (timeRe.test(t1) && dayNames.has(t2.toLowerCase()) && timeRe.test(t3)) {
+        const supplier = tokens.slice(i + 5).slice(0, 8).join(" ").split(/(?=[A-ZÅÄÖ]{3,})/)[0]?.trim() ?? "";
+        results.push({
+          deliveryDay: t,
+          deliveryTime: t1,
+          orderDay: t2,
+          stopTime: t3,
+          flowName: t4,
+          supplier: tokens.slice(i + 5).filter((_, j) => j < 6).join(" "),
+        });
+        i += 5;
+        continue;
+      }
+      // Fallback: try combining current + next line (tokens may be split differently)
+      const combined = tokens.slice(i, i + 12).join(" ");
+      const times = [...combined.matchAll(/\d{2}:\d{2}/g)].map((m) => m[0]);
       if (times.length >= 2) {
         const parts = combined.split(/\s+/);
         const deliveryDay = parts[0] ?? "";
-        const deliveryTime = times[0] ?? "";
-        // Find order day (second day name)
+        const deliveryTime = times[0];
         let orderDayIdx = -1;
         for (let j = 1; j < parts.length; j++) {
-          if (dayNames.has(parts[j]?.toLowerCase())) {
-            orderDayIdx = j;
-            break;
-          }
+          if (dayNames.has(parts[j]?.toLowerCase())) { orderDayIdx = j; break; }
         }
         const orderDay = orderDayIdx >= 0 ? parts[orderDayIdx] : "";
-        const stopTime = times[1] ?? "";
-        // Everything after stopTime is flowName + supplier
-        const afterStop = combined.slice(combined.indexOf(stopTime) + stopTime.length).trim();
-        const flowWords = afterStop.split(/\s+/);
-        // Flow name is typically one word: Färskt, Torrt, Fryst, Standard
-        const flowName = flowWords[0] ?? "";
-        const supplier = flowWords.slice(1).join(" ");
-
-        if (deliveryDay && deliveryTime) {
+        const stopTime = times[1];
+        const afterStopIdx = combined.lastIndexOf(stopTime) + stopTime.length;
+        const afterStop = combined.slice(afterStopIdx).trim().split(/\s+/);
+        const flowName = afterStop[0] ?? "";
+        const supplier = afterStop.slice(1).join(" ");
+        if (deliveryDay && deliveryTime && flowName) {
           results.push({ deliveryDay, deliveryTime, orderDay, stopTime, flowName, supplier });
         }
+        i += 6;
+        continue;
       }
     }
     i++;
@@ -669,8 +720,8 @@ function SchemaPage() {
         if (empErr || !empData) continue;
         const empId = (empData as ScheduleEmployee).id;
         const rows = emp.days.flatMap((day) => {
-          if (day.shifts.length > 0) return day.shifts.map((s) => ({ schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate, start_time: s.startTime || null, stop_time: s.stopTime || null, shift_name: s.shiftName, color: s.color, gross_minutes: s.grossMinutes, net_minutes: s.netMinutes, deviation_cause: s.deviationCause, is_absence_day: day.isAbsenceDay }));
-          if (day.isAbsenceDay) return [{ schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate, start_time: null, stop_time: null, shift_name: "", color: "#e0e0e0", gross_minutes: 0, net_minutes: 0, deviation_cause: "", is_absence_day: true }];
+          if (day.shifts.length > 0) return day.shifts.map((s) => ({ schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate, start_time: s.startTime || null, stop_time: s.stopTime || null, shift_name: s.shiftName, color: s.color, gross_minutes: s.grossMinutes, net_minutes: s.netMinutes, deviation_cause: s.deviationCause, is_absence_day: day.isAbsenceDay || day.isSemester, is_lended: s.isLended }));
+          if (day.isAbsenceDay || day.isSemester) return [{ schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate, start_time: null, stop_time: null, shift_name: day.isSemester ? "Semester" : "", color: day.isSemester ? "#fca5a5" : "#e0e0e0", gross_minutes: 0, net_minutes: 0, deviation_cause: day.isSemester ? "Semester" : "", is_absence_day: true, is_lended: false }];
           return [];
         });
         if (rows.length > 0) await supabase.from("schedule_shifts").insert(rows);
@@ -956,50 +1007,65 @@ function SchemaPage() {
                   <p className="text-sm text-muted-foreground">Inga pass schemalagda denna dag</p>
                 </div>
               ) : (
-                employeeRows.map(({ emp, workShifts, absenceShift, appUser, weekMinutes, initials }) => (
-                  <div key={emp.id} className="group flex border-b border-border/20 last:border-b-0 hover:bg-muted/20 transition-colors">
-                    <div className="flex w-48 shrink-0 items-center gap-2.5 border-r border-border/30 px-4 py-3">
+                employeeRows.map(({ emp, workShifts, absenceShift, appUser, weekMinutes, initials }) => {
+                  const isSemesterDay = absenceShift?.deviation_cause?.toLowerCase().includes("semester") || absenceShift?.shift_name?.toLowerCase() === "semester";
+                  return (
+                  <div key={emp.id} className={["group flex border-b border-border/20 last:border-b-0 transition-colors", isSemesterDay ? "bg-red-50/60 hover:bg-red-50/80 dark:bg-red-950/20" : "hover:bg-muted/20"].join(" ")}>
+                    <div className={["flex w-48 shrink-0 items-center gap-2.5 border-r px-4 py-3", isSemesterDay ? "border-red-200/60 dark:border-red-800/40" : "border-border/30"].join(" ")}>
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
-                        style={{ background: appUser ? "oklch(0.5 0.16 148)" : "oklch(0.88 0.02 145)", color: appUser ? "white" : "oklch(0.4 0.05 145)" }}>
+                        style={{ background: isSemesterDay ? "#fca5a5" : appUser ? "oklch(0.5 0.16 148)" : "oklch(0.88 0.02 145)", color: isSemesterDay ? "#7f1d1d" : appUser ? "white" : "oklch(0.4 0.05 145)" }}>
                         {initials}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-semibold text-foreground leading-tight">{appUser?.display_name ?? emp.employee_name}</p>
-                        <p className="truncate text-[10px] text-muted-foreground">{weekMinutes > 0 ? minsToHours(weekMinutes) + " / v" : emp.employee_group || "–"}</p>
+                        <p className={["truncate text-[10px]", isSemesterDay ? "text-red-500 font-medium" : "text-muted-foreground"].join(" ")}>{isSemesterDay ? "Semester" : weekMinutes > 0 ? minsToHours(weekMinutes) + " / v" : emp.employee_group || "–"}</p>
                       </div>
                     </div>
                     <div className="relative flex-1 py-2.5" style={{ minWidth: `${TOTAL_HOURS * 60}px` }}>
-                      <div className="absolute inset-0 flex pointer-events-none">
-                        {hourMarkers.map((h) => <div key={h} className="flex-1 border-r border-border/15 last:border-r-0" />)}
-                      </div>
-                      {currentNowPercent >= 0 && (
-                        <div className="absolute top-0 bottom-0 z-10 w-px bg-destructive/70 pointer-events-none" style={{ left: `${currentNowPercent}%` }} />
-                      )}
-                      {workShifts.length === 0 ? (
-                        <div className="flex h-full items-center px-3">
-                          <span className="text-[11px] italic text-muted-foreground/40">{absenceShift?.deviation_cause || "Ledig"}</span>
+                      {isSemesterDay && (
+                        <div className="absolute inset-0 flex items-center px-4">
+                          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-100/60 px-3 py-1.5 dark:border-red-800/40 dark:bg-red-900/20">
+                            <span className="text-[11px] font-medium text-red-600 dark:text-red-400">Semester</span>
+                          </div>
                         </div>
-                      ) : (
-                        workShifts.map((shift) => {
-                          const left = timeToPercent(shift.start_time!);
-                          const width = shiftWidthPercent(shift.start_time!, shift.stop_time!);
-                          const col = shiftColor(shift.shift_name, shift.color);
-                          const light = isLightColor(col);
-                          return (
-                            <div key={shift.id}
-                              className="absolute top-1.5 bottom-1.5 flex items-center overflow-hidden rounded-lg px-2.5 text-[11px] font-semibold shadow-sm cursor-default select-none transition-opacity hover:opacity-90"
-                              style={{ left: `${Math.max(0, left)}%`, width: `${Math.max(width, 1.5)}%`, minWidth: "36px", backgroundColor: col, color: light ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.92)", borderLeft: `2px solid ${light ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.3)"}` }}
-                              title={`${shift.shift_name || emp.employee_name}: ${shift.start_time} – ${shift.stop_time}\n${minsToHours(shift.gross_minutes)}`}>
-                              <span className="truncate leading-tight">
-                                {shift.shift_name ? <>{shift.shift_name}<br /><span className="opacity-70">{shift.start_time}–{shift.stop_time}</span></> : `${shift.start_time}–${shift.stop_time}`}
-                              </span>
+                      )}
+                      {!isSemesterDay && (
+                        <>
+                          <div className="absolute inset-0 flex pointer-events-none">
+                            {hourMarkers.map((h) => <div key={h} className="flex-1 border-r border-border/15 last:border-r-0" />)}
+                          </div>
+                          {currentNowPercent >= 0 && (
+                            <div className="absolute top-0 bottom-0 z-10 w-px bg-destructive/70 pointer-events-none" style={{ left: `${currentNowPercent}%` }} />
+                          )}
+                          {workShifts.length === 0 ? (
+                            <div className="flex h-full items-center px-3">
+                              <span className="text-[11px] italic text-muted-foreground/40">{absenceShift?.deviation_cause || "Ledig"}</span>
                             </div>
-                          );
-                        })
+                          ) : (
+                            workShifts.map((shift) => {
+                              const left = timeToPercent(shift.start_time!);
+                              const width = shiftWidthPercent(shift.start_time!, shift.stop_time!);
+                              const col = shiftColor(shift.shift_name, shift.color);
+                              const light = isLightColor(col);
+                              return (
+                                <div key={shift.id}
+                                  className="absolute top-1.5 bottom-1.5 flex items-center gap-1 overflow-hidden rounded-lg px-2 text-[11px] font-semibold shadow-sm cursor-default select-none transition-opacity hover:opacity-90"
+                                  style={{ left: `${Math.max(0, left)}%`, width: `${Math.max(width, 1.5)}%`, minWidth: "36px", backgroundColor: col, color: light ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.92)", borderLeft: `2px solid ${light ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.3)"}` }}
+                                  title={`${shift.shift_name || emp.employee_name}: ${shift.start_time} – ${shift.stop_time}\n${minsToHours(shift.gross_minutes)}${shift.is_lended ? "\n↔ Utlånad/inlånad" : ""}`}>
+                                  {shift.is_lended && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
+                                  <span className="truncate leading-tight">
+                                    {shift.shift_name ? <>{shift.shift_name}<br /><span className="opacity-70">{shift.start_time}–{shift.stop_time}</span></> : `${shift.start_time}–${shift.stop_time}`}
+                                  </span>
+                                </div>
+                              );
+                            })
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
@@ -1046,17 +1112,23 @@ function SchemaPage() {
                       const dayShifts = scheduleShifts.filter((s) => s.schedule_employee_id === emp.id && s.day_date === date);
                       const work = dayShifts.filter((s) => !s.is_absence_day && s.start_time);
                       const absence = dayShifts.find((s) => s.is_absence_day);
+                      const isSemDay = absence?.deviation_cause?.toLowerCase().includes("semester") || absence?.shift_name?.toLowerCase() === "semester";
                       const isToday = date === todayStr;
                       return (
-                        <div key={idx} className={["border-r border-border/20 last:border-r-0 px-1.5 py-2 flex flex-col justify-center gap-0.5 cursor-pointer hover:bg-muted/20 transition-colors", isToday ? "bg-primary-soft/20" : ""].join(" ")} onClick={() => { setSelectedDayIndex(idx); setViewMode("day"); }}>
+                        <div key={idx} className={["border-r border-border/20 last:border-r-0 px-1.5 py-2 flex flex-col justify-center gap-0.5 cursor-pointer transition-colors", isSemDay ? "bg-red-50/70 hover:bg-red-50 dark:bg-red-950/20" : isToday ? "bg-primary-soft/20 hover:bg-muted/20" : "hover:bg-muted/20"].join(" ")} onClick={() => { setSelectedDayIndex(idx); setViewMode("day"); }}>
                           {work.length === 0 && !absence && <span className="text-center text-[10px] text-muted-foreground/30">–</span>}
-                          {absence && work.length === 0 && <span className="rounded px-1 py-0.5 text-center text-[10px] font-medium text-warning-foreground bg-warning/15 truncate">{absence.deviation_cause || "Frånvaro"}</span>}
+                          {absence && work.length === 0 && (
+                            <span className={["rounded px-1 py-0.5 text-center text-[10px] font-medium truncate", isSemDay ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" : "bg-warning/15 text-warning-foreground"].join(" ")}>
+                              {isSemDay ? "Semester" : absence.deviation_cause || "Frånvaro"}
+                            </span>
+                          )}
                           {work.map((s) => {
                             const col = shiftColor(s.shift_name, s.color);
                             return (
-                              <div key={s.id} className="rounded px-1 py-0.5 text-center text-[10px] font-semibold truncate"
+                              <div key={s.id} className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-semibold truncate"
                                 style={{ backgroundColor: col + "55", borderLeft: `2px solid ${col}`, color: isLightColor(col) ? "oklch(0.25 0.05 145)" : "oklch(0.15 0.05 145)" }}>
-                                {s.start_time}–{s.stop_time}
+                                {s.is_lended && <ArrowLeftRight className="h-2 w-2 shrink-0" />}
+                                <span className="truncate">{s.start_time}–{s.stop_time}</span>
                               </div>
                             );
                           })}
@@ -1435,36 +1507,67 @@ function SchemaPage() {
 // ─── PDF text extraction (no external deps) ──────────────────────────────────
 
 async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
-  // Simple PDF text extraction: find all text between BT and ET markers
   const bytes = new Uint8Array(buffer);
   const decoder = new TextDecoder("latin1");
   const raw = decoder.decode(bytes);
 
-  const lines: string[] = [];
+  // Collect text objects with their Y position so we can group by row
+  type TextObj = { y: number; text: string };
+  const objects: TextObj[] = [];
+
   const btEtRe = /BT([\s\S]*?)ET/g;
   let m;
   while ((m = btEtRe.exec(raw)) !== null) {
     const block = m[1];
-    // Extract strings from (text) or <hex> tokens
+    // Extract y-position from Td/TD/Tm operators
+    let y = 0;
+    const tmMatch = block.match(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+Tm/);
+    const tdMatch = block.match(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+T[dD]/);
+    if (tmMatch) y = parseFloat(tmMatch[2]);
+    else if (tdMatch) y = parseFloat(tdMatch[2]);
+
     const strRe = /\(([^)]*)\)|<([0-9a-fA-F]+)>/g;
     let sm;
     const parts: string[] = [];
     while ((sm = strRe.exec(block)) !== null) {
       if (sm[1] !== undefined) {
-        parts.push(sm[1].replace(/\\n/g, "\n").replace(/\\\(/g, "(").replace(/\\\)/g, ")"));
+        const decoded = sm[1]
+          .replace(/\\n/g, " ")
+          .replace(/\\\(/g, "(")
+          .replace(/\\\)/g, ")")
+          .replace(/\\r/g, " ")
+          // Fix common latin1 Swedish chars in PDF encoding
+          .replace(/\xc3\xa5/g, "å").replace(/\xc3\xa4/g, "ä").replace(/\xc3\xb6/g, "ö")
+          .replace(/\xc3\x85/g, "Å").replace(/\xc3\x84/g, "Ä").replace(/\xc3\x96/g, "Ö");
+        if (decoded.trim()) parts.push(decoded.trim());
       } else if (sm[2]) {
-        // Hex decode
         const hex = sm[2];
         let s = "";
         for (let i = 0; i < hex.length; i += 2) {
           s += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16));
         }
-        parts.push(s);
+        if (s.trim()) parts.push(s.trim());
       }
     }
-    if (parts.length > 0) lines.push(parts.join(" "));
+    if (parts.length > 0) objects.push({ y, text: parts.join(" ") });
   }
-  return lines.join("\n");
+
+  if (objects.length === 0) return "";
+
+  // Group by Y position (same row = within 3 units) and sort rows top-to-bottom
+  const rows: Map<number, string[]> = new Map();
+  for (const obj of objects) {
+    let key = obj.y;
+    for (const existingY of rows.keys()) {
+      if (Math.abs(existingY - obj.y) < 4) { key = existingY; break; }
+    }
+    if (!rows.has(key)) rows.set(key, []);
+    rows.get(key)!.push(obj.text);
+  }
+
+  // Sort rows descending by Y (PDF Y increases upward, so higher Y = higher on page)
+  const sortedRows = [...rows.entries()].sort((a, b) => b[0] - a[0]);
+  return sortedRows.map(([, parts]) => parts.join(" ")).join("\n");
 }
 
 function getISOWeek(date: Date): number {
