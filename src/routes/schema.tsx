@@ -451,6 +451,8 @@ function SchemaPage() {
   const [importFiles, setImportFiles] = useState<File[]>([]);
   const [importProcessing, setImportProcessing] = useState(false);
   const [pdfPreviews, setPdfPreviews] = useState<Record<string, ParsedDelivery[]>>({});
+  const [csvWeekNumber, setCsvWeekNumber] = useState<number>(() => getISOWeek(new Date()));
+  const [csvYear, setCsvYear] = useState<number>(() => new Date().getFullYear());
   const [scheduleTasks, setScheduleTasks] = useState<Task[]>([]);
 
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -600,9 +602,9 @@ function SchemaPage() {
               toast.error(`Inga leveranser hittades i ${file.name}`);
               continue;
             }
-            const weekStart = activeImport?.week_start_date ?? todayStr;
-            const weekNumber = activeImport?.week_number ?? getISOWeek(new Date());
-            const year = activeImport?.year ?? new Date().getFullYear();
+            const weekNumber = csvWeekNumber;
+            const year = csvYear;
+            const weekStart = getWeekStartDate(weekNumber, year);
             const { data: plan, error: planErr } = await supabase.from("delivery_plans").insert({
               store_id: storeId, week_number: weekNumber, year, imported_by: user.id, filename: file.name,
             }).select().single();
@@ -814,7 +816,7 @@ function SchemaPage() {
               </Button>
             )}
             {isAdmin && (
-              <Button size="sm" className="gap-1.5" onClick={() => { setImportFiles([]); setPdfPreviews({}); setImportDialogOpen(true); }}>
+              <Button size="sm" className="gap-1.5" onClick={() => { setImportFiles([]); setPdfPreviews({}); if (activeImport) { setCsvWeekNumber(activeImport.week_number + 1 > 53 ? 1 : activeImport.week_number + 1); setCsvYear(activeImport.year); } setImportDialogOpen(true); }}>
                 <Upload className="h-4 w-4" />
                 Importera
               </Button>
@@ -877,7 +879,7 @@ function SchemaPage() {
             </p>
           </div>
           {isAdmin && (
-            <Button className="gap-2" onClick={() => { setImportFiles([]); setPdfPreviews({}); setImportDialogOpen(true); }}>
+            <Button className="gap-2" onClick={() => { setImportFiles([]); setPdfPreviews({}); if (activeImport) { setCsvWeekNumber(activeImport.week_number + 1 > 53 ? 1 : activeImport.week_number + 1); setCsvYear(activeImport.year); } setImportDialogOpen(true); }}>
               <Upload className="h-4 w-4" />
               Importera schema
             </Button>
@@ -1235,7 +1237,7 @@ function SchemaPage() {
             </div>
             <div className="flex-1">
               <h2 className="text-sm font-semibold">Importera filer</h2>
-              <p className="text-xs text-muted-foreground">Schema (XML) och/eller leveransplan (PDF)</p>
+              <p className="text-xs text-muted-foreground">Schema (XML) och/eller leveransplan (CSV)</p>
             </div>
             <button className="rounded-md p-1.5 text-muted-foreground hover:bg-muted transition-colors" onClick={() => { if (!importProcessing) { setImportDialogOpen(false); setImportFiles([]); setPdfPreviews({}); } }}>
               <X className="h-4 w-4" />
@@ -1255,10 +1257,38 @@ function SchemaPage() {
               <div className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-muted/30 p-3">
                 <FileText className="mt-0.5 h-4 w-4 shrink-0 text-info" />
                 <div>
-                  <p className="text-xs font-semibold text-foreground">Leveransplan (PDF)</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">En vecka per PDF — kan laddas upp flera på en gång</p>
+                  <p className="text-xs font-semibold text-foreground">Leveransplan (CSV)</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Export från Coop-portalen — välj veckonummer nedan</p>
                 </div>
               </div>
+            </div>
+
+            {/* Week picker for CSV */}
+            <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+              <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="text-xs font-medium text-foreground shrink-0">Leveransplan gäller vecka</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={53}
+                  value={csvWeekNumber}
+                  onChange={(e) => setCsvWeekNumber(Math.max(1, Math.min(53, parseInt(e.target.value) || 1)))}
+                  className="w-16 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+                <span className="text-xs text-muted-foreground">/</span>
+                <input
+                  type="number"
+                  min={2020}
+                  max={2099}
+                  value={csvYear}
+                  onChange={(e) => setCsvYear(parseInt(e.target.value) || new Date().getFullYear())}
+                  className="w-20 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+              <span className="text-[11px] text-muted-foreground ml-auto">
+                {getWeekStartDate(csvWeekNumber, csvYear)} →
+              </span>
             </div>
 
             {/* Drop zone */}
@@ -1314,8 +1344,8 @@ function SchemaPage() {
                         </button>
                       </div>
 
-                      {/* PDF delivery preview table */}
-                      {isPdf && preview && preview.length > 0 && (
+                      {/* CSV delivery preview table */}
+                      {isCsv && preview && preview.length > 0 && (
                         <div className="border-t border-border/40">
                           <div className="grid grid-cols-[1fr_auto_auto_auto_1fr] gap-0 text-[10px]">
                             <div className="col-span-5 grid grid-cols-[1fr_auto_auto_auto_1fr] bg-muted/40 px-3 py-1.5 font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1345,10 +1375,10 @@ function SchemaPage() {
                       )}
 
                       {/* No deliveries found warning */}
-                      {isPdf && preview && preview.length === 0 && (
+                      {isCsv && preview && preview.length === 0 && (
                         <div className="border-t border-border/40 flex items-center gap-2 px-3 py-2.5 bg-warning/5">
                           <AlertCircle className="h-3.5 w-3.5 shrink-0 text-warning" />
-                          <p className="text-[11px] text-warning">Kunde inte läsa leveranser från denna PDF. Kontrollera att det är en korrekt leveransplan.</p>
+                          <p className="text-[11px] text-warning">Kunde inte läsa leveranser från denna CSV. Kontrollera att det är en korrekt leveransplan.</p>
                         </div>
                       )}
                     </div>
@@ -1548,6 +1578,16 @@ function getISOWeek(date: Date): number {
   d.setDate(d.getDate() + 4 - (d.getDay() || 7));
   const yearStart = new Date(d.getFullYear(), 0, 1);
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+function getWeekStartDate(week: number, year: number): string {
+  // ISO 8601: week 1 is the week containing the first Thursday of the year
+  const jan4 = new Date(year, 0, 4);
+  const mondayOfWeek1 = new Date(jan4);
+  mondayOfWeek1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
+  const start = new Date(mondayOfWeek1);
+  start.setDate(mondayOfWeek1.getDate() + (week - 1) * 7);
+  return start.toISOString().slice(0, 10);
 }
 
 // ─── StatPill ─────────────────────────────────────────────────────────────────
