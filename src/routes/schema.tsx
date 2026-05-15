@@ -177,20 +177,19 @@ function assignUnknownShiftColor(key: string): string {
   return color;
 }
 
+const IGNORE_COLORS = new Set(["#4caf50", "#4CAF50", "#ffffff", "#FFFFFF", "#000000", "#FFFFFFFF"]);
+
 function shiftColor(name: string, xmlColor: string): string {
+  // XML color takes priority — it's explicitly set per shift in SoftOne
+  if (xmlColor && !IGNORE_COLORS.has(xmlColor) && /^#[0-9a-fA-F]{6}$/.test(xmlColor)) return xmlColor;
   const key = name.toLowerCase().trim();
-  // Check known colors first
   for (const k of Object.keys(SHIFT_COLORS)) {
     if (key.includes(k)) return SHIFT_COLORS[k].bg;
   }
-  // Check dynamic saved colors
   const dynamic = getDynamicShiftColors();
   for (const k of Object.keys(dynamic)) {
     if (key.includes(k)) return dynamic[k];
   }
-  // Fall back to XML color if it looks custom (not the default green or white)
-  if (xmlColor && xmlColor !== "#4CAF50" && xmlColor !== "#ffffff" && xmlColor !== "#FFFFFF") return xmlColor;
-  // Assign and save a new color for this unknown type
   if (key) return assignUnknownShiftColor(key);
   return SHIFT_COLORS["kassa"].bg;
 }
@@ -237,6 +236,10 @@ function parseTime(raw: string): string {
   return match ? match[1] : "";
 }
 
+function getAttrOrText(el: Element, tag: string): string {
+  return el.getAttribute(tag) || getText(el, tag);
+}
+
 function parseXml(xmlText: string): ParsedSchedule | null {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlText, "application/xml");
@@ -245,64 +248,101 @@ function parseXml(xmlText: string): ParsedSchedule | null {
   if (!root || root.nodeName !== "SOE_TimeEmployeeSchedule") return null;
 
   const storeName =
+    getAttrOrText(root, "Company") ||
     getText(root, "ReportHeader Company") ||
     getText(root, "Store StoreName") ||
     getText(root, "StoreName") || "";
 
   const weekEl = root.querySelector("Week");
-  const weekNrText = weekEl ? (getText(weekEl, "ScheduleWeekNr") || weekEl.getAttribute("WeekNr") || "") : "";
+  const weekNrText = weekEl ? (getAttrOrText(weekEl, "ScheduleWeekNr") || weekEl.getAttribute("WeekNr") || "") : "";
   const weekNumber = parseInt(weekNrText, 10) || 0;
-  const yearText = weekEl ? (getText(weekEl, "Year") || weekEl.getAttribute("Year") || "") : "";
+  const yearText = weekEl ? (getAttrOrText(weekEl, "Year") || "") : "";
   const year = parseInt(yearText, 10) || new Date().getFullYear();
   let weekStartDate = "";
 
   const employees: ParsedEmployee[] = Array.from(root.querySelectorAll("Employee")).map((empEl) => {
-    const employeeNr = getText(empEl, "EmployeeNr") || empEl.getAttribute("EmployeeNr") || "";
-    const employeeName = getText(empEl, "EmployeeName") || empEl.getAttribute("EmployeeName") || "";
-    const employeeGroup = getText(empEl, "EmployeeGroup") || empEl.getAttribute("EmployeeGroup") || "";
+    const employeeNr = getAttrOrText(empEl, "EmployeeNr");
+    const employeeName = getAttrOrText(empEl, "EmployeeName");
+    const employeeGroup = getAttrOrText(empEl, "EmployeeGroup");
 
     const days: XmlDay[] = Array.from(empEl.querySelectorAll("Day")).map((dayEl) => {
-      const dayNr = parseInt(getText(dayEl, "DayNr") || dayEl.getAttribute("DayNr") || "0", 10);
-      const scheduleDateRaw = getText(dayEl, "ScheduleDate") || dayEl.getAttribute("ScheduleDate") || "";
+      const dayNr = parseInt(getAttrOrText(dayEl, "DayNr") || "0", 10);
+      const scheduleDateRaw = getAttrOrText(dayEl, "ScheduleDate");
       const scheduleDate = scheduleDateRaw.slice(0, 10);
-      const absenceRaw = getText(dayEl, "IsAbsenceDay") || dayEl.getAttribute("IsAbsenceDay") || "0";
+      const absenceRaw = getAttrOrText(dayEl, "IsAbsenceDay") || "0";
       const isAbsenceDay = absenceRaw === "1" || absenceRaw.toLowerCase() === "true";
+      const absenceName = getAttrOrText(dayEl, "AbsencePayrollProductName");
       if (dayNr === 1 && scheduleDate && !weekStartDate) weekStartDate = scheduleDate;
-      const shifts: XmlShift[] = Array.from(dayEl.querySelectorAll("Shifts")).map((sEl) => {
-        const sName = getText(sEl, "ShiftName");
-        const xmlCol = getText(sEl, "Color") ? `#${getText(sEl, "Color")}` : "#4CAF50";
-        const lendedRaw = getText(sEl, "ShiftLended") || sEl.getAttribute("ShiftLended") || "0";
-        const grossMinutes = parseInt(getText(sEl, "ShiftGrossTimeMinutes") || "0", 10);
-        // Extract total break duration
-        const breakMinutes = parseInt(getText(sEl, "ScheduleBreakTime") || "0", 10);
-        // net = gross - breaks (use XML value if provided, otherwise calculate)
-        const xmlNet = parseInt(getText(sEl, "ShiftNetTimeMinutes") || "0", 10);
-        const netMinutes = xmlNet > 0 ? xmlNet : Math.max(0, grossMinutes - breakMinutes);
-        // Extract individual break windows (ScheduleBreak1Start/Minutes, ScheduleBreak2Start/Minutes, ...)
-        const breakWindows: BreakWindow[] = [];
-        for (let bIdx = 1; bIdx <= 5; bIdx++) {
-          const bStartRaw = getText(sEl, `ScheduleBreak${bIdx}Start`) || getText(sEl, `ScheduleBreakXStart`);
-          const bMins = parseInt(getText(sEl, `ScheduleBreak${bIdx}Minutes`) || getText(sEl, `ScheduleBreakXMinutes`) || "0", 10);
-          if (bStartRaw && bMins > 0) {
-            breakWindows.push({ start: parseTime(bStartRaw), minutes: bMins });
-            break; // only use the first generic ScheduleBreakXStart/Minutes pair
-          }
+
+      // Day-level break windows (ScheduleBreak1Start..ScheduleBreak4Start)
+      const dayBreakWindows: BreakWindow[] = [];
+      for (let bIdx = 1; bIdx <= 4; bIdx++) {
+        const bStartRaw = getAttrOrText(dayEl, `ScheduleBreak${bIdx}Start`);
+        const bMins = parseInt(getAttrOrText(dayEl, `ScheduleBreak${bIdx}Minutes`) || "0", 10);
+        if (bStartRaw && bMins > 0) {
+          dayBreakWindows.push({ start: parseTime(bStartRaw), minutes: bMins });
         }
-        return {
+      }
+      const dayBreakTotal = parseInt(getAttrOrText(dayEl, "ScheduleBreakTime") || "0", 10);
+
+      // Shifts are Shift1..Shift15 as direct child elements or attributes
+      const shifts: XmlShift[] = [];
+      for (let sIdx = 1; sIdx <= 15; sIdx++) {
+        const prefix = `Shift${sIdx}`;
+        // Try child element first, then attribute on dayEl
+        const sName = getAttrOrText(dayEl, `${prefix}Name`);
+        if (!sName) break;
+        const sStartRaw = getAttrOrText(dayEl, `${prefix}StartTime`);
+        const sStopRaw = getAttrOrText(dayEl, `${prefix}StopTime`);
+        if (!sStartRaw && !sStopRaw) break;
+        const colRaw = getAttrOrText(dayEl, `${prefix}Color`);
+        // Color may be 6-char hex without #
+        const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "";
+        const netMins = parseInt(getAttrOrText(dayEl, `${prefix}NetTimeMinutes`) || "0", 10);
+        const lendedRaw = getAttrOrText(dayEl, `${prefix}Lended`) || "0";
+        shifts.push({
           shiftName: sName,
-          startTime: parseTime(getText(sEl, "ShiftStartTime")),
-          stopTime: parseTime(getText(sEl, "ShiftStopTime")),
-          color: shiftColor(sName, xmlCol),
-          grossMinutes,
-          netMinutes,
-          breakMinutes,
-          breakWindows,
-          deviationCause: getText(sEl, "ShiftTimeDeviationCauseName"),
-          totalCost: parseFloat((getText(sEl, "ShiftTotalCost") || "0").replace(",", ".")),
+          startTime: parseTime(sStartRaw),
+          stopTime: parseTime(sStopRaw),
+          // Prefer XML color directly; fall back to name-based lookup
+          color: xmlCol && xmlCol !== "#000000" && xmlCol !== "#FFFFFF" && xmlCol !== "#ffffff" ? xmlCol : shiftColor(sName, xmlCol),
+          grossMinutes: netMins + (sIdx === 1 ? dayBreakTotal : 0),
+          netMinutes: netMins,
+          breakMinutes: sIdx === 1 ? dayBreakTotal : 0,
+          breakWindows: sIdx === 1 ? dayBreakWindows : [],
+          deviationCause: absenceName,
+          totalCost: 0,
           isLended: lendedRaw === "1" || lendedRaw.toLowerCase() === "true",
-        };
-      });
-      const isSemester = shifts.some((s) => s.deviationCause.toLowerCase().includes("semester"));
+        });
+      }
+
+      // Fallback: try <Shifts> child elements (older format)
+      if (shifts.length === 0) {
+        Array.from(dayEl.querySelectorAll("Shifts")).forEach((sEl) => {
+          const sName = getText(sEl, "ShiftName") || getAttrOrText(sEl, "ShiftName");
+          const colRaw = getText(sEl, "Color") || getAttrOrText(sEl, "Color");
+          const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "#4CAF50";
+          const grossMinutes = parseInt(getText(sEl, "ShiftGrossTimeMinutes") || "0", 10);
+          const xmlNet = parseInt(getText(sEl, "ShiftNetTimeMinutes") || "0", 10);
+          const netMinutes = xmlNet > 0 ? xmlNet : Math.max(0, grossMinutes - dayBreakTotal);
+          const lendedRaw = getText(sEl, "ShiftLended") || getAttrOrText(sEl, "ShiftLended") || "0";
+          shifts.push({
+            shiftName: sName,
+            startTime: parseTime(getText(sEl, "ShiftStartTime")),
+            stopTime: parseTime(getText(sEl, "ShiftStopTime")),
+            color: xmlCol && xmlCol !== "#4CAF50" ? xmlCol : shiftColor(sName, xmlCol),
+            grossMinutes,
+            netMinutes,
+            breakMinutes: dayBreakTotal,
+            breakWindows: dayBreakWindows,
+            deviationCause: absenceName || getText(sEl, "ShiftTimeDeviationCauseName"),
+            totalCost: parseFloat((getText(sEl, "ShiftTotalCost") || "0").replace(",", ".")),
+            isLended: lendedRaw === "1" || lendedRaw.toLowerCase() === "true",
+          });
+        });
+      }
+
+      const isSemester = isAbsenceDay && (absenceName.toLowerCase().includes("semester") || absenceName.toLowerCase().includes("holiday"));
       return { dayNr, scheduleDate, isAbsenceDay, isSemester, shifts };
     });
     return { employeeNr, employeeName, employeeGroup, days };
