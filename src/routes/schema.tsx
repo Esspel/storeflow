@@ -137,6 +137,17 @@ type DeliveryEntry = {
   delivery_date: string | null;
 };
 
+// Represents one employee from XML after auto-matching
+type MatchedEmployee = {
+  employeeNr: string;
+  employeeName: string;
+  employeeGroup: string;
+  matchType: "existing" | "new";
+  appUserId: string | null; // set for "existing" or after creation
+  newUsername: string;
+  newPassword: string;
+};
+
 // ─── Shift colour mapping (from image reference) ──────────────────────────────
 
 const SHIFT_COLORS: Record<string, { bg: string; label: string }> = {
@@ -183,6 +194,14 @@ function groupToRole(group: string): "admin" | "manager" | "employee" {
   if (g.includes("ledarna")) return "manager";
   if (g.includes("handels tjm") || g.includes("handels") || g.includes("tjm")) return "manager";
   return "employee";
+}
+
+function normalizeName(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+function nameToUsername(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, ".").replace(/[åä]/g, "a").replace(/ö/g, "o").replace(/[^a-z0-9.]/g, "");
 }
 
 // ─── XML parsing ──────────────────────────────────────────────────────────────
@@ -401,6 +420,8 @@ function SchemaPage() {
   const [showDeliveries, setShowDeliveries] = useState(true);
 
   const [parsed, setParsed] = useState<ParsedSchedule | null>(null);
+  const [matchedEmployees, setMatchedEmployees] = useState<MatchedEmployee[]>([]);
+  const [allUsers, setAllUsers] = useState<AppUser[]>([]);
   const [mappingOpen, setMappingOpen] = useState(false);
   const [savingImport, setSavingImport] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -435,8 +456,11 @@ function SchemaPage() {
 
   async function loadAppUsers() {
     if (!storeId) return;
-    const { data } = await supabase.from("app_users").select("id, username, display_name, role, store_id, active_store_id, is_active, last_login, created_at").eq("store_id", storeId).eq("is_active", true).order("display_name");
+    const { data } = await supabase.from("app_users").select("id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at").eq("store_id", storeId).eq("is_active", true).order("display_name");
     setAppUsers((data ?? []) as AppUser[]);
+    // Also load all users globally for cross-store name matching
+    const { data: all } = await supabase.from("app_users").select("id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at").eq("is_active", true).order("display_name");
+    setAllUsers((all ?? []) as AppUser[]);
   }
 
   async function loadMappings() {
@@ -480,7 +504,26 @@ function SchemaPage() {
             toast.error(`Kunde inte läsa XML-filen: ${file.name}. Kontrollera att det är en SoftOne GO-export.`);
             continue;
           }
-          setParsed({ ...result, storeName: result.storeName || activeStore?.name || "" });
+          const schedule = { ...result, storeName: result.storeName || activeStore?.name || "" };
+          // Auto-match employees by display_name (normalized)
+          const usedUserIds = new Set<string>();
+          const matched: MatchedEmployee[] = result.employees.map((emp) => {
+            const savedMapping = mappings.find((m) => m.employee_nr === emp.employeeNr);
+            if (savedMapping?.app_user_id) {
+              usedUserIds.add(savedMapping.app_user_id);
+              return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "existing" as const, appUserId: savedMapping.app_user_id, newUsername: "", newPassword: "" };
+            }
+            // Try name match across all users
+            const normEmp = normalizeName(emp.employeeName);
+            const byName = allUsers.find((u) => !usedUserIds.has(u.id) && normalizeName(u.display_name) === normEmp);
+            if (byName) {
+              usedUserIds.add(byName.id);
+              return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "existing" as const, appUserId: byName.id, newUsername: "", newPassword: "" };
+            }
+            return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "new" as const, appUserId: null, newUsername: nameToUsername(emp.employeeName), newPassword: "Welcome1!" };
+          });
+          setParsed(schedule);
+          setMatchedEmployees(matched);
           setImportDialogOpen(false);
           setImportFiles([]);
           setMappingOpen(true);
@@ -551,17 +594,54 @@ function SchemaPage() {
     if (!parsed || !storeId || !user) return;
     setSavingImport(true);
     try {
-      await saveMappings();
+      // Resolve final mappings: create new users where needed
+      const finalMappings: EmployeeMapping[] = [];
+      const newlyCreated: AppUser[] = [];
 
-      // Bulk update app_users role + store based on EmployeeGroup
-      for (const emp of parsed.employees) {
-        const mappedUserId = getMappedUserId(emp.employeeNr);
-        if (mappedUserId && emp.employeeGroup) {
-          const role = groupToRole(emp.employeeGroup);
-          await supabase.from("app_users").update({ role, employee_group: emp.employeeGroup, store_id: storeId }).eq("id", mappedUserId);
+      for (const me of matchedEmployees) {
+        if (me.matchType === "existing" && me.appUserId) {
+          finalMappings.push({ employee_nr: me.employeeNr, app_user_id: me.appUserId });
+          // Ensure this user is connected to the current store
+          await supabase.from("user_stores").upsert({ user_id: me.appUserId, store_id: storeId, is_primary: false }, { onConflict: "user_id,store_id" });
+          // Update role + group from XML
+          if (me.employeeGroup) {
+            const role = groupToRole(me.employeeGroup);
+            await supabase.from("app_users").update({ role, employee_group: me.employeeGroup }).eq("id", me.appUserId);
+          }
+        } else if (me.matchType === "new") {
+          // Create user
+          const username = me.newUsername || nameToUsername(me.employeeName);
+          const password = me.newPassword || "Welcome1!";
+          if (!username) continue;
+          // Check if username taken, append suffix if so
+          let finalUsername = username;
+          const { data: existing } = await supabase.from("app_users").select("id").eq("username", finalUsername).maybeSingle();
+          if (existing) finalUsername = `${username}_${me.employeeNr.slice(-4)}`;
+          const { data: hash } = await supabase.rpc("hash_password", { plain_password: password });
+          const role = groupToRole(me.employeeGroup);
+          const { data: created, error: createErr } = await supabase.from("app_users").insert({
+            username: finalUsername, password_hash: hash, display_name: me.employeeName,
+            role, employee_group: me.employeeGroup, store_id: storeId, is_active: true,
+          }).select("id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at").single();
+          if (createErr || !created) continue;
+          const newUser = created as AppUser;
+          newlyCreated.push(newUser);
+          // Connect to store via user_stores
+          await supabase.from("user_stores").insert({ user_id: newUser.id, store_id: storeId, is_primary: true });
+          finalMappings.push({ employee_nr: me.employeeNr, app_user_id: newUser.id });
         }
       }
 
+      // Persist mappings
+      for (const m of finalMappings) {
+        await supabase.from("employee_mappings").upsert(
+          { store_id: storeId, employee_nr: m.employee_nr, app_user_id: m.app_user_id || null, created_by: user.id, updated_at: new Date().toISOString() },
+          { onConflict: "store_id,employee_nr" }
+        );
+      }
+      setMappings(finalMappings);
+
+      // Create schedule import record
       const { data: importData, error: importErr } = await supabase
         .from("schedule_imports")
         .insert({ store_id: storeId, week_start_date: parsed.weekStartDate, week_number: parsed.weekNumber, year: parsed.year, imported_by: user.id, filename: `vecka_${parsed.weekNumber}_${parsed.year}.xml`, raw_employee_count: parsed.employees.length })
@@ -581,9 +661,13 @@ function SchemaPage() {
         if (rows.length > 0) await supabase.from("schedule_shifts").insert(rows);
       }
 
-      toast.success(`Schema för vecka ${parsed.weekNumber} importerat! Roll & butik uppdaterades för kopplade användare.`);
+      const createdCount = newlyCreated.length;
+      const matchedCount = finalMappings.length - createdCount;
+      toast.success(`Schema vecka ${parsed.weekNumber} importerat. ${matchedCount} matchade · ${createdCount > 0 ? `${createdCount} nya konton skapade` : "inga nya konton"}.`);
+      if (newlyCreated.length > 0) setAppUsers((p) => [...p, ...newlyCreated]);
       setMappingOpen(false);
       setParsed(null);
+      setMatchedEmployees([]);
       await loadImports();
       setActiveImport(importData as ImportRow);
     } catch (err) {
@@ -1018,7 +1102,7 @@ function SchemaPage() {
 
       {/* Unified import dialog */}
       <Dialog open={importDialogOpen} onOpenChange={(o) => { if (!importProcessing) { setImportDialogOpen(o); if (!o) setImportFiles([]); } }}>
-        <DialogContent className="max-w-lg p-0 gap-0">
+        <DialogContent className="flex max-h-[90vh] max-w-lg flex-col p-0 gap-0 overflow-hidden">
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-soft">
               <Upload className="h-4 w-4 text-primary" />
@@ -1032,7 +1116,7 @@ function SchemaPage() {
             </button>
           </div>
 
-          <div className="p-5 space-y-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-5 space-y-4">
             {/* Info boxes */}
             <div className="grid grid-cols-2 gap-3">
               <div className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-muted/30 p-3">
@@ -1099,7 +1183,7 @@ function SchemaPage() {
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-border/60 px-5 py-3.5">
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-4">
             <Button variant="outline" size="sm" onClick={() => { setImportDialogOpen(false); setImportFiles([]); }} disabled={importProcessing}>Avbryt</Button>
             <Button size="sm" onClick={() => processImportFiles(importFiles)} disabled={importFiles.length === 0 || importProcessing} className="gap-1.5">
               <Upload className="h-3.5 w-3.5" />
@@ -1110,49 +1194,144 @@ function SchemaPage() {
       </Dialog>
 
       {/* Import + mapping dialog */}
-      <Dialog open={mappingOpen} onOpenChange={(o) => { if (!savingImport) { setMappingOpen(o); if (!o) setParsed(null); } }}>
-        <DialogContent className="max-h-[90vh] w-full max-w-2xl overflow-hidden p-0 gap-0">
-          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+      <Dialog open={mappingOpen} onOpenChange={(o) => { if (!savingImport) { setMappingOpen(o); if (!o) { setParsed(null); setMatchedEmployees([]); } } }}>
+        <DialogContent className="flex h-[90vh] w-full max-w-2xl flex-col p-0 gap-0 overflow-hidden">
+          {/* Header */}
+          <div className="flex shrink-0 items-center gap-3 border-b border-border/60 px-5 py-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft">
               <Users className="h-4 w-4 text-primary" />
             </div>
             <div className="flex-1">
-              <h2 className="text-sm font-semibold text-foreground">{parsed ? "Importera schema & matcha personal" : "Personalmatching"}</h2>
-              {parsed && <p className="text-xs text-muted-foreground">{parsed.storeName && `${parsed.storeName} · `}Vecka {parsed.weekNumber}, {parsed.year} · {parsed.employees.length} anställda</p>}
+              <h2 className="text-sm font-semibold text-foreground">
+                {parsed ? "Granska och bekräfta import" : "Personalmatching"}
+              </h2>
+              {parsed && (
+                <p className="text-xs text-muted-foreground">
+                  {parsed.storeName && `${parsed.storeName} · `}Vecka {parsed.weekNumber}, {parsed.year} · {parsed.employees.length} anställda
+                </p>
+              )}
             </div>
-            <button className="rounded-md p-1.5 text-muted-foreground hover:bg-muted" onClick={() => { if (!savingImport) { setMappingOpen(false); setParsed(null); } }}>
+            <button className="rounded-md p-1.5 text-muted-foreground hover:bg-muted transition-colors" onClick={() => { if (!savingImport) { setMappingOpen(false); setParsed(null); setMatchedEmployees([]); } }}>
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="overflow-y-auto" style={{ maxHeight: "calc(90vh - 120px)" }}>
-            {parsed && (
-              <div className="p-5">
-                <div className="mb-4 flex items-start gap-3 rounded-xl border border-success/30 bg-success/8 p-4">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  <div className="text-sm">
-                    <p className="font-medium text-foreground">XML inläst</p>
-                    <p className="text-muted-foreground">{parsed.storeName && `${parsed.storeName} · `}Vecka {parsed.weekNumber}, {parsed.year} · {parsed.employees.length} anställda</p>
+          {/* Scrollable body */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {parsed && matchedEmployees.length > 0 && (
+              <div className="p-5 space-y-4">
+                {/* Summary pills */}
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {matchedEmployees.filter((m) => m.matchType === "existing").length} matchade befintliga
+                  </span>
+                  {matchedEmployees.filter((m) => m.matchType === "new").length > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1 text-xs font-medium text-primary">
+                      <UserPlus className="h-3.5 w-3.5" />
+                      {matchedEmployees.filter((m) => m.matchType === "new").length} nya konton skapas
+                    </span>
+                  )}
+                </div>
+
+                {/* Existing matches */}
+                {matchedEmployees.some((m) => m.matchType === "existing") && (
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Matchade användare</p>
+                    <div className="divide-y divide-border/40 rounded-xl border border-border/60 overflow-hidden">
+                      {matchedEmployees.filter((m) => m.matchType === "existing").map((me) => {
+                        const matched = allUsers.find((u) => u.id === me.appUserId);
+                        const role = groupToRole(me.employeeGroup);
+                        const roleLabel = role === "manager" ? "Chef" : "Anställd";
+                        return (
+                          <div key={me.employeeNr} className="flex items-center gap-3 px-4 py-3">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-success/10 text-[10px] font-bold text-success">
+                              {me.employeeName.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-foreground">{me.employeeName}</p>
+                              <p className="text-xs text-muted-foreground">{me.employeeGroup || "—"}</p>
+                            </div>
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-success/60" />
+                            <div className="min-w-0 text-right">
+                              <p className="text-xs font-medium text-foreground">{matched?.display_name ?? "–"}</p>
+                              <p className="text-[10px] text-muted-foreground">{roleLabel}</p>
+                            </div>
+                            <Select
+                              value={me.appUserId ?? "__none__"}
+                              onValueChange={(v) => setMatchedEmployees((prev) => prev.map((x) => x.employeeNr === me.employeeNr ? { ...x, appUserId: v === "__none__" ? null : v, matchType: v === "__none__" ? "new" : "existing" } : x))}
+                            >
+                              <SelectTrigger className="h-7 w-36 shrink-0 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__"><span className="text-muted-foreground">Inget konto</span></SelectItem>
+                                {allUsers.map((u) => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-                <div className="mb-4 rounded-lg border border-info/30 bg-info/8 px-4 py-2.5 text-xs text-info">
-                  Roll och butik uppdateras automatiskt för kopplade användare baserat på EmployeeGroup i XML-filen (Ledarna/Handels = Chef, Butik Timlön = Anställd).
-                </div>
-                <p className="mb-1 text-sm font-medium text-foreground">Koppla SoftOne-anställda till användare</p>
-                <p className="mb-4 text-xs text-muted-foreground">Matchningarna sparas automatiskt vid nästa import.</p>
-                <div className="divide-y divide-border/40 rounded-xl border border-border/60 overflow-hidden">
-                  {parsed.employees.map((emp) => (
-                    <MappingRow key={emp.employeeNr} employeeNr={emp.employeeNr} employeeName={emp.employeeName} employeeGroup={emp.employeeGroup} appUsers={appUsers} mappedUserId={getMappedUserId(emp.employeeNr)} storeId={storeId} onMap={(uid) => setMapping(emp.employeeNr, uid)} onUserCreated={(u) => { setAppUsers((p) => [...p, u]); setMapping(emp.employeeNr, u.id); }} />
-                  ))}
-                </div>
+                )}
+
+                {/* New users to create */}
+                {matchedEmployees.some((m) => m.matchType === "new") && (
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nya konton skapas</p>
+                    <div className="divide-y divide-border/40 rounded-xl border border-border/60 overflow-hidden">
+                      {matchedEmployees.filter((m) => m.matchType === "new").map((me) => {
+                        const role = groupToRole(me.employeeGroup);
+                        const roleLabel = role === "manager" ? "Chef" : "Anställd";
+                        return (
+                          <div key={me.employeeNr} className="px-4 py-3 space-y-2">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[10px] font-bold text-primary">
+                                {me.employeeName.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-medium text-foreground">{me.employeeName}</p>
+                                  <span className={["rounded-full px-1.5 py-0.5 text-[10px] font-semibold", role === "manager" ? "bg-info/15 text-info" : "bg-muted text-muted-foreground"].join(" ")}>{roleLabel}</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">{me.employeeGroup || "—"}</p>
+                              </div>
+                              <Select
+                                value="__new__"
+                                onValueChange={(v) => { if (v !== "__new__") setMatchedEmployees((prev) => prev.map((x) => x.employeeNr === me.employeeNr ? { ...x, appUserId: v, matchType: "existing" } : x)); }}
+                              >
+                                <SelectTrigger className="h-7 w-36 shrink-0 text-xs"><SelectValue placeholder="Skapa nytt" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__new__"><span className="text-primary font-medium">Skapa nytt konto</span></SelectItem>
+                                  {allUsers.map((u) => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 pl-11">
+                              <div>
+                                <Label className="text-[11px] text-muted-foreground">Användarnamn</Label>
+                                <Input value={me.newUsername} onChange={(e) => setMatchedEmployees((prev) => prev.map((x) => x.employeeNr === me.employeeNr ? { ...x, newUsername: e.target.value } : x))} className="mt-1 h-7 text-xs" />
+                              </div>
+                              <div>
+                                <Label className="text-[11px] text-muted-foreground">Lösenord</Label>
+                                <Input type="password" value={me.newPassword} onChange={(e) => setMatchedEmployees((prev) => prev.map((x) => x.employeeNr === me.employeeNr ? { ...x, newPassword: e.target.value } : x))} className="mt-1 h-7 text-xs" />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
+
+            {/* View existing mappings (no pending import) */}
             {!parsed && imports.length > 0 && (
               <div className="p-5">
                 <p className="mb-4 text-sm text-muted-foreground">Koppla SoftOne-anställda till användare i systemet.</p>
                 <div className="divide-y divide-border/40 rounded-xl border border-border/60 overflow-hidden">
                   {Array.from(new Map(scheduleEmployees.map((e) => [e.employee_nr, e])).values()).map((emp) => (
-                    <MappingRow key={emp.employee_nr} employeeNr={emp.employee_nr} employeeName={emp.employee_name} employeeGroup={emp.employee_group} appUsers={appUsers} mappedUserId={getMappedUserId(emp.employee_nr)} storeId={storeId} onMap={(uid) => setMapping(emp.employee_nr, uid)} onUserCreated={(u) => { setAppUsers((p) => [...p, u]); setMapping(emp.employee_nr, u.id); }} />
+                    <MappingRow key={emp.employee_nr} employeeNr={emp.employee_nr} employeeName={emp.employee_name} employeeGroup={emp.employee_group} appUsers={allUsers} mappedUserId={getMappedUserId(emp.employee_nr)} storeId={storeId} onMap={(uid) => setMapping(emp.employee_nr, uid)} onUserCreated={(u) => { setAppUsers((p) => [...p, u]); setAllUsers((p) => [...p, u]); setMapping(emp.employee_nr, u.id); }} />
                   ))}
                 </div>
               </div>
@@ -1165,12 +1344,22 @@ function SchemaPage() {
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-border/60 px-5 py-3">
-            <Button variant="outline" size="sm" onClick={() => { if (!savingImport) { setMappingOpen(false); setParsed(null); } }} disabled={savingImport}>{parsed ? "Avbryt" : "Stäng"}</Button>
+          {/* Sticky footer */}
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-4">
+            <Button variant="outline" size="sm" onClick={() => { if (!savingImport) { setMappingOpen(false); setParsed(null); setMatchedEmployees([]); } }} disabled={savingImport}>
+              {parsed ? "Avbryt" : "Stäng"}
+            </Button>
             {!parsed && imports.length > 0 && (
-              <Button size="sm" onClick={async () => { await saveMappings(); await loadMappings(); setMappingOpen(false); toast.success("Matchningar sparade!"); }}>Spara matchningar</Button>
+              <Button size="sm" onClick={async () => { await saveMappings(); await loadMappings(); setMappingOpen(false); toast.success("Matchningar sparade!"); }}>
+                Spara matchningar
+              </Button>
             )}
-            {parsed && <Button size="sm" onClick={confirmImport} disabled={savingImport}>{savingImport ? "Importerar…" : "Importera schema"}</Button>}
+            {parsed && (
+              <Button size="sm" onClick={confirmImport} disabled={savingImport} className="gap-1.5">
+                <Upload className="h-3.5 w-3.5" />
+                {savingImport ? "Importerar…" : "Bekräfta och importera"}
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
