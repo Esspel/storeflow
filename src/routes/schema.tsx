@@ -605,7 +605,10 @@ function SchemaPage() {
             username: finalUsername, password_hash: hash, display_name: me.employeeName,
             role, employee_group: me.employeeGroup, store_id: storeId, is_active: true,
           }).select("id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at").single();
-          if (createErr || !created) continue;
+          if (createErr || !created) {
+            toast.error(`Kunde inte skapa användare för ${me.employeeName}: ${createErr?.message}`);
+            continue;
+          }
           const newUser = created as AppUser;
           newlyCreated.push(newUser);
           // Connect to store via user_stores
@@ -616,10 +619,11 @@ function SchemaPage() {
 
       // Persist mappings
       for (const m of finalMappings) {
-        await supabase.from("employee_mappings").upsert(
+        const { error: mapErr } = await supabase.from("employee_mappings").upsert(
           { store_id: storeId, employee_nr: m.employee_nr, app_user_id: m.app_user_id || null, created_by: user.id, updated_at: new Date().toISOString() },
           { onConflict: "store_id,employee_nr" }
         );
+        if (mapErr) console.error("employee_mappings upsert error:", mapErr);
       }
       setMappings(finalMappings);
 
@@ -628,7 +632,7 @@ function SchemaPage() {
         .from("schedule_imports")
         .insert({ store_id: storeId, week_start_date: parsed.weekStartDate, week_number: parsed.weekNumber, year: parsed.year, imported_by: user.id, filename: `vecka_${parsed.weekNumber}_${parsed.year}.xml`, raw_employee_count: parsed.employees.length })
         .select().single();
-      if (importErr || !importData) throw new Error(importErr?.message ?? "Import failed");
+      if (importErr || !importData) throw new Error(`schedule_imports: ${importErr?.message ?? "Import failed"}`);
       const importId = (importData as ImportRow).id;
 
       for (const emp of parsed.employees) {
@@ -653,8 +657,9 @@ function SchemaPage() {
       await loadImports();
       setActiveImport(importData as ImportRow);
     } catch (err) {
-      toast.error("Något gick fel vid importen. Försök igen.");
-      console.error(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Import misslyckades: ${msg}`);
+      console.error("confirmImport error:", err);
     } finally {
       setSavingImport(false);
     }
