@@ -24,6 +24,7 @@ import {
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import { getSimulatedNow } from "@/lib/time-simulation";
 
 export const Route = createFileRoute("/uppgifter")({
   component: TasksPage,
@@ -59,13 +60,20 @@ function statusBadge(s: string) {
 
 function isDueSoon(due_date: string | null): boolean {
   if (!due_date) return false;
-  const diff = new Date(due_date).getTime() - Date.now();
+  const now = getSimulatedNow();
+  const diff = new Date(due_date).getTime() - now;
   return diff > 0 && diff < 24 * 60 * 60 * 1000;
 }
 
 function isOverdue(due_date: string | null, status: string): boolean {
   if (!due_date || status === "done" || status === "cancelled") return false;
-  return new Date(due_date).getTime() < Date.now();
+  return new Date(due_date).getTime() < getSimulatedNow();
+}
+
+// Returns effective status considering simulated time
+function effectiveStatus(t: { status: string; due_date: string | null }): string {
+  if (isOverdue(t.due_date, t.status) && t.status !== "done" && t.status !== "cancelled") return "late";
+  return t.status;
 }
 
 type TaskFull = Task & {
@@ -474,7 +482,7 @@ function TasksPage() {
   ];
 
   const filtered = visibleTasks.filter((t) => {
-    if (tab !== "all" && t.status !== tab) return false;
+    if (tab !== "all" && effectiveStatus(t) !== tab) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -518,7 +526,7 @@ function TasksPage() {
                 className="gap-2 rounded-full px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm text-xs">
                 {f.label}
                 <span className="rounded-full bg-background/70 px-1.5 text-[10px] font-medium text-muted-foreground">
-                  {f.value === "all" ? visibleTasks.length : visibleTasks.filter((t) => t.status === f.value).length}
+                  {f.value === "all" ? visibleTasks.length : visibleTasks.filter((t) => effectiveStatus(t) === f.value).length}
                 </span>
               </TabsTrigger>
             ))}
@@ -584,7 +592,7 @@ function TasksPage() {
                       )}
                     </div>
                   </div>
-                  <div className="shrink-0">{statusBadge(t.status)}</div>
+                  <div className="shrink-0">{statusBadge(effectiveStatus(t))}</div>
                 </header>
                 {/* Progress bar for steps */}
                 {t.steps && t.steps.length > 0 && (
@@ -620,7 +628,7 @@ function TasksPage() {
                     {detailTask.recurrence_rule && <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] text-primary"><Repeat className="h-3 w-3" />{RECURRENCE_OPTIONS.find(r => r.value === detailTask.recurrence_rule)?.label}</span>}
                   </div>
                 </div>
-                {statusBadge(detailTask.status)}
+                {statusBadge(effectiveStatus(detailTask))}
               </div>
             </DialogHeader>
 

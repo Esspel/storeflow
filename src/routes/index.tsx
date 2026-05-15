@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
+import { getSimulatedNow } from "@/lib/time-simulation";
 
 export const Route = createFileRoute("/")({
   component: HubPage,
@@ -81,7 +82,7 @@ function HubPage() {
     const load = async () => {
       const storeFilter = activeStore?.id ?? null;
 
-      let tasksQ = supabase.from("tasks").select("status");
+      let tasksQ = supabase.from("tasks").select("status, due_date");
       if (storeFilter) tasksQ = tasksQ.eq("store_id", storeFilter);
       const { data: tasks } = await tasksQ;
 
@@ -90,9 +91,12 @@ function HubPage() {
       const { data: incidents } = await incQ;
 
       const all = tasks ?? [];
+      const now = getSimulatedNow();
+      const isEffectivelyLate = (t: { status: string; due_date: string | null }) =>
+        t.status !== "done" && t.status !== "cancelled" && t.due_date != null && new Date(t.due_date).getTime() < now;
       const done = all.filter((t) => t.status === "done").length;
-      const openTasks = all.filter((t) => t.status === "todo" || t.status === "progress").length;
-      const overdueTasks = all.filter((t) => t.status === "late").length;
+      const openTasks = all.filter((t) => (t.status === "todo" || t.status === "progress") && !isEffectivelyLate(t)).length;
+      const overdueTasks = all.filter((t) => t.status === "late" || isEffectivelyLate(t)).length;
       const total = all.length;
       const completionRate = total > 0 ? Math.round((done / total) * 100) : 0;
 
