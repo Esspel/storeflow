@@ -142,10 +142,10 @@ function TasksPage() {
   // Detail modal
   const [detailTask, setDetailTask] = useState<TaskFull | null>(null);
   const [answerDraft, setAnswerDraft] = useState<Record<string, string>>({});
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
-  // Ref mirrors lightboxSrc so Radix onOpenChange can read it synchronously
-  // (React state may not have re-rendered yet when Radix fires its handler)
-  const lightboxOpenRef = useRef(false);
+  // Lightbox: we store the task separately so we can hide the Dialog while the
+  // photo is open (Radix's dismiss layer would otherwise eat all pointer events).
+  const [lightboxTask, setLightboxTask] = useState<TaskFull | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   const fetchTasks = useCallback(async () => {
     let q = supabase
@@ -239,8 +239,14 @@ function TasksPage() {
 
     // Normalise a Date to midnight local time, return new Date
     const midnight = (d: Date): Date => { const n = new Date(d); n.setHours(0,0,0,0); return n; };
-    // YYYY-MM-DD string used as period-start key
-    const dateStr = (d: Date): string => midnight(d).toISOString().slice(0, 10);
+    // YYYY-MM-DD in LOCAL timezone (not UTC) — critical for correct dedup in non-UTC locales
+    const dateStr = (d: Date): string => {
+      const m = midnight(d);
+      const y = m.getFullYear();
+      const mo = String(m.getMonth() + 1).padStart(2, "0");
+      const day = String(m.getDate()).padStart(2, "0");
+      return `${y}-${mo}-${day}`;
+    };
 
     // Build per-parent set of period-start date strings that already have a child
     const coveredByParent = new Map<string, Set<string>>();
@@ -798,7 +804,7 @@ function TasksPage() {
 
       {/* DETAIL MODAL */}
       {detailTask && (
-        <Dialog open={!!detailTask} onOpenChange={(o) => { if (!o && !lightboxOpenRef.current) setDetailTask(null); }}>
+        <Dialog open={!!detailTask && !lightboxTask} onOpenChange={(o) => { if (!o) setDetailTask(null); }}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-start justify-between gap-2 pr-6">
@@ -924,7 +930,11 @@ function TasksPage() {
                         key={img.id}
                         type="button"
                         className="group relative overflow-hidden rounded-lg border border-border/60"
-                        onClick={() => { lightboxOpenRef.current = true; setLightboxSrc(getPublicUrl(img.storage_path)); }}
+                        onClick={() => {
+                          const imgIdx = detailTask.images!.indexOf(img);
+                          setLightboxTask(detailTask);
+                          setLightboxIndex(imgIdx >= 0 ? imgIdx : 0);
+                        }}
                       >
                         <img src={getPublicUrl(img.storage_path)} alt="" className="h-20 w-20 object-cover transition-transform group-hover:scale-105" />
                         <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
@@ -1239,12 +1249,14 @@ function TasksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Photo viewer — uses native <dialog> so it sits above Radix modals */}
-      {lightboxSrc && (
+      {/* Photo viewer — rendered when lightboxTask is set.
+          The Dialog is hidden (open=false) while this is shown so Radix's
+          dismiss layer cannot intercept pointer events on the overlay. */}
+      {lightboxTask && (
         <PhotoViewer
-          images={detailTask ? detailTask.images?.map(img => getPublicUrl(img.storage_path)).filter(Boolean) ?? [lightboxSrc] : [lightboxSrc]}
-          initialIndex={detailTask?.images ? detailTask.images.findIndex(img => getPublicUrl(img.storage_path) === lightboxSrc) : 0}
-          onClose={() => { lightboxOpenRef.current = false; setLightboxSrc(null); }}
+          images={lightboxTask.images?.map(img => getPublicUrl(img.storage_path)).filter(Boolean) ?? []}
+          initialIndex={lightboxIndex}
+          onClose={() => { setLightboxTask(null); }}
         />
       )}
     </div>
