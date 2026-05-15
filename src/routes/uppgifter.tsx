@@ -269,15 +269,13 @@ function TasksPage() {
   return (
     <div className="mx-auto max-w-[1400px] px-5 py-8 md:px-8 md:py-10">
       <PageHeader
-        title="Uppgifter & Checklistor"
+        title="Uppgifter"
         description={activeStore ? `Uppgifter för ${activeStore.name}` : "Standardiserade rutiner för alla butiker."}
         actions={
           <div className="flex gap-2">
-            {tasks.length > 0 && (
-              <Button variant="outline" className="rounded-full" onClick={exportCSV}>
-                <Download className="mr-2 h-4 w-4" /> Exportera CSV
-              </Button>
-            )}
+            <Button variant="outline" className="rounded-full" onClick={exportCSV}>
+              <Download className="mr-2 h-4 w-4" /> Exportera CSV
+            </Button>
             {isManager && (
               <Button className="rounded-full" onClick={() => { setShowCreate(true); setSaveError(""); }}>
                 <Plus className="mr-2 h-4 w-4" /> Ny uppgift
@@ -482,10 +480,10 @@ function TasksPage() {
             {/* Recurrence */}
             <div className="space-y-1.5">
               <Label>Återkommande</Label>
-              <Select value={newTask.recurrence_rule} onValueChange={(v) => setNewTask(p => ({ ...p, recurrence_rule: v }))}>
+              <Select value={newTask.recurrence_rule || "__none"} onValueChange={(v) => setNewTask(p => ({ ...p, recurrence_rule: v === "__none" ? "" : v }))}>
                 <SelectTrigger><SelectValue placeholder="Ingen" /></SelectTrigger>
                 <SelectContent>
-                  {RECURRENCE_OPTIONS.map(o => <SelectItem key={o.value || "__none"} value={o.value}>{o.label}</SelectItem>)}
+                  {RECURRENCE_OPTIONS.map(o => <SelectItem key={o.value || "__none"} value={o.value || "__none"}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
