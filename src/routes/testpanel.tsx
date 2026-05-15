@@ -24,16 +24,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase, createNotification, logAudit, type AuditLog } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import {
+  getTimeOffsetMs, setTimeOffsetMs, getSimulatedDate,
+} from "@/lib/time-simulation";
 
 export const Route = createFileRoute("/testpanel")({
   component: TestPanel,
 });
-
-// In-memory time offset (ms). Exported so other modules can use it for recurring task preview.
-let _timeOffsetMs = 0;
-export function getSimulatedDate(): Date {
-  return new Date(Date.now() + _timeOffsetMs);
-}
 
 type Result = { ok: boolean; msg: string; ts: string };
 type DbStats = {
@@ -57,7 +54,7 @@ function TestPanel() {
   // Time simulation
   const [timeAmount, setTimeAmount] = useState("1");
   const [timeUnit, setTimeUnit] = useState<"hours" | "days" | "weeks" | "months" | "years">("days");
-  const [simulatedOffset, setSimulatedOffset] = useState(0);
+  const [simulatedOffset, setSimulatedOffset] = useState(() => getTimeOffsetMs());
 
   // Notification
   const [customMsg, setCustomMsg] = useState("");
@@ -107,13 +104,14 @@ function TestPanel() {
       months: 2_592_000_000,
       years: 31_536_000_000,
     };
-    _timeOffsetMs += amount * unitMs[timeUnit];
-    setSimulatedOffset(_timeOffsetMs);
+    const newOffset = getTimeOffsetMs() + amount * unitMs[timeUnit];
+    setTimeOffsetMs(newOffset);
+    setSimulatedOffset(newOffset);
     addResult(true, `Tid framflyttad +${amount} ${timeUnit}. Simulerad tid: ${getSimulatedDate().toLocaleString("sv-SE")}`);
   }
 
   function resetTime() {
-    _timeOffsetMs = 0;
+    setTimeOffsetMs(0);
     setSimulatedOffset(0);
     addResult(true, "Simulerad tid återställd till aktuell tid.");
   }

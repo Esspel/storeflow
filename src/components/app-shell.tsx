@@ -18,6 +18,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { supabase, type Notification, cleanOldNotifications } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { getSimulatedDate, getTimeOffsetMs, setTimeOffsetMs, isSimulationActive } from "@/lib/time-simulation";
 
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -27,6 +28,17 @@ export function AppShell() {
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [simActive, setSimActive] = useState(() => isSimulationActive());
+
+  useEffect(() => {
+    const sync = () => setSimActive(isSimulationActive());
+    window.addEventListener("sf-time-changed", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("sf-time-changed", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
 
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "manager" || isAdmin;
@@ -282,6 +294,21 @@ export function AppShell() {
           </div>
         )}
       </header>
+
+      {simActive && (
+        <div className="sticky top-16 z-30 flex items-center justify-between gap-3 border-b border-warning/40 bg-warning/10 px-5 py-2 text-xs font-medium text-warning-foreground md:px-8">
+          <span>
+            Tidssimulering aktiv — simulerad tid:{" "}
+            <strong>{getSimulatedDate().toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}</strong>
+          </span>
+          <button
+            className="rounded-full border border-warning/40 px-3 py-1 hover:bg-warning/20 transition-colors"
+            onClick={() => { setTimeOffsetMs(0); setSimActive(false); }}
+          >
+            Återställ
+          </button>
+        </div>
+      )}
 
       <main className="flex-1">
         <Outlet />
