@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks,
-  Plus, Repeat, Store, X, Search, FileText, Users, Image as ImageIcon,
+  CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks,
+  Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon,
+  ChevronDown, ChevronUp, AlertTriangle, ZoomIn,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -12,13 +13,17 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  supabase, type Task, type TaskStep, type Store as StoreType, type AppUser,
-  type ChecklistTemplate, type ChecklistTemplateItem, type TaskAssignee, type TaskImage, type UserGroup,
+  supabase,
+  type Task, type TaskStep, type TaskQuestion, type TaskImage,
+  type Store as StoreType, type AppUser,
+  type ChecklistTemplate, type ChecklistTemplateItem, type ChecklistTemplateQuestion,
+  type TaskAssignee, type UserGroup,
   logAudit, createNotification, notifyUsers, uploadAttachment, getPublicUrl,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
@@ -49,18 +54,33 @@ function priorityClass(p: string) {
 }
 
 function statusBadge(s: string) {
-  if (s === "done") return <Badge className="bg-success/15 text-success hover:bg-success/20">Klar</Badge>;
-  if (s === "progress") return <Badge className="bg-info/15 text-info hover:bg-info/20">Pågående</Badge>;
-  if (s === "late") return <Badge className="bg-destructive/10 text-destructive hover:bg-destructive/15">Försenad</Badge>;
+  if (s === "done") return <Badge className="bg-success/15 text-success">Klar</Badge>;
+  if (s === "progress") return <Badge className="bg-info/15 text-info">Pågående</Badge>;
+  if (s === "late") return <Badge className="bg-destructive/10 text-destructive">Försenad</Badge>;
+  if (s === "cancelled") return <Badge variant="secondary" className="text-muted-foreground">Avbruten</Badge>;
   return <Badge variant="secondary">Ej påbörjad</Badge>;
+}
+
+function isDueSoon(due_date: string | null): boolean {
+  if (!due_date) return false;
+  const diff = new Date(due_date).getTime() - Date.now();
+  return diff > 0 && diff < 24 * 60 * 60 * 1000;
+}
+
+function isOverdue(due_date: string | null, status: string): boolean {
+  if (!due_date || status === "done" || status === "cancelled") return false;
+  return new Date(due_date).getTime() < Date.now();
 }
 
 type TaskFull = Task & {
   steps: TaskStep[];
+  questions: TaskQuestion[];
   store?: StoreType;
   assignees?: (TaskAssignee & { user?: AppUser; group?: UserGroup })[];
   images?: TaskImage[];
 };
+
+type FormQuestion = { label: string; is_required: boolean };
 
 const emptyForm = (storeId: string) => ({
   title: "",
@@ -74,20 +94,50 @@ const emptyForm = (storeId: string) => ({
   recurrence_interval: 1,
   recurrence_start: "",
   recurrence_end: "",
-  steps: [""] as string[],
+  steps: [{ label: "", requires_photo: false }] as { label: string; requires_photo: boolean }[],
+  questions: [] as FormQuestion[],
   assigneeUserIds: [] as string[],
   assigneeGroupIds: [] as string[],
 });
 
+// Image lightbox component
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute right-4 top-4 z-10 rounded-full bg-black/40 p-2 text-white/80 backdrop-blur-sm transition-colors hover:bg-black/60 hover:text-white"
+        aria-label="Stäng"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      <img
+        src={src}
+        alt=""
+        className="max-h-[90vh] max-w-full rounded-xl shadow-2xl object-contain"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
 function TasksPage() {
   const { user, activeStore, userStores } = useAuth();
   const isManager = user?.role === "manager" || user?.role === "admin";
+  const isEmployee = user?.role === "employee";
 
   const [tasks, setTasks] = useState<TaskFull[]>([]);
   const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
   const [groups, setGroups] = useState<UserGroup[]>([]);
   const [stores, setStores] = useState<StoreType[]>([]);
-  const [templates, setTemplates] = useState<(ChecklistTemplate & { items: ChecklistTemplateItem[] })[]>([]);
+  const [templates, setTemplates] = useState<(ChecklistTemplate & { items: ChecklistTemplateItem[]; questions: ChecklistTemplateQuestion[] })[]>([]);
+  const [userGroupIds, setUserGroupIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
@@ -97,11 +147,17 @@ function TasksPage() {
   const [saveError, setSaveError] = useState("");
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const detailFileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchTasks = async () => {
+  // Detail modal
+  const [detailTask, setDetailTask] = useState<TaskFull | null>(null);
+  const [answerDraft, setAnswerDraft] = useState<Record<string, string>>({});
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  const fetchTasks = useCallback(async () => {
     let q = supabase
       .from("tasks")
-      .select("*, store:stores(*), steps:task_steps(*), assignees:task_assignees(*, user:app_users(id,display_name,username), group:user_groups(id,name)), images:task_images(*)")
+      .select("*, store:stores(*), steps:task_steps(*), questions:task_questions(*), assignees:task_assignees(*, user:app_users(id,display_name,username), group:user_groups(id,name)), images:task_images(*)")
       .order("created_at", { ascending: false });
 
     if (activeStore) {
@@ -113,24 +169,33 @@ function TasksPage() {
     const { data } = await q;
     if (data) setTasks(data as TaskFull[]);
     setLoading(false);
-  };
+  }, [activeStore, userStores]);
+
+  // Fetch current user's group IDs for visibility filtering
+  const fetchUserGroups = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase.from("user_group_members").select("group_id").eq("user_id", user.id);
+    setUserGroupIds((data ?? []).map((r: { group_id: string }) => r.group_id));
+  }, [user]);
 
   useEffect(() => {
     setLoading(true);
     fetchTasks();
+    fetchUserGroups();
 
     const storeQ = user?.role === "admin"
       ? supabase.from("stores").select("*").eq("is_active", true)
       : supabase.from("stores").select("*").in("id", userStores.map((s) => s.id));
     storeQ.then(({ data }) => { if (data) setStores(data as StoreType[]); });
 
-    supabase.from("checklist_templates").select("*, items:checklist_template_items(*)").then(({ data }) => {
-      if (data) setTemplates(data as (ChecklistTemplate & { items: ChecklistTemplateItem[] })[]);
-    });
+    supabase.from("checklist_templates")
+      .select("*, items:checklist_template_items(*), questions:checklist_template_questions(*)")
+      .then(({ data }) => {
+        if (data) setTemplates(data as typeof templates);
+      });
 
-    // Load users for this store
     if (activeStore) {
-      supabase.from("user_stores").select("user_id, user:app_users(*)").eq("store_id", activeStore.id)
+      supabase.from("user_stores").select("user:app_users(*)").eq("store_id", activeStore.id)
         .then(({ data }) => {
           if (data) setStoreUsers((data as { user: AppUser }[]).map(d => d.user).filter(Boolean));
         });
@@ -146,41 +211,111 @@ function TasksPage() {
     setNewTask(emptyForm(activeStore?.id ?? ""));
   }, [activeStore, user]);
 
+  // Realtime channel
+  useEffect(() => {
+    const channel = supabase
+      .channel("tasks-rt-" + (activeStore?.id ?? "all"))
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, fetchTasks)
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_steps" }, fetchTasks)
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_questions" }, fetchTasks)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [activeStore, fetchTasks]);
+
+  // Filter tasks by role visibility
+  const visibleTasks = tasks.filter((t) => {
+    if (!isEmployee) return true; // managers/admins see all
+    const taskGroups = (t.assignees ?? []).filter(a => a.group_id).map(a => a.group_id!);
+    if (taskGroups.length === 0) return true; // unassigned to any group → everyone sees it
+    return taskGroups.some(gid => userGroupIds.includes(gid));
+  });
+
   const applyTemplate = (templateId: string) => {
     const tmpl = templates.find((t) => t.id === templateId);
     if (!tmpl) return;
     const steps = (tmpl.items ?? [])
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((it) => it.label);
+      .map((it) => ({ label: it.label, requires_photo: it.requires_photo }));
+    const questions = (tmpl.questions ?? [])
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((q) => ({ label: q.label, is_required: q.is_required }));
     setNewTask((p) => ({
       ...p,
       title: p.title || tmpl.title,
       category: tmpl.category || p.category,
-      steps: steps.length > 0 ? steps : [""],
+      steps: steps.length > 0 ? steps : p.steps,
+      questions: questions.length > 0 ? questions : p.questions,
     }));
   };
 
-  const toggleStep = async (taskId: string, stepId: string, current: boolean) => {
+  // Mark task as pågående when user interacts
+  const markInProgress = async (task: TaskFull) => {
+    if (task.status !== "todo" && task.status !== "late") return;
+    await supabase.from("tasks").update({ status: "progress" }).eq("id", task.id);
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: "progress" } : t));
+    if (detailTask?.id === task.id) setDetailTask(p => p ? { ...p, status: "progress" } : null);
+  };
+
+  const toggleStep = async (task: TaskFull, stepId: string, current: boolean) => {
+    await markInProgress(task);
     await supabase.from("task_steps").update({ is_done: !current }).eq("id", stepId);
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id !== taskId ? t
-          : { ...t, steps: t.steps.map((s) => s.id === stepId ? { ...s, is_done: !s.is_done } : s) }
-      )
-    );
+    logAudit(user?.id ?? null, "task.step.toggle", "task_steps", stepId, { task_id: task.id, is_done: !current });
+    fetchTasks();
+    if (detailTask?.id === task.id) {
+      setDetailTask(p => p ? {
+        ...p,
+        steps: p.steps.map(s => s.id === stepId ? { ...s, is_done: !current } : s)
+      } : null);
+    }
+  };
+
+  const saveAnswer = async (task: TaskFull, question: TaskQuestion, value: string) => {
+    await markInProgress(task);
+    const oldAnswer = question.answer;
+    // Save to history
+    await supabase.from("task_question_answers").insert({
+      task_question_id: question.id,
+      task_id: task.id,
+      answer: value,
+      answered_by: user?.id,
+    });
+    // Update current answer
+    await supabase.from("task_questions").update({
+      answer: value,
+      answered_by: user?.id,
+      answered_at: new Date().toISOString(),
+    }).eq("id", question.id);
+    logAudit(user?.id ?? null, "task.question.answer", "task_questions", question.id, { task_id: task.id, old: oldAnswer, new: value });
+    fetchTasks();
+    if (detailTask?.id === task.id) {
+      setDetailTask(p => p ? {
+        ...p,
+        questions: p.questions.map(q => q.id === question.id ? { ...q, answer: value, answered_by: user?.id ?? null, answered_at: new Date().toISOString() } : q)
+      } : null);
+    }
   };
 
   const completeTask = async (task: TaskFull) => {
     const isDone = task.status === "done";
     const newStatus = isDone ? "todo" : "done";
+
+    // Check required questions are answered
+    if (!isDone) {
+      const unanswered = (task.questions ?? []).filter(q => q.is_required && !q.answer?.trim());
+      if (unanswered.length > 0) {
+        alert(`Fyll i obligatoriska fält: ${unanswered.map(q => q.label).join(", ")}`);
+        return;
+      }
+    }
+
     await supabase.from("tasks").update({
       status: newStatus,
       completed_at: newStatus === "done" ? new Date().toISOString() : null,
     }).eq("id", task.id);
+
     if (newStatus === "done") {
       await supabase.from("task_steps").update({ is_done: true }).eq("task_id", task.id);
       logAudit(user?.id ?? null, "task.complete", "tasks", task.id, { title: task.title });
-      // Notify creator and assignees
       const notifyIds = new Set<string>();
       if (task.created_by && task.created_by !== user?.id) notifyIds.add(task.created_by);
       task.assignees?.forEach(a => { if (a.user_id && a.user_id !== user?.id) notifyIds.add(a.user_id); });
@@ -189,6 +324,21 @@ function TasksPage() {
       await supabase.from("task_steps").update({ is_done: false }).eq("task_id", task.id);
     }
     fetchTasks();
+    if (detailTask?.id === task.id) setDetailTask(p => p ? { ...p, status: newStatus as Task["status"] } : null);
+  };
+
+  const uploadTaskImage = async (task: TaskFull, file: File) => {
+    const path = await uploadAttachment(file, `tasks/${task.id}`);
+    if (path) {
+      await supabase.from("task_images").insert({ task_id: task.id, storage_path: path, uploaded_by: user?.id });
+      logAudit(user?.id ?? null, "task.image.upload", "task_images", task.id, { path });
+      await markInProgress(task);
+      fetchTasks();
+      if (detailTask?.id === task.id) {
+        const { data } = await supabase.from("task_images").select("*").eq("task_id", task.id);
+        if (data) setDetailTask(p => p ? { ...p, images: data as TaskImage[] } : null);
+      }
+    }
   };
 
   const createTask = async () => {
@@ -222,49 +372,44 @@ function TasksPage() {
     }
 
     if (task) {
-      // Steps
-      const validSteps = newTask.steps.filter((s) => s.trim());
+      const validSteps = newTask.steps.filter(s => s.label.trim());
       if (validSteps.length > 0) {
         await supabase.from("task_steps").insert(
-          validSteps.map((label, i) => ({
-            task_id: task.id,
-            label,
-            sort_order: i,
-            requires_photo: label.toLowerCase().includes("foto"),
+          validSteps.map((s, i) => ({
+            task_id: task.id, label: s.label, sort_order: i, requires_photo: s.requires_photo,
           }))
         );
       }
 
-      // Assignees
+      const validQuestions = newTask.questions.filter(q => q.label.trim());
+      if (validQuestions.length > 0) {
+        await supabase.from("task_questions").insert(
+          validQuestions.map((q, i) => ({
+            task_id: task.id, label: q.label, is_required: q.is_required, sort_order: i,
+          }))
+        );
+      }
+
       const assigneeRows: { task_id: string; user_id?: string; group_id?: string }[] = [];
       newTask.assigneeUserIds.forEach(uid => assigneeRows.push({ task_id: task.id, user_id: uid }));
       newTask.assigneeGroupIds.forEach(gid => assigneeRows.push({ task_id: task.id, group_id: gid }));
-      if (assigneeRows.length > 0) {
-        await supabase.from("task_assignees").insert(assigneeRows);
-      }
+      if (assigneeRows.length > 0) await supabase.from("task_assignees").insert(assigneeRows);
 
-      // Images
       if (uploadFiles.length > 0) {
         for (const file of uploadFiles) {
           const path = await uploadAttachment(file, `tasks/${task.id}`);
-          if (path) {
-            await supabase.from("task_images").insert({ task_id: task.id, storage_path: path, uploaded_by: user?.id });
-          }
+          if (path) await supabase.from("task_images").insert({ task_id: task.id, storage_path: path, uploaded_by: user?.id });
         }
       }
 
       logAudit(user?.id ?? null, "task.create", "tasks", task.id, { title: task.title });
 
-      // Notify assigned users
       const notifyIds = new Set<string>();
       newTask.assigneeUserIds.forEach(uid => { if (uid !== user?.id) notifyIds.add(uid); });
-      // Expand groups to get member user IDs
       if (newTask.assigneeGroupIds.length > 0) {
         const { data: members } = await supabase
-          .from("user_group_members")
-          .select("user_id")
-          .in("group_id", newTask.assigneeGroupIds);
-        members?.forEach(m => { if (m.user_id !== user?.id) notifyIds.add(m.user_id); });
+          .from("user_group_members").select("user_id").in("group_id", newTask.assigneeGroupIds);
+        members?.forEach((m: { user_id: string }) => { if (m.user_id !== user?.id) notifyIds.add(m.user_id); });
       }
       if (notifyIds.size > 0) {
         notifyUsers([...notifyIds], "task_assigned", `Ny uppgift tilldelad: ${task.title}`, `Tilldelad av ${user?.display_name}`, "/uppgifter");
@@ -280,8 +425,8 @@ function TasksPage() {
 
   const exportCSV = () => {
     const rows = [
-      ["Titel", "Beskrivning", "Kategori", "Prioritet", "Status", "Butik", "Tilldelade", "Förfallodatum", "Återkommande", "Checkpoints", "Slutförd", "Skapad"],
-      ...tasks.map((t) => [
+      ["Titel", "Beskrivning", "Kategori", "Prioritet", "Status", "Butik", "Tilldelade", "Förfallodatum", "Återkommande", "Checkpoints", "Frågor & svar", "Slutförd", "Skapad"],
+      ...visibleTasks.map((t) => [
         t.title,
         t.description ?? "",
         t.category,
@@ -292,6 +437,7 @@ function TasksPage() {
         t.due_date ? new Date(t.due_date).toLocaleDateString("sv-SE") : "",
         RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label ?? "",
         t.steps?.map(s => `${s.is_done ? "[x]" : "[ ]"} ${s.label}`).join(" | ") || "",
+        t.questions?.map(q => `${q.label}: ${q.answer || "-"}`).join(" | ") || "",
         t.completed_at ? new Date(t.completed_at).toLocaleDateString("sv-SE") : "",
         new Date(t.created_at).toLocaleDateString("sv-SE"),
       ]),
@@ -314,23 +460,32 @@ function TasksPage() {
     { value: "late", label: "Försenad" },
   ];
 
-  const visible = tasks.filter((t) => {
+  const filtered = visibleTasks.filter((t) => {
     if (tab !== "all" && t.status !== tab) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  const availableTemplates = templates;
+  const openDetail = async (task: TaskFull) => {
+    setDetailTask(task);
+    setAnswerDraft(
+      Object.fromEntries((task.questions ?? []).map(q => [q.id, q.answer ?? ""]))
+    );
+    // Auto-mark in progress when opened
+    if (task.status === "todo" || task.status === "late") {
+      await markInProgress(task);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-[1400px] px-5 py-8 md:px-8 md:py-10">
       <PageHeader
         title="Uppgifter"
-        description={activeStore ? `Uppgifter för ${activeStore.name}` : "Standardiserade rutiner för alla butiker."}
+        description={activeStore ? `Uppgifter för ${activeStore.name}` : "Standardiserade rutiner."}
         actions={
           <div className="flex gap-2">
             <Button variant="outline" className="rounded-full" onClick={exportCSV}>
-              <Download className="mr-2 h-4 w-4" /> Exportera CSV
+              <Download className="mr-2 h-4 w-4" /> CSV
             </Button>
             {isManager && (
               <Button className="rounded-full" onClick={() => { setShowCreate(true); setSaveError(""); }}>
@@ -341,42 +496,33 @@ function TasksPage() {
         }
       />
 
-      {/* Filters row */}
+      {/* Filters */}
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="rounded-full bg-muted/60 p-1">
             {filters.map((f) => (
-              <TabsTrigger
-                key={f.value} value={f.value}
-                className="gap-2 rounded-full px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm"
-              >
+              <TabsTrigger key={f.value} value={f.value}
+                className="gap-2 rounded-full px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm text-xs">
                 {f.label}
                 <span className="rounded-full bg-background/70 px-1.5 text-[10px] font-medium text-muted-foreground">
-                  {f.value === "all" ? tasks.length : tasks.filter((t) => t.status === f.value).length}
+                  {f.value === "all" ? visibleTasks.length : visibleTasks.filter((t) => t.status === f.value).length}
                 </span>
               </TabsTrigger>
             ))}
           </TabsList>
         </Tabs>
-
-        <div className="ml-auto flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Sök uppgifter..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-9 rounded-full pl-9 text-sm w-44"
-            />
-          </div>
+        <div className="ml-auto relative">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Sök..." value={search} onChange={(e) => setSearch(e.target.value)}
+            className="h-9 rounded-full pl-9 text-sm w-40" />
         </div>
       </div>
 
       {loading ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {[1,2,3].map(i => <div key={i} className="h-48 animate-pulse rounded-2xl bg-card" />)}
+          {[1,2,3].map(i => <div key={i} className="h-28 animate-pulse rounded-2xl bg-card" />)}
         </div>
-      ) : visible.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
           <ListChecks className="mb-3 h-10 w-10 text-muted-foreground/40" />
           <p className="text-sm font-medium text-muted-foreground">Inga uppgifter hittades</p>
@@ -388,93 +534,57 @@ function TasksPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {visible.map((t) => {
-            const doneSteps = t.steps?.filter((s) => s.is_done).length ?? 0;
-            const totalSteps = t.steps?.length ?? 0;
+          {filtered.map((t) => {
+            const overdue = isOverdue(t.due_date, t.status);
+            const dueSoon = isDueSoon(t.due_date);
             return (
-              <article key={t.id} className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)]">
-                <header className="flex items-start justify-between gap-3 border-b border-border/60 p-5">
+              <article
+                key={t.id}
+                className={cn(
+                  "cursor-pointer overflow-hidden rounded-2xl border bg-card shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)]",
+                  overdue ? "border-destructive/40" : "border-border/60"
+                )}
+                onClick={() => openDetail(t)}
+              >
+                <header className="flex items-start justify-between gap-3 p-4 md:p-5">
                   <div className="min-w-0 flex-1">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
                       <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", priorityClass(t.priority))}>{t.priority}</span>
                       <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{t.category}</span>
                       {t.recurrence_rule && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-medium text-primary">
-                          <Repeat className="h-3 w-3" /> {RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label ?? t.recurrence_rule}
+                          <Repeat className="h-3 w-3" />{RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label}
                         </span>
                       )}
+                      {overdue && <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive"><AlertTriangle className="h-3 w-3" />Försenad</span>}
+                      {dueSoon && !overdue && <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning-foreground"><Clock className="h-3 w-3" />Snart</span>}
                     </div>
-                    <h3 className="text-base font-semibold leading-tight">{t.title}</h3>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      {t.store && <span className="inline-flex items-center gap-1"><Store className="h-3.5 w-3.5" />{t.store.name}</span>}
-                      {t.due_date && <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{new Date(t.due_date).toLocaleDateString("sv-SE")}</span>}
+                    <h3 className="text-sm font-semibold leading-tight md:text-base">{t.title}</h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      {t.due_date && <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{new Date(t.due_date).toLocaleDateString("sv-SE")}</span>}
                       {t.assignees && t.assignees.length > 0 && (
                         <span className="inline-flex items-center gap-1">
-                          <Users className="h-3.5 w-3.5" />
-                          {t.assignees.map(a => a.user?.display_name ?? a.group?.name).filter(Boolean).join(", ")}
+                          <Users className="h-3 w-3" />
+                          {t.assignees.slice(0, 2).map(a => a.user?.display_name ?? a.group?.name).filter(Boolean).join(", ")}
+                          {t.assignees.length > 2 && ` +${t.assignees.length - 2}`}
                         </span>
                       )}
                     </div>
                   </div>
-                  {statusBadge(t.status)}
+                  <div className="shrink-0">{statusBadge(t.status)}</div>
                 </header>
-
-                {/* Images */}
-                {t.images && t.images.length > 0 && (
-                  <div className="flex gap-2 overflow-x-auto px-5 pt-3">
-                    {t.images.map(img => (
-                      <img key={img.id} src={getPublicUrl(img.storage_path)} alt="" className="h-16 w-16 rounded-lg object-cover border border-border/60" />
-                    ))}
-                  </div>
-                )}
-
-                {totalSteps > 0 && (
-                  <div className="p-5">
-                    <div className="mb-3 flex items-center justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 font-medium"><ListChecks className="h-3.5 w-3.5" /> Checkpoints</span>
-                      <span className="text-muted-foreground">{doneSteps} / {totalSteps} klara</span>
+                {/* Progress bar for steps */}
+                {t.steps && t.steps.length > 0 && (
+                  <div className="px-4 pb-3 md:px-5">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex-1 rounded-full bg-muted h-1.5 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all"
+                          style={{ width: `${Math.round((t.steps.filter(s => s.is_done).length / t.steps.length) * 100)}%` }}
+                        />
+                      </div>
+                      <span>{t.steps.filter(s => s.is_done).length}/{t.steps.length}</span>
                     </div>
-                    <ul className="space-y-2">
-                      {t.steps.map((step) => (
-                        <li key={step.id} className="flex items-start gap-3">
-                          <Checkbox checked={step.is_done} onCheckedChange={() => toggleStep(t.id, step.id, step.is_done)} className="mt-0.5" />
-                          <span className={cn("flex-1 text-sm", step.is_done && "text-muted-foreground line-through")}>{step.label}</span>
-                          {step.requires_photo && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground">
-                              <ImagePlus className="h-3 w-3" /> Foto
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-4 flex items-center justify-end border-t border-border/60 pt-4">
-                      <Button
-                        size="sm"
-                        variant={t.status === "done" ? "default" : "ghost"}
-                        className="gap-1.5 rounded-full text-xs"
-                        onClick={() => completeTask(t)}
-                      >
-                        {t.status === "done"
-                          ? <><CheckCircle2 className="h-3.5 w-3.5" /> Markera öppen</>
-                          : <><Circle className="h-3.5 w-3.5" /> Markera klar</>
-                        }
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {totalSteps === 0 && (
-                  <div className="flex items-center justify-end border-t border-border/60 px-5 py-3">
-                    <Button
-                      size="sm" variant={t.status === "done" ? "default" : "ghost"}
-                      className="gap-1.5 rounded-full text-xs"
-                      onClick={() => completeTask(t)}
-                    >
-                      {t.status === "done"
-                        ? <><CheckCircle2 className="h-3.5 w-3.5" /> Markera öppen</>
-                        : <><Circle className="h-3.5 w-3.5" /> Markera klar</>
-                      }
-                    </Button>
                   </div>
                 )}
               </article>
@@ -483,23 +593,199 @@ function TasksPage() {
         </div>
       )}
 
+      {/* DETAIL MODAL */}
+      {detailTask && (
+        <Dialog open={!!detailTask} onOpenChange={(o) => !o && setDetailTask(null)}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <div className="flex items-start justify-between gap-2 pr-6">
+                <div className="min-w-0">
+                  <DialogTitle className="text-base leading-snug">{detailTask.title}</DialogTitle>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", priorityClass(detailTask.priority))}>{detailTask.priority}</span>
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{detailTask.category}</span>
+                    {detailTask.recurrence_rule && <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[11px] text-primary"><Repeat className="h-3 w-3" />{RECURRENCE_OPTIONS.find(r => r.value === detailTask.recurrence_rule)?.label}</span>}
+                  </div>
+                </div>
+                {statusBadge(detailTask.status)}
+              </div>
+            </DialogHeader>
+
+            <div className="space-y-5 py-1">
+              {detailTask.description && (
+                <p className="text-sm text-muted-foreground">{detailTask.description}</p>
+              )}
+
+              {/* Meta row */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                {detailTask.due_date && (
+                  <span className={cn("inline-flex items-center gap-1", isOverdue(detailTask.due_date, detailTask.status) && "text-destructive font-medium")}>
+                    <Clock className="h-3.5 w-3.5" />
+                    {new Date(detailTask.due_date).toLocaleDateString("sv-SE", { dateStyle: "medium" })}
+                  </span>
+                )}
+                {detailTask.assignees && detailTask.assignees.length > 0 && (
+                  <span className="inline-flex items-center gap-1">
+                    <Users className="h-3.5 w-3.5" />
+                    {detailTask.assignees.map(a => a.user?.display_name ?? a.group?.name).filter(Boolean).join(", ")}
+                  </span>
+                )}
+              </div>
+
+              {/* Checkpoints */}
+              {detailTask.steps && detailTask.steps.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Checkpoints</p>
+                  {detailTask.steps.map((step) => (
+                    <label key={step.id} className="flex items-start gap-3 cursor-pointer group rounded-lg p-2 hover:bg-muted/40 transition-colors">
+                      <Checkbox
+                        checked={step.is_done}
+                        onCheckedChange={(checked) => {
+                          void toggleStep(detailTask, step.id, step.is_done);
+                        }}
+                        className="mt-0.5"
+                      />
+                      <span className={cn("flex-1 text-sm", step.is_done && "line-through text-muted-foreground")}>{step.label}</span>
+                      {step.requires_photo && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                          <ImagePlus className="h-3 w-3" />foto
+                        </span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {/* Questions */}
+              {detailTask.questions && detailTask.questions.length > 0 && (
+                <div className="space-y-4">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Frågor</p>
+                  {detailTask.questions.map((q) => (
+                    <div key={q.id} className="space-y-1.5">
+                      <Label className="text-sm">
+                        {q.label}
+                        {q.is_required && <span className="ml-1 text-destructive">*</span>}
+                      </Label>
+                      <Textarea
+                        value={answerDraft[q.id] ?? q.answer ?? ""}
+                        onChange={(e) => setAnswerDraft(p => ({ ...p, [q.id]: e.target.value }))}
+                        onBlur={() => {
+                          const val = answerDraft[q.id] ?? "";
+                          if (val !== (q.answer ?? "")) {
+                            void saveAnswer(detailTask, q, val);
+                          }
+                        }}
+                        placeholder="Skriv ditt svar..."
+                        rows={2}
+                        className="resize-none text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Images */}
+              {detailTask.images && detailTask.images.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Bilder</p>
+                  <div className="flex flex-wrap gap-2">
+                    {detailTask.images.map((img) => (
+                      <button
+                        key={img.id}
+                        type="button"
+                        className="group relative overflow-hidden rounded-lg border border-border/60"
+                        onClick={() => setLightboxSrc(getPublicUrl(img.storage_path))}
+                      >
+                        <img src={getPublicUrl(img.storage_path)} alt="" className="h-20 w-20 object-cover transition-transform group-hover:scale-105" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+                          <ZoomIn className="h-5 w-5 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Upload image */}
+              <div>
+                <input
+                  ref={detailFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && detailTask) {
+                      Array.from(e.target.files).forEach(f => void uploadTaskImage(detailTask, f));
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full text-xs"
+                  onClick={() => detailFileInputRef.current?.click()}
+                >
+                  <ImageIcon className="mr-1.5 h-3.5 w-3.5" /> Lägg till bild
+                </Button>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-4">
+                {detailTask.status !== "done" && detailTask.status !== "cancelled" && (
+                  <Button
+                    size="sm"
+                    className="rounded-full gap-1.5"
+                    onClick={() => void completeTask(detailTask)}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Markera klar
+                  </Button>
+                )}
+                {detailTask.status === "done" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full gap-1.5"
+                    onClick={() => void completeTask(detailTask)}
+                  >
+                    <Circle className="h-3.5 w-3.5" /> Öppna igen
+                  </Button>
+                )}
+                {isManager && detailTask.status !== "cancelled" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="rounded-full text-muted-foreground hover:text-destructive"
+                    onClick={async () => {
+                      await supabase.from("tasks").update({ status: "cancelled" }).eq("id", detailTask.id);
+                      logAudit(user?.id ?? null, "task.cancel", "tasks", detailTask.id, {});
+                      fetchTasks();
+                      setDetailTask(p => p ? { ...p, status: "cancelled" } : null);
+                    }}
+                  >
+                    Avbryt uppgift
+                  </Button>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* CREATE DIALOG */}
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setSaveError(""); setUploadFiles([]); } }}>
         <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
           <DialogHeader><DialogTitle>Ny uppgift</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
 
-            {/* Template selector */}
-            {availableTemplates.length > 0 && (
+            {templates.length > 0 && (
               <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Använd mall</Label>
+                <Label className="flex items-center gap-1.5 text-sm"><FileText className="h-3.5 w-3.5" />Använd mall</Label>
                 <Select onValueChange={applyTemplate}>
-                  <SelectTrigger><SelectValue placeholder="Välj mall att fylla i från..." /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Välj mall..." /></SelectTrigger>
                   <SelectContent>
-                    {availableTemplates.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.title} {t.category ? `(${t.category})` : ""}
-                      </SelectItem>
+                    {templates.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.title} {t.category ? `(${t.category})` : ""}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -522,7 +808,7 @@ function TasksPage() {
                 <Select value={newTask.category} onValueChange={(v) => setNewTask(p => ({ ...p, category: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {["Drift", "Säkerhet", "Visual Merchandising", "Kundärenden", "Övrigt"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {["Drift", "Säkerhet", "Kundärenden", "Övrigt"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -556,21 +842,15 @@ function TasksPage() {
 
             {/* Assignees */}
             <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Tilldela personer</Label>
-              <div className="max-h-32 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
+              <Label className="flex items-center gap-1.5 text-sm"><Users className="h-3.5 w-3.5" />Tilldela personer</Label>
+              <div className="max-h-32 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-0.5">
                 {storeUsers.map(u => (
-                  <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
-                    <Checkbox
-                      checked={newTask.assigneeUserIds.includes(u.id)}
-                      onCheckedChange={() => {
-                        setNewTask(p => ({
-                          ...p,
-                          assigneeUserIds: p.assigneeUserIds.includes(u.id)
-                            ? p.assigneeUserIds.filter(id => id !== u.id)
-                            : [...p.assigneeUserIds, u.id]
-                        }));
-                      }}
-                    />
+                  <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-muted/50">
+                    <Checkbox checked={newTask.assigneeUserIds.includes(u.id)}
+                      onCheckedChange={() => setNewTask(p => ({
+                        ...p,
+                        assigneeUserIds: p.assigneeUserIds.includes(u.id) ? p.assigneeUserIds.filter(id => id !== u.id) : [...p.assigneeUserIds, u.id]
+                      }))} />
                     <span className="text-sm">{u.display_name}</span>
                   </label>
                 ))}
@@ -579,21 +859,15 @@ function TasksPage() {
 
             {groups.length > 0 && (
               <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Tilldela grupper</Label>
-                <div className="max-h-24 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
+                <Label className="flex items-center gap-1.5 text-sm"><Users className="h-3.5 w-3.5" />Tilldela grupper</Label>
+                <div className="max-h-24 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-0.5">
                   {groups.map(g => (
-                    <label key={g.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
-                      <Checkbox
-                        checked={newTask.assigneeGroupIds.includes(g.id)}
-                        onCheckedChange={() => {
-                          setNewTask(p => ({
-                            ...p,
-                            assigneeGroupIds: p.assigneeGroupIds.includes(g.id)
-                              ? p.assigneeGroupIds.filter(id => id !== g.id)
-                              : [...p.assigneeGroupIds, g.id]
-                          }));
-                        }}
-                      />
+                    <label key={g.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-muted/50">
+                      <Checkbox checked={newTask.assigneeGroupIds.includes(g.id)}
+                        onCheckedChange={() => setNewTask(p => ({
+                          ...p,
+                          assigneeGroupIds: p.assigneeGroupIds.includes(g.id) ? p.assigneeGroupIds.filter(id => id !== g.id) : [...p.assigneeGroupIds, g.id]
+                        }))} />
                       <span className="text-sm">{g.name}</span>
                     </label>
                   ))}
@@ -617,21 +891,13 @@ function TasksPage() {
                 <Label>Veckodagar</Label>
                 <div className="flex flex-wrap gap-2">
                   {WEEKDAYS.map((day, idx) => (
-                    <button
-                      key={idx} type="button"
-                      className={cn(
-                        "rounded-full px-3 py-1 text-xs font-medium border transition-colors",
-                        newTask.recurrence_days.includes(idx)
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-background border-border/60 text-muted-foreground hover:border-primary/50"
-                      )}
+                    <button key={idx} type="button"
+                      className={cn("rounded-full px-3 py-1 text-xs font-medium border transition-colors",
+                        newTask.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border/60 text-muted-foreground hover:border-primary/50")}
                       onClick={() => {
-                        const days = newTask.recurrence_days.includes(idx)
-                          ? newTask.recurrence_days.filter(d => d !== idx)
-                          : [...newTask.recurrence_days, idx];
+                        const days = newTask.recurrence_days.includes(idx) ? newTask.recurrence_days.filter(d => d !== idx) : [...newTask.recurrence_days, idx];
                         setNewTask(p => ({ ...p, recurrence_days: days }));
-                      }}
-                    >
+                      }}>
                       {day}
                     </button>
                   ))}
@@ -654,39 +920,72 @@ function TasksPage() {
               </div>
             )}
 
-            {/* Steps */}
+            {/* Checkpoints */}
             <div className="space-y-1.5">
               <Label>Checkpoints</Label>
               <div className="space-y-2">
                 {newTask.steps.map((step, i) => (
-                  <div key={i} className="flex gap-2">
-                    <Input
-                      placeholder={`Checkpoint ${i + 1}`} value={step}
-                      onChange={(e) => setNewTask(p => ({ ...p, steps: p.steps.map((s, idx) => idx === i ? e.target.value : s) }))}
-                    />
+                  <div key={i} className="flex items-center gap-2">
+                    <Input placeholder={`Checkpoint ${i + 1}`} value={step.label}
+                      onChange={(e) => setNewTask(p => ({ ...p, steps: p.steps.map((s, idx) => idx === i ? { ...s, label: e.target.value } : s) }))}
+                      className="flex-1" />
+                    <label className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+                      <Checkbox checked={step.requires_photo}
+                        onCheckedChange={(v) => setNewTask(p => ({ ...p, steps: p.steps.map((s, idx) => idx === i ? { ...s, requires_photo: !!v } : s) }))} />
+                      Foto
+                    </label>
                     {newTask.steps.length > 1 && (
-                      <Button variant="ghost" size="icon" onClick={() => setNewTask(p => ({ ...p, steps: p.steps.filter((_, idx) => idx !== i) }))}>
+                      <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8"
+                        onClick={() => setNewTask(p => ({ ...p, steps: p.steps.filter((_, idx) => idx !== i) }))}>
                         <X className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
                 ))}
-                <Button variant="outline" size="sm" className="w-full rounded-full" onClick={() => setNewTask(p => ({ ...p, steps: [...p.steps, ""] }))}>
-                  <Plus className="mr-1 h-3.5 w-3.5" /> Lägg till checkpoint
+                <Button variant="outline" size="sm" className="w-full rounded-full"
+                  onClick={() => setNewTask(p => ({ ...p, steps: [...p.steps, { label: "", requires_photo: false }] }))}>
+                  <Plus className="mr-1 h-3.5 w-3.5" />Lägg till checkpoint
                 </Button>
               </div>
             </div>
 
-            {/* File upload */}
+            {/* Questions */}
             <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" /> Bilder</Label>
+              <Label>Frågor (textfält)</Label>
+              <div className="space-y-2">
+                {newTask.questions.map((q, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input placeholder={`Fråga ${i + 1}`} value={q.label}
+                      onChange={(e) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, label: e.target.value } : qr) }))}
+                      className="flex-1" />
+                    <label className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+                      <Checkbox checked={q.is_required}
+                        onCheckedChange={(v) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, is_required: !!v } : qr) }))} />
+                      Obligatorisk
+                    </label>
+                    <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8"
+                      onClick={() => setNewTask(p => ({ ...p, questions: p.questions.filter((_, idx) => idx !== i) }))}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" className="w-full rounded-full"
+                  onClick={() => setNewTask(p => ({ ...p, questions: [...p.questions, { label: "", is_required: false }] }))}>
+                  <Plus className="mr-1 h-3.5 w-3.5" />Lägg till fråga
+                </Button>
+              </div>
+            </div>
+
+            {/* Images */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5 text-sm"><ImageIcon className="h-3.5 w-3.5" />Bilder</Label>
               <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
                 onChange={(e) => { if (e.target.files) setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]); }} />
               <Button variant="outline" size="sm" className="w-full rounded-full" onClick={() => fileInputRef.current?.click()}>
-                <Plus className="mr-1 h-3.5 w-3.5" /> Välj bilder
+                <Plus className="mr-1 h-3.5 w-3.5" />Välj bilder
               </Button>
               {uploadFiles.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex flex-wrap gap-2">
                   {uploadFiles.map((f, i) => (
                     <div key={i} className="relative">
                       <img src={URL.createObjectURL(f)} alt="" className="h-14 w-14 rounded-lg object-cover border border-border/60" />
@@ -708,6 +1007,9 @@ function TasksPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Lightbox */}
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
     </div>
   );
 }

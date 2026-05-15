@@ -67,7 +67,7 @@ type Stats = {
 };
 
 function HubPage() {
-  const { user, activeStore, userStores } = useAuth();
+  const { user, activeStore } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
   const isManager = user?.role === "manager" || user?.role === "admin";
 
@@ -104,13 +104,10 @@ function HubPage() {
     load();
   }, [user, activeStore]);
 
-  const storeLine = activeStore ? `${activeStore.name}${activeStore.region ? ` · ${activeStore.region}` : ""}` : null;
-
   return (
     <div className="mx-auto w-full max-w-[1400px] px-5 py-12 md:px-8 md:py-20">
       <div className="text-center">
-        {storeLine && <p className="text-sm font-medium text-primary">{storeLine}</p>}
-        <h1 className="mt-2 text-4xl font-black tracking-tight text-foreground md:text-6xl">
+        <h1 className="text-4xl font-black tracking-tight text-foreground md:text-6xl">
           Vad ska du göra idag?
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground">

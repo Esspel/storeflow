@@ -16,7 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase, type ChecklistTemplate, type ChecklistTemplateItem, type Store, logAudit } from "@/lib/supabase";
+import { supabase, type ChecklistTemplate, type ChecklistTemplateItem, type ChecklistTemplateQuestion, type Store, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/mallar")({
@@ -27,7 +27,7 @@ function MallarPage() {
   const { user, activeStore, userStores } = useAuth();
   const isManager = user?.role === "manager" || user?.role === "admin";
 
-  const [templates, setTemplates] = useState<(ChecklistTemplate & { storeIds: string[] })[]>([]);
+  const [templates, setTemplates] = useState<(ChecklistTemplate & { storeIds: string[]; questions: ChecklistTemplateQuestion[] })[]>([]);
   const [allStores, setAllStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -43,6 +43,7 @@ function MallarPage() {
     category: "",
     storeIds: [] as string[],
     items: [{ label: "", requires_photo: false }] as { label: string; requires_photo: boolean }[],
+    questions: [] as { label: string; is_required: boolean }[],
   });
 
   useEffect(() => { load(); }, [user, activeStore]);
@@ -50,7 +51,7 @@ function MallarPage() {
   async function load() {
     setLoading(true);
     const [templatesRes, storesRes, tsRes] = await Promise.all([
-      supabase.from("checklist_templates").select("*, items:checklist_template_items(*)").order("created_at", { ascending: false }),
+      supabase.from("checklist_templates").select("*, items:checklist_template_items(*), questions:checklist_template_questions(*)").order("created_at", { ascending: false }),
       supabase.from("stores").select("*").order("name"),
       supabase.from("template_stores").select("template_id, store_id"),
     ]);
@@ -60,6 +61,7 @@ function MallarPage() {
     const withStores = raw.map((t) => ({
       ...t,
       storeIds: storeAssignments.filter((a) => a.template_id === t.id).map((a) => a.store_id),
+      questions: (t as typeof t & { questions?: ChecklistTemplateQuestion[] }).questions ?? [],
     }));
 
     // Filter templates by active store: show templates assigned to active store OR global templates (no store assignment)
@@ -120,11 +122,23 @@ function MallarPage() {
       );
     }
 
+    const validQuestions = form.questions.filter(q => q.label.trim());
+    if (validQuestions.length > 0) {
+      await supabase.from("checklist_template_questions").insert(
+        validQuestions.map((q, idx) => ({
+          template_id: tmpl.id,
+          label: q.label.trim(),
+          is_required: q.is_required,
+          sort_order: idx,
+        }))
+      );
+    }
+
     logAudit(user?.id ?? null, "template.create", "checklist_templates", tmpl.id, { title: form.title });
     await load();
     setSaving(false);
     setShowCreate(false);
-    setForm({ title: "", description: "", category: "", storeIds: [], items: [{ label: "", requires_photo: false }] });
+    setForm({ title: "", description: "", category: "", storeIds: [], items: [{ label: "", requires_photo: false }], questions: [] });
   }
 
   async function deleteTemplate() {
@@ -139,13 +153,14 @@ function MallarPage() {
 
   const exportCSV = () => {
     const rows = [
-      ["Titel", "Kategori", "Beskrivning", "Antal steg", "Steg (detaljer)", "Butiker", "Skapad"],
+      ["Titel", "Kategori", "Beskrivning", "Antal steg", "Steg (detaljer)", "Frågor", "Butiker", "Skapad"],
       ...templates.map((t) => [
         t.title,
         t.category,
         t.description,
         t.items?.length ?? 0,
         (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it, idx) => `${idx + 1}. ${it.label}${it.requires_photo ? " [foto]" : ""}`).join(" | "),
+        (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q, idx) => `${idx + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}`).join(" | "),
         t.storeIds.map((sid) => allStores.find(s => s.id === sid)?.name ?? sid).join(", "),
         t.created_at ? new Date(t.created_at).toLocaleDateString("sv-SE") : "",
       ]),
@@ -205,6 +220,7 @@ function MallarPage() {
                     <div className="mt-0.5 flex items-center gap-2">
                       {t.category && <Badge variant="secondary" className="text-xs">{t.category}</Badge>}
                       <span className="text-xs text-muted-foreground">{t.items?.length ?? 0} steg</span>
+                      {(t.questions?.length ?? 0) > 0 && <span className="text-xs text-muted-foreground">{t.questions?.length} frågor</span>}
                     </div>
                   </div>
                 </button>
@@ -221,21 +237,38 @@ function MallarPage() {
               </div>
 
               {expanded === t.id && (
-                <div className="border-t border-border/60 px-5 py-4">
-                  {t.description && <p className="mb-3 text-sm text-muted-foreground">{t.description}</p>}
+                <div className="border-t border-border/60 px-5 py-4 space-y-3">
+                  {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
                   {(t.items?.length ?? 0) > 0 && (
-                    <ol className="space-y-2">
-                      {(t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((item: ChecklistTemplateItem, idx: number) => (
-                        <li key={item.id} className="flex items-center gap-2.5 text-sm">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">{idx + 1}</span>
-                          <span>{item.label}</span>
-                          {item.requires_photo && <Badge variant="secondary" className="text-xs">Foto krävs</Badge>}
-                        </li>
-                      ))}
-                    </ol>
+                    <div>
+                      <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">Checkpoints</p>
+                      <ol className="space-y-2">
+                        {(t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((item: ChecklistTemplateItem, idx: number) => (
+                          <li key={item.id} className="flex items-center gap-2.5 text-sm">
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">{idx + 1}</span>
+                            <span>{item.label}</span>
+                            {item.requires_photo && <Badge variant="secondary" className="text-xs">Foto krävs</Badge>}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                  {(t.questions?.length ?? 0) > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">Frågor</p>
+                      <ol className="space-y-2">
+                        {(t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q: ChecklistTemplateQuestion, idx: number) => (
+                          <li key={q.id} className="flex items-center gap-2.5 text-sm">
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-medium text-primary">{idx + 1}</span>
+                            <span>{q.label}</span>
+                            {q.is_required && <Badge variant="secondary" className="text-xs text-destructive">Obligatorisk</Badge>}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
                   )}
                   {t.storeIds.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-1.5">
                       <span className="text-xs text-muted-foreground">Tilldelade butiker:</span>
                       {t.storeIds.map((sid) => {
                         const s = allStores.find((st) => st.id === sid);
@@ -307,6 +340,40 @@ function MallarPage() {
                 ))}
                 <Button variant="outline" size="sm" className="rounded-full" onClick={addItem}>
                   <Plus className="mr-1.5 h-3.5 w-3.5" /> Lägg till steg
+                </Button>
+              </div>
+            </div>
+
+            {/* Questions */}
+            <div className="space-y-1.5">
+              <Label>Frågor (textfält)</Label>
+              <div className="space-y-2">
+                {form.questions.map((q, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Input placeholder={`Fråga ${idx + 1}`} value={q.label}
+                      onChange={(e) => {
+                        const qs = [...form.questions];
+                        qs[idx] = { ...qs[idx], label: e.target.value };
+                        setForm(p => ({ ...p, questions: qs }));
+                      }} className="flex-1" />
+                    <label className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                      <Checkbox checked={q.is_required}
+                        onCheckedChange={(v) => {
+                          const qs = [...form.questions];
+                          qs[idx] = { ...qs[idx], is_required: !!v };
+                          setForm(p => ({ ...p, questions: qs }));
+                        }} />
+                      Obligatorisk
+                    </label>
+                    <Button variant="ghost" size="icon" className="shrink-0 rounded-full text-muted-foreground hover:text-destructive"
+                      onClick={() => setForm(p => ({ ...p, questions: p.questions.filter((_, i) => i !== idx) }))}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" className="rounded-full"
+                  onClick={() => setForm(p => ({ ...p, questions: [...p.questions, { label: "", is_required: false }] }))}>
+                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Lägg till fråga
                 </Button>
               </div>
             </div>

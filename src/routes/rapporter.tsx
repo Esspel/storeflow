@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
 
@@ -16,6 +16,11 @@ export const Route = createFileRoute("/rapporter")({
 
 function ReportsPage() {
   const { user, activeStore } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user && user.role === "employee") navigate({ to: "/" });
+  }, [user]);
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);

@@ -4,7 +4,6 @@ import {
   Building2,
   Mail,
   MapPin,
-  Phone,
   Plus,
   Trash2,
   UserCog,
@@ -75,7 +74,7 @@ function AccountsPage() {
 
   const [showCreateStore, setShowCreateStore] = useState(false);
   const [deleteStore, setDeleteStore] = useState<Store | null>(null);
-  const [newStore, setNewStore] = useState({ name: "", city: "", region: "", address: "", phone: "", email: "" });
+  const [newStore, setNewStore] = useState({ name: "", city: "", address: "", email: "" });
 
   // Groups
   const [groups, setGroups] = useState<(UserGroup & { members?: (UserGroupMember & { user?: AppUser })[] })[]>([]);
@@ -223,9 +222,7 @@ function AccountsPage() {
     const { data: created } = await supabase.from("stores").insert({
       name: newStore.name.trim(),
       city: newStore.city.trim(),
-      region: newStore.region.trim(),
       address: newStore.address.trim(),
-      phone: newStore.phone.trim(),
       email: newStore.email.trim(),
     }).select("id").maybeSingle();
     logAudit(currentUser?.id ?? null, "store.create", "stores", created?.id ?? null, { name: newStore.name });
@@ -233,7 +230,7 @@ function AccountsPage() {
     setStores((data ?? []) as Store[]);
     setSaving(false);
     setShowCreateStore(false);
-    setNewStore({ name: "", city: "", region: "", address: "", phone: "", email: "" });
+    setNewStore({ name: "", city: "", address: "", email: "" });
   };
 
   const confirmDeleteStore = async () => {
@@ -493,10 +490,8 @@ function AccountsPage() {
                     </div>
                   </div>
                   <h3 className="mt-3 text-base font-semibold">{store.name}</h3>
-                  {store.region && <p className="text-xs font-medium text-primary">{store.region}</p>}
                   <div className="mt-3 space-y-1.5 text-xs text-muted-foreground">
                     {store.address && <div className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" /><span>{store.address}{store.city && `, ${store.city}`}</span></div>}
-                    {store.phone && <div className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 shrink-0" /><span>{store.phone}</span></div>}
                     {store.email && <div className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{store.email}</span></div>}
                   </div>
                   <Button
@@ -647,27 +642,15 @@ function AccountsPage() {
                   onChange={(e) => setNewStore(p => ({ ...p, city: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>Region</Label>
-                <Input placeholder="Region Stockholm" value={newStore.region}
-                  onChange={(e) => setNewStore(p => ({ ...p, region: e.target.value }))} />
+                <Label>E-post</Label>
+                <Input type="email" placeholder="butik@example.com" value={newStore.email}
+                  onChange={(e) => setNewStore(p => ({ ...p, email: e.target.value }))} />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label>Adress</Label>
               <Input placeholder="Gatuadress" value={newStore.address}
                 onChange={(e) => setNewStore(p => ({ ...p, address: e.target.value }))} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Telefon</Label>
-                <Input placeholder="08-123 456" value={newStore.phone}
-                  onChange={(e) => setNewStore(p => ({ ...p, phone: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>E-post</Label>
-                <Input type="email" placeholder="butik@example.com" value={newStore.email}
-                  onChange={(e) => setNewStore(p => ({ ...p, email: e.target.value }))} />
-              </div>
             </div>
             {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
           </div>

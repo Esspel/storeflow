@@ -1,5 +1,5 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
-import { Bell, ChevronDown, FlaskConical, LogOut, Menu, Settings, User, X } from "lucide-react";
+import { Bell, ChevronDown, FlaskConical, LogOut, Menu, Settings, Trash2, User, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth-context";
-import { supabase, type Notification } from "@/lib/supabase";
+import { supabase, type Notification, cleanOldNotifications } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
 export function AppShell() {
@@ -53,6 +53,7 @@ export function AppShell() {
     };
 
     fetchNotifications();
+    cleanOldNotifications(user.id);
     const interval = setInterval(fetchNotifications, 5000);
     const onVisible = () => { if (document.visibilityState === "visible") fetchNotifications(); };
     document.addEventListener("visibilitychange", onVisible);
@@ -69,6 +70,11 @@ export function AppShell() {
     if (!user || unreadCount === 0) return;
     await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false);
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+  };
+
+  const deleteNotification = async (id: string) => {
+    await supabase.from("notifications").delete().eq("id", id);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
   const isActive = (to: string) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
@@ -164,13 +170,24 @@ export function AppShell() {
                     notifications.map((n) => (
                       <div
                         key={n.id}
-                        className={cn("border-b border-border/40 px-4 py-3 last:border-0", !n.is_read && "bg-primary-soft/30")}
+                        className={cn("group border-b border-border/40 px-4 py-3 last:border-0", !n.is_read && "bg-primary-soft/30")}
                       >
-                        <p className={cn("text-sm font-medium", !n.is_read && "text-primary")}>{n.title}</p>
-                        {n.body && <p className="mt-0.5 text-xs text-muted-foreground">{n.body}</p>}
-                        <p className="mt-1 text-xs text-muted-foreground/60">
-                          {new Date(n.created_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}
-                        </p>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className={cn("text-sm font-medium", !n.is_read && "text-primary")}>{n.title}</p>
+                            {n.body && <p className="mt-0.5 text-xs text-muted-foreground">{n.body}</p>}
+                            <p className="mt-1 text-xs text-muted-foreground/60">
+                              {new Date(n.created_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => deleteNotification(n.id)}
+                            className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                            aria-label="Ta bort notis"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}

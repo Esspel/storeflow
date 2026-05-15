@@ -63,7 +63,7 @@ export type Task = {
   assigned_to: string | null;
   created_by: string | null;
   priority: "Låg" | "Medel" | "Hög" | "Kritisk";
-  status: "todo" | "progress" | "done" | "late";
+  status: "todo" | "progress" | "done" | "late" | "cancelled";
   due_date: string | null;
   recurring: string | null;
   recurrence_rule: string | null;
@@ -77,6 +77,7 @@ export type Task = {
   store?: Store;
   assignee?: AppUser;
   steps?: TaskStep[];
+  questions?: TaskQuestion[];
 };
 
 export type TaskStep = {
@@ -146,6 +147,35 @@ export type ChecklistTemplateItem = {
   label: string;
   requires_photo: boolean;
   sort_order: number;
+};
+
+export type ChecklistTemplateQuestion = {
+  id: string;
+  template_id: string;
+  label: string;
+  is_required: boolean;
+  sort_order: number;
+};
+
+export type TaskQuestion = {
+  id: string;
+  task_id: string;
+  label: string;
+  answer: string;
+  is_required: boolean;
+  sort_order: number;
+  answered_by: string | null;
+  answered_at: string | null;
+  created_at: string;
+};
+
+export type TaskQuestionAnswer = {
+  id: string;
+  task_question_id: string;
+  task_id: string;
+  answer: string;
+  answered_by: string | null;
+  created_at: string;
 };
 
 export type Notification = {
@@ -248,6 +278,12 @@ export function notifyUsers(
 // Helper: get public URL for a storage path
 export function getPublicUrl(path: string) {
   return supabase.storage.from("attachments").getPublicUrl(path).data.publicUrl;
+}
+
+// Helper: delete old notifications (>3 days) for a user
+export async function cleanOldNotifications(userId: string) {
+  const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  await supabase.from("notifications").delete().eq("user_id", userId).lt("created_at", cutoff);
 }
 
 // Helper: upload file to attachments bucket
