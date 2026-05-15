@@ -1,25 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import {
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  Upload,
-  Users,
-  Clock,
-  CircleAlert as AlertCircle,
-  CircleCheck as CheckCircle2,
-  X,
-  UserPlus,
-  LayoutGrid,
-  List,
-  Timer,
-  Truck,
-  FileText,
-  Lock,
-  FilePlus2,
-  FileCode2,
-} from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -603,8 +584,9 @@ function SchemaPage() {
           finalMappings.push({ employee_nr: me.employeeNr, app_user_id: me.appUserId });
           // Ensure this user is connected to the current store
           await supabase.from("user_stores").upsert({ user_id: me.appUserId, store_id: storeId, is_primary: false }, { onConflict: "user_id,store_id" });
-          // Update role + group from XML
-          if (me.employeeGroup) {
+          // Update role + group from XML — never downgrade an existing admin
+          const existingUser = allUsers.find((u) => u.id === me.appUserId);
+          if (me.employeeGroup && existingUser?.role !== "admin") {
             const role = groupToRole(me.employeeGroup);
             await supabase.from("app_users").update({ role, employee_group: me.employeeGroup }).eq("id", me.appUserId);
           }
