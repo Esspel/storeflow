@@ -973,34 +973,10 @@ function SchemaPage() {
         <div className="grid grid-cols-2 gap-3 border-b border-border/40 bg-card/50 px-6 py-3 sm:grid-cols-4">
           <StatPill icon={<Users className="h-4 w-4" />} label="Arbetar idag" value={String(workingToday)} tone="primary" />
           <StatPill icon={<Calendar className="h-4 w-4" />} label="Totalt i veckan" value={String(totalStaff)} tone="default" />
-          <StatPill icon={<Timer className="h-4 w-4" />} label="Veckotimmar" value={minsToHours(totalWeekHours)} tone="default" />
           <StatPill icon={<Clock className="h-4 w-4" />} label="Frånvaro idag" value={String(absentToday)} tone={absentToday > 0 ? "warning" : "default"} />
         </div>
       )}
 
-      {/* Shift colour legend */}
-      {activeImport && (
-        <div className="flex flex-wrap gap-2 border-b border-border/30 bg-card/30 px-6 py-2">
-          {Object.entries(SHIFT_COLORS).filter(([k]) => !k.includes("reserv") && k !== "standard").map(([key, val]) => (
-            <div key={key} className="flex items-center gap-1">
-              <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: val.bg, border: "1px solid rgba(0,0,0,0.15)" }} />
-              <span className="text-[10px] text-muted-foreground">{val.label}</span>
-            </div>
-          ))}
-          <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: FLOW_COLORS["färskt"].bg, border: `1px solid ${FLOW_COLORS["färskt"].text}40` }} />
-            <span className="text-[10px] text-muted-foreground">Leverans Färskt</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: FLOW_COLORS["torrt"].bg, border: `1px solid ${FLOW_COLORS["torrt"].text}40` }} />
-            <span className="text-[10px] text-muted-foreground">Leverans Torrt</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: FLOW_COLORS["fryst"].bg, border: `1px solid ${FLOW_COLORS["fryst"].text}40` }} />
-            <span className="text-[10px] text-muted-foreground">Leverans Fryst</span>
-          </div>
-        </div>
-      )}
 
       {/* Empty state */}
       {imports.length === 0 && (
@@ -1162,7 +1138,7 @@ function SchemaPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-semibold text-foreground leading-tight">{appUser?.display_name ?? emp.employee_name}</p>
-                        <p className={["truncate text-[10px]", isSemesterDay ? "text-red-500 font-medium" : "text-muted-foreground"].join(" ")}>{isSemesterDay ? "Semester" : weekMinutes > 0 ? minsToHours(weekMinutes) + " / v" : emp.employee_group || "–"}</p>
+                        {isSemesterDay && <p className="truncate text-[10px] text-red-500 font-medium">Semester</p>}
                       </div>
                     </div>
                     <div className="relative flex-1 py-2.5" style={{ minWidth: `${TOTAL_HOURS * 60}px` }}>
@@ -1293,7 +1269,6 @@ function SchemaPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-semibold text-foreground">{appUser?.display_name ?? emp.employee_name}</p>
-                        <p className="text-[10px] text-muted-foreground">{weekMinutes > 0 ? minsToHours(weekMinutes) : "–"}</p>
                       </div>
                     </div>
                     {weekDates.map((date, idx) => {
