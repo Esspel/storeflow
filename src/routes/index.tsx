@@ -3,6 +3,7 @@ import {
   TriangleAlert as AlertTriangle,
   ArrowRight,
   ChartBar as BarChart3,
+  CalendarDays,
   ListChecks,
   Clock,
   TrendingUp,
@@ -280,10 +281,11 @@ function HubPage() {
         {/* Quick nav cards */}
         <div className={cn(
           "grid grid-cols-1 gap-3 sm:grid-cols-2",
-          isManager ? "lg:grid-cols-3" : "max-w-2xl"
+          isManager ? "lg:grid-cols-4" : "lg:grid-cols-3"
         )}>
           <QuickCard to="/uppgifter" icon={ListChecks} title="Dagens uppgifter" desc="Rutiner, checklistor och kontroller" tone="blue" />
           <QuickCard to="/avvikelser" icon={AlertTriangle} title="Avvikelser" desc="Rapportera och följ upp ärenden" tone="amber" />
+          <QuickCard to="/schema" icon={CalendarDays} title="Schema" desc="Skiftöversikt och leveransplan" tone="green" />
           {isManager && <QuickCard to="/rapporter" icon={BarChart3} title="Rapporter" desc="KPI:er, trender och insikter" tone="green" />}
         </div>
       </div>

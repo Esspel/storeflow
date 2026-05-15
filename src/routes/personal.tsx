@@ -68,6 +68,7 @@ function AccountsPage() {
     password: "",
     display_name: "",
     role: "employee" as "admin" | "manager" | "employee",
+    employee_group: "",
     storeIds: [] as string[],
   });
   const [resetPw, setResetPw] = useState("");
@@ -162,6 +163,7 @@ function AccountsPage() {
       password_hash: hash,
       display_name: newUser.display_name.trim(),
       role: newUser.role,
+      employee_group: newUser.employee_group.trim(),
       store_id: newUser.storeIds[0] ?? null,
     }).select("id").maybeSingle();
 
@@ -173,7 +175,7 @@ function AccountsPage() {
     await fetchUsers();
     setSaving(false);
     setShowCreateUser(false);
-    setNewUser({ username: "", password: "", display_name: "", role: "employee", storeIds: [] });
+    setNewUser({ username: "", password: "", display_name: "", role: "employee", employee_group: "", storeIds: [] });
   };
 
   const updateUser = async () => {
@@ -184,6 +186,7 @@ function AccountsPage() {
     await supabase.from("app_users").update({
       display_name: editUser.display_name.trim(),
       role: editUser.role,
+      employee_group: (editUser.employee_group ?? "").trim(),
       store_id: editUser.assignedStoreIds[0] ?? null,
     }).eq("id", editUser.id);
 
@@ -555,6 +558,11 @@ function AccountsPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
+              <Label>Anställningsgrupp</Label>
+              <Input placeholder="t.ex. Butik Timlön" value={newUser.employee_group}
+                onChange={(e) => setNewUser(p => ({ ...p, employee_group: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
               <Label>Butiker</Label>
               <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
                 {stores.map(s => (
@@ -604,6 +612,11 @@ function AccountsPage() {
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Anställningsgrupp</Label>
+                <Input placeholder="t.ex. Butik Timlön" value={editUser.employee_group ?? ""}
+                  onChange={(e) => setEditUser(u => u ? { ...u, employee_group: e.target.value } : null)} />
               </div>
               <div className="space-y-1.5">
                 <Label>Butiker</Label>

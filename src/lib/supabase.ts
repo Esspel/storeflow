@@ -26,6 +26,7 @@ export type AppUser = {
   username: string;
   display_name: string;
   role: "admin" | "manager" | "employee";
+  employee_group: string;
   store_id: string | null;
   active_store_id: string | null;
   is_active: boolean;
