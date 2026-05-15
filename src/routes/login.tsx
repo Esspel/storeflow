@@ -54,7 +54,7 @@ function LoginPage() {
                 id="username"
                 type="text"
                 autoComplete="username"
-                placeholder="användarnamn"
+                placeholder="Ange ditt användarnamn"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -96,11 +96,6 @@ function LoginPage() {
             </Button>
           </div>
         </form>
-
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Standard: <span className="font-mono">admin</span> /{" "}
-          <span className="font-mono">admin123</span>
-        </p>
       </div>
     </div>
   );
