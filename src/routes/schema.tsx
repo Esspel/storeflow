@@ -518,6 +518,7 @@ function SchemaPage() {
   const [csvWeekNumber, setCsvWeekNumber] = useState<number>(() => getISOWeek(new Date()));
   const [csvYear, setCsvYear] = useState<number>(() => new Date().getFullYear());
   const [scheduleTasks, setScheduleTasks] = useState<Task[]>([]);
+  const [scheduleTaskAssignees, setScheduleTaskAssignees] = useState<{ task_id: string; user_id: string | null }[]>([]);
 
   const importInputRef = useRef<HTMLInputElement>(null);
   const storeId = activeStore?.id ?? user?.store_id ?? null;
@@ -568,7 +569,19 @@ function SchemaPage() {
       .not("status", "eq", "cancelled")
       .gte("due_date", activeImport.week_start_date)
       .lte("due_date", weekEnd)
-      .then(({ data }) => setScheduleTasks((data ?? []) as Task[]));
+      .then(async ({ data }) => {
+        const tasks = (data ?? []) as Task[];
+        setScheduleTasks(tasks);
+        if (tasks.length > 0) {
+          const { data: assignees } = await supabase
+            .from("task_assignees")
+            .select("task_id, user_id")
+            .in("task_id", tasks.map(t => t.id));
+          setScheduleTaskAssignees((assignees ?? []) as { task_id: string; user_id: string | null }[]);
+        } else {
+          setScheduleTaskAssignees([]);
+        }
+      });
   }, [storeId, activeImport]);
 
   async function loadImports() {
@@ -876,7 +889,11 @@ function SchemaPage() {
       const weekMinutes = allShifts.filter((s) => !s.is_absence_day && s.start_time).reduce((sum, s) => sum + (s.net_minutes > 0 ? s.net_minutes : Math.max(0, s.gross_minutes - s.break_minutes)), 0);
       const initials = (appUser?.display_name ?? emp.employee_name).split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase();
       const dayTasks = appUser
-        ? scheduleTasks.filter((t) => t.assigned_to === appUser.id && t.due_date && t.due_date.slice(0, 10) === currentDate)
+        ? scheduleTasks.filter((t) => {
+            if (!t.due_date || t.due_date.slice(0, 10) !== currentDate) return false;
+            if (t.assigned_to === appUser.id) return true;
+            return scheduleTaskAssignees.some(a => a.task_id === t.id && a.user_id === appUser.id);
+          })
         : [];
       return { emp, dayShifts, workShifts, shadowShifts, absenceShift, appUser, weekMinutes, initials, dayTasks };
     });
