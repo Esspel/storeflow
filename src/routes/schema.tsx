@@ -17,6 +17,8 @@ import {
   Truck,
   FileText,
   Lock,
+  FilePlus2,
+  FileCode2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -401,9 +403,12 @@ function SchemaPage() {
   const [parsed, setParsed] = useState<ParsedSchedule | null>(null);
   const [mappingOpen, setMappingOpen] = useState(false);
   const [savingImport, setSavingImport] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importDragOver, setImportDragOver] = useState(false);
+  const [importFiles, setImportFiles] = useState<File[]>([]);
+  const [importProcessing, setImportProcessing] = useState(false);
 
-  const fileRef = useRef<HTMLInputElement>(null);
-  const pdfRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const storeId = activeStore?.id ?? user?.store_id ?? null;
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -461,80 +466,63 @@ function SchemaPage() {
     }
   }
 
-  // XML import
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const result = parseXml(ev.target?.result as string);
-      if (!result || result.employees.length === 0) {
-        toast.error("Kunde inte läsa XML-filen. Kontrollera att det är en SoftOne GO-export.");
-        return;
-      }
-      setParsed({ ...result, storeName: result.storeName || activeStore?.name || "" });
-      setMappingOpen(true);
-    };
-    reader.readAsText(file, "utf-8");
-    e.target.value = "";
-  }
-
-  // PDF import
-  async function handlePdfChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
-    if (!storeId || !user) return;
-
-    for (const file of files) {
-      try {
-        const arrayBuffer = await file.arrayBuffer();
-        const text = await extractPdfText(arrayBuffer);
-        const entries = parsePdfText(text);
-        if (entries.length === 0) {
-          toast.error(`Inga leveranser hittades i ${file.name}`);
-          continue;
+  // Unified import handler — detects by file extension
+  async function processImportFiles(files: File[]) {
+    if (!storeId || !user || files.length === 0) return;
+    setImportProcessing(true);
+    try {
+      for (const file of files) {
+        const ext = file.name.split(".").pop()?.toLowerCase();
+        if (ext === "xml") {
+          const text = await file.text();
+          const result = parseXml(text);
+          if (!result || result.employees.length === 0) {
+            toast.error(`Kunde inte läsa XML-filen: ${file.name}. Kontrollera att det är en SoftOne GO-export.`);
+            continue;
+          }
+          setParsed({ ...result, storeName: result.storeName || activeStore?.name || "" });
+          setImportDialogOpen(false);
+          setImportFiles([]);
+          setMappingOpen(true);
+          return; // XML opens mapping dialog; only handle first XML
+        } else if (ext === "pdf") {
+          try {
+            const arrayBuffer = await file.arrayBuffer();
+            const text = await extractPdfText(arrayBuffer);
+            const entries = parsePdfText(text);
+            if (entries.length === 0) {
+              toast.error(`Inga leveranser hittades i ${file.name}`);
+              continue;
+            }
+            const weekStart = activeImport?.week_start_date ?? todayStr;
+            const weekNumber = activeImport?.week_number ?? getISOWeek(new Date());
+            const year = activeImport?.year ?? new Date().getFullYear();
+            const { data: plan, error: planErr } = await supabase.from("delivery_plans").insert({
+              store_id: storeId, week_number: weekNumber, year, imported_by: user.id, filename: file.name,
+            }).select().single();
+            if (planErr || !plan) { toast.error(`Fel vid sparande av leveransplan: ${planErr?.message}`); continue; }
+            const planId = (plan as DeliveryPlan).id;
+            const rows = entries.map((e) => ({
+              plan_id: planId, delivery_day: e.deliveryDay, delivery_time: e.deliveryTime,
+              order_day: e.orderDay, stop_time: e.stopTime, flow_name: e.flowName, supplier: e.supplier,
+              delivery_date: deliveryDateForDay(e.deliveryDay, weekStart),
+            }));
+            await supabase.from("delivery_entries").insert(rows);
+            toast.success(`Leveransplan från ${file.name} importerad (${rows.length} leveranser)`);
+          } catch (err) {
+            toast.error(`Fel vid läsning av ${file.name}`);
+            console.error(err);
+          }
+        } else {
+          toast.error(`Okänt filformat: ${file.name}. Ladda upp .xml (schema) eller .pdf (leveransplan).`);
         }
-
-        // Detect week/year from activeImport or current week
-        const weekStart = activeImport?.week_start_date ?? todayStr;
-        const weekNumber = activeImport?.week_number ?? getISOWeek(new Date());
-        const year = activeImport?.year ?? new Date().getFullYear();
-
-        const { data: plan, error: planErr } = await supabase.from("delivery_plans").insert({
-          store_id: storeId,
-          week_number: weekNumber,
-          year,
-          imported_by: user.id,
-          filename: file.name,
-        }).select().single();
-
-        if (planErr || !plan) {
-          toast.error(`Fel vid sparande av leveransplan: ${planErr?.message}`);
-          continue;
-        }
-
-        const planId = (plan as DeliveryPlan).id;
-        const rows = entries.map((e) => ({
-          plan_id: planId,
-          delivery_day: e.deliveryDay,
-          delivery_time: e.deliveryTime,
-          order_day: e.orderDay,
-          stop_time: e.stopTime,
-          flow_name: e.flowName,
-          supplier: e.supplier,
-          delivery_date: deliveryDateForDay(e.deliveryDay, weekStart),
-        }));
-
-        await supabase.from("delivery_entries").insert(rows);
-        toast.success(`Leveransplan från ${file.name} importerad (${rows.length} leveranser)`);
-      } catch (err) {
-        toast.error(`Fel vid läsning av ${file.name}`);
-        console.error(err);
       }
+      setImportDialogOpen(false);
+      setImportFiles([]);
+      await loadDeliveryPlans();
+    } finally {
+      setImportProcessing(false);
     }
-
-    e.target.value = "";
-    await loadDeliveryPlans();
   }
 
   function getMappedUserId(employeeNr: string) {
@@ -669,16 +657,10 @@ function SchemaPage() {
               </Button>
             )}
             {isAdmin && (
-              <>
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => pdfRef.current?.click()}>
-                  <FileText className="h-4 w-4" />
-                  Leveransplan PDF
-                </Button>
-                <Button size="sm" className="gap-1.5" onClick={() => fileRef.current?.click()}>
-                  <Upload className="h-4 w-4" />
-                  Schema XML
-                </Button>
-              </>
+              <Button size="sm" className="gap-1.5" onClick={() => { setImportFiles([]); setImportDialogOpen(true); }}>
+                <Upload className="h-4 w-4" />
+                Importera
+              </Button>
             )}
             {!isAdmin && (
               <div className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
@@ -686,8 +668,7 @@ function SchemaPage() {
                 Enbart visning
               </div>
             )}
-            <input ref={fileRef} type="file" accept=".xml" className="hidden" onChange={handleFileChange} />
-            <input ref={pdfRef} type="file" accept=".pdf" multiple className="hidden" onChange={handlePdfChange} />
+            <input ref={importInputRef} type="file" accept=".xml,.pdf" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length) setImportFiles((p) => [...p, ...files].filter((f, i, arr) => arr.findIndex((x) => x.name === f.name) === i)); e.target.value = ""; }} />
           </div>
         </div>
       </div>
@@ -739,9 +720,9 @@ function SchemaPage() {
             </p>
           </div>
           {isAdmin && (
-            <Button className="gap-2" onClick={() => fileRef.current?.click()}>
+            <Button className="gap-2" onClick={() => { setImportFiles([]); setImportDialogOpen(true); }}>
               <Upload className="h-4 w-4" />
-              Välj XML-fil
+              Importera schema
             </Button>
           )}
         </div>
@@ -1034,6 +1015,99 @@ function SchemaPage() {
           )}
         </div>
       )}
+
+      {/* Unified import dialog */}
+      <Dialog open={importDialogOpen} onOpenChange={(o) => { if (!importProcessing) { setImportDialogOpen(o); if (!o) setImportFiles([]); } }}>
+        <DialogContent className="max-w-lg p-0 gap-0">
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-soft">
+              <Upload className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-sm font-semibold">Importera filer</h2>
+              <p className="text-xs text-muted-foreground">Schema (XML) och/eller leveransplan (PDF)</p>
+            </div>
+            <button className="rounded-md p-1.5 text-muted-foreground hover:bg-muted transition-colors" onClick={() => { if (!importProcessing) { setImportDialogOpen(false); setImportFiles([]); } }}>
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="p-5 space-y-4">
+            {/* Info boxes */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-muted/30 p-3">
+                <FileCode2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div>
+                  <p className="text-xs font-semibold text-foreground">Schema (XML)</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">SoftOne GO-export med anställda och skift</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-muted/30 p-3">
+                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-info" />
+                <div>
+                  <p className="text-xs font-semibold text-foreground">Leveransplan (PDF)</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">En vecka per PDF — kan laddas upp flera på en gång</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Drop zone */}
+            <div
+              className={[
+                "relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed py-10 px-6 text-center transition-colors cursor-pointer select-none",
+                importDragOver ? "border-primary bg-primary-soft/40" : "border-border/60 bg-muted/20 hover:border-primary/50 hover:bg-muted/40",
+              ].join(" ")}
+              onDragOver={(e) => { e.preventDefault(); setImportDragOver(true); }}
+              onDragLeave={() => setImportDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setImportDragOver(false);
+                const dropped = Array.from(e.dataTransfer.files).filter((f) => f.name.endsWith(".xml") || f.name.endsWith(".pdf"));
+                if (dropped.length) setImportFiles((p) => [...p, ...dropped].filter((f, i, arr) => arr.findIndex((x) => x.name === f.name) === i));
+              }}
+              onClick={() => importInputRef.current?.click()}
+            >
+              <div className={["flex h-12 w-12 items-center justify-center rounded-2xl transition-colors", importDragOver ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"].join(" ")}>
+                <FilePlus2 className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Dra och släpp filer här</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">eller klicka för att välja</p>
+                <p className="mt-1 text-[11px] text-muted-foreground/60">.xml och .pdf stöds</p>
+              </div>
+            </div>
+
+            {/* File list */}
+            {importFiles.length > 0 && (
+              <div className="space-y-1.5">
+                {importFiles.map((f) => {
+                  const isPdf = f.name.endsWith(".pdf");
+                  return (
+                    <div key={f.name} className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-card px-3 py-2">
+                      {isPdf ? <FileText className="h-4 w-4 shrink-0 text-info" /> : <FileCode2 className="h-4 w-4 shrink-0 text-primary" />}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-foreground">{f.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{isPdf ? "Leveransplan PDF" : "Schema XML"} · {(f.size / 1024).toFixed(0)} KB</p>
+                      </div>
+                      <button className="shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-destructive transition-colors" onClick={(e) => { e.stopPropagation(); setImportFiles((p) => p.filter((x) => x.name !== f.name)); }} aria-label="Ta bort">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-border/60 px-5 py-3.5">
+            <Button variant="outline" size="sm" onClick={() => { setImportDialogOpen(false); setImportFiles([]); }} disabled={importProcessing}>Avbryt</Button>
+            <Button size="sm" onClick={() => processImportFiles(importFiles)} disabled={importFiles.length === 0 || importProcessing} className="gap-1.5">
+              <Upload className="h-3.5 w-3.5" />
+              {importProcessing ? "Importerar…" : `Importera${importFiles.length > 0 ? ` (${importFiles.length})` : ""}`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Import + mapping dialog */}
       <Dialog open={mappingOpen} onOpenChange={(o) => { if (!savingImport) { setMappingOpen(o); if (!o) setParsed(null); } }}>
