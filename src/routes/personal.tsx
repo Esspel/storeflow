@@ -9,6 +9,7 @@ import {
   Trash2,
   UserCog,
   X,
+  Check,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -36,7 +37,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { supabase, type AppUser, type Store } from "@/lib/supabase";
+import { Checkbox } from "@/components/ui/checkbox";
+import { supabase, type AppUser, type Store, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/personal")({
@@ -49,128 +51,143 @@ function roleBadge(role: string) {
   return <Badge variant="secondary">Anställd</Badge>;
 }
 
+type UserWithStores = AppUser & { assignedStoreIds: string[] };
+
 function AccountsPage() {
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
 
-  // Users state
-  const [users, setUsers] = useState<AppUser[]>([]);
+  const [users, setUsers] = useState<UserWithStores[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // User dialogs
   const [showCreateUser, setShowCreateUser] = useState(false);
-  const [editUser, setEditUser] = useState<AppUser | null>(null);
+  const [editUser, setEditUser] = useState<UserWithStores | null>(null);
   const [deleteUser, setDeleteUser] = useState<AppUser | null>(null);
   const [newUser, setNewUser] = useState({
     username: "",
     password: "",
     display_name: "",
     role: "employee" as "admin" | "manager" | "employee",
-    store_id: "",
+    storeIds: [] as string[],
   });
   const [resetPw, setResetPw] = useState("");
 
-  // Store dialogs
   const [showCreateStore, setShowCreateStore] = useState(false);
   const [deleteStore, setDeleteStore] = useState<Store | null>(null);
-  const [newStore, setNewStore] = useState({
-    name: "",
-    city: "",
-    region: "",
-    address: "",
-    phone: "",
-    email: "",
-  });
+  const [newStore, setNewStore] = useState({ name: "", city: "", region: "", address: "", phone: "", email: "" });
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (currentUser?.role !== "admin") {
-      navigate({ to: "/" });
-      return;
-    }
-    Promise.all([
+    if (currentUser?.role !== "admin") { navigate({ to: "/" }); return; }
+    load();
+  }, [currentUser]);
+
+  async function load() {
+    const [usersRes, storesRes, userStoresRes] = await Promise.all([
       supabase.from("app_users").select("*").order("created_at"),
       supabase.from("stores").select("*").order("name"),
-    ]).then(([usersRes, storesRes]) => {
-      setUsers((usersRes.data ?? []) as AppUser[]);
-      setStores((storesRes.data ?? []) as Store[]);
-      setLoading(false);
-    });
-  }, [currentUser, navigate]);
+      supabase.from("user_stores").select("user_id, store_id"),
+    ]);
+    const rawUsers = (usersRes.data ?? []) as AppUser[];
+    const storeAssignments = (userStoresRes.data ?? []) as { user_id: string; store_id: string }[];
+    const usersWithStores: UserWithStores[] = rawUsers.map((u) => ({
+      ...u,
+      assignedStoreIds: storeAssignments.filter((a) => a.user_id === u.id).map((a) => a.store_id),
+    }));
+    setUsers(usersWithStores);
+    setStores((storesRes.data ?? []) as Store[]);
+    setLoading(false);
+  }
 
-  const fetchUsers = async () => {
-    const { data } = await supabase.from("app_users").select("*").order("created_at");
-    if (data) setUsers(data as AppUser[]);
-  };
+  async function fetchUsers() {
+    const [usersRes, userStoresRes] = await Promise.all([
+      supabase.from("app_users").select("*").order("created_at"),
+      supabase.from("user_stores").select("user_id, store_id"),
+    ]);
+    const rawUsers = (usersRes.data ?? []) as AppUser[];
+    const storeAssignments = (userStoresRes.data ?? []) as { user_id: string; store_id: string }[];
+    setUsers(rawUsers.map((u) => ({
+      ...u,
+      assignedStoreIds: storeAssignments.filter((a) => a.user_id === u.id).map((a) => a.store_id),
+    })));
+  }
 
-  const fetchStores = async () => {
-    const { data } = await supabase.from("stores").select("*").order("name");
-    if (data) setStores(data as Store[]);
-  };
+  function toggleStoreSelection(storeId: string, selected: string[], set: (ids: string[]) => void) {
+    if (selected.includes(storeId)) {
+      set(selected.filter((id) => id !== storeId));
+    } else {
+      set([...selected, storeId]);
+    }
+  }
 
-  // ── User CRUD ────────────────────────────────────────────────────────────
+  async function syncUserStores(userId: string, storeIds: string[]) {
+    await supabase.from("user_stores").delete().eq("user_id", userId);
+    if (storeIds.length > 0) {
+      await supabase.from("user_stores").insert(
+        storeIds.map((sid, i) => ({ user_id: userId, store_id: sid, is_primary: i === 0 }))
+      );
+    }
+    // keep legacy store_id in sync with primary store
+    await supabase
+      .from("app_users")
+      .update({ store_id: storeIds[0] ?? null })
+      .eq("id", userId);
+  }
 
   const createUser = async () => {
     setError("");
     if (!newUser.username.trim() || !newUser.password || !newUser.display_name.trim()) {
-      setError("Fyll i alla obligatoriska fält.");
-      return;
+      setError("Fyll i alla obligatoriska fält."); return;
     }
-    if (newUser.password.length < 8) {
-      setError("Lösenordet måste vara minst 8 tecken.");
-      return;
-    }
+    if (newUser.password.length < 8) { setError("Lösenordet måste vara minst 8 tecken."); return; }
     setSaving(true);
 
     const { data: existing } = await supabase
-      .from("app_users")
-      .select("id")
-      .eq("username", newUser.username.toLowerCase().trim())
-      .maybeSingle();
-
-    if (existing) {
-      setError("Användarnamnet är redan taget.");
-      setSaving(false);
-      return;
-    }
+      .from("app_users").select("id").eq("username", newUser.username.toLowerCase().trim()).maybeSingle();
+    if (existing) { setError("Användarnamnet är redan taget."); setSaving(false); return; }
 
     const { data: hash } = await supabase.rpc("hash_password", { plain_password: newUser.password });
-
-    await supabase.from("app_users").insert({
+    const { data: created } = await supabase.from("app_users").insert({
       username: newUser.username.toLowerCase().trim(),
       password_hash: hash,
       display_name: newUser.display_name.trim(),
       role: newUser.role,
-      store_id: newUser.store_id || null,
-    });
+      store_id: newUser.storeIds[0] ?? null,
+    }).select("id").maybeSingle();
+
+    if (created?.id) {
+      await syncUserStores(created.id, newUser.storeIds);
+      logAudit(currentUser?.id ?? null, "user.create", "app_users", created.id, { username: newUser.username });
+    }
 
     await fetchUsers();
     setSaving(false);
     setShowCreateUser(false);
-    setNewUser({ username: "", password: "", display_name: "", role: "employee", store_id: "" });
+    setNewUser({ username: "", password: "", display_name: "", role: "employee", storeIds: [] });
   };
 
   const updateUser = async () => {
     if (!editUser) return;
-    if (resetPw && resetPw.length < 8) {
-      setError("Nytt lösenord måste vara minst 8 tecken.");
-      return;
-    }
+    if (resetPw && resetPw.length < 8) { setError("Nytt lösenord måste vara minst 8 tecken."); return; }
     setSaving(true);
+
     await supabase.from("app_users").update({
       display_name: editUser.display_name.trim(),
       role: editUser.role,
-      store_id: editUser.store_id,
+      store_id: editUser.assignedStoreIds[0] ?? null,
     }).eq("id", editUser.id);
+
+    await syncUserStores(editUser.id, editUser.assignedStoreIds);
 
     if (resetPw.length >= 8) {
       const { data: hash } = await supabase.rpc("hash_password", { plain_password: resetPw });
       await supabase.from("app_users").update({ password_hash: hash }).eq("id", editUser.id);
     }
 
+    logAudit(currentUser?.id ?? null, "user.edit", "app_users", editUser.id, {});
     await fetchUsers();
     setSaving(false);
     setEditUser(null);
@@ -186,28 +203,26 @@ function AccountsPage() {
   const confirmDeleteUser = async () => {
     if (!deleteUser) return;
     await supabase.from("app_users").delete().eq("id", deleteUser.id);
+    logAudit(currentUser?.id ?? null, "user.delete", "app_users", deleteUser.id, { username: deleteUser.username });
     setUsers((prev) => prev.filter((u) => u.id !== deleteUser.id));
     setDeleteUser(null);
   };
 
-  // ── Store CRUD ───────────────────────────────────────────────────────────
-
   const createStore = async () => {
     setError("");
-    if (!newStore.name.trim()) {
-      setError("Butiksnamn är obligatoriskt.");
-      return;
-    }
+    if (!newStore.name.trim()) { setError("Butiksnamn är obligatoriskt."); return; }
     setSaving(true);
-    await supabase.from("stores").insert({
+    const { data: created } = await supabase.from("stores").insert({
       name: newStore.name.trim(),
       city: newStore.city.trim(),
       region: newStore.region.trim(),
       address: newStore.address.trim(),
       phone: newStore.phone.trim(),
       email: newStore.email.trim(),
-    });
-    await fetchStores();
+    }).select("id").maybeSingle();
+    logAudit(currentUser?.id ?? null, "store.create", "stores", created?.id ?? null, { name: newStore.name });
+    const { data } = await supabase.from("stores").select("*").order("name");
+    setStores((data ?? []) as Store[]);
     setSaving(false);
     setShowCreateStore(false);
     setNewStore({ name: "", city: "", region: "", address: "", phone: "", email: "" });
@@ -217,6 +232,7 @@ function AccountsPage() {
     if (!deleteStore) return;
     setSaving(true);
     await supabase.from("stores").delete().eq("id", deleteStore.id);
+    logAudit(currentUser?.id ?? null, "store.delete", "stores", deleteStore.id, { name: deleteStore.name });
     setStores((prev) => prev.filter((s) => s.id !== deleteStore.id));
     setDeleteStore(null);
     setSaving(false);
@@ -226,10 +242,7 @@ function AccountsPage() {
 
   return (
     <div className="mx-auto max-w-[1400px] px-5 py-8 md:px-8 md:py-10">
-      <PageHeader
-        title="Administration"
-        description="Hantera användarkonton och butiker."
-      />
+      <PageHeader title="Administration" description="Hantera användarkonton och butiker." />
 
       <Tabs defaultValue="users" className="mt-6">
         <TabsList className="rounded-full bg-muted/60 p-1">
@@ -241,12 +254,12 @@ function AccountsPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* ── USERS TAB ── */}
+        {/* USERS TAB */}
         <TabsContent value="users" className="mt-6">
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold">Användarkonton</h2>
-              <p className="text-sm text-muted-foreground">Administrera alla användarkonton</p>
+              <p className="text-sm text-muted-foreground">{users.length} konton totalt</p>
             </div>
             <Button className="rounded-full" onClick={() => { setShowCreateUser(true); setError(""); }}>
               <Plus className="mr-2 h-4 w-4" /> Nytt konto
@@ -254,18 +267,14 @@ function AccountsPage() {
           </div>
 
           {loading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-16 animate-pulse rounded-2xl bg-card" />
-              ))}
-            </div>
+            <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-16 animate-pulse rounded-2xl bg-card" />)}</div>
           ) : (
             <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/60">
                     <th className="px-5 py-3.5 text-left text-xs font-medium text-muted-foreground">Konto</th>
-                    <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground md:table-cell">Butik</th>
+                    <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground md:table-cell">Butiker</th>
                     <th className="px-5 py-3.5 text-center text-xs font-medium text-muted-foreground">Roll</th>
                     <th className="px-5 py-3.5 text-center text-xs font-medium text-muted-foreground">Aktiv</th>
                     <th className="px-5 py-3.5 text-right text-xs font-medium text-muted-foreground">Åtgärder</th>
@@ -286,9 +295,18 @@ function AccountsPage() {
                         </div>
                       </td>
                       <td className="hidden px-5 py-3.5 text-muted-foreground md:table-cell">
-                        {stores.find((s) => s.id === u.store_id)?.name ?? (
-                          <span className="text-muted-foreground/50">—</span>
-                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {u.assignedStoreIds.length === 0 ? (
+                            <span className="text-muted-foreground/50">—</span>
+                          ) : (
+                            u.assignedStoreIds.map((sid) => {
+                              const s = stores.find((st) => st.id === sid);
+                              return s ? (
+                                <span key={sid} className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs">{s.name}</span>
+                              ) : null;
+                            })
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 text-center">{roleBadge(u.role)}</td>
                       <td className="px-5 py-3.5 text-center">
@@ -301,20 +319,15 @@ function AccountsPage() {
                       <td className="px-5 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button
-                            variant="ghost"
-                            size="sm"
-                            className="rounded-full text-xs"
-                            onClick={() => { setEditUser(u); setResetPw(""); setError(""); }}
+                            variant="ghost" size="sm" className="rounded-full text-xs"
+                            onClick={() => { setEditUser({ ...u }); setResetPw(""); setError(""); }}
                           >
                             <UserCog className="mr-1.5 h-3.5 w-3.5" /> Redigera
                           </Button>
                           {u.id !== currentUser?.id && (
                             <Button
-                              variant="ghost"
-                              size="icon"
-                              className="rounded-full text-muted-foreground hover:text-destructive"
-                              onClick={() => setDeleteUser(u)}
-                              aria-label="Ta bort konto"
+                              variant="ghost" size="icon" className="rounded-full text-muted-foreground hover:text-destructive"
+                              onClick={() => setDeleteUser(u)} aria-label="Ta bort"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -329,12 +342,12 @@ function AccountsPage() {
           )}
         </TabsContent>
 
-        {/* ── STORES TAB ── */}
+        {/* STORES TAB */}
         <TabsContent value="stores" className="mt-6">
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold">Butiker</h2>
-              <p className="text-sm text-muted-foreground">Hantera alla butiker i kedjan</p>
+              <p className="text-sm text-muted-foreground">{stores.length} butiker totalt</p>
             </div>
             <Button className="rounded-full" onClick={() => { setShowCreateStore(true); setError(""); }}>
               <Plus className="mr-2 h-4 w-4" /> Ny butik
@@ -343,9 +356,7 @@ function AccountsPage() {
 
           {loading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-44 animate-pulse rounded-2xl bg-card" />
-              ))}
+              {[1,2,3].map(i => <div key={i} className="h-44 animate-pulse rounded-2xl bg-card" />)}
             </div>
           ) : stores.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
@@ -358,57 +369,26 @@ function AccountsPage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {stores.map((store) => (
-                <div
-                  key={store.id}
-                  className="relative overflow-hidden rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)]"
-                >
+                <div key={store.id} className="relative overflow-hidden rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)]">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
                       <Building2 className="h-5 w-5" />
                     </div>
-                    <Badge
-                      className={
-                        store.is_active
-                          ? "bg-success/15 text-success hover:bg-success/20"
-                          : "bg-muted text-muted-foreground"
-                      }
-                    >
+                    <Badge className={store.is_active ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}>
                       {store.is_active ? "Aktiv" : "Inaktiv"}
                     </Badge>
                   </div>
-
                   <h3 className="mt-3 text-base font-semibold">{store.name}</h3>
-                  {store.region && (
-                    <p className="text-xs font-medium text-primary">{store.region}</p>
-                  )}
-
+                  {store.region && <p className="text-xs font-medium text-primary">{store.region}</p>}
                   <div className="mt-3 space-y-1.5 text-xs text-muted-foreground">
-                    {store.address && (
-                      <div className="flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5 shrink-0" />
-                        <span>{store.address}{store.city && `, ${store.city}`}</span>
-                      </div>
-                    )}
-                    {store.phone && (
-                      <div className="flex items-center gap-1.5">
-                        <Phone className="h-3.5 w-3.5 shrink-0" />
-                        <span>{store.phone}</span>
-                      </div>
-                    )}
-                    {store.email && (
-                      <div className="flex items-center gap-1.5">
-                        <Mail className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{store.email}</span>
-                      </div>
-                    )}
+                    {store.address && <div className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" /><span>{store.address}{store.city && `, ${store.city}`}</span></div>}
+                    {store.phone && <div className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 shrink-0" /><span>{store.phone}</span></div>}
+                    {store.email && <div className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{store.email}</span></div>}
                   </div>
-
                   <Button
-                    variant="ghost"
-                    size="icon"
+                    variant="ghost" size="icon"
                     className="absolute right-3 top-3 rounded-full text-muted-foreground hover:text-destructive"
-                    onClick={() => setDeleteStore(store)}
-                    aria-label="Ta bort butik"
+                    onClick={() => setDeleteStore(store)} aria-label="Ta bort butik"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -419,47 +399,80 @@ function AccountsPage() {
         </TabsContent>
       </Tabs>
 
-      {/* ── Create User Dialog ── */}
+      {/* CREATE USER DIALOG */}
       <Dialog open={showCreateUser} onOpenChange={(o) => { setShowCreateUser(o); if (!o) setError(""); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nytt konto</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Nytt konto</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
               <Label>Användarnamn *</Label>
-              <Input
-                placeholder="t.ex. anna.svensson"
-                value={newUser.username}
-                onChange={(e) => setNewUser((p) => ({ ...p, username: e.target.value }))}
-                autoComplete="off"
-              />
+              <Input placeholder="t.ex. anna.svensson" value={newUser.username}
+                onChange={(e) => setNewUser(p => ({ ...p, username: e.target.value }))} autoComplete="off" />
             </div>
             <div className="space-y-1.5">
               <Label>Visningsnamn *</Label>
-              <Input
-                placeholder="Anna Svensson"
-                value={newUser.display_name}
-                onChange={(e) => setNewUser((p) => ({ ...p, display_name: e.target.value }))}
-              />
+              <Input placeholder="Anna Svensson" value={newUser.display_name}
+                onChange={(e) => setNewUser(p => ({ ...p, display_name: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
               <Label>Lösenord *</Label>
-              <Input
-                type="password"
-                placeholder="Minst 8 tecken"
-                value={newUser.password}
-                onChange={(e) => setNewUser((p) => ({ ...p, password: e.target.value }))}
-                autoComplete="new-password"
-              />
+              <Input type="password" placeholder="Minst 8 tecken" value={newUser.password}
+                onChange={(e) => setNewUser(p => ({ ...p, password: e.target.value }))} autoComplete="new-password" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Roll</Label>
+              <Select value={newUser.role} onValueChange={(v) => setNewUser(p => ({ ...p, role: v as "admin" | "manager" | "employee" }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="employee">Anställd</SelectItem>
+                  <SelectItem value="manager">Chef</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Butiker</Label>
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
+                {stores.map(s => (
+                  <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
+                    <Checkbox
+                      checked={newUser.storeIds.includes(s.id)}
+                      onCheckedChange={() => toggleStoreSelection(s.id, newUser.storeIds, (ids) => setNewUser(p => ({ ...p, storeIds: ids })))}
+                    />
+                    <span className="text-sm">{s.name}</span>
+                    {s.region && <span className="text-xs text-muted-foreground">{s.region}</span>}
+                  </label>
+                ))}
+              </div>
+            </div>
+            {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowCreateUser(false); setError(""); }}>Avbryt</Button>
+            <Button onClick={createUser} disabled={saving}>{saving ? "Skapar..." : "Skapa konto"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* EDIT USER DIALOG */}
+      <Dialog open={!!editUser} onOpenChange={(o) => { if (!o) { setEditUser(null); setError(""); } }}>
+        {editUser && (
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>Redigera konto</DialogTitle></DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label>Användarnamn</Label>
+                <Input value={editUser.username} disabled className="bg-muted/40 font-mono" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Visningsnamn</Label>
+                <Input value={editUser.display_name}
+                  onChange={(e) => setEditUser(u => u ? { ...u, display_name: e.target.value } : null)} />
+              </div>
               <div className="space-y-1.5">
                 <Label>Roll</Label>
-                <Select
-                  value={newUser.role}
-                  onValueChange={(v) => setNewUser((p) => ({ ...p, role: v as "admin" | "manager" | "employee" }))}
-                >
+                <Select value={editUser.role}
+                  onValueChange={(v) => setEditUser(u => u ? { ...u, role: v as "admin" | "manager" | "employee" } : null)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="employee">Anställd</SelectItem>
@@ -469,223 +482,119 @@ function AccountsPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Butik</Label>
-                <Select
-                  value={newUser.store_id}
-                  onValueChange={(v) => setNewUser((p) => ({ ...p, store_id: v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder="Välj..." /></SelectTrigger>
-                  <SelectContent>
-                    {stores.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            {error && (
-              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCreateUser(false); setError(""); }}>Avbryt</Button>
-            <Button onClick={createUser} disabled={saving}>
-              {saving ? "Skapar..." : "Skapa konto"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Edit User Dialog ── */}
-      <Dialog open={!!editUser} onOpenChange={(o) => { if (!o) { setEditUser(null); setError(""); } }}>
-        {editUser && (
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Redigera konto</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div className="space-y-1.5">
-                <Label>Användarnamn</Label>
-                <Input value={editUser.username} disabled className="bg-muted/40 font-mono" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Visningsnamn</Label>
-                <Input
-                  value={editUser.display_name}
-                  onChange={(e) => setEditUser((u) => u ? { ...u, display_name: e.target.value } : null)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Roll</Label>
-                  <Select
-                    value={editUser.role}
-                    onValueChange={(v) => setEditUser((u) => u ? { ...u, role: v as "admin" | "manager" | "employee" } : null)}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="employee">Anställd</SelectItem>
-                      <SelectItem value="manager">Chef</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Butik</Label>
-                  <Select
-                    value={editUser.store_id ?? ""}
-                    onValueChange={(v) => setEditUser((u) => u ? { ...u, store_id: v || null } : null)}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Ingen" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Ingen</SelectItem>
-                      {stores.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <Label>Butiker</Label>
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
+                  {stores.map(s => (
+                    <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
+                      <Checkbox
+                        checked={editUser.assignedStoreIds.includes(s.id)}
+                        onCheckedChange={() => toggleStoreSelection(s.id, editUser.assignedStoreIds, (ids) => setEditUser(u => u ? { ...u, assignedStoreIds: ids } : null))}
+                      />
+                      <span className="text-sm">{s.name}</span>
+                      {s.region && <span className="text-xs text-muted-foreground">{s.region}</span>}
+                      {editUser.assignedStoreIds[0] === s.id && (
+                        <span className="ml-auto text-xs text-primary">Primär</span>
+                      )}
+                    </label>
+                  ))}
                 </div>
               </div>
               <div className="space-y-1.5">
                 <Label>Nytt lösenord (lämna tomt för att behålla)</Label>
-                <Input
-                  type="password"
-                  placeholder="Minst 8 tecken"
-                  value={resetPw}
-                  onChange={(e) => setResetPw(e.target.value)}
-                  autoComplete="new-password"
-                />
+                <Input type="password" placeholder="Minst 8 tecken" value={resetPw}
+                  onChange={(e) => setResetPw(e.target.value)} autoComplete="new-password" />
               </div>
-              {error && (
-                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
-              )}
+              {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => { setEditUser(null); setError(""); }}>
                 <X className="mr-1.5 h-3.5 w-3.5" /> Avbryt
               </Button>
-              <Button onClick={updateUser} disabled={saving}>
-                {saving ? "Sparar..." : "Spara"}
-              </Button>
+              <Button onClick={updateUser} disabled={saving}>{saving ? "Sparar..." : "Spara"}</Button>
             </DialogFooter>
           </DialogContent>
         )}
       </Dialog>
 
-      {/* ── Create Store Dialog ── */}
+      {/* CREATE STORE DIALOG */}
       <Dialog open={showCreateStore} onOpenChange={(o) => { setShowCreateStore(o); if (!o) setError(""); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Lägg till butik</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Lägg till butik</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
               <Label>Butiksnamn *</Label>
-              <Input
-                placeholder="T.ex. Stockholm City"
-                value={newStore.name}
-                onChange={(e) => setNewStore((p) => ({ ...p, name: e.target.value }))}
-              />
+              <Input placeholder="T.ex. Stockholm City" value={newStore.name}
+                onChange={(e) => setNewStore(p => ({ ...p, name: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Stad</Label>
-                <Input
-                  placeholder="Stockholm"
-                  value={newStore.city}
-                  onChange={(e) => setNewStore((p) => ({ ...p, city: e.target.value }))}
-                />
+                <Input placeholder="Stockholm" value={newStore.city}
+                  onChange={(e) => setNewStore(p => ({ ...p, city: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Region</Label>
-                <Input
-                  placeholder="Region Stockholm"
-                  value={newStore.region}
-                  onChange={(e) => setNewStore((p) => ({ ...p, region: e.target.value }))}
-                />
+                <Input placeholder="Region Stockholm" value={newStore.region}
+                  onChange={(e) => setNewStore(p => ({ ...p, region: e.target.value }))} />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label>Adress</Label>
-              <Input
-                placeholder="Gatuadress"
-                value={newStore.address}
-                onChange={(e) => setNewStore((p) => ({ ...p, address: e.target.value }))}
-              />
+              <Input placeholder="Gatuadress" value={newStore.address}
+                onChange={(e) => setNewStore(p => ({ ...p, address: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Telefon</Label>
-                <Input
-                  placeholder="08-123 456"
-                  value={newStore.phone}
-                  onChange={(e) => setNewStore((p) => ({ ...p, phone: e.target.value }))}
-                />
+                <Input placeholder="08-123 456" value={newStore.phone}
+                  onChange={(e) => setNewStore(p => ({ ...p, phone: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>E-post</Label>
-                <Input
-                  type="email"
-                  placeholder="butik@example.com"
-                  value={newStore.email}
-                  onChange={(e) => setNewStore((p) => ({ ...p, email: e.target.value }))}
-                />
+                <Input type="email" placeholder="butik@example.com" value={newStore.email}
+                  onChange={(e) => setNewStore(p => ({ ...p, email: e.target.value }))} />
               </div>
             </div>
-            {error && (
-              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
-            )}
+            {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowCreateStore(false); setError(""); }}>Avbryt</Button>
-            <Button onClick={createStore} disabled={saving || !newStore.name}>
-              {saving ? "Sparar..." : "Lägg till"}
-            </Button>
+            <Button onClick={createStore} disabled={saving || !newStore.name}>{saving ? "Sparar..." : "Lägg till"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete User Confirm ── */}
+      {/* DELETE USER CONFIRM */}
       <AlertDialog open={!!deleteUser} onOpenChange={(o) => !o && setDeleteUser(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort konto</AlertDialogTitle>
             <AlertDialogDescription>
-              Är du säker på att du vill ta bort kontot för{" "}
-              <strong>{deleteUser?.display_name}</strong>? Åtgärden kan inte ångras.
+              Är du säker på att du vill ta bort kontot för <strong>{deleteUser?.display_name}</strong>? Åtgärden kan inte ångras.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmDeleteUser}
-            >
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDeleteUser}>
               Ta bort
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Delete Store Confirm ── */}
+      {/* DELETE STORE CONFIRM */}
       <AlertDialog open={!!deleteStore} onOpenChange={(o) => !o && setDeleteStore(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort butik</AlertDialogTitle>
             <AlertDialogDescription>
-              Är du säker på att du vill permanent ta bort butiken{" "}
-              <strong>{deleteStore?.name}</strong>?
-              <span className="mt-2 block text-xs">
-                Relaterade uppgifter, avvikelser och användarkopplingar kan påverkas. Åtgärden kan inte ångras.
-              </span>
+              Är du säker på att du vill permanent ta bort <strong>{deleteStore?.name}</strong>?
+              <span className="mt-2 block text-xs">Relaterade uppgifter, avvikelser och användarkopplingar kan påverkas. Åtgärden kan inte ångras.</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmDeleteStore}
-            >
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDeleteStore}>
               Ta bort butik
             </AlertDialogAction>
           </AlertDialogFooter>

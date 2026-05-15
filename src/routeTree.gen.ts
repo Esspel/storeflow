@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UppgifterRouteImport } from './routes/uppgifter'
 import { Route as RapporterRouteImport } from './routes/rapporter'
 import { Route as PersonalRouteImport } from './routes/personal'
+import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InstallningarRouteImport } from './routes/installningar'
 import { Route as AvvikelserRouteImport } from './routes/avvikelser'
@@ -30,6 +31,11 @@ const RapporterRoute = RapporterRouteImport.update({
 const PersonalRoute = PersonalRouteImport.update({
   id: '/personal',
   path: '/personal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MallarRoute = MallarRouteImport.update({
+  id: '/mallar',
+  path: '/mallar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/avvikelser': typeof AvvikelserRoute
   '/installningar': typeof InstallningarRoute
   '/login': typeof LoginRoute
+  '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
   '/uppgifter': typeof UppgifterRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/avvikelser': typeof AvvikelserRoute
   '/installningar': typeof InstallningarRoute
   '/login': typeof LoginRoute
+  '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
   '/uppgifter': typeof UppgifterRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/avvikelser': typeof AvvikelserRoute
   '/installningar': typeof InstallningarRoute
   '/login': typeof LoginRoute
+  '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
   '/uppgifter': typeof UppgifterRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/avvikelser'
     | '/installningar'
     | '/login'
+    | '/mallar'
     | '/personal'
     | '/rapporter'
     | '/uppgifter'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/avvikelser'
     | '/installningar'
     | '/login'
+    | '/mallar'
     | '/personal'
     | '/rapporter'
     | '/uppgifter'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/avvikelser'
     | '/installningar'
     | '/login'
+    | '/mallar'
     | '/personal'
     | '/rapporter'
     | '/uppgifter'
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   AvvikelserRoute: typeof AvvikelserRoute
   InstallningarRoute: typeof InstallningarRoute
   LoginRoute: typeof LoginRoute
+  MallarRoute: typeof MallarRoute
   PersonalRoute: typeof PersonalRoute
   RapporterRoute: typeof RapporterRoute
   UppgifterRoute: typeof UppgifterRoute
@@ -142,6 +155,13 @@ declare module '@tanstack/react-router' {
       path: '/personal'
       fullPath: '/personal'
       preLoaderRoute: typeof PersonalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mallar': {
+      id: '/mallar'
+      path: '/mallar'
+      fullPath: '/mallar'
+      preLoaderRoute: typeof MallarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -180,6 +200,7 @@ const rootRouteChildren: RootRouteChildren = {
   AvvikelserRoute: AvvikelserRoute,
   InstallningarRoute: InstallningarRoute,
   LoginRoute: LoginRoute,
+  MallarRoute: MallarRoute,
   PersonalRoute: PersonalRoute,
   RapporterRoute: RapporterRoute,
   UppgifterRoute: UppgifterRoute,

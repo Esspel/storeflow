@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Eye, EyeOff, KeyRound, User } from "lucide-react";
+import { CircleCheck as CheckCircle2, Eye, EyeOff, KeyRound, Store, User } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/lib/supabase";
+import { Badge } from "@/components/ui/badge";
+import { supabase, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/installningar")({
@@ -14,7 +15,7 @@ export const Route = createFileRoute("/installningar")({
 });
 
 function SettingsPage() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, userStores, activeStore, setActiveStore } = useAuth();
   const [displayName, setDisplayName] = useState(user?.display_name ?? "");
   const [nameSaving, setNameSaving] = useState(false);
   const [nameSuccess, setNameSuccess] = useState(false);
@@ -32,6 +33,7 @@ function SettingsPage() {
     if (!displayName.trim() || !user) return;
     setNameSaving(true);
     await supabase.from("app_users").update({ display_name: displayName.trim() }).eq("id", user.id);
+    logAudit(user.id, "user.edit", "app_users", user.id, { field: "display_name" });
     refreshUser({ ...user, display_name: displayName.trim() });
     setNameSaving(false);
     setNameSuccess(true);
@@ -43,7 +45,7 @@ function SettingsPage() {
     setPwSuccess(false);
     if (!user) return;
     if (newPw !== confirmPw) { setPwError("Lösenorden stämmer inte överens."); return; }
-    if (newPw.length < 6) { setPwError("Lösenordet måste vara minst 6 tecken."); return; }
+    if (newPw.length < 8) { setPwError("Lösenordet måste vara minst 8 tecken."); return; }
 
     setPwSaving(true);
 
@@ -66,6 +68,7 @@ function SettingsPage() {
 
     const { data: hash } = await supabase.rpc("hash_password", { plain_password: newPw });
     await supabase.from("app_users").update({ password_hash: hash }).eq("id", user.id);
+    logAudit(user.id, "user.password_change", "app_users", user.id, {});
 
     setPwSaving(false);
     setPwSuccess(true);
@@ -109,6 +112,45 @@ function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {userStores.length > 0 && (
+          <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                <Store className="h-4 w-4" />
+              </div>
+              <h2 className="font-semibold">Butiker</h2>
+            </div>
+            <div className="space-y-2">
+              {userStores.map((store) => {
+                const isActive = activeStore?.id === store.id;
+                return (
+                  <div
+                    key={store.id}
+                    className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      {isActive && <CheckCircle2 className="h-4 w-4 text-success" />}
+                      <span className="text-sm font-medium">{store.name}</span>
+                      {store.region && <span className="text-xs text-muted-foreground">{store.region}</span>}
+                    </div>
+                    {!isActive && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full text-xs"
+                        onClick={() => setActiveStore(store)}
+                      >
+                        Välj
+                      </Button>
+                    )}
+                    {isActive && <Badge variant="secondary" className="text-xs">Aktiv</Badge>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
           <div className="mb-4 flex items-center gap-3">

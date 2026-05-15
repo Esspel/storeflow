@@ -1,6 +1,6 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LogOut, Menu, Settings, User, X } from "lucide-react";
-import { useState } from "react";
+import { Bell, ChevronDown, LogOut, Menu, Settings, User, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -10,24 +10,64 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth-context";
+import { supabase, type Notification } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
-
-const nav = [
-  { to: "/", label: "Översikt" },
-  { to: "/uppgifter", label: "Uppgifter" },
-  { to: "/avvikelser", label: "Avvikelser" },
-  { to: "/rapporter", label: "Rapporter" },
-];
 
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [open, setOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, logout, userStores, activeStore, setActiveStore } = useAuth();
   const navigate = useNavigate();
 
-  const isActive = (to: string) =>
-    to === "/" ? pathname === "/" : pathname.startsWith(to);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  const isAdmin = user?.role === "admin";
+  const isManager = user?.role === "manager" || isAdmin;
+
+  const nav = [
+    { to: "/", label: "Översikt" },
+    { to: "/uppgifter", label: "Uppgifter" },
+    { to: "/avvikelser", label: "Avvikelser" },
+    ...(isManager ? [{ to: "/rapporter", label: "Rapporter" }] : []),
+    { to: "/mallar", label: "Mallar" },
+  ];
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .then(({ data }) => setNotifications((data ?? []) as Notification[]));
+
+    const channel = supabase
+      .channel("notifications:" + user.id)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+        (payload) => setNotifications((prev) => [payload.new as Notification, ...prev].slice(0, 20))
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
+
+  const markAllRead = async () => {
+    if (!user || unreadCount === 0) return;
+    await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false);
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+  };
+
+  const isActive = (to: string) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
 
   const handleLogout = async () => {
     await logout();
@@ -35,26 +75,17 @@ export function AppShell() {
   };
 
   const initials = user?.display_name
-    ? user.display_name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
+    ? user.display_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : "?";
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-background">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-card">
-        <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center gap-6 px-5 md:px-8">
+        <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center gap-4 px-5 md:px-8">
           <Link to="/" className="flex shrink-0 items-center gap-2">
             <div className="flex flex-col leading-none">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                Store
-              </span>
-              <span className="text-2xl font-black tracking-tight text-primary">
-                Flow
-              </span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Store</span>
+              <span className="text-2xl font-black tracking-tight text-primary">Flow</span>
             </div>
           </Link>
 
@@ -77,14 +108,76 @@ export function AppShell() {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
+            {/* Store switcher */}
+            {userStores.length > 1 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="hidden rounded-full border-border/80 md:flex gap-1.5 max-w-[160px]">
+                    <span className="truncate text-xs">{activeStore?.name ?? "Välj butik"}</span>
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  {userStores.map((s) => (
+                    <DropdownMenuItem
+                      key={s.id}
+                      className={cn("cursor-pointer", activeStore?.id === s.id && "bg-primary-soft text-primary")}
+                      onClick={() => setActiveStore(s)}
+                    >
+                      {s.name}
+                      {activeStore?.id === s.id && <span className="ml-auto text-xs">Aktiv</span>}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {/* Notifications */}
+            <Popover open={notifOpen} onOpenChange={setNotifOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" className="relative rounded-xl border-border/80" aria-label="Notiser">
+                  <Bell className="h-4 w-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-0">
+                <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+                  <p className="text-sm font-semibold">Notiser</p>
+                  {unreadCount > 0 && (
+                    <button onClick={markAllRead} className="text-xs text-primary hover:underline">
+                      Markera alla som lästa
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-72 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">Inga notiser</p>
+                  ) : (
+                    notifications.map((n) => (
+                      <div
+                        key={n.id}
+                        className={cn("border-b border-border/40 px-4 py-3 last:border-0", !n.is_read && "bg-primary-soft/30")}
+                      >
+                        <p className={cn("text-sm font-medium", !n.is_read && "text-primary")}>{n.title}</p>
+                        {n.body && <p className="mt-0.5 text-xs text-muted-foreground">{n.body}</p>}
+                        <p className="mt-1 text-xs text-muted-foreground/60">
+                          {new Date(n.created_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* User menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="rounded-xl border-border/80"
-                  aria-label="Konto"
-                >
+                <Button variant="outline" size="icon" className="rounded-xl border-border/80" aria-label="Konto">
                   <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-soft text-[10px] font-bold text-primary">
                     {initials}
                   </div>
@@ -94,6 +187,7 @@ export function AppShell() {
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-medium">{user?.display_name}</p>
                   <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
+                  {activeStore && <p className="text-xs text-muted-foreground">{activeStore.name}</p>}
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
@@ -102,7 +196,7 @@ export function AppShell() {
                     Inställningar
                   </Link>
                 </DropdownMenuItem>
-                {user?.role === "admin" && (
+                {isAdmin && (
                   <DropdownMenuItem asChild>
                     <Link to="/personal" className="cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
@@ -111,10 +205,7 @@ export function AppShell() {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="cursor-pointer text-destructive focus:text-destructive"
-                  onClick={handleLogout}
-                >
+                <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Logga ut
                 </DropdownMenuItem>
@@ -122,11 +213,8 @@ export function AppShell() {
             </DropdownMenu>
 
             <Button
-              variant="outline"
-              size="icon"
-              className="rounded-xl border-border/80 md:hidden"
-              onClick={() => setOpen((o) => !o)}
-              aria-label="Meny"
+              variant="outline" size="icon" className="rounded-xl border-border/80 md:hidden"
+              onClick={() => setOpen((o) => !o)} aria-label="Meny"
             >
               {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </Button>
@@ -141,14 +229,26 @@ export function AppShell() {
                   key={item.to}
                   to={item.to}
                   onClick={() => setOpen(false)}
-                  className={cn(
-                    "rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/80",
-                    isActive(item.to) && "bg-primary-soft text-primary",
-                  )}
+                  className={cn("rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/80", isActive(item.to) && "bg-primary-soft text-primary")}
                 >
                   {item.label}
                 </Link>
               ))}
+              {userStores.length > 1 && (
+                <>
+                  <div className="my-2 border-t border-border/60" />
+                  <p className="px-3 py-1 text-xs font-medium text-muted-foreground">Välj butik</p>
+                  {userStores.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => { setActiveStore(s); setOpen(false); }}
+                      className={cn("rounded-lg px-3 py-2.5 text-left text-sm text-foreground/80", activeStore?.id === s.id && "bg-primary-soft text-primary")}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </>
+              )}
             </nav>
           </div>
         )}
