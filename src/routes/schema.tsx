@@ -258,7 +258,11 @@ function parseXml(xmlText: string): ParsedSchedule | null {
   const weekNumber = parseInt(weekNrText, 10) || 0;
   const yearText = weekEl ? (getAttrOrText(weekEl, "Year") || "") : "";
   const year = parseInt(yearText, 10) || new Date().getFullYear();
-  let weekStartDate = "";
+
+  // Try to extract week start from ReportHeader DateInterval (format: "YYYY-MM-DD-YYYY-MM-DD")
+  const dateIntervalRaw = getText(root, "ReportHeader DateInterval") || getAttrOrText(root, "DateInterval");
+  const dateIntervalMatch = dateIntervalRaw.match(/(\d{4}-\d{2}-\d{2})/);
+  let weekStartDate = dateIntervalMatch ? dateIntervalMatch[1] : "";
 
   const employees: ParsedEmployee[] = Array.from(root.querySelectorAll("Employee")).map((empEl) => {
     const employeeNr = getAttrOrText(empEl, "EmployeeNr");
@@ -300,6 +304,7 @@ function parseXml(xmlText: string): ParsedSchedule | null {
         const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "";
         const netMins = parseInt(getAttrOrText(dayEl, `${prefix}NetTimeMinutes`) || "0", 10);
         const lendedRaw = getAttrOrText(dayEl, `${prefix}Lended`) || "0";
+        const deviationCause = getAttrOrText(dayEl, `${prefix}TimeDeviationCauseName`) || absenceName;
         shifts.push({
           shiftName: sName,
           startTime: parseTime(sStartRaw),
@@ -310,7 +315,7 @@ function parseXml(xmlText: string): ParsedSchedule | null {
           netMinutes: netMins,
           breakMinutes: sIdx === 1 ? dayBreakTotal : 0,
           breakWindows: sIdx === 1 ? dayBreakWindows : [],
-          deviationCause: absenceName,
+          deviationCause,
           totalCost: 0,
           isLended: lendedRaw === "1" || lendedRaw.toLowerCase() === "true",
         });
@@ -342,7 +347,14 @@ function parseXml(xmlText: string): ParsedSchedule | null {
         });
       }
 
-      const isSemester = isAbsenceDay && (absenceName.toLowerCase().includes("semester") || absenceName.toLowerCase().includes("holiday"));
+      const anyShiftSemester = shifts.some((s) =>
+        s.deviationCause.toLowerCase().includes("semester") || s.deviationCause.toLowerCase().includes("holiday")
+      );
+      const isSemester = isAbsenceDay && (
+        absenceName.toLowerCase().includes("semester") ||
+        absenceName.toLowerCase().includes("holiday") ||
+        anyShiftSemester
+      );
       return { dayNr, scheduleDate, isAbsenceDay, isSemester, shifts };
     });
     return { employeeNr, employeeName, employeeGroup, days };
