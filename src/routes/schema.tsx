@@ -40,6 +40,8 @@ type XmlShift = {
   deviationCause: string;
   totalCost: number;
   isLended: boolean;
+  shiftLink: string;
+  isBorrowed: boolean;
 };
 
 type XmlDay = {
@@ -104,6 +106,9 @@ type ScheduleShift = {
   deviation_cause: string;
   is_absence_day: boolean;
   is_lended: boolean;
+  is_borrowed: boolean;
+  is_shadow_shift: boolean;
+  shift_link: string;
 };
 
 type DeliveryPlan = {
@@ -305,6 +310,10 @@ function parseXml(xmlText: string): ParsedSchedule | null {
         const netMins = parseInt(getAttrOrText(dayEl, `${prefix}NetTimeMinutes`) || "0", 10);
         const lendedRaw = getAttrOrText(dayEl, `${prefix}Lended`) || "0";
         const deviationCause = getAttrOrText(dayEl, `${prefix}TimeDeviationCauseName`) || absenceName;
+        const shiftLink = getAttrOrText(dayEl, `${prefix}Link`) || "";
+        const totalCostRaw = parseFloat((getAttrOrText(dayEl, `${prefix}TotalCost`) || "0").replace(",", "."));
+        // Borrowed: linked to another unit (non-empty GUID in ShiftLink) AND cost is exactly 0
+        const isBorrowed = shiftLink.length > 8 && totalCostRaw === 0;
         shifts.push({
           shiftName: sName,
           startTime: parseTime(sStartRaw),
@@ -316,8 +325,10 @@ function parseXml(xmlText: string): ParsedSchedule | null {
           breakMinutes: sIdx === 1 ? dayBreakTotal : 0,
           breakWindows: sIdx === 1 ? dayBreakWindows : [],
           deviationCause,
-          totalCost: 0,
+          totalCost: totalCostRaw,
           isLended: lendedRaw === "1" || lendedRaw.toLowerCase() === "true",
+          shiftLink,
+          isBorrowed,
         });
       }
 
@@ -331,6 +342,8 @@ function parseXml(xmlText: string): ParsedSchedule | null {
           const xmlNet = parseInt(getText(sEl, "ShiftNetTimeMinutes") || "0", 10);
           const netMinutes = xmlNet > 0 ? xmlNet : Math.max(0, grossMinutes - dayBreakTotal);
           const lendedRaw = getText(sEl, "ShiftLended") || getAttrOrText(sEl, "ShiftLended") || "0";
+          const fbLink = getText(sEl, "ShiftLink") || getAttrOrText(sEl, "ShiftLink") || "";
+          const fbCost = parseFloat((getText(sEl, "ShiftTotalCost") || "0").replace(",", "."));
           shifts.push({
             shiftName: sName,
             startTime: parseTime(getText(sEl, "ShiftStartTime")),
@@ -341,8 +354,10 @@ function parseXml(xmlText: string): ParsedSchedule | null {
             breakMinutes: dayBreakTotal,
             breakWindows: dayBreakWindows,
             deviationCause: absenceName || getText(sEl, "ShiftTimeDeviationCauseName"),
-            totalCost: parseFloat((getText(sEl, "ShiftTotalCost") || "0").replace(",", ".")),
+            totalCost: fbCost,
             isLended: lendedRaw === "1" || lendedRaw.toLowerCase() === "true",
+            shiftLink: fbLink,
+            isBorrowed: fbLink.length > 8 && fbCost === 0,
           });
         });
       }
@@ -777,8 +792,51 @@ function SchemaPage() {
         if (empErr || !empData) continue;
         const empId = (empData as ScheduleEmployee).id;
         const rows = emp.days.flatMap((day) => {
-          if (day.shifts.length > 0) return day.shifts.map((s) => ({ schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate, start_time: s.startTime || null, stop_time: s.stopTime || null, shift_name: s.shiftName, color: s.color, gross_minutes: s.grossMinutes, net_minutes: s.netMinutes, break_minutes: s.breakMinutes, break_windows: s.breakWindows, deviation_cause: s.deviationCause, is_absence_day: day.isAbsenceDay || day.isSemester, is_lended: s.isLended }));
-          if (day.isAbsenceDay || day.isSemester) return [{ schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate, start_time: null, stop_time: null, shift_name: day.isSemester ? "Semester" : "", color: day.isSemester ? "#fca5a5" : "#e0e0e0", gross_minutes: 0, net_minutes: 0, break_minutes: 0, break_windows: [], deviation_cause: day.isSemester ? "Semester" : "", is_absence_day: true, is_lended: false }];
+          const isAbsence = day.isAbsenceDay || day.isSemester;
+          if (day.shifts.length > 0) {
+            // Absence takes priority: shifts become shadow shifts (metadata only, no worked time)
+            return day.shifts.map((s) => ({
+              schedule_employee_id: empId,
+              import_id: importId,
+              day_date: day.scheduleDate,
+              start_time: s.startTime || null,
+              stop_time: s.stopTime || null,
+              shift_name: s.shiftName,
+              color: isAbsence ? (day.isSemester ? "#fca5a5" : "#e0e0e0") : s.color,
+              // Absence day: no counted minutes regardless of what XML shift says
+              gross_minutes: isAbsence ? 0 : s.grossMinutes,
+              net_minutes: isAbsence ? 0 : s.netMinutes,
+              break_minutes: isAbsence ? 0 : s.breakMinutes,
+              break_windows: isAbsence ? [] : s.breakWindows,
+              deviation_cause: s.deviationCause || (day.isSemester ? "Semester" : ""),
+              is_absence_day: isAbsence,
+              is_lended: s.isLended,
+              is_borrowed: s.isBorrowed,
+              shift_link: s.shiftLink,
+              is_shadow_shift: isAbsence && !!(s.startTime || s.shiftName),
+            }));
+          }
+          if (isAbsence) {
+            return [{
+              schedule_employee_id: empId,
+              import_id: importId,
+              day_date: day.scheduleDate,
+              start_time: null,
+              stop_time: null,
+              shift_name: day.isSemester ? "Semester" : "",
+              color: day.isSemester ? "#fca5a5" : "#e0e0e0",
+              gross_minutes: 0,
+              net_minutes: 0,
+              break_minutes: 0,
+              break_windows: [],
+              deviation_cause: day.isSemester ? "Semester" : "",
+              is_absence_day: true,
+              is_lended: false,
+              is_borrowed: false,
+              shift_link: "",
+              is_shadow_shift: false,
+            }];
+          }
           return [];
         });
         if (rows.length > 0) await supabase.from("schedule_shifts").insert(rows);
@@ -814,6 +872,7 @@ function SchemaPage() {
       const allShifts = scheduleShifts.filter((s) => s.schedule_employee_id === emp.id);
       const dayShifts = allShifts.filter((s) => s.day_date === currentDate);
       const workShifts = dayShifts.filter((s) => !s.is_absence_day && s.start_time);
+      const shadowShifts = dayShifts.filter((s) => s.is_absence_day && s.is_shadow_shift && s.start_time);
       const absenceShift = dayShifts.find((s) => s.is_absence_day);
       const mapping = mappings.find((m) => m.employee_nr === emp.employee_nr);
       const appUser = mapping?.app_user_id ? appUsers.find((u) => u.id === mapping.app_user_id) : null;
@@ -822,7 +881,7 @@ function SchemaPage() {
       const dayTasks = appUser
         ? scheduleTasks.filter((t) => t.assigned_to === appUser.id && t.due_date && t.due_date.slice(0, 10) === currentDate)
         : [];
-      return { emp, dayShifts, workShifts, absenceShift, appUser, weekMinutes, initials, dayTasks };
+      return { emp, dayShifts, workShifts, shadowShifts, absenceShift, appUser, weekMinutes, initials, dayTasks };
     });
 
   const workingToday = employeeRows.filter((r) => r.workShifts.length > 0).length;
@@ -1067,7 +1126,7 @@ function SchemaPage() {
                   <p className="text-sm text-muted-foreground">Inga pass schemalagda denna dag</p>
                 </div>
               ) : (
-                employeeRows.map(({ emp, workShifts, absenceShift, appUser, weekMinutes, initials, dayTasks }) => {
+                employeeRows.map(({ emp, workShifts, shadowShifts, absenceShift, appUser, weekMinutes, initials, dayTasks }) => {
                   const isSemesterDay = absenceShift?.deviation_cause?.toLowerCase().includes("semester") || absenceShift?.shift_name?.toLowerCase() === "semester";
                   return (
                   <div key={emp.id} className={["group flex border-b border-border/20 last:border-b-0 transition-colors", isSemesterDay ? "bg-red-50/60 hover:bg-red-50/80 dark:bg-red-950/20" : "hover:bg-muted/20"].join(" ")} style={{ minHeight: dayTasks.length > 0 ? "56px" : undefined }}>
@@ -1089,11 +1148,23 @@ function SchemaPage() {
                         <div className="absolute top-0 bottom-0 z-10 w-px bg-destructive/70 pointer-events-none" style={{ left: `${currentNowPercent}%` }} />
                       )}
                       {isSemesterDay ? (
-                        <div className="absolute top-1.5 bottom-1.5 flex items-center" style={{ left: currentNowPercent >= 0 ? `calc(${currentNowPercent}% + 4px)` : "12px" }}>
-                          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-100/60 px-3 py-1.5 dark:border-red-800/40 dark:bg-red-900/20">
-                            <span className="text-[11px] font-medium text-red-600 dark:text-red-400">Semester</span>
+                        <>
+                          <div className="absolute top-1.5 bottom-1.5 flex items-center" style={{ left: "12px" }}>
+                            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-100/60 px-3 py-1.5 dark:border-red-800/40 dark:bg-red-900/20">
+                              <span className="text-[11px] font-medium text-red-600 dark:text-red-400">Semester</span>
+                            </div>
                           </div>
-                        </div>
+                          {shadowShifts.map((shift) => {
+                            const left = timeToPercent(shift.start_time!);
+                            const width = shiftWidthPercent(shift.start_time!, shift.stop_time!);
+                            return (
+                              <div key={shift.id} className="absolute top-1.5 bottom-1.5 opacity-30 pointer-events-none" style={{ left: `${Math.max(0, left)}%`, width: `${Math.max(width, 1.5)}%`, minWidth: "36px" }}>
+                                <div className="absolute inset-0 rounded-lg border border-dashed border-red-400 bg-red-100/40"
+                                  title={`Skuggpass: ${shift.shift_name} ${shift.start_time}–${shift.stop_time}\nOrsak: ${shift.deviation_cause}`} />
+                              </div>
+                            );
+                          })}
+                        </>
                       ) : workShifts.length === 0 ? (
                         <div className="flex h-full items-center px-3">
                           <span className="text-[11px] italic text-muted-foreground/40">{absenceShift?.deviation_cause || "Ledig"}</span>
@@ -1116,8 +1187,12 @@ function SchemaPage() {
                                   shift.break_minutes > 0 ? `Rast: ${shift.break_minutes} min` : null,
                                   `Netto: ${minsToHours(shift.net_minutes > 0 ? shift.net_minutes : Math.max(0, shift.gross_minutes - shift.break_minutes))}`,
                                   shift.is_lended ? "↔ Utlånad/inlånad" : null,
+                                  shift.is_borrowed ? "! Inlånad från annan enhet (Remote Unit Assignment)" : null,
                                 ].filter(Boolean).join("\n")}>
-                                {shift.is_lended && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
+                                {shift.is_borrowed && (
+                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white text-[9px] font-bold leading-none">!</span>
+                                )}
+                                {!shift.is_borrowed && shift.is_lended && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
                                 <span className="truncate leading-tight">
                                   {shift.shift_name ? <>{shift.shift_name}<br /><span className="opacity-70">{shift.start_time}–{shift.stop_time}</span></> : `${shift.start_time}–${shift.stop_time}`}
                                 </span>
@@ -1218,8 +1293,10 @@ function SchemaPage() {
                             const col = shiftColor(s.shift_name, s.color);
                             return (
                               <div key={s.id} className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-semibold truncate"
-                                style={{ backgroundColor: col + "55", borderLeft: `2px solid ${col}`, color: isLightColor(col) ? "oklch(0.25 0.05 145)" : "oklch(0.15 0.05 145)" }}>
-                                {s.is_lended && <ArrowLeftRight className="h-2 w-2 shrink-0" />}
+                                style={{ backgroundColor: col + "55", borderLeft: `2px solid ${col}`, color: isLightColor(col) ? "oklch(0.25 0.05 145)" : "oklch(0.15 0.05 145)" }}
+                                title={s.is_borrowed ? "Inlånad från annan enhet (Remote Unit Assignment)" : s.is_lended ? "Utlånad/inlånad" : undefined}>
+                                {s.is_borrowed && <span className="flex h-3 w-3 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none">!</span>}
+                                {!s.is_borrowed && s.is_lended && <ArrowLeftRight className="h-2 w-2 shrink-0" />}
                                 <span className="truncate">{s.start_time}–{s.stop_time}</span>
                               </div>
                             );
