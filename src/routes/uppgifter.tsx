@@ -237,6 +237,113 @@ function TasksPage() {
   // Children inherit recurrence_rule/recurrence_days so the badge renders.
   const spawnRef = useRef(false);
 
+  // Shared helpers used both at creation time and in the load-time spawn pass.
+  const midnight = (d: Date): Date => { const n = new Date(d); n.setHours(0,0,0,0); return n; };
+
+  function buildPeriodStarts(originDue: Date, rule: string, weekdays: number[] | null, startDate: Date | null, endDate: Date | null, ceil: Date): Date[] {
+    const effectiveCeil = endDate
+      ? (midnight(new Date(endDate)) < ceil ? midnight(new Date(endDate)) : ceil)
+      : ceil;
+    let floor: Date;
+    if (startDate) {
+      floor = midnight(new Date(startDate));
+    } else {
+      floor = midnight(new Date(originDue));
+      floor.setDate(floor.getDate() + 1);
+    }
+    const results: Date[] = [];
+    if (rule === "weekly" && weekdays && weekdays.length > 0) {
+      const cur = new Date(floor);
+      while (cur <= effectiveCeil) {
+        const jsDay = cur.getDay();
+        const ourDay = jsDay === 0 ? 6 : jsDay - 1;
+        if (weekdays.includes(ourDay)) results.push(new Date(cur));
+        cur.setDate(cur.getDate() + 1);
+      }
+      return results;
+    }
+    const advance = (d: Date): Date => {
+      const n = new Date(d);
+      if (rule === "daily") { n.setDate(n.getDate() + 1); }
+      else if (rule === "every_other_day") { n.setDate(n.getDate() + 2); }
+      else if (rule === "weekly") { n.setDate(n.getDate() + 7); }
+      else if (rule === "monthly") {
+        const origDay = originDue.getDate();
+        n.setMonth(n.getMonth() + 1);
+        const daysInMonth = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
+        n.setDate(Math.min(origDay, daysInMonth));
+      } else if (rule === "yearly") { n.setFullYear(n.getFullYear() + 1); }
+      n.setHours(0, 0, 0, 0);
+      return n;
+    };
+    let cur = midnight(new Date(originDue));
+    cur = advance(cur);
+    while (cur < floor) cur = advance(cur);
+    while (cur <= effectiveCeil) { results.push(new Date(cur)); cur = advance(new Date(cur)); }
+    return results;
+  }
+
+  async function copyChildData(childId: string, t: TaskFull) {
+    const steps = (t.steps ?? []).map(s => ({ task_id: childId, label: s.label, sort_order: s.sort_order, requires_photo: s.requires_photo, is_done: false }));
+    if (steps.length > 0) await supabase.from("task_steps").insert(steps);
+    const questions = (t.questions ?? []).map(q => ({ task_id: childId, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: q.sort_order }));
+    if (questions.length > 0) await supabase.from("task_questions").insert(questions);
+    if ((t.images ?? []).length > 0) {
+      await supabase.from("task_images").insert(t.images!.map(img => ({ task_id: childId, storage_path: img.storage_path, uploaded_by: img.uploaded_by })));
+    }
+    const assignees = (t.assignees ?? []).map(a => ({ task_id: childId, user_id: a.user_id, group_id: a.group_id }));
+    if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
+  }
+
+  // Called immediately after a recurring parent is fully saved so all future instances are visible right away.
+  async function spawnChildrenForNewParent(parent: TaskFull) {
+    if (!parent.recurrence_rule) return;
+    const nowMs = getSimulatedNow();
+    const originDate = parent.recurrence_start
+      ? midnight(new Date(parent.recurrence_start))
+      : parent.due_date
+        ? midnight(new Date(parent.due_date))
+        : midnight(new Date(parent.created_at));
+    const durationMs = parent.due_date
+      ? Math.max(0, midnight(new Date(parent.due_date)).getTime() - originDate.getTime())
+      : 0;
+    // Ceiling: recurrence_end if set, otherwise 1 year from today
+    const ceilDate = parent.recurrence_end
+      ? midnight(new Date(parent.recurrence_end))
+      : (() => { const d = new Date(nowMs); d.setFullYear(d.getFullYear() + 1); d.setHours(0,0,0,0); return d; })();
+    const periodStarts = buildPeriodStarts(
+      originDate,
+      parent.recurrence_rule,
+      parent.recurrence_days ?? null,
+      parent.recurrence_start ? new Date(parent.recurrence_start) : null,
+      parent.recurrence_end ? new Date(parent.recurrence_end) : null,
+      ceilDate,
+    );
+    for (const ps of periodStarts) {
+      const psKey = localDateStr(ps);
+      const childDue = parent.due_date ? new Date(ps.getTime() + durationMs) : null;
+      const { data: child } = await supabase.from("tasks").insert({
+        title: parent.title,
+        description: parent.description,
+        category: parent.category,
+        priority: parent.priority,
+        store_id: parent.store_id,
+        due_date: childDue ? childDue.toISOString() : null,
+        recurrence_rule: parent.recurrence_rule,
+        recurrence_days: parent.recurrence_days,
+        recurrence_period_start: psKey,
+        parent_task_id: parent.id,
+        created_by: parent.created_by,
+        assigned_to: parent.assigned_to,
+        status: "todo",
+      }).select().maybeSingle();
+      if (child) await copyChildData(child.id, parent);
+    }
+    if (periodStarts.length > 0) {
+      await supabase.from("tasks").update({ last_spawned_at: new Date(nowMs).toISOString() }).eq("id", parent.id);
+    }
+  }
+
   const spawnRecurringTasks = useCallback(async (taskList: TaskFull[]) => {
     if (!isManager || spawnRef.current) return;
     spawnRef.current = true;
@@ -245,10 +352,6 @@ function TasksPage() {
     const simToday = new Date(nowMs);
     simToday.setHours(0, 0, 0, 0);
 
-    // Normalise a Date to midnight local time, return new Date
-    const midnight = (d: Date): Date => { const n = new Date(d); n.setHours(0,0,0,0); return n; };
-
-    // Build per-parent set of period-start date strings that already have a child
     const coveredByParent = new Map<string, Set<string>>();
     for (const t of taskList) {
       if (!t.parent_task_id) continue;
@@ -259,153 +362,44 @@ function TasksPage() {
       if (key) coveredByParent.get(t.parent_task_id)!.add(key);
     }
 
-    const recurringTasks = taskList.filter(
-      (t) => t.recurrence_rule && !t.parent_task_id
-    );
+    const recurringTasks = taskList.filter((t) => t.recurrence_rule && !t.parent_task_id);
     if (recurringTasks.length === 0) { spawnRef.current = false; return; }
-
-    // Compute all period-start dates from day-after-originDue up through simToday
-    // startDate: explicit floor for periods. If null, defaults to day after originDue.
-    function allPeriodStarts(originDue: Date, rule: string, weekdays: number[] | null, startDate: Date | null, endDate: Date | null): Date[] {
-      const ceil = endDate
-        ? (midnight(new Date(endDate)) < simToday ? midnight(new Date(endDate)) : simToday)
-        : simToday;
-      let floor: Date;
-      if (startDate) {
-        floor = midnight(new Date(startDate));
-      } else {
-        floor = midnight(new Date(originDue));
-        floor.setDate(floor.getDate() + 1);
-      }
-      const results: Date[] = [];
-
-      if (rule === "weekly" && weekdays && weekdays.length > 0) {
-        const cur = new Date(floor);
-        while (cur <= ceil) {
-          const jsDay = cur.getDay();
-          const ourDay = jsDay === 0 ? 6 : jsDay - 1; // Mon=0 Sun=6
-          if (weekdays.includes(ourDay)) results.push(new Date(cur));
-          cur.setDate(cur.getDate() + 1);
-        }
-        return results;
-      }
-
-      const advance = (d: Date): Date => {
-        const n = new Date(d);
-        if (rule === "daily") { n.setDate(n.getDate() + 1); }
-        else if (rule === "every_other_day") { n.setDate(n.getDate() + 2); }
-        else if (rule === "weekly") { n.setDate(n.getDate() + 7); }
-        else if (rule === "monthly") {
-          const origDay = originDue.getDate();
-          n.setMonth(n.getMonth() + 1);
-          const daysInMonth = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
-          n.setDate(Math.min(origDay, daysInMonth));
-        } else if (rule === "yearly") {
-          n.setFullYear(n.getFullYear() + 1);
-        }
-        n.setHours(0, 0, 0, 0);
-        return n;
-      };
-
-      // Start at the first period >= floor
-      let cur = midnight(new Date(originDue));
-      cur = advance(cur);
-      while (cur < floor) cur = advance(cur);
-      while (cur <= ceil) {
-        results.push(new Date(cur));
-        cur = advance(new Date(cur));
-      }
-      return results;
-    }
-
-    async function copyChildData(childId: string, t: TaskFull) {
-      const steps = (t.steps ?? []).map(s => ({
-        task_id: childId, label: s.label, sort_order: s.sort_order,
-        requires_photo: s.requires_photo, is_done: false,
-      }));
-      if (steps.length > 0) await supabase.from("task_steps").insert(steps);
-
-      const questions = (t.questions ?? []).map(q => ({
-        task_id: childId, label: q.label,
-        question_type: q.question_type ?? "text",
-        is_required: q.is_required, sort_order: q.sort_order,
-      }));
-      if (questions.length > 0) await supabase.from("task_questions").insert(questions);
-
-      // Copy all images from the parent (reference photos set by creator)
-      if ((t.images ?? []).length > 0) {
-        await supabase.from("task_images").insert(
-          t.images!.map(img => ({ task_id: childId, storage_path: img.storage_path, uploaded_by: img.uploaded_by }))
-        );
-      }
-
-      const assignees = (t.assignees ?? []).map(a => ({
-        task_id: childId, user_id: a.user_id, group_id: a.group_id,
-      }));
-      if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
-    }
 
     let didSpawn = false;
 
     for (const t of recurringTasks) {
-      // Origin used for period calculation: recurrence_start > due_date > created_at
       const originDate: Date = t.recurrence_start
         ? midnight(new Date(t.recurrence_start))
-        : t.due_date
-          ? midnight(new Date(t.due_date))
-          : midnight(new Date(t.created_at));
-
-      // How long after the period start the child task is due (0 = same day = no deadline offset)
+        : t.due_date ? midnight(new Date(t.due_date)) : midnight(new Date(t.created_at));
       const durationMs = t.due_date
-        ? Math.max(0, midnight(new Date(t.due_date)).getTime() - originDate.getTime())
-        : 0;
+        ? Math.max(0, midnight(new Date(t.due_date)).getTime() - originDate.getTime()) : 0;
 
-      const periodStarts = allPeriodStarts(
-        originDate,
-        t.recurrence_rule!,
-        t.recurrence_days ?? null,
+      const periodStarts = buildPeriodStarts(
+        originDate, t.recurrence_rule!, t.recurrence_days ?? null,
         t.recurrence_start ? new Date(t.recurrence_start) : null,
         t.recurrence_end ? new Date(t.recurrence_end) : null,
+        simToday,
       );
 
       const covered = coveredByParent.get(t.id) ?? new Set<string>();
-
       for (const ps of periodStarts) {
         const psKey = localDateStr(ps);
         if (covered.has(psKey)) continue;
-
         const childDue = t.due_date ? new Date(ps.getTime() + durationMs) : null;
-
         const { data: child } = await supabase.from("tasks").insert({
-          title: t.title,
-          description: t.description,
-          category: t.category,
-          priority: t.priority,
-          store_id: t.store_id,
-          due_date: childDue ? childDue.toISOString() : null,
-          recurrence_rule: t.recurrence_rule,
-          recurrence_days: t.recurrence_days,
-          recurrence_period_start: psKey,
-          parent_task_id: t.id,
-          created_by: t.created_by,
-          assigned_to: t.assigned_to,
-          status: "todo",
+          title: t.title, description: t.description, category: t.category, priority: t.priority,
+          store_id: t.store_id, due_date: childDue ? childDue.toISOString() : null,
+          recurrence_rule: t.recurrence_rule, recurrence_days: t.recurrence_days,
+          recurrence_period_start: psKey, parent_task_id: t.id,
+          created_by: t.created_by, assigned_to: t.assigned_to, status: "todo",
         }).select().maybeSingle();
-
-        if (child) {
-          await copyChildData(child.id, t);
-          covered.add(psKey);
-          didSpawn = true;
-        }
+        if (child) { await copyChildData(child.id, t); covered.add(psKey); didSpawn = true; }
       }
     }
 
     if (didSpawn) {
-      // Update last_spawned_at for all recurring parents in one query
       const parentIds = recurringTasks.map(t => t.id);
-      await supabase.from("tasks")
-        .update({ last_spawned_at: new Date(nowMs).toISOString() })
-        .in("id", parentIds);
+      await supabase.from("tasks").update({ last_spawned_at: new Date(nowMs).toISOString() }).in("id", parentIds);
       logAudit(user?.id ?? null, "task.recurrence.spawn", "tasks", "batch", {});
     }
 
@@ -620,6 +614,23 @@ function TasksPage() {
       }
       if (notifyIds.size > 0) {
         notifyUsers([...notifyIds], "task_assigned", `Ny uppgift tilldelad: ${task.title}`, `Tilldelad av ${user?.display_name}`, "/uppgifter");
+      }
+
+      // Spawn all recurring instances immediately so they're visible without reload
+      if (task.recurrence_rule) {
+        const validSteps = newTask.steps.filter(s => s.label.trim());
+        const validQuestions = newTask.questions.filter(q => q.label.trim());
+        const assigneesFull = newTask.assigneeUserIds.map(uid => ({ task_id: task.id, user_id: uid, group_id: null }));
+        newTask.assigneeGroupIds.forEach(gid => assigneesFull.push({ task_id: task.id, user_id: null as unknown as string, group_id: gid }));
+        const parentFull: TaskFull = {
+          ...task,
+          steps: validSteps.map((s, i) => ({ id: "", task_id: task.id, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false })),
+          questions: validQuestions.map((q, i) => ({ id: "", task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: i, answer: null })),
+          assignees: assigneesFull.map(a => ({ task_id: task.id, user_id: a.user_id, group_id: a.group_id })),
+          images: [],
+        };
+        spawnRef.current = false;
+        await spawnChildrenForNewParent(parentFull);
       }
     }
 
