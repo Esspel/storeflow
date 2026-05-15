@@ -18,7 +18,8 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { supabase, type Notification, cleanOldNotifications } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
-import { getSimulatedDate, getTimeOffsetMs, setTimeOffsetMs, isSimulationActive } from "@/lib/time-simulation";
+import { getSimulatedDate, setTimeOffsetMs, isSimulationActive } from "@/lib/time-simulation";
+import { supabase as _supabase } from "@/lib/supabase";
 
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -303,7 +304,11 @@ export function AppShell() {
           </span>
           <button
             className="rounded-full border border-warning/40 px-3 py-1 hover:bg-warning/20 transition-colors"
-            onClick={() => { setTimeOffsetMs(0); setSimActive(false); }}
+            onClick={async () => {
+              await _supabase.from("tasks").delete().not("parent_task_id", "is", null);
+              setTimeOffsetMs(0);
+              setSimActive(false);
+            }}
           >
             Återställ
           </button>

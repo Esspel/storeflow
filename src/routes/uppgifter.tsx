@@ -59,6 +59,14 @@ function statusBadge(s: string) {
   return <Badge variant="secondary">Ej påbörjad</Badge>;
 }
 
+// Returns the start-of-day timestamp for a simulated "today"
+function simTodayStart(): number {
+  const d = new Date(getSimulatedNow());
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+// A task is due soon if its due_date is within today (but not yet past end of today)
 function isDueSoon(due_date: string | null): boolean {
   if (!due_date) return false;
   const now = getSimulatedNow();
@@ -66,9 +74,12 @@ function isDueSoon(due_date: string | null): boolean {
   return diff > 0 && diff < 24 * 60 * 60 * 1000;
 }
 
+// A task is overdue only if its due date is BEFORE the start of today (i.e. due yesterday or earlier)
 function isOverdue(due_date: string | null, status: string): boolean {
   if (!due_date || status === "done" || status === "cancelled") return false;
-  return new Date(due_date).getTime() < getSimulatedNow();
+  const dueDay = new Date(due_date);
+  dueDay.setHours(0, 0, 0, 0);
+  return dueDay.getTime() < simTodayStart();
 }
 
 // Returns effective status considering simulated time
@@ -917,21 +928,6 @@ function TasksPage() {
                     onClick={() => void completeTask(detailTask)}
                   >
                     <Circle className="h-3.5 w-3.5" /> Öppna igen
-                  </Button>
-                )}
-                {isManager && detailTask.status !== "cancelled" && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="rounded-full text-muted-foreground hover:text-destructive"
-                    onClick={async () => {
-                      await supabase.from("tasks").update({ status: "cancelled" }).eq("id", detailTask.id);
-                      logAudit(user?.id ?? null, "task.cancel", "tasks", detailTask.id, {});
-                      fetchTasks();
-                      setDetailTask(p => p ? { ...p, status: "cancelled" } : null);
-                    }}
-                  >
-                    Avbryt uppgift
                   </Button>
                 )}
               </div>

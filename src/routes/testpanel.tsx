@@ -110,10 +110,11 @@ function TestPanel() {
     addResult(true, `Tid framflyttad +${amount} ${timeUnit}. Simulerad tid: ${getSimulatedDate().toLocaleString("sv-SE")}`);
   }
 
-  function resetTime() {
+  async function resetTime() {
+    await supabase.from("tasks").delete().not("parent_task_id", "is", null);
     setTimeOffsetMs(0);
     setSimulatedOffset(0);
-    addResult(true, "Simulerad tid återställd till aktuell tid.");
+    addResult(true, "Simulerad tid återställd. Simulerade uppgifter borttagna.");
   }
 
   // ---- Notifications ----
