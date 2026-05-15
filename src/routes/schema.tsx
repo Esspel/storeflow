@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import * as pdfjsLib from "pdfjs-dist";
 import { Calendar, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -1535,13 +1534,12 @@ function SchemaPage() {
 
 // ─── PDF text extraction via pdfjs-dist ──────────────────────────────────────
 
-// Point pdfjs worker at the bundled file served from node_modules
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.mjs",
-  import.meta.url,
-).toString();
-
 async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
+  const pdfjsLib = await import("pdfjs-dist");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.mjs",
+    import.meta.url,
+  ).toString();
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer), useSystemFonts: true });
   const pdf = await loadingTask.promise;
   const pageTexts: string[] = [];
