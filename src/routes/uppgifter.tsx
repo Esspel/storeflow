@@ -1,10 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks,
-  Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon,
-  ChevronDown, ChevronUp, AlertTriangle, ZoomIn,
-} from "lucide-react";
+import { CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, TriangleAlert as AlertTriangle, ZoomIn } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -103,12 +99,22 @@ const emptyForm = (storeId: string) => ({
 // Image lightbox component
 function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    // capture phase so we intercept before Radix Dialog's keydown handler
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4"
+      onClick={onClose}
+      onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}
+    >
       <button
         type="button"
         onClick={onClose}
