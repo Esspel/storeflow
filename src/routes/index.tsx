@@ -1,5 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { TriangleAlert as AlertTriangle, ArrowRight, ChartBar as BarChart3, ListChecks, Clock, TrendingUp, Repeat, CircleCheck as CheckCircle2, Circle } from "lucide-react";
+import {
+  TriangleAlert as AlertTriangle,
+  ArrowRight,
+  ChartBar as BarChart3,
+  ListChecks,
+  Clock,
+  TrendingUp,
+  Repeat,
+  CircleCheck as CheckCircle2,
+  Circle,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -27,12 +37,10 @@ type TaskRow = {
 
 type Stats = {
   todosCompleted: number;
-  tasksCompleted: number;
   issuesCreated: number;
   openTasks: number;
   overdueTasks: number;
   openIncidents: number;
-  completionRate: number;
 };
 
 const RECURRENCE_LABELS: Record<string, string> = {
@@ -72,7 +80,6 @@ function HubPage() {
       const storeFilter = activeStore?.id ?? null;
       const now = getSimulatedNow();
 
-      // Tasks with step counts
       let tasksQ = supabase
         .from("tasks")
         .select("id, title, status, due_date, recurrence_rule, parent_task_id, priority, recurrence_days, steps:task_steps(id, is_done)")
@@ -80,7 +87,6 @@ function HubPage() {
       if (storeFilter) tasksQ = tasksQ.eq("store_id", storeFilter);
       const { data: rawTasks } = await tasksQ;
 
-      // Incidents
       let incQ = supabase.from("incidents").select("id, status, created_at");
       if (storeFilter) incQ = incQ.eq("store_id", storeFilter);
       const { data: incidents } = await incQ;
@@ -93,42 +99,18 @@ function HubPage() {
         steps_done: t.steps?.filter((s) => s.is_done).length ?? 0,
       }));
 
-      // Stats
       const done = mapped.filter((t) => t.status === "done").length;
       const openTasks = mapped.filter((t) => (t.status === "todo" || t.status === "progress") && !isEffectivelyLate(t, now)).length;
       const overdueTasks = mapped.filter((t) => t.status === "late" || isEffectivelyLate(t, now)).length;
-      const total = mapped.length;
-      const completionRate = total > 0 ? Math.round((done / total) * 100) : 0;
 
       const inc = (incidents ?? []) as { id: string; status: string; created_at: string }[];
       const openIncidents = inc.filter((i) => ["open", "in_progress", "escalated"].includes(i.status)).length;
-      const issuesCreated = inc.length;
 
-      setStats({
-        todosCompleted: done,
-        tasksCompleted: done,
-        issuesCreated,
-        openTasks,
-        overdueTasks,
-        openIncidents,
-        completionRate,
-      });
+      setStats({ todosCompleted: done, issuesCreated: inc.length, openTasks, overdueTasks, openIncidents });
 
-      // Parent IDs that have children
       const parentIdsWithChildren = new Set(mapped.filter((t) => t.parent_task_id).map((t) => t.parent_task_id!));
-
-      // One-off tasks: not recurring, not done, not cancelled — show top 4
-      const oneOff = mapped
-        .filter((t) => !t.recurrence_rule && !parentIdsWithChildren.has(t.id) && t.status !== "cancelled")
-        .slice(0, 4);
-
-      // Recurring parent templates — show top 4
-      const recurring = mapped
-        .filter((t) => t.recurrence_rule && !t.parent_task_id)
-        .slice(0, 4);
-
-      setOneOffTasks(oneOff);
-      setRecurringTasks(recurring);
+      setOneOffTasks(mapped.filter((t) => !t.recurrence_rule && !parentIdsWithChildren.has(t.id) && t.status !== "cancelled").slice(0, 5));
+      setRecurringTasks(mapped.filter((t) => t.recurrence_rule && !t.parent_task_id).slice(0, 5));
       setLoading(false);
     };
     load();
@@ -137,70 +119,82 @@ function HubPage() {
   return (
     <div className="mx-auto w-full max-w-[1400px] px-5 py-10 md:px-8 md:py-14">
 
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-black tracking-tight text-foreground md:text-4xl">
-          {user?.display_name ? `Hej, ${user.display_name.split(" ")[0]}` : "Välkommen"}
+      {/* Hero heading */}
+      <div className="mb-8 md:mb-10">
+        <h1 className="text-3xl font-black tracking-tight text-foreground md:text-5xl">
+          Vad ska du göra idag?
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {activeStore ? activeStore.name : "Allt du behöver för butikens dagliga drift — på ett ställe."}
+        <p className="mt-2 text-sm text-muted-foreground md:text-base">
+          {activeStore
+            ? `${activeStore.name} — allt du behöver för butikens dagliga drift.`
+            : "Allt du behöver för butikens dagliga drift — på ett ställe."}
         </p>
       </div>
 
-      {/* Main task preview panel */}
+      {/* Main panel — inspired by StoreSprint two-column layout */}
       <div className="mb-6 overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
+
+        {/* Top: two-column task preview */}
         <div className="grid grid-cols-1 divide-y divide-border/60 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
 
           {/* Left: one-off tasks */}
-          <div className="p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-foreground">Uppgifter idag</h2>
+          <div className="p-5 md:p-6">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-primary" />
+                <h2 className="text-sm font-semibold text-foreground">Uppgifter idag</h2>
+              </div>
               <Link to="/uppgifter" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
                 Se alla <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
+
             {loading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/50" />)}
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-muted/50" />)}
               </div>
             ) : oneOffTasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-center">
-                <CheckCircle2 className="mb-2 h-8 w-8 text-success/60" />
-                <p className="text-sm font-medium text-muted-foreground">Inga aktiva uppgifter</p>
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <CheckCircle2 className="mb-2 h-7 w-7 text-success/60" />
+                <p className="text-xs font-medium text-muted-foreground">Inga aktiva uppgifter</p>
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="divide-y divide-border/40">
                 {oneOffTasks.map((t) => <TaskPreviewRow key={t.id} task={t} />)}
               </div>
             )}
           </div>
 
-          {/* Right: recurring tasks */}
-          <div className="p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-foreground">Återkommande rutiner</h2>
+          {/* Right: recurring */}
+          <div className="p-5 md:p-6">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-success" />
+                <h2 className="text-sm font-semibold text-foreground">Återkommande rutiner</h2>
+              </div>
               <Link to="/uppgifter" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
                 Se alla <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
+
             {loading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/50" />)}
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-muted/50" />)}
               </div>
             ) : recurringTasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-center">
-                <Repeat className="mb-2 h-8 w-8 text-muted-foreground/40" />
-                <p className="text-sm font-medium text-muted-foreground">Inga återkommande rutiner</p>
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Repeat className="mb-2 h-7 w-7 text-muted-foreground/40" />
+                <p className="text-xs font-medium text-muted-foreground">Inga återkommande rutiner</p>
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="divide-y divide-border/40">
                 {recurringTasks.map((t) => <TaskPreviewRow key={t.id} task={t} recurring />)}
               </div>
             )}
           </div>
         </div>
 
-        {/* Stats row */}
+        {/* Bottom stats bar */}
         {stats && (
           <div className="grid grid-cols-2 divide-x divide-y divide-border/60 border-t border-border/60 md:grid-cols-4 md:divide-y-0">
             <StatCell label="Slutförda uppgifter" value={stats.todosCompleted} icon={CheckCircle2} />
@@ -211,34 +205,14 @@ function HubPage() {
         )}
       </div>
 
-      {/* Quick action cards */}
+      {/* Quick nav cards */}
       <div className={cn(
-        "mx-auto grid grid-cols-1 gap-4 sm:grid-cols-2",
-        isManager ? "lg:grid-cols-3" : "max-w-xl"
+        "grid grid-cols-1 gap-3 sm:grid-cols-2",
+        isManager ? "lg:grid-cols-3" : "max-w-2xl"
       )}>
-        <QuickCard
-          to="/uppgifter"
-          icon={ListChecks}
-          title="Dagens uppgifter"
-          desc="Rutiner, checklistor och kontroller"
-          tone="blue"
-        />
-        <QuickCard
-          to="/avvikelser"
-          icon={AlertTriangle}
-          title="Avvikelser"
-          desc="Rapportera och följ upp ärenden"
-          tone="amber"
-        />
-        {isManager && (
-          <QuickCard
-            to="/rapporter"
-            icon={BarChart3}
-            title="Rapporter"
-            desc="KPI:er, trender och insikter"
-            tone="green"
-          />
-        )}
+        <QuickCard to="/uppgifter" icon={ListChecks} title="Dagens uppgifter" desc="Rutiner, checklistor och kontroller" tone="blue" />
+        <QuickCard to="/avvikelser" icon={AlertTriangle} title="Avvikelser" desc="Rapportera och följ upp ärenden" tone="amber" />
+        {isManager && <QuickCard to="/rapporter" icon={BarChart3} title="Rapporter" desc="KPI:er, trender och insikter" tone="green" />}
       </div>
     </div>
   );
@@ -253,39 +227,29 @@ function TaskPreviewRow({ task, recurring = false }: { task: TaskRow; recurring?
   return (
     <Link
       to="/uppgifter"
-      className="group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-muted/50"
+      className="group flex items-center gap-3 py-2.5 transition-colors hover:bg-muted/30 -mx-2 px-2 rounded-lg"
     >
-      {/* Status dot */}
       <div className={cn(
         "h-2 w-2 shrink-0 rounded-full",
-        done ? "bg-success" : late ? "bg-destructive" : task.priority === "Kritisk" ? "bg-destructive" : "bg-muted-foreground/40"
+        done ? "bg-success" : late ? "bg-destructive" : task.priority === "Kritisk" ? "bg-destructive" : "bg-border"
       )} />
 
       <div className="min-w-0 flex-1">
-        <p className={cn("truncate text-sm font-medium leading-tight", done && "line-through text-muted-foreground")}>
+        <p className={cn("truncate text-sm font-medium", done && "line-through text-muted-foreground")}>
           {task.title}
         </p>
-        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-          {task.due_date && !recurring && (
-            <span className={cn("inline-flex items-center gap-0.5", late && "text-destructive font-medium")}>
-              <Clock className="h-3 w-3" />
-              {new Date(task.due_date).toLocaleDateString("sv-SE", { month: "short", day: "numeric" })}
-            </span>
-          )}
-          {recurring && task.recurrence_rule && (
-            <span className="inline-flex items-center gap-0.5">
-              <Repeat className="h-3 w-3" />
-              {recurrenceLabel(task)}
-            </span>
-          )}
-          {task.steps_total > 0 && (
-            <span>{task.steps_done}/{task.steps_total}</span>
-          )}
-        </div>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          {recurring && task.recurrence_rule
+            ? recurrenceLabel(task)
+            : task.due_date
+              ? new Date(task.due_date).toLocaleDateString("sv-SE", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+              : "Inget datum"
+          }
+        </p>
       </div>
 
       {/* Progress bar */}
-      <div className="w-24 shrink-0">
+      <div className="w-20 shrink-0">
         <div className="h-1.5 overflow-hidden rounded-full bg-muted">
           <div
             className={cn("h-full rounded-full transition-all", done ? "bg-success" : "bg-primary")}
@@ -294,54 +258,37 @@ function TaskPreviewRow({ task, recurring = false }: { task: TaskRow; recurring?
         </div>
       </div>
 
-      {/* Done indicator */}
-      {done && <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />}
-      {!done && <Circle className="h-4 w-4 shrink-0 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors" />}
+      {done
+        ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+        : <Circle className="h-4 w-4 shrink-0 text-border group-hover:text-muted-foreground transition-colors" />
+      }
     </Link>
   );
 }
 
-function StatCell({
-  label,
-  value,
-  icon: Icon,
-  urgent = false,
-}: {
-  label: string;
-  value: number;
-  icon: LucideIcon;
-  urgent?: boolean;
+function StatCell({ label, value, icon: Icon, urgent = false }: {
+  label: string; value: number; icon: LucideIcon; urgent?: boolean;
 }) {
-  const formatted = value >= 1000 ? `${(value / 1000).toFixed(2)}k` : String(value);
+  const fmt = value >= 1000 ? `${(value / 1000).toFixed(2)}k` : String(value);
   return (
-    <div className="flex items-start gap-3 p-5">
+    <div className="flex items-start gap-3 p-4 md:p-5">
       <div className={cn(
         "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-        urgent ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"
+        urgent ? "bg-destructive/10 text-destructive" : "bg-success/10 text-success"
       )}>
         <Icon className="h-4 w-4" />
       </div>
-      <div>
-        <p className="text-2xl font-black tracking-tight text-foreground">{formatted}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
+      <div className="min-w-0">
+        <p className="text-xl font-black tracking-tight text-foreground md:text-2xl">{fmt}</p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground leading-tight">{label}</p>
       </div>
-      <TrendingUp className="ml-auto mt-1 h-4 w-4 shrink-0 text-muted-foreground/40" />
+      <TrendingUp className="ml-auto mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground/30" />
     </div>
   );
 }
 
-function QuickCard({
-  to,
-  icon: Icon,
-  title,
-  desc,
-  tone,
-}: {
-  to: string;
-  icon: LucideIcon;
-  title: string;
-  desc: string;
-  tone: "blue" | "amber" | "green";
+function QuickCard({ to, icon: Icon, title, desc, tone }: {
+  to: string; icon: LucideIcon; title: string; desc: string; tone: "blue" | "amber" | "green";
 }) {
   const colors = {
     blue: "bg-info/10 text-info",
@@ -351,16 +298,16 @@ function QuickCard({
   return (
     <Link
       to={to}
-      className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]"
+      className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-card p-4 shadow-[var(--shadow-sm)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]"
     >
-      <div className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", colors[tone])}>
+      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", colors[tone])}>
         <Icon className="h-5 w-5" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="font-semibold text-foreground">{title}</p>
+        <p className="font-semibold text-sm text-foreground">{title}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">{desc}</p>
       </div>
-      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5" />
     </Link>
   );
 }

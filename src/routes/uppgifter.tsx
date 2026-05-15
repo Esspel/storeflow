@@ -1064,263 +1064,341 @@ function TasksPage() {
         </Dialog>
       )}
 
-      {/* CREATE DIALOG */}
+      {/* CREATE DIALOG — StoreSprint two-panel layout */}
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setSaveError(""); setUploadFiles([]); } }}>
-        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
-          <DialogHeader><DialogTitle>Ny uppgift</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-
-            {templates.length > 0 && (
-              <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5 text-sm"><FileText className="h-3.5 w-3.5" />Använd mall</Label>
-                <Select onValueChange={applyTemplate}>
-                  <SelectTrigger><SelectValue placeholder="Välj mall..." /></SelectTrigger>
-                  <SelectContent>
-                    {templates.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>{t.title} {t.category ? `(${t.category})` : ""}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label>Titel *</Label>
-              <Input placeholder="Uppgiftens titel" value={newTask.title}
-                onChange={(e) => setNewTask(p => ({ ...p, title: e.target.value }))} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Beskrivning</Label>
-              <Input placeholder="Valfri beskrivning" value={newTask.description}
-                onChange={(e) => setNewTask(p => ({ ...p, description: e.target.value }))} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Kategori</Label>
-                <Select value={newTask.category} onValueChange={(v) => setNewTask(p => ({ ...p, category: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["Drift", "Säkerhet", "Kundärenden", "Övrigt"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Prioritet</Label>
-                <Select value={newTask.priority} onValueChange={(v) => setNewTask(p => ({ ...p, priority: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["Låg", "Medel", "Hög", "Kritisk"].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Butik</Label>
-                <Select value={newTask.store_id || "__none"} onValueChange={(v) => setNewTask(p => ({ ...p, store_id: v === "__none" ? "" : v }))}>
-                  <SelectTrigger><SelectValue placeholder="Välj butik" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">Ingen</SelectItem>
-                    {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Förfallodatum</Label>
-                <Input type="datetime-local" value={newTask.due_date}
-                  onChange={(e) => setNewTask(p => ({ ...p, due_date: e.target.value }))} />
-              </div>
-            </div>
-
-            {/* Assignees */}
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5 text-sm"><Users className="h-3.5 w-3.5" />Tilldela personer</Label>
-              <div className="max-h-32 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-0.5">
-                {storeUsers.map(u => (
-                  <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-muted/50">
-                    <Checkbox checked={newTask.assigneeUserIds.includes(u.id)}
-                      onCheckedChange={() => setNewTask(p => ({
-                        ...p,
-                        assigneeUserIds: p.assigneeUserIds.includes(u.id) ? p.assigneeUserIds.filter(id => id !== u.id) : [...p.assigneeUserIds, u.id]
-                      }))} />
-                    <span className="text-sm">{u.display_name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {groups.length > 0 && (
-              <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5 text-sm"><Users className="h-3.5 w-3.5" />Tilldela grupper</Label>
-                <div className="max-h-24 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-0.5">
-                  {groups.map(g => (
-                    <label key={g.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-muted/50">
-                      <Checkbox checked={newTask.assigneeGroupIds.includes(g.id)}
-                        onCheckedChange={() => setNewTask(p => ({
-                          ...p,
-                          assigneeGroupIds: p.assigneeGroupIds.includes(g.id) ? p.assigneeGroupIds.filter(id => id !== g.id) : [...p.assigneeGroupIds, g.id]
-                        }))} />
-                      <span className="text-sm">{g.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Recurrence */}
-            <div className="space-y-1.5">
-              <Label>Återkommande</Label>
-              <Select value={newTask.recurrence_rule || "__none"} onValueChange={(v) => {
-                  const rule = v === "__none" ? "" : v;
-                  setNewTask(p => ({
-                    ...p,
-                    recurrence_rule: rule,
-                    // Default start date to simulated today when a rule is first chosen
-                    recurrence_start: rule && !p.recurrence_start ? localDateStr(new Date(getSimulatedNow())) : p.recurrence_start,
-                  }));
-                }}>
-                <SelectTrigger><SelectValue placeholder="Ingen" /></SelectTrigger>
-                <SelectContent>
-                  {RECURRENCE_OPTIONS.map(o => <SelectItem key={o.value || "__none"} value={o.value || "__none"}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {newTask.recurrence_rule === "weekly" && (
-              <div className="space-y-1.5">
-                <Label>Veckodagar</Label>
-                <div className="flex flex-wrap gap-2">
-                  {WEEKDAYS.map((day, idx) => (
-                    <button key={idx} type="button"
-                      className={cn("rounded-full px-3 py-1 text-xs font-medium border transition-colors",
-                        newTask.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border/60 text-muted-foreground hover:border-primary/50")}
-                      onClick={() => {
-                        const days = newTask.recurrence_days.includes(idx) ? newTask.recurrence_days.filter(d => d !== idx) : [...newTask.recurrence_days, idx];
-                        setNewTask(p => ({ ...p, recurrence_days: days }));
-                      }}>
-                      {day}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {newTask.recurrence_rule && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Startdatum</Label>
-                  <Input type="date" value={newTask.recurrence_start}
-                    onChange={(e) => setNewTask(p => ({ ...p, recurrence_start: e.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Slutdatum</Label>
-                  <Input type="date" value={newTask.recurrence_end}
-                    onChange={(e) => setNewTask(p => ({ ...p, recurrence_end: e.target.value }))} />
-                </div>
-              </div>
-            )}
-
-            {/* Checkpoints */}
-            <div className="space-y-1.5">
-              <Label>Checkpoints</Label>
-              <div className="space-y-2">
-                {newTask.steps.map((step, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <Input placeholder={`Checkpoint ${i + 1}`} value={step.label}
-                      onChange={(e) => setNewTask(p => ({ ...p, steps: p.steps.map((s, idx) => idx === i ? { ...s, label: e.target.value } : s) }))}
-                      className="flex-1" />
-                    <label className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
-                      <Checkbox checked={step.requires_photo}
-                        onCheckedChange={(v) => setNewTask(p => ({ ...p, steps: p.steps.map((s, idx) => idx === i ? { ...s, requires_photo: !!v } : s) }))} />
-                      Foto
-                    </label>
-                    {newTask.steps.length > 1 && (
-                      <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8"
-                        onClick={() => setNewTask(p => ({ ...p, steps: p.steps.filter((_, idx) => idx !== i) }))}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                <Button variant="outline" size="sm" className="w-full rounded-full"
-                  onClick={() => setNewTask(p => ({ ...p, steps: [...p.steps, { label: "", requires_photo: false }] }))}>
-                  <Plus className="mr-1 h-3.5 w-3.5" />Lägg till checkpoint
-                </Button>
-              </div>
-            </div>
-
-            {/* Questions */}
-            <div className="space-y-1.5">
-              <Label>Frågor</Label>
-              <div className="space-y-2">
-                {newTask.questions.map((q, i) => (
-                  <div key={i} className="flex flex-col gap-1.5 rounded-lg border border-border/60 p-2.5">
-                    <div className="flex items-center gap-2">
-                      <Input placeholder={`Fråga ${i + 1}`} value={q.label}
-                        onChange={(e) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, label: e.target.value } : qr) }))}
-                        className="flex-1 h-8 text-sm" />
-                      <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8"
-                        onClick={() => setNewTask(p => ({ ...p, questions: p.questions.filter((_, idx) => idx !== i) }))}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex gap-1">
-                        <button type="button"
-                          className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors", q.question_type === "text" ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
-                          onClick={() => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, question_type: "text" } : qr) }))}>
-                          Text
-                        </button>
-                        <button type="button"
-                          className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors", q.question_type === "yes_no" ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
-                          onClick={() => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, question_type: "yes_no" } : qr) }))}>
-                          Ja/Nej
-                        </button>
-                      </div>
-                      <label className="ml-auto flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
-                        <Checkbox checked={q.is_required}
-                          onCheckedChange={(v) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, is_required: !!v } : qr) }))} />
-                        Obligatorisk
-                      </label>
-                    </div>
-                  </div>
-                ))}
-                <Button variant="outline" size="sm" className="w-full rounded-full"
-                  onClick={() => setNewTask(p => ({ ...p, questions: [...p.questions, { label: "", question_type: "text", is_required: false }] }))}>
-                  <Plus className="mr-1 h-3.5 w-3.5" />Lägg till fråga
-                </Button>
-              </div>
-            </div>
-
-            {/* Images */}
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5 text-sm"><ImageIcon className="h-3.5 w-3.5" />Bilder</Label>
-              <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
-                onChange={(e) => { if (e.target.files) setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]); }} />
-              <Button variant="outline" size="sm" className="w-full rounded-full" onClick={() => fileInputRef.current?.click()}>
-                <Plus className="mr-1 h-3.5 w-3.5" />Välj bilder
+        <DialogContent className="max-h-[92vh] w-full max-w-4xl overflow-hidden p-0 gap-0">
+          {/* Header bar */}
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+            <ListChecks className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-muted-foreground">Ny uppgift</span>
+            {newTask.title && <span className="text-sm font-semibold text-foreground">{newTask.title}</span>}
+            <div className="ml-auto flex items-center gap-2">
+              {saveError && <span className="text-xs text-destructive">{saveError}</span>}
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setShowCreate(false)}>Avbryt</Button>
+              <Button size="sm" className="rounded-full gap-1.5 bg-primary text-primary-foreground" onClick={createTask} disabled={saving || !newTask.title.trim()}>
+                {saving ? "Sparar..." : "Skapa uppgift"}
               </Button>
-              {uploadFiles.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {uploadFiles.map((f, i) => (
-                    <div key={i} className="relative">
-                      <img src={URL.createObjectURL(f)} alt="" className="h-14 w-14 rounded-lg object-cover border border-border/60" />
-                      <button type="button" className="absolute -top-1 -right-1 rounded-full bg-destructive p-0.5 text-white"
-                        onClick={() => setUploadFiles(prev => prev.filter((_, idx) => idx !== i))}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
+            </div>
+          </div>
+
+          {/* Two-panel body */}
+          <div className="flex overflow-hidden" style={{ maxHeight: "calc(92vh - 56px)" }}>
+
+            {/* LEFT: Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 min-w-0">
+
+              {/* Template picker */}
+              {templates.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Använd mall</Label>
+                  <Select onValueChange={applyTemplate}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Välj mall..." /></SelectTrigger>
+                    <SelectContent>
+                      {templates.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.title} {t.category ? `(${t.category})` : ""}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
+
+              {/* Title */}
+              <div>
+                <input
+                  placeholder="Uppgiftens titel..."
+                  value={newTask.title}
+                  onChange={(e) => setNewTask(p => ({ ...p, title: e.target.value }))}
+                  className="w-full border-0 bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground/50 outline-none focus:outline-none"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <Textarea
+                  placeholder="Lägg till en beskrivning eller instruktioner..."
+                  value={newTask.description}
+                  onChange={(e) => setNewTask(p => ({ ...p, description: e.target.value }))}
+                  rows={3}
+                  className="resize-none border-0 bg-transparent px-0 text-sm text-muted-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 shadow-none"
+                />
+              </div>
+
+              {/* Checkpoints */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Checkpoints</p>
+                <div className="space-y-1.5">
+                  {newTask.steps.map((step, i) => (
+                    <div key={i} className="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-colors hover:bg-muted/40">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-muted-foreground/30" />
+                      <Input
+                        placeholder={`Checkpoint ${i + 1}`}
+                        value={step.label}
+                        onChange={(e) => setNewTask(p => ({ ...p, steps: p.steps.map((s, idx) => idx === i ? { ...s, label: e.target.value } : s) }))}
+                        className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0"
+                      />
+                      <label className="flex items-center gap-1 text-[11px] text-muted-foreground/70 whitespace-nowrap cursor-pointer">
+                        <Checkbox
+                          checked={step.requires_photo}
+                          onCheckedChange={(v) => setNewTask(p => ({ ...p, steps: p.steps.map((s, idx) => idx === i ? { ...s, requires_photo: !!v } : s) }))}
+                          className="h-3 w-3"
+                        />
+                        Foto
+                      </label>
+                      {newTask.steps.length > 1 && (
+                        <button type="button" className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => setNewTask(p => ({ ...p, steps: p.steps.filter((_, idx) => idx !== i) }))}>
+                          <X className="h-3.5 w-3.5 text-muted-foreground/60" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                  onClick={() => setNewTask(p => ({ ...p, steps: [...p.steps, { label: "", requires_photo: false }] }))}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Lägg till checkpoint
+                </button>
+              </div>
+
+              {/* Questions */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Frågor</p>
+                <div className="space-y-2">
+                  {newTask.questions.map((q, i) => (
+                    <div key={i} className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          placeholder={`Fråga ${i + 1}`}
+                          value={q.label}
+                          onChange={(e) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, label: e.target.value } : qr) }))}
+                          className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0"
+                        />
+                        <button type="button" onClick={() => setNewTask(p => ({ ...p, questions: p.questions.filter((_, idx) => idx !== i) }))}>
+                          <X className="h-3.5 w-3.5 text-muted-foreground/50" />
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex gap-1">
+                          {(["text", "yes_no"] as const).map((type) => (
+                            <button key={type} type="button"
+                              className={cn("rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+                                q.question_type === type ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                              onClick={() => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, question_type: type } : qr) }))}>
+                              {type === "text" ? "Text" : "Ja/Nej"}
+                            </button>
+                          ))}
+                        </div>
+                        <label className="flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer">
+                          <Checkbox checked={q.is_required}
+                            onCheckedChange={(v) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, is_required: !!v } : qr) }))}
+                            className="h-3 w-3" />
+                          Obligatorisk
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                  onClick={() => setNewTask(p => ({ ...p, questions: [...p.questions, { label: "", question_type: "text", is_required: false }] }))}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Lägg till fråga
+                </button>
+              </div>
+
+              {/* Images */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Bilder</p>
+                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
+                  onChange={(e) => { if (e.target.files) setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]); }} />
+                {uploadFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {uploadFiles.map((f, i) => (
+                      <div key={i} className="relative">
+                        <img src={URL.createObjectURL(f)} alt="" className="h-14 w-14 rounded-lg object-cover border border-border/60" />
+                        <button type="button" className="absolute -top-1 -right-1 rounded-full bg-destructive p-0.5 text-white"
+                          onClick={() => setUploadFiles(prev => prev.filter((_, idx) => idx !== i))}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImageIcon className="h-3.5 w-3.5" /> Välj bilder
+                </button>
+              </div>
             </div>
 
-            {saveError && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{saveError}</p>}
+            {/* RIGHT: Properties sidebar */}
+            <div className="w-72 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/20">
+
+              {/* Property rows — Coop-inspired: label left, value/control right */}
+              <div className="divide-y divide-border/50">
+
+                {/* Förfallodatum */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Förfallodatum</span>
+                  <Input
+                    type="datetime-local"
+                    value={newTask.due_date}
+                    onChange={(e) => setNewTask(p => ({ ...p, due_date: e.target.value }))}
+                    className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus-visible:ring-0 text-right"
+                  />
+                </div>
+
+                {/* Prioritet */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Prioritet</span>
+                  <Select value={newTask.priority} onValueChange={(v) => setNewTask(p => ({ ...p, priority: v }))}>
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs font-medium shadow-none focus:ring-0 justify-end">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["Låg", "Medel", "Hög", "Kritisk"].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Kategori */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Kategori</span>
+                  <Select value={newTask.category} onValueChange={(v) => setNewTask(p => ({ ...p, category: v }))}>
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["Drift", "Säkerhet", "Kundärenden", "Övrigt"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Butik */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <ListChecks className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Butik</span>
+                  <Select value={newTask.store_id || "__none"} onValueChange={(v) => setNewTask(p => ({ ...p, store_id: v === "__none" ? "" : v }))}>
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
+                      <SelectValue placeholder="Ingen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Ingen</SelectItem>
+                      {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Återkommande */}
+                <div className="px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <Repeat className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <span className="w-24 shrink-0 text-xs text-muted-foreground">Återkommande</span>
+                    <Select value={newTask.recurrence_rule || "__none"} onValueChange={(v) => {
+                      const rule = v === "__none" ? "" : v;
+                      setNewTask(p => ({
+                        ...p,
+                        recurrence_rule: rule,
+                        recurrence_start: rule && !p.recurrence_start ? localDateStr(new Date(getSimulatedNow())) : p.recurrence_start,
+                      }));
+                    }}>
+                      <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
+                        <SelectValue placeholder="Ingen" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RECURRENCE_OPTIONS.map(o => <SelectItem key={o.value || "__none"} value={o.value || "__none"}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {newTask.recurrence_rule === "weekly" && (
+                    <div className="flex flex-wrap gap-1 pl-7">
+                      {WEEKDAYS.map((day, idx) => (
+                        <button key={idx} type="button"
+                          className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                            newTask.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                          onClick={() => {
+                            const days = newTask.recurrence_days.includes(idx) ? newTask.recurrence_days.filter(d => d !== idx) : [...newTask.recurrence_days, idx];
+                            setNewTask(p => ({ ...p, recurrence_days: days }));
+                          }}>
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {newTask.recurrence_rule && (
+                    <div className="pl-7 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground w-12">Start</span>
+                        <Input type="date" value={newTask.recurrence_start}
+                          onChange={(e) => setNewTask(p => ({ ...p, recurrence_start: e.target.value }))}
+                          className="flex-1 h-7 text-xs" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground w-12">Slut</span>
+                        <Input type="date" value={newTask.recurrence_end}
+                          onChange={(e) => setNewTask(p => ({ ...p, recurrence_end: e.target.value }))}
+                          className="flex-1 h-7 text-xs" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tilldela personer */}
+                {storeUsers.length > 0 && (
+                  <div className="px-4 py-3 space-y-1.5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                      <span className="text-xs text-muted-foreground">Tilldela personer</span>
+                    </div>
+                    <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                      {storeUsers.map(u => (
+                        <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
+                          <Checkbox checked={newTask.assigneeUserIds.includes(u.id)}
+                            onCheckedChange={() => setNewTask(p => ({
+                              ...p,
+                              assigneeUserIds: p.assigneeUserIds.includes(u.id) ? p.assigneeUserIds.filter(id => id !== u.id) : [...p.assigneeUserIds, u.id]
+                            }))} className="h-3.5 w-3.5" />
+                          <span className="text-xs">{u.display_name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tilldela grupper */}
+                {groups.length > 0 && (
+                  <div className="px-4 py-3 space-y-1.5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                      <span className="text-xs text-muted-foreground">Tilldela grupper</span>
+                    </div>
+                    <div className="space-y-0.5 max-h-28 overflow-y-auto">
+                      {groups.map(g => (
+                        <label key={g.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
+                          <Checkbox checked={newTask.assigneeGroupIds.includes(g.id)}
+                            onCheckedChange={() => setNewTask(p => ({
+                              ...p,
+                              assigneeGroupIds: p.assigneeGroupIds.includes(g.id) ? p.assigneeGroupIds.filter(id => id !== g.id) : [...p.assigneeGroupIds, g.id]
+                            }))} className="h-3.5 w-3.5" />
+                          <span className="text-xs">{g.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Avbryt</Button>
-            <Button onClick={createTask} disabled={saving || !newTask.title.trim()}>{saving ? "Sparar..." : "Skapa uppgift"}</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
