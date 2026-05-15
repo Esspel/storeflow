@@ -143,6 +143,9 @@ function TasksPage() {
   const [detailTask, setDetailTask] = useState<TaskFull | null>(null);
   const [answerDraft, setAnswerDraft] = useState<Record<string, string>>({});
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  // Ref mirrors lightboxSrc so Radix onOpenChange can read it synchronously
+  // (React state may not have re-rendered yet when Radix fires its handler)
+  const lightboxOpenRef = useRef(false);
 
   const fetchTasks = useCallback(async () => {
     let q = supabase
@@ -394,6 +397,16 @@ function TasksPage() {
       void spawnRecurringTasks(tasks);
     }
   }, [tasks, spawnRecurringTasks]);
+
+  // When the simulated clock advances, re-fetch and re-spawn so new periods appear
+  useEffect(() => {
+    const handler = () => {
+      spawnRef.current = false; // allow a fresh spawn run
+      void fetchTasks();
+    };
+    window.addEventListener("sf-time-changed", handler);
+    return () => window.removeEventListener("sf-time-changed", handler);
+  }, [fetchTasks]);
 
   // Filter tasks by role visibility
   const visibleTasks = tasks.filter((t) => {
@@ -785,7 +798,7 @@ function TasksPage() {
 
       {/* DETAIL MODAL */}
       {detailTask && (
-        <Dialog open={!!detailTask} onOpenChange={(o) => { if (!o && !lightboxSrc) setDetailTask(null); }}>
+        <Dialog open={!!detailTask} onOpenChange={(o) => { if (!o && !lightboxOpenRef.current) setDetailTask(null); }}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-start justify-between gap-2 pr-6">
@@ -911,7 +924,7 @@ function TasksPage() {
                         key={img.id}
                         type="button"
                         className="group relative overflow-hidden rounded-lg border border-border/60"
-                        onClick={() => setLightboxSrc(getPublicUrl(img.storage_path))}
+                        onClick={() => { lightboxOpenRef.current = true; setLightboxSrc(getPublicUrl(img.storage_path)); }}
                       >
                         <img src={getPublicUrl(img.storage_path)} alt="" className="h-20 w-20 object-cover transition-transform group-hover:scale-105" />
                         <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
@@ -1231,7 +1244,7 @@ function TasksPage() {
         <PhotoViewer
           images={detailTask ? detailTask.images?.map(img => getPublicUrl(img.storage_path)).filter(Boolean) ?? [lightboxSrc] : [lightboxSrc]}
           initialIndex={detailTask?.images ? detailTask.images.findIndex(img => getPublicUrl(img.storage_path) === lightboxSrc) : 0}
-          onClose={() => setLightboxSrc(null)}
+          onClose={() => { lightboxOpenRef.current = false; setLightboxSrc(null); }}
         />
       )}
     </div>

@@ -8,49 +8,33 @@ interface Props {
   onClose: () => void;
 }
 
-/**
- * Full-screen image gallery rendered directly into document.body via portal.
- *
- * Intentionally avoids native <dialog> and Radix primitives. Uses a plain
- * fixed-position div with the highest possible z-index (2147483647), rendered
- * via createPortal outside any existing React tree so no parent context or
- * event-capture can interfere with close behaviour.
- *
- * Close paths: X button, backdrop click, Escape key, swipe down (mobile).
- */
 export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
   const [idx, setIdx] = useState(Math.max(0, Math.min(initialIndex, images.length - 1)));
   const touchStart = useRef<{ x: number; y: number } | null>(null);
-  const closedRef = useRef(false);
 
-  const close = () => {
-    if (closedRef.current) return;
-    closedRef.current = true;
-    onClose();
-  };
-
-  // Escape key
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); close(); }
-      if (e.key === "ArrowLeft") setIdx(i => Math.max(0, i - 1));
-      if (e.key === "ArrowRight") setIdx(i => Math.min(images.length - 1, i + 1));
-    };
-    document.addEventListener("keydown", handler, true);
-    return () => document.removeEventListener("keydown", handler, true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [images.length]);
-
-  // Prevent body scroll while open
+  // Lock body scroll while open
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
   }, []);
 
+  // Keyboard navigation + Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.stopPropagation(); onClose(); }
+      else if (e.key === "ArrowLeft") setIdx(i => Math.max(0, i - 1));
+      else if (e.key === "ArrowRight") setIdx(i => Math.min(images.length - 1, i + 1));
+    };
+    // Use capture so we intercept before Radix can process Escape
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [images.length, onClose]);
+
   const prev = () => setIdx(i => Math.max(0, i - 1));
   const next = () => setIdx(i => Math.min(images.length - 1, i + 1));
 
+  // Touch swipe
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   };
@@ -59,9 +43,7 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
     const dx = e.changedTouches[0].clientX - touchStart.current.x;
     const dy = e.changedTouches[0].clientY - touchStart.current.y;
     touchStart.current = null;
-    // Swipe down to close
-    if (dy > 80 && Math.abs(dx) < Math.abs(dy)) { close(); return; }
-    // Swipe left/right to navigate
+    if (dy > 80 && Math.abs(dx) < Math.abs(dy)) { onClose(); return; }
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
       if (dx < 0) next(); else prev();
     }
@@ -69,105 +51,82 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
 
   const content = (
     <div
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 2147483647,
-        background: "rgba(0,0,0,0.95)",
+        zIndex: 99999,
+        background: "rgba(0,0,0,0.93)",
         display: "flex",
-        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        touchAction: "none",
-      }}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      // Backdrop click: close when clicking the backdrop itself (not image/buttons).
-      // Also stop native propagation so Radix dismiss-layer does not see this
-      // pointer-down and close the underlying Dialog.
-      onPointerDown={(e) => {
-        e.nativeEvent.stopImmediatePropagation();
-        if (e.target === e.currentTarget) close();
       }}
     >
-      {/* Close button — large touch target */}
+      {/* Invisible backdrop — clicking here closes. Must be below the image/buttons */}
+      <div
+        onClick={onClose}
+        style={{ position: "absolute", inset: 0 }}
+        aria-label="Stäng"
+      />
+
+      {/* Close button — above the backdrop div */}
       <button
         type="button"
-        onPointerDown={e => e.nativeEvent.stopImmediatePropagation()}
-        onClick={close}
+        onClick={onClose}
         aria-label="Stäng"
         style={{
           position: "absolute",
           top: 12,
           right: 12,
-          width: 48,
-          height: 48,
+          zIndex: 2,
+          width: 52,
+          height: 52,
           borderRadius: "50%",
-          background: "rgba(255,255,255,0.18)",
-          border: "1.5px solid rgba(255,255,255,0.3)",
+          background: "rgba(255,255,255,0.15)",
+          border: "2px solid rgba(255,255,255,0.35)",
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           color: "white",
-          zIndex: 10,
-          WebkitTapHighlightColor: "transparent",
         }}
       >
-        <X style={{ width: 22, height: 22, pointerEvents: "none" }} />
+        <X style={{ width: 24, height: 24 }} />
       </button>
 
-      {/* Image counter */}
+      {/* Counter */}
       {images.length > 1 && (
         <div style={{
-          position: "absolute", top: 20, left: "50%", transform: "translateX(-50%)",
-          color: "rgba(255,255,255,0.65)", fontSize: 13, fontWeight: 500, userSelect: "none",
-          pointerEvents: "none",
+          position: "absolute", top: 18, left: "50%", transform: "translateX(-50%)",
+          zIndex: 2, color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: 500,
+          pointerEvents: "none", userSelect: "none",
         }}>
           {idx + 1} / {images.length}
         </div>
       )}
 
-      {/* Image */}
+      {/* Image — above backdrop, stops click from reaching backdrop */}
       <img
-        key={images[idx]}
+        key={idx}
         src={images[idx]}
         alt=""
         draggable={false}
-        onMouseDown={e => e.stopPropagation()}
+        onClick={e => e.stopPropagation()}
         style={{
-          maxHeight: "80dvh",
-          maxWidth: "min(calc(100vw - 88px), 1200px)",
+          position: "relative",
+          zIndex: 1,
+          maxHeight: "85dvh",
+          maxWidth: "calc(100vw - 96px)",
           objectFit: "contain",
-          borderRadius: 10,
-          boxShadow: "0 24px 64px rgba(0,0,0,0.7)",
+          borderRadius: 8,
+          boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
           userSelect: "none",
           display: "block",
-          pointerEvents: "none",
         }}
       />
 
-      {/* Swipe hint */}
-      {images.length > 1 && (
-        <div style={{
-          position: "absolute", bottom: 24,
-          display: "flex", gap: 6, alignItems: "center",
-          pointerEvents: "none",
-        }}>
-          {images.map((_, i) => (
-            <span key={i} style={{
-              width: i === idx ? 20 : 7,
-              height: 7,
-              borderRadius: 4,
-              background: i === idx ? "white" : "rgba(255,255,255,0.35)",
-              display: "inline-block",
-              transition: "width 0.2s, background 0.2s",
-            }} />
-          ))}
-        </div>
-      )}
-
-      {/* Prev / Next — hidden on single image */}
+      {/* Prev / Next */}
       {images.length > 1 && (
         <>
           <button
@@ -177,16 +136,16 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
             aria-label="Föregående"
             style={{
               position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
-              width: 44, height: 44, borderRadius: "50%",
-              background: idx === 0 ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.18)",
-              border: "1.5px solid rgba(255,255,255,0.2)",
+              zIndex: 2, width: 48, height: 48, borderRadius: "50%",
+              background: "rgba(255,255,255,0.15)",
+              border: "1.5px solid rgba(255,255,255,0.25)",
               cursor: idx === 0 ? "default" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              color: idx === 0 ? "rgba(255,255,255,0.25)" : "white",
-              WebkitTapHighlightColor: "transparent",
+              color: idx === 0 ? "rgba(255,255,255,0.2)" : "white",
+              opacity: idx === 0 ? 0.4 : 1,
             }}
           >
-            <ChevronLeft style={{ width: 20, height: 20, pointerEvents: "none" }} />
+            <ChevronLeft style={{ width: 22, height: 22 }} />
           </button>
           <button
             type="button"
@@ -195,18 +154,34 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
             aria-label="Nästa"
             style={{
               position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
-              width: 44, height: 44, borderRadius: "50%",
-              background: idx === images.length - 1 ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.18)",
-              border: "1.5px solid rgba(255,255,255,0.2)",
+              zIndex: 2, width: 48, height: 48, borderRadius: "50%",
+              background: "rgba(255,255,255,0.15)",
+              border: "1.5px solid rgba(255,255,255,0.25)",
               cursor: idx === images.length - 1 ? "default" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              color: idx === images.length - 1 ? "rgba(255,255,255,0.25)" : "white",
-              WebkitTapHighlightColor: "transparent",
+              color: idx === images.length - 1 ? "rgba(255,255,255,0.2)" : "white",
+              opacity: idx === images.length - 1 ? 0.4 : 1,
             }}
           >
-            <ChevronRight style={{ width: 20, height: 20, pointerEvents: "none" }} />
+            <ChevronRight style={{ width: 22, height: 22 }} />
           </button>
         </>
+      )}
+
+      {/* Dot indicators */}
+      {images.length > 1 && (
+        <div style={{
+          position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
+          zIndex: 2, display: "flex", gap: 6, pointerEvents: "none",
+        }}>
+          {images.map((_, i) => (
+            <span key={i} style={{
+              width: i === idx ? 20 : 7, height: 7, borderRadius: 4,
+              background: i === idx ? "white" : "rgba(255,255,255,0.4)",
+              display: "inline-block", transition: "width 0.2s",
+            }} />
+          ))}
+        </div>
       )}
     </div>
   );
