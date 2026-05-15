@@ -73,6 +73,7 @@ export type Task = {
   recurrence_end: string | null;
   parent_task_id: string | null;
   last_spawned_at: string | null;
+  recurrence_period_start: string | null;
   completed_at: string | null;
   created_at: string;
   store?: Store;

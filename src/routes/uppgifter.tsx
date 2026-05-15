@@ -214,18 +214,16 @@ function TasksPage() {
 
   // --- Recurring task spawning ---
   //
-  // For each parent recurring task we compute EVERY period that should exist
-  // between the parent's due_date and today, then create all missing children
-  // in one pass (no looping over re-fetches).
+  // Strategy: one pass per load that creates ALL missing period children.
   //
-  // Dedup key: period-start ISO day string stored on the child as a plain tag.
-  // We derive the period-start from the child's due_date by reversing the
-  // duration offset: periodStart = childDue - (parentDue - parentCreated).
+  // Dedup: each child stores `recurrence_period_start` (a date string YYYY-MM-DD)
+  // set at creation. We read existing children's recurrence_period_start values to
+  // know which periods are already covered — no math reconstruction needed.
   //
-  // Child due_date = periodStart + (parentDue - parentCreated)
-  // — each child gets the same window the parent had.
+  // Child due_date = periodStart + (parent.due_date - parent.created_at)
+  // so each child gets the same "window" duration the original task had.
   //
-  // Children inherit recurrence_rule so the badge renders.
+  // Children inherit recurrence_rule/recurrence_days so the badge renders.
   const spawnRef = useRef(false);
 
   const spawnRecurringTasks = useCallback(async (taskList: TaskFull[]) => {
@@ -236,23 +234,21 @@ function TasksPage() {
     const simToday = new Date(nowMs);
     simToday.setHours(0, 0, 0, 0);
 
-    // day(d) — normalise a Date to midnight, returns a new Date
-    const day = (d: Date): Date => { const n = new Date(d); n.setHours(0,0,0,0); return n; };
-    const dayKey = (d: Date): string => day(d).toISOString();
+    // Normalise a Date to midnight local time, return new Date
+    const midnight = (d: Date): Date => { const n = new Date(d); n.setHours(0,0,0,0); return n; };
+    // YYYY-MM-DD string used as period-start key
+    const dateStr = (d: Date): string => midnight(d).toISOString().slice(0, 10);
 
-    // Build per-parent set of period-start keys that are already covered.
-    // We reconstruct period-start from each child: periodStart = childDue - duration
+    // Build per-parent set of period-start date strings that already have a child
     const coveredByParent = new Map<string, Set<string>>();
     for (const t of taskList) {
-      if (!t.parent_task_id || !t.due_date) continue;
-      // Find the parent to get the duration
-      const parent = taskList.find(p => p.id === t.parent_task_id);
-      if (!parent || !parent.due_date) continue;
-      const durationMs = Math.max(0, new Date(parent.due_date).getTime() - new Date(parent.created_at).getTime());
-      const childDueMs = new Date(t.due_date).getTime();
-      const periodStartMs = childDueMs - durationMs;
+      if (!t.parent_task_id) continue;
       if (!coveredByParent.has(t.parent_task_id)) coveredByParent.set(t.parent_task_id, new Set());
-      coveredByParent.get(t.parent_task_id)!.add(dayKey(new Date(periodStartMs)));
+      // Use stored recurrence_period_start if available, fall back to due_date day
+      const key = t.recurrence_period_start
+        ? t.recurrence_period_start.slice(0, 10)
+        : (t.due_date ? dateStr(new Date(t.due_date)) : null);
+      if (key) coveredByParent.get(t.parent_task_id)!.add(key);
     }
 
     const recurringTasks = taskList.filter(
@@ -260,15 +256,17 @@ function TasksPage() {
     );
     if (recurringTasks.length === 0) { spawnRef.current = false; return; }
 
-    // Returns all period-start Dates from day-after-originDue up to simToday
+    // Compute all period-start dates from day-after-originDue up through simToday
     function allPeriodStarts(originDue: Date, rule: string, weekdays: number[] | null, endDate: Date | null): Date[] {
-      const ceiling = endDate ? (day(new Date(endDate)) < simToday ? day(new Date(endDate)) : simToday) : simToday;
+      const ceil = endDate
+        ? (midnight(new Date(endDate)) < simToday ? midnight(new Date(endDate)) : simToday)
+        : simToday;
       const results: Date[] = [];
 
       if (rule === "weekly" && weekdays && weekdays.length > 0) {
-        const cur = day(new Date(originDue));
+        const cur = midnight(new Date(originDue));
         cur.setDate(cur.getDate() + 1);
-        while (cur <= ceiling) {
+        while (cur <= ceil) {
           const jsDay = cur.getDay();
           const ourDay = jsDay === 0 ? 6 : jsDay - 1; // Mon=0 Sun=6
           if (weekdays.includes(ourDay)) results.push(new Date(cur));
@@ -290,19 +288,18 @@ function TasksPage() {
         } else if (rule === "yearly") {
           n.setFullYear(n.getFullYear() + 1);
         }
-        n.setHours(0,0,0,0);
+        n.setHours(0, 0, 0, 0);
         return n;
       };
 
-      let cur = advance(day(new Date(originDue)));
-      while (cur <= ceiling) {
+      let cur = advance(midnight(new Date(originDue)));
+      while (cur <= ceil) {
         results.push(new Date(cur));
         cur = advance(new Date(cur));
       }
       return results;
     }
 
-    // Helper to copy a parent task's related rows to a new child
     async function copyChildData(childId: string, t: TaskFull) {
       const steps = (t.steps ?? []).map(s => ({
         task_id: childId, label: s.label, sort_order: s.sort_order,
@@ -317,10 +314,10 @@ function TasksPage() {
       }));
       if (questions.length > 0) await supabase.from("task_questions").insert(questions);
 
-      const creatorImages = (t.images ?? []).filter(img => img.uploaded_by === t.created_by);
-      if (creatorImages.length > 0) {
+      // Copy all images from the parent (reference photos set by creator)
+      if ((t.images ?? []).length > 0) {
         await supabase.from("task_images").insert(
-          creatorImages.map(img => ({ task_id: childId, storage_path: img.storage_path, uploaded_by: img.uploaded_by }))
+          t.images!.map(img => ({ task_id: childId, storage_path: img.storage_path, uploaded_by: img.uploaded_by }))
         );
       }
 
@@ -333,8 +330,9 @@ function TasksPage() {
     let didSpawn = false;
 
     for (const t of recurringTasks) {
-      if (t.recurrence_end && simToday > day(new Date(t.recurrence_end))) continue;
+      if (t.recurrence_end && simToday > midnight(new Date(t.recurrence_end))) continue;
 
+      // Duration the original task had from creation → due date
       const durationMs = Math.max(0,
         new Date(t.due_date!).getTime() - new Date(t.created_at).getTime()
       );
@@ -349,7 +347,8 @@ function TasksPage() {
       const covered = coveredByParent.get(t.id) ?? new Set<string>();
 
       for (const ps of periodStarts) {
-        if (covered.has(dayKey(ps))) continue; // already spawned this period
+        const psKey = dateStr(ps);
+        if (covered.has(psKey)) continue;
 
         const childDue = new Date(ps.getTime() + durationMs);
 
@@ -362,6 +361,7 @@ function TasksPage() {
           due_date: childDue.toISOString(),
           recurrence_rule: t.recurrence_rule,
           recurrence_days: t.recurrence_days,
+          recurrence_period_start: psKey,
           parent_task_id: t.id,
           created_by: t.created_by,
           assigned_to: t.assigned_to,
@@ -370,17 +370,19 @@ function TasksPage() {
 
         if (child) {
           await copyChildData(child.id, t);
-          covered.add(dayKey(ps)); // prevent duplicates within this pass
+          covered.add(psKey);
           didSpawn = true;
         }
       }
+    }
 
-      if (didSpawn) {
-        await supabase.from("tasks")
-          .update({ last_spawned_at: new Date(nowMs).toISOString() })
-          .eq("id", t.id);
-        logAudit(user?.id ?? null, "task.recurrence.spawn", "tasks", t.id, { periods: periodStarts.length });
-      }
+    if (didSpawn) {
+      // Update last_spawned_at for all recurring parents in one query
+      const parentIds = recurringTasks.map(t => t.id);
+      await supabase.from("tasks")
+        .update({ last_spawned_at: new Date(nowMs).toISOString() })
+        .in("id", parentIds);
+      logAudit(user?.id ?? null, "task.recurrence.spawn", "tasks", "batch", {});
     }
 
     spawnRef.current = false;
@@ -783,7 +785,7 @@ function TasksPage() {
 
       {/* DETAIL MODAL */}
       {detailTask && (
-        <Dialog open={!!detailTask} onOpenChange={(o) => { if (!o) setDetailTask(null); }}>
+        <Dialog open={!!detailTask} onOpenChange={(o) => { if (!o && !lightboxSrc) setDetailTask(null); }}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-start justify-between gap-2 pr-6">

@@ -185,10 +185,3 @@
   }
 }
 
-/* Native <dialog> used by PhotoViewer — remove browser defaults */
-dialog.photo-viewer-dialog {
-  outline: none;
-}
-dialog.photo-viewer-dialog::backdrop {
-  background: transparent;
-}

@@ -135,20 +135,20 @@ export function AppShell() {
             {userStores.length > 1 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="hidden rounded-full border-border/80 md:flex gap-1.5 max-w-[160px]">
+                  <Button variant="outline" size="sm" className="hidden rounded-full border-border/80 md:flex gap-1.5 max-w-[240px]">
                     <span className="truncate text-xs">{activeStore?.name ?? "Välj butik"}</span>
                     <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuContent align="end" className="w-64">
                   {userStores.map((s) => (
                     <DropdownMenuItem
                       key={s.id}
                       className={cn("cursor-pointer", activeStore?.id === s.id && "bg-primary-soft text-primary")}
                       onClick={() => setActiveStore(s)}
                     >
-                      {s.name}
-                      {activeStore?.id === s.id && <span className="ml-auto text-xs">Aktiv</span>}
+                      <span className="flex-1">{s.name}</span>
+                      {activeStore?.id === s.id && <span className="ml-2 shrink-0 text-xs">Aktiv</span>}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>

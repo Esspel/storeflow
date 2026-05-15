@@ -209,9 +209,22 @@ function AccountsPage() {
 
   const confirmDeleteUser = async () => {
     if (!deleteUser) return;
-    await supabase.from("app_users").delete().eq("id", deleteUser.id);
+    setSaving(true);
+    // Soft-delete: anonymise the user record so all tasks/incidents/comments that
+    // reference this user_id still resolve to a readable name instead of NULL.
+    // Hard-deleting would cascade NULLs onto every assigned/created_by field.
+    await supabase.from("app_users").update({
+      display_name: "Gallrad användare",
+      username: `deleted_${deleteUser.id.slice(0, 8)}`,
+      is_active: false,
+      password_hash: "",
+    }).eq("id", deleteUser.id);
+    // Remove store and group memberships so the account no longer has any access
+    await supabase.from("user_stores").delete().eq("user_id", deleteUser.id);
+    await supabase.from("user_group_members").delete().eq("user_id", deleteUser.id);
     logAudit(currentUser?.id ?? null, "user.delete", "app_users", deleteUser.id, { username: deleteUser.username });
-    setUsers((prev) => prev.filter((u) => u.id !== deleteUser.id));
+    await fetchUsers();
+    setSaving(false);
     setDeleteUser(null);
   };
 
@@ -236,6 +249,8 @@ function AccountsPage() {
   const confirmDeleteStore = async () => {
     if (!deleteStore) return;
     setSaving(true);
+    // Nullify store_id on groups so they don't become orphaned
+    await supabase.from("user_groups").update({ store_id: null }).eq("store_id", deleteStore.id);
     await supabase.from("stores").delete().eq("id", deleteStore.id);
     logAudit(currentUser?.id ?? null, "store.delete", "stores", deleteStore.id, { name: deleteStore.name });
     setStores((prev) => prev.filter((s) => s.id !== deleteStore.id));
@@ -342,7 +357,7 @@ function AccountsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {users.map((u) => (
+                  {users.filter(u => u.display_name !== "Gallrad användare").map((u) => (
                     <tr key={u.id} className="hover:bg-muted/30">
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 interface Props {
@@ -8,241 +9,207 @@ interface Props {
 }
 
 /**
- * Full-screen photo viewer using a native <dialog> element.
+ * Full-screen image gallery rendered directly into document.body via portal.
  *
- * Native dialog lives in the browser's top-layer — above ALL other elements
- * including Radix modals, regardless of z-index. Close button, backdrop tap,
- * Escape key, and touch swipe all work reliably.
+ * Intentionally avoids native <dialog> and Radix primitives. Uses a plain
+ * fixed-position div with the highest possible z-index (2147483647), rendered
+ * via createPortal outside any existing React tree so no parent context or
+ * event-capture can interfere with close behaviour.
+ *
+ * Close paths: X button, backdrop click, Escape key, swipe down (mobile).
  */
 export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [idx, setIdx] = useState(Math.max(0, Math.min(initialIndex, images.length - 1)));
-  const touchStartX = useRef<number | null>(null);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const closedRef = useRef(false);
 
-  // Open the native dialog and set up cleanup
-  useEffect(() => {
-    const el = dialogRef.current;
-    if (!el) return;
-    el.showModal();
-    const handleClose = () => onClose();
-    el.addEventListener("close", handleClose);
-    return () => {
-      el.removeEventListener("close", handleClose);
-      if (el.open) el.close();
-    };
-  }, [onClose]);
+  const close = () => {
+    if (closedRef.current) return;
+    closedRef.current = true;
+    onClose();
+  };
 
-  // Keyboard navigation
+  // Escape key
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); close(); }
       if (e.key === "ArrowLeft") setIdx(i => Math.max(0, i - 1));
       if (e.key === "ArrowRight") setIdx(i => Math.min(images.length - 1, i + 1));
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    document.addEventListener("keydown", handler, true);
+    return () => document.removeEventListener("keydown", handler, true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [images.length]);
+
+  // Prevent body scroll while open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
 
   const prev = () => setIdx(i => Math.max(0, i - 1));
   const next = () => setIdx(i => Math.min(images.length - 1, i + 1));
 
-  // Clicking the backdrop (the <dialog> element itself) closes
-  const handleDialogClick = (e: React.MouseEvent<HTMLDialogElement>) => {
-    if (e.target === dialogRef.current) dialogRef.current?.close();
-  };
-
-  // Touch swipe
   const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   };
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX.current === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX.current;
-    touchStartX.current = null;
-    if (Math.abs(dx) < 40) return;
-    if (dx < 0) next();
-    else prev();
+    if (!touchStart.current) return;
+    const dx = e.changedTouches[0].clientX - touchStart.current.x;
+    const dy = e.changedTouches[0].clientY - touchStart.current.y;
+    touchStart.current = null;
+    // Swipe down to close
+    if (dy > 80 && Math.abs(dx) < Math.abs(dy)) { close(); return; }
+    // Swipe left/right to navigate
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx < 0) next(); else prev();
+    }
   };
 
-  return (
-    <dialog
-      ref={dialogRef}
-      onClick={handleDialogClick}
+  const content = (
+    <div
       style={{
-        background: "transparent",
-        border: "none",
-        padding: 0,
-        margin: "auto",
-        maxWidth: "100vw",
-        maxHeight: "100vh",
-        width: "100vw",
-        height: "100dvh",
-        overflow: "hidden",
+        position: "fixed",
+        inset: 0,
+        zIndex: 2147483647,
+        background: "rgba(0,0,0,0.95)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        touchAction: "none",
       }}
-      className="photo-viewer-dialog"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      // Backdrop click: close when clicking the backdrop itself (not image/buttons).
+      // Also stop native propagation so Radix dismiss-layer does not see this
+      // pointer-down and close the underlying Dialog.
+      onPointerDown={(e) => {
+        e.nativeEvent.stopImmediatePropagation();
+        if (e.target === e.currentTarget) close();
+      }}
     >
-      {/* Backdrop — also handles touch swipe */}
-      <div
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
+      {/* Close button — large touch target */}
+      <button
+        type="button"
+        onPointerDown={e => e.nativeEvent.stopImmediatePropagation()}
+        onClick={close}
+        aria-label="Stäng"
         style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.92)",
+          position: "absolute",
+          top: 12,
+          right: 12,
+          width: 48,
+          height: 48,
+          borderRadius: "50%",
+          background: "rgba(255,255,255,0.18)",
+          border: "1.5px solid rgba(255,255,255,0.3)",
+          cursor: "pointer",
           display: "flex",
-          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
+          color: "white",
+          zIndex: 10,
+          WebkitTapHighlightColor: "transparent",
         }}
       >
-        {/* Close button — top right */}
-        <button
-          type="button"
-          onClick={() => dialogRef.current?.close()}
-          aria-label="Stäng"
-          style={{
-            position: "absolute",
-            top: 16,
-            right: 16,
-            zIndex: 10,
-            width: 44,
-            height: 44,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.15)",
-            border: "1.5px solid rgba(255,255,255,0.25)",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "white",
-            backdropFilter: "blur(4px)",
-            transition: "background 0.15s",
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.28)")}
-          onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
-        >
-          <X style={{ width: 20, height: 20 }} />
-        </button>
+        <X style={{ width: 22, height: 22, pointerEvents: "none" }} />
+      </button>
 
-        {/* Counter */}
-        {images.length > 1 && (
-          <div
+      {/* Image counter */}
+      {images.length > 1 && (
+        <div style={{
+          position: "absolute", top: 20, left: "50%", transform: "translateX(-50%)",
+          color: "rgba(255,255,255,0.65)", fontSize: 13, fontWeight: 500, userSelect: "none",
+          pointerEvents: "none",
+        }}>
+          {idx + 1} / {images.length}
+        </div>
+      )}
+
+      {/* Image */}
+      <img
+        key={images[idx]}
+        src={images[idx]}
+        alt=""
+        draggable={false}
+        onMouseDown={e => e.stopPropagation()}
+        style={{
+          maxHeight: "80dvh",
+          maxWidth: "min(calc(100vw - 88px), 1200px)",
+          objectFit: "contain",
+          borderRadius: 10,
+          boxShadow: "0 24px 64px rgba(0,0,0,0.7)",
+          userSelect: "none",
+          display: "block",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Swipe hint */}
+      {images.length > 1 && (
+        <div style={{
+          position: "absolute", bottom: 24,
+          display: "flex", gap: 6, alignItems: "center",
+          pointerEvents: "none",
+        }}>
+          {images.map((_, i) => (
+            <span key={i} style={{
+              width: i === idx ? 20 : 7,
+              height: 7,
+              borderRadius: 4,
+              background: i === idx ? "white" : "rgba(255,255,255,0.35)",
+              display: "inline-block",
+              transition: "width 0.2s, background 0.2s",
+            }} />
+          ))}
+        </div>
+      )}
+
+      {/* Prev / Next — hidden on single image */}
+      {images.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); prev(); }}
+            disabled={idx === 0}
+            aria-label="Föregående"
             style={{
-              position: "absolute",
-              top: 20,
-              left: "50%",
-              transform: "translateX(-50%)",
-              color: "rgba(255,255,255,0.7)",
-              fontSize: 13,
-              fontWeight: 500,
-              userSelect: "none",
+              position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
+              width: 44, height: 44, borderRadius: "50%",
+              background: idx === 0 ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.18)",
+              border: "1.5px solid rgba(255,255,255,0.2)",
+              cursor: idx === 0 ? "default" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: idx === 0 ? "rgba(255,255,255,0.25)" : "white",
+              WebkitTapHighlightColor: "transparent",
             }}
           >
-            {idx + 1} / {images.length}
-          </div>
-        )}
-
-        {/* Image */}
-        <img
-          src={images[idx]}
-          alt=""
-          onClick={e => e.stopPropagation()}
-          style={{
-            maxHeight: "85dvh",
-            maxWidth: "calc(100vw - 96px)",
-            objectFit: "contain",
-            borderRadius: 8,
-            boxShadow: "0 32px 64px rgba(0,0,0,0.6)",
-            userSelect: "none",
-            display: "block",
-          }}
-          draggable={false}
-        />
-
-        {/* Prev / Next buttons */}
-        {images.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={e => { e.stopPropagation(); prev(); }}
-              disabled={idx === 0}
-              aria-label="Föregående"
-              style={{
-                position: "absolute",
-                left: 12,
-                top: "50%",
-                transform: "translateY(-50%)",
-                width: 44,
-                height: 44,
-                borderRadius: "50%",
-                background: idx === 0 ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.15)",
-                border: "1.5px solid rgba(255,255,255,0.2)",
-                cursor: idx === 0 ? "default" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: idx === 0 ? "rgba(255,255,255,0.3)" : "white",
-              }}
-            >
-              <ChevronLeft style={{ width: 20, height: 20 }} />
-            </button>
-            <button
-              type="button"
-              onClick={e => { e.stopPropagation(); next(); }}
-              disabled={idx === images.length - 1}
-              aria-label="Nästa"
-              style={{
-                position: "absolute",
-                right: 12,
-                top: "50%",
-                transform: "translateY(-50%)",
-                width: 44,
-                height: 44,
-                borderRadius: "50%",
-                background: idx === images.length - 1 ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.15)",
-                border: "1.5px solid rgba(255,255,255,0.2)",
-                cursor: idx === images.length - 1 ? "default" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: idx === images.length - 1 ? "rgba(255,255,255,0.3)" : "white",
-              }}
-            >
-              <ChevronRight style={{ width: 20, height: 20 }} />
-            </button>
-          </>
-        )}
-
-        {/* Swipe hint on mobile */}
-        {images.length > 1 && (
-          <div
+            <ChevronLeft style={{ width: 20, height: 20, pointerEvents: "none" }} />
+          </button>
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); next(); }}
+            disabled={idx === images.length - 1}
+            aria-label="Nästa"
             style={{
-              position: "absolute",
-              bottom: 20,
-              display: "flex",
-              gap: 6,
+              position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+              width: 44, height: 44, borderRadius: "50%",
+              background: idx === images.length - 1 ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.18)",
+              border: "1.5px solid rgba(255,255,255,0.2)",
+              cursor: idx === images.length - 1 ? "default" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: idx === images.length - 1 ? "rgba(255,255,255,0.25)" : "white",
+              WebkitTapHighlightColor: "transparent",
             }}
           >
-            {images.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={e => { e.stopPropagation(); setIdx(i); }}
-                style={{
-                  width: i === idx ? 20 : 8,
-                  height: 8,
-                  borderRadius: 4,
-                  background: i === idx ? "white" : "rgba(255,255,255,0.35)",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 0,
-                  transition: "width 0.2s, background 0.2s",
-                }}
-                aria-label={`Bild ${i + 1}`}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </dialog>
+            <ChevronRight style={{ width: 20, height: 20, pointerEvents: "none" }} />
+          </button>
+        </>
+      )}
+    </div>
   );
+
+  return createPortal(content, document.body);
 }
