@@ -9,7 +9,6 @@ import {
   Trash2,
   UserCog,
   X,
-  Check,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -374,9 +373,6 @@ function AccountsPage() {
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
                       <Building2 className="h-5 w-5" />
                     </div>
-                    <Badge className={store.is_active ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}>
-                      {store.is_active ? "Aktiv" : "Inaktiv"}
-                    </Badge>
                   </div>
                   <h3 className="mt-3 text-base font-semibold">{store.name}</h3>
                   {store.region && <p className="text-xs font-medium text-primary">{store.region}</p>}

@@ -32,10 +32,10 @@ export function StatCard({
   tone = "default",
 }: {
   label: string;
-  value: string;
+  value: string | number;
   delta?: string;
   hint?: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon?: React.ComponentType<{ className?: string }>;
   tone?: "default" | "success" | "warning" | "destructive" | "info";
 }) {
   const toneMap = {
@@ -60,9 +60,11 @@ export function StatCard({
             </p>
           )}
         </div>
-        <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", toneMap[tone])}>
-          <Icon className="h-5 w-5" />
-        </div>
+        {Icon && (
+          <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", toneMap[tone])}>
+            <Icon className="h-5 w-5" />
+          </div>
+        )}
       </div>
     </div>
   );

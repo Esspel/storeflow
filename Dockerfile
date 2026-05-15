@@ -24,8 +24,8 @@ WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/docker-server.js ./docker-server.js
 COPY --from=builder /app/package*.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 RUN chown -R appuser:appgroup /app
 USER appuser
@@ -38,4 +38,4 @@ ENV PORT=3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD wget -qO- http://localhost:3000/ || exit 1
 
-CMD ["node", "dist/server/index.js"]
+CMD ["node", "docker-server.js"]

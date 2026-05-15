@@ -1,4 +1,4 @@
-import { supabase, type AppUser } from "./supabase";
+import { supabase, setSessionToken, type AppUser } from "./supabase";
 
 const SESSION_KEY = "sf_session_token";
 const USER_KEY = "sf_user";
@@ -57,6 +57,9 @@ export async function login(
     expires_at: expiresAt,
   });
 
+  // Set the token so subsequent requests pass it for RLS validation
+  setSessionToken(token);
+
   await supabase
     .from("app_users")
     .update({ last_login: new Date().toISOString() })
@@ -68,6 +71,7 @@ export async function login(
     display_name: user.display_name,
     role: user.role,
     store_id: user.store_id,
+    active_store_id: user.active_store_id ?? null,
     is_active: user.is_active,
     last_login: user.last_login,
     created_at: user.created_at,
@@ -78,19 +82,24 @@ export async function login(
 
 export async function logout(token: string) {
   await supabase.from("app_sessions").delete().eq("token", token);
+  setSessionToken(null);
   clearSession();
 }
 
 export async function validateSession(token: string): Promise<AppUser | null> {
+  // Set token early so RLS policies can validate the caller for any writes
+  setSessionToken(token);
+
   const { data: session } = await supabase
     .from("app_sessions")
     .select("user_id, expires_at")
     .eq("token", token)
     .maybeSingle();
 
-  if (!session) return null;
+  if (!session) { setSessionToken(null); return null; }
   if (new Date(session.expires_at) < new Date()) {
     await supabase.from("app_sessions").delete().eq("token", token);
+    setSessionToken(null);
     return null;
   }
 
@@ -109,6 +118,7 @@ export async function validateSession(token: string): Promise<AppUser | null> {
     display_name: user.display_name,
     role: user.role,
     store_id: user.store_id,
+    active_store_id: user.active_store_id ?? null,
     is_active: user.is_active,
     last_login: user.last_login,
     created_at: user.created_at,

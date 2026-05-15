@@ -1,6 +1,6 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Download, TrendingUp } from "lucide-react";
+import { Download } from "lucide-react";
 
 import { PageHeader, StatCard } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
