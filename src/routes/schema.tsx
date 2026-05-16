@@ -561,7 +561,7 @@ function SchemaPage() {
 
   const importInputRef = useRef<HTMLInputElement>(null);
   const storeId = activeStore?.id ?? user?.store_id ?? null;
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = (() => { const d = new Date(); const p = (n: number) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; })();
 
   async function addImportFiles(newFiles: File[]) {
     const merged = [...importFiles, ...newFiles].filter((f, i, arr) => arr.findIndex((x) => x.name === f.name) === i);
@@ -1358,15 +1358,17 @@ function SchemaPage() {
                               </div>
                               {bws.map((bw, bi) => {
                                 const bLeft = ((timeToPercent(bw.start) - left) / width) * 100;
-                                const bWidth = ((bw.minutes / (TOTAL_HOURS * 60)) * 100 / width) * 100;
-                                // Skip break windows that fall outside this shift's bounds
-                                if (bLeft < 0 || bLeft >= 100) return null;
-                                const clampedWidth = Math.min(bWidth, 100 - bLeft);
+                                const bWidth = Math.max(((bw.minutes / (TOTAL_HOURS * 60)) * 100 / width) * 100, 2);
+                                // Clamp to shift bar bounds
+                                const clampedLeft = Math.max(0, Math.min(bLeft, 98));
+                                const clampedWidth = Math.min(bWidth, 100 - clampedLeft);
+                                // Skip if entirely outside shift
+                                if (bLeft > 100 || bLeft + bWidth < 0) return null;
                                 return (
                                   <div key={bi} className="absolute top-0 bottom-0 z-20 pointer-events-none"
-                                    style={{ left: `${bLeft}%`, width: `${Math.max(clampedWidth, 1)}%` }}
+                                    style={{ left: `${clampedLeft}%`, width: `${Math.max(clampedWidth, 2)}%` }}
                                     title={`Rast ${bw.start}, ${bw.minutes} min`}>
-                                    <div className="absolute inset-0 rounded-sm bg-black/25 backdrop-brightness-75" />
+                                    <div className="absolute inset-0 rounded-sm bg-black/30 backdrop-brightness-75" />
                                   </div>
                                 );
                               })}

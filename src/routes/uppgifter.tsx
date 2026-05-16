@@ -110,6 +110,25 @@ type TaskFull = Task & {
 
 type FormQuestion = { label: string; question_type: "text" | "yes_no"; is_required: boolean };
 
+// datetime-local input gives "YYYY-MM-DDTHH:mm" in local time.
+// Supabase timestamptz needs a proper UTC ISO string.
+// These two helpers convert between them without double-shifting.
+function localInputToUtcIso(localStr: string): string {
+  if (!localStr) return "";
+  // Parse as local time by appending no timezone → Date treats it as local
+  const d = new Date(localStr);
+  if (isNaN(d.getTime())) return localStr;
+  return d.toISOString(); // UTC ISO
+}
+function utcIsoToLocalInput(utcStr: string): string {
+  if (!utcStr) return "";
+  const d = new Date(utcStr);
+  if (isNaN(d.getTime())) return utcStr.slice(0, 16);
+  // Format as YYYY-MM-DDTHH:mm in local time
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 const emptyForm = (storeId: string) => ({
   title: "",
   description: "",
@@ -454,7 +473,7 @@ function TasksPage() {
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((q) => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required }));
     const dueDate = tmpl.due_date_offset != null
-      ? (() => { const d = new Date(getSimulatedNow()); d.setDate(d.getDate() + tmpl.due_date_offset!); return d.toISOString().slice(0, 16); })()
+      ? (() => { const d = new Date(getSimulatedNow()); d.setDate(d.getDate() + tmpl.due_date_offset!); return utcIsoToLocalInput(d.toISOString()); })()
       : "";
     setNewTask((p) => ({
       ...p,
@@ -571,17 +590,15 @@ function TasksPage() {
     if (!deleteTarget) return;
     const t = deleteTarget;
     if (t.recurrence_rule && scope === "future") {
-      // Delete this task and all future siblings (same parent or this is the parent)
       const parentId = t.parent_task_id ?? t.id;
       const periodStart = t.recurrence_period_start ?? (t.due_date ? t.due_date.slice(0, 10) : null);
       if (periodStart) {
-        // Delete children with period_start >= this one
+        // Delete children from this period onward (not before)
         await supabase.from("tasks").delete().eq("parent_task_id", parentId).gte("recurrence_period_start", periodStart);
       }
-      // If this task itself is a child, also delete it
-      if (t.parent_task_id) {
-        await supabase.from("tasks").delete().eq("id", t.id);
-      }
+      // Delete the parent only if this task IS the parent (no parent_task_id)
+      // or if this is a child — delete the child itself too
+      await supabase.from("tasks").delete().eq("id", t.id);
     } else {
       await supabase.from("tasks").delete().eq("id", t.id);
     }
@@ -600,7 +617,7 @@ function TasksPage() {
       category: task.category,
       priority: task.priority,
       store_id: task.store_id ?? "",
-      due_date: task.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : "",
+      due_date: task.due_date ? utcIsoToLocalInput(task.due_date) : "",
       recurrence_rule: task.recurrence_rule ?? "",
       recurrence_days: task.recurrence_days ?? [],
       recurrence_interval: task.recurrence_interval ?? 1,
@@ -619,21 +636,24 @@ function TasksPage() {
     const isRecurring = !!editTask.recurrence_rule;
     const isChild = !!editTask.parent_task_id;
 
-    const updates = {
+    // Fields that apply to the task record itself (no due_date — each child keeps its own)
+    const coreUpdates = {
       title: editForm.title.trim(),
       description: editForm.description.trim(),
       category: editForm.category,
       priority: editForm.priority,
       store_id: editForm.store_id || null,
-      due_date: editForm.due_date || null,
       recurrence_rule: editForm.recurrence_rule || null,
       recurrence_days: editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
       recurrence_start: editForm.recurrence_start || null,
       recurrence_end: editForm.recurrence_end || null,
     };
 
+    // IDs of all tasks to update steps/questions/assignees for
+    let affectedIds: string[] = [editTask.id];
+
     if (isRecurring && isChild) {
-      // Update this and all future siblings
+      // Update this child + all future siblings
       const parentId = editTask.parent_task_id!;
       const periodStart = editTask.recurrence_period_start ?? editTask.due_date?.slice(0, 10);
       if (periodStart) {
@@ -642,32 +662,41 @@ function TasksPage() {
           .select("id")
           .eq("parent_task_id", parentId)
           .gte("recurrence_period_start", periodStart);
-        const ids = (futureChildren ?? []).map((c: { id: string }) => c.id);
-        if (ids.length > 0) await supabase.from("tasks").update(updates).in("id", ids);
+        const siblingIds = (futureChildren ?? []).map((c: { id: string }) => c.id);
+        if (siblingIds.length > 0) {
+          await supabase.from("tasks").update(coreUpdates).in("id", siblingIds);
+          affectedIds = siblingIds;
+        }
+        // Also update the parent so future spawns inherit the changes
+        await supabase.from("tasks").update(coreUpdates).eq("id", parentId);
       }
     } else {
-      await supabase.from("tasks").update(updates).eq("id", editTask.id);
+      // Non-recurring or parent task — update due_date too
+      await supabase.from("tasks").update({ ...coreUpdates, due_date: editForm.due_date ? localInputToUtcIso(editForm.due_date) : null }).eq("id", editTask.id);
     }
 
-    // Rebuild steps and questions for this task
-    await supabase.from("task_steps").delete().eq("task_id", editTask.id);
     const validSteps = editForm.steps.filter(s => s.label.trim());
-    if (validSteps.length > 0) {
-      await supabase.from("task_steps").insert(validSteps.map((s, i) => ({ task_id: editTask.id, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false })));
-    }
-    await supabase.from("task_questions").delete().eq("task_id", editTask.id);
     const validQuestions = editForm.questions.filter(q => q.label.trim());
-    if (validQuestions.length > 0) {
-      await supabase.from("task_questions").insert(validQuestions.map((q, i) => ({ task_id: editTask.id, label: q.label, question_type: q.question_type, is_required: q.is_required, sort_order: i })));
-    }
-    // Rebuild assignees
-    await supabase.from("task_assignees").delete().eq("task_id", editTask.id);
     const assigneeRows: { task_id: string; user_id?: string; group_id?: string }[] = [];
-    editForm.assigneeUserIds.forEach(uid => assigneeRows.push({ task_id: editTask.id, user_id: uid }));
-    editForm.assigneeGroupIds.forEach(gid => assigneeRows.push({ task_id: editTask.id, group_id: gid }));
-    if (assigneeRows.length > 0) await supabase.from("task_assignees").insert(assigneeRows);
+    editForm.assigneeUserIds.forEach(uid => assigneeRows.push({ task_id: "__placeholder", user_id: uid }));
+    editForm.assigneeGroupIds.forEach(gid => assigneeRows.push({ task_id: "__placeholder", group_id: gid }));
 
-    logAudit(user?.id ?? null, "task.edit", "tasks", editTask.id, { title: updates.title });
+    // Apply steps, questions, assignees to all affected task IDs
+    for (const tid of affectedIds) {
+      await supabase.from("task_steps").delete().eq("task_id", tid);
+      if (validSteps.length > 0) {
+        await supabase.from("task_steps").insert(validSteps.map((s, i) => ({ task_id: tid, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false })));
+      }
+      await supabase.from("task_questions").delete().eq("task_id", tid);
+      if (validQuestions.length > 0) {
+        await supabase.from("task_questions").insert(validQuestions.map((q, i) => ({ task_id: tid, label: q.label, question_type: q.question_type, is_required: q.is_required, sort_order: i })));
+      }
+      await supabase.from("task_assignees").delete().eq("task_id", tid);
+      const rows = assigneeRows.map(r => ({ ...r, task_id: tid }));
+      if (rows.length > 0) await supabase.from("task_assignees").insert(rows);
+    }
+
+    logAudit(user?.id ?? null, "task.edit", "tasks", editTask.id, { title: coreUpdates.title });
     setEditTask(null);
     setEditForm(null);
     setDetailTask(null);
@@ -687,7 +716,7 @@ function TasksPage() {
       category: newTask.category,
       priority: newTask.priority,
       store_id: newTask.store_id || null,
-      due_date: newTask.due_date || null,
+      due_date: newTask.due_date ? localInputToUtcIso(newTask.due_date) : null,
       recurring: newTask.recurrence_rule || null,
       recurrence_rule: newTask.recurrence_rule || null,
       recurrence_days: newTask.recurrence_days.length > 0 ? newTask.recurrence_days : null,
