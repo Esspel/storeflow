@@ -1333,54 +1333,48 @@ function SchemaPage() {
                           <span className="text-[11px] italic text-muted-foreground/40">{absenceShift?.deviation_cause || "Ledig"}</span>
                         </div>
                       ) : (
-                        workShifts.map((shift) => {
-                          const left = timeToPercent(shift.start_time!);
-                          const width = shiftWidthPercent(shift.start_time!, shift.stop_time!);
-                          const col = shiftColor(shift.shift_name, shift.color);
-                          const light = isLightColor(col);
-                          const bws: BreakWindow[] = Array.isArray(shift.break_windows) ? shift.break_windows : [];
-                          return (
-                            <div key={shift.id} className="absolute top-1.5 bottom-1.5" style={{ left: `${Math.max(0, left)}%`, width: `${Math.max(width, 1.5)}%`, minWidth: "36px" }}>
-                              <div
-                                className="absolute inset-0 flex items-center gap-1 overflow-hidden rounded-lg px-2 text-[11px] font-semibold shadow-sm cursor-default select-none transition-opacity hover:opacity-90"
-                                style={{ backgroundColor: col, color: light ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.92)", borderLeft: `2px solid ${light ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.3)"}` }}
-                                title={[
-                                  `${shift.shift_name || emp.employee_name}: ${shift.start_time} – ${shift.stop_time}`,
-                                  `Brutto: ${minsToHours(shift.gross_minutes)}`,
-                                  shift.break_minutes > 0 ? `Rast: ${shift.break_minutes} min` : null,
-                                  `Netto: ${minsToHours(shift.net_minutes > 0 ? shift.net_minutes : Math.max(0, shift.gross_minutes - shift.break_minutes))}`,
-                                  shift.is_lended ? "↔ Utlånad till annan enhet" : null,
-                                ].filter(Boolean).join("\n")}>
-                                {shift.is_lended && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
-                                <span className="truncate leading-tight">
-                                  {shift.shift_name ? <>{shift.shift_name}<br /><span className="opacity-70">{shift.start_time}–{shift.stop_time}</span></> : `${shift.start_time}–${shift.stop_time}`}
-                                </span>
+                        <>
+                          {workShifts.map((shift) => {
+                            const left = timeToPercent(shift.start_time!);
+                            const width = shiftWidthPercent(shift.start_time!, shift.stop_time!);
+                            const col = shiftColor(shift.shift_name, shift.color);
+                            const light = isLightColor(col);
+                            return (
+                              <div key={shift.id} className="absolute top-1.5 bottom-1.5" style={{ left: `${Math.max(0, left)}%`, width: `${Math.max(width, 1.5)}%`, minWidth: "36px" }}>
+                                <div
+                                  className="absolute inset-0 flex items-center gap-1 overflow-hidden rounded-lg px-2 text-[11px] font-semibold shadow-sm cursor-default select-none transition-opacity hover:opacity-90"
+                                  style={{ backgroundColor: col, color: light ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.92)", borderLeft: `2px solid ${light ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.3)"}` }}
+                                  title={[
+                                    `${shift.shift_name || emp.employee_name}: ${shift.start_time} – ${shift.stop_time}`,
+                                    `Brutto: ${minsToHours(shift.gross_minutes)}`,
+                                    shift.break_minutes > 0 ? `Rast: ${shift.break_minutes} min` : null,
+                                    `Netto: ${minsToHours(shift.net_minutes > 0 ? shift.net_minutes : Math.max(0, shift.gross_minutes - shift.break_minutes))}`,
+                                    shift.is_lended ? "↔ Utlånad till annan enhet" : null,
+                                  ].filter(Boolean).join("\n")}>
+                                  {shift.is_lended && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
+                                  <span className="truncate leading-tight">
+                                    {shift.shift_name ? <>{shift.shift_name}<br /><span className="opacity-70">{shift.start_time}–{shift.stop_time}</span></> : `${shift.start_time}–${shift.stop_time}`}
+                                  </span>
+                                </div>
                               </div>
-                              {(() => {
-                                const shiftStartMins = (() => { const [h,m] = shift.start_time!.split(":").map(Number); return h*60+m; })();
-                                const shiftStopMins = (() => { const [h,m] = shift.stop_time!.split(":").map(Number); return h*60+m; })();
-                                const shiftDuration = shiftStopMins - shiftStartMins;
-                                if (shiftDuration <= 0) return null;
-                                return bws.map((bw, bi) => {
-                                  const [bh, bm] = bw.start.split(":").map(Number);
-                                  const bStartMins = bh * 60 + bm;
-                                  // Skip breaks outside this shift's time window
-                                  if (bStartMins < shiftStartMins || bStartMins >= shiftStopMins) return null;
-                                  const bLeftPct = ((bStartMins - shiftStartMins) / shiftDuration) * 100;
-                                  const bWidthPct = (bw.minutes / shiftDuration) * 100;
-                                  const clampedWidth = Math.min(bWidthPct, 100 - bLeftPct);
-                                  return (
-                                    <div key={bi} className="absolute top-0 bottom-0 z-20 pointer-events-none"
-                                      style={{ left: `${bLeftPct}%`, width: `${Math.max(clampedWidth, 2)}%` }}
-                                      title={`Rast ${bw.start}, ${bw.minutes} min`}>
-                                      <div className="absolute inset-0 rounded-sm bg-black/30 backdrop-brightness-75" />
-                                    </div>
-                                  );
-                                });
-                              })()}
-                            </div>
-                          );
-                        })
+                            );
+                          })}
+                          {/* Breaks rendered on the timeline directly using absolute timestamps */}
+                          {workShifts.flatMap((shift) =>
+                            (Array.isArray(shift.break_windows) ? shift.break_windows as BreakWindow[] : []).map((bw, bi) => {
+                              const bLeft = timeToPercent(bw.start);
+                              const bWidthPct = (bw.minutes / (TOTAL_HOURS * 60)) * 100;
+                              if (bLeft < 0 || bLeft > 100) return null;
+                              return (
+                                <div key={`${shift.id}-bw-${bi}`}
+                                  className="absolute top-1.5 bottom-1.5 z-20 pointer-events-none rounded-sm"
+                                  style={{ left: `${bLeft}%`, width: `${Math.max(bWidthPct, 0.4)}%`, backgroundColor: "rgba(0,0,0,0.28)", backdropFilter: "brightness(0.72)" }}
+                                  title={`Rast ${bw.start}, ${bw.minutes} min`}
+                                />
+                              );
+                            })
+                          )}
+                        </>
                       )}
                       {dayTasks.map((task) => {
                         if (!task.due_date) return null;
