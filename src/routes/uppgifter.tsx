@@ -156,9 +156,9 @@ function isTouchDevice(): boolean {
   return window.matchMedia("(pointer: coarse)").matches;
 }
 
-// Swipeable card: right-swipe → complete (with undo), left-swipe → open detail.
-// On non-touch devices the swipe handlers are never registered; the card behaves
-// as a plain clickable element so mouse drag cannot trigger accidental actions.
+// Swipeable card: right-swipe → complete (green hint), left-swipe → open detail (blue hint).
+// Threshold = 35% of screen width to prevent accidental triggers while scrolling.
+// Only active on coarse-pointer (touch) devices.
 function SwipeableCard({
   done,
   onSwipeRight,
@@ -177,18 +177,20 @@ function SwipeableCard({
   const startX = useRef(0);
   const startY = useRef(0);
   const deltaX = useRef(0);
+  const isHorizontal = useRef(false);
   const [offset, setOffset] = useState(0);
   const [swiping, setSwiping] = useState(false);
-  const THRESHOLD = 72;
 
-  // Only wire up pointer events on touch devices
   const touch = isTouchDevice();
+  // 35% of screen width as threshold
+  const THRESHOLD = typeof window !== "undefined" ? window.innerWidth * 0.35 : 120;
 
   const onPtrDown = (e: React.PointerEvent) => {
     if (!touch) return;
     startX.current = e.clientX;
     startY.current = e.clientY;
     deltaX.current = 0;
+    isHorizontal.current = false;
     setSwiping(false);
   };
 
@@ -196,10 +198,17 @@ function SwipeableCard({
     if (!touch) return;
     const dx = e.clientX - startX.current;
     const dy = e.clientY - startY.current;
-    if (!swiping && Math.abs(dy) > Math.abs(dx)) return; // vertical scroll wins
-    if (Math.abs(dx) > 6) setSwiping(true);
+    // Determine gesture direction on first significant movement
+    if (!isHorizontal.current && !swiping) {
+      if (Math.abs(dy) > Math.abs(dx) + 4) return; // vertical — don't intercept
+      if (Math.abs(dx) > 8) isHorizontal.current = true;
+    }
+    if (!isHorizontal.current) return;
+    e.stopPropagation();
+    setSwiping(true);
     deltaX.current = dx;
-    setOffset(Math.max(-THRESHOLD * 1.2, Math.min(THRESHOLD * 1.2, dx)));
+    const maxPull = THRESHOLD * 1.15;
+    setOffset(Math.max(-maxPull, Math.min(maxPull, dx)));
   };
 
   const onPtrUp = () => {
@@ -207,41 +216,56 @@ function SwipeableCard({
     const dx = deltaX.current;
     setOffset(0);
     setSwiping(false);
+    isHorizontal.current = false;
     if (dx > THRESHOLD) { onSwipeRight(); return; }
     if (dx < -THRESHOLD) { onSwipeLeft(); return; }
   };
 
-  const isRight = offset > 20;
-  const isLeft = offset < -20;
+  // Progress fraction 0–1 toward trigger threshold
+  const rightFrac = Math.max(0, Math.min(1, offset / THRESHOLD));
+  const leftFrac = Math.max(0, Math.min(1, -offset / THRESHOLD));
 
   return (
     <div className="relative overflow-hidden rounded-xl" data-swipeable>
-      {/* Right hint (complete) — hidden on fine-pointer via CSS */}
-      <div data-swipe-hint className={cn(
-        "absolute inset-y-0 left-0 flex w-20 items-center justify-center rounded-l-xl transition-opacity",
-        done ? "bg-muted/60" : "bg-success/20",
-        isRight ? "opacity-100" : "opacity-0"
-      )}>
+      {/* Right hint: green background fades in as you drag right */}
+      <div
+        data-swipe-hint
+        className="absolute inset-0 flex items-center justify-start pl-5 rounded-xl"
+        style={{
+          background: done
+            ? `rgba(0,0,0,${rightFrac * 0.08})`
+            : `rgba(var(--color-success-rgb, 34 197 94) / ${rightFrac * 0.8})`,
+          backgroundColor: done ? `rgba(200,200,200,${rightFrac * 0.5})` : `oklch(0.6 0.16 148 / ${rightFrac * 0.85})`,
+          opacity: rightFrac > 0.05 ? 1 : 0,
+        }}
+      >
         {done
-          ? <Circle className="h-6 w-6 text-muted-foreground" />
-          : <CheckCircle2 className="h-6 w-6 text-success" />
+          ? <Circle className="h-7 w-7 text-muted-foreground" style={{ opacity: rightFrac }} />
+          : <CheckCircle2 className="h-7 w-7 text-white" style={{ opacity: rightFrac }} />
         }
       </div>
-      {/* Left hint (open) — hidden on fine-pointer via CSS */}
-      <div data-swipe-hint className={cn(
-        "absolute inset-y-0 right-0 flex w-20 items-center justify-center rounded-r-xl bg-primary/10 transition-opacity",
-        isLeft ? "opacity-100" : "opacity-0"
-      )}>
-        <ChevronRight className="h-6 w-6 text-primary" />
+      {/* Left hint: blue/primary background */}
+      <div
+        data-swipe-hint
+        className="absolute inset-0 flex items-center justify-end pr-5 rounded-xl"
+        style={{
+          backgroundColor: `oklch(0.5 0.16 148 / ${leftFrac * 0.7})`,
+          opacity: leftFrac > 0.05 ? 1 : 0,
+        }}
+      >
+        <ChevronRight className="h-7 w-7 text-white" style={{ opacity: leftFrac }} />
       </div>
       <article
-        className={cn("relative z-10", touch ? "touch-pan-y" : "", className)}
-        style={{ transform: swiping ? `translateX(${offset}px)` : undefined, transition: swiping ? "none" : "transform 0.2s ease" }}
+        className={cn("relative z-10", touch ? "touch-pan-y select-none" : "", className)}
+        style={{
+          transform: swiping ? `translateX(${offset}px)` : undefined,
+          transition: swiping ? "none" : "transform 0.22s cubic-bezier(0.25, 1, 0.5, 1)",
+        }}
         onPointerDown={onPtrDown}
         onPointerMove={onPtrMove}
         onPointerUp={onPtrUp}
         onPointerCancel={onPtrUp}
-        onClick={() => { if (Math.abs(deltaX.current) < 6) onClick(); }}
+        onClick={() => { if (Math.abs(deltaX.current) < 8) onClick(); }}
       >
         {children}
       </article>
@@ -1536,28 +1560,28 @@ function TasksPage() {
         </Dialog>
       )}
 
-      {/* CREATE DIALOG — StoreSprint two-panel layout */}
+      {/* CREATE DIALOG — two-panel on desktop, single-column on mobile */}
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setSaveError(""); setUploadFiles([]); } }}>
-        <DialogContent className="max-h-[92vh] w-full max-w-4xl overflow-hidden p-0 gap-0">
+        <DialogContent className="sm:max-h-[92vh] sm:max-w-4xl overflow-hidden p-0 gap-0">
           {/* Header bar */}
-          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <ListChecks className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-muted-foreground">Ny uppgift</span>
-            {newTask.title && <span className="text-sm font-semibold text-foreground">{newTask.title}</span>}
+            <span className="text-sm font-medium text-muted-foreground hidden sm:block">Ny uppgift</span>
+            {newTask.title && <span className="text-sm font-semibold text-foreground truncate max-w-[140px] sm:max-w-xs">{newTask.title}</span>}
             <div className="ml-auto flex items-center gap-2">
-              {saveError && <span className="text-xs text-destructive">{saveError}</span>}
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setShowCreate(false)}>Avbryt</Button>
-              <Button size="sm" className="rounded-full gap-1.5 bg-primary text-primary-foreground" onClick={createTask} disabled={saving || !newTask.title.trim()}>
-                {saving ? "Sparar..." : "Skapa uppgift"}
+              {saveError && <span className="text-xs text-destructive hidden sm:block">{saveError}</span>}
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hidden sm:flex" onClick={() => setShowCreate(false)}>Avbryt</Button>
+              <Button size="sm" className="rounded-full gap-1.5 bg-primary text-primary-foreground text-xs" onClick={createTask} disabled={saving || !newTask.title.trim()}>
+                {saving ? "Sparar..." : "Skapa"}
               </Button>
             </div>
           </div>
 
-          {/* Two-panel body */}
-          <div className="flex overflow-hidden" style={{ maxHeight: "calc(92vh - 56px)" }}>
+          {/* Body: stacked on mobile, side-by-side on desktop */}
+          <div className="flex flex-col sm:flex-row overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
 
-            {/* LEFT: Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 min-w-0">
+            {/* CONTENT column */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-5 sm:p-6 sm:space-y-6 min-w-0">
 
               {/* Template picker */}
               {templates.length > 0 && (
@@ -1709,10 +1733,10 @@ function TasksPage() {
               </div>
             </div>
 
-            {/* RIGHT: Properties sidebar */}
-            <div className="w-72 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/30">
+            {/* PROPERTIES sidebar — full-width on mobile, fixed 72 on desktop */}
+            <div className="w-full sm:w-72 shrink-0 overflow-y-auto border-t sm:border-t-0 sm:border-l border-border/60 bg-muted/30">
 
-              {/* Property rows — Coop-inspired: label left, value/control right */}
+              {/* Property rows */}
               <div className="divide-y divide-border/50">
 
                 {/* Förfallodatum */}
@@ -1773,16 +1797,36 @@ function TasksPage() {
                 </div>
 
                 {/* SAP artikel-ID */}
-                <div className="flex items-center gap-3 px-4 py-3 min-w-0">
-                  <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="w-24 shrink-0 text-xs text-muted-foreground">SAP-artikel</span>
-                  <input
-                    value={newTask.sap_article_id}
-                    onChange={(e) => setNewTask(p => ({ ...p, sap_article_id: e.target.value }))}
-                    placeholder="t.ex. 1047133"
-                    inputMode="numeric"
-                    className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none overflow-hidden"
-                  />
+                <div className="px-4 py-3 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <span className="text-xs text-muted-foreground shrink-0">SAP-artikel</span>
+                    <div className="flex flex-1 items-center gap-1 min-w-0">
+                      <input
+                        value={newTask.sap_article_id}
+                        onChange={(e) => setNewTask(p => ({ ...p, sap_article_id: e.target.value }))}
+                        placeholder="t.ex. 1047133"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none overflow-hidden"
+                      />
+                      {newTask.sap_article_id && (
+                        <button type="button" onClick={() => setNewTask(p => ({ ...p, sap_article_id: "" }))} className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/60 hover:text-destructive shrink-0">
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {newTask.sap_article_id && (
+                    <a
+                      href={`https://mittcoop.coop.se/sortiment/articles/${newTask.sap_article_id.trim()}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" /> Öppna i Mitt Coop
+                    </a>
+                  )}
                 </div>
 
                 {/* Återkommande */}
@@ -1937,20 +1981,20 @@ function TasksPage() {
       {/* EDIT DIALOG */}
       {editTask && editForm && (
         <Dialog open onOpenChange={(o) => { if (!o) { setEditTask(null); setEditForm(null); } }}>
-          <DialogContent className="max-h-[92vh] w-full max-w-4xl overflow-hidden p-0 gap-0">
-            <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+          <DialogContent className="sm:max-h-[92vh] sm:max-w-4xl overflow-hidden p-0 gap-0">
+            <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
               <Pencil className="h-4 w-4 text-green-600" />
-              <span className="text-sm font-medium text-muted-foreground">Redigera uppgift</span>
-              <span className="text-sm font-semibold text-foreground truncate">{editTask.title}</span>
+              <span className="text-sm font-medium text-muted-foreground hidden sm:block">Redigera uppgift</span>
+              <span className="text-sm font-semibold text-foreground truncate max-w-[140px] sm:max-w-xs">{editTask.title}</span>
               <div className="ml-auto flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => { setEditTask(null); setEditForm(null); }}>Avbryt</Button>
-                <Button size="sm" className="rounded-full gap-1.5 bg-green-600 text-white hover:bg-green-700" onClick={saveEdit} disabled={editSaving || !editForm.title.trim()}>
-                  {editSaving ? "Sparar..." : "Spara ändringar"}
+                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hidden sm:flex" onClick={() => { setEditTask(null); setEditForm(null); }}>Avbryt</Button>
+                <Button size="sm" className="rounded-full gap-1.5 bg-green-600 text-white hover:bg-green-700 text-xs" onClick={saveEdit} disabled={editSaving || !editForm.title.trim()}>
+                  {editSaving ? "Sparar..." : "Spara"}
                 </Button>
               </div>
             </div>
-            <div className="flex overflow-hidden" style={{ maxHeight: "calc(92vh - 56px)" }}>
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 min-w-0">
+            <div className="flex flex-col sm:flex-row overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 sm:space-y-6 min-w-0">
                 <input
                   placeholder="Titel..."
                   value={editForm.title}
@@ -2008,7 +2052,7 @@ function TasksPage() {
                   </button>
                 </div>
               </div>
-              <div className="w-72 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/30">
+              <div className="w-full sm:w-72 shrink-0 overflow-y-auto border-t sm:border-t-0 sm:border-l border-border/60 bg-muted/30">
                 <div className="divide-y divide-border/50">
                   <div className="flex items-start gap-3 px-4 py-3">
                     <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />

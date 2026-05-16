@@ -138,6 +138,20 @@ function MeetingsPage() {
   const { user, activeStore, userStores } = useAuth();
   const isManager = user?.role === "manager" || user?.role === "admin";
 
+  // Wake lock: keep screen on during active meetings
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wakeLockRef = useRef<any>(null);
+  const acquireWakeLock = async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ("wakeLock" in navigator && !wakeLockRef.current) {
+      try { wakeLockRef.current = await (navigator as any).wakeLock.request("screen"); } catch {}
+    }
+  };
+  const releaseWakeLock = () => {
+    if (wakeLockRef.current) { wakeLockRef.current.release().catch(() => {}); wakeLockRef.current = null; }
+  };
+  useEffect(() => () => releaseWakeLock(), []);
+
   const [meetings, setMeetings] = useState<MeetingFull[]>([]);
   const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -220,8 +234,8 @@ function MeetingsPage() {
 
   const updateMeetingStatus = async (id: string, status: Meeting["status"]) => {
     const updates: Record<string, unknown> = { status };
-    if (status === "in_progress") updates.started_at = new Date().toISOString();
-    if (status === "completed") updates.ended_at = new Date().toISOString();
+    if (status === "in_progress") { updates.started_at = new Date().toISOString(); void acquireWakeLock(); }
+    if (status === "completed" || status === "cancelled") { updates.ended_at = new Date().toISOString(); releaseWakeLock(); }
     await supabase.from("meetings").update(updates).eq("id", id);
     logAudit(user?.id ?? null, "meeting.status", "meetings", id, { status });
     await fetchMeetings();

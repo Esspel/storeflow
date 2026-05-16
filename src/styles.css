@@ -181,37 +181,35 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  html {
-    /* Prevent browser pull-to-refresh and overscroll bounce from eating scroll events */
-    overscroll-behavior-y: contain;
-  }
-
-  body {
+  html, body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    /* Normal scrolling — do NOT add overflow:hidden or overscroll-behavior globally */
   }
 
-  /* Contain overscroll only on explicit scroll containers, not the body */
+  /* Contain overscroll only on explicit inner scroll containers */
   [data-scroll-container] {
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Swipe-to-complete is only safe on coarse-pointer (touch) devices.
-     On fine-pointer (mouse/trackpad) devices the swipe hints stay hidden
-     so click-and-drag never triggers destructive actions. */
+  /* Lock body scroll when a modal is open (set via JS: document.body.dataset.modalOpen = "1") */
+  body[data-modal-open="1"] {
+    overflow: hidden;
+    /* Keep page from jumping when scrollbar disappears */
+    padding-right: var(--scrollbar-width, 0px);
+  }
+
+  /* Swipe-to-complete: hidden on fine-pointer (mouse) devices */
   @media (pointer: fine) {
-    [data-swipeable] {
-      touch-action: auto;
-    }
     [data-swipe-hint] {
       display: none !important;
     }
   }
 
+  /* On touch devices allow horizontal swipe detection in JS */
   @media (pointer: coarse) {
     [data-swipeable] {
-      /* Allow vertical scroll but hand horizontal movement to JS swipe logic */
       touch-action: pan-y;
     }
   }

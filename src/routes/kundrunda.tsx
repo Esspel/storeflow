@@ -83,7 +83,6 @@ function KundrundaPage() {
   const [activeSession, setActiveSession] = useState<KundrundaSession | null>(null);
   const [responses, setResponses] = useState<ResponseMap>({});
   const [responseImages, setResponseImages] = useState<Record<string, KundrundaResponseImage[]>>({});
-  const [currentZoneIdx, setCurrentZoneIdx] = useState(0);
   const [defectDialog, setDefectDialog] = useState<DefectForm | null>(null);
   const [savingDefect, setSavingDefect] = useState(false);
   const [viewerImages, setViewerImages] = useState<string[]>([]);
@@ -96,6 +95,16 @@ function KundrundaPage() {
   const [checkpointRefImages, setCheckpointRefImages] = useState<Record<string, { id: string; storage_path: string }[]>>({});
 
   const [view, setView] = useState<"home" | "active" | "edit">("home");
+
+  // Accordion: which zone indexes are expanded (active session view)
+  const [expandedZones, setExpandedZones] = useState<Set<number>>(new Set([0]));
+
+  // Finish/abort confirmation dialog
+  const [showFinishWarning, setShowFinishWarning] = useState(false);
+
+  // Offline sync state
+  const [syncStatus, setSyncStatus] = useState<"online" | "offline" | "syncing">("online");
+  const pendingSyncRef = useRef<Record<string, KundrundaResponse>>({});
 
   // Zone/checkpoint editing
   const [editZone, setEditZone] = useState<ZoneWithCheckpoints | null>(null);
@@ -145,6 +154,48 @@ function KundrundaPage() {
     setLoading(false);
   };
 
+  // localStorage draft key — per user + store
+  const draftKey = `kundrunda-draft-${user?.id ?? "anon"}-${activeStore?.id ?? "all"}`;
+
+  // Persist responses to localStorage (offline autosave)
+  const saveLocalDraft = (session: KundrundaSession, respMap: ResponseMap) => {
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ sessionId: session.id, responses: respMap, savedAt: new Date().toISOString() }));
+    } catch {}
+  };
+
+  // Background sync: flush pendingSyncRef to Supabase
+  const flushPendingSync = async () => {
+    const pending = { ...pendingSyncRef.current };
+    if (Object.keys(pending).length === 0) return;
+    setSyncStatus("syncing");
+    try {
+      for (const resp of Object.values(pending)) {
+        if (resp.id && resp.id !== "pending") {
+          await supabase.from("kundrunda_responses").update({
+            result: resp.result, defect_description: resp.defect_description,
+            action_taken: resp.action_taken, responsible_user_id: resp.responsible_user_id,
+            sap_article_id: resp.sap_article_id,
+          }).eq("id", resp.id);
+        }
+        delete pendingSyncRef.current[resp.checkpoint_id];
+      }
+      setSyncStatus("online");
+    } catch {
+      setSyncStatus("offline");
+    }
+  };
+
+  // Network reconnect → flush
+  useEffect(() => {
+    const onOnline = () => { setSyncStatus("online"); void flushPendingSync(); };
+    const onOffline = () => setSyncStatus("offline");
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    if (!navigator.onLine) setSyncStatus("offline");
+    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
+  }, []);
+
   useEffect(() => {
     fetchData();
     if (activeStore) {
@@ -170,7 +221,8 @@ function KundrundaPage() {
       setActiveSession(data as KundrundaSession);
       setResponses({});
       setResponseImages({});
-      setCurrentZoneIdx(0);
+      setExpandedZones(new Set([0]));
+      saveLocalDraft(data as KundrundaSession, {});
       setView("active");
       logAudit(user?.id ?? null, "kundrunda.session.start", "kundrunda_sessions", data.id, {});
     }
@@ -191,22 +243,64 @@ function KundrundaPage() {
     setActiveSession(session);
     setResponses(map);
     setResponseImages(imgMap);
-    setCurrentZoneIdx(0);
+    saveLocalDraft(session, map);
+    // Find first incomplete zone and expand it
+    const firstIncomplete = zones.findIndex(z => !z.checkpoints.every(c => map[c.id]?.result));
+    setExpandedZones(new Set([Math.max(0, firstIncomplete)]));
     setView("active");
   };
 
   const recordOk = async (checkpoint: KundrundaCheckpoint) => {
     if (!activeSession) return;
     const existing = responses[checkpoint.id];
-    if (existing) {
-      await supabase.from("kundrunda_responses").update({ result: "ok", defect_description: null, action_taken: null, responsible_user_id: null, sap_article_id: null }).eq("id", existing.id);
-      setResponses(p => ({ ...p, [checkpoint.id]: { ...p[checkpoint.id], result: "ok", defect_description: null, action_taken: null, responsible_user_id: null } }));
+
+    // Optimistic update
+    const optimistic: KundrundaResponse = {
+      ...(existing ?? {} as KundrundaResponse),
+      checkpoint_id: checkpoint.id,
+      zone_id: checkpoint.zone_id,
+      session_id: activeSession.id,
+      result: "ok",
+      defect_description: null,
+      action_taken: null,
+      responsible_user_id: null,
+      sap_article_id: null,
+    };
+    const newResponses = (p: ResponseMap) => ({ ...p, [checkpoint.id]: optimistic });
+    setResponses(prev => {
+      const updated = newResponses(prev);
+      saveLocalDraft(activeSession, updated);
+      // Auto-expand next zone if current zone is now complete
+      const zoneIdx = zones.findIndex(z => z.id === checkpoint.zone_id);
+      if (zoneIdx >= 0) {
+        const zone = zones[zoneIdx];
+        const allDone = zone.checkpoints.every(c => (c.id === checkpoint.id ? true : updated[c.id]?.result));
+        if (allDone && zoneIdx < zones.length - 1) {
+          setExpandedZones(prev2 => {
+            const next = new Set(prev2);
+            next.delete(zoneIdx);
+            next.add(zoneIdx + 1);
+            return next;
+          });
+        }
+      }
+      return updated;
+    });
+
+    if (navigator.onLine) {
+      if (existing) {
+        await supabase.from("kundrunda_responses").update({ result: "ok", defect_description: null, action_taken: null, responsible_user_id: null, sap_article_id: null }).eq("id", existing.id);
+      } else {
+        const { data } = await supabase.from("kundrunda_responses").insert({
+          session_id: activeSession.id, checkpoint_id: checkpoint.id, zone_id: checkpoint.zone_id, result: "ok",
+        }).select().maybeSingle();
+        if (data) setResponses(p => ({ ...p, [checkpoint.id]: data as KundrundaResponse }));
+      }
     } else {
-      const { data } = await supabase.from("kundrunda_responses").insert({
-        session_id: activeSession.id, checkpoint_id: checkpoint.id, zone_id: checkpoint.zone_id, result: "ok",
-      }).select().maybeSingle();
-      if (data) setResponses(p => ({ ...p, [checkpoint.id]: data as KundrundaResponse }));
+      pendingSyncRef.current[checkpoint.id] = optimistic;
+      setSyncStatus("offline");
     }
+
     await updateScore();
   };
 
@@ -371,14 +465,28 @@ function KundrundaPage() {
     setActiveSession(p => p ? { ...p, total_score: okCount, max_score: total } : null);
   };
 
-  const completeSession = async () => {
+  const completeSession = async (force = false) => {
     if (!activeSession) return;
+    // If not all checked and not forcing, show warning
+    if (!force && answeredCount < totalCheckpoints) {
+      setShowFinishWarning(true);
+      return;
+    }
     await supabase.from("kundrunda_sessions").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", activeSession.id);
     logAudit(user?.id ?? null, "kundrunda.session.complete", "kundrunda_sessions", activeSession.id, {});
+    try { localStorage.removeItem(draftKey); } catch {}
     await fetchData();
     setActiveSession(null);
     setResponses({});
     setResponseImages({});
+    setShowFinishWarning(false);
+    setView("home");
+  };
+
+  const suspendSession = () => {
+    // Save draft and go to home without completing
+    if (activeSession) saveLocalDraft(activeSession, responses);
+    setShowFinishWarning(false);
     setView("home");
   };
 
@@ -454,7 +562,6 @@ function KundrundaPage() {
     setCommonDefects(p => p.filter(d => d.id !== id));
   };
 
-  const currentZone = zones[currentZoneIdx];
   const totalCheckpoints = zones.reduce((s, z) => s + z.checkpoints.length, 0);
   const answeredCount = Object.values(responses).filter(r => r.result).length;
   const defectCount = Object.values(responses).filter(r => r.result === "avvikelse").length;
@@ -468,19 +575,24 @@ function KundrundaPage() {
   }
 
   // ── ACTIVE SESSION VIEW ────────────────────────────────────────────────────
-  if (view === "active" && activeSession && currentZone) {
-    const zoneProgress = currentZone.checkpoints.filter(c => responses[c.id]?.result).length;
-    const zoneTotal = currentZone.checkpoints.length;
+  if (view === "active" && activeSession !== null) {
     const sessionPct = totalCheckpoints > 0 ? answeredCount / totalCheckpoints : 0;
-    const allZoneDone = zoneProgress === zoneTotal;
+    const isAllDone = answeredCount === totalCheckpoints;
+
+    // Build list of incomplete zones for finish warning
+    const incompleteZones = zones.filter(z => !z.checkpoints.every(c => responses[c.id]?.result));
 
     return (
-      <div className="flex h-[calc(100vh-4rem)] flex-col bg-background">
+      <div className="flex h-[100dvh] flex-col bg-background">
         {/* Session header */}
-        <div className="shrink-0 border-b border-border/60 bg-card px-5 py-3">
+        <div className="shrink-0 border-b border-border/60 bg-card px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <button className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted hover:bg-muted/70" onClick={() => setView("home")}>
+              <button
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted hover:bg-muted/70 active:scale-95 transition-all"
+                onClick={suspendSession}
+                aria-label="Spara och stäng"
+              >
                 <X className="h-4 w-4" />
               </button>
               <div className="min-w-0">
@@ -489,173 +601,190 @@ function KundrundaPage() {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-3">
+              {/* Offline indicator */}
+              {syncStatus !== "online" && (
+                <div className={cn(
+                  "flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium",
+                  syncStatus === "offline" ? "bg-warning/20 text-warning-foreground" : "bg-muted text-muted-foreground"
+                )}>
+                  <span className={cn("h-1.5 w-1.5 rounded-full", syncStatus === "offline" ? "bg-warning-foreground" : "bg-muted-foreground animate-pulse")} />
+                  {syncStatus === "offline" ? "Sparat lokalt" : "Synkar..."}
+                </div>
+              )}
               <div className="text-right">
-                <p className="text-xs text-muted-foreground">{answeredCount}/{totalCheckpoints}</p>
-                <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${sessionPct * 100}%` }} />
+                <p className="text-xs font-medium tabular-nums">{answeredCount}<span className="text-muted-foreground">/{totalCheckpoints}</span></p>
+                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted mt-0.5">
+                  <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${sessionPct * 100}%` }} />
                 </div>
               </div>
+              {/* Always-visible finish button */}
+              <Button
+                size="sm"
+                className={cn("rounded-full text-xs shrink-0", isAllDone ? "bg-success text-success-foreground hover:bg-success/90" : "")}
+                onClick={() => completeSession(false)}
+              >
+                {isAllDone ? <><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Slutför</> : "Avsluta"}
+              </Button>
             </div>
           </div>
         </div>
 
-        {/* Zone navigation */}
-        <div className="shrink-0 overflow-x-auto border-b border-border/40 bg-card px-4 py-2">
-          <div className="flex gap-1.5">
-            {zones.map((z, i) => {
-              const done = z.checkpoints.every(c => responses[c.id]?.result);
-              const partial = z.checkpoints.some(c => responses[c.id]?.result);
-              return (
-                <button
-                  key={z.id}
-                  onClick={() => setCurrentZoneIdx(i)}
-                  className={cn(
-                    "flex h-8 shrink-0 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors",
-                    i === currentZoneIdx ? "bg-primary text-primary-foreground" :
-                    done ? "bg-success/15 text-success" :
-                    partial ? "bg-primary-soft text-primary" :
-                    "bg-muted text-muted-foreground hover:bg-muted/70"
-                  )}
-                >
-                  {done && <CheckCircle2 className="h-3 w-3" />}
-                  {z.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Current zone */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-2xl p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold">{currentZone.name}</h2>
-                <p className="text-xs text-muted-foreground">{zoneProgress}/{zoneTotal} besvarade</p>
-              </div>
-              <div className="flex items-center gap-2">
-                {!allZoneDone && (
-                  <Button size="sm" variant="outline" className="rounded-full gap-1.5 text-xs text-success border-success/40 hover:bg-success/10" onClick={() => approveZone(currentZone)}>
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Godkänn alla
-                  </Button>
-                )}
-                {currentZoneIdx > 0 && (
-                  <button onClick={() => setCurrentZoneIdx(i => i - 1)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-card hover:bg-muted/40">
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                )}
-                {currentZoneIdx < zones.length - 1 && (
-                  <button onClick={() => setCurrentZoneIdx(i => i + 1)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-card hover:bg-muted/40">
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {currentZone.checkpoints.map((cp) => {
-              const resp = responses[cp.id];
-              const isOk = resp?.result === "ok";
-              const isDefect = resp?.result === "avvikelse";
-              const refImages = checkpointRefImages[cp.id] ?? [];
+        {/* Accordion zone list */}
+        <div className="flex-1 overflow-y-auto" data-scroll-container>
+          <div className="mx-auto max-w-2xl p-3 sm:p-5 space-y-2">
+            {zones.map((zone, zoneIdx) => {
+              const zoneDone = zone.checkpoints.every(c => responses[c.id]?.result);
+              const zoneAnswered = zone.checkpoints.filter(c => responses[c.id]?.result).length;
+              const isExpanded = expandedZones.has(zoneIdx);
 
               return (
-                <div key={cp.id} className={cn(
-                  "rounded-2xl border p-4 transition-all",
-                  isOk ? "border-success/40 bg-success/5" :
-                  isDefect ? "border-destructive/40 bg-destructive/5" :
-                  "border-border/60 bg-card"
+                <div key={zone.id} className={cn(
+                  "rounded-2xl border overflow-hidden transition-all",
+                  zoneDone ? "border-success/40 bg-success/5" : isExpanded ? "border-primary/30 bg-card shadow-[var(--shadow-sm)]" : "border-border/60 bg-card"
                 )}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      {isOk ? <CheckCircle2 className="h-5 w-5 shrink-0 text-success" />
-                        : isDefect ? <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
-                        : <Circle className="h-5 w-5 shrink-0 text-muted-foreground/30" />
+                  {/* Zone header — tappable to expand/collapse */}
+                  <button
+                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
+                    onClick={() => setExpandedZones(prev => {
+                      const next = new Set(prev);
+                      if (next.has(zoneIdx)) next.delete(zoneIdx);
+                      else next.add(zoneIdx);
+                      return next;
+                    })}
+                  >
+                    <div className={cn(
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors",
+                      zoneDone ? "bg-success/20" : "bg-muted"
+                    )}>
+                      {zoneDone
+                        ? <CheckCircle2 className="h-4 w-4 text-success" />
+                        : <span className="text-[11px] font-bold text-muted-foreground">{zoneIdx + 1}</span>
                       }
-                      <div className="min-w-0">
-                        <span className="font-medium text-sm">{cp.label}</span>
-                        {cp.description && (
-                          <p className="mt-0.5 text-xs text-muted-foreground leading-snug">{cp.description}</p>
-                        )}
-                      </div>
                     </div>
-                    <div className="flex shrink-0 gap-2">
-                      <button
-                        onClick={() => recordOk(cp)}
-                        className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-xl border-2 transition-all active:scale-95",
-                          isOk ? "border-success bg-success/15 text-success" : "border-border/60 text-muted-foreground hover:border-success/50 hover:text-success"
-                        )}
-                        aria-label="OK"
-                      >
-                        <CheckCircle2 className="h-5 w-5" />
-                      </button>
-                      <button
-                        onClick={() => openDefectDialog(cp)}
-                        className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-xl border-2 transition-all active:scale-95",
-                          isDefect ? "border-destructive bg-destructive/15 text-destructive" : "border-border/60 text-muted-foreground hover:border-destructive/50 hover:text-destructive"
-                        )}
-                        aria-label="Avvikelse"
-                      >
-                        <AlertTriangle className="h-5 w-5" />
-                      </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">{zone.name}</p>
+                      <p className="text-xs text-muted-foreground">{zoneAnswered}/{zone.checkpoints.length} klart</p>
                     </div>
-                  </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {zoneDone && <span className="text-[11px] font-medium text-success">Klart</span>}
+                      {!zoneDone && zoneAnswered > 0 && (
+                        <span className="text-[11px] text-muted-foreground">{zone.checkpoints.length - zoneAnswered} kvar</span>
+                      )}
+                      <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform", isExpanded ? "rotate-90" : "")} />
+                    </div>
+                  </button>
 
-                  {/* Reference images for this checkpoint */}
-                  {refImages.length > 0 && (
-                    <div className="mt-3 border-t border-border/40 pt-3">
-                      <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Referensbilder</p>
-                      <div className="flex gap-1.5 overflow-x-auto">
-                        {refImages.map((img, idx) => (
-                          <button key={img.id} className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60" onClick={() => { setViewerImages(refImages.map(i => getPublicUrl(i.storage_path))); setViewerIdx(idx); }}>
-                            <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {isDefect && resp.defect_description && (
-                    <div className="mt-3 border-t border-destructive/20 pt-3 space-y-1">
-                      <p className="text-xs text-destructive/80">{resp.defect_description}</p>
-                      {resp.sap_article_id && <p className="text-[11px] text-muted-foreground font-mono">SAP: {resp.sap_article_id}</p>}
-                      <button className="text-[11px] text-primary underline" onClick={() => openDefectDialog(cp)}>Redigera</button>
-                      {/* Defect photos */}
-                      {resp.id && (responseImages[resp.id] ?? []).length > 0 && (
-                        <div className="flex gap-1.5 pt-1 overflow-x-auto">
-                          {(responseImages[resp.id] ?? []).map((img, idx) => (
-                            <button key={img.id} className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-border/60" onClick={() => { setViewerImages((responseImages[resp.id] ?? []).map(i => getPublicUrl(i.storage_path))); setViewerIdx(idx); }}>
-                              <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
-                            </button>
-                          ))}
+                  {/* Expandable checkpoint list */}
+                  {isExpanded && (
+                    <div className="border-t border-border/40">
+                      {/* Approve-all button for incomplete zone */}
+                      {!zoneDone && (
+                        <div className="flex items-center justify-between px-4 py-2 bg-muted/20">
+                          <span className="text-xs text-muted-foreground">{zone.checkpoints.length - zoneAnswered} punkt{zone.checkpoints.length - zoneAnswered !== 1 ? "er" : ""} kvar</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 rounded-full gap-1 text-[11px] text-success border-success/40 hover:bg-success/10"
+                            onClick={() => approveZone(zone)}
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Godkänn alla
+                          </Button>
                         </div>
                       )}
+                      <div className="divide-y divide-border/40">
+                        {zone.checkpoints.map((cp) => {
+                          const resp = responses[cp.id];
+                          const isOk = resp?.result === "ok";
+                          const isDefect = resp?.result === "avvikelse";
+                          const refImages = checkpointRefImages[cp.id] ?? [];
+
+                          return (
+                            <div key={cp.id} className={cn(
+                              "p-4 transition-colors",
+                              isOk ? "bg-success/5" : isDefect ? "bg-destructive/5" : ""
+                            )}>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-start gap-3 min-w-0 flex-1">
+                                  <div className="mt-0.5 shrink-0">
+                                    {isOk ? <CheckCircle2 className="h-5 w-5 text-success" />
+                                      : isDefect ? <AlertTriangle className="h-5 w-5 text-destructive" />
+                                      : <Circle className="h-5 w-5 text-muted-foreground/30" />
+                                    }
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="font-medium text-sm leading-snug">{cp.label}</span>
+                                    {cp.description && (
+                                      <p className="mt-0.5 text-xs text-muted-foreground leading-snug">{cp.description}</p>
+                                    )}
+                                  </div>
+                                </div>
+                                {/* Action buttons — min 44x44px touch targets */}
+                                <div className="flex shrink-0 gap-2">
+                                  <button
+                                    onClick={() => recordOk(cp)}
+                                    className={cn(
+                                      "flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95",
+                                      isOk ? "border-success bg-success/15 text-success" : "border-border/60 text-muted-foreground hover:border-success/50 hover:text-success"
+                                    )}
+                                    aria-label="OK"
+                                  >
+                                    <CheckCircle2 className="h-5 w-5" />
+                                  </button>
+                                  <button
+                                    onClick={() => openDefectDialog(cp)}
+                                    className={cn(
+                                      "flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95",
+                                      isDefect ? "border-destructive bg-destructive/15 text-destructive" : "border-border/60 text-muted-foreground hover:border-destructive/50 hover:text-destructive"
+                                    )}
+                                    aria-label="Avvikelse"
+                                  >
+                                    <AlertTriangle className="h-5 w-5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Reference images */}
+                              {refImages.length > 0 && (
+                                <div className="mt-3 pt-2">
+                                  <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Referens</p>
+                                  <div className="flex gap-1.5 overflow-x-auto">
+                                    {refImages.map((img, idx) => (
+                                      <button key={img.id} className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60" onClick={() => { setViewerImages(refImages.map(i => getPublicUrl(i.storage_path))); setViewerIdx(idx); }}>
+                                        <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {isDefect && (
+                                <div className="mt-3 pt-2 space-y-1">
+                                  {resp?.defect_description && <p className="text-xs text-destructive/80">{resp.defect_description}</p>}
+                                  {resp?.sap_article_id && <p className="text-[11px] text-muted-foreground font-mono">SAP: {resp.sap_article_id}</p>}
+                                  <button className="text-[11px] text-primary underline" onClick={() => openDefectDialog(cp)}>Redigera</button>
+                                  {resp?.id && (responseImages[resp.id] ?? []).length > 0 && (
+                                    <div className="flex gap-1.5 pt-1 overflow-x-auto">
+                                      {(responseImages[resp.id] ?? []).map((img, idx) => (
+                                        <button key={img.id} className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-border/60" onClick={() => { setViewerImages((responseImages[resp.id!] ?? []).map(i => getPublicUrl(i.storage_path))); setViewerIdx(idx); }}>
+                                          <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
               );
             })}
-          </div>
-        </div>
 
-        {/* Bottom action bar */}
-        <div className="shrink-0 border-t border-border/60 bg-card p-4">
-          <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
-            <div className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{defectCount}</span> avvikelse{defectCount !== 1 ? "r" : ""}
-            </div>
-            {answeredCount === totalCheckpoints ? (
-              <Button className="rounded-full gap-1.5" onClick={completeSession}>
-                <CheckCircle2 className="h-4 w-4" /> Slutför rundan
-              </Button>
-            ) : currentZoneIdx < zones.length - 1 ? (
-              <Button className="rounded-full gap-1.5" onClick={() => setCurrentZoneIdx(i => i + 1)}>
-                Nästa zon <ArrowRight className="h-4 w-4" />
-              </Button>
-            ) : (
-              <Button variant="outline" className="rounded-full" onClick={completeSession}>Avsluta ändå</Button>
-            )}
+            {/* Bottom padding for FAB */}
+            <div className="h-4" />
           </div>
         </div>
 
@@ -674,7 +803,7 @@ function KundrundaPage() {
                     <div className="flex flex-wrap gap-1.5">
                       {commonDefects.map(d => (
                         <button key={d.id} type="button"
-                          className="rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                          className="min-h-[44px] rounded-full border border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
                           onClick={() => setDefectDialog(p => p ? { ...p, defect_description: d.label } : null)}
                         >
                           {d.label}
@@ -694,7 +823,7 @@ function KundrundaPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Åtgärd</Label>
+                  <Label className="text-xs">Åtgärd som ska vidtas</Label>
                   <Input
                     value={defectDialog.action_taken}
                     onChange={(e) => setDefectDialog(p => p ? { ...p, action_taken: e.target.value } : null)}
@@ -711,7 +840,6 @@ function KundrundaPage() {
                   <Button type="button" variant="outline" size="sm" className="rounded-full gap-1.5 text-xs w-full" onClick={() => defectPhotoRef.current?.click()}>
                     <Camera className="h-3.5 w-3.5" /> Lägg till foto
                   </Button>
-                  {/* Show already-uploaded defect photos */}
                   {(() => {
                     const existing = responses[defectDialog.checkpoint_id];
                     const imgs = existing?.id ? (responseImages[existing.id] ?? []) : [];
@@ -728,26 +856,32 @@ function KundrundaPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">SAP-artikel-ID</Label>
-                  <div className="relative">
-                    <Hash className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <Input
+                  <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2">
+                    <Hash className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <input
                       value={defectDialog.sap_article_id}
                       onChange={(e) => setDefectDialog(p => p ? { ...p, sap_article_id: e.target.value } : null)}
                       placeholder="t.ex. 1047133"
                       inputMode="numeric"
-                      className="pl-9 text-sm"
+                      pattern="[0-9]*"
+                      className="flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground/40"
                     />
+                    {defectDialog.sap_article_id && (
+                      <button type="button" onClick={() => setDefectDialog(p => p ? { ...p, sap_article_id: "" } : null)} className="text-muted-foreground hover:text-destructive">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
-                  {defectDialog.sap_article_id && activeSession.store?.sap_site_id && (
-                    <a href={mittCoopUrl(defectDialog.sap_article_id, activeSession.store.sap_site_id) ?? "#"} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                      Öppna i Mitt Coop
+                  {defectDialog.sap_article_id && (
+                    <a href={mittCoopUrl(defectDialog.sap_article_id, activeSession.store?.sap_site_id ?? null) ?? `https://mittcoop.coop.se/sortiment/articles/${defectDialog.sap_article_id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                      <ArrowRight className="h-3 w-3" /> Öppna i Mitt Coop
                     </a>
                   )}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Ansvarig</Label>
                   <Select value={defectDialog.responsible_user_id || "__none"} onValueChange={(v) => setDefectDialog(p => p ? { ...p, responsible_user_id: v === "__none" ? "" : v } : null)}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Välj person" /></SelectTrigger>
+                    <SelectTrigger className="h-11 text-sm"><SelectValue placeholder="Välj person" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none">Ingen</SelectItem>
                       {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
@@ -767,6 +901,43 @@ function KundrundaPage() {
             </DialogContent>
           )}
         </Dialog>
+
+        {/* Finish warning dialog */}
+        <AlertDialog open={showFinishWarning} onOpenChange={setShowFinishWarning}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Rundan är inte klar</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p>Du har {totalCheckpoints - answeredCount} punkt{totalCheckpoints - answeredCount !== 1 ? "er" : ""} kvar:</p>
+                  <ul className="space-y-1">
+                    {incompleteZones.map(z => {
+                      const remaining = z.checkpoints.filter(c => !responses[c.id]?.result).length;
+                      return (
+                        <li key={z.id} className="flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-warning-foreground shrink-0" />
+                          <strong>{z.name}</strong>: {remaining} punkt{remaining !== 1 ? "er" : ""} kvar
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+              <Button variant="outline" className="rounded-full w-full sm:w-auto" onClick={suspendSession}>
+                Spara som utkast
+              </Button>
+              <AlertDialogCancel className="sm:hidden">Fortsätt rundan</AlertDialogCancel>
+              <Button variant="outline" className="rounded-full w-full sm:w-auto hidden sm:flex" onClick={() => setShowFinishWarning(false)}>
+                Fortsätt rundan
+              </Button>
+              <AlertDialogAction className="rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => completeSession(true)}>
+                Avsluta ändå
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {viewerIdx !== null && (
           <PhotoViewer images={viewerImages} initialIndex={viewerIdx} onClose={() => setViewerIdx(null)} />
@@ -961,6 +1132,13 @@ function KundrundaPage() {
   const inProgressSession = sessions.find(s => s.status === "in_progress");
   const completedSessions = sessions.filter(s => s.status === "completed");
 
+  // Check for a local draft that might be newer than remote
+  let localDraftTime: string | null = null;
+  try {
+    const raw = localStorage.getItem(draftKey);
+    if (raw) { const parsed = JSON.parse(raw); localDraftTime = parsed.savedAt ?? null; }
+  } catch {}
+
   return (
     <div className="mx-auto max-w-2xl px-5 py-8 md:px-8 md:py-10">
       <PageHeader
@@ -984,18 +1162,27 @@ function KundrundaPage() {
               <div>
                 <p className="font-semibold">Pågående runda</p>
                 <p className="text-xs text-muted-foreground">
-                  Startad {new Date(inProgressSession.started_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}
+                  Startad kl {new Date(inProgressSession.started_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}
+                  {localDraftTime && (
+                    <span className="ml-1 text-muted-foreground/70">· Autosparat {new Date(localDraftTime).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}</span>
+                  )}
+                </p>
+                <p className="mt-0.5 text-xs text-warning-foreground font-medium">
+                  Vill du återuppta eller starta en ny?
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               {isManager && (
                 <button className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-destructive" onClick={() => setDeleteSessionTarget(inProgressSession)} aria-label="Ta bort">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               )}
+              <Button size="sm" variant="outline" className="rounded-full gap-1.5 shrink-0 text-xs" onClick={startSession}>
+                Ny runda
+              </Button>
               <Button className="rounded-full gap-1.5 shrink-0" onClick={() => resumeSession(inProgressSession)}>
-                Fortsätt <ArrowRight className="h-4 w-4" />
+                Återuppta <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
           </div>

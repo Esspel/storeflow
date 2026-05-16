@@ -480,23 +480,23 @@ function IssuesPage() {
 
       {/* CREATE DIALOG — two-panel layout */}
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setUploadFiles([]); }}>
-        <DialogContent className="max-h-[92vh] w-full max-w-4xl overflow-hidden p-0 gap-0">
+        <DialogContent className="sm:max-h-[92vh] sm:max-w-4xl overflow-hidden p-0 gap-0">
           {/* Header bar */}
-          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-muted-foreground">Ny avvikelse</span>
-            {newIncident.title && <span className="text-sm font-semibold text-foreground truncate max-w-xs">{newIncident.title}</span>}
+            <span className="text-sm font-medium text-muted-foreground hidden sm:block">Ny avvikelse</span>
+            {newIncident.title && <span className="text-sm font-semibold text-foreground truncate max-w-[140px] sm:max-w-xs">{newIncident.title}</span>}
             <div className="ml-auto flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setShowCreate(false)}>Avbryt</Button>
-              <Button size="sm" className="rounded-full" onClick={createIncident} disabled={saving || !newIncident.title}>
-                {saving ? "Sparar..." : "Skapa avvikelse"}
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hidden sm:flex" onClick={() => setShowCreate(false)}>Avbryt</Button>
+              <Button size="sm" className="rounded-full text-xs" onClick={createIncident} disabled={saving || !newIncident.title}>
+                {saving ? "Sparar..." : "Skapa"}
               </Button>
             </div>
           </div>
 
-          <div className="flex overflow-hidden" style={{ maxHeight: "calc(92vh - 56px)" }}>
-            {/* LEFT: Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-5 min-w-0">
+          <div className="flex flex-col sm:flex-row overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
+            {/* CONTENT column */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 min-w-0">
               <input
                 placeholder="Titel på avvikelsen..."
                 value={newIncident.title}
@@ -539,8 +539,8 @@ function IssuesPage() {
               </div>
             </div>
 
-            {/* RIGHT: Properties sidebar */}
-            <div className="w-64 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/30">
+            {/* PROPERTIES sidebar */}
+            <div className="w-full sm:w-64 shrink-0 overflow-y-auto border-t sm:border-t-0 sm:border-l border-border/60 bg-muted/30">
               <div className="divide-y divide-border/50">
 
                 {/* Prioritet */}
@@ -602,16 +602,36 @@ function IssuesPage() {
                 </div>
 
                 {/* SAP artikel-ID */}
-                <div className="flex items-center gap-3 px-4 py-3 min-w-0">
-                  <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="w-20 shrink-0 text-xs text-muted-foreground">SAP-artikel</span>
-                  <input
-                    value={newIncident.sap_article_id}
-                    onChange={(e) => setNewIncident(p => ({ ...p, sap_article_id: e.target.value }))}
-                    placeholder="t.ex. 1047133"
-                    inputMode="numeric"
-                    className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none overflow-hidden"
-                  />
+                <div className="px-4 py-3 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <span className="text-xs text-muted-foreground shrink-0">SAP-artikel</span>
+                    <div className="flex flex-1 items-center gap-1 min-w-0">
+                      <input
+                        value={newIncident.sap_article_id}
+                        onChange={(e) => setNewIncident(p => ({ ...p, sap_article_id: e.target.value }))}
+                        placeholder="t.ex. 1047133"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none overflow-hidden"
+                      />
+                      {newIncident.sap_article_id && (
+                        <button type="button" onClick={() => setNewIncident(p => ({ ...p, sap_article_id: "" }))} className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/60 hover:text-destructive shrink-0">
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {newIncident.sap_article_id && (
+                    <a
+                      href={`https://mittcoop.coop.se/sortiment/articles/${newIncident.sap_article_id.trim()}${newIncident.store_id ? "" : ""}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" /> Öppna i Mitt Coop
+                    </a>
+                  )}
                 </div>
 
               </div>
