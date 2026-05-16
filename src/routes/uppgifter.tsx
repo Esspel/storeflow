@@ -655,6 +655,7 @@ function TasksPage() {
     const dueDate = tmpl.due_date_offset != null
       ? (() => { const d = new Date(getSimulatedNow()); d.setDate(d.getDate() + tmpl.due_date_offset!); return utcIsoToLocalInput(d.toISOString()); })()
       : "";
+    const todayStr = localDateStr(new Date(getSimulatedNow()));
     setNewTask((p) => ({
       ...p,
       title: p.title || tmpl.title,
@@ -662,6 +663,9 @@ function TasksPage() {
       priority: tmpl.priority || p.priority,
       recurrence_rule: tmpl.recurrence_rule ?? p.recurrence_rule,
       recurrence_days: tmpl.recurrence_days ?? p.recurrence_days,
+      recurrence_interval: tmpl.recurrence_interval ?? p.recurrence_interval,
+      // Always set recurrence_start to today when applying a template with recurrence
+      recurrence_start: tmpl.recurrence_rule ? todayStr : p.recurrence_start,
       due_date: dueDate || p.due_date,
       steps: steps.length > 0 ? steps : p.steps,
       questions: questions.length > 0 ? questions : p.questions,
@@ -924,6 +928,16 @@ function TasksPage() {
   const createTask = async () => {
     setSaveError("");
     if (!newTask.title.trim()) { setSaveError("Titel är obligatorisk."); return; }
+    const validStepsNow = newTask.steps.filter(s => s.label.trim());
+    const validQuestionsNow = newTask.questions.filter(q => q.label.trim());
+    if (validStepsNow.length === 0 && validQuestionsNow.length === 0) {
+      setSaveError("Minst en checkpunkt eller fråga är obligatorisk.");
+      return;
+    }
+    if (newTask.recurrence_rule && !newTask.recurrence_start) {
+      setSaveError("Startdatum för repetition är obligatoriskt.");
+      return;
+    }
     if (!isManager) return;
     setSaving(true);
 

@@ -168,6 +168,7 @@ function IssuesPage() {
 
   const createIncident = async () => {
     if (!newIncident.title.trim()) return;
+    if (!newIncident.description.trim()) return;
     setSaving(true);
     const { data: inc } = await supabase.from("incidents").insert({
       title: newIncident.title.trim(),
@@ -488,7 +489,7 @@ function IssuesPage() {
             {newIncident.title && <span className="text-sm font-semibold text-foreground truncate max-w-[140px] sm:max-w-xs">{newIncident.title}</span>}
             <div className="ml-auto flex items-center gap-2">
               <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hidden sm:flex" onClick={() => setShowCreate(false)}>Avbryt</Button>
-              <Button size="sm" className="rounded-full text-xs" onClick={createIncident} disabled={saving || !newIncident.title}>
+              <Button size="sm" className="rounded-full text-xs" onClick={createIncident} disabled={saving || !newIncident.title.trim() || !newIncident.description.trim()}>
                 {saving ? "Sparar..." : "Skapa"}
               </Button>
             </div>

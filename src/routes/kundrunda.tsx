@@ -254,6 +254,16 @@ function KundrundaPage() {
     if (!activeSession) return;
     const existing = responses[checkpoint.id];
 
+    // If overwriting a defect that had a linked incident/task, delete them
+    if (existing?.result === "avvikelse") {
+      if (existing.incident_id) {
+        await supabase.from("incidents").delete().eq("id", existing.incident_id);
+      }
+      if (existing.created_task_id) {
+        await supabase.from("tasks").delete().eq("id", existing.created_task_id);
+      }
+    }
+
     // Optimistic update
     const optimistic: KundrundaResponse = {
       ...(existing ?? {} as KundrundaResponse),
@@ -307,7 +317,8 @@ function KundrundaPage() {
   const approveZone = async (zone: ZoneWithCheckpoints) => {
     if (!activeSession) return;
     for (const cp of zone.checkpoints) {
-      if (responses[cp.id]?.result === "ok") continue;
+      // Skip checkpoints that are already ok or have a defect
+      if (responses[cp.id]?.result) continue;
       await recordOk(cp);
     }
   };
@@ -326,6 +337,8 @@ function KundrundaPage() {
 
   const saveDefect = async () => {
     if (!activeSession || !defectDialog) return;
+    if (!defectDialog.defect_description.trim()) return;
+    if (!defectDialog.action_taken.trim()) return;
     setSavingDefect(true);
     const existing = responses[defectDialog.checkpoint_id];
     let responseId: string | undefined;
@@ -604,9 +617,9 @@ function KundrundaPage() {
     const incompleteZones = zones.filter(z => !z.checkpoints.every(c => responses[c.id]?.result));
 
     return (
-      <div className="flex h-[100dvh] flex-col bg-background">
-        {/* Session header */}
-        <div className="shrink-0 border-b border-border/60 bg-card px-4 py-3">
+      <div className="flex min-h-screen flex-col bg-background">
+        {/* Session header — sticky so it stays at top while body scrolls */}
+        <div className="sticky top-0 z-20 shrink-0 border-b border-border/60 bg-card px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <button
@@ -651,7 +664,7 @@ function KundrundaPage() {
         </div>
 
         {/* Accordion zone list */}
-        <div className="flex-1 overflow-y-auto" data-scroll-container>
+        <div className="flex-1">
           <div className="mx-auto max-w-2xl p-3 sm:p-5 space-y-2">
             {zones.map((zone, zoneIdx) => {
               const zoneDone = zone.checkpoints.every(c => responses[c.id]?.result);
@@ -915,9 +928,17 @@ function KundrundaPage() {
                     <p className="text-[11px] text-muted-foreground">En uppgift och en avvikelse skapas automatiskt.</p>
                   )}
                 </div>
+                {defectDialog && (!defectDialog.defect_description.trim() || !defectDialog.action_taken.trim()) && savingDefect === false && (defectDialog.defect_description.length > 0 || defectDialog.action_taken.length > 0) && (
+                  <p className="text-xs text-destructive">Beskrivning och åtgärd är obligatoriska fält.</p>
+                )}
                 <div className="flex justify-end gap-2 pt-1">
                   <Button variant="outline" size="sm" className="rounded-full" onClick={() => setDefectDialog(null)}>Avbryt</Button>
-                  <Button size="sm" className="rounded-full" disabled={savingDefect} onClick={saveDefect}>
+                  <Button
+                    size="sm"
+                    className="rounded-full"
+                    disabled={savingDefect || !defectDialog?.defect_description.trim() || !defectDialog?.action_taken.trim()}
+                    onClick={saveDefect}
+                  >
                     {savingDefect ? "Sparar..." : "Spara avvikelse"}
                   </Button>
                 </div>
@@ -1265,6 +1286,14 @@ function KundrundaPage() {
                     <span className={cn("text-base font-bold tabular-nums", scoreColor)}>{Math.round(pct * 100)}%</span>
                     <p className="text-[10px] text-muted-foreground">{s.total_score}/{s.max_score}</p>
                   </div>
+                  <button
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:bg-primary-soft hover:text-primary"
+                    onClick={() => resumeSession(s)}
+                    aria-label="Granska"
+                    title="Granska / redigera"
+                  >
+                    <ZoomIn className="h-3.5 w-3.5" />
+                  </button>
                   {isManager && (
                     <button className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted/60 hover:text-destructive transition-opacity" onClick={() => setDeleteSessionTarget(s)} aria-label="Ta bort">
                       <Trash2 className="h-3.5 w-3.5" />
