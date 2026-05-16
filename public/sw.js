@@ -1,22 +1,113 @@
-// StoreFlow Service Worker — offline shell caching + Web Push
+// StoreFlow Service Worker — offline shell caching + Web Push + Background Sync
 // Strategy: Cache-First for static assets, Network-First for API/supabase calls.
 // Bump CACHE_VERSION on every production deploy to force a cache refresh and
 // trigger the update banner on all open tabs.
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 const CACHE_NAME = `storeflow-shell-${CACHE_VERSION}`;
 
-// Session token for attaching x-session-token to background sync requests.
-// Populated via postMessage from the main thread after login.
-let _sessionToken = null;
+// ── IndexedDB token access ───────────────────────────────────────────────────
+// Reads the session token directly from the same IndexedDB store that
+// secure-storage.ts writes to. This survives SW restarts and closed tabs.
+const IDB_NAME = "storeflow_secure";
+const IDB_VERSION = 1;
+const IDB_STORE = "session";
+const IDB_TOKEN_KEY = "sf_token";
 
-self.addEventListener("message", (event) => {
-  if (event.data?.type === "SET_TOKEN") {
-    _sessionToken = event.data.token ?? null;
+function getTokenFromIDB() {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction(IDB_STORE, "readonly");
+        const get = tx.objectStore(IDB_STORE).get(IDB_TOKEN_KEY);
+        get.onsuccess = () => resolve(get.result ?? null);
+        get.onerror = () => resolve(null);
+        tx.oncomplete = () => db.close();
+      };
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+// ── Offline sync queue (IndexedDB) ──────────────────────────────────────────
+const SYNC_DB_NAME = "storeflow_sync";
+const SYNC_DB_VERSION = 1;
+const SYNC_STORE = "queue";
+
+function openSyncDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(SYNC_DB_NAME, SYNC_DB_VERSION);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(SYNC_STORE, { autoIncrement: true });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function enqueueSync(entry) {
+  try {
+    const db = await openSyncDB();
+    const tx = db.transaction(SYNC_STORE, "readwrite");
+    tx.objectStore(SYNC_STORE).add(entry);
+    await new Promise((r) => { tx.oncomplete = r; });
+    db.close();
+  } catch {}
+}
+
+async function drainSyncQueue() {
+  const token = await getTokenFromIDB();
+  if (!token) return;
+  let db;
+  try { db = await openSyncDB(); } catch { return; }
+
+  const tx = db.transaction(SYNC_STORE, "readwrite");
+  const store = tx.objectStore(SYNC_STORE);
+  const all = await new Promise((resolve) => {
+    const req = store.getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve([]);
+  });
+  const keys = await new Promise((resolve) => {
+    const req = store.getAllKeys();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve([]);
+  });
+
+  for (let i = 0; i < all.length; i++) {
+    const entry = all[i];
+    try {
+      const res = await fetch(entry.url, {
+        method: entry.method || "POST",
+        headers: {
+          ...entry.headers,
+          "x-session-token": token,
+        },
+        body: entry.body ? JSON.stringify(entry.body) : undefined,
+      });
+      if (res.ok || res.status < 500) {
+        store.delete(keys[i]);
+      }
+    } catch {
+      break;
+    }
   }
-  // Main thread sends SKIP_WAITING after the user confirms the update banner
-  // (or after the 5-second countdown). This activates the new SW immediately.
+  db.close();
+}
+
+// ── Message handling ─────────────────────────────────────────────────────────
+self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
+  }
+  if (event.data?.type === "ENQUEUE_SYNC") {
+    enqueueSync(event.data.entry);
   }
 });
 
@@ -85,6 +176,13 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
+// ── Background Sync ──────────────────────────────────────────────────────────
+self.addEventListener("sync", (event) => {
+  if (event.tag === "storeflow-offline-sync") {
+    event.waitUntil(drainSyncQueue());
+  }
+});
+
 // ── Web Push ─────────────────────────────────────────────────────────────────
 
 self.addEventListener("push", (event) => {
@@ -102,7 +200,6 @@ self.addEventListener("push", (event) => {
     body: payload.body ?? "",
     icon: "/manifest.json",
     badge: "/badge-72x72.png",
-    // Zebra TC52 vibration pattern: two short pulses
     vibrate: [200, 100, 200],
     requireInteraction: true,
     tag: payload.tag ?? "storeflow-notification",
@@ -112,14 +209,21 @@ self.addEventListener("push", (event) => {
     },
   };
 
-  // Only show OS notification if no app window is currently visible/focused.
-  // When the app is open the in-app notification tab handles it via polling.
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clients) => {
         const appOpen = clients.some((c) => c.visibilityState === "visible");
-        if (appOpen) return;
+        if (appOpen) {
+          // Forward payload to the visible window for in-app notification
+          for (const client of clients) {
+            if (client.visibilityState === "visible") {
+              client.postMessage({ type: "PUSH_RECEIVED", payload });
+              break;
+            }
+          }
+          return;
+        }
         return self.registration.showNotification(title, options);
       }),
   );

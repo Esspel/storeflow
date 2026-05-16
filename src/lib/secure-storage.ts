@@ -87,10 +87,6 @@ export async function secureSetSession(token: string, user: unknown): Promise<vo
     return;
   }
   await Promise.all([idbSet(TOKEN_KEY, token), idbSet(USER_KEY, user)]);
-  // Also expose token to service worker via postMessage so it can attach headers
-  if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({ type: "SET_TOKEN", token });
-  }
 }
 
 export async function secureClearSession(): Promise<void> {
@@ -100,9 +96,6 @@ export async function secureClearSession(): Promise<void> {
     return;
   }
   await Promise.all([idbDelete(TOKEN_KEY), idbDelete(USER_KEY)]);
-  if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({ type: "SET_TOKEN", token: null });
-  }
 }
 
 export async function secureGetSession<T>(): Promise<{ token: string; user: T } | null> {
