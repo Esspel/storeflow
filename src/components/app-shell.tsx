@@ -1,5 +1,5 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
-import { Bell, ChevronDown, FlaskConical, LogOut, Menu, Settings, ShoppingCart, Trash2, User, Wifi, WifiOff, X } from "lucide-react";
+import { Bell, ChevronDown, FlaskConical, LogOut, Settings, ShoppingCart, Trash2, User, Wifi, WifiOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -52,7 +52,7 @@ function OfflineSnackbar() {
     };
   }, []);
 
-  const visible = status === "offline" || status === "reconnected";
+  if (status === "idle") return null;
 
   return (
     <div
@@ -64,7 +64,7 @@ function OfflineSnackbar() {
         status === "offline"
           ? "bg-destructive text-destructive-foreground"
           : "bg-success text-success-foreground",
-        visible ? "visible" : "",
+        "visible",
       )}
     >
       {status === "offline" ? (
@@ -84,7 +84,6 @@ function OfflineSnackbar() {
 
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const [open, setOpen] = useState(false);
   const { user, logout, userStores, activeStore, setActiveStore } = useAuth();
   const navigate = useNavigate();
 
@@ -316,13 +315,48 @@ export function AppShell() {
                   </div>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-56">
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-medium">{user?.display_name}</p>
                   <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
                   {activeStore && <p className="text-xs text-muted-foreground">{activeStore.name}</p>}
                 </div>
+                {/* Store switcher in dropdown — shown on mobile when multiple stores */}
+                {userStores.length > 1 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <div className="px-2 py-1">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Butik</p>
+                      {userStores.map((s) => (
+                        <DropdownMenuItem
+                          key={s.id}
+                          className={cn("cursor-pointer rounded-md", activeStore?.id === s.id && "bg-primary-soft text-primary")}
+                          onClick={() => setActiveStore(s)}
+                        >
+                          <span className="flex-1 text-sm">{s.name}</span>
+                          {activeStore?.id === s.id && <span className="ml-2 shrink-0 text-[10px]">Aktiv</span>}
+                        </DropdownMenuItem>
+                      ))}
+                    </div>
+                  </>
+                )}
                 <DropdownMenuSeparator />
+                {/* Mobile-only links to hidden nav items */}
+                {isManager && (
+                  <DropdownMenuItem asChild className="md:hidden">
+                    <Link to="/rapporter" className="cursor-pointer">
+                      <FlaskConical className="mr-2 h-4 w-4" />
+                      Rapporter
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem asChild className="md:hidden">
+                  <Link to="/mallar" className="cursor-pointer">
+                    <Settings className="mr-2 h-4 w-4" />
+                    Mallar
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="md:hidden" />
                 <DropdownMenuItem asChild>
                   <Link to="/installningar" className="cursor-pointer">
                     <Settings className="mr-2 h-4 w-4" />
@@ -353,55 +387,8 @@ export function AppShell() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button
-              variant="outline" size="icon" className="rounded-xl border-border/80 md:hidden"
-              onClick={() => setOpen((o) => !o)} aria-label="Meny"
-            >
-              {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-            </Button>
           </div>
         </div>
-
-        {open && (
-          <div className="border-t border-border/60 bg-card px-5 py-3 md:hidden">
-            <nav className="flex flex-col">
-              {nav.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    "rounded-lg px-3 py-3 text-sm font-medium leading-none",
-                    isActive(item.to) ? "bg-primary-soft text-primary" : "text-foreground",
-                  )}
-                >
-                  {item.label}
-                  {item.mobileHidden && (
-                    <span className="ml-2 text-[10px] text-muted-foreground/60">↗</span>
-                  )}
-                </Link>
-              ))}
-              {userStores.length > 1 && (
-                <>
-                  <div className="my-2 border-t border-border/60" />
-                  <p className="px-3 py-1 text-xs font-medium text-muted-foreground">Välj butik</p>
-                  {userStores.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => { setActiveStore(s); setOpen(false); }}
-                      className={cn(
-                        "rounded-lg px-3 py-3 text-left text-sm text-foreground",
-                        activeStore?.id === s.id && "bg-primary-soft text-primary",
-                      )}
-                    >
-                      {s.name}
-                    </button>
-                  ))}
-                </>
-              )}
-            </nav>
-          </div>
-        )}
       </header>
 
       {simActive && (

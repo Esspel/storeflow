@@ -523,7 +523,7 @@ function MeetingsPage() {
       {/* Mobile FAB */}
       {isManager && (
         <button
-          className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
+          className="fixed bottom-20 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
           aria-label="Nytt möte"
           onClick={() => setShowCreate(true)}
         >

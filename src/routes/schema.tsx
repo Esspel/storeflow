@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { supabase, type AppUser, type Task, type Meeting } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 function SchemaRoute() {
