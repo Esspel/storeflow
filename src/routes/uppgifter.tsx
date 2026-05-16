@@ -511,6 +511,8 @@ function TasksPage() {
   // Shared helpers used both at creation time and in the load-time spawn pass.
   const midnight = (d: Date): Date => { const n = new Date(d); n.setHours(0,0,0,0); return n; };
 
+  const MAX_SPAWN_INSTANCES = 90;
+
   function buildPeriodStarts(originDue: Date, rule: string, weekdays: number[] | null, startDate: Date | null, endDate: Date | null, ceil: Date): Date[] {
     const effectiveCeil = endDate
       ? (midnight(new Date(endDate)) < ceil ? midnight(new Date(endDate)) : ceil)
@@ -525,7 +527,7 @@ function TasksPage() {
     const results: Date[] = [];
     if (rule === "weekly" && weekdays && weekdays.length > 0) {
       const cur = new Date(floor);
-      while (cur <= effectiveCeil) {
+      while (cur <= effectiveCeil && results.length < MAX_SPAWN_INSTANCES) {
         const jsDay = cur.getDay();
         const ourDay = jsDay === 0 ? 6 : jsDay - 1;
         if (weekdays.includes(ourDay)) results.push(new Date(cur));
@@ -544,13 +546,14 @@ function TasksPage() {
         const daysInMonth = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
         n.setDate(Math.min(origDay, daysInMonth));
       } else if (rule === "yearly") { n.setFullYear(n.getFullYear() + 1); }
+      else { n.setDate(n.getDate() + 1); }
       n.setHours(0, 0, 0, 0);
       return n;
     };
     let cur = midnight(new Date(originDue));
     cur = advance(cur);
     while (cur < floor) cur = advance(cur);
-    while (cur <= effectiveCeil) { results.push(new Date(cur)); cur = advance(new Date(cur)); }
+    while (cur <= effectiveCeil && results.length < MAX_SPAWN_INSTANCES) { results.push(new Date(cur)); cur = advance(new Date(cur)); }
     return results;
   }
 
@@ -566,7 +569,8 @@ function TasksPage() {
     if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
   }
 
-  // Called immediately after a recurring parent is fully saved so all future instances are visible right away.
+  // Called immediately after a recurring parent is fully saved so near-term instances are visible right away.
+  // Only spawns up to 30 days ahead to avoid freezing the UI; spawnRecurringTasks handles ongoing catch-up.
   async function spawnChildrenForNewParent(parent: TaskFull) {
     if (!parent.recurrence_rule) return;
     const nowMs = getSimulatedNow();
@@ -578,10 +582,11 @@ function TasksPage() {
     const durationMs = parent.due_date
       ? Math.max(0, midnight(new Date(parent.due_date)).getTime() - originDate.getTime())
       : 0;
-    // Ceiling: recurrence_end if set, otherwise 1 year from today
+    // Ceiling: recurrence_end if set, otherwise 30 days from today
+    const maxCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 30); d.setHours(0,0,0,0); return d; })();
     const ceilDate = parent.recurrence_end
-      ? midnight(new Date(parent.recurrence_end))
-      : (() => { const d = new Date(nowMs); d.setFullYear(d.getFullYear() + 1); d.setHours(0,0,0,0); return d; })();
+      ? (() => { const e = midnight(new Date(parent.recurrence_end)); return e < maxCeil ? e : maxCeil; })()
+      : maxCeil;
     const periodStarts = buildPeriodStarts(
       originDate,
       parent.recurrence_rule,
