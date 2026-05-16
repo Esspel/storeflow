@@ -212,6 +212,19 @@
     [data-swipeable] {
       touch-action: pan-y;
     }
+
+    /* Contain pull-to-refresh on inner scroll areas only on touch devices */
+    [data-scroll-container] {
+      overscroll-behavior-y: contain;
+    }
+
+    /* Touch feedback for interactive elements */
+    button:active,
+    [role="button"]:active,
+    a:active {
+      opacity: 0.75;
+      transition: opacity 60ms ease;
+    }
   }
 }
 

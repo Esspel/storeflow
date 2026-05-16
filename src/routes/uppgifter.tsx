@@ -1808,6 +1808,9 @@ function TasksPage() {
                         placeholder="t.ex. 1047133"
                         inputMode="numeric"
                         pattern="[0-9]*"
+                        autoCorrect="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none overflow-hidden"
                       />
                       {newTask.sap_article_id && (

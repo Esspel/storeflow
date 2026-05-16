@@ -12,6 +12,7 @@ import { useEffect } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { BarcodeProvider } from "@/lib/barcode-context";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -158,7 +159,9 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <AppLayout />
+        <BarcodeProvider>
+          <AppLayout />
+        </BarcodeProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

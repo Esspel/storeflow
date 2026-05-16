@@ -864,6 +864,9 @@ function KundrundaPage() {
                       placeholder="t.ex. 1047133"
                       inputMode="numeric"
                       pattern="[0-9]*"
+                      autoCorrect="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
                       className="flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground/40"
                     />
                     {defectDialog.sap_article_id && (
