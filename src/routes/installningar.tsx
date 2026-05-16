@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { CircleCheck as CheckCircle2, Eye, EyeOff, KeyRound, Store, User, Hash } from "lucide-react";
+import { CircleCheck as CheckCircle2, Eye, EyeOff, KeyRound, Store, User, Hash, Bell } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { supabase, logAudit, type Store as StoreType } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { PushNotificationSetup } from "@/components/push-notification-setup";
 
 export const Route = createFileRoute("/installningar")({
   component: SettingsPage,
@@ -199,6 +200,19 @@ function SettingsPage() {
             </div>
           </div>
         )}
+
+        <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+              <Bell className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="font-semibold">Push-notiser</h2>
+              <p className="text-xs text-muted-foreground">Få aviseringar direkt på enheten när uppgifter tilldelas eller deadlines nalkas.</p>
+            </div>
+          </div>
+          <PushNotificationSetup />
+        </div>
 
         <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
           <div className="mb-4 flex items-center gap-3">
