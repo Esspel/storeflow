@@ -708,10 +708,10 @@ function SchemaPage() {
 
   async function loadAppUsers() {
     if (!storeId) return;
-    const { data } = await supabase.from("app_users").select("id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at").eq("store_id", storeId).eq("is_active", true).order("display_name");
+    const { data } = await supabase.from("app_users").select("id, username, display_name, role, role_manually_set, employee_group, store_id, active_store_id, is_active, last_login, created_at").eq("store_id", storeId).eq("is_active", true).order("display_name");
     setAppUsers((data ?? []) as AppUser[]);
     // Also load all users globally for cross-store name matching
-    const { data: all } = await supabase.from("app_users").select("id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at").eq("is_active", true).order("display_name");
+    const { data: all } = await supabase.from("app_users").select("id, username, display_name, role, role_manually_set, employee_group, store_id, active_store_id, is_active, last_login, created_at").eq("is_active", true).order("display_name");
     setAllUsers((all ?? []) as AppUser[]);
   }
 
@@ -873,11 +873,14 @@ function SchemaPage() {
           finalMappings.push({ employee_nr: me.employeeNr, app_user_id: me.appUserId });
           // Ensure this user is connected to the current store
           await supabase.from("user_stores").upsert({ user_id: me.appUserId, store_id: storeId, is_primary: false }, { onConflict: "user_id,store_id" });
-          // Update role + group from XML — never downgrade an existing admin
+          // Only update role from XML if it was not manually set by an admin
           const existingUser = allUsers.find((u) => u.id === me.appUserId);
-          if (me.employeeGroup && existingUser?.role !== "admin") {
+          if (me.employeeGroup && !existingUser?.role_manually_set) {
             const role = groupToRole(me.employeeGroup);
             await supabase.from("app_users").update({ role, employee_group: me.employeeGroup }).eq("id", me.appUserId);
+          } else if (me.employeeGroup) {
+            // Still update employee_group even if role is manually locked
+            await supabase.from("app_users").update({ employee_group: me.employeeGroup }).eq("id", me.appUserId);
           }
         } else if (me.matchType === "new") {
           // Create user
@@ -1756,7 +1759,7 @@ function SchemaPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft">
               <Users className="h-4 w-4 text-primary" />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 pr-8">
               <h2 className="text-sm font-semibold text-foreground">
                 {parsed ? "Granska och bekräfta import" : "Personalmatching"}
               </h2>
@@ -1766,9 +1769,6 @@ function SchemaPage() {
                 </p>
               )}
             </div>
-            <button className="rounded-md p-1.5 text-muted-foreground hover:bg-muted transition-colors" onClick={() => { if (!savingImport) { setMappingOpen(false); setParsed(null); setMatchedEmployees([]); } }}>
-              <X className="h-4 w-4" />
-            </button>
           </div>
 
           {/* Scrollable body */}

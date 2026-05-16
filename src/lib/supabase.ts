@@ -26,6 +26,7 @@ export type AppUser = {
   username: string;
   display_name: string;
   role: "admin" | "manager" | "employee";
+  role_manually_set: boolean;
   employee_group: string;
   store_id: string | null;
   active_store_id: string | null;
@@ -231,6 +232,7 @@ export type TaskAssignee = {
 export type TaskImage = {
   id: string;
   task_id: string;
+  step_id: string | null;
   storage_path: string;
   uploaded_by: string | null;
   created_at: string;

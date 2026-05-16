@@ -189,6 +189,7 @@ function AccountsPage() {
     await supabase.from("app_users").update({
       display_name: editUser.display_name.trim(),
       role: editUser.role,
+      role_manually_set: true,
       employee_group: (editUser.employee_group ?? "").trim(),
       store_id: editUser.assignedStoreIds[0] ?? null,
     }).eq("id", editUser.id);

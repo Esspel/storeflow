@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -46,8 +46,21 @@ function MallarPage() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ChecklistTemplate | null>(null);
+  const [editTarget, setEditTarget] = useState<(ChecklistTemplate & { storeIds: string[]; questions: ChecklistTemplateQuestion[] }) | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [editForm, setEditForm] = useState({
+    title: "",
+    description: "",
+    category: "",
+    priority: "Medel",
+    recurrence_rule: "",
+    recurrence_days: [] as number[],
+    due_date_offset: "" as string,
+    storeIds: [] as string[],
+    items: [{ id: "", label: "", requires_photo: false }] as { id: string; label: string; requires_photo: boolean }[],
+    questions: [] as { id: string; label: string; question_type: "text" | "yes_no"; is_required: boolean }[],
+  });
 
   const [form, setForm] = useState({
     title: "",
@@ -168,6 +181,69 @@ function MallarPage() {
     logAudit(user?.id ?? null, "template.delete", "checklist_templates", deleteTarget.id, { title: deleteTarget.title });
     setDeleteTarget(null);
     await load();
+  }
+
+  function openEditTemplate(t: ChecklistTemplate & { storeIds: string[]; questions: ChecklistTemplateQuestion[] }) {
+    setEditTarget(t);
+    setEditForm({
+      title: t.title,
+      description: t.description ?? "",
+      category: t.category ?? "",
+      priority: t.priority ?? "Medel",
+      recurrence_rule: t.recurrence_rule ?? "",
+      recurrence_days: t.recurrence_days ?? [],
+      due_date_offset: t.due_date_offset != null ? String(t.due_date_offset) : "",
+      storeIds: t.storeIds,
+      items: (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ id: it.id, label: it.label, requires_photo: it.requires_photo })),
+      questions: (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q) => ({ id: q.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required })),
+    });
+    setError("");
+  }
+
+  async function saveEditTemplate() {
+    if (!editTarget) return;
+    setError("");
+    if (!editForm.title.trim()) { setError("Titel är obligatorisk."); return; }
+    setSaving(true);
+
+    await supabase.from("checklist_templates").update({
+      title: editForm.title.trim(),
+      description: editForm.description.trim(),
+      category: editForm.category.trim(),
+      priority: editForm.priority,
+      recurrence_rule: editForm.recurrence_rule || null,
+      recurrence_days: editForm.recurrence_rule === "weekly" && editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
+      due_date_offset: editForm.due_date_offset !== "" ? parseInt(editForm.due_date_offset) : null,
+    }).eq("id", editTarget.id);
+
+    // Replace items: delete all existing, insert new
+    await supabase.from("checklist_template_items").delete().eq("template_id", editTarget.id);
+    const validItems = editForm.items.filter((it) => it.label.trim());
+    if (validItems.length > 0) {
+      await supabase.from("checklist_template_items").insert(
+        validItems.map((it, idx) => ({ template_id: editTarget.id, label: it.label.trim(), requires_photo: it.requires_photo, sort_order: idx }))
+      );
+    }
+
+    // Replace questions: delete all existing, insert new
+    await supabase.from("checklist_template_questions").delete().eq("template_id", editTarget.id);
+    const validQuestions = editForm.questions.filter((q) => q.label.trim());
+    if (validQuestions.length > 0) {
+      await supabase.from("checklist_template_questions").insert(
+        validQuestions.map((q, idx) => ({ template_id: editTarget.id, label: q.label.trim(), question_type: q.question_type, is_required: q.is_required, sort_order: idx }))
+      );
+    }
+
+    // Replace store assignments
+    await supabase.from("template_stores").delete().eq("template_id", editTarget.id);
+    if (editForm.storeIds.length > 0) {
+      await supabase.from("template_stores").insert(editForm.storeIds.map((sid) => ({ template_id: editTarget.id, store_id: sid })));
+    }
+
+    logAudit(user?.id ?? null, "template.edit", "checklist_templates", editTarget.id, { title: editForm.title });
+    await load();
+    setSaving(false);
+    setEditTarget(null);
   }
 
   const displayStores = user?.role === "admin" ? allStores : userStores;
@@ -366,14 +442,24 @@ function MallarPage() {
                   </div>
                 </button>
                 {isManager && (
-                  <Button
-                    variant="ghost" size="icon"
-                    className="mr-3 rounded-full text-muted-foreground hover:text-destructive"
-                    onClick={() => setDeleteTarget(t)}
-                    aria-label="Ta bort"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <div className="mr-3 flex items-center gap-1">
+                    <Button
+                      variant="ghost" size="icon"
+                      className="rounded-full text-muted-foreground hover:text-primary"
+                      onClick={(e) => { e.stopPropagation(); openEditTemplate(t); }}
+                      aria-label="Redigera"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon"
+                      className="rounded-full text-muted-foreground hover:text-destructive"
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(t); }}
+                      aria-label="Ta bort"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -641,6 +727,174 @@ function MallarPage() {
                             onCheckedChange={() => toggleStore(s.id, form.storeIds, (ids) => setForm(p => ({ ...p, storeIds: ids })))}
                             className="h-3.5 w-3.5"
                           />
+                          <span className="text-xs">{s.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* EDIT DIALOG */}
+      <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
+        <DialogContent className="max-h-[92vh] w-full max-w-3xl overflow-hidden p-0 gap-0">
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-muted-foreground">Redigera mall</span>
+            <div className="ml-auto flex items-center gap-2">
+              {error && <span className="text-xs text-destructive">{error}</span>}
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setEditTarget(null)}>Avbryt</Button>
+              <Button size="sm" className="rounded-full" onClick={saveEditTemplate} disabled={saving}>
+                {saving ? "Sparar..." : "Spara ändringar"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex overflow-hidden" style={{ maxHeight: "calc(92vh - 56px)" }}>
+            {/* LEFT: Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 min-w-0">
+              <input
+                placeholder="Mallens namn..."
+                value={editForm.title}
+                onChange={(e) => setEditForm(p => ({ ...p, title: e.target.value }))}
+                className="w-full border-0 bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground/50 outline-none focus:outline-none"
+              />
+              <Textarea
+                placeholder="Kort beskrivning..."
+                value={editForm.description}
+                onChange={(e) => setEditForm(p => ({ ...p, description: e.target.value }))}
+                rows={2}
+                className="resize-none border-0 bg-transparent px-0 text-sm text-muted-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 shadow-none"
+              />
+
+              {/* Steg */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Steg</p>
+                <div className="space-y-1.5">
+                  {editForm.items.map((item, idx) => (
+                    <div key={idx} className="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-colors hover:bg-muted/40">
+                      <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/30" />
+                      <Input
+                        placeholder={`Steg ${idx + 1}`}
+                        value={item.label}
+                        onChange={(e) => { const items = [...editForm.items]; items[idx] = { ...items[idx], label: e.target.value }; setEditForm(p => ({ ...p, items })); }}
+                        className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0"
+                      />
+                      <label className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground/70 cursor-pointer">
+                        <Checkbox
+                          checked={item.requires_photo}
+                          onCheckedChange={(v) => { const items = [...editForm.items]; items[idx] = { ...items[idx], requires_photo: !!v }; setEditForm(p => ({ ...p, items })); }}
+                          className="h-3 w-3"
+                        />
+                        Foto
+                      </label>
+                      <button type="button" className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setEditForm(p => ({ ...p, items: p.items.filter((_, i) => i !== idx) }))} disabled={editForm.items.length === 1}>
+                        <X className="h-3.5 w-3.5 text-muted-foreground/60" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary" onClick={() => setEditForm(p => ({ ...p, items: [...p.items, { id: "", label: "", requires_photo: false }] }))}>
+                  <Plus className="h-3.5 w-3.5" /> Lägg till steg
+                </button>
+              </div>
+
+              {/* Frågor */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Frågor</p>
+                <div className="space-y-2">
+                  {editForm.questions.map((q, idx) => (
+                    <div key={idx} className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          placeholder={`Fråga ${idx + 1}`}
+                          value={q.label}
+                          onChange={(e) => { const qs = [...editForm.questions]; qs[idx] = { ...qs[idx], label: e.target.value }; setEditForm(p => ({ ...p, questions: qs })); }}
+                          className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0"
+                        />
+                        <button type="button" onClick={() => setEditForm(p => ({ ...p, questions: p.questions.filter((_, i) => i !== idx) }))}><X className="h-3.5 w-3.5 text-muted-foreground/50" /></button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex gap-1">
+                          {(["text", "yes_no"] as const).map((type) => (
+                            <button key={type} type="button"
+                              className={cn("rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors", (q.question_type ?? "text") === type ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                              onClick={() => { const qs = [...editForm.questions]; qs[idx] = { ...qs[idx], question_type: type }; setEditForm(p => ({ ...p, questions: qs })); }}>
+                              {type === "text" ? "Text" : "Ja/Nej"}
+                            </button>
+                          ))}
+                        </div>
+                        <label className="flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer">
+                          <Checkbox checked={q.is_required} onCheckedChange={(v) => { const qs = [...editForm.questions]; qs[idx] = { ...qs[idx], is_required: !!v }; setEditForm(p => ({ ...p, questions: qs })); }} className="h-3 w-3" />
+                          Obligatorisk
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary" onClick={() => setEditForm(p => ({ ...p, questions: [...p.questions, { id: "", label: "", question_type: "text", is_required: false }] }))}>
+                  <Plus className="h-3.5 w-3.5" /> Lägg till fråga
+                </button>
+              </div>
+            </div>
+
+            {/* RIGHT: Properties sidebar */}
+            <div className="w-64 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/30">
+              <div className="divide-y divide-border/50">
+                <div className="flex items-start gap-3 px-4 py-3">
+                  <div className="mt-0.5 h-4 w-4 shrink-0 flex items-center justify-center"><span className="text-xs text-muted-foreground/60">#</span></div>
+                  <div className="flex flex-col gap-1 min-w-0 flex-1">
+                    <span className="text-xs text-muted-foreground">Kategori</span>
+                    <Input placeholder="t.ex. Rengöring" value={editForm.category} onChange={(e) => setEditForm(p => ({ ...p, category: e.target.value }))} className="h-7 border border-border/60 text-xs" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Prioritet</span>
+                  <Select value={editForm.priority} onValueChange={(v) => setEditForm(p => ({ ...p, priority: v }))}>
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs font-medium shadow-none focus:ring-0 justify-end"><SelectValue /></SelectTrigger>
+                    <SelectContent>{["Låg","Medel","Hög","Kritisk"].map(pr => <SelectItem key={pr} value={pr}>{pr}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <div className="flex flex-col gap-1 flex-1 min-w-0">
+                    <span className="text-xs text-muted-foreground">Förfaller om (dagar)</span>
+                    <Input type="number" min={0} placeholder="t.ex. 1" value={editForm.due_date_offset} onChange={(e) => setEditForm(p => ({ ...p, due_date_offset: e.target.value }))} className="h-7 border border-border/60 text-xs" />
+                  </div>
+                </div>
+                <div className="px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <Repeat className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <span className="w-20 shrink-0 text-xs text-muted-foreground">Återkommande</span>
+                    <Select value={editForm.recurrence_rule || "__none"} onValueChange={(v) => setEditForm(p => ({ ...p, recurrence_rule: v === "__none" ? "" : v }))}>
+                      <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end"><SelectValue placeholder="Ingen" /></SelectTrigger>
+                      <SelectContent>{RECURRENCE_OPTIONS.map(o => <SelectItem key={o.value || "__none"} value={o.value || "__none"}>{o.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  {editForm.recurrence_rule === "weekly" && (
+                    <div className="flex flex-wrap gap-1 pl-7">
+                      {WEEKDAYS.map((day, idx) => (
+                        <button key={idx} type="button"
+                          className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors", editForm.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                          onClick={() => { const days = editForm.recurrence_days.includes(idx) ? editForm.recurrence_days.filter(d=>d!==idx) : [...editForm.recurrence_days, idx]; setEditForm(p => ({ ...p, recurrence_days: days })); }}>
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {displayStores.length > 0 && (
+                  <div className="px-4 py-3 space-y-2">
+                    <span className="text-xs text-muted-foreground">Tilldelade butiker</span>
+                    <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                      {displayStores.map(s => (
+                        <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
+                          <Checkbox checked={editForm.storeIds.includes(s.id)} onCheckedChange={() => toggleStore(s.id, editForm.storeIds, (ids) => setEditForm(p => ({ ...p, storeIds: ids })))} className="h-3.5 w-3.5" />
                           <span className="text-xs">{s.name}</span>
                         </label>
                       ))}

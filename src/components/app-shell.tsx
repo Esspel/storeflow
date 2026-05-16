@@ -340,24 +340,19 @@ export function AppShell() {
       {/* Mitt Coop iframe panel */}
       <Sheet open={mittCoopOpen} onOpenChange={setMittCoopOpen}>
         <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-2xl">
-          <SheetHeader className="flex flex-row items-center justify-between border-b border-border/60 px-4 py-3 space-y-0">
+          <SheetHeader className="flex flex-row items-center justify-between border-b border-border/60 px-4 py-3 pr-12 space-y-0">
             <SheetTitle className="flex items-center gap-2 text-sm">
               <ShoppingCart className="h-4 w-4 text-primary" />
               Mitt Coop Sortiment
             </SheetTitle>
-            <div className="flex items-center gap-2">
-              <a
-                href={`https://mittcoop.coop.se/sortiment/articles?siteId=${activeStore?.sap_site_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ExternalLink className="h-3 w-3" /> Öppna i ny flik
-              </a>
-              <button onClick={() => setMittCoopOpen(false)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+            <a
+              href={`https://mittcoop.coop.se/sortiment/articles?siteId=${activeStore?.sap_site_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ExternalLink className="h-3 w-3" /> Öppna i ny flik
+            </a>
           </SheetHeader>
           <div className="relative flex-1">
             <p className="absolute inset-x-0 top-12 px-6 text-center text-xs text-muted-foreground">

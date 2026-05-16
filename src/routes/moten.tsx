@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Calendar, CircleCheck as CheckCircle2, ChevronDown, ChevronUp, Clock, Pause, Play, Plus, Trash2, Users, X, ArrowRight, FileText } from "lucide-react";
+import { Calendar, CircleCheck as CheckCircle2, Clock, Pause, Pencil, Play, Plus, Trash2, Users, X, FileText } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   supabase,
@@ -155,6 +159,10 @@ function MeetingsPage() {
 
   const [newDecision, setNewDecision] = useState({ description: "", responsible_user_id: "", due_date: "", createTask: false });
   const [addingDecision, setAddingDecision] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<MeetingFull | null>(null);
+  const [editTarget, setEditTarget] = useState<MeetingFull | null>(null);
+  const [editForm, setEditForm] = useState({ title: "", scheduled_at: "", moderator_id: "" });
+  const [editSaving, setEditSaving] = useState(false);
 
   const fetchMeetings = async () => {
     let q = supabase
@@ -283,6 +291,43 @@ function MeetingsPage() {
     if (updated) setShowDetail(updated as MeetingFull);
   };
 
+  const deleteMeeting = async () => {
+    if (!deleteTarget) return;
+    await supabase.from("meeting_decisions").delete().eq("meeting_id", deleteTarget.id);
+    await supabase.from("meeting_agenda_items").delete().eq("meeting_id", deleteTarget.id);
+    await supabase.from("meetings").delete().eq("id", deleteTarget.id);
+    logAudit(user?.id ?? null, "meeting.delete", "meetings", deleteTarget.id, { title: deleteTarget.title });
+    setDeleteTarget(null);
+    if (showDetail?.id === deleteTarget.id) setShowDetail(null);
+    await fetchMeetings();
+  };
+
+  const openEditMeeting = (m: MeetingFull) => {
+    setEditTarget(m);
+    setEditForm({
+      title: m.title,
+      scheduled_at: new Date(m.scheduled_at).toISOString().slice(0, 16),
+      moderator_id: m.moderator_id ?? "",
+    });
+  };
+
+  const saveEditMeeting = async () => {
+    if (!editTarget || !editForm.title.trim()) return;
+    setEditSaving(true);
+    await supabase.from("meetings").update({
+      title: editForm.title.trim(),
+      scheduled_at: new Date(editForm.scheduled_at).toISOString(),
+      moderator_id: editForm.moderator_id || null,
+    }).eq("id", editTarget.id);
+    logAudit(user?.id ?? null, "meeting.edit", "meetings", editTarget.id, { title: editForm.title });
+    setEditSaving(false);
+    setEditTarget(null);
+    if (showDetail?.id === editTarget.id) {
+      setShowDetail(p => p ? { ...p, title: editForm.title.trim(), scheduled_at: new Date(editForm.scheduled_at).toISOString(), moderator_id: editForm.moderator_id || null } : null);
+    }
+    await fetchMeetings();
+  };
+
   const typeInfo = (type: Meeting["meeting_type"]) => MEETING_TYPES.find(t => t.value === type);
 
   const upcoming = meetings.filter(m => m.status === "scheduled" || m.status === "in_progress");
@@ -337,7 +382,19 @@ function MeetingsPage() {
                           <p className="truncate font-semibold text-sm">{m.title}</p>
                           <p className="text-xs text-muted-foreground">{info?.label}</p>
                         </div>
-                        {statusBadge(m.status)}
+                        <div className="flex items-center gap-1">
+                          {statusBadge(m.status)}
+                          {isManager && (
+                            <>
+                              <button className="ml-1 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary" onClick={(e) => { e.stopPropagation(); openEditMeeting(m); }} aria-label="Redigera">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteTarget(m); }} aria-label="Ta bort">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
                         <Clock className="h-3.5 w-3.5" />
@@ -477,13 +534,25 @@ function MeetingsPage() {
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-start justify-between gap-3 pr-6">
-                <div>
+                <div className="min-w-0">
                   <DialogTitle className="text-base">{showDetail.title}</DialogTitle>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {typeInfo(showDetail.meeting_type)?.label} · {new Date(showDetail.scheduled_at).toLocaleString("sv-SE", { dateStyle: "medium", timeStyle: "short" })}
                   </p>
                 </div>
-                {statusBadge(showDetail.status)}
+                <div className="flex items-center gap-1 shrink-0">
+                  {statusBadge(showDetail.status)}
+                  {isManager && (
+                    <>
+                      <button className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary" onClick={() => openEditMeeting(showDetail)} aria-label="Redigera">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-destructive" onClick={() => setDeleteTarget(showDetail)} aria-label="Ta bort">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </DialogHeader>
 
@@ -618,6 +687,64 @@ function MeetingsPage() {
           </DialogContent>
         )}
       </Dialog>
+
+      {/* EDIT DIALOG */}
+      <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Redigera möte</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Titel</Label>
+              <Input value={editForm.title} onChange={(e) => setEditForm(p => ({ ...p, title: e.target.value }))} className="text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Datum & tid</Label>
+              <input
+                type="datetime-local"
+                value={editForm.scheduled_at}
+                onChange={(e) => setEditForm(p => ({ ...p, scheduled_at: e.target.value }))}
+                className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Moderator</Label>
+              <Select value={editForm.moderator_id || "__none"} onValueChange={(v) => setEditForm(p => ({ ...p, moderator_id: v === "__none" ? "" : v }))}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Ingen" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Ingen</SelectItem>
+                  {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" size="sm" className="rounded-full" onClick={() => setEditTarget(null)}>Avbryt</Button>
+              <Button size="sm" className="rounded-full" disabled={editSaving || !editForm.title.trim()} onClick={saveEditMeeting}>
+                {editSaving ? "Sparar..." : "Spara ändringar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DELETE CONFIRM */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort möte</AlertDialogTitle>
+            <AlertDialogDescription>
+              Är du säker på att du vill ta bort mötet <strong>{deleteTarget?.title}</strong>? Alla agendapunkter och beslut tas bort.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteMeeting}>
+              Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

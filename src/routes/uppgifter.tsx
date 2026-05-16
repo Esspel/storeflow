@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink } from "lucide-react";
+import { Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -311,6 +311,8 @@ function TasksPage() {
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
+  const stepPhotoInputRef = useRef<HTMLInputElement>(null);
+  const [pendingPhotoStepId, setPendingPhotoStepId] = useState<string | null>(null);
 
   // Detail modal
   const [detailTask, setDetailTask] = useState<TaskFull | null>(null);
@@ -730,10 +732,10 @@ function TasksPage() {
     }
   };
 
-  const uploadTaskImage = async (task: TaskFull, file: File) => {
+  const uploadTaskImage = async (task: TaskFull, file: File, stepId?: string) => {
     const path = await uploadAttachment(file, `tasks/${task.id}`);
     if (path) {
-      await supabase.from("task_images").insert({ task_id: task.id, storage_path: path, uploaded_by: user?.id });
+      await supabase.from("task_images").insert({ task_id: task.id, step_id: stepId ?? null, storage_path: path, uploaded_by: user?.id });
       logAudit(user?.id ?? null, "task.image.upload", "task_images", task.id, { path });
       await markInProgress(task);
       fetchTasks();
@@ -1303,21 +1305,35 @@ function TasksPage() {
               {detailTask.steps && detailTask.steps.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Checkpoints</p>
-                  {detailTask.steps.map((step) => (
-                    <label key={step.id} className="flex min-h-[44px] items-center gap-3 cursor-pointer group rounded-xl px-3 py-2.5 hover:bg-muted/40 active:bg-muted/60 transition-colors">
-                      <Checkbox
-                        checked={step.is_done}
-                        onCheckedChange={() => void toggleStep(detailTask, step.id, step.is_done)}
-                        className="h-5 w-5 shrink-0"
-                      />
-                      <span className={cn("flex-1 text-sm leading-snug", step.is_done && "line-through text-muted-foreground")}>{step.label}</span>
-                      {step.requires_photo && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground shrink-0">
-                          <ImagePlus className="h-3 w-3" />foto
-                        </span>
-                      )}
-                    </label>
-                  ))}
+                  {detailTask.steps.map((step) => {
+                    const stepImages = (detailTask.images ?? []).filter(img => img.step_id === step.id);
+                    return (
+                      <div key={step.id} className="space-y-1.5">
+                        <label className="flex min-h-[44px] items-center gap-3 cursor-pointer group rounded-xl px-3 py-2.5 hover:bg-muted/40 active:bg-muted/60 transition-colors">
+                          <Checkbox
+                            checked={step.is_done}
+                            onCheckedChange={() => void toggleStep(detailTask, step.id, step.is_done)}
+                            className="h-5 w-5 shrink-0"
+                          />
+                          <span className={cn("flex-1 text-sm leading-snug", step.is_done && "line-through text-muted-foreground")}>{step.label}</span>
+                          {step.requires_photo && (
+                            <button
+                              type="button"
+                              aria-label="Ladda upp foto för detta steg"
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPendingPhotoStepId(step.id); stepPhotoInputRef.current?.click(); }}
+                              className={cn(
+                                "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
+                                stepImages.length > 0 ? "bg-success/15 text-success" : "bg-muted text-muted-foreground hover:bg-primary-soft hover:text-primary"
+                              )}
+                            >
+                              <Camera className="h-3 w-3" />
+                              {stepImages.length > 0 ? `${stepImages.length} foto` : "foto"}
+                            </button>
+                          )}
+                        </label>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -1430,6 +1446,21 @@ function TasksPage() {
                     if (e.target.files && detailTask) {
                       Array.from(e.target.files).forEach(f => void uploadTaskImage(detailTask, f));
                     }
+                  }}
+                />
+                <input
+                  ref={stepPhotoInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file && detailTask && pendingPhotoStepId) {
+                      void uploadTaskImage(detailTask, file, pendingPhotoStepId);
+                      setPendingPhotoStepId(null);
+                    }
+                    e.target.value = "";
                   }}
                 />
                 <Button

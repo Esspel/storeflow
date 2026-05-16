@@ -189,15 +189,12 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    /* Prevent rubber-band scroll on iOS triggering full page reload */
-    overscroll-behavior-y: contain;
-    /* Smooth momentum scrolling on iOS */
-    -webkit-overflow-scrolling: touch;
   }
 
-  /* Ensure every scrollable container respects overscroll containment */
+  /* Contain overscroll only on explicit scroll containers, not the body */
   [data-scroll-container] {
     overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Swipe-to-complete is only safe on coarse-pointer (touch) devices.

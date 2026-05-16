@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   TriangleAlert as AlertTriangle, Clock, Download, MessageSquare,
-  Plus, Search, Send, Store, X, User, Image as ImageIcon, ZoomIn,
+  Pencil, Plus, Search, Send, Store, Trash2, X, User, Image as ImageIcon, ZoomIn,
   Hash, ExternalLink,
 } from "lucide-react";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -16,6 +16,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   supabase, type Incident, type IncidentComment, type IncidentImage,
@@ -103,6 +107,10 @@ function IssuesPage() {
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [viewerIdx, setViewerIdx] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [deleteTarget, setDeleteTarget] = useState<IncidentFull | null>(null);
+  const [editTarget, setEditTarget] = useState<IncidentFull | null>(null);
+  const [editForm, setEditForm] = useState({ title: "", description: "", category: "", priority: "", responsible_user_id: "", sap_article_id: "" });
+  const [editSaving, setEditSaving] = useState(false);
 
   const fetchIncidents = async () => {
     let q = supabase.from("incidents")
@@ -261,6 +269,50 @@ function IssuesPage() {
     await Promise.all([fetchComments(inc.id), fetchDetailImages(inc.id)]);
   };
 
+  const deleteIncident = async () => {
+    if (!deleteTarget) return;
+    await supabase.from("incident_comments").delete().eq("incident_id", deleteTarget.id);
+    await supabase.from("incident_images").delete().eq("incident_id", deleteTarget.id);
+    await supabase.from("incidents").delete().eq("id", deleteTarget.id);
+    logAudit(user?.id ?? null, "incident.delete", "incidents", deleteTarget.id, { title: deleteTarget.title });
+    if (showDetail?.id === deleteTarget.id) setShowDetail(null);
+    setDeleteTarget(null);
+    await fetchIncidents();
+  };
+
+  const openEditIncident = (inc: IncidentFull) => {
+    setEditTarget(inc);
+    setEditForm({
+      title: inc.title,
+      description: inc.description ?? "",
+      category: inc.category,
+      priority: inc.priority,
+      responsible_user_id: inc.responsible_user_id ?? "",
+      sap_article_id: inc.sap_article_id ?? "",
+    });
+  };
+
+  const saveEditIncident = async () => {
+    if (!editTarget || !editForm.title.trim()) return;
+    setEditSaving(true);
+    await supabase.from("incidents").update({
+      title: editForm.title.trim(),
+      description: editForm.description.trim(),
+      category: editForm.category,
+      priority: editForm.priority,
+      responsible_user_id: editForm.responsible_user_id || null,
+      sap_article_id: editForm.sap_article_id?.trim() || null,
+    }).eq("id", editTarget.id);
+    logAudit(user?.id ?? null, "incident.edit", "incidents", editTarget.id, { title: editForm.title });
+    setEditSaving(false);
+    if (showDetail?.id === editTarget.id) {
+      const responsible = storeUsers.find(u => u.id === editForm.responsible_user_id);
+      setShowDetail(p => p ? { ...p, title: editForm.title.trim(), description: editForm.description.trim(), category: editForm.category, priority: editForm.priority, responsible_user_id: editForm.responsible_user_id || null, responsible: responsible ?? undefined, sap_article_id: editForm.sap_article_id?.trim() || null } : null);
+    }
+    setEditTarget(null);
+    await fetchIncidents();
+  };
+
   const visible = incidents.filter((i) => {
     if (filterStatus !== "all" && i.status !== filterStatus) return false;
     if (filterPriority !== "all" && i.priority !== filterPriority) return false;
@@ -365,11 +417,12 @@ function IssuesPage() {
                 <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground sm:table-cell">Prioritet</th>
                 <th className="px-5 py-3.5 text-center text-xs font-medium text-muted-foreground">Status</th>
                 <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground lg:table-cell">Datum</th>
+                {isManager && <th className="px-3 py-3.5" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
               {visible.map((inc) => (
-                <tr key={inc.id} className="cursor-pointer hover:bg-muted/30" onClick={() => openDetail(inc)}>
+                <tr key={inc.id} className="group cursor-pointer hover:bg-muted/30" onClick={() => openDetail(inc)}>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2">
                       <span className={cn("h-2 w-2 shrink-0 rounded-full", inc.priority === "Kritisk" ? "bg-destructive" : inc.priority === "Hög" ? "bg-warning-foreground" : inc.priority === "Medel" ? "bg-info" : "bg-muted-foreground")} />
@@ -396,6 +449,14 @@ function IssuesPage() {
                   <td className="hidden px-5 py-3.5 text-xs text-muted-foreground lg:table-cell">
                     <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{new Date(inc.created_at).toLocaleDateString("sv-SE")}</span>
                   </td>
+                  {isManager && (
+                    <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary" onClick={() => openEditIncident(inc)} aria-label="Redigera"><Pencil className="h-3.5 w-3.5" /></button>
+                        <button className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-destructive" onClick={() => setDeleteTarget(inc)} aria-label="Ta bort"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -701,6 +762,79 @@ function IssuesPage() {
           onClose={() => setViewerIdx(null)}
         />
       )}
+
+      {/* EDIT DIALOG */}
+      <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Redigera avvikelse</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Titel</Label>
+              <Input value={editForm.title} onChange={(e) => setEditForm(p => ({ ...p, title: e.target.value }))} className="text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Beskrivning</Label>
+              <Textarea value={editForm.description} onChange={(e) => setEditForm(p => ({ ...p, description: e.target.value }))} rows={3} className="resize-none text-sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Kategori</Label>
+                <Select value={editForm.category} onValueChange={(v) => setEditForm(p => ({ ...p, category: v }))}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>{["Drift","Säkerhet","Kundärende","Skada","Stöld","Övrigt"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Prioritet</Label>
+                <Select value={editForm.priority} onValueChange={(v) => setEditForm(p => ({ ...p, priority: v }))}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>{["Låg","Medel","Hög","Kritisk"].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Ansvarig</Label>
+              <Select value={editForm.responsible_user_id || "__none"} onValueChange={(v) => setEditForm(p => ({ ...p, responsible_user_id: v === "__none" ? "" : v }))}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Ingen" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Ingen</SelectItem>
+                  {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">SAP artikel-ID</Label>
+              <Input value={editForm.sap_article_id} onChange={(e) => setEditForm(p => ({ ...p, sap_article_id: e.target.value }))} className="text-sm font-mono" placeholder="t.ex. 1234567" />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" size="sm" className="rounded-full" onClick={() => setEditTarget(null)}>Avbryt</Button>
+              <Button size="sm" className="rounded-full" disabled={editSaving || !editForm.title.trim()} onClick={saveEditIncident}>
+                {editSaving ? "Sparar..." : "Spara ändringar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DELETE CONFIRM */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort avvikelse</AlertDialogTitle>
+            <AlertDialogDescription>
+              Är du säker på att du vill ta bort avvikelsen <strong>{deleteTarget?.title}</strong>? All data inklusive kommentarer och bilder tas bort.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteIncident}>
+              Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
