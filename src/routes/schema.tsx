@@ -1356,22 +1356,28 @@ function SchemaPage() {
                                   {shift.shift_name ? <>{shift.shift_name}<br /><span className="opacity-70">{shift.start_time}–{shift.stop_time}</span></> : `${shift.start_time}–${shift.stop_time}`}
                                 </span>
                               </div>
-                              {bws.map((bw, bi) => {
-                                const bLeft = ((timeToPercent(bw.start) - left) / width) * 100;
-                                const bWidth = Math.max(((bw.minutes / (TOTAL_HOURS * 60)) * 100 / width) * 100, 2);
-                                // Clamp to shift bar bounds
-                                const clampedLeft = Math.max(0, Math.min(bLeft, 98));
-                                const clampedWidth = Math.min(bWidth, 100 - clampedLeft);
-                                // Skip if entirely outside shift
-                                if (bLeft > 100 || bLeft + bWidth < 0) return null;
-                                return (
-                                  <div key={bi} className="absolute top-0 bottom-0 z-20 pointer-events-none"
-                                    style={{ left: `${clampedLeft}%`, width: `${Math.max(clampedWidth, 2)}%` }}
-                                    title={`Rast ${bw.start}, ${bw.minutes} min`}>
-                                    <div className="absolute inset-0 rounded-sm bg-black/30 backdrop-brightness-75" />
-                                  </div>
-                                );
-                              })}
+                              {(() => {
+                                const shiftStartMins = (() => { const [h,m] = shift.start_time!.split(":").map(Number); return h*60+m; })();
+                                const shiftStopMins = (() => { const [h,m] = shift.stop_time!.split(":").map(Number); return h*60+m; })();
+                                const shiftDuration = shiftStopMins - shiftStartMins;
+                                if (shiftDuration <= 0) return null;
+                                return bws.map((bw, bi) => {
+                                  const [bh, bm] = bw.start.split(":").map(Number);
+                                  const bStartMins = bh * 60 + bm;
+                                  // Skip breaks outside this shift's time window
+                                  if (bStartMins < shiftStartMins || bStartMins >= shiftStopMins) return null;
+                                  const bLeftPct = ((bStartMins - shiftStartMins) / shiftDuration) * 100;
+                                  const bWidthPct = (bw.minutes / shiftDuration) * 100;
+                                  const clampedWidth = Math.min(bWidthPct, 100 - bLeftPct);
+                                  return (
+                                    <div key={bi} className="absolute top-0 bottom-0 z-20 pointer-events-none"
+                                      style={{ left: `${bLeftPct}%`, width: `${Math.max(clampedWidth, 2)}%` }}
+                                      title={`Rast ${bw.start}, ${bw.minutes} min`}>
+                                      <div className="absolute inset-0 rounded-sm bg-black/30 backdrop-brightness-75" />
+                                    </div>
+                                  );
+                                });
+                              })()}
                             </div>
                           );
                         })
