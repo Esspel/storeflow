@@ -25,7 +25,7 @@ import {
   type Store as StoreType, type AppUser,
   type ChecklistTemplate, type ChecklistTemplateItem, type ChecklistTemplateQuestion,
   type TaskAssignee, type UserGroup,
-  logAudit, createNotification, notifyUsers, uploadAttachment, getPublicUrl,
+  logAudit, createNotification, notifyUsers, uploadAttachment, getPublicUrl, deleteStorageFiles,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -173,6 +173,10 @@ function TasksPage() {
   // Detail modal
   const [detailTask, setDetailTask] = useState<TaskFull | null>(null);
   const [answerDraft, setAnswerDraft] = useState<Record<string, string>>({});
+  // Ref so Realtime handler can check draft state without stale closure
+  const answerDraftRef = useRef<Record<string, string>>({});
+  // Keep ref in sync with state
+  useEffect(() => { answerDraftRef.current = answerDraft; }, [answerDraft]);
   // Lightbox: we store the task separately so we can hide the Dialog while the
   // photo is open (Radix's dismiss layer would otherwise eat all pointer events).
   const [lightboxTask, setLightboxTask] = useState<TaskFull | null>(null);
@@ -186,6 +190,10 @@ function TasksPage() {
   const [editTask, setEditTask] = useState<TaskFull | null>(null);
   const [editForm, setEditForm] = useState<ReturnType<typeof emptyForm> | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+
+  // In-flight guard refs — prevent double-submit without triggering re-renders
+  const completingRef = useRef<Set<string>>(new Set());
+  const savingAnswerRef = useRef<Set<string>>(new Set());
 
   const fetchTasks = useCallback(async () => {
     let q = supabase
@@ -244,13 +252,17 @@ function TasksPage() {
     setNewTask(emptyForm(activeStore?.id ?? ""));
   }, [activeStore, user]);
 
-  // Realtime channel
+  // Realtime channel — skip full reload when user has unsaved text drafts open
   useEffect(() => {
+    const safeRefresh = () => {
+      if (Object.keys(answerDraftRef.current).length > 0) return;
+      fetchTasks();
+    };
     const channel = supabase
       .channel("tasks-rt-" + (activeStore?.id ?? "all"))
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, fetchTasks)
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_steps" }, fetchTasks)
-      .on("postgres_changes", { event: "*", schema: "public", table: "task_questions" }, fetchTasks)
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, safeRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_steps" }, safeRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "task_questions" }, safeRefresh)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [activeStore, fetchTasks]);
@@ -510,61 +522,70 @@ function TasksPage() {
   };
 
   const saveAnswer = async (task: TaskFull, question: TaskQuestion, value: string) => {
-    await markInProgress(task);
-    const oldAnswer = question.answer;
-    // Save to history
-    await supabase.from("task_question_answers").insert({
-      task_question_id: question.id,
-      task_id: task.id,
-      answer: value,
-      answered_by: user?.id,
-    });
-    // Update current answer
-    await supabase.from("task_questions").update({
-      answer: value,
-      answered_by: user?.id,
-      answered_at: new Date().toISOString(),
-    }).eq("id", question.id);
-    logAudit(user?.id ?? null, "task.question.answer", "task_questions", question.id, { task_id: task.id, old: oldAnswer, new: value });
-    fetchTasks();
-    if (detailTask?.id === task.id) {
-      setDetailTask(p => p ? {
-        ...p,
-        questions: p.questions.map(q => q.id === question.id ? { ...q, answer: value, answered_by: user?.id ?? null, answered_at: new Date().toISOString() } : q)
-      } : null);
+    if (savingAnswerRef.current.has(question.id)) return;
+    savingAnswerRef.current.add(question.id);
+    try {
+      await markInProgress(task);
+      const oldAnswer = question.answer;
+      await supabase.from("task_question_answers").insert({
+        task_question_id: question.id,
+        task_id: task.id,
+        answer: value,
+        answered_by: user?.id,
+      });
+      await supabase.from("task_questions").update({
+        answer: value,
+        answered_by: user?.id,
+        answered_at: new Date().toISOString(),
+      }).eq("id", question.id);
+      logAudit(user?.id ?? null, "task.question.answer", "task_questions", question.id, { task_id: task.id, old: oldAnswer, new: value });
+      fetchTasks();
+      if (detailTask?.id === task.id) {
+        setDetailTask(p => p ? {
+          ...p,
+          questions: p.questions.map(q => q.id === question.id ? { ...q, answer: value, answered_by: user?.id ?? null, answered_at: new Date().toISOString() } : q)
+        } : null);
+      }
+    } finally {
+      savingAnswerRef.current.delete(question.id);
     }
   };
 
   const completeTask = async (task: TaskFull) => {
-    const isDone = task.status === "done";
-    const newStatus = isDone ? "todo" : "done";
+    if (completingRef.current.has(task.id)) return;
+    completingRef.current.add(task.id);
+    try {
+      const isDone = task.status === "done";
+      const newStatus = isDone ? "todo" : "done";
 
-    // Check required questions are answered
-    if (!isDone) {
-      const unanswered = (task.questions ?? []).filter(q => q.is_required && !q.answer?.trim());
-      if (unanswered.length > 0) {
-        alert(`Fyll i obligatoriska fält: ${unanswered.map(q => q.label).join(", ")}`);
-        return;
+      if (!isDone) {
+        const unanswered = (task.questions ?? []).filter(q => q.is_required && !q.answer?.trim());
+        if (unanswered.length > 0) {
+          alert(`Fyll i obligatoriska fält: ${unanswered.map(q => q.label).join(", ")}`);
+          return;
+        }
       }
-    }
 
-    await supabase.from("tasks").update({
-      status: newStatus,
-      completed_at: newStatus === "done" ? new Date().toISOString() : null,
-    }).eq("id", task.id);
+      await supabase.from("tasks").update({
+        status: newStatus,
+        completed_at: newStatus === "done" ? new Date().toISOString() : null,
+      }).eq("id", task.id);
 
-    if (newStatus === "done") {
-      await supabase.from("task_steps").update({ is_done: true }).eq("task_id", task.id);
-      logAudit(user?.id ?? null, "task.complete", "tasks", task.id, { title: task.title });
-      const notifyIds = new Set<string>();
-      if (task.created_by && task.created_by !== user?.id) notifyIds.add(task.created_by);
-      task.assignees?.forEach(a => { if (a.user_id && a.user_id !== user?.id) notifyIds.add(a.user_id); });
-      notifyUsers([...notifyIds], "task_done", `Uppgift klar: ${task.title}`, `Slutförd av ${user?.display_name}`, "/uppgifter");
-    } else {
-      await supabase.from("task_steps").update({ is_done: false }).eq("task_id", task.id);
+      if (newStatus === "done") {
+        await supabase.from("task_steps").update({ is_done: true }).eq("task_id", task.id);
+        logAudit(user?.id ?? null, "task.complete", "tasks", task.id, { title: task.title });
+        const notifyIds = new Set<string>();
+        if (task.created_by && task.created_by !== user?.id) notifyIds.add(task.created_by);
+        task.assignees?.forEach(a => { if (a.user_id && a.user_id !== user?.id) notifyIds.add(a.user_id); });
+        notifyUsers([...notifyIds], "task_done", `Uppgift klar: ${task.title}`, `Slutförd av ${user?.display_name}`, "/uppgifter");
+      } else {
+        await supabase.from("task_steps").update({ is_done: false }).eq("task_id", task.id);
+      }
+      fetchTasks();
+      if (detailTask?.id === task.id) setDetailTask(p => p ? { ...p, status: newStatus as Task["status"] } : null);
+    } finally {
+      completingRef.current.delete(task.id);
     }
-    fetchTasks();
-    if (detailTask?.id === task.id) setDetailTask(p => p ? { ...p, status: newStatus as Task["status"] } : null);
   };
 
   const uploadTaskImage = async (task: TaskFull, file: File) => {
@@ -589,19 +610,31 @@ function TasksPage() {
   const confirmDelete = async (scope: "single" | "future") => {
     if (!deleteTarget) return;
     const t = deleteTarget;
+
+    // Collect task IDs being deleted so we can clean up their storage files
+    const idsToDelete: string[] = [];
+
     if (t.recurrence_rule && scope === "future") {
       const parentId = t.parent_task_id ?? t.id;
       const periodStart = t.recurrence_period_start ?? (t.due_date ? t.due_date.slice(0, 10) : null);
       if (periodStart) {
-        // Delete children from this period onward (not before)
+        const { data: toRemove } = await supabase.from("tasks").select("id").eq("parent_task_id", parentId).gte("recurrence_period_start", periodStart);
+        (toRemove ?? []).forEach((r: { id: string }) => idsToDelete.push(r.id));
         await supabase.from("tasks").delete().eq("parent_task_id", parentId).gte("recurrence_period_start", periodStart);
       }
-      // Delete the parent only if this task IS the parent (no parent_task_id)
-      // or if this is a child — delete the child itself too
+      idsToDelete.push(t.id);
       await supabase.from("tasks").delete().eq("id", t.id);
     } else {
+      idsToDelete.push(t.id);
       await supabase.from("tasks").delete().eq("id", t.id);
     }
+
+    // Clean up storage files for all deleted tasks
+    if (idsToDelete.length > 0) {
+      const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", idsToDelete);
+      deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+    }
+
     logAudit(user?.id ?? null, "task.delete", "tasks", t.id, { title: t.title, scope });
     setDeleteTarget(null);
     setDeleteScope(null);
@@ -945,7 +978,11 @@ function TasksPage() {
             const done = effectiveStatus(t) === "done";
             const stepsDone = t.steps?.filter((s) => s.is_done).length ?? 0;
             const stepsTotal = t.steps?.length ?? 0;
-            const progress = stepsTotal > 0 ? stepsDone / stepsTotal : done ? 1 : 0;
+            const reqQuestions = (t.questions ?? []).filter(q => q.is_required);
+            const reqAnswered = reqQuestions.filter(q => q.answer?.trim()).length;
+            const totalItems = stepsTotal + reqQuestions.length;
+            const doneItems = stepsDone + reqAnswered;
+            const progress = totalItems > 0 ? doneItems / totalItems : done ? 1 : 0;
             const isKritisk = t.priority === "Kritisk";
             const weekdayShort = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
             return (
@@ -1016,8 +1053,8 @@ function TasksPage() {
                         style={{ width: `${Math.round(progress * 100)}%` }}
                       />
                     </div>
-                    {stepsTotal > 0 && (
-                      <span className="text-[11px] text-muted-foreground tabular-nums">{stepsDone}/{stepsTotal}</span>
+                    {totalItems > 0 && (
+                      <span className="text-[11px] text-muted-foreground tabular-nums">{doneItems}/{totalItems}</span>
                     )}
                   </div>
                 </div>
@@ -1029,7 +1066,7 @@ function TasksPage() {
 
       {/* DETAIL MODAL */}
       {detailTask && (
-        <Dialog open={!!detailTask && !lightboxTask} onOpenChange={(o) => { if (!o) setDetailTask(null); }}>
+        <Dialog open={!!detailTask && !lightboxTask} onOpenChange={(o) => { if (!o) { setDetailTask(null); setAnswerDraft({}); } }}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-start justify-between gap-2 pr-6">

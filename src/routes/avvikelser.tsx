@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   supabase, type Incident, type IncidentComment, type IncidentImage,
   type Store as StoreType, type AppUser, logAudit, createNotification, notifyUsers,
-  uploadAttachment, getPublicUrl,
+  uploadAttachment, getPublicUrl, deleteStorageFiles,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";

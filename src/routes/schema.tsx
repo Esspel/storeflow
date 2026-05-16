@@ -226,6 +226,20 @@ function normalizeName(name: string): string {
   return name.toLowerCase().trim().replace(/\s+/g, " ");
 }
 
+// Read a file as text with automatic encoding detection.
+// Tries UTF-8 first; if the result contains replacement characters (U+FFFD)
+// it re-reads with windows-1252 (which covers ISO-8859-1 as a superset).
+async function readFileText(file: File): Promise<string> {
+  const buf = await file.arrayBuffer();
+  const utf8 = new TextDecoder("utf-8", { fatal: false }).decode(buf);
+  if (!utf8.includes("\uFFFD")) return utf8;
+  try {
+    return new TextDecoder("windows-1252").decode(buf);
+  } catch {
+    return utf8;
+  }
+}
+
 function nameToUsername(name: string): string {
   return name.toLowerCase().trim().replace(/\s+/g, ".").replace(/[åä]/g, "a").replace(/ö/g, "o").replace(/[^a-z0-9.]/g, "");
 }
@@ -734,7 +748,7 @@ function SchemaPage() {
       for (const file of files) {
         const ext = file.name.split(".").pop()?.toLowerCase();
         if (ext === "xml") {
-          const text = await file.text();
+          const text = await readFileText(file);
           const result = parseXml(text);
           if (!result || result.employees.length === 0) {
             toast.error(`Kunde inte läsa XML-filen: ${file.name}. Kontrollera att det är en SoftOne GO-export.`);
@@ -770,7 +784,7 @@ function SchemaPage() {
             // Re-use already-parsed preview if available
             let entries = pdfPreviews[file.name];
             if (entries === undefined) {
-              const text = await file.text();
+              const text = await readFileText(file);
               entries = parseCsvDelivery(text);
             }
             if (entries.length === 0) {

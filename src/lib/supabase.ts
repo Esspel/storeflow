@@ -296,11 +296,48 @@ export async function cleanOldNotifications(userId: string) {
   await supabase.from("notifications").delete().eq("user_id", userId).lt("created_at", cutoff);
 }
 
-// Helper: upload file to attachments bucket
+// Compress an image file on the client before uploading.
+// Resizes to max 1920px on the longest side and encodes as JPEG at 82% quality.
+// Non-image files are returned as-is.
+export async function compressImage(file: File, maxPx = 1920, quality = 0.82): Promise<File> {
+  if (!file.type.startsWith("image/")) return file;
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxPx || height > maxPx) {
+        if (width >= height) { height = Math.round((height / width) * maxPx); width = maxPx; }
+        else { width = Math.round((width / height) * maxPx); height = maxPx; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => resolve(blob ? new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }) : file),
+        "image/jpeg",
+        quality,
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+// Helper: upload file to attachments bucket (compresses images automatically)
 export async function uploadAttachment(file: File, folder: string): Promise<string | null> {
-  const ext = file.name.split(".").pop() ?? "bin";
+  const toUpload = await compressImage(file);
+  const ext = toUpload.name.split(".").pop() ?? "bin";
   const path = `${folder}/${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from("attachments").upload(path, file);
+  const { error } = await supabase.storage.from("attachments").upload(path, toUpload);
   if (error) return null;
   return path;
+}
+
+// Helper: remove storage files for a list of paths (fire-and-forget, best-effort)
+export function deleteStorageFiles(paths: string[]) {
+  if (paths.length === 0) return;
+  supabase.storage.from("attachments").remove(paths).then(() => {});
 }
