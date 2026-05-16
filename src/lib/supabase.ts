@@ -105,6 +105,7 @@ export type Incident = {
   reported_by: string | null;
   assigned_to: string | null;
   responsible_user_id: string | null;
+  responsible_group_id: string | null;
   priority: "Låg" | "Medel" | "Hög" | "Kritisk";
   status: "open" | "in_progress" | "escalated" | "resolved" | "closed";
   sla_deadline: string | null;
@@ -116,6 +117,7 @@ export type Incident = {
   store?: Store;
   reporter?: AppUser;
   responsible?: AppUser;
+  responsible_group?: UserGroup;
   comments?: IncidentComment[];
   images?: IncidentImage[];
 };

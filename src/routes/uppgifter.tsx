@@ -1323,7 +1323,7 @@ function TasksPage() {
 
       {/* Undo toast — shown 4s after a swipe-complete so the user can cancel */}
       {undoToast && (
-        <div className="fixed bottom-36 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div className="fixed bottom-44 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
           <div className="flex items-center gap-3 rounded-full border border-border/60 bg-card px-5 py-3 shadow-[var(--shadow-lg)]">
             <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
             <span className="text-sm font-medium">Markerad som klar</span>
@@ -1344,7 +1344,7 @@ function TasksPage() {
       {/* Mobile FAB — thumb-zone shortcut, hidden on lg+ where header button is visible */}
       {isManager && (
         <button
-          className="fixed bottom-20 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
+          className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
           aria-label="Ny uppgift"
           onClick={() => { setShowCreate(true); setSaveError(""); }}
         >

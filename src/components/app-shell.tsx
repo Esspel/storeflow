@@ -1,5 +1,5 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
-import { Bell, ChevronDown, FlaskConical, LogOut, Settings, ShoppingCart, Trash2, User, Wifi, WifiOff } from "lucide-react";
+import { Bell, ChevronDown, ClipboardList, FlaskConical, Hop as Home, LogOut, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -105,14 +105,14 @@ export function AppShell() {
   const isManager = user?.role === "manager" || isAdmin;
 
   const nav = [
-    { to: "/", label: "Översikt", mobileHidden: false },
-    { to: "/uppgifter", label: "Uppgifter", mobileHidden: false },
-    { to: "/schema", label: "Schema", mobileHidden: false },
-    { to: "/avvikelser", label: "Avvikelser", mobileHidden: false },
-    { to: "/kundrunda", label: "Kundrunda", mobileHidden: false },
-    { to: "/moten", label: "Möten", mobileHidden: false },
-    ...(isManager ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true }] : []),
-    { to: "/mallar", label: "Mallar", mobileHidden: true },
+    { to: "/", label: "Översikt", mobileHidden: false, Icon: Home },
+    { to: "/uppgifter", label: "Uppgifter", mobileHidden: false, Icon: ClipboardList },
+    { to: "/schema", label: "Schema", mobileHidden: false, Icon: CalendarDays },
+    { to: "/avvikelser", label: "Avvikelser", mobileHidden: false, Icon: TriangleAlert },
+    { to: "/kundrunda", label: "Kundrunda", mobileHidden: false, Icon: UserRound },
+    { to: "/moten", label: "Möten", mobileHidden: false, Icon: MessageSquare },
+    ...(isManager ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }] : []),
+    { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
   ];
 
   useEffect(() => {
@@ -170,7 +170,7 @@ export function AppShell() {
       <div className="pt-safe" />
 
       <header className="sticky top-0 z-40 border-b border-border/60 bg-card">
-        <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center gap-4 px-5 md:px-8">
+        <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4 md:h-16 md:gap-4 md:px-8">
           <Link to="/" className="flex shrink-0 items-center gap-2">
             <div className="flex flex-col leading-none">
               <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Store</span>
@@ -196,26 +196,28 @@ export function AppShell() {
             ))}
           </nav>
           {/* Mobile bottom nav — core routes only */}
-          <nav className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-card md:hidden" data-safe-bottom>
-            {nav.filter((item) => !item.mobileHidden).map((item) => (
+          <nav className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-card pb-safe md:hidden" data-safe-bottom>
+            {nav.filter((item) => !item.mobileHidden).map(({ to, label, Icon }) => (
               <Link
-                key={item.to}
-                to={item.to}
+                key={to}
+                to={to}
                 className={cn(
                   "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
-                  isActive(item.to) ? "text-primary" : "text-muted-foreground",
+                  isActive(to) ? "text-primary" : "text-muted-foreground",
                 )}
               >
-                <span className={cn(
-                  "h-1 w-6 rounded-full transition-all",
-                  isActive(item.to) ? "bg-primary" : "bg-transparent",
-                )} />
-                {item.label}
+                <div className={cn(
+                  "flex h-7 w-10 items-center justify-center rounded-full transition-all",
+                  isActive(to) ? "bg-primary/10" : "bg-transparent",
+                )}>
+                  <Icon className="h-4 w-4" />
+                </div>
+                <span className="leading-none">{label}</span>
               </Link>
             ))}
           </nav>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1.5 md:gap-2">
             {/* Mitt Coop button */}
             {activeStore?.sap_site_id && (
               <a
@@ -321,9 +323,9 @@ export function AppShell() {
                   <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
                   {activeStore && <p className="text-xs text-muted-foreground">{activeStore.name}</p>}
                 </div>
-                {/* Store switcher in dropdown — shown on mobile when multiple stores */}
+                {/* Store switcher in dropdown — mobile only (desktop has header button) */}
                 {userStores.length > 1 && (
-                  <>
+                  <div className="md:hidden">
                     <DropdownMenuSeparator />
                     <div className="px-2 py-1">
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Butik</p>
@@ -338,7 +340,7 @@ export function AppShell() {
                         </DropdownMenuItem>
                       ))}
                     </div>
-                  </>
+                  </div>
                 )}
                 <DropdownMenuSeparator />
                 {/* Mobile-only links to hidden nav items */}
@@ -392,7 +394,7 @@ export function AppShell() {
       </header>
 
       {simActive && (
-        <div className="sticky top-16 z-30 flex items-center justify-between gap-3 border-b border-warning/40 bg-warning/10 px-5 py-2 text-xs font-medium text-warning-foreground md:px-8">
+        <div className="sticky top-14 z-30 flex items-center justify-between gap-3 border-b border-warning/40 bg-warning/10 px-5 py-2 text-xs font-medium text-warning-foreground md:top-16 md:px-8">
           <span>
             Tidssimulering aktiv — simulerad tid:{" "}
             <strong>{getSimulatedDate().toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}</strong>
@@ -410,7 +412,7 @@ export function AppShell() {
         </div>
       )}
 
-      <main className="flex-1 pb-16 md:pb-0">
+      <main className="flex-1 pb-24 md:pb-0">
         <Outlet />
       </main>
 

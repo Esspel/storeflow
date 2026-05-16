@@ -1209,7 +1209,7 @@ function SchemaPage() {
       {activeImport && weekDates.length > 0 && (
         <div className="flex flex-1 flex-col px-3 py-3 sm:px-6 sm:py-4">
           {/* Sticky day strip — touch-action: pan-x so only horizontal swipe changes day */}
-          <div className="sticky top-16 z-20 -mx-3 mb-3 flex items-center gap-1 border-b border-border/40 bg-background/95 px-2 py-2 backdrop-blur-sm sm:-mx-6 sm:px-4" style={{ touchAction: "pan-x" }}>
+          <div className="sticky top-14 z-20 -mx-3 mb-3 flex items-center gap-1 border-b border-border/40 bg-background/95 px-2 py-2 backdrop-blur-sm sm:-mx-6 sm:top-16 sm:px-4" style={{ touchAction: "pan-x" }}>
             <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors" onClick={() => setSelectedDayIndex((i) => Math.max(0, i - 1))} disabled={selectedDayIndex === 0} aria-label="Föregående dag">
               <ChevronLeft className="h-5 w-5" />
             </button>

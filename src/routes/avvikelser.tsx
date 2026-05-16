@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   TriangleAlert as AlertTriangle, Clock, Download, MessageSquare,
-  Pencil, Plus, Search, Send, Store, Trash2, X, User, Image as ImageIcon, ZoomIn,
+  Pencil, Plus, Search, Send, Store, Trash2, Users, X, User, Image as ImageIcon, ZoomIn,
   Hash, ExternalLink,
 } from "lucide-react";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -23,7 +23,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   supabase, type Incident, type IncidentComment, type IncidentImage,
-  type Store as StoreType, type AppUser, type KundrundaCommonDefect,
+  type Store as StoreType, type AppUser, type KundrundaCommonDefect, type UserGroup,
   logAudit, createNotification, notifyUsers,
   uploadAttachment, getPublicUrl, deleteStorageFiles, mittCoopUrl,
 } from "@/lib/supabase";
@@ -55,6 +55,7 @@ type IncidentFull = Incident & {
   store?: StoreType;
   reporter?: AppUser;
   responsible?: AppUser;
+  responsible_group?: UserGroup;
   images?: IncidentImage[];
 };
 
@@ -78,6 +79,7 @@ function IssuesPage() {
   const [incidents, setIncidents] = useState<IncidentFull[]>([]);
   const [stores, setStores] = useState<StoreType[]>([]);
   const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
+  const [groups, setGroups] = useState<UserGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("active");
   const [filterPriority, setFilterPriority] = useState("all");
@@ -89,7 +91,7 @@ function IssuesPage() {
   const [newComment, setNewComment] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
   const INCIDENT_DRAFT_KEY = `sf-incident-draft-${user?.id ?? ""}`;
-  const emptyIncident = () => ({ title: "", description: "", category: "Drift", store_id: activeStore?.id ?? "", priority: "Medel", responsible_user_id: "", sap_article_id: "" });
+  const emptyIncident = () => ({ title: "", description: "", category: "Drift", store_id: activeStore?.id ?? "", priority: "Medel", responsible_user_id: "", responsible_group_id: "", sap_article_id: "" });
   const [newIncident, _setNewIncident] = useState(() => {
     try {
       const saved = localStorage.getItem(`sf-incident-draft-${user?.id ?? ""}`);
@@ -110,14 +112,14 @@ function IssuesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [deleteTarget, setDeleteTarget] = useState<IncidentFull | null>(null);
   const [editTarget, setEditTarget] = useState<IncidentFull | null>(null);
-  const [editForm, setEditForm] = useState({ title: "", description: "", category: "", priority: "", responsible_user_id: "", sap_article_id: "" });
+  const [editForm, setEditForm] = useState({ title: "", description: "", category: "", priority: "", responsible_user_id: "", responsible_group_id: "", sap_article_id: "" });
   const [editSaving, setEditSaving] = useState(false);
   const [commonDefects, setCommonDefects] = useState<KundrundaCommonDefect[]>([]);
   const [createStep, setCreateStep] = useState<1 | 2>(1);
 
   const fetchIncidents = async () => {
     let q = supabase.from("incidents")
-      .select("*, store:stores(*), reporter:app_users!reported_by(id,display_name,username), responsible:app_users!responsible_user_id(id,display_name,username), images:incident_images(*)")
+      .select("*, store:stores(*), reporter:app_users!reported_by(id,display_name,username), responsible:app_users!responsible_user_id(id,display_name,username), responsible_group:user_groups!responsible_group_id(id,name,store_id,created_at), images:incident_images(*)")
       .order("created_at", { ascending: false });
     if (activeStore) {
       q = q.eq("store_id", activeStore.id);
@@ -161,9 +163,13 @@ function IssuesPage() {
         .then(({ data }) => {
           if (data) setStoreUsers((data as { user: AppUser }[]).map(d => d.user).filter(Boolean));
         });
+      supabase.from("user_groups").select("*").eq("store_id", activeStore.id).order("name")
+        .then(({ data }) => { if (data) setGroups(data as UserGroup[]); });
     } else {
       supabase.from("app_users").select("*").eq("is_active", true)
         .then(({ data }) => { if (data) setStoreUsers(data as AppUser[]); });
+      supabase.from("user_groups").select("*").order("name")
+        .then(({ data }) => { if (data) setGroups(data as UserGroup[]); });
     }
 
     setNewIncident(p => ({ ...p, store_id: activeStore?.id ?? "" }));
@@ -194,6 +200,7 @@ function IssuesPage() {
       priority: newIncident.priority,
       reported_by: user?.id,
       responsible_user_id: newIncident.responsible_user_id || null,
+      responsible_group_id: newIncident.responsible_group_id || null,
       sap_article_id: newIncident.sap_article_id?.trim() || null,
       status: "open",
     }).select().maybeSingle();
@@ -267,6 +274,15 @@ function IssuesPage() {
     }
   };
 
+  const assignGroup = async (incId: string, groupId: string) => {
+    await supabase.from("incidents").update({ responsible_group_id: groupId || null }).eq("id", incId);
+    await fetchIncidents();
+    if (showDetail?.id === incId) {
+      const grp = groups.find(g => g.id === groupId);
+      setShowDetail(p => p ? { ...p, responsible_group_id: groupId || null, responsible_group: grp ?? undefined } : null);
+    }
+  };
+
   const sendComment = async () => {
     if (!newComment.trim() || !showDetail || !user) return;
     setSendingComment(true);
@@ -305,6 +321,7 @@ function IssuesPage() {
       category: inc.category,
       priority: inc.priority,
       responsible_user_id: inc.responsible_user_id ?? "",
+      responsible_group_id: inc.responsible_group_id ?? "",
       sap_article_id: inc.sap_article_id ?? "",
     });
   };
@@ -318,6 +335,7 @@ function IssuesPage() {
       category: editForm.category,
       priority: editForm.priority,
       responsible_user_id: editForm.responsible_user_id || null,
+      responsible_group_id: editForm.responsible_group_id || null,
       sap_article_id: editForm.sap_article_id?.trim() || null,
     }).eq("id", editTarget.id);
     logAudit(user?.id ?? null, "incident.edit", "incidents", editTarget.id, { title: editForm.title });
@@ -475,6 +493,8 @@ function IssuesPage() {
                   <td className="hidden px-5 py-3.5 text-xs text-muted-foreground lg:table-cell">
                     {inc.responsible ? (
                       <span className="inline-flex items-center gap-1"><User className="h-3.5 w-3.5" />{inc.responsible.display_name}</span>
+                    ) : inc.responsible_group ? (
+                      <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" />{inc.responsible_group.name}</span>
                     ) : "—"}
                   </td>
                   <td className="hidden px-5 py-3.5 sm:table-cell">
@@ -501,7 +521,7 @@ function IssuesPage() {
 
       {/* Mobile FAB — thumb-zone shortcut for creating incidents */}
       <button
-        className="fixed bottom-20 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
+        className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
         aria-label="Ny avvikelse"
         onClick={() => setShowCreate(true)}
       >
@@ -666,10 +686,10 @@ function IssuesPage() {
                   </Select>
                 </div>
 
-                {/* Ansvarig */}
+                {/* Ansvarig person */}
                 <div className="flex items-center gap-3 px-4 py-3">
                   <User className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Ansvarig</span>
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Person</span>
                   <Select value={newIncident.responsible_user_id || "__none"} onValueChange={(v) => setNewIncident(p => ({ ...p, responsible_user_id: v === "__none" ? "" : v }))}>
                     <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
                       <SelectValue placeholder="Ingen" />
@@ -680,6 +700,23 @@ function IssuesPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Ansvarig grupp */}
+                {groups.length > 0 && (
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <Users className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <span className="w-20 shrink-0 text-xs text-muted-foreground">Grupp</span>
+                    <Select value={newIncident.responsible_group_id || "__none"} onValueChange={(v) => setNewIncident(p => ({ ...p, responsible_group_id: v === "__none" ? "" : v }))}>
+                      <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
+                        <SelectValue placeholder="Ingen" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">Ingen</SelectItem>
+                        {groups.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 {/* SAP artikel-ID */}
                 <div className="px-4 py-3 min-w-0 space-y-1">
@@ -779,24 +816,48 @@ function IssuesPage() {
                 );
               })()}
 
-              {/* Responsible user */}
+              {/* Responsible user + group */}
               {isManager && (
-                <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1.5 text-xs"><User className="h-3.5 w-3.5" /> Ansvarig person</Label>
-                  <Select value={showDetail.responsible_user_id ?? "__none"} onValueChange={(v) => assignResponsible(showDetail.id, v === "__none" ? "" : v)}>
-                    <SelectTrigger className="h-9 rounded-full text-sm"><SelectValue placeholder="Ingen" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none">Ingen</SelectItem>
-                      {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1.5 text-xs"><User className="h-3.5 w-3.5" /> Ansvarig person</Label>
+                    <Select value={showDetail.responsible_user_id ?? "__none"} onValueChange={(v) => assignResponsible(showDetail.id, v === "__none" ? "" : v)}>
+                      <SelectTrigger className="h-9 rounded-full text-sm"><SelectValue placeholder="Ingen" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">Ingen</SelectItem>
+                        {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {groups.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label className="flex items-center gap-1.5 text-xs"><Users className="h-3.5 w-3.5" /> Ansvarig grupp</Label>
+                      <Select value={showDetail.responsible_group_id ?? "__none"} onValueChange={(v) => assignGroup(showDetail.id, v === "__none" ? "" : v)}>
+                        <SelectTrigger className="h-9 rounded-full text-sm"><SelectValue placeholder="Ingen" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Ingen</SelectItem>
+                          {groups.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {!isManager && showDetail.responsible && (
-                <div className="flex items-center gap-2 text-sm">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span>Ansvarig: <strong>{showDetail.responsible.display_name}</strong></span>
+              {!isManager && (showDetail.responsible || showDetail.responsible_group) && (
+                <div className="flex flex-wrap gap-3">
+                  {showDetail.responsible && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <span>Ansvarig: <strong>{showDetail.responsible.display_name}</strong></span>
+                    </div>
+                  )}
+                  {showDetail.responsible_group && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <span>Grupp: <strong>{showDetail.responsible_group.name}</strong></span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -907,15 +968,29 @@ function IssuesPage() {
                 </Select>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Ansvarig</Label>
-              <Select value={editForm.responsible_user_id || "__none"} onValueChange={(v) => setEditForm(p => ({ ...p, responsible_user_id: v === "__none" ? "" : v }))}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Ingen" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none">Ingen</SelectItem>
-                  {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Ansvarig person</Label>
+                <Select value={editForm.responsible_user_id || "__none"} onValueChange={(v) => setEditForm(p => ({ ...p, responsible_user_id: v === "__none" ? "" : v }))}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Ingen" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Ingen</SelectItem>
+                    {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {groups.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Ansvarig grupp</Label>
+                  <Select value={editForm.responsible_group_id || "__none"} onValueChange={(v) => setEditForm(p => ({ ...p, responsible_group_id: v === "__none" ? "" : v }))}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Ingen" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Ingen</SelectItem>
+                      {groups.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">SAP artikel-ID</Label>

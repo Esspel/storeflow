@@ -1,12 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { CircleCheck as CheckCircle2, Eye, EyeOff, KeyRound, Store, User, Hash, Bell } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Store, User, Hash, Bell } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { supabase, logAudit, type Store as StoreType } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { PushNotificationSetup } from "@/components/push-notification-setup";
@@ -16,7 +15,7 @@ export const Route = createFileRoute("/installningar")({
 });
 
 function SettingsPage() {
-  const { user, refreshUser, userStores, activeStore, setActiveStore } = useAuth();
+  const { user, refreshUser, userStores, activeStore } = useAuth();
   const isAdmin = user?.role === "admin";
 
   const [displayName, setDisplayName] = useState(user?.display_name ?? "");
@@ -130,70 +129,54 @@ function SettingsPage() {
           </div>
         </div>
 
-        {userStores.length > 0 && (
+        {isAdmin && userStores.length > 0 && (
           <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
                 <Store className="h-4 w-4" />
               </div>
-              <h2 className="font-semibold">Butiker</h2>
+              <div>
+                <h2 className="font-semibold">Butiksinställningar</h2>
+                <p className="text-xs text-muted-foreground">SAP-koppling för Mitt Coop-integration.</p>
+              </div>
             </div>
             <div className="space-y-3">
               {userStores.map((store) => {
-                const isActive = activeStore?.id === store.id;
                 const sapVal = sapSiteIds[store.id] ?? (store.sap_site_id ?? "");
                 return (
-                  <div
-                    key={store.id}
-                    className="rounded-xl border border-border/60 overflow-hidden"
-                  >
-                    <div className="flex items-center justify-between px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {isActive && <CheckCircle2 className="h-4 w-4 text-success" />}
-                        <span className="text-sm font-medium">{store.name}</span>
-                        {store.region && <span className="text-xs text-muted-foreground">{store.region}</span>}
-                      </div>
-                      {!isActive && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="rounded-full text-xs"
-                          onClick={() => setActiveStore(store)}
-                        >
-                          Välj
-                        </Button>
-                      )}
-                      {isActive && <Badge variant="secondary" className="text-xs">Aktiv</Badge>}
+                  <div key={store.id} className="rounded-xl border border-border/60 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/20 border-b border-border/40">
+                      <Store className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-sm font-medium">{store.name}</span>
+                      {store.region && <span className="text-xs text-muted-foreground">{store.region}</span>}
                     </div>
-                    {isAdmin && (
-                      <div className="border-t border-border/40 bg-muted/20 px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Hash className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <Label className="w-28 shrink-0 text-xs">SAP-butiksnr</Label>
-                          <Input
-                            value={sapVal}
-                            onChange={(e) => setSapSiteIds(p => ({ ...p, [store.id]: e.target.value }))}
-                            placeholder="t.ex. 1452"
-                            className="h-7 flex-1 rounded-full text-xs"
-                            inputMode="numeric"
-                          />
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-full text-xs h-7 px-3"
-                            disabled={sapSaving[store.id]}
-                            onClick={() => saveSapSiteId(store)}
-                          >
-                            {sapSaving[store.id] ? "..." : sapSuccess[store.id] ? "Sparat!" : "Spara"}
-                          </Button>
-                        </div>
-                        {store.sap_site_id && (
-                          <p className="mt-1 pl-[1.375rem] text-xs text-muted-foreground">
-                            Mitt Coop siteId: <span className="font-mono">{store.sap_site_id}</span>
-                          </p>
-                        )}
+                    <div className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Hash className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <Label className="w-28 shrink-0 text-xs">SAP-butiksnr</Label>
+                        <Input
+                          value={sapVal}
+                          onChange={(e) => setSapSiteIds(p => ({ ...p, [store.id]: e.target.value }))}
+                          placeholder="t.ex. 1452"
+                          className="h-7 flex-1 rounded-full text-xs"
+                          inputMode="numeric"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-full text-xs h-7 px-3"
+                          disabled={sapSaving[store.id]}
+                          onClick={() => saveSapSiteId(store)}
+                        >
+                          {sapSaving[store.id] ? "..." : sapSuccess[store.id] ? "Sparat!" : "Spara"}
+                        </Button>
                       </div>
-                    )}
+                      {store.sap_site_id && (
+                        <p className="mt-1 pl-[1.375rem] text-xs text-muted-foreground">
+                          Mitt Coop siteId: <span className="font-mono">{store.sap_site_id}</span>
+                        </p>
+                      )}
+                    </div>
                   </div>
                 );
               })}
