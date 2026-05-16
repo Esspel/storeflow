@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { Eye, EyeOff, KeyRound, Store, User, Hash, Bell, ArrowLeftRight, Delete } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Eye, EyeOff, KeyRound, Store, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -28,12 +28,25 @@ function SettingsPage() {
   const [pinSaving, setPinSaving] = useState(false);
   const [hasPin, setHasPin] = useState(false);
 
-  // Load whether user already has a PIN
-  useState(() => {
+  // Barcode ID state
+  const [barcodeId, setBarcodeId] = useState("");
+  const [barcodeSaving, setBarcodeSaving] = useState(false);
+  const [barcodeSuccess, setBarcodeSuccess] = useState(false);
+  const [barcodeError, setBarcodeError] = useState("");
+
+  // Load current PIN and barcode status
+  useEffect(() => {
     if (!user) return;
-    supabase.from("app_users").select("quick_pin_hash").eq("id", user.id).maybeSingle()
-      .then(({ data }) => setHasPin(!!data?.quick_pin_hash));
-  });
+    supabase
+      .from("app_users")
+      .select("quick_pin_hash, barcode_id")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        setHasPin(!!data?.quick_pin_hash);
+        setBarcodeId(data?.barcode_id ?? "");
+      });
+  }, [user?.id]);
 
   const handlePinDigit = (digit: string) => {
     if (pinStep === "enter") {
@@ -78,6 +91,38 @@ function SettingsPage() {
     await supabase.from("app_users").update({ quick_pin_hash: null }).eq("id", user.id);
     logAudit(user.id, "user.clear_quick_pin", "app_users", user.id, {});
     setHasPin(false);
+  };
+
+  const saveBarcode = async () => {
+    if (!user) return;
+    setBarcodeError("");
+    const trimmed = barcodeId.trim();
+    if (!trimmed) return;
+    setBarcodeSaving(true);
+    // Check uniqueness across users in same store(s)
+    const { data: existing } = await supabase
+      .from("app_users")
+      .select("id, display_name")
+      .eq("barcode_id", trimmed)
+      .neq("id", user.id)
+      .maybeSingle();
+    if (existing) {
+      setBarcodeError(`Streckkoden är redan registrerad på ${existing.display_name}.`);
+      setBarcodeSaving(false);
+      return;
+    }
+    await supabase.from("app_users").update({ barcode_id: trimmed }).eq("id", user.id);
+    logAudit(user.id, "user.set_barcode", "app_users", user.id, {});
+    setBarcodeSaving(false);
+    setBarcodeSuccess(true);
+    setTimeout(() => setBarcodeSuccess(false), 2000);
+  };
+
+  const clearBarcode = async () => {
+    if (!user) return;
+    await supabase.from("app_users").update({ barcode_id: null }).eq("id", user.id);
+    logAudit(user.id, "user.clear_barcode", "app_users", user.id, {});
+    setBarcodeId("");
   };
 
   const [displayName, setDisplayName] = useState(user?.display_name ?? "");
@@ -259,99 +304,161 @@ function SettingsPage() {
           <PushNotificationSetup />
         </div>
 
-        {/* Quick PIN setup */}
+        {/* Quick switch: barcode + PIN */}
         <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
-          <div className="mb-4 flex items-center gap-3">
+          <div className="mb-5 flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
               <ArrowLeftRight className="h-4 w-4" />
             </div>
             <div>
-              <h2 className="font-semibold">Snabbinloggning (PIN)</h2>
+              <h2 className="font-semibold">Snabbt användarbyte</h2>
               <p className="text-xs text-muted-foreground">
-                Ange en 4-siffrig PIN för snabbt användarbyte på delade Zebra-enheter.
+                Registrera streckkod och/eller PIN för att ta över en delad Zebra-enhet på sekunder.
               </p>
             </div>
           </div>
 
-          {hasPin && !pinStep && (
-            <div className="flex items-center justify-between rounded-xl bg-success/10 px-4 py-3">
-              <p className="text-sm text-success-foreground">Du har en aktiv PIN-kod.</p>
-              <Button size="sm" variant="outline" className="rounded-full text-xs" onClick={clearPin}>
-                Ta bort PIN
-              </Button>
+          <div className="space-y-6">
+            {/* ── Barcode section ── */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <ScanBarcode className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Passerkortets streckkod</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Scanna ditt passerkort med Zebra-skannern i fältet nedan, eller skriv in streckkodsvärdet manuellt.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  value={barcodeId}
+                  onChange={(e) => { setBarcodeId(e.target.value); setBarcodeError(""); }}
+                  placeholder="Scanna kort eller ange ID manuellt"
+                  className="flex-1 font-mono text-sm"
+                  autoComplete="off"
+                  onKeyDown={(e) => { if (e.key === "Enter") saveBarcode(); }}
+                />
+                {barcodeId.trim() && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full shrink-0"
+                    onClick={clearBarcode}
+                  >
+                    Rensa
+                  </Button>
+                )}
+              </div>
+              {barcodeError && (
+                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{barcodeError}</p>
+              )}
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={saveBarcode}
+                  disabled={barcodeSaving || !barcodeId.trim()}
+                  size="sm"
+                  className="rounded-full"
+                >
+                  {barcodeSaving ? "Sparar..." : "Spara streckkod"}
+                </Button>
+                {barcodeSuccess && <span className="text-sm text-success">Sparat!</span>}
+              </div>
             </div>
-          )}
 
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              {pinStep === "enter" ? (hasPin ? "Ange ny PIN-kod:" : "Välj en 4-siffrig PIN:") : "Bekräfta PIN-koden:"}
-            </p>
+            <div className="border-t border-border/60" />
 
-            {/* PIN dots */}
-            <div className="flex justify-center gap-4">
-              {[0, 1, 2, 3].map((i) => {
-                const active = pinStep === "enter" ? newPin : confirmPin;
-                return (
-                  <div
-                    key={i}
-                    className={cn(
-                      "h-4 w-4 rounded-full border-2 transition-all duration-100",
-                      active.length > i ? "border-primary bg-primary scale-110" : "border-border bg-transparent",
-                    )}
-                  />
-                );
-              })}
-            </div>
+            {/* ── PIN section ── */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Hash className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">4-siffrig PIN-kod</span>
+                </div>
+                {hasPin && (
+                  <button
+                    onClick={clearPin}
+                    className="text-xs text-destructive hover:underline"
+                  >
+                    Ta bort PIN
+                  </button>
+                )}
+              </div>
 
-            {pinError && (
-              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">{pinError}</p>
-            )}
-            {pinSuccess && (
-              <p className="rounded-lg bg-success/10 px-3 py-2 text-center text-sm text-success-foreground">PIN sparad!</p>
-            )}
+              {hasPin && pinStep === "enter" && newPin.length === 0 && (
+                <p className="text-xs text-muted-foreground">Du har en aktiv PIN. Ange nedan för att byta.</p>
+              )}
 
-            {/* PIN pad */}
-            <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
-              {["1","2","3","4","5","6","7","8","9"].map((d) => (
+              <p className="text-sm text-muted-foreground">
+                {pinStep === "enter"
+                  ? (hasPin ? "Ange ny PIN-kod:" : "Välj en 4-siffrig PIN:")
+                  : "Bekräfta PIN-koden:"}
+              </p>
+
+              {/* PIN dots */}
+              <div className="flex justify-center gap-4 py-1">
+                {[0, 1, 2, 3].map((i) => {
+                  const active = pinStep === "enter" ? newPin : confirmPin;
+                  return (
+                    <div
+                      key={i}
+                      className={cn(
+                        "h-4 w-4 rounded-full border-2 transition-all duration-100",
+                        active.length > i ? "border-primary bg-primary scale-110" : "border-border bg-transparent",
+                      )}
+                    />
+                  );
+                })}
+              </div>
+
+              {pinError && (
+                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">{pinError}</p>
+              )}
+              {pinSuccess && (
+                <p className="rounded-lg bg-success/10 px-3 py-2 text-center text-sm text-success-foreground">PIN sparad!</p>
+              )}
+
+              {/* PIN pad */}
+              <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
+                {["1","2","3","4","5","6","7","8","9"].map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => handlePinDigit(d)}
+                    className="flex h-14 items-center justify-center rounded-xl border border-border/60 bg-card text-xl font-semibold transition-all active:scale-95 hover:bg-accent"
+                  >
+                    {d}
+                  </button>
+                ))}
                 <button
-                  key={d}
-                  onClick={() => handlePinDigit(d)}
+                  onClick={() => { setNewPin(""); setConfirmPin(""); setPinStep("enter"); setPinError(""); }}
+                  className="flex h-14 items-center justify-center rounded-xl text-xs text-muted-foreground transition-all active:scale-95 hover:bg-muted"
+                >
+                  Rensa
+                </button>
+                <button
+                  onClick={() => handlePinDigit("0")}
                   className="flex h-14 items-center justify-center rounded-xl border border-border/60 bg-card text-xl font-semibold transition-all active:scale-95 hover:bg-accent"
                 >
-                  {d}
+                  0
                 </button>
-              ))}
-              <button
-                onClick={() => { setNewPin(""); setConfirmPin(""); setPinStep("enter"); setPinError(""); }}
-                className="flex h-14 items-center justify-center rounded-xl text-xs text-muted-foreground transition-all active:scale-95 hover:bg-muted"
-              >
-                Rensa
-              </button>
-              <button
-                onClick={() => handlePinDigit("0")}
-                className="flex h-14 items-center justify-center rounded-xl border border-border/60 bg-card text-xl font-semibold transition-all active:scale-95 hover:bg-accent"
-              >
-                0
-              </button>
-              <button
-                onClick={() => {
-                  if (pinStep === "enter") setNewPin(p => p.slice(0, -1));
-                  else setConfirmPin(p => p.slice(0, -1));
-                  setPinError("");
-                }}
-                className="flex h-14 items-center justify-center rounded-xl text-muted-foreground transition-all active:scale-95 hover:bg-muted"
-              >
-                <Delete className="h-4 w-4" />
-              </button>
-            </div>
-
-            {pinStep === "confirm" && confirmPin.length === 4 && confirmPin === newPin && (
-              <div className="flex justify-center">
-                <Button onClick={savePin} disabled={pinSaving} className="rounded-full">
-                  {pinSaving ? "Sparar..." : "Spara PIN-kod"}
-                </Button>
+                <button
+                  onClick={() => {
+                    if (pinStep === "enter") setNewPin(p => p.slice(0, -1));
+                    else setConfirmPin(p => p.slice(0, -1));
+                    setPinError("");
+                  }}
+                  className="flex h-14 items-center justify-center rounded-xl text-muted-foreground transition-all active:scale-95 hover:bg-muted"
+                >
+                  <Delete className="h-4 w-4" />
+                </button>
               </div>
-            )}
+
+              {pinStep === "confirm" && confirmPin.length === 4 && confirmPin === newPin && (
+                <div className="flex justify-center">
+                  <Button onClick={savePin} disabled={pinSaving} className="rounded-full">
+                    {pinSaving ? "Sparar..." : "Spara PIN-kod"}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
