@@ -292,7 +292,14 @@ function firePush(userIds: string[], title: string, body: string, url: string) {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${PUSH_ANON_KEY}` },
     body: JSON.stringify({ user_ids: userIds, title, body, url }),
-  }).catch(() => {});
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error("firePush failed:", res.status, text);
+      }
+    })
+    .catch((err) => console.error("firePush network error:", err));
 }
 
 // Helper: create a notification

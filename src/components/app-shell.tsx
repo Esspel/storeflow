@@ -169,6 +169,60 @@ export function AppShell() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [simActive, setSimActive] = useState(() => isSimulationActive());
 
+  // Push subscription maintenance: ensure registration is valid on every session
+  useEffect(() => {
+    if (!user) return;
+    const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+    if (!vapidKey || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    if (Notification.permission !== "granted") return;
+
+    const maintain = async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (!sub) return;
+
+        const isDeprecated = sub.endpoint.includes("fcm.googleapis.com/fcm/send/");
+        if (isDeprecated) {
+          await supabase.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+          await sub.unsubscribe();
+          // Re-subscribe with fresh endpoint
+          const padding = "=".repeat((4 - (vapidKey.length % 4)) % 4);
+          const base64 = (vapidKey + padding).replace(/-/g, "+").replace(/_/g, "/");
+          const rawData = atob(base64);
+          const appServerKey = Uint8Array.from(rawData, (c) => c.charCodeAt(0));
+          const freshSub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appServerKey });
+          await supabase.from("push_subscriptions").insert({
+            user_id: user.id,
+            endpoint: freshSub.endpoint,
+            subscription_json: freshSub.toJSON(),
+            user_agent: navigator.userAgent,
+          });
+          return;
+        }
+
+        // Ensure subscription exists in DB for this user
+        const { data: existing } = await supabase
+          .from("push_subscriptions")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("endpoint", sub.endpoint)
+          .maybeSingle();
+
+        if (!existing) {
+          await supabase.from("push_subscriptions").upsert(
+            { user_id: user.id, endpoint: sub.endpoint, subscription_json: sub.toJSON(), user_agent: navigator.userAgent, updated_at: new Date().toISOString() },
+            { onConflict: "endpoint" },
+          );
+        }
+      } catch (err) {
+        console.error("Push maintenance error:", err);
+      }
+    };
+
+    maintain();
+  }, [user]);
+
   useEffect(() => {
     const sync = () => setSimActive(isSimulationActive());
     window.addEventListener("sf-time-changed", sync);

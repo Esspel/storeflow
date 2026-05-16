@@ -289,11 +289,11 @@ function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-5 py-8 md:px-8 md:py-10">
+    <div className="mx-auto max-w-2xl px-4 py-6 md:px-8 md:py-10">
       <PageHeader title="Inställningar" description="Hantera ditt konto och lösenord." />
 
       <div className="space-y-6">
-        <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
+        <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
               <User className="h-4 w-4" />
@@ -324,7 +324,7 @@ function SettingsPage() {
         </div>
 
         {isAdmin && userStores.length > 0 && (
-          <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
+          <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
                 <Store className="h-4 w-4" />
@@ -339,34 +339,38 @@ function SettingsPage() {
                 const sapVal = sapSiteIds[store.id] ?? (store.sap_site_id ?? "");
                 return (
                   <div key={store.id} className="rounded-xl border border-border/60 overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/20 border-b border-border/40">
-                      <Store className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-sm font-medium">{store.name}</span>
-                      {store.region && <span className="text-xs text-muted-foreground">{store.region}</span>}
+                    <div className="flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-muted/20 border-b border-border/40">
+                      <Store className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="text-sm font-medium truncate">{store.name}</span>
+                      {store.region && <span className="text-xs text-muted-foreground shrink-0">{store.region}</span>}
                     </div>
-                    <div className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Hash className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <Label className="w-28 shrink-0 text-xs">SAP-butiksnr</Label>
-                        <Input
-                          value={sapVal}
-                          onChange={(e) => setSapSiteIds(p => ({ ...p, [store.id]: e.target.value }))}
-                          placeholder="t.ex. 1452"
-                          className="h-7 flex-1 rounded-full text-xs"
-                          inputMode="numeric"
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full text-xs h-7 px-3"
-                          disabled={sapSaving[store.id]}
-                          onClick={() => saveSapSiteId(store)}
-                        >
-                          {sapSaving[store.id] ? "..." : sapSuccess[store.id] ? "Sparat!" : "Spara"}
-                        </Button>
+                    <div className="px-3 sm:px-4 py-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                        <div className="flex items-center gap-2">
+                          <Hash className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <Label className="text-xs whitespace-nowrap">SAP-butiksnr</Label>
+                        </div>
+                        <div className="flex items-center gap-2 flex-1">
+                          <Input
+                            value={sapVal}
+                            onChange={(e) => setSapSiteIds(p => ({ ...p, [store.id]: e.target.value }))}
+                            placeholder="t.ex. 1452"
+                            className="h-8 flex-1 rounded-full text-xs"
+                            inputMode="numeric"
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-full text-xs h-8 px-3 shrink-0"
+                            disabled={sapSaving[store.id]}
+                            onClick={() => saveSapSiteId(store)}
+                          >
+                            {sapSaving[store.id] ? "..." : sapSuccess[store.id] ? "Sparat!" : "Spara"}
+                          </Button>
+                        </div>
                       </div>
                       {store.sap_site_id && (
-                        <p className="mt-1 pl-[1.375rem] text-xs text-muted-foreground">
+                        <p className="mt-2 text-xs text-muted-foreground">
                           Mitt Coop siteId: <span className="font-mono">{store.sap_site_id}</span>
                         </p>
                       )}
@@ -378,7 +382,7 @@ function SettingsPage() {
           </div>
         )}
 
-        <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
+        <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
               <Bell className="h-4 w-4" />
@@ -392,7 +396,7 @@ function SettingsPage() {
         </div>
 
         {/* Quick switch: barcode + PIN */}
-        <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
+        <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
               <ArrowLeftRight className="h-4 w-4" />
@@ -549,7 +553,7 @@ function SettingsPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
+        <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
               <KeyRound className="h-4 w-4" />
@@ -618,7 +622,7 @@ function SettingsPage() {
 
         {/* Diagnostics panel — revealed by tapping the version number 7 times */}
         {showDiagnostics ? (
-          <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
+          <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
