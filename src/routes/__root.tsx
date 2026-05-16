@@ -131,7 +131,7 @@ function AppLayout() {
     if (loading) return;
     if (!user && !isLoginPage) {
       navigate({ to: "/login" });
-    } else if (user && isLoginPage) {
+    } else if (user && isLoginPage && !user.must_change_password) {
       navigate({ to: "/" });
     }
   }, [user, loading, isLoginPage, navigate]);

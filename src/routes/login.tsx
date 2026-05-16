@@ -25,9 +25,6 @@ function LoginPage() {
 
   // Forced password change state
   const [forcePwChange, setForcePwChange] = useState(false);
-  // Keep a local ref to the logged-in user so the force-change form works
-  // even before the auth context state has propagated
-  const [pendingUser, setPendingUser] = useState<typeof user>(null);
   const [newPw, setNewPw] = useState("");
   const [newPwConfirm, setNewPwConfirm] = useState("");
   const [showNewPw, setShowNewPw] = useState(false);
@@ -42,18 +39,11 @@ function LoginPage() {
     if (result.error) {
       setError(result.error);
     } else if (result.mustChangePassword) {
-      // Capture the user immediately — auth-context sets it but React state
-      // batching means the context value may not be readable in the same tick
-      if (user) setPendingUser(user);
       setForcePwChange(true);
     } else {
       navigate({ to: "/" });
     }
   };
-
-  // Resolve the user to use: prefer the context user (already updated),
-  // fall back to local pending capture
-  const activeUser = user ?? pendingUser;
 
   const handleForceChangePw = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,31 +56,27 @@ function LoginPage() {
       setError("Lösenorden stämmer inte överens.");
       return;
     }
-    if (!activeUser) {
+    if (!user) {
       setError("Sessionen har gått ut. Logga in igen.");
       setForcePwChange(false);
       return;
     }
     setPwSaving(true);
-    // Use the RPC to hash (runs as service role via function, bypasses RLS)
     const { data: hash } = await supabase.rpc("hash_password", { plain_password: newPw });
-    // Update via the Users can update own profile policy (session token is set after login)
     const { error: updateErr } = await supabase.from("app_users").update({
       password_hash: hash,
       must_change_password: false,
-    }).eq("id", activeUser.id);
+    }).eq("id", user.id);
 
     if (updateErr) {
       setError("Kunde inte spara lösenordet. Försök igen.");
       setPwSaving(false);
       return;
     }
-    refreshUser({ ...activeUser, must_change_password: false });
+    refreshUser({ ...user, must_change_password: false });
     setPwSaving(false);
     navigate({ to: "/" });
   };
-
-  void pendingUser;
 
   if (forcePwChange) {
     return (
