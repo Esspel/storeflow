@@ -157,6 +157,8 @@ export type ChecklistTemplate = {
   recurrence_interval: number | null;
   due_date_offset: number | null;
   created_by: string | null;
+  is_global: boolean;
+  locked_by_admin: boolean;
   created_at: string;
   updated_at: string;
   items?: ChecklistTemplateItem[];

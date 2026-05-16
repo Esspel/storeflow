@@ -59,6 +59,7 @@ function MallarPage() {
     recurrence_days: [] as number[],
     due_date_offset: "" as string,
     storeIds: [] as string[],
+    isGlobal: false,
     items: [{ id: "", label: "", requires_photo: false }] as { id: string; label: string; requires_photo: boolean }[],
     questions: [] as { id: string; label: string; question_type: "text" | "yes_no"; is_required: boolean }[],
   });
@@ -72,6 +73,7 @@ function MallarPage() {
     recurrence_days: [] as number[],
     due_date_offset: "" as string,
     storeIds: [] as string[],
+    isGlobal: false,
     items: [{ label: "", requires_photo: false }] as { label: string; requires_photo: boolean }[],
     questions: [] as { label: string; question_type: "text" | "yes_no"; is_required: boolean }[],
   });
@@ -94,9 +96,10 @@ function MallarPage() {
       questions: (t as typeof t & { questions?: ChecklistTemplateQuestion[] }).questions ?? [],
     }));
 
-    // Filter templates by active store: show templates assigned to active store OR global templates (no store assignment)
+    // Filter templates by active store: show is_global templates OR store-assigned ones
     const filtered = withStores.filter((t) => {
-      if (t.storeIds.length === 0) return true; // global template
+      if (t.is_global) return true;
+      if (t.storeIds.length === 0 && user?.role === "admin") return true; // unassigned, admin only
       if (activeStore && t.storeIds.includes(activeStore.id)) return true;
       if (!activeStore && user?.role === "admin") return true;
       if (!activeStore && userStores.some((us) => t.storeIds.includes(us.id))) return true;
@@ -138,6 +141,7 @@ function MallarPage() {
       recurrence_days: form.recurrence_rule === "weekly" && form.recurrence_days.length > 0 ? form.recurrence_days : null,
       due_date_offset: form.due_date_offset !== "" ? parseInt(form.due_date_offset) : null,
       created_by: user?.id ?? null,
+      is_global: form.isGlobal,
     }).select("id").maybeSingle();
 
     if (!tmpl?.id) { setSaving(false); return; }
@@ -154,7 +158,7 @@ function MallarPage() {
       );
     }
 
-    if (form.storeIds.length > 0) {
+    if (!form.isGlobal && form.storeIds.length > 0) {
       await supabase.from("template_stores").insert(
         form.storeIds.map((sid) => ({ template_id: tmpl.id, store_id: sid }))
       );
@@ -177,7 +181,7 @@ function MallarPage() {
     await load();
     setSaving(false);
     setShowCreate(false);
-    setForm({ title: "", description: "", category: "", priority: "Medel", recurrence_rule: "", recurrence_days: [], due_date_offset: "", storeIds: [], items: [{ label: "", requires_photo: false }], questions: [] as { label: string; question_type: "text" | "yes_no"; is_required: boolean }[] });
+    setForm({ title: "", description: "", category: "", priority: "Medel", recurrence_rule: "", recurrence_days: [], due_date_offset: "", storeIds: [], isGlobal: false, items: [{ label: "", requires_photo: false }], questions: [] as { label: string; question_type: "text" | "yes_no"; is_required: boolean }[] });
   }
 
   async function deleteTemplate() {
@@ -199,6 +203,7 @@ function MallarPage() {
       recurrence_days: t.recurrence_days ?? [],
       due_date_offset: t.due_date_offset != null ? String(t.due_date_offset) : "",
       storeIds: t.storeIds,
+      isGlobal: t.is_global ?? false,
       items: (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ id: it.id, label: it.label, requires_photo: it.requires_photo })),
       questions: (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q) => ({ id: q.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required })),
     });
@@ -223,6 +228,7 @@ function MallarPage() {
       recurrence_rule: editForm.recurrence_rule || null,
       recurrence_days: editForm.recurrence_rule === "weekly" && editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
       due_date_offset: editForm.due_date_offset !== "" ? parseInt(editForm.due_date_offset) : null,
+      is_global: editForm.isGlobal,
     }).eq("id", editTarget.id);
 
     // Replace items: delete all existing, insert new
@@ -243,9 +249,9 @@ function MallarPage() {
       );
     }
 
-    // Replace store assignments
+    // Replace store assignments (skip if global — no per-store rows needed)
     await supabase.from("template_stores").delete().eq("template_id", editTarget.id);
-    if (editForm.storeIds.length > 0) {
+    if (!editForm.isGlobal && editForm.storeIds.length > 0) {
       await supabase.from("template_stores").insert(editForm.storeIds.map((sid) => ({ template_id: editTarget.id, store_id: sid })));
     }
 
@@ -445,6 +451,8 @@ function MallarPage() {
                     <p className="font-medium">{t.title}</p>
                     <div className="mt-0.5 flex items-center gap-2">
                       {t.category && <Badge variant="secondary" className="text-xs">{t.category}</Badge>}
+                      {t.is_global && <Badge variant="outline" className="text-xs border-blue-300 text-blue-600">Global</Badge>}
+                      {t.locked_by_admin && <Badge variant="outline" className="text-xs border-amber-300 text-amber-600">Låst</Badge>}
                       <span className="text-xs text-muted-foreground">{t.items?.length ?? 0} steg</span>
                       {(t.questions?.length ?? 0) > 0 && <span className="text-xs text-muted-foreground">{t.questions?.length} frågor</span>}
                     </div>
@@ -452,22 +460,26 @@ function MallarPage() {
                 </button>
                 {isManager && (
                   <div className="mr-3 flex items-center gap-1">
-                    <Button
-                      variant="ghost" size="icon"
-                      className="rounded-full text-muted-foreground hover:text-primary"
-                      onClick={(e) => { e.stopPropagation(); openEditTemplate(t); }}
-                      aria-label="Redigera"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost" size="icon"
-                      className="rounded-full text-muted-foreground hover:text-destructive"
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(t); }}
-                      aria-label="Ta bort"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {(user?.role === "admin" || (!t.locked_by_admin && !t.is_global)) && (
+                      <Button
+                        variant="ghost" size="icon"
+                        className="rounded-full text-muted-foreground hover:text-primary"
+                        onClick={(e) => { e.stopPropagation(); openEditTemplate(t); }}
+                        aria-label="Redigera"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {(user?.role === "admin" || (!t.locked_by_admin && !t.is_global)) && (
+                      <Button
+                        variant="ghost" size="icon"
+                        className="rounded-full text-muted-foreground hover:text-destructive"
+                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(t); }}
+                        aria-label="Ta bort"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -956,11 +968,10 @@ function MallarPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
             <AlertDialogAction onClick={() => {
-              const allIds = allStores.map((s) => s.id);
               if (broadcastConfirm === "create") {
-                setForm(p => ({ ...p, storeIds: allIds }));
+                setForm(p => ({ ...p, storeIds: [], isGlobal: true }));
               } else {
-                setEditForm(p => ({ ...p, storeIds: allIds }));
+                setEditForm(p => ({ ...p, storeIds: [], isGlobal: true }));
               }
               setBroadcastConfirm(null);
             }}>
