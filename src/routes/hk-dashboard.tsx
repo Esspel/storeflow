@@ -149,17 +149,36 @@ function KpiCard({ label, value, sub, icon, trend, trendLabel, accent = "primary
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+function mapStoreRow(r: Record<string, unknown>): StoreRow {
+  return {
+    store_id: String(r.store_id),
+    store_name: String(r.store_name ?? "–"),
+    region: String(r.region ?? "–"),
+    completion_rate_pct: r.completion_rate_pct != null ? Number(r.completion_rate_pct) : null,
+    sessions_last_7d: Number(r.sessions_last_7d ?? 0),
+    open_incidents: Number(r.open_incidents ?? 0),
+    avg_resolution_hours: r.avg_resolution_hours != null ? Number(r.avg_resolution_hours) : null,
+    sla_breaches: Number(r.sla_breaches ?? 0),
+    tasks_late: Number(r.tasks_late ?? 0),
+    last_session_at: (r.last_session_at as string | null) ?? null,
+    active_24h: Boolean(r.active_24h),
+  };
+}
+
 function HkDashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
   const [national, setNational] = useState<NationalStats | null>(null);
   const [regional, setRegional] = useState<RegionalRow[]>([]);
+  // allStores: all stores loaded upfront, grouped by region in the UI
+  const [allStores, setAllStores] = useState<StoreRow[]>([]);
   const [drillRegion, setDrillRegion] = useState<string | null>(null);
-  const [stores, setStores] = useState<StoreRow[]>([]);
+  const [drillStores, setDrillStores] = useState<StoreRow[]>([]);
   const [loadingNational, setLoadingNational] = useState(true);
   const [loadingRegional, setLoadingRegional] = useState(true);
-  const [loadingStores, setLoadingStores] = useState(false);
+  const [loadingAllStores, setLoadingAllStores] = useState(true);
+  const [loadingDrillStores, setLoadingDrillStores] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
   // Admin gate
@@ -205,59 +224,59 @@ function HkDashboardPage() {
     setLoadingRegional(false);
   }, []);
 
-  const loadStores = useCallback(async (region: string) => {
-    setLoadingStores(true);
+  const loadAllStores = useCallback(async () => {
+    setLoadingAllStores(true);
+    const { data, error } = await supabase
+      .from("view_store_performance")
+      .select("*")
+      .order("completion_rate_pct", { ascending: false, nullsFirst: false });
+    if (!error && data) {
+      setAllStores((data as Record<string, unknown>[]).map(mapStoreRow));
+    }
+    setLoadingAllStores(false);
+  }, []);
+
+  const loadDrillStores = useCallback(async (region: string) => {
+    setLoadingDrillStores(true);
     const { data, error } = await supabase.rpc("get_store_performance_by_region", { p_region: region });
     if (!error && data) {
-      setStores(
-        (data as Record<string, unknown>[]).map((r) => ({
-          store_id: String(r.store_id),
-          store_name: String(r.store_name ?? "–"),
-          region: String(r.region ?? "–"),
-          completion_rate_pct: r.completion_rate_pct != null ? Number(r.completion_rate_pct) : null,
-          sessions_last_7d: Number(r.sessions_last_7d ?? 0),
-          open_incidents: Number(r.open_incidents ?? 0),
-          avg_resolution_hours: r.avg_resolution_hours != null ? Number(r.avg_resolution_hours) : null,
-          sla_breaches: Number(r.sla_breaches ?? 0),
-          tasks_late: Number(r.tasks_late ?? 0),
-          last_session_at: (r.last_session_at as string | null) ?? null,
-          active_24h: Boolean(r.active_24h),
-        })),
-      );
+      setDrillStores((data as Record<string, unknown>[]).map(mapStoreRow));
     }
-    setLoadingStores(false);
+    setLoadingDrillStores(false);
   }, []);
 
   useEffect(() => {
     if (user?.role !== "admin") return;
     loadNational();
     loadRegional();
-  }, [user, loadNational, loadRegional]);
+    loadAllStores();
+  }, [user, loadNational, loadRegional, loadAllStores]);
 
   const handleRefresh = () => {
     setLastRefresh(new Date());
     loadNational();
     loadRegional();
-    if (drillRegion) loadStores(drillRegion);
+    loadAllStores();
+    if (drillRegion) loadDrillStores(drillRegion);
   };
 
   const handleDrillDown = (region: string) => {
     setDrillRegion(region);
-    setStores([]);
-    loadStores(region);
+    setDrillStores([]);
+    loadDrillStores(region);
   };
 
   const handleBack = () => {
     setDrillRegion(null);
-    setStores([]);
+    setDrillStores([]);
   };
 
   if (user?.role !== "admin") return null;
 
   // ─── Drill-down view ──────────────────────────────────────────────────────
   if (drillRegion) {
-    const topStore = stores[0] ?? null;
-    const bottomStore = stores[stores.length - 1] ?? null;
+    const topStore = drillStores[0] ?? null;
+    const bottomStore = drillStores[drillStores.length - 1] ?? null;
 
     return (
       <div className="mx-auto max-w-[1400px] px-4 py-6 md:px-8 md:py-10">
@@ -277,12 +296,12 @@ function HkDashboardPage() {
         <div className="mb-4 sm:mb-6">
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Region: {drillRegion}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {loadingStores ? "Laddar butiksdata..." : `${stores.length} butiker`}
+            {loadingDrillStores ? "Laddar butiksdata..." : `${drillStores.length} butiker`}
           </p>
         </div>
 
         {/* Top / Bottom highlight */}
-        {!loadingStores && stores.length >= 2 && (
+        {!loadingDrillStores && drillStores.length >= 2 && (
           <div className="mb-6 grid gap-4 sm:grid-cols-2">
             <div className="rounded-2xl border border-success/30 bg-success/5 p-4">
               <div className="mb-2 flex items-center gap-2">
@@ -317,14 +336,14 @@ function HkDashboardPage() {
 
           {/* Mobile cards */}
           <div className="md:hidden divide-y divide-border/30">
-            {loadingStores
+            {loadingDrillStores
               ? Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="px-4 py-3">
                     <Skeleton className="mb-2 h-5 w-40" />
                     <Skeleton className="h-4 w-full" />
                   </div>
                 ))
-              : stores.map((s, idx) => (
+              : drillStores.map((s, idx) => (
                   <div
                     key={s.store_id}
                     className={cn("px-4 py-3.5", idx === 0 && "bg-success/3")}
@@ -348,7 +367,7 @@ function HkDashboardPage() {
                     </div>
                   </div>
                 ))}
-            {!loadingStores && stores.length === 0 && (
+            {!loadingDrillStores && drillStores.length === 0 && (
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                 Inga butiker hittades i region {drillRegion}.
               </div>
@@ -371,7 +390,7 @@ function HkDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {loadingStores
+                {loadingDrillStores
                   ? Array.from({ length: 5 }).map((_, i) => (
                       <tr key={i} className="border-b border-border/30">
                         <td className="px-5 py-3"><Skeleton className="h-4 w-36" /></td>
@@ -384,7 +403,7 @@ function HkDashboardPage() {
                         <td className="px-4 py-3"><Skeleton className="mx-auto h-3 w-3 rounded-full" /></td>
                       </tr>
                     ))
-                  : stores.map((s, idx) => (
+                  : drillStores.map((s, idx) => (
                       <tr
                         key={s.store_id}
                         className={cn(
@@ -436,7 +455,7 @@ function HkDashboardPage() {
                         </td>
                       </tr>
                     ))}
-                {!loadingStores && stores.length === 0 && (
+                {!loadingDrillStores && drillStores.length === 0 && (
                   <tr>
                     <td colSpan={8} className="px-5 py-10 text-center text-sm text-muted-foreground">
                       Inga butiker hittades i region {drillRegion}.
@@ -453,8 +472,12 @@ function HkDashboardPage() {
 
   // ─── National overview ────────────────────────────────────────────────────
   const sortedRegional = [...regional].sort((a, b) => b.completion_rate_pct - a.completion_rate_pct);
-  const topRegions = sortedRegional.slice(0, 3);
-  const bottomRegions = [...sortedRegional].reverse().slice(0, 3);
+  // Group all stores by region for direct display
+  const storesByRegion: Record<string, StoreRow[]> = {};
+  for (const s of allStores) {
+    if (!storesByRegion[s.region]) storesByRegion[s.region] = [];
+    storesByRegion[s.region].push(s);
+  }
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6 md:px-8 md:py-10">
@@ -567,202 +590,84 @@ function HkDashboardPage() {
         </div>
       </div>
 
-      {/* ── Regional top/bottom ── */}
-      {!loadingRegional && regional.length > 0 && (
-        <div className="mb-8 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border border-success/30 bg-card p-5 shadow-[var(--shadow-sm)]">
-            <div className="mb-4 flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-success" />
-              <h3 className="text-sm font-semibold text-success">Topp 3 regioner</h3>
-            </div>
-            <div className="space-y-2.5">
-              {topRegions.map((r, i) => (
-                <button
-                  key={r.region}
-                  onClick={() => handleDrillDown(r.region)}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted/50 active:bg-muted"
-                >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-success/15 text-xs font-bold text-success">
-                    {i + 1}
-                  </span>
-                  <span className="flex-1 text-sm font-medium text-foreground">{r.region}</span>
-                  <span className="text-xs text-muted-foreground">{r.store_count} butiker</span>
-                  <RateBar pct={r.completion_rate_pct} size="sm" />
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-destructive/30 bg-card p-5 shadow-[var(--shadow-sm)]">
-            <div className="mb-4 flex items-center gap-2">
-              <TrendingDown className="h-4 w-4 text-destructive" />
-              <h3 className="text-sm font-semibold text-destructive">Behöver uppmärksamhet</h3>
-            </div>
-            <div className="space-y-2.5">
-              {bottomRegions.map((r) => (
-                <button
-                  key={r.region}
-                  onClick={() => handleDrillDown(r.region)}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted/50 active:bg-muted"
-                >
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-destructive/10">
-                    <AlertTriangle className="h-3 w-3 text-destructive" />
-                  </div>
-                  <span className="flex-1 text-sm font-medium text-foreground">{r.region}</span>
-                  {r.open_incidents > 0 && (
-                    <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
-                      {r.open_incidents} avv.
-                    </span>
-                  )}
-                  <RateBar pct={r.completion_rate_pct} size="sm" />
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Full regional list ── */}
-      <div className="rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
-        <div className="flex items-center justify-between border-b border-border/60 px-4 sm:px-5 py-3.5">
-          <h2 className="text-sm font-semibold">Alla regioner</h2>
-          <span className="text-xs text-muted-foreground">{regional.length} regioner</span>
-        </div>
-
-        {/* Mobile cards */}
-        <div className="md:hidden divide-y divide-border/30">
-          {loadingRegional
-            ? Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="px-4 py-4">
-                  <Skeleton className="mb-2 h-5 w-32" />
-                  <Skeleton className="h-4 w-full" />
+      {/* ── Butiker per region ── */}
+      <div className="space-y-4">
+        {(loadingRegional || loadingAllStores)
+          ? Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
+                <div className="border-b border-border/60 px-4 py-3.5">
+                  <Skeleton className="h-5 w-32" />
                 </div>
-              ))
+                {Array.from({ length: 2 }).map((__, j) => (
+                  <div key={j} className="border-b border-border/30 px-4 py-3.5">
+                    <Skeleton className="mb-2 h-4 w-48" />
+                    <Skeleton className="h-3 w-full" />
+                  </div>
+                ))}
+              </div>
+            ))
+          : sortedRegional.length === 0
+            ? (
+              <div className="rounded-2xl border border-border/60 bg-card p-10 text-center text-sm text-muted-foreground shadow-[var(--shadow-sm)]">
+                Inga regioner hittades. Kontrollera att butikerna har en region inställd i adminpanelen.
+              </div>
+            )
             : sortedRegional.map((r) => {
-                const onlinePct = r.store_count > 0 ? Math.round((r.active_stores_24h / r.store_count) * 100) : 0;
+                const regionStores = storesByRegion[r.region] ?? [];
                 return (
-                  <button
-                    key={r.region}
-                    onClick={() => handleDrillDown(r.region)}
-                    className="flex w-full flex-col gap-2 px-4 py-4 text-left transition-colors active:bg-muted/40"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Store className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="font-semibold text-foreground">{r.region}</span>
+                  <div key={r.region} className="rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
+                    {/* Region header */}
+                    <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                          <Store className="h-3.5 w-3.5" />
+                        </div>
+                        <div>
+                          <span className="font-semibold text-foreground">{r.region}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">{r.store_count} butiker</span>
+                        </div>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+                      <div className="flex items-center gap-3">
+                        <RateBar pct={r.completion_rate_pct} size="sm" />
+                        {r.open_incidents > 0 && (
+                          <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
+                            {r.open_incidents} avv.
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <RateBar pct={r.completion_rate_pct} size="sm" />
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      <span>{r.store_count} butiker</span>
-                      <span className={cn("font-medium", onlinePct >= 80 ? "text-success" : onlinePct >= 50 ? "text-warning-foreground" : "text-destructive")}>
-                        {r.active_stores_24h}/{r.store_count} online
-                      </span>
-                      <span>{r.total_sessions} rundor</span>
-                      {r.open_incidents > 0 && (
-                        <span className="font-medium text-destructive">{r.open_incidents} avvikelser</span>
-                      )}
-                      {r.avg_incident_resolution_hours != null && (
-                        <span>Medel: {fmtHours(r.avg_incident_resolution_hours)}</span>
-                      )}
-                      {r.last_session_at && (
-                        <span>Senast: {fmtDate(r.last_session_at)}</span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-          {!loadingRegional && regional.length === 0 && (
-            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-              Ingen regiondata tillgänglig. Kontrollera att butikerna har registrerade kundrundor.
-            </div>
-          )}
-        </div>
 
-        {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/40">
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Region</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fullföljandegrad</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">Butiker</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">Online (24h)</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rundor tot.</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">Öppna avv.</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Medel åtgärdstid</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Senaste aktivitet</th>
-                <th className="w-10 px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {loadingRegional
-                ? Array.from({ length: 4 }).map((_, i) => (
-                    <tr key={i} className="border-b border-border/30">
-                      {Array.from({ length: 9 }).map((__, j) => (
-                        <td key={j} className="px-4 py-3.5"><Skeleton className="h-4 w-full" /></td>
-                      ))}
-                    </tr>
-                  ))
-                : sortedRegional.map((r) => {
-                    const onlinePct = r.store_count > 0 ? Math.round((r.active_stores_24h / r.store_count) * 100) : 0;
-                    return (
-                      <tr
-                        key={r.region}
-                        className="group cursor-pointer border-b border-border/30 last:border-0 transition-colors hover:bg-muted/30"
-                        onClick={() => handleDrillDown(r.region)}
-                      >
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-2">
-                            <Store className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="font-medium text-foreground">{r.region}</span>
+                    {/* Stores in this region */}
+                    <div className="divide-y divide-border/30">
+                      {regionStores.length === 0 ? (
+                        <div className="px-4 py-4 text-sm text-muted-foreground">
+                          Inga butiker med data i denna region.
+                        </div>
+                      ) : regionStores.map((s, idx) => (
+                        <div key={s.store_id} className="flex items-center gap-3 px-4 py-3">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
+                            {idx + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate text-sm font-medium text-foreground">{s.store_name}</span>
+                              <StatusDot active={s.active_24h} />
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0 text-xs text-muted-foreground">
+                              <span>{s.sessions_last_7d} rundor/v</span>
+                              {s.open_incidents > 0 && <span className="text-destructive font-medium">{s.open_incidents} avv.</span>}
+                              {s.tasks_late > 0 && <span className="text-warning-foreground font-medium">{s.tasks_late} sena</span>}
+                              {s.last_session_at && <span>Senast: {fmtDate(s.last_session_at)}</span>}
+                            </div>
                           </div>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <RateBar pct={r.completion_rate_pct} />
-                        </td>
-                        <td className="px-4 py-3.5 text-center tabular-nums text-foreground/80">{r.store_count}</td>
-                        <td className="px-4 py-3.5 text-center">
-                          <span className={cn(
-                            "text-xs font-semibold tabular-nums",
-                            onlinePct >= 80 ? "text-success" : onlinePct >= 50 ? "text-warning-foreground" : "text-destructive",
-                          )}>
-                            {r.active_stores_24h}/{r.store_count}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 text-center tabular-nums text-foreground/80">{r.total_sessions}</td>
-                        <td className="px-4 py-3.5 text-center">
-                          <span className={cn(
-                            "tabular-nums font-medium",
-                            r.open_incidents > 0 ? "text-destructive" : "text-muted-foreground",
-                          )}>
-                            {r.open_incidents}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 text-sm text-muted-foreground">
-                          {fmtHours(r.avg_incident_resolution_hours)}
-                        </td>
-                        <td className="px-4 py-3.5 text-xs text-muted-foreground">{fmtDate(r.last_session_at)}</td>
-                        <td className="px-4 py-3.5">
-                          <ArrowUpRight className="h-4 w-4 text-muted-foreground/40 transition-colors group-hover:text-primary" />
-                        </td>
-                      </tr>
-                    );
-                  })}
-              {!loadingRegional && regional.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="px-5 py-12 text-center text-sm text-muted-foreground">
-                    Ingen regiondata tillgänglig. Kontrollera att butikerna har registrerade kundrundor.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                          <RateBar pct={s.completion_rate_pct} size="sm" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+        }
       </div>
     </div>
   );

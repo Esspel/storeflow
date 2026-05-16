@@ -74,13 +74,13 @@ Deno.serve(async (req: Request) => {
 
     const pushPayload = JSON.stringify({ title, body, url, tag });
     const staleEndpoints: string[] = [];
+    const errors: string[] = [];
     let sent = 0;
     let skipped = 0;
 
     await Promise.all(
       (subscriptions ?? []).map(async (sub: { endpoint: string; subscription_json: unknown }) => {
-        // Automatically remove deprecated FCM endpoints — they accept the request
-        // but silently drop the message, so there is no point in sending to them.
+        // Automatically remove deprecated FCM endpoints
         if (isDeprecatedEndpoint(sub.endpoint)) {
           staleEndpoints.push(sub.endpoint);
           skipped++;
@@ -91,12 +91,13 @@ Deno.serve(async (req: Request) => {
           await webpush.sendNotification(sub.subscription_json as webpush.PushSubscription, pushPayload);
           sent++;
         } catch (err: unknown) {
-          const status = (err as { statusCode?: number }).statusCode;
-          // 410 Gone = subscription revoked, 404 Not Found = endpoint gone
+          const e = err as { statusCode?: number; body?: string; message?: string };
+          const status = e.statusCode;
+          const detail = `${sub.endpoint.slice(0, 40)}... status=${status} body=${e.body ?? e.message ?? String(err)}`;
+          console.error("Push send error:", detail);
+          errors.push(detail);
           if (status === 410 || status === 404) {
             staleEndpoints.push(sub.endpoint);
-          } else {
-            console.error("Push send error for endpoint", sub.endpoint, err);
           }
         }
       }),
@@ -108,7 +109,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ sent, skipped, removed: staleEndpoints.length }),
+      JSON.stringify({ sent, skipped, removed: staleEndpoints.length, errors }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {

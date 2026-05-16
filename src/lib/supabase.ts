@@ -294,9 +294,11 @@ function firePush(userIds: string[], title: string, body: string, url: string) {
     body: JSON.stringify({ user_ids: userIds, title, body, url }),
   })
     .then(async (res) => {
+      const json = await res.json().catch(() => null);
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        console.error("firePush failed:", res.status, text);
+        console.error("firePush failed:", res.status, json);
+      } else if (json?.errors?.length) {
+        console.warn("firePush partial errors:", json.errors);
       }
     })
     .catch((err) => console.error("firePush network error:", err));

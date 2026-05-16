@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Eye, EyeOff, KeyRound, Store, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw } from "lucide-react";
+import { Eye, EyeOff, KeyRound, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase, logAudit, type Store as StoreType } from "@/lib/supabase";
+import { supabase, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { PushNotificationSetup } from "@/components/push-notification-setup";
@@ -18,8 +18,7 @@ export const Route = createFileRoute("/installningar")({
 });
 
 function SettingsPage() {
-  const { user, refreshUser, userStores, activeStore } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const { user, refreshUser } = useAuth();
 
   // Quick PIN state
   const [newPin, setNewPin] = useState("");
@@ -130,20 +129,6 @@ function SettingsPage() {
   const [displayName, setDisplayName] = useState(user?.display_name ?? "");
   const [nameSaving, setNameSaving] = useState(false);
   const [nameSuccess, setNameSuccess] = useState(false);
-
-  const [sapSiteIds, setSapSiteIds] = useState<Record<string, string>>({});
-  const [sapSaving, setSapSaving] = useState<Record<string, boolean>>({});
-  const [sapSuccess, setSapSuccess] = useState<Record<string, boolean>>({});
-
-  const saveSapSiteId = async (store: StoreType) => {
-    const val = sapSiteIds[store.id] ?? (store.sap_site_id ?? "");
-    setSapSaving(p => ({ ...p, [store.id]: true }));
-    await supabase.from("stores").update({ sap_site_id: val.trim() || null }).eq("id", store.id);
-    logAudit(user?.id ?? null, "store.sap_site_id", "stores", store.id, { sap_site_id: val });
-    setSapSaving(p => ({ ...p, [store.id]: false }));
-    setSapSuccess(p => ({ ...p, [store.id]: true }));
-    setTimeout(() => setSapSuccess(p => ({ ...p, [store.id]: false })), 2000);
-  };
 
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -322,65 +307,6 @@ function SettingsPage() {
             </div>
           </div>
         </div>
-
-        {isAdmin && userStores.length > 0 && (
-          <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                <Store className="h-4 w-4" />
-              </div>
-              <div>
-                <h2 className="font-semibold">Butiksinställningar</h2>
-                <p className="text-xs text-muted-foreground">SAP-koppling för Mitt Coop-integration.</p>
-              </div>
-            </div>
-            <div className="space-y-3">
-              {userStores.map((store) => {
-                const sapVal = sapSiteIds[store.id] ?? (store.sap_site_id ?? "");
-                return (
-                  <div key={store.id} className="rounded-xl border border-border/60 overflow-hidden">
-                    <div className="flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-muted/20 border-b border-border/40">
-                      <Store className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="text-sm font-medium truncate">{store.name}</span>
-                      {store.region && <span className="text-xs text-muted-foreground shrink-0">{store.region}</span>}
-                    </div>
-                    <div className="px-3 sm:px-4 py-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                        <div className="flex items-center gap-2">
-                          <Hash className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <Label className="text-xs whitespace-nowrap">SAP-butiksnr</Label>
-                        </div>
-                        <div className="flex items-center gap-2 flex-1">
-                          <Input
-                            value={sapVal}
-                            onChange={(e) => setSapSiteIds(p => ({ ...p, [store.id]: e.target.value }))}
-                            placeholder="t.ex. 1452"
-                            className="h-8 flex-1 rounded-full text-xs"
-                            inputMode="numeric"
-                          />
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-full text-xs h-8 px-3 shrink-0"
-                            disabled={sapSaving[store.id]}
-                            onClick={() => saveSapSiteId(store)}
-                          >
-                            {sapSaving[store.id] ? "..." : sapSuccess[store.id] ? "Sparat!" : "Spara"}
-                          </Button>
-                        </div>
-                      </div>
-                      {store.sap_site_id && (
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Mitt Coop siteId: <span className="font-mono">{store.sap_site_id}</span>
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="mb-4 flex items-center gap-3">
