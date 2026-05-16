@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, X } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, X, Repeat, Clock, TriangleAlert as AlertTriangle } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase, type ChecklistTemplate, type ChecklistTemplateItem, type ChecklistTemplateQuestion, type Store, logAudit } from "@/lib/supabase";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const RECURRENCE_OPTIONS = [
+  { value: "", label: "Ingen" },
+  { value: "daily", label: "Dagligen" },
+  { value: "every_other_day", label: "Varannan dag" },
+  { value: "weekly", label: "Varje vecka" },
+  { value: "monthly", label: "Varje månad" },
+  { value: "yearly", label: "Varje år" },
+];
+const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +53,10 @@ function MallarPage() {
     title: "",
     description: "",
     category: "",
+    priority: "Medel",
+    recurrence_rule: "",
+    recurrence_days: [] as number[],
+    due_date_offset: "" as string,
     storeIds: [] as string[],
     items: [{ label: "", requires_photo: false }] as { label: string; requires_photo: boolean }[],
     questions: [] as { label: string; question_type: "text" | "yes_no"; is_required: boolean }[],
@@ -100,6 +115,10 @@ function MallarPage() {
       title: form.title.trim(),
       description: form.description.trim(),
       category: form.category.trim(),
+      priority: form.priority,
+      recurrence_rule: form.recurrence_rule || null,
+      recurrence_days: form.recurrence_rule === "weekly" && form.recurrence_days.length > 0 ? form.recurrence_days : null,
+      due_date_offset: form.due_date_offset !== "" ? parseInt(form.due_date_offset) : null,
       created_by: user?.id ?? null,
     }).select("id").maybeSingle();
 
@@ -140,7 +159,7 @@ function MallarPage() {
     await load();
     setSaving(false);
     setShowCreate(false);
-    setForm({ title: "", description: "", category: "", storeIds: [], items: [{ label: "", requires_photo: false }], questions: [] as { label: string; question_type: "text" | "yes_no"; is_required: boolean }[] });
+    setForm({ title: "", description: "", category: "", priority: "Medel", recurrence_rule: "", recurrence_days: [], due_date_offset: "", storeIds: [], items: [{ label: "", requires_photo: false }], questions: [] as { label: string; question_type: "text" | "yes_no"; is_required: boolean }[] });
   }
 
   async function deleteTemplate() {
@@ -428,7 +447,7 @@ function MallarPage() {
             </div>
 
             {/* RIGHT: Properties sidebar */}
-            <div className="w-60 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/30">
+            <div className="w-64 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/30">
               <div className="divide-y divide-border/50">
 
                 {/* Kategori */}
@@ -445,6 +464,49 @@ function MallarPage() {
                       className="h-7 border border-border/60 text-xs"
                     />
                   </div>
+                </div>
+
+                {/* Prioritet */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Prioritet</span>
+                  <Select value={form.priority} onValueChange={(v) => setForm(p => ({ ...p, priority: v }))}>
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs font-medium shadow-none focus:ring-0 justify-end"><SelectValue /></SelectTrigger>
+                    <SelectContent>{["Låg","Medel","Hög","Kritisk"].map(pr => <SelectItem key={pr} value={pr}>{pr}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+
+                {/* Förfallodagar */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <div className="flex flex-col gap-1 flex-1 min-w-0">
+                    <span className="text-xs text-muted-foreground">Förfaller om (dagar)</span>
+                    <Input type="number" min={0} placeholder="t.ex. 1" value={form.due_date_offset} onChange={(e) => setForm(p => ({ ...p, due_date_offset: e.target.value }))} className="h-7 border border-border/60 text-xs" />
+                  </div>
+                </div>
+
+                {/* Återkommande */}
+                <div className="px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <Repeat className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <span className="w-20 shrink-0 text-xs text-muted-foreground">Återkommande</span>
+                    <Select value={form.recurrence_rule || "__none"} onValueChange={(v) => setForm(p => ({ ...p, recurrence_rule: v === "__none" ? "" : v }))}>
+                      <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end"><SelectValue placeholder="Ingen" /></SelectTrigger>
+                      <SelectContent>{RECURRENCE_OPTIONS.map(o => <SelectItem key={o.value || "__none"} value={o.value || "__none"}>{o.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  {form.recurrence_rule === "weekly" && (
+                    <div className="flex flex-wrap gap-1 pl-7">
+                      {WEEKDAYS.map((day, idx) => (
+                        <button key={idx} type="button"
+                          className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                            form.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                          onClick={() => { const days = form.recurrence_days.includes(idx) ? form.recurrence_days.filter(d=>d!==idx) : [...form.recurrence_days,idx]; setForm(p => ({ ...p, recurrence_days: days })); }}>
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Tilldelade butiker */}

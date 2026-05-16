@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, TriangleAlert as AlertTriangle, ZoomIn } from "lucide-react";
+import { CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -14,6 +14,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   supabase,
@@ -154,6 +158,15 @@ function TasksPage() {
   // photo is open (Radix's dismiss layer would otherwise eat all pointer events).
   const [lightboxTask, setLightboxTask] = useState<TaskFull | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<TaskFull | null>(null);
+  const [deleteScope, setDeleteScope] = useState<"single" | "future" | null>(null);
+
+  // Edit state
+  const [editTask, setEditTask] = useState<TaskFull | null>(null);
+  const [editForm, setEditForm] = useState<ReturnType<typeof emptyForm> | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   const fetchTasks = useCallback(async () => {
     let q = supabase
@@ -440,10 +453,17 @@ function TasksPage() {
     const questions = (tmpl.questions ?? [])
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((q) => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required }));
+    const dueDate = tmpl.due_date_offset != null
+      ? (() => { const d = new Date(getSimulatedNow()); d.setDate(d.getDate() + tmpl.due_date_offset!); return d.toISOString().slice(0, 16); })()
+      : "";
     setNewTask((p) => ({
       ...p,
       title: p.title || tmpl.title,
       category: tmpl.category || p.category,
+      priority: tmpl.priority || p.priority,
+      recurrence_rule: tmpl.recurrence_rule ?? p.recurrence_rule,
+      recurrence_days: tmpl.recurrence_days ?? p.recurrence_days,
+      due_date: dueDate || p.due_date,
       steps: steps.length > 0 ? steps : p.steps,
       questions: questions.length > 0 ? questions : p.questions,
     }));
@@ -540,6 +560,119 @@ function TasksPage() {
         if (data) setDetailTask(p => p ? { ...p, images: data as TaskImage[] } : null);
       }
     }
+  };
+
+  const openDelete = (task: TaskFull) => {
+    setDeleteTarget(task);
+    setDeleteScope(null);
+  };
+
+  const confirmDelete = async (scope: "single" | "future") => {
+    if (!deleteTarget) return;
+    const t = deleteTarget;
+    if (t.recurrence_rule && scope === "future") {
+      // Delete this task and all future siblings (same parent or this is the parent)
+      const parentId = t.parent_task_id ?? t.id;
+      const periodStart = t.recurrence_period_start ?? (t.due_date ? t.due_date.slice(0, 10) : null);
+      if (periodStart) {
+        // Delete children with period_start >= this one
+        await supabase.from("tasks").delete().eq("parent_task_id", parentId).gte("recurrence_period_start", periodStart);
+      }
+      // If this task itself is a child, also delete it
+      if (t.parent_task_id) {
+        await supabase.from("tasks").delete().eq("id", t.id);
+      }
+    } else {
+      await supabase.from("tasks").delete().eq("id", t.id);
+    }
+    logAudit(user?.id ?? null, "task.delete", "tasks", t.id, { title: t.title, scope });
+    setDeleteTarget(null);
+    setDeleteScope(null);
+    setDetailTask(null);
+    await fetchTasks();
+  };
+
+  const openEdit = (task: TaskFull) => {
+    setEditTask(task);
+    setEditForm({
+      title: task.title,
+      description: task.description ?? "",
+      category: task.category,
+      priority: task.priority,
+      store_id: task.store_id ?? "",
+      due_date: task.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : "",
+      recurrence_rule: task.recurrence_rule ?? "",
+      recurrence_days: task.recurrence_days ?? [],
+      recurrence_interval: task.recurrence_interval ?? 1,
+      recurrence_start: task.recurrence_start ?? "",
+      recurrence_end: task.recurrence_end ?? "",
+      steps: (task.steps ?? []).map(s => ({ label: s.label, requires_photo: s.requires_photo })),
+      questions: (task.questions ?? []).map(q => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required })),
+      assigneeUserIds: (task.assignees ?? []).filter(a => a.user_id).map(a => a.user_id!),
+      assigneeGroupIds: (task.assignees ?? []).filter(a => a.group_id).map(a => a.group_id!),
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editTask || !editForm || !isManager) return;
+    setEditSaving(true);
+    const isRecurring = !!editTask.recurrence_rule;
+    const isChild = !!editTask.parent_task_id;
+
+    const updates = {
+      title: editForm.title.trim(),
+      description: editForm.description.trim(),
+      category: editForm.category,
+      priority: editForm.priority,
+      store_id: editForm.store_id || null,
+      due_date: editForm.due_date || null,
+      recurrence_rule: editForm.recurrence_rule || null,
+      recurrence_days: editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
+      recurrence_start: editForm.recurrence_start || null,
+      recurrence_end: editForm.recurrence_end || null,
+    };
+
+    if (isRecurring && isChild) {
+      // Update this and all future siblings
+      const parentId = editTask.parent_task_id!;
+      const periodStart = editTask.recurrence_period_start ?? editTask.due_date?.slice(0, 10);
+      if (periodStart) {
+        const { data: futureChildren } = await supabase
+          .from("tasks")
+          .select("id")
+          .eq("parent_task_id", parentId)
+          .gte("recurrence_period_start", periodStart);
+        const ids = (futureChildren ?? []).map((c: { id: string }) => c.id);
+        if (ids.length > 0) await supabase.from("tasks").update(updates).in("id", ids);
+      }
+    } else {
+      await supabase.from("tasks").update(updates).eq("id", editTask.id);
+    }
+
+    // Rebuild steps and questions for this task
+    await supabase.from("task_steps").delete().eq("task_id", editTask.id);
+    const validSteps = editForm.steps.filter(s => s.label.trim());
+    if (validSteps.length > 0) {
+      await supabase.from("task_steps").insert(validSteps.map((s, i) => ({ task_id: editTask.id, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false })));
+    }
+    await supabase.from("task_questions").delete().eq("task_id", editTask.id);
+    const validQuestions = editForm.questions.filter(q => q.label.trim());
+    if (validQuestions.length > 0) {
+      await supabase.from("task_questions").insert(validQuestions.map((q, i) => ({ task_id: editTask.id, label: q.label, question_type: q.question_type, is_required: q.is_required, sort_order: i })));
+    }
+    // Rebuild assignees
+    await supabase.from("task_assignees").delete().eq("task_id", editTask.id);
+    const assigneeRows: { task_id: string; user_id?: string; group_id?: string }[] = [];
+    editForm.assigneeUserIds.forEach(uid => assigneeRows.push({ task_id: editTask.id, user_id: uid }));
+    editForm.assigneeGroupIds.forEach(gid => assigneeRows.push({ task_id: editTask.id, group_id: gid }));
+    if (assigneeRows.length > 0) await supabase.from("task_assignees").insert(assigneeRows);
+
+    logAudit(user?.id ?? null, "task.edit", "tasks", editTask.id, { title: updates.title });
+    setEditTask(null);
+    setEditForm(null);
+    setDetailTask(null);
+    setEditSaving(false);
+    await fetchTasks();
   };
 
   const createTask = async () => {
@@ -1069,6 +1202,26 @@ function TasksPage() {
                     <Circle className="h-3.5 w-3.5" /> Öppna igen
                   </Button>
                 )}
+                {isManager && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full gap-1.5 border-green-500/60 text-green-700 hover:bg-green-50 hover:border-green-500"
+                    onClick={() => { openEdit(detailTask); setDetailTask(null); }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" /> Redigera
+                  </Button>
+                )}
+                {isManager && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full gap-1.5 border-destructive/60 text-destructive hover:bg-destructive/10 hover:border-destructive"
+                    onClick={() => openDelete(detailTask)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Ta bort
+                  </Button>
+                )}
               </div>
             </div>
           </DialogContent>
@@ -1414,6 +1567,187 @@ function TasksPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* DELETE DIALOG */}
+      {deleteTarget && !deleteScope && (
+        <AlertDialog open onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-destructive">Ta bort uppgift</AlertDialogTitle>
+              <AlertDialogDescription>
+                {deleteTarget.recurrence_rule
+                  ? "Denna uppgift är återkommande. Vad vill du ta bort?"
+                  : `Är du säker på att du vill ta bort "${deleteTarget.title}"?`}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {deleteTarget.recurrence_rule ? (
+              <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+                <button
+                  className="w-full rounded-lg border-2 border-destructive/60 bg-destructive/10 px-4 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors text-left"
+                  onClick={() => confirmDelete("single")}
+                >
+                  <span className="font-semibold">Bara denna</span>
+                  <p className="text-xs text-destructive/70 mt-0.5">Tar bara bort just den här förekomsten</p>
+                </button>
+                <button
+                  className="w-full rounded-lg border-2 border-destructive bg-destructive/15 px-4 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/25 transition-colors text-left"
+                  onClick={() => confirmDelete("future")}
+                >
+                  <span className="font-semibold">Denna och alla framtida</span>
+                  <p className="text-xs text-destructive/70 mt-0.5">Tar bort denna och alla kommande upprepningar</p>
+                </button>
+                <AlertDialogCancel className="w-full">Avbryt</AlertDialogCancel>
+              </AlertDialogFooter>
+            ) : (
+              <AlertDialogFooter>
+                <AlertDialogCancel>Avbryt</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => confirmDelete("single")}
+                >
+                  Ta bort
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            )}
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* EDIT DIALOG */}
+      {editTask && editForm && (
+        <Dialog open onOpenChange={(o) => { if (!o) { setEditTask(null); setEditForm(null); } }}>
+          <DialogContent className="max-h-[92vh] w-full max-w-4xl overflow-hidden p-0 gap-0">
+            <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+              <Pencil className="h-4 w-4 text-green-600" />
+              <span className="text-sm font-medium text-muted-foreground">Redigera uppgift</span>
+              <span className="text-sm font-semibold text-foreground truncate">{editTask.title}</span>
+              <div className="ml-auto flex items-center gap-2">
+                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => { setEditTask(null); setEditForm(null); }}>Avbryt</Button>
+                <Button size="sm" className="rounded-full gap-1.5 bg-green-600 text-white hover:bg-green-700" onClick={saveEdit} disabled={editSaving || !editForm.title.trim()}>
+                  {editSaving ? "Sparar..." : "Spara ändringar"}
+                </Button>
+              </div>
+            </div>
+            <div className="flex overflow-hidden" style={{ maxHeight: "calc(92vh - 56px)" }}>
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 min-w-0">
+                <input
+                  placeholder="Titel..."
+                  value={editForm.title}
+                  onChange={(e) => setEditForm(p => p ? { ...p, title: e.target.value } : p)}
+                  className="w-full border-0 bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground/50 outline-none"
+                />
+                <Textarea
+                  placeholder="Beskrivning..."
+                  value={editForm.description}
+                  onChange={(e) => setEditForm(p => p ? { ...p, description: e.target.value } : p)}
+                  rows={3}
+                  className="resize-none border-0 bg-transparent px-0 text-sm text-muted-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 shadow-none"
+                />
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Checkpoints</p>
+                  {editForm.steps.map((step, i) => (
+                    <div key={i} className="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+                      <Input placeholder={`Checkpoint ${i+1}`} value={step.label} onChange={(e) => setEditForm(p => p ? { ...p, steps: p.steps.map((s,idx) => idx===i ? {...s,label:e.target.value} : s) } : p)} className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0" />
+                      <label className="flex items-center gap-1 text-[11px] text-muted-foreground/70 whitespace-nowrap cursor-pointer">
+                        <Checkbox checked={step.requires_photo} onCheckedChange={(v) => setEditForm(p => p ? { ...p, steps: p.steps.map((s,idx) => idx===i ? {...s,requires_photo:!!v} : s) } : p)} className="h-3 w-3" />Foto
+                      </label>
+                      <button type="button" className="opacity-0 group-hover:opacity-100" onClick={() => setEditForm(p => p ? { ...p, steps: p.steps.filter((_,idx) => idx!==i) } : p)}>
+                        <X className="h-3.5 w-3.5 text-muted-foreground/60" />
+                      </button>
+                    </div>
+                  ))}
+                  <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary" onClick={() => setEditForm(p => p ? { ...p, steps: [...p.steps, { label:"", requires_photo:false }] } : p)}>
+                    <Plus className="h-3.5 w-3.5" /> Lägg till checkpoint
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Frågor</p>
+                  {editForm.questions.map((q, i) => (
+                    <div key={i} className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Input placeholder={`Fråga ${i+1}`} value={q.label} onChange={(e) => setEditForm(p => p ? { ...p, questions: p.questions.map((qr,idx) => idx===i ? {...qr,label:e.target.value} : qr) } : p)} className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0" />
+                        <button type="button" onClick={() => setEditForm(p => p ? { ...p, questions: p.questions.filter((_,idx) => idx!==i) } : p)}><X className="h-3.5 w-3.5 text-muted-foreground/50" /></button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex gap-1">
+                          {(["text","yes_no"] as const).map(type => (
+                            <button key={type} type="button" className={cn("rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors", q.question_type===type ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground")} onClick={() => setEditForm(p => p ? { ...p, questions: p.questions.map((qr,idx) => idx===i ? {...qr,question_type:type} : qr) } : p)}>
+                              {type === "text" ? "Text" : "Ja/Nej"}
+                            </button>
+                          ))}
+                        </div>
+                        <label className="flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer">
+                          <Checkbox checked={q.is_required} onCheckedChange={(v) => setEditForm(p => p ? { ...p, questions: p.questions.map((qr,idx) => idx===i ? {...qr,is_required:!!v} : qr) } : p)} className="h-3 w-3" />Obligatorisk
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                  <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary" onClick={() => setEditForm(p => p ? { ...p, questions: [...p.questions, { label:"", question_type:"text", is_required:false }] } : p)}>
+                    <Plus className="h-3.5 w-3.5" /> Lägg till fråga
+                  </button>
+                </div>
+              </div>
+              <div className="w-72 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/30">
+                <div className="divide-y divide-border/50">
+                  <div className="flex items-start gap-3 px-4 py-3">
+                    <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <div className="flex flex-col gap-1 min-w-0 flex-1">
+                      <span className="text-xs text-muted-foreground">Förfallodatum</span>
+                      <input type="datetime-local" value={editForm.due_date} onChange={(e) => setEditForm(p => p ? { ...p, due_date: e.target.value } : p)} className="w-full rounded border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <span className="w-24 shrink-0 text-xs text-muted-foreground">Prioritet</span>
+                    <Select value={editForm.priority} onValueChange={(v) => setEditForm(p => p ? { ...p, priority: v } : p)}>
+                      <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs font-medium shadow-none focus:ring-0 justify-end"><SelectValue /></SelectTrigger>
+                      <SelectContent>{["Låg","Medel","Hög","Kritisk"].map(pr => <SelectItem key={pr} value={pr}>{pr}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <FileText className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <span className="w-24 shrink-0 text-xs text-muted-foreground">Kategori</span>
+                    <Select value={editForm.category} onValueChange={(v) => setEditForm(p => p ? { ...p, category: v } : p)}>
+                      <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end"><SelectValue /></SelectTrigger>
+                      <SelectContent>{["Drift","Säkerhet","Kundärenden","Övrigt"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="px-4 py-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <Repeat className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                      <span className="w-24 shrink-0 text-xs text-muted-foreground">Återkommande</span>
+                      <Select value={editForm.recurrence_rule || "__none"} onValueChange={(v) => setEditForm(p => p ? { ...p, recurrence_rule: v === "__none" ? "" : v } : p)}>
+                        <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end"><SelectValue placeholder="Ingen" /></SelectTrigger>
+                        <SelectContent>{RECURRENCE_OPTIONS.map(o => <SelectItem key={o.value || "__none"} value={o.value || "__none"}>{o.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    {editForm.recurrence_rule === "weekly" && (
+                      <div className="flex flex-wrap gap-1 pl-7">
+                        {WEEKDAYS.map((day, idx) => (
+                          <button key={idx} type="button" className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors", editForm.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground")} onClick={() => setEditForm(p => { if (!p) return p; const days = p.recurrence_days.includes(idx) ? p.recurrence_days.filter(d=>d!==idx) : [...p.recurrence_days,idx]; return {...p, recurrence_days: days}; })}>{day}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {storeUsers.length > 0 && (
+                    <div className="px-4 py-3 space-y-1.5">
+                      <div className="flex items-center gap-2 mb-2"><Users className="h-4 w-4 shrink-0 text-muted-foreground/60" /><span className="text-xs text-muted-foreground">Tilldela</span></div>
+                      <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                        {storeUsers.map(u => (
+                          <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
+                            <Checkbox checked={editForm.assigneeUserIds.includes(u.id)} onCheckedChange={() => setEditForm(p => { if (!p) return p; const ids = p.assigneeUserIds.includes(u.id) ? p.assigneeUserIds.filter(id=>id!==u.id) : [...p.assigneeUserIds, u.id]; return {...p, assigneeUserIds:ids}; })} className="h-3.5 w-3.5" />
+                            <span className="text-xs">{u.display_name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Photo viewer — rendered when lightboxTask is set.
           The Dialog is hidden (open=false) while this is shown so Radix's

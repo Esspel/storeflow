@@ -137,6 +137,11 @@ export type ChecklistTemplate = {
   title: string;
   description: string;
   category: string;
+  priority: string;
+  recurrence_rule: string | null;
+  recurrence_days: number[] | null;
+  recurrence_interval: number | null;
+  due_date_offset: number | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

@@ -322,14 +322,35 @@ function parseXml(xmlText: string): ParsedSchedule | null {
           grossMinutes: netMins + (sIdx === 1 ? dayBreakTotal : 0),
           netMinutes: netMins,
           breakMinutes: sIdx === 1 ? dayBreakTotal : 0,
-          breakWindows: sIdx === 1 ? dayBreakWindows : [],
+          breakWindows: [], // will be distributed below after all shifts are collected
           deviationCause,
           totalCost: dayScheduleCost,
-          // Lended OUT: day-level ShiftLink present + ScheduleTotalCost=0 + not absence
           isLended: isDayLendedOut,
           shiftLink: dayShiftLink,
           isBorrowed: false,
         });
+      }
+
+      // Distribute day-level break windows to the shift segment that contains each break start time
+      if (dayBreakWindows.length > 0 && shifts.length > 0) {
+        const timeToMins = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+        for (const bw of dayBreakWindows) {
+          const bStart = timeToMins(bw.start);
+          // Find the shift whose time range contains this break start
+          let target = shifts.find((s) => {
+            if (!s.startTime || !s.stopTime) return false;
+            const sStart = timeToMins(s.startTime);
+            const sStop = timeToMins(s.stopTime);
+            return bStart >= sStart && bStart < sStop;
+          });
+          // Fallback: assign to the shift with start time closest to (but before) the break
+          if (!target) {
+            const before = shifts.filter((s) => s.startTime && timeToMins(s.startTime) <= bStart);
+            if (before.length > 0) target = before[before.length - 1];
+            else target = shifts[0];
+          }
+          if (target) target.breakWindows.push(bw);
+        }
       }
 
       // Fallback: try <Shifts> child elements (older format)
@@ -515,6 +536,8 @@ function SchemaPage() {
     return d === 0 ? 6 : d - 1;
   });
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
+  const [hideLedig, setHideLedig] = useState(false);
+  const [sortMode, setSortMode] = useState<"default" | "start" | "end">("default");
 
   // Delivery
   const [deliveryPlans, setDeliveryPlans] = useState<DeliveryPlan[]>([]);
@@ -576,31 +599,84 @@ function SchemaPage() {
 
   useEffect(() => {
     if (!storeId || !activeImport) return;
-    // Fetch one day before and after the week to catch tasks stored in UTC that shift ±1 day in local time
     const queryStart = addDays(activeImport.week_start_date, -1);
     const queryEnd = addDays(activeImport.week_start_date, 7);
-    supabase
-      .from("tasks")
-      .select("id, title, due_date, assigned_to, status, priority")
-      .eq("store_id", storeId)
-      .not("status", "eq", "done")
-      .not("status", "eq", "cancelled")
-      .gte("due_date", queryStart)
-      .lte("due_date", queryEnd)
-      .then(async ({ data }) => {
-        const tasks = (data ?? []) as Task[];
-        setScheduleTasks(tasks);
-        if (tasks.length > 0) {
-          const { data: assignees } = await supabase
-            .from("task_assignees")
-            .select("task_id, user_id")
-            .in("task_id", tasks.map(t => t.id));
-          setScheduleTaskAssignees((assignees ?? []) as { task_id: string; user_id: string | null }[]);
-        } else {
-          setScheduleTaskAssignees([]);
+
+    async function loadAndSpawnTasks() {
+      // First ensure recurring children are spawned for this week
+      if (isAdmin) {
+        const { data: parents } = await supabase
+          .from("tasks")
+          .select("id, title, recurrence_rule, recurrence_days, recurrence_start, recurrence_end, recurrence_period_start, parent_task_id, due_date, created_at, status, store_id, assigned_to, created_by")
+          .eq("store_id", storeId!)
+          .not("recurrence_rule", "is", null)
+          .is("parent_task_id", null);
+
+        if (parents && parents.length > 0) {
+          const { data: existingChildren } = await supabase
+            .from("tasks")
+            .select("parent_task_id, recurrence_period_start")
+            .in("parent_task_id", parents.map((p: Task) => p.id));
+
+          const coveredByParent = new Map<string, Set<string>>();
+          for (const c of (existingChildren ?? []) as { parent_task_id: string; recurrence_period_start: string | null }[]) {
+            if (!c.parent_task_id) continue;
+            if (!coveredByParent.has(c.parent_task_id)) coveredByParent.set(c.parent_task_id, new Set());
+            if (c.recurrence_period_start) coveredByParent.get(c.parent_task_id)!.add(c.recurrence_period_start.slice(0, 10));
+          }
+
+          const weekCeil = new Date(queryEnd);
+          const midnight = (d: Date) => { const n = new Date(d); n.setHours(0,0,0,0); return n; };
+          const localDS = (d: Date) => { const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,"0"); const day=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${day}`; };
+
+          for (const t of parents as Task[]) {
+            if (!t.recurrence_rule) continue;
+            const originDate = t.recurrence_start ? midnight(new Date(t.recurrence_start)) : t.due_date ? midnight(new Date(t.due_date)) : midnight(new Date(t.created_at));
+            const durationMs = t.due_date ? Math.max(0, midnight(new Date(t.due_date)).getTime() - originDate.getTime()) : 0;
+            const weekStart = new Date(queryStart);
+
+            const periodStarts = buildPeriodStartsSimple(originDate, t.recurrence_rule, t.recurrence_days ?? null, t.recurrence_start ? new Date(t.recurrence_start) : null, t.recurrence_end ? new Date(t.recurrence_end) : null, weekCeil, weekStart);
+            const covered = coveredByParent.get(t.id) ?? new Set<string>();
+            for (const ps of periodStarts) {
+              const psKey = localDS(ps);
+              if (covered.has(psKey)) continue;
+              const childDue = t.due_date ? new Date(ps.getTime() + durationMs) : null;
+              await supabase.from("tasks").insert({
+                title: t.title, description: (t as Task & { description?: string }).description, category: t.category, priority: t.priority,
+                store_id: t.store_id, due_date: childDue ? childDue.toISOString() : null,
+                recurrence_rule: t.recurrence_rule, recurrence_days: t.recurrence_days,
+                recurrence_period_start: psKey, parent_task_id: t.id,
+                created_by: t.created_by, assigned_to: t.assigned_to, status: "todo",
+              });
+              covered.add(psKey);
+            }
+          }
         }
-      });
-  }, [storeId, activeImport]);
+      }
+
+      const { data } = await supabase
+        .from("tasks")
+        .select("id, title, due_date, assigned_to, status, priority")
+        .eq("store_id", storeId!)
+        .not("status", "eq", "done")
+        .not("status", "eq", "cancelled")
+        .gte("due_date", queryStart)
+        .lte("due_date", queryEnd);
+      const tasks = (data ?? []) as Task[];
+      setScheduleTasks(tasks);
+      if (tasks.length > 0) {
+        const { data: assignees } = await supabase
+          .from("task_assignees")
+          .select("task_id, user_id")
+          .in("task_id", tasks.map(t => t.id));
+        setScheduleTaskAssignees((assignees ?? []) as { task_id: string; user_id: string | null }[]);
+      } else {
+        setScheduleTaskAssignees([]);
+      }
+    }
+
+    loadAndSpawnTasks();
+  }, [storeId, activeImport, isAdmin]);
 
   async function loadImports() {
     if (!storeId) return;
@@ -898,6 +974,41 @@ function SchemaPage() {
   const currentDate = weekDates[selectedDayIndex] ?? null;
   const currentNowPercent = currentDate === todayStr ? nowPercent() : -1;
 
+  // ── Auto-detect borrowed-out shifts ──────────────────────────────────────
+  // A shift is "butik-only" if all its week shifts have shift_name containing only "butik"
+  // and each day has exactly 1 long work shift.
+  // We flag these employees as borrowed-out when >60% of others have complex shifts (≥2 distinct types per day at some point in the week).
+  function isButikOnly(name: string): boolean {
+    const n = name.toLowerCase().trim();
+    return n === "butik" || n.startsWith("butik ");
+  }
+  function isComplexEmployee(empId: string): boolean {
+    // Has at least one day with 2+ distinct shift types
+    const workDays = weekDates.map(date =>
+      scheduleShifts.filter(s => s.schedule_employee_id === empId && s.day_date === date && !s.is_absence_day && s.start_time)
+    ).filter(ds => ds.length > 0);
+    return workDays.some(ds => {
+      const types = new Set(ds.map(s => s.shift_name.toLowerCase().trim()));
+      return types.size >= 2;
+    });
+  }
+
+  const allEmpIds = scheduleEmployees.map(e => e.id);
+  const complexCount = allEmpIds.filter(id => isComplexEmployee(id)).length;
+  const complexRatio = allEmpIds.length > 0 ? complexCount / allEmpIds.length : 0;
+  const autoBorrowedEmployeeIds = new Set<string>();
+  if (complexRatio > 0.6) {
+    for (const emp of scheduleEmployees) {
+      const weekWork = scheduleShifts.filter(s => s.schedule_employee_id === emp.id && !s.is_absence_day && s.start_time);
+      if (weekWork.length === 0) continue;
+      const allButik = weekWork.every(s => isButikOnly(s.shift_name));
+      // Also check: each work day has only 1 shift
+      const days = [...new Set(weekWork.map(s => s.day_date))];
+      const singleShiftDays = days.every(d => weekWork.filter(s => s.day_date === d).length === 1);
+      if (allButik && singleShiftDays) autoBorrowedEmployeeIds.add(emp.id);
+    }
+  }
+
   const employeeRows = scheduleEmployees
     .filter((emp) => scheduleShifts.some((s) => s.schedule_employee_id === emp.id))
     .map((emp) => {
@@ -917,13 +1028,32 @@ function SchemaPage() {
             return scheduleTaskAssignees.some(a => a.task_id === t.id && a.user_id === appUser.id);
           })
         : [];
-      return { emp, dayShifts, workShifts, shadowShifts, absenceShift, appUser, weekMinutes, initials, dayTasks };
+      const isAutoBorrowed = autoBorrowedEmployeeIds.has(emp.id);
+      return { emp, dayShifts, workShifts, shadowShifts, absenceShift, appUser, weekMinutes, initials, dayTasks, isAutoBorrowed };
     });
 
   const workingToday = employeeRows.filter((r) => r.workShifts.length > 0).length;
   const absentToday = employeeRows.filter((r) => r.workShifts.length === 0 && r.absenceShift).length;
   const totalStaff = employeeRows.length;
   const totalWeekHours = employeeRows.reduce((sum, r) => sum + r.weekMinutes, 0);
+
+  // Apply filter and sort
+  const timeToMinsSort = (t: string | null) => { if (!t) return 9999; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+  const displayRows = employeeRows
+    .filter((r) => !hideLedig || r.workShifts.length > 0 || r.absenceShift)
+    .sort((a, b) => {
+      if (sortMode === "start") {
+        const aStart = Math.min(...(a.workShifts.length > 0 ? a.workShifts.map(s => timeToMinsSort(s.start_time)) : [9999]));
+        const bStart = Math.min(...(b.workShifts.length > 0 ? b.workShifts.map(s => timeToMinsSort(s.start_time)) : [9999]));
+        return aStart - bStart;
+      }
+      if (sortMode === "end") {
+        const aEnd = Math.max(...(a.workShifts.length > 0 ? a.workShifts.map(s => timeToMinsSort(s.stop_time)) : [0]));
+        const bEnd = Math.max(...(b.workShifts.length > 0 ? b.workShifts.map(s => timeToMinsSort(s.stop_time)) : [0]));
+        return bEnd - aEnd;
+      }
+      return 0;
+    });
 
   // Deliveries for current day
   const todayDeliveries = deliveryEntries.filter((d) => d.delivery_date === currentDate);
@@ -1058,16 +1188,36 @@ function SchemaPage() {
           </div>
 
           {/* Day heading */}
-          <div className="mb-3">
-            <h2 className="text-base font-semibold text-foreground">
-              {viewMode === "day" ? DAY_NAMES[selectedDayIndex] : "Veckovy"}
-              {viewMode === "day" && weekDates[selectedDayIndex] && <span className="ml-2 font-normal text-muted-foreground">{fmtDate(weekDates[selectedDayIndex])}</span>}
-            </h2>
+          <div className="mb-3 flex items-start justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">
+                {viewMode === "day" ? DAY_NAMES[selectedDayIndex] : "Veckovy"}
+                {viewMode === "day" && weekDates[selectedDayIndex] && <span className="ml-2 font-normal text-muted-foreground">{fmtDate(weekDates[selectedDayIndex])}</span>}
+              </h2>
+              {viewMode === "day" && (
+                <p className="text-xs text-muted-foreground">
+                  {workingToday} arbetar · {absentToday > 0 ? `${absentToday} frånvaro · ` : ""}{totalStaff - workingToday - absentToday} lediga
+                  {todayDeliveries.length > 0 && ` · ${todayDeliveries.length} leveranser`}
+                </p>
+              )}
+            </div>
             {viewMode === "day" && (
-              <p className="text-xs text-muted-foreground">
-                {workingToday} arbetar · {absentToday > 0 ? `${absentToday} frånvaro · ` : ""}{totalStaff - workingToday - absentToday} lediga
-                {todayDeliveries.length > 0 && ` · ${todayDeliveries.length} leveranser`}
-              </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setHideLedig(v => !v)}
+                  className={["rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors", hideLedig ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border/60 hover:border-primary/50"].join(" ")}
+                >
+                  Dölj lediga
+                </button>
+                <div className="flex items-center overflow-hidden rounded-lg border border-border/60 bg-muted/40">
+                  {(["default","start","end"] as const).map(m => (
+                    <button key={m} onClick={() => setSortMode(m)}
+                      className={["px-2.5 py-1 text-xs font-medium transition-colors", sortMode === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"].join(" ")}>
+                      {m === "default" ? "Standard" : m === "start" ? "Starttid" : "Sluttid"}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 
@@ -1132,13 +1282,13 @@ function SchemaPage() {
                 </div>
               )}
 
-              {employeeRows.length === 0 ? (
+              {displayRows.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-16">
                   <Clock className="h-8 w-8 text-muted-foreground/30" />
                   <p className="text-sm text-muted-foreground">Inga pass schemalagda denna dag</p>
                 </div>
               ) : (
-                employeeRows.map(({ emp, workShifts, shadowShifts, absenceShift, appUser, weekMinutes, initials, dayTasks }) => {
+                displayRows.map(({ emp, workShifts, shadowShifts, absenceShift, appUser, weekMinutes, initials, dayTasks }) => {
                   const isSemesterDay = absenceShift?.deviation_cause?.toLowerCase().includes("semester") || absenceShift?.shift_name?.toLowerCase() === "semester";
                   return (
                   <div key={emp.id} className={["group flex border-b border-border/20 last:border-b-0 transition-colors", isSemesterDay ? "bg-red-50/60 hover:bg-red-50/80 dark:bg-red-950/20" : "hover:bg-muted/20"].join(" ")} style={{ minHeight: dayTasks.length > 0 ? "56px" : undefined }}>
@@ -1161,21 +1311,22 @@ function SchemaPage() {
                       )}
                       {isSemesterDay ? (
                         <>
-                          <div className="absolute top-1.5 bottom-1.5 flex items-center" style={{ left: "12px" }}>
+                          <div className="absolute top-1.5 bottom-1.5 flex items-center gap-2 flex-wrap" style={{ left: "12px" }}>
                             <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-100/60 px-3 py-1.5 dark:border-red-800/40 dark:bg-red-900/20">
                               <span className="text-[11px] font-medium text-red-600 dark:text-red-400">Semester</span>
                             </div>
+                            {shadowShifts.map((shift) => {
+                              const col = shiftColor(shift.shift_name, shift.color);
+                              return (
+                                <div key={shift.id} className="flex items-center gap-1 rounded-lg border px-2 py-1 opacity-60"
+                                  style={{ borderColor: col + "80", backgroundColor: col + "20" }}
+                                  title={`Planerat: ${shift.shift_name} ${shift.start_time}–${shift.stop_time}`}>
+                                  <span className="text-[10px] font-medium" style={{ color: isLightColor(col) ? "rgba(0,0,0,0.6)" : col }}>{shift.shift_name}</span>
+                                  <span className="text-[10px] opacity-70" style={{ color: isLightColor(col) ? "rgba(0,0,0,0.5)" : col + "cc" }}>{shift.start_time}–{shift.stop_time}</span>
+                                </div>
+                              );
+                            })}
                           </div>
-                          {shadowShifts.map((shift) => {
-                            const left = timeToPercent(shift.start_time!);
-                            const width = shiftWidthPercent(shift.start_time!, shift.stop_time!);
-                            return (
-                              <div key={shift.id} className="absolute top-1.5 bottom-1.5 opacity-30 pointer-events-none" style={{ left: `${Math.max(0, left)}%`, width: `${Math.max(width, 1.5)}%`, minWidth: "36px" }}>
-                                <div className="absolute inset-0 rounded-lg border border-dashed border-red-400 bg-red-100/40"
-                                  title={`Skuggpass: ${shift.shift_name} ${shift.start_time}–${shift.stop_time}\nOrsak: ${shift.deviation_cause}`} />
-                              </div>
-                            );
-                          })}
                         </>
                       ) : workShifts.length === 0 ? (
                         <div className="flex h-full items-center px-3">
@@ -1268,13 +1419,13 @@ function SchemaPage() {
                 })}
               </div>
 
-              {employeeRows.length === 0 ? (
+              {displayRows.length === 0 ? (
                 <div className="flex items-center justify-center gap-2 py-12">
                   <Clock className="h-6 w-6 text-muted-foreground/30" />
                   <p className="text-sm text-muted-foreground">Inga schemalagda pass</p>
                 </div>
               ) : (
-                employeeRows.map(({ emp, appUser, weekMinutes, initials }) => (
+                displayRows.map(({ emp, appUser, weekMinutes, initials }) => (
                   <div key={emp.id} className="grid border-b border-border/20 last:border-b-0 hover:bg-muted/10 transition-colors" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>
                     <div className="flex items-center gap-2.5 border-r border-border/30 px-4 py-3">
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
@@ -1710,6 +1861,45 @@ function SchemaPage() {
   );
 }
 
+
+function buildPeriodStartsSimple(
+  originDue: Date, rule: string, weekdays: number[] | null,
+  startDate: Date | null, endDate: Date | null,
+  ceil: Date, floor: Date,
+): Date[] {
+  const midnight = (d: Date) => { const n = new Date(d); n.setHours(0,0,0,0); return n; };
+  const effectiveCeil = endDate && midnight(endDate) < ceil ? midnight(endDate) : ceil;
+  const effectiveFloor = startDate ? midnight(startDate) : floor;
+  const results: Date[] = [];
+
+  if (rule === "weekly" && weekdays && weekdays.length > 0) {
+    const cur = new Date(effectiveFloor);
+    while (cur <= effectiveCeil) {
+      const js = cur.getDay();
+      const d = js === 0 ? 6 : js - 1;
+      if (weekdays.includes(d)) results.push(new Date(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return results;
+  }
+
+  const advance = (d: Date): Date => {
+    const n = new Date(d);
+    if (rule === "daily") n.setDate(n.getDate() + 1);
+    else if (rule === "every_other_day") n.setDate(n.getDate() + 2);
+    else if (rule === "weekly") n.setDate(n.getDate() + 7);
+    else if (rule === "monthly") { const od = originDue.getDate(); n.setMonth(n.getMonth() + 1); const dim = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate(); n.setDate(Math.min(od, dim)); }
+    else if (rule === "yearly") n.setFullYear(n.getFullYear() + 1);
+    n.setHours(0,0,0,0);
+    return n;
+  };
+
+  let cur = midnight(new Date(originDue));
+  cur = advance(cur);
+  while (cur < effectiveFloor) cur = advance(cur);
+  while (cur <= effectiveCeil) { results.push(new Date(cur)); cur = advance(new Date(cur)); }
+  return results;
+}
 
 function getISOWeek(date: Date): number {
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());

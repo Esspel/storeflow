@@ -135,11 +135,33 @@ function HubPage() {
       const openIncidents = inc.filter((i) => ["open", "in_progress", "escalated"].includes(i.status)).length;
 
       setStats({ todosCompleted: done, openTasks, overdueTasks, openIncidents });
-      setRecentIncidents(inc);
+      // Hide closed incidents
+      setRecentIncidents(inc.filter((i) => i.status !== "closed"));
 
       const parentIdsWithChildren = new Set(mapped.filter((t) => t.parent_task_id).map((t) => t.parent_task_id!));
-      setOneOffTasks(mapped.filter((t) => !t.recurrence_rule && !parentIdsWithChildren.has(t.id) && t.status !== "cancelled").slice(0, 5));
-      setRecurringTasks(mapped.filter((t) => t.recurrence_rule && !t.parent_task_id).slice(0, 5));
+      const simTodayStart = new Date(now); simTodayStart.setHours(0,0,0,0);
+      const simTodayEnd = new Date(now); simTodayEnd.setHours(23,59,59,999);
+
+      // Uppgifter idag: non-recurring tasks due today (not in the past, not done)
+      const todayTasks = mapped.filter((t) => {
+        if (t.recurrence_rule || t.status === "done" || t.status === "cancelled") return false;
+        if (parentIdsWithChildren.has(t.id)) return false;
+        if (!t.due_date) return false;
+        const d = new Date(t.due_date);
+        return d >= simTodayStart && d <= simTodayEnd;
+      });
+      setOneOffTasks(todayTasks.slice(0, 5));
+
+      // Återkommande: parent recurring tasks, hide done, deduplicate by title (show each once)
+      const seenTitles = new Set<string>();
+      const recurringUnique = mapped.filter((t) => {
+        if (!t.recurrence_rule || t.parent_task_id) return false;
+        if (t.status === "done" || t.status === "cancelled") return false;
+        if (seenTitles.has(t.title)) return false;
+        seenTitles.add(t.title);
+        return true;
+      });
+      setRecurringTasks(recurringUnique.slice(0, 5));
       setLoading(false);
     };
     load();
