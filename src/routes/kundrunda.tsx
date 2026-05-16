@@ -830,22 +830,27 @@ function KundrundaPage() {
                 <DialogTitle className="text-base">Avvikelse — detaljer</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                {/* Common defect quick-select */}
-                {commonDefects.length > 0 && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Vanliga avvikelser</Label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {commonDefects.map(d => (
-                        <button key={d.id} type="button"
-                          className="min-h-[44px] rounded-full border border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
-                          onClick={() => setDefectDialog(p => p ? { ...p, defect_description: d.label } : null)}
-                        >
-                          {d.label}
-                        </button>
-                      ))}
+                {/* Common defect quick-select — filtered to current checkpoint */}
+                {(() => {
+                  const filtered = commonDefects.filter(d =>
+                    d.checkpoint_id === defectDialog.checkpoint_id || d.checkpoint_id === null
+                  );
+                  return filtered.length > 0 ? (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Vanliga avvikelser</Label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {filtered.map(d => (
+                          <button key={d.id} type="button"
+                            className="min-h-[44px] rounded-full border border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                            onClick={() => setDefectDialog(p => p ? { ...p, defect_description: d.label } : null)}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  ) : null;
+                })()}
                 <div className="space-y-1.5">
                   <Label className="text-xs">Beskriv avvikelsen</Label>
                   <Textarea

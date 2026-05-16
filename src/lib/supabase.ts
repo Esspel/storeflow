@@ -378,6 +378,7 @@ export type KundrundaCheckpointImage = {
 export type KundrundaCommonDefect = {
   id: string;
   store_id: string | null;
+  checkpoint_id: string | null;
   label: string;
   sort_order: number;
   created_at: string;

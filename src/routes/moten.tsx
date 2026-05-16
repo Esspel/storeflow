@@ -30,9 +30,9 @@ export const Route = createFileRoute("/moten")({
 
 const MEETING_TYPES: { value: Meeting["meeting_type"]; label: string; description: string; defaultDurationMin: number }[] = [
   { value: "daglig_styrning", label: "Daglig styrning", description: "Daglig uppföljning mån–fre kl 09:30, 15 min. Genomgång av StoreFlow-tavlan.", defaultDurationMin: 15 },
-  { value: "ledningsgrupp", label: "Ledningsgrupp", description: "Veckogenomgång för ledningsgruppen. Fredag 13:00, 60 min.", defaultDurationMin: 60 },
+  { value: "ledningsgrupp", label: "Ledningsgrupp", description: "Veckogenomgång för ledningsgruppen. Fredag 13:00, 60 min. Schema via SoftOne GO.", defaultDurationMin: 60 },
   { value: "saljledare", label: "Säljledarmöte", description: "Månadsvis säljledaremöte. Första måndag 13:00, 60 min.", defaultDurationMin: 60 },
-  { value: "personalmote", label: "Personalmöte", description: "Butiksmöte med all personal. Genomgång av Relesys-nyheter, kampanjer och arbetsmiljö.", defaultDurationMin: 45 },
+  { value: "personalmote", label: "Personalmöte", description: "Butiksmöte med all personal. Genomgång av nyheter från Relesys (kommunikationskanal) och Coopnet, kampanjer och arbetsmiljö.", defaultDurationMin: 45 },
   { value: "haccp", label: "HACCP / Livsmedelssäkerhet", description: "Månadsvis HACCP-uppföljning. Egenkontroll via GetCompliant, temperaturloggar.", defaultDurationMin: 30 },
   { value: "frankly", label: "&frankly — Medarbetarenkät", description: "Genomgång av &frankly-resultat. Halvårsvis, 45 min.", defaultDurationMin: 45 },
   { value: "cap_genomgang", label: "CAP / KPI-genomgång", description: "Genomgång av Power BI-rapporter från CAP (Coop Analytical Platform).", defaultDurationMin: 30 },
@@ -51,7 +51,7 @@ const DEFAULT_AGENDAS: Record<Meeting["meeting_type"], { title: string; duration
     { title: "Försäljning & budget (CAP / Power BI)", duration: 15 },
     { title: "Personal, schema & SoftOne GO", duration: 10 },
     { title: "Avvikelser & incidenter (StoreFlow)", duration: 10 },
-    { title: "Kommande kampanjer (GK Engage / Open Access)", duration: 10 },
+    { title: "Kommande kampanjer (Open Access / Coopnet)", duration: 10 },
     { title: "Beslut & åtgärder", duration: 10 },
   ],
   saljledare: [
@@ -62,7 +62,7 @@ const DEFAULT_AGENDAS: Record<Meeting["meeting_type"], { title: string; duration
     { title: "Beslut", duration: 10 },
   ],
   personalmote: [
-    { title: "Nyheter från Relesys & Coopnet (Coop Direkt)", duration: 10 },
+    { title: "Nyheter från Relesys (kommunikationskanal) & Coopnet (intranät)", duration: 10 },
     { title: "Försäljning & butikens resultat", duration: 10 },
     { title: "Kampanjer & aktiviteter kommande period", duration: 10 },
     { title: "Attensi Skills — utbildningsstatus", duration: 5 },
