@@ -40,7 +40,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase, type AppUser, type Store, type UserGroup, type UserGroupMember, logAudit, ROLE_LABELS } from "@/lib/supabase";
+import { supabase, type AppUser, type Store, type Region, type UserGroup, type UserGroupMember, logAudit, ROLE_LABELS } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { GdprExport } from "@/components/gdpr-export";
 
@@ -68,6 +68,7 @@ function AccountsPage() {
 
   const [users, setUsers] = useState<UserWithStores[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
+  const [regions, setRegions] = useState<Region[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [showCreateUser, setShowCreateUser] = useState(false);
@@ -90,7 +91,7 @@ function AccountsPage() {
   const [showCreateStore, setShowCreateStore] = useState(false);
   const [deleteStore, setDeleteStore] = useState<Store | null>(null);
   const [editStore, setEditStore] = useState<Store | null>(null);
-  const [newStore, setNewStore] = useState({ name: "", city: "", address: "", email: "", sap_site_id: "" });
+  const [newStore, setNewStore] = useState({ name: "", city: "", address: "", email: "", sap_site_id: "", region_id: "" });
 
   // Groups
   const [groups, setGroups] = useState<(UserGroup & { members?: (UserGroupMember & { user?: AppUser })[] })[]>([]);
@@ -116,13 +117,15 @@ function AccountsPage() {
 
   async function load() {
     const managerStoreIds = currentUserStores.map(s => s.id);
-    const [usersRes, storesRes, userStoresRes] = await Promise.all([
+    const [usersRes, storesRes, userStoresRes, regionsRes] = await Promise.all([
       supabase.from("app_users").select("*").order("created_at"),
       isAdmin || managerStoreIds.length === 0
         ? supabase.from("stores").select("*").order("name")
         : supabase.from("stores").select("*").in("id", managerStoreIds).order("name"),
       supabase.from("user_stores").select("user_id, store_id"),
+      supabase.from("regions").select("*").order("name"),
     ]);
+    setRegions((regionsRes.data ?? []) as Region[]);
     const rawUsers = (usersRes.data ?? []) as AppUser[];
     const storeAssignments = (userStoresRes.data ?? []) as { user_id: string; store_id: string }[];
     let usersWithStores: UserWithStores[] = rawUsers.map((u) => ({
@@ -340,13 +343,14 @@ function AccountsPage() {
       address: newStore.address.trim(),
       email: newStore.email.trim(),
       sap_site_id: newStore.sap_site_id.trim() || null,
+      region_id: newStore.region_id || null,
     }).select("id").maybeSingle();
     logAudit(currentUser?.id ?? null, "store.create", "stores", created?.id ?? null, { name: newStore.name });
     const { data } = await supabase.from("stores").select("*").order("name");
     setStores((data ?? []) as Store[]);
     setSaving(false);
     setShowCreateStore(false);
-    setNewStore({ name: "", city: "", address: "", email: "", sap_site_id: "" });
+    setNewStore({ name: "", city: "", address: "", email: "", sap_site_id: "", region_id: "" });
   };
 
   const updateStore = async () => {
@@ -360,6 +364,7 @@ function AccountsPage() {
       address: editStore.address?.trim() ?? "",
       email: editStore.email?.trim() ?? "",
       sap_site_id: editStore.sap_site_id?.trim() || null,
+      region_id: editStore.region_id || null,
     }).eq("id", editStore.id);
     logAudit(currentUser?.id ?? null, "store.edit", "stores", editStore.id, { name: editStore.name });
     const { data } = await supabase.from("stores").select("*").order("name");
@@ -692,6 +697,7 @@ function AccountsPage() {
                   </div>
                   <h3 className="mt-3 text-base font-semibold">{store.name}</h3>
                   <div className="mt-3 space-y-1.5 text-xs text-muted-foreground">
+                    {store.region && <div className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 shrink-0" /><span>{store.region}</span></div>}
                     {store.address && <div className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" /><span>{store.address}{store.city && `, ${store.city}`}</span></div>}
                     {store.email && <div className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{store.email}</span></div>}
                     {store.sap_site_id && <div className="flex items-center gap-1.5"><Hash className="h-3.5 w-3.5 shrink-0" /><span className="font-mono">SAP {store.sap_site_id}</span></div>}
@@ -909,6 +915,16 @@ function AccountsPage() {
                 onChange={(e) => setNewStore(p => ({ ...p, address: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
+              <Label>Region *</Label>
+              <Select value={newStore.region_id || "__none"} onValueChange={(v) => setNewStore(p => ({ ...p, region_id: v === "__none" ? "" : v }))}>
+                <SelectTrigger><SelectValue placeholder="Välj region" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Ingen region</SelectItem>
+                  {regions.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
               <Label>SAP-butiksnummer (Mitt Coop siteId)</Label>
               <Input placeholder="t.ex. 1452" value={newStore.sap_site_id} inputMode="numeric"
                 onChange={(e) => setNewStore(p => ({ ...p, sap_site_id: e.target.value }))} />
@@ -949,6 +965,19 @@ function AccountsPage() {
                 <Label>Adress</Label>
                 <Input value={editStore.address ?? ""}
                   onChange={(e) => setEditStore(s => s ? { ...s, address: e.target.value } : null)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Region *</Label>
+                <Select
+                  value={editStore.region_id || "__none"}
+                  onValueChange={(v) => setEditStore(s => s ? { ...s, region_id: v === "__none" ? null : v } : null)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Välj region" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Ingen region</SelectItem>
+                    {regions.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>SAP-butiksnummer (Mitt Coop siteId)</Label>

@@ -42,11 +42,19 @@ export const ROLE_LABELS: Record<string, string> = {
   employee: "Anställd",
 };
 
+export type Region = {
+  id: string;
+  name: string;
+  code: string | null;
+  created_at: string;
+};
+
 export type Store = {
   id: string;
   name: string;
   city: string;
   region: string;
+  region_id: string | null;
   address: string;
   phone: string;
   email: string;
