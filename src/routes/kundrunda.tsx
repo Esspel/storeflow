@@ -24,6 +24,7 @@ import {
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import { haptic } from "@/lib/haptic";
 
 export const Route = createFileRoute("/kundrunda")({
   component: KundrundaPage,
@@ -295,13 +296,16 @@ function KundrundaPage() {
       if (zoneIdx >= 0) {
         const zone = zones[zoneIdx];
         const allDone = zone.checkpoints.every(c => (c.id === checkpoint.id ? true : updated[c.id]?.result));
-        if (allDone && zoneIdx < zones.length - 1) {
-          setExpandedZones(prev2 => {
-            const next = new Set(prev2);
-            next.delete(zoneIdx);
-            next.add(zoneIdx + 1);
-            return next;
-          });
+        if (allDone) {
+          haptic.success();
+          if (zoneIdx < zones.length - 1) {
+            setExpandedZones(prev2 => {
+              const next = new Set(prev2);
+              next.delete(zoneIdx);
+              next.add(zoneIdx + 1);
+              return next;
+            });
+          }
         }
       }
       return updated;
@@ -347,8 +351,8 @@ function KundrundaPage() {
 
   const saveDefect = async () => {
     if (!activeSession || !defectDialog) return;
-    if (!defectDialog.defect_description.trim()) return;
-    if (!defectDialog.action_taken.trim()) return;
+    if (!defectDialog.defect_description.trim()) { haptic.error(); return; }
+    if (!defectDialog.action_taken.trim()) { haptic.error(); return; }
     setSavingDefect(true);
     const existing = responses[defectDialog.checkpoint_id];
     let responseId: string | undefined;
@@ -665,8 +669,28 @@ function KundrundaPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-2xl px-5 py-8">
-        <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="h-20 animate-pulse rounded-2xl bg-card" />)}</div>
+      <div className="mx-auto max-w-2xl px-5 py-8 space-y-4">
+        <div className="h-8 w-40 animate-pulse rounded-md bg-muted" />
+        <div className="rounded-2xl border border-border/60 bg-card p-6">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 animate-pulse rounded-xl bg-muted shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-1/2 animate-pulse rounded-md bg-muted" />
+              <div className="h-3 w-1/3 animate-pulse rounded-md bg-muted/60" />
+            </div>
+            <div className="h-9 w-24 animate-pulse rounded-full bg-muted shrink-0" />
+          </div>
+        </div>
+        {[1,2,3].map(i => (
+          <div key={i} className="rounded-2xl border border-border/60 bg-card p-4 flex items-center gap-3">
+            <div className="h-7 w-7 animate-pulse rounded-full bg-muted shrink-0" />
+            <div className="flex-1 space-y-1.5">
+              <div className="h-3.5 w-2/5 animate-pulse rounded-md bg-muted" />
+              <div className="h-3 w-1/4 animate-pulse rounded-md bg-muted/60" />
+            </div>
+            <div className="h-4 w-4 animate-pulse rounded-md bg-muted/50 shrink-0" />
+          </div>
+        ))}
       </div>
     );
   }
@@ -818,7 +842,7 @@ function KundrundaPage() {
                                 {/* Action buttons — min 44x44px touch targets */}
                                 <div className="flex shrink-0 gap-2">
                                   <button
-                                    onClick={() => recordOk(cp)}
+                                    onClick={() => { haptic.light(); recordOk(cp); }}
                                     className={cn(
                                       "flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95",
                                       isOk ? "border-success bg-success/15 text-success" : "border-border/60 text-muted-foreground hover:border-success/50 hover:text-success"

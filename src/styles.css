@@ -89,7 +89,8 @@
   --secondary-foreground: oklch(0.3 0.04 160);
 
   --muted: oklch(0.95 0.018 148);
-  --muted-foreground: oklch(0.5 0.02 200);
+  /* Darkened from 0.5 → 0.42 to reach WCAG AA 4.5:1 on white/near-white backgrounds */
+  --muted-foreground: oklch(0.42 0.025 200);
 
   /* Pink icon-bubble accent (matches Coop's pink rondell) */
   --accent: oklch(0.92 0.05 15);
@@ -187,18 +188,76 @@
     /* Allow natural body-level scrolling — Radix Dialog handles scroll lock */
   }
 
+  /* ── Typography: WCAG-friendly baseline for store-floor use ────────────── */
+  /* Instruction text, descriptions, and body copy: min 16px, 1.6 line-height */
+  p, li, label, .text-body {
+    line-height: 1.6;
+  }
+
+  /* Enforce minimum readable size on description-level text */
+  .description-text {
+    font-size: 1rem;       /* 16px */
+    line-height: 1.6;
+  }
+
+  /* ── Safe area insets for notched/hole-punch devices ───────────────────── */
+  /* Applied via utility classes: pt-safe, pb-safe, etc. */
+  .pt-safe  { padding-top:    env(safe-area-inset-top,    0px); }
+  .pb-safe  { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .pl-safe  { padding-left:   env(safe-area-inset-left,   0px); }
+  .pr-safe  { padding-right:  env(safe-area-inset-right,  0px); }
+
+  /* Header safe-area supplement (adds on top of existing padding) */
+  [data-safe-header] {
+    padding-top: max(0px, env(safe-area-inset-top));
+  }
+
+  /* Bottom fixed elements (FAB, bottom nav) */
+  [data-safe-bottom] {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  /* ── Swipe affordance: subtle drag handle on task cards (touch only) ────── */
+  [data-swipe-hint] {
+    position: relative;
+  }
+
+  /* Swipe-to-complete: visible only on touch (coarse pointer) */
+  @media (pointer: fine) {
+    [data-swipe-hint]::after {
+      display: none;
+    }
+  }
+
+  @media (pointer: coarse) {
+    /* Pulsing arrow hint — fades after first interaction via .swipe-used class */
+    [data-swipe-hint]:not(.swipe-used)::after {
+      content: "";
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 20px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M5 12h14m-4-4 4 4-4 4'/%3E%3C/svg%3E");
+      background-size: contain;
+      background-repeat: no-repeat;
+      opacity: 0.35;
+      animation: swipe-hint-pulse 2s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes swipe-hint-pulse {
+      0%, 100% { opacity: 0.35; transform: translateY(-50%) translateX(0); }
+      50%       { opacity: 0.6;  transform: translateY(-50%) translateX(4px); }
+    }
+  }
+
   /* Contain overscroll only on explicit inner scroll containers (e.g. kundrunda active view) */
   [data-scroll-container] {
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
     overflow-y: auto;
-  }
-
-  /* Swipe-to-complete: hidden on fine-pointer (mouse) devices */
-  @media (pointer: fine) {
-    [data-swipe-hint] {
-      display: none !important;
-    }
   }
 
   /* On touch devices allow horizontal swipe detection in JS */
@@ -219,6 +278,22 @@
       opacity: 0.75;
       transition: opacity 60ms ease;
     }
+  }
+
+  /* ── Offline snackbar ───────────────────────────────────────────────────── */
+  #offline-snackbar {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 72px); /* above bottom FAB */
+    left: 50%;
+    transform: translateX(-50%) translateY(120%);
+    z-index: 9999;
+    transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  #offline-snackbar.visible {
+    transform: translateX(-50%) translateY(0);
   }
 }
 

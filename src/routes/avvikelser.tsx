@@ -419,7 +419,18 @@ function IssuesPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-20 animate-pulse rounded-2xl bg-card" />)}</div>
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="flex items-center gap-4 border-b border-border/40 px-5 py-4 last:border-0">
+              <div className="h-4 w-4 animate-pulse rounded-full bg-muted/60 shrink-0" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-3.5 w-2/3 animate-pulse rounded-md bg-muted" />
+                <div className="h-3 w-1/3 animate-pulse rounded-md bg-muted/60" />
+              </div>
+              <div className="h-5 w-16 animate-pulse rounded-full bg-muted/60 shrink-0" />
+            </div>
+          ))}
+        </div>
       ) : visible.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
           <AlertTriangle className="mb-3 h-10 w-10 text-muted-foreground/40" />

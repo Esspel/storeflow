@@ -1,6 +1,6 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
-import { Bell, ChevronDown, FlaskConical, LogOut, Menu, Settings, ShoppingCart, Trash2, User, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bell, ChevronDown, FlaskConical, LogOut, Menu, Settings, ShoppingCart, Trash2, User, Wifi, WifiOff, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,62 @@ import { supabase, type Notification, cleanOldNotifications } from "@/lib/supaba
 import { cn } from "@/lib/utils";
 import { getSimulatedDate, setTimeOffsetMs, isSimulationActive } from "@/lib/time-simulation";
 import { supabase as _supabase } from "@/lib/supabase";
+
+// ── Offline snackbar ────────────────────────────────────────────────────────
+function OfflineSnackbar() {
+  const [status, setStatus] = useState<"online" | "offline" | "reconnected">(
+    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "online",
+  );
+  // Timer ref to hide the "reconnected" banner after 2 s
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const onOffline = () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      setStatus("offline");
+    };
+    const onOnline = () => {
+      setStatus("reconnected");
+      hideTimerRef.current = setTimeout(() => setStatus("online"), 2000);
+    };
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+    return () => {
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, []);
+
+  const visible = status === "offline" || status === "reconnected";
+
+  return (
+    <div
+      id="offline-snackbar"
+      role="status"
+      aria-live="polite"
+      className={cn(
+        "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium shadow-lg",
+        status === "offline"
+          ? "bg-destructive text-destructive-foreground"
+          : "bg-success text-success-foreground",
+        visible ? "visible" : "",
+      )}
+    >
+      {status === "offline" ? (
+        <>
+          <WifiOff className="h-4 w-4 shrink-0" />
+          Du är offline – ändringar sparas lokalt
+        </>
+      ) : (
+        <>
+          <Wifi className="h-4 w-4 shrink-0" />
+          Ansluten
+        </>
+      )}
+    </div>
+  );
+}
 
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -106,6 +162,9 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-background" style={{ isolation: "isolate" }}>
+      {/* Safe-area top spacer for notched devices */}
+      <div className="pt-safe" />
+
       <header className="sticky top-0 z-40 border-b border-border/60 bg-card">
         <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center gap-4 px-5 md:px-8">
           <Link to="/" className="flex shrink-0 items-center gap-2">
@@ -134,7 +193,7 @@ export function AppShell() {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            {/* Mitt Coop button — visible on all screens when active store has SAP site ID */}
+            {/* Mitt Coop button */}
             {activeStore?.sap_site_id && (
               <a
                 href={`https://mittcoop.coop.se/sortiment/articles?siteId=${activeStore.sap_site_id}`}
@@ -203,9 +262,9 @@ export function AppShell() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <p className={cn("text-sm font-medium", !n.is_read && "text-primary")}>{n.title}</p>
-                            {n.body && <p className="mt-0.5 text-xs text-muted-foreground">{n.body}</p>}
-                            <p className="mt-1 text-xs text-muted-foreground/60">
+                            <p className={cn("text-sm font-medium leading-snug", !n.is_read && "text-primary")}>{n.title}</p>
+                            {n.body && <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{n.body}</p>}
+                            <p className="mt-1 text-xs text-muted-foreground/70">
                               {new Date(n.created_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}
                             </p>
                           </div>
@@ -287,7 +346,10 @@ export function AppShell() {
                   key={item.to}
                   to={item.to}
                   onClick={() => setOpen(false)}
-                  className={cn("rounded-lg px-3 py-2.5 text-sm font-medium text-foreground/80", isActive(item.to) && "bg-primary-soft text-primary")}
+                  className={cn(
+                    "rounded-lg px-3 py-3 text-sm font-medium leading-none",
+                    isActive(item.to) ? "bg-primary-soft text-primary" : "text-foreground",
+                  )}
                 >
                   {item.label}
                 </Link>
@@ -300,7 +362,10 @@ export function AppShell() {
                     <button
                       key={s.id}
                       onClick={() => { setActiveStore(s); setOpen(false); }}
-                      className={cn("rounded-lg px-3 py-2.5 text-left text-sm text-foreground/80", activeStore?.id === s.id && "bg-primary-soft text-primary")}
+                      className={cn(
+                        "rounded-lg px-3 py-3 text-left text-sm text-foreground",
+                        activeStore?.id === s.id && "bg-primary-soft text-primary",
+                      )}
                     >
                       {s.name}
                     </button>
@@ -335,6 +400,11 @@ export function AppShell() {
         <Outlet />
       </main>
 
+      {/* Safe-area bottom spacer */}
+      <div className="pb-safe" />
+
+      {/* Global offline / reconnected snackbar */}
+      <OfflineSnackbar />
     </div>
   );
 }

@@ -1197,8 +1197,22 @@ function TasksPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {[1,2,3].map(i => <div key={i} className="h-28 animate-pulse rounded-2xl bg-card" />)}
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-3/4 animate-pulse rounded-md bg-muted" />
+                  <div className="h-3 w-1/2 animate-pulse rounded-md bg-muted/60" />
+                </div>
+                <div className="h-5 w-14 animate-pulse rounded-full bg-muted/60" />
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-20 animate-pulse rounded-md bg-muted/50" />
+                <div className="h-3 w-16 animate-pulse rounded-md bg-muted/50" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
