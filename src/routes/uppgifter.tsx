@@ -149,7 +149,16 @@ const emptyForm = (storeId: string) => ({
 });
 
 
-// Swipeable card: right-swipe → complete, left-swipe → open detail (or delete hint for managers)
+// Returns true only on genuine touch devices (coarse pointer).
+// Guards against mouse click-and-drag triggering swipe actions on desktop.
+function isTouchDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+}
+
+// Swipeable card: right-swipe → complete (with undo), left-swipe → open detail.
+// On non-touch devices the swipe handlers are never registered; the card behaves
+// as a plain clickable element so mouse drag cannot trigger accidental actions.
 function SwipeableCard({
   done,
   onSwipeRight,
@@ -172,7 +181,11 @@ function SwipeableCard({
   const [swiping, setSwiping] = useState(false);
   const THRESHOLD = 72;
 
+  // Only wire up pointer events on touch devices
+  const touch = isTouchDevice();
+
   const onPtrDown = (e: React.PointerEvent) => {
+    if (!touch) return;
     startX.current = e.clientX;
     startY.current = e.clientY;
     deltaX.current = 0;
@@ -180,6 +193,7 @@ function SwipeableCard({
   };
 
   const onPtrMove = (e: React.PointerEvent) => {
+    if (!touch) return;
     const dx = e.clientX - startX.current;
     const dy = e.clientY - startY.current;
     if (!swiping && Math.abs(dy) > Math.abs(dx)) return; // vertical scroll wins
@@ -189,6 +203,7 @@ function SwipeableCard({
   };
 
   const onPtrUp = () => {
+    if (!touch) return;
     const dx = deltaX.current;
     setOffset(0);
     setSwiping(false);
@@ -200,9 +215,9 @@ function SwipeableCard({
   const isLeft = offset < -20;
 
   return (
-    <div className="relative overflow-hidden rounded-xl">
-      {/* Right hint (complete) */}
-      <div className={cn(
+    <div className="relative overflow-hidden rounded-xl" data-swipeable>
+      {/* Right hint (complete) — hidden on fine-pointer via CSS */}
+      <div data-swipe-hint className={cn(
         "absolute inset-y-0 left-0 flex w-20 items-center justify-center rounded-l-xl transition-opacity",
         done ? "bg-muted/60" : "bg-success/20",
         isRight ? "opacity-100" : "opacity-0"
@@ -212,15 +227,15 @@ function SwipeableCard({
           : <CheckCircle2 className="h-6 w-6 text-success" />
         }
       </div>
-      {/* Left hint (open) */}
-      <div className={cn(
+      {/* Left hint (open) — hidden on fine-pointer via CSS */}
+      <div data-swipe-hint className={cn(
         "absolute inset-y-0 right-0 flex w-20 items-center justify-center rounded-r-xl bg-primary/10 transition-opacity",
         isLeft ? "opacity-100" : "opacity-0"
       )}>
         <ChevronRight className="h-6 w-6 text-primary" />
       </div>
       <article
-        className={cn("relative z-10 touch-pan-y", className)}
+        className={cn("relative z-10", touch ? "touch-pan-y" : "", className)}
         style={{ transform: swiping ? `translateX(${offset}px)` : undefined, transition: swiping ? "none" : "transform 0.2s ease" }}
         onPointerDown={onPtrDown}
         onPointerMove={onPtrMove}
@@ -248,6 +263,33 @@ function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("today");
   const [search, setSearch] = useState("");
+
+  // Undo toast: when a swipe-complete fires we show a 4-second window to cancel
+  // before the DB write actually happens.
+  const [undoToast, setUndoToast] = useState<{ task: TaskFull; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
+  const undoToastRef = useRef(undoToast);
+  useEffect(() => { undoToastRef.current = undoToast; }, [undoToast]);
+
+  const dismissUndoToast = () => {
+    if (undoToastRef.current) {
+      clearTimeout(undoToastRef.current.timeoutId);
+      setUndoToast(null);
+    }
+  };
+
+  // Called by SwipeableCard's onSwipeRight — delays the actual DB write by 4s
+  const swipeComplete = (task: TaskFull) => {
+    // Cancel any prior pending undo first
+    dismissUndoToast();
+    // Optimistically reflect the toggle in the UI immediately
+    const isDone = task.status === "done";
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: isDone ? "todo" : "done" } : t));
+    const tid = setTimeout(() => {
+      setUndoToast(null);
+      void completeTask(task);
+    }, 4000);
+    setUndoToast({ task, timeoutId: tid });
+  };
   const [showCreate, setShowCreate] = useState(false);
   const TASK_DRAFT_KEY = `sf-task-draft-${user?.id ?? ""}`;
   const [newTask, _setNewTask] = useState<ReturnType<typeof emptyForm>>(() => {
@@ -1091,7 +1133,7 @@ function TasksPage() {
               <SwipeableCard
                 key={t.id}
                 done={done}
-                onSwipeRight={() => void completeTask(t)}
+                onSwipeRight={() => swipeComplete(t)}
                 onSwipeLeft={() => openDetail(t)}
                 onClick={() => openDetail(t)}
                 className={cn(
@@ -1166,6 +1208,26 @@ function TasksPage() {
               </SwipeableCard>
             );
           })}
+        </div>
+      )}
+
+      {/* Undo toast — shown 4s after a swipe-complete so the user can cancel */}
+      {undoToast && (
+        <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="flex items-center gap-3 rounded-full border border-border/60 bg-card px-5 py-3 shadow-[var(--shadow-lg)]">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+            <span className="text-sm font-medium">Markerad som klar</span>
+            <button
+              className="ml-1 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted/70 active:scale-95 transition-transform"
+              onClick={() => {
+                // Cancel the pending DB write and revert the optimistic update
+                dismissUndoToast();
+                setTasks(prev => prev.map(t => t.id === undoToast.task.id ? undoToast.task : t));
+              }}
+            >
+              Ångra
+            </button>
+          </div>
         </div>
       )}
 

@@ -199,5 +199,24 @@
   [data-scroll-container] {
     overscroll-behavior-y: contain;
   }
+
+  /* Swipe-to-complete is only safe on coarse-pointer (touch) devices.
+     On fine-pointer (mouse/trackpad) devices the swipe hints stay hidden
+     so click-and-drag never triggers destructive actions. */
+  @media (pointer: fine) {
+    [data-swipeable] {
+      touch-action: auto;
+    }
+    [data-swipe-hint] {
+      display: none !important;
+    }
+  }
+
+  @media (pointer: coarse) {
+    [data-swipeable] {
+      /* Allow vertical scroll but hand horizontal movement to JS swipe logic */
+      touch-action: pan-y;
+    }
+  }
 }
 
