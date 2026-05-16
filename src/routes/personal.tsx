@@ -2,8 +2,10 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   Building2,
+  Hash,
   Mail,
   MapPin,
+  Pencil,
   Plus,
   Trash2,
   UserCog,
@@ -75,7 +77,8 @@ function AccountsPage() {
 
   const [showCreateStore, setShowCreateStore] = useState(false);
   const [deleteStore, setDeleteStore] = useState<Store | null>(null);
-  const [newStore, setNewStore] = useState({ name: "", city: "", address: "", email: "" });
+  const [editStore, setEditStore] = useState<Store | null>(null);
+  const [newStore, setNewStore] = useState({ name: "", city: "", address: "", email: "", sap_site_id: "" });
 
   // Groups
   const [groups, setGroups] = useState<(UserGroup & { members?: (UserGroupMember & { user?: AppUser })[] })[]>([]);
@@ -240,13 +243,34 @@ function AccountsPage() {
       city: newStore.city.trim(),
       address: newStore.address.trim(),
       email: newStore.email.trim(),
+      sap_site_id: newStore.sap_site_id.trim() || null,
     }).select("id").maybeSingle();
     logAudit(currentUser?.id ?? null, "store.create", "stores", created?.id ?? null, { name: newStore.name });
     const { data } = await supabase.from("stores").select("*").order("name");
     setStores((data ?? []) as Store[]);
     setSaving(false);
     setShowCreateStore(false);
-    setNewStore({ name: "", city: "", address: "", email: "" });
+    setNewStore({ name: "", city: "", address: "", email: "", sap_site_id: "" });
+  };
+
+  const updateStore = async () => {
+    if (!editStore) return;
+    setError("");
+    if (!editStore.name.trim()) { setError("Butiksnamn är obligatoriskt."); return; }
+    setSaving(true);
+    await supabase.from("stores").update({
+      name: editStore.name.trim(),
+      city: editStore.city?.trim() ?? "",
+      address: editStore.address?.trim() ?? "",
+      email: editStore.email?.trim() ?? "",
+      sap_site_id: editStore.sap_site_id?.trim() || null,
+    }).eq("id", editStore.id);
+    logAudit(currentUser?.id ?? null, "store.edit", "stores", editStore.id, { name: editStore.name });
+    const { data } = await supabase.from("stores").select("*").order("name");
+    setStores((data ?? []) as Store[]);
+    setSaving(false);
+    setEditStore(null);
+    setError("");
   };
 
   const confirmDeleteStore = async () => {
@@ -506,19 +530,29 @@ function AccountsPage() {
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
                       <Building2 className="h-5 w-5" />
                     </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost" size="icon"
+                        className="rounded-full text-muted-foreground hover:text-foreground"
+                        onClick={() => { setEditStore({ ...store }); setError(""); }} aria-label="Redigera butik"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="rounded-full text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeleteStore(store)} aria-label="Ta bort butik"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
                   <h3 className="mt-3 text-base font-semibold">{store.name}</h3>
                   <div className="mt-3 space-y-1.5 text-xs text-muted-foreground">
                     {store.address && <div className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" /><span>{store.address}{store.city && `, ${store.city}`}</span></div>}
                     {store.email && <div className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{store.email}</span></div>}
+                    {store.sap_site_id && <div className="flex items-center gap-1.5"><Hash className="h-3.5 w-3.5 shrink-0" /><span className="font-mono">SAP {store.sap_site_id}</span></div>}
                   </div>
-                  <Button
-                    variant="ghost" size="icon"
-                    className="absolute right-3 top-3 rounded-full text-muted-foreground hover:text-destructive"
-                    onClick={() => setDeleteStore(store)} aria-label="Ta bort butik"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
                 </div>
               ))}
             </div>
@@ -681,6 +715,11 @@ function AccountsPage() {
               <Input placeholder="Gatuadress" value={newStore.address}
                 onChange={(e) => setNewStore(p => ({ ...p, address: e.target.value }))} />
             </div>
+            <div className="space-y-1.5">
+              <Label>SAP-butiksnummer (Mitt Coop siteId)</Label>
+              <Input placeholder="t.ex. 1452" value={newStore.sap_site_id} inputMode="numeric"
+                onChange={(e) => setNewStore(p => ({ ...p, sap_site_id: e.target.value }))} />
+            </div>
             {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
@@ -688,6 +727,52 @@ function AccountsPage() {
             <Button onClick={createStore} disabled={saving || !newStore.name}>{saving ? "Sparar..." : "Lägg till"}</Button>
           </DialogFooter>
         </DialogContent>
+      </Dialog>
+
+      {/* EDIT STORE DIALOG */}
+      <Dialog open={!!editStore} onOpenChange={(o) => { if (!o) { setEditStore(null); setError(""); } }}>
+        {editStore && (
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>Redigera butik</DialogTitle></DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label>Butiksnamn *</Label>
+                <Input value={editStore.name}
+                  onChange={(e) => setEditStore(s => s ? { ...s, name: e.target.value } : null)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Stad</Label>
+                  <Input value={editStore.city ?? ""}
+                    onChange={(e) => setEditStore(s => s ? { ...s, city: e.target.value } : null)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>E-post</Label>
+                  <Input type="email" value={editStore.email ?? ""}
+                    onChange={(e) => setEditStore(s => s ? { ...s, email: e.target.value } : null)} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Adress</Label>
+                <Input value={editStore.address ?? ""}
+                  onChange={(e) => setEditStore(s => s ? { ...s, address: e.target.value } : null)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>SAP-butiksnummer (Mitt Coop siteId)</Label>
+                <Input placeholder="t.ex. 1452" value={editStore.sap_site_id ?? ""} inputMode="numeric"
+                  onChange={(e) => setEditStore(s => s ? { ...s, sap_site_id: e.target.value } : null)} />
+                <p className="text-xs text-muted-foreground">Används för Mitt Coop-integrationen.</p>
+              </div>
+              {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setEditStore(null); setError(""); }}>
+                <X className="mr-1.5 h-3.5 w-3.5" /> Avbryt
+              </Button>
+              <Button onClick={updateStore} disabled={saving}>{saving ? "Sparar..." : "Spara"}</Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
       </Dialog>
 
       {/* DELETE USER CONFIRM */}

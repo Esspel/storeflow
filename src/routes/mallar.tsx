@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, X, Repeat, Clock, TriangleAlert as AlertTriangle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -171,6 +171,111 @@ function MallarPage() {
   }
 
   const displayStores = user?.role === "admin" ? allStores : userStores;
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+
+  // Download a blank CSV template so users know the expected format
+  const downloadBlankTemplate = () => {
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Förfaller om (dagar)", "Steg (detaljer)", "Frågor"];
+    const example = [
+      "Exempelmall",
+      "Rengöring",
+      "Beskriv mallen här",
+      "Medel",
+      "weekly",
+      "1",
+      "1. Torka hyllor | 2. Dammsuga [foto]",
+      "1. Är allt klart? [obligatorisk] [ja_nej]",
+    ];
+    const csv = [headers, example]
+      .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";"))
+      .join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "mall-import-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Parse and import a CSV file containing templates
+  const importCSV = async (file: File) => {
+    setImporting(true);
+    const text = await file.text();
+    // strip BOM
+    const cleaned = text.startsWith("\ufeff") ? text.slice(1) : text;
+    const lines = cleaned.split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2) { setImporting(false); return; }
+
+    // Parse CSV row respecting quoted fields with semicolon separator
+    const parseRow = (line: string): string[] => {
+      const cols: string[] = [];
+      let cur = "";
+      let inQuote = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuote && line[i + 1] === '"') { cur += '"'; i++; }
+          else inQuote = !inQuote;
+        } else if (ch === ";" && !inQuote) {
+          cols.push(cur); cur = "";
+        } else {
+          cur += ch;
+        }
+      }
+      cols.push(cur);
+      return cols;
+    };
+
+    const rows = lines.slice(1).map(parseRow);
+    for (const cols of rows) {
+      const [title, category, description, priority, recurrence, dueDays, stepsRaw, questionsRaw] = cols;
+      if (!title?.trim()) continue;
+
+      const { data: tmpl } = await supabase.from("checklist_templates").insert({
+        title: title.trim(),
+        category: (category ?? "").trim(),
+        description: (description ?? "").trim(),
+        priority: (priority ?? "Medel").trim() || "Medel",
+        recurrence_rule: (recurrence ?? "").trim() || null,
+        due_date_offset: dueDays?.trim() ? parseInt(dueDays.trim()) : null,
+        created_by: user?.id ?? null,
+      }).select("id").maybeSingle();
+
+      if (!tmpl?.id) continue;
+
+      // Parse steps: "1. Label [foto] | 2. Label"
+      if (stepsRaw?.trim()) {
+        const stepParts = stepsRaw.split("|").map((s) => s.trim()).filter(Boolean);
+        const items = stepParts.map((part, idx) => ({
+          template_id: tmpl.id,
+          label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[foto\]/i, "").trim(),
+          requires_photo: /\[foto\]/i.test(part),
+          sort_order: idx,
+        }));
+        if (items.length > 0) await supabase.from("checklist_template_items").insert(items);
+      }
+
+      // Parse questions: "1. Label [obligatorisk] [ja_nej] | 2. Label"
+      if (questionsRaw?.trim()) {
+        const qParts = questionsRaw.split("|").map((s) => s.trim()).filter(Boolean);
+        const questions = qParts.map((part, idx) => ({
+          template_id: tmpl.id,
+          label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[obligatorisk\]/i, "").replace(/\s*\[ja_nej\]/i, "").trim(),
+          question_type: /\[ja_nej\]/i.test(part) ? "yes_no" : "text",
+          is_required: /\[obligatorisk\]/i.test(part),
+          sort_order: idx,
+        }));
+        if (questions.length > 0) await supabase.from("checklist_template_questions").insert(questions);
+      }
+
+      logAudit(user?.id ?? null, "template.import", "checklist_templates", tmpl.id, { title: title.trim() });
+    }
+
+    await load();
+    setImporting(false);
+  };
 
   const exportCSV = () => {
     const rows = [
@@ -202,10 +307,25 @@ function MallarPage() {
         title="Mallar"
         description="Återanvändbara checklistor och rutiners mallar."
         actions={
-          <div className="flex gap-2">
-            <Button variant="outline" className="rounded-full" onClick={exportCSV}>
-              <Download className="mr-2 h-4 w-4" /> Exportera CSV
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) importCSV(f); e.target.value = ""; }}
+            />
+            <Button variant="outline" className="rounded-full" onClick={downloadBlankTemplate}>
+              <Download className="mr-2 h-4 w-4" /> CSV-mall
             </Button>
+            <Button variant="outline" className="rounded-full" onClick={exportCSV}>
+              <Download className="mr-2 h-4 w-4" /> Exportera
+            </Button>
+            {isManager && (
+              <Button variant="outline" className="rounded-full" disabled={importing} onClick={() => importInputRef.current?.click()}>
+                <Upload className="mr-2 h-4 w-4" /> {importing ? "Importerar..." : "Importera CSV"}
+              </Button>
+            )}
             {isManager && (
               <Button className="rounded-full" onClick={() => { setShowCreate(true); setError(""); }}>
                 <Plus className="mr-2 h-4 w-4" /> Ny mall

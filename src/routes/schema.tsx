@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Calendar, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight } from "lucide-react";
+import { Calendar, CalendarClock, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase, type AppUser, type Task } from "@/lib/supabase";
+import { supabase, type AppUser, type Task, type Meeting } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 
@@ -572,6 +572,7 @@ function SchemaPage() {
   const [csvYear, setCsvYear] = useState<number>(() => new Date().getFullYear());
   const [scheduleTasks, setScheduleTasks] = useState<Task[]>([]);
   const [scheduleTaskAssignees, setScheduleTaskAssignees] = useState<{ task_id: string; user_id: string | null }[]>([]);
+  const [weekMeetings, setWeekMeetings] = useState<Meeting[]>([]);
 
   const importInputRef = useRef<HTMLInputElement>(null);
   const storeId = activeStore?.id ?? user?.store_id ?? null;
@@ -609,6 +610,7 @@ function SchemaPage() {
   useEffect(() => {
     if (!activeImport) return;
     loadScheduleData(activeImport.id);
+    loadMeetingsForWeek(activeImport.week_start_date);
   }, [activeImport]);
 
   useEffect(() => {
@@ -726,6 +728,19 @@ function SchemaPage() {
     ]);
     setScheduleEmployees((empRes.data ?? []) as ScheduleEmployee[]);
     setScheduleShifts((shiftRes.data ?? []) as ScheduleShift[]);
+  }
+
+  async function loadMeetingsForWeek(weekStart: string) {
+    if (!storeId) return;
+    const weekEnd = addDays(weekStart, 7);
+    const { data } = await supabase
+      .from("meetings")
+      .select("id, meeting_type, title, store_id, scheduled_at, status")
+      .eq("store_id", storeId)
+      .gte("scheduled_at", weekStart)
+      .lt("scheduled_at", weekEnd)
+      .order("scheduled_at");
+    setWeekMeetings((data ?? []) as Meeting[]);
   }
 
   async function loadDeliveryPlans() {
@@ -1072,6 +1087,9 @@ function SchemaPage() {
   // Deliveries for current day
   const todayDeliveries = deliveryEntries.filter((d) => d.delivery_date === currentDate);
 
+  // Meetings for current day
+  const todayMeetings = weekMeetings.filter((m) => toLocalDateStr(m.scheduled_at) === currentDate);
+
   const hourMarkers = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => TIMELINE_START + i);
 
   return (
@@ -1167,6 +1185,7 @@ function SchemaPage() {
                 const isToday = date === todayStr;
                 const count = scheduleEmployees.filter((emp) => scheduleShifts.some((s) => s.schedule_employee_id === emp.id && s.day_date === date && !s.is_absence_day && s.start_time)).length;
                 const delivCount = deliveryEntries.filter((d) => d.delivery_date === date).length;
+                const meetCount = weekMeetings.filter((m) => toLocalDateStr(m.scheduled_at) === date).length;
                 const isSelected = selectedDayIndex === idx;
                 return (
                   <button key={date} onClick={() => setSelectedDayIndex(idx)}
@@ -1181,6 +1200,11 @@ function SchemaPage() {
                     {delivCount > 0 && (
                       <span className={["text-[9px] font-medium", isSelected ? "text-primary-foreground/60" : "text-info"].join(" ")}>
                         {delivCount}lev
+                      </span>
+                    )}
+                    {meetCount > 0 && (
+                      <span className={["text-[9px] font-medium", isSelected ? "text-primary-foreground/60" : "text-sky-600"].join(" ")}>
+                        {meetCount}möte{meetCount > 1 ? "n" : ""}
                       </span>
                     )}
                     {isToday && !isSelected && <span className="absolute bottom-1.5 h-1 w-1 rounded-full bg-primary" />}
@@ -1237,7 +1261,7 @@ function SchemaPage() {
 
           {/* Deliveries row for day view */}
           {viewMode === "day" && showDeliveries && todayDeliveries.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-2">
+            <div className="mb-2 flex flex-wrap gap-2">
               {todayDeliveries.map((d) => {
                 const c = flowColor(d.flow_name);
                 return (
@@ -1245,6 +1269,27 @@ function SchemaPage() {
                     <Truck className="h-3 w-3" />
                     <span>{d.delivery_time} — {d.flow_name}</span>
                     {d.supplier && <span className="opacity-60 text-[10px]">· {d.supplier.split(" ").slice(0, 3).join(" ")}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Meetings row for day view */}
+          {viewMode === "day" && todayMeetings.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {todayMeetings.map((m) => {
+                const time = new Date(m.scheduled_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+                const label = m.meeting_type === "daglig_styrning" ? "Daglig styrning"
+                  : m.meeting_type === "veckostamning" ? "Veckostämning"
+                  : m.meeting_type === "ledningsgrupp" ? "Ledningsgrupp"
+                  : "Säljledarmöte";
+                const isDone = m.status === "completed" || m.status === "cancelled";
+                return (
+                  <div key={m.id} className={["flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium", isDone ? "opacity-50" : ""].join(" ")} style={{ backgroundColor: "var(--color-info-soft, #e0f2fe)", color: "#0369a1", borderColor: "#bae6fd" }}>
+                    <CalendarClock className="h-3 w-3" />
+                    <span>{time} — {label}</span>
+                    {m.title !== label && <span className="opacity-60 text-[10px]">· {m.title}</span>}
                   </div>
                 );
               })}

@@ -153,7 +153,7 @@ const emptyForm = (storeId: string) => ({
 // Guards against mouse click-and-drag triggering swipe actions on desktop.
 function isTouchDevice(): boolean {
   if (typeof window === "undefined") return false;
-  return window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+  return window.matchMedia("(pointer: coarse)").matches;
 }
 
 // Swipeable card: right-swipe → complete (with undo), left-swipe → open detail.
@@ -1726,7 +1726,7 @@ function TasksPage() {
                 </div>
 
                 {/* SAP artikel-ID */}
-                <div className="flex items-center gap-3 px-4 py-3">
+                <div className="flex items-center gap-3 px-4 py-3 min-w-0">
                   <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                   <span className="w-24 shrink-0 text-xs text-muted-foreground">SAP-artikel</span>
                   <input
@@ -1734,7 +1734,7 @@ function TasksPage() {
                     onChange={(e) => setNewTask(p => ({ ...p, sap_article_id: e.target.value }))}
                     placeholder="t.ex. 1047133"
                     inputMode="numeric"
-                    className="flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none"
+                    className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none overflow-hidden"
                   />
                 </div>
 

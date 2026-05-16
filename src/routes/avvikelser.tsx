@@ -414,7 +414,7 @@ function IssuesPage() {
 
       {/* CREATE DIALOG — two-panel layout */}
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setUploadFiles([]); }}>
-        <DialogContent className="max-h-[92vh] w-full max-w-3xl overflow-hidden p-0 gap-0">
+        <DialogContent className="max-h-[92vh] w-full max-w-4xl overflow-hidden p-0 gap-0">
           {/* Header bar */}
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
@@ -536,7 +536,7 @@ function IssuesPage() {
                 </div>
 
                 {/* SAP artikel-ID */}
-                <div className="flex items-center gap-3 px-4 py-3">
+                <div className="flex items-center gap-3 px-4 py-3 min-w-0">
                   <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                   <span className="w-20 shrink-0 text-xs text-muted-foreground">SAP-artikel</span>
                   <input
@@ -544,7 +544,7 @@ function IssuesPage() {
                     onChange={(e) => setNewIncident(p => ({ ...p, sap_article_id: e.target.value }))}
                     placeholder="t.ex. 1047133"
                     inputMode="numeric"
-                    className="flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none"
+                    className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none overflow-hidden"
                   />
                 </div>
 
