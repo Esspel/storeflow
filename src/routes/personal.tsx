@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   Building2,
-  FileUp,
   Hash,
   Mail,
   MapPin,
@@ -43,7 +42,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase, type AppUser, type Store, type UserGroup, type UserGroupMember, logAudit, ROLE_LABELS } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
-import { XmlImportModal } from "@/components/xml-import-modal";
 import { GdprExport } from "@/components/gdpr-export";
 
 const MIN_PW_LENGTH = 12;
@@ -62,7 +60,7 @@ function roleBadge(role: string) {
 type UserWithStores = AppUser & { assignedStoreIds: string[] };
 
 function AccountsPage() {
-  const { user: currentUser, userStores: currentUserStores } = useAuth();
+  const { user: currentUser, userStores: currentUserStores, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const isAdmin = currentUser?.role === "admin";
@@ -82,8 +80,12 @@ function AccountsPage() {
     role: "employee" as "admin" | "manager" | "employee",
     employee_group: "",
     storeIds: [] as string[],
+    pin: "",
+    barcode: "",
   });
   const [resetPw, setResetPw] = useState("");
+  const [editPin, setEditPin] = useState("");
+  const [editBarcode, setEditBarcode] = useState("");
 
   const [showCreateStore, setShowCreateStore] = useState(false);
   const [deleteStore, setDeleteStore] = useState<Store | null>(null);
@@ -99,13 +101,13 @@ function AccountsPage() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [showXmlImport, setShowXmlImport] = useState(false);
-  const [xmlImportStoreId, setXmlImportStoreId] = useState("");
 
   useEffect(() => {
+    // Wait until auth has finished loading before deciding to redirect
+    if (authLoading) return;
     if (!isManager) { navigate({ to: "/" }); return; }
     load();
-  }, [currentUser]);
+  }, [currentUser, authLoading]);
 
   // The stores a manager is allowed to manage (all for admin)
   const manageableStoreIds = isAdmin ? null : currentUserStores.map((s) => s.id);
@@ -196,6 +198,20 @@ function AccountsPage() {
     const { data: hash } = await supabase.rpc("hash_password", { plain_password: newUser.password });
     // Chefer kan inte skapa admin-konton
     const safeRole = !isAdmin && newUser.role === "admin" ? "employee" : newUser.role;
+
+    // Hash PIN if provided
+    let pinHash: string | null = null;
+    if (newUser.pin.length >= 4) {
+      const { data: ph } = await supabase.rpc("hash_password", { plain_password: newUser.pin });
+      pinHash = ph;
+    }
+
+    // Check barcode uniqueness
+    if (newUser.barcode.trim()) {
+      const { data: existing } = await supabase.from("app_users").select("id").eq("barcode_id", newUser.barcode.trim()).maybeSingle();
+      if (existing) { setError("Streckkoden är redan registrerad på en annan användare."); setSaving(false); return; }
+    }
+
     const { data: created } = await supabase.from("app_users").insert({
       username: newUser.username.toLowerCase().trim(),
       password_hash: hash,
@@ -204,6 +220,8 @@ function AccountsPage() {
       employee_group: newUser.employee_group.trim(),
       store_id: newUser.storeIds[0] ?? null,
       must_change_password: true,
+      ...(pinHash ? { quick_pin_hash: pinHash } : {}),
+      ...(newUser.barcode.trim() ? { barcode_id: newUser.barcode.trim() } : {}),
     }).select("id").maybeSingle();
 
     if (created?.id) {
@@ -214,22 +232,33 @@ function AccountsPage() {
     await fetchUsers();
     setSaving(false);
     setShowCreateUser(false);
-    setNewUser({ username: "", password: "", display_name: "", role: "employee", employee_group: "", storeIds: [] });
+    setNewUser({ username: "", password: "", display_name: "", role: "employee", employee_group: "", storeIds: [], pin: "", barcode: "" });
   };
 
   const updateUser = async () => {
     if (!editUser) return;
     if (resetPw && resetPw.length < MIN_PW_LENGTH) { setError(`Nytt lösenord måste vara minst ${MIN_PW_LENGTH} tecken.`); return; }
+    if (editPin && editPin.length > 0 && editPin.length < 4) { setError("PIN måste vara minst 4 siffror."); return; }
     setSaving(true);
 
-    await supabase.from("app_users").update({
+    // Check barcode uniqueness if changed
+    if (editBarcode.trim()) {
+      const { data: existingBarcode } = await supabase.from("app_users").select("id").eq("barcode_id", editBarcode.trim()).neq("id", editUser.id).maybeSingle();
+      if (existingBarcode) { setError("Streckkoden är redan registrerad på en annan användare."); setSaving(false); return; }
+    }
+
+    const updates: Record<string, unknown> = {
       display_name: editUser.display_name.trim(),
       role: editUser.role,
       role_manually_set: true,
       employee_group: (editUser.employee_group ?? "").trim(),
       store_id: editUser.assignedStoreIds[0] ?? null,
-    }).eq("id", editUser.id);
+    };
 
+    if (editBarcode.trim()) updates.barcode_id = editBarcode.trim();
+    else if (editBarcode === "") updates.barcode_id = null;
+
+    await supabase.from("app_users").update(updates).eq("id", editUser.id);
     await syncUserStores(editUser.id, editUser.assignedStoreIds);
 
     if (resetPw.length >= MIN_PW_LENGTH) {
@@ -237,11 +266,20 @@ function AccountsPage() {
       await supabase.from("app_users").update({ password_hash: hash, must_change_password: true }).eq("id", editUser.id);
     }
 
+    if (editPin.length >= 4) {
+      const { data: pinHash } = await supabase.rpc("hash_password", { plain_password: editPin });
+      await supabase.from("app_users").update({ quick_pin_hash: pinHash }).eq("id", editUser.id);
+    } else if (editPin === "clear") {
+      await supabase.from("app_users").update({ quick_pin_hash: null }).eq("id", editUser.id);
+    }
+
     logAudit(currentUser?.id ?? null, "user.edit", "app_users", editUser.id, {});
     await fetchUsers();
     setSaving(false);
     setEditUser(null);
     setResetPw("");
+    setEditPin("");
+    setEditBarcode("");
     setError("");
   };
 
@@ -412,18 +450,6 @@ function AccountsPage() {
               <p className="text-sm text-muted-foreground">{users.filter(u => u.display_name !== "Gallrad användare").length} konton</p>
             </div>
             <div className="flex gap-2">
-              {isAdmin && (
-                <Button
-                  variant="outline"
-                  className="rounded-full"
-                  onClick={() => {
-                    setXmlImportStoreId(currentUserStores[0]?.id ?? stores[0]?.id ?? "");
-                    setShowXmlImport(true);
-                  }}
-                >
-                  <FileUp className="mr-2 h-4 w-4" /> Importera XML
-                </Button>
-              )}
               <Button className="rounded-full" onClick={() => { setShowCreateUser(true); setError(""); }}>
                 <Plus className="mr-2 h-4 w-4" /> Nytt konto
               </Button>
@@ -484,7 +510,7 @@ function AccountsPage() {
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost" size="sm" className="rounded-full text-xs"
-                            onClick={() => { setEditUser({ ...u }); setResetPw(""); setError(""); }}
+                            onClick={() => { setEditUser({ ...u }); setResetPw(""); setEditPin(""); setEditBarcode((u as AppUser & { assignedStoreIds: string[]; barcode_id?: string }).barcode_id ?? ""); setError(""); }}
                           >
                             <UserCog className="mr-1.5 h-3.5 w-3.5" /> Redigera
                           </Button>
@@ -687,6 +713,29 @@ function AccountsPage() {
                 ))}
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>PIN-kod (snabbyte)</Label>
+                <Input
+                  type="password"
+                  inputMode="numeric"
+                  placeholder="Min. 4 siffror"
+                  maxLength={8}
+                  value={newUser.pin}
+                  onChange={(e) => setNewUser(p => ({ ...p, pin: e.target.value.replace(/\D/g, "") }))}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Streckkods-ID</Label>
+                <Input
+                  placeholder="Skanna eller ange"
+                  value={newUser.barcode}
+                  onChange={(e) => setNewUser(p => ({ ...p, barcode: e.target.value }))}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
             {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
@@ -752,10 +801,35 @@ function AccountsPage() {
                   onChange={(e) => setResetPw(e.target.value)} autoComplete="new-password" />
                 {resetPw.length > 0 && <p className="text-xs text-muted-foreground">Användaren tvingas byta lösenord vid nästa inlogg.</p>}
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>PIN-kod (snabbyte)</Label>
+                  <Input
+                    type="password"
+                    inputMode="numeric"
+                    placeholder="Ny PIN, min 4 siffror"
+                    maxLength={8}
+                    value={editPin}
+                    onChange={(e) => setEditPin(e.target.value.replace(/\D/g, ""))}
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground">Lämna tomt för att behålla befintlig PIN.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Streckkods-ID</Label>
+                  <Input
+                    placeholder="Skanna eller ange"
+                    value={editBarcode}
+                    onChange={(e) => setEditBarcode(e.target.value)}
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground">Lämna tomt för att ta bort streckkod.</p>
+                </div>
+              </div>
               {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => { setEditUser(null); setError(""); }}>
+              <Button variant="outline" onClick={() => { setEditUser(null); setEditPin(""); setEditBarcode(""); setError(""); }}>
                 <X className="mr-1.5 h-3.5 w-3.5" /> Avbryt
               </Button>
               <Button onClick={updateUser} disabled={saving}>{saving ? "Sparar..." : "Spara"}</Button>
@@ -994,17 +1068,6 @@ function AccountsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* XML IMPORT MODAL */}
-      {isAdmin && (
-        <XmlImportModal
-          open={showXmlImport}
-          onOpenChange={setShowXmlImport}
-          storeId={xmlImportStoreId}
-          stores={stores}
-          existingUsernames={users.map((u) => u.username)}
-          onImported={fetchUsers}
-        />
-      )}
 
     </div>
   );

@@ -45,13 +45,20 @@ export function GdprExport() {
 
     const userId = (user as { id: string }).id;
 
+    // Fetch kundrunda sessions first so we can use the IDs for responses query
+    const { data: sessionRows } = await supabase
+      .from("kundrunda_sessions")
+      .select("id, started_at, completed_at, total_score, max_score")
+      .eq("conducted_by", userId);
+
+    const sessionIds = (sessionRows ?? []).map((s: { id: string }) => s.id);
+
     const [
       tasksCreated,
       tasksAssigned,
       incidentsReported,
       incidentsAssigned,
       incidentComments,
-      kundrundaSessions,
       kundrundaResponses,
       auditEntries,
     ] = await Promise.all([
@@ -60,13 +67,13 @@ export function GdprExport() {
       supabase.from("incidents").select("id, ref_number, title, category, status, created_at").eq("reported_by", userId),
       supabase.from("incidents").select("id, ref_number, title, status, created_at").eq("assigned_to", userId),
       supabase.from("incident_comments").select("id, content, created_at, incident_id").eq("author_id", userId),
-      supabase.from("kundrunda_sessions").select("id, started_at, completed_at, total_score, max_score").eq("conducted_by", userId),
-      supabase.from("kundrunda_responses").select("id, checkpoint_id, result, defect_description, created_at").in(
-        "session_id",
-        ((await supabase.from("kundrunda_sessions").select("id").eq("conducted_by", userId)).data ?? []).map((s: { id: string }) => s.id)
-      ),
+      sessionIds.length > 0
+        ? supabase.from("kundrunda_responses").select("id, checkpoint_id, result, defect_description, created_at").in("session_id", sessionIds)
+        : Promise.resolve({ data: [] }),
       supabase.from("audit_log").select("action, entity, entity_id, meta, created_at").eq("actor_id", userId).order("created_at", { ascending: false }).limit(200),
     ]);
+
+    const kundrundaSessions = { data: sessionRows };
 
     const exportData: ExportResult = {
       user: {

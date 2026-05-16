@@ -1,5 +1,6 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
 import { Bell, ChevronDown, ClipboardList, FlaskConical, Hop as Home, LogOut, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight } from "lucide-react";
+import { ROLE_LABELS } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
 import { useEffect, useRef, useState } from "react";
 
@@ -321,7 +322,7 @@ export function AppShell() {
               <DropdownMenuContent align="end" className="w-56">
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-medium">{user?.display_name}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
+                  <p className="text-xs text-muted-foreground">{user?.role ? (ROLE_LABELS[user.role] ?? user.role) : ""}</p>
                   {activeStore && <p className="text-xs text-muted-foreground">{activeStore.name}</p>}
                 </div>
                 {/* Store switcher in dropdown — mobile only (desktop has header button) */}
@@ -366,7 +367,7 @@ export function AppShell() {
                     Inställningar
                   </Link>
                 </DropdownMenuItem>
-                {isAdmin && (
+                {isManager && (
                   <DropdownMenuItem asChild>
                     <Link to="/personal" className="cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
