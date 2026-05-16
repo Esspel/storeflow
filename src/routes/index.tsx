@@ -135,8 +135,8 @@ function HubPage() {
       const openIncidents = inc.filter((i) => ["open", "in_progress", "escalated"].includes(i.status)).length;
 
       setStats({ todosCompleted: done, openTasks, overdueTasks, openIncidents });
-      // Hide closed incidents
-      setRecentIncidents(inc.filter((i) => i.status !== "closed"));
+      // Hide closed and resolved incidents from dashboard overview
+      setRecentIncidents(inc.filter((i) => i.status !== "closed" && i.status !== "resolved"));
 
       const parentIdsWithChildren = new Set(mapped.filter((t) => t.parent_task_id).map((t) => t.parent_task_id!));
       const simTodayStart = new Date(now); simTodayStart.setHours(0,0,0,0);

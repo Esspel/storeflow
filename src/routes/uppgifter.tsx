@@ -340,6 +340,7 @@ function TasksPage() {
 
   // Detail modal
   const [detailTask, setDetailTask] = useState<TaskFull | null>(null);
+  const [completeError, setCompleteError] = useState("");
   const [answerDraft, setAnswerDraft] = useState<Record<string, string>>({});
   // Ref so Realtime handler can check draft state without stale closure
   const answerDraftRef = useRef<Record<string, string>>({});
@@ -680,16 +681,38 @@ function TasksPage() {
     if (detailTask?.id === task.id) setDetailTask(p => p ? { ...p, status: "progress" } : null);
   };
 
+  // Check if a task should auto-complete (all steps done + all questions answered with no blank text fields)
+  const shouldAutoComplete = (steps: TaskFull["steps"], questions: TaskFull["questions"]): boolean => {
+    const allStepsDone = (steps ?? []).every(s => s.is_done);
+    const allAnswered = (questions ?? []).every(q => q.answer?.trim());
+    return allStepsDone && allAnswered;
+  };
+
   const toggleStep = async (task: TaskFull, stepId: string, current: boolean) => {
+    const wasChecking = !current;
     await markInProgress(task);
-    await supabase.from("task_steps").update({ is_done: !current }).eq("id", stepId);
-    logAudit(user?.id ?? null, "task.step.toggle", "task_steps", stepId, { task_id: task.id, is_done: !current });
+    await supabase.from("task_steps").update({ is_done: wasChecking }).eq("id", stepId);
+    logAudit(user?.id ?? null, "task.step.toggle", "task_steps", stepId, { task_id: task.id, is_done: wasChecking });
+
+    // Build updated task state for auto-complete check
+    const updatedSteps = (task.steps ?? []).map(s => s.id === stepId ? { ...s, is_done: wasChecking } : s);
+
+    // If unchecking while done → auto-reopen
+    if (!wasChecking && task.status === "done") {
+      await supabase.from("tasks").update({ status: "progress", completed_at: null }).eq("id", task.id);
+    }
+    // If all done and no free-text question blank → auto-complete
+    else if (wasChecking && shouldAutoComplete(updatedSteps, task.questions)) {
+      const hasTextQ = (task.questions ?? []).some(q => q.question_type === "text");
+      if (!hasTextQ) {
+        await completeTask({ ...task, steps: updatedSteps });
+        return;
+      }
+    }
+
     fetchTasks();
     if (detailTask?.id === task.id) {
-      setDetailTask(p => p ? {
-        ...p,
-        steps: p.steps.map(s => s.id === stepId ? { ...s, is_done: !current } : s)
-      } : null);
+      setDetailTask(p => p ? { ...p, steps: updatedSteps } : null);
     }
   };
 
@@ -711,12 +734,27 @@ function TasksPage() {
         answered_at: new Date().toISOString(),
       }).eq("id", question.id);
       logAudit(user?.id ?? null, "task.question.answer", "task_questions", question.id, { task_id: task.id, old: oldAnswer, new: value });
+
+      const updatedQuestions = (task.questions ?? []).map(q =>
+        q.id === question.id ? { ...q, answer: value, answered_by: user?.id ?? null, answered_at: new Date().toISOString() } : q
+      );
+
+      // If answer cleared while task is done → auto-reopen
+      if (!value?.trim() && task.status === "done") {
+        await supabase.from("tasks").update({ status: "progress", completed_at: null }).eq("id", task.id);
+      }
+      // If all items now complete and no blank text question → auto-complete
+      else if (value?.trim() && shouldAutoComplete(task.steps, updatedQuestions)) {
+        const hasTextQ = updatedQuestions.some(q => q.question_type === "text");
+        if (!hasTextQ) {
+          await completeTask({ ...task, questions: updatedQuestions });
+          return;
+        }
+      }
+
       fetchTasks();
       if (detailTask?.id === task.id) {
-        setDetailTask(p => p ? {
-          ...p,
-          questions: p.questions.map(q => q.id === question.id ? { ...q, answer: value, answered_by: user?.id ?? null, answered_at: new Date().toISOString() } : q)
-        } : null);
+        setDetailTask(p => p ? { ...p, questions: updatedQuestions } : null);
       }
     } finally {
       savingAnswerRef.current.delete(question.id);
@@ -731,11 +769,12 @@ function TasksPage() {
       const newStatus = isDone ? "todo" : "done";
 
       if (!isDone) {
-        const unanswered = (task.questions ?? []).filter(q => q.is_required && !q.answer?.trim());
+        const unanswered = (task.questions ?? []).filter(q => !q.answer?.trim());
         if (unanswered.length > 0) {
-          alert(`Fyll i obligatoriska fält: ${unanswered.map(q => q.label).join(", ")}`);
+          setCompleteError(`Obesvarade frågor: ${unanswered.map(q => q.label).join(", ")}`);
           return;
         }
+        setCompleteError("");
       }
 
       await supabase.from("tasks").update({
@@ -1178,10 +1217,10 @@ function TasksPage() {
             const done = effectiveStatus(t) === "done";
             const stepsDone = t.steps?.filter((s) => s.is_done).length ?? 0;
             const stepsTotal = t.steps?.length ?? 0;
-            const reqQuestions = (t.questions ?? []).filter(q => q.is_required);
-            const reqAnswered = reqQuestions.filter(q => q.answer?.trim()).length;
-            const totalItems = stepsTotal + reqQuestions.length;
-            const doneItems = stepsDone + reqAnswered;
+            const allQuestions = t.questions ?? [];
+            const answeredQuestions = allQuestions.filter(q => q.answer?.trim()).length;
+            const totalItems = stepsTotal + allQuestions.length;
+            const doneItems = stepsDone + answeredQuestions;
             const progress = totalItems > 0 ? doneItems / totalItems : done ? 1 : 0;
             const isKritisk = t.priority === "Kritisk";
             const weekdayShort = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
@@ -1300,7 +1339,7 @@ function TasksPage() {
 
       {/* DETAIL MODAL */}
       {detailTask && (
-        <Dialog open={!!detailTask && !lightboxTask} onOpenChange={(o) => { if (!o) { setDetailTask(null); setAnswerDraft({}); } }}>
+        <Dialog open={!!detailTask && !lightboxTask} onOpenChange={(o) => { if (!o) { setDetailTask(null); setAnswerDraft({}); setCompleteError(""); } }}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <div className="flex items-start justify-between gap-2 pr-6">
@@ -1528,7 +1567,11 @@ function TasksPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-4">
+              <div className="flex flex-col gap-2 border-t border-border/60 pt-4">
+                {completeError && (
+                  <p className="text-xs text-destructive">{completeError}</p>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
                 {detailTask.status !== "done" && detailTask.status !== "cancelled" && (
                   <Button
                     size="sm"
@@ -1568,6 +1611,7 @@ function TasksPage() {
                     <Trash2 className="h-3.5 w-3.5" /> Ta bort
                   </Button>
                 )}
+                </div>
               </div>
             </div>
           </DialogContent>

@@ -78,7 +78,7 @@ function IssuesPage() {
   const [stores, setStores] = useState<StoreType[]>([]);
   const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("active");
   const [filterPriority, setFilterPriority] = useState("all");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -315,7 +315,8 @@ function IssuesPage() {
   };
 
   const visible = incidents.filter((i) => {
-    if (filterStatus !== "all" && i.status !== filterStatus) return false;
+    if (filterStatus === "active" && ["resolved", "closed"].includes(i.status)) return false;
+    if (filterStatus !== "all" && filterStatus !== "active" && i.status !== filterStatus) return false;
     if (filterPriority !== "all" && i.priority !== filterPriority) return false;
     if (search && !i.title.toLowerCase().includes(search.toLowerCase()) && !i.ref_number?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -387,6 +388,7 @@ function IssuesPage() {
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="h-9 w-40 rounded-full text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
+            <SelectItem value="active">Aktiva</SelectItem>
             <SelectItem value="all">Alla statusar</SelectItem>
             {Object.entries(STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
           </SelectContent>
