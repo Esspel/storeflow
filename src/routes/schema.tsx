@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Calendar, CalendarClock, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight } from "lucide-react";
+import { Calendar, CalendarClock, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -580,7 +580,10 @@ function SchemaPage() {
   const [scheduleTaskAssignees, setScheduleTaskAssignees] = useState<{ task_id: string; user_id: string | null }[]>([]);
   const [weekMeetings, setWeekMeetings] = useState<Meeting[]>([]);
 
+  const [loadingSchedule, setLoadingSchedule] = useState(false);
+
   const importInputRef = useRef<HTMLInputElement>(null);
+  const mobileListRef = useRef<HTMLDivElement>(null);
   const storeId = activeStore?.id ?? user?.store_id ?? null;
   const todayStr = (() => { const d = new Date(); const p = (n: number) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; })();
 
@@ -728,12 +731,14 @@ function SchemaPage() {
   }
 
   async function loadScheduleData(importId: string) {
+    setLoadingSchedule(true);
     const [empRes, shiftRes] = await Promise.all([
       supabase.from("schedule_employees").select("*").eq("import_id", importId).order("employee_name"),
       supabase.from("schedule_shifts").select("*").eq("import_id", importId),
     ]);
     setScheduleEmployees((empRes.data ?? []) as ScheduleEmployee[]);
     setScheduleShifts((shiftRes.data ?? []) as ScheduleShift[]);
+    setLoadingSchedule(false);
   }
 
   async function loadMeetingsForWeek(weekStart: string) {
@@ -1101,6 +1106,24 @@ function SchemaPage() {
 
   const hourMarkers = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => TIMELINE_START + i);
 
+  // Auto-scroll mobile list to first active/upcoming shift
+  useEffect(() => {
+    if (!mobileListRef.current || currentDate !== todayStr) return;
+    const now = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    // Find the first card whose shift contains or is upcoming within 30 min
+    const cards = mobileListRef.current.querySelectorAll<HTMLElement>("[data-shift-start]");
+    let targetEl: HTMLElement | null = null;
+    for (const card of Array.from(cards)) {
+      const start = parseInt(card.dataset.shiftStart ?? "9999", 10);
+      const stop = parseInt(card.dataset.shiftStop ?? "9999", 10);
+      if (stop > nowMins - 15) { targetEl = card; break; }
+    }
+    if (targetEl) {
+      setTimeout(() => targetEl!.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
+    }
+  }, [currentDate, displayRows, loadingSchedule]);
+
   return (
     <div className="flex min-h-full flex-col bg-background">
       {/* Page header */}
@@ -1160,20 +1183,20 @@ function SchemaPage() {
       )}
 
 
-      {/* Empty state */}
+      {/* Empty state — no schedule imported */}
       {imports.length === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-24">
-          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-primary-soft">
-            <Calendar className="h-10 w-10 text-primary" />
+          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-muted">
+            <Calendar className="h-10 w-10 text-muted-foreground/50" />
           </div>
           <div className="text-center">
             <h3 className="text-lg font-semibold text-foreground">Inget schema importerat</h3>
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-              {isAdmin ? "Exportera ett schema från SoftOne GO som XML och importera det för att se skiftöversikten." : "Schema importeras av administratören."}
+              {isAdmin ? "Exportera ett schema från SoftOne GO som XML och importera det för att se skiftöversikten." : "Schema importeras av administratören. Kontrollera att rätt butik är vald."}
             </p>
           </div>
           {isAdmin && (
-            <Button className="gap-2" onClick={() => { setImportFiles([]); setPdfPreviews({}); if (activeImport) { setCsvWeekNumber(activeImport.week_number + 1 > 53 ? 1 : activeImport.week_number + 1); setCsvYear(activeImport.year); } setImportDialogOpen(true); }}>
+            <Button className="min-h-[48px] gap-2 rounded-full" onClick={() => { setImportFiles([]); setPdfPreviews({}); if (activeImport) { setCsvWeekNumber(activeImport.week_number + 1 > 53 ? 1 : activeImport.week_number + 1); setCsvYear(activeImport.year); } setImportDialogOpen(true); }}>
               <Upload className="h-4 w-4" />
               Importera schema
             </Button>
@@ -1183,13 +1206,13 @@ function SchemaPage() {
 
       {/* Main content */}
       {activeImport && weekDates.length > 0 && (
-        <div className="flex flex-1 flex-col px-6 py-4">
-          {/* Day picker + view toggle */}
-          <div className="mb-4 flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" onClick={() => setSelectedDayIndex((i) => Math.max(0, i - 1))} disabled={selectedDayIndex === 0}>
+        <div className="flex flex-1 flex-col px-3 py-3 sm:px-6 sm:py-4">
+          {/* Sticky day strip — touch-action: pan-x so only horizontal swipe changes day */}
+          <div className="sticky top-16 z-20 -mx-3 mb-3 flex items-center gap-1 border-b border-border/40 bg-background/95 px-2 py-2 backdrop-blur-sm sm:-mx-6 sm:px-4" style={{ touchAction: "pan-x" }}>
+            <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors" onClick={() => setSelectedDayIndex((i) => Math.max(0, i - 1))} disabled={selectedDayIndex === 0} aria-label="Föregående dag">
               <ChevronLeft className="h-5 w-5" />
-            </Button>
-            <div className="flex flex-1 gap-1.5 overflow-x-auto">
+            </button>
+            <div className="flex flex-1 gap-1 overflow-x-auto scrollbar-none">
               {weekDates.map((date, idx) => {
                 const isToday = date === todayStr;
                 const count = scheduleEmployees.filter((emp) => scheduleShifts.some((s) => s.schedule_employee_id === emp.id && s.day_date === date && !s.is_absence_day && s.start_time)).length;
@@ -1198,33 +1221,34 @@ function SchemaPage() {
                 const isSelected = selectedDayIndex === idx;
                 return (
                   <button key={date} onClick={() => setSelectedDayIndex(idx)}
-                    className={["relative flex min-w-[68px] flex-col items-center rounded-xl px-2 py-2.5 text-center transition-all",
+                    className={["relative flex min-w-[52px] flex-col items-center rounded-xl px-1 py-2 text-center transition-all",
                       isSelected ? "bg-primary text-primary-foreground shadow-[var(--shadow-md)]" : isToday ? "bg-primary-soft text-primary border border-primary/30" : "bg-card text-foreground hover:bg-muted border border-border/60"].join(" ")}
                   >
-                    <span className="text-[10px] font-semibold uppercase tracking-widest">{DAY_SHORT[idx]}</span>
-                    <span className="mt-0.5 text-sm font-bold">{fmtDate(date).split(" ")[0]}</span>
-                    <span className={["mt-0.5 text-[10px]", isSelected ? "text-primary-foreground/70" : "text-muted-foreground"].join(" ")}>
+                    <span className="text-[9px] font-semibold uppercase tracking-widest">{DAY_SHORT[idx]}</span>
+                    <span className="mt-0.5 text-sm font-bold leading-none">{fmtDate(date).split(" ")[0]}</span>
+                    <span className={["mt-0.5 text-[9px] font-medium", isSelected ? "text-primary-foreground/70" : count > 0 ? "text-muted-foreground" : "text-muted-foreground/40"].join(" ")}>
                       {count > 0 ? `${count}p` : "–"}
                     </span>
                     {delivCount > 0 && (
-                      <span className={["text-[9px] font-medium", isSelected ? "text-primary-foreground/60" : "text-info"].join(" ")}>
-                        {delivCount}lev
+                      <span className={["text-[8px] font-medium leading-none", isSelected ? "text-primary-foreground/60" : "text-info"].join(" ")}>
+                        {delivCount}l
                       </span>
                     )}
                     {meetCount > 0 && (
-                      <span className={["text-[9px] font-medium", isSelected ? "text-primary-foreground/60" : "text-sky-600"].join(" ")}>
-                        {meetCount}möte{meetCount > 1 ? "n" : ""}
+                      <span className={["text-[8px] font-medium leading-none", isSelected ? "text-primary-foreground/60" : "text-sky-600"].join(" ")}>
+                        m
                       </span>
                     )}
-                    {isToday && !isSelected && <span className="absolute bottom-1.5 h-1 w-1 rounded-full bg-primary" />}
+                    {isToday && !isSelected && <span className="absolute bottom-1 h-1 w-1 rounded-full bg-primary" />}
                   </button>
                 );
               })}
             </div>
-            <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" onClick={() => setSelectedDayIndex((i) => Math.min(6, i + 1))} disabled={selectedDayIndex === 6}>
+            <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors" onClick={() => setSelectedDayIndex((i) => Math.min(6, i + 1))} disabled={selectedDayIndex === 6} aria-label="Nästa dag">
               <ChevronRight className="h-5 w-5" />
-            </Button>
-            <div className="ml-2 flex shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted/40">
+            </button>
+            {/* View mode toggle — hidden on mobile, visible sm+ */}
+            <div className="ml-1 hidden shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted/40 sm:flex">
               <button onClick={() => setViewMode("day")} className={["flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "day" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"].join(" ")}>
                 <List className="h-3.5 w-3.5" />Dag
               </button>
@@ -1234,7 +1258,7 @@ function SchemaPage() {
             </div>
           </div>
 
-          {/* Day heading */}
+          {/* Day heading + controls */}
           <div className="mb-3 flex items-start justify-between gap-2">
             <div>
               <h2 className="text-base font-semibold text-foreground">
@@ -1249,17 +1273,17 @@ function SchemaPage() {
               )}
             </div>
             {viewMode === "day" && (
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                 <button
                   onClick={() => setHideLedig(v => !v)}
-                  className={["rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors", hideLedig ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border/60 hover:border-primary/50"].join(" ")}
+                  className={["rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors min-h-[36px]", hideLedig ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border/60 hover:border-primary/50"].join(" ")}
                 >
                   Dölj lediga
                 </button>
-                <div className="flex items-center overflow-hidden rounded-lg border border-border/60 bg-muted/40">
+                <div className="hidden items-center overflow-hidden rounded-lg border border-border/60 bg-muted/40 sm:flex">
                   {(["default","start","end"] as const).map(m => (
                     <button key={m} onClick={() => setSortMode(m)}
-                      className={["px-2.5 py-1 text-xs font-medium transition-colors", sortMode === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"].join(" ")}>
+                      className={["px-2.5 py-1.5 text-xs font-medium transition-colors", sortMode === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"].join(" ")}>
                       {m === "default" ? "Standard" : m === "start" ? "Starttid" : "Sluttid"}
                     </button>
                   ))}
@@ -1268,9 +1292,9 @@ function SchemaPage() {
             )}
           </div>
 
-          {/* Deliveries row for day view */}
+          {/* Deliveries row for day view — desktop only */}
           {viewMode === "day" && showDeliveries && todayDeliveries.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-2">
+            <div className="mb-2 hidden flex-wrap gap-2 sm:flex">
               {todayDeliveries.map((d) => {
                 const c = flowColor(d.flow_name);
                 return (
@@ -1284,9 +1308,9 @@ function SchemaPage() {
             </div>
           )}
 
-          {/* Meetings row for day view */}
+          {/* Meetings row for day view — desktop only */}
           {viewMode === "day" && todayMeetings.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-2">
+            <div className="mb-3 hidden flex-wrap gap-2 sm:flex">
               {todayMeetings.map((m) => {
                 const time = new Date(m.scheduled_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
                 const label = m.meeting_type === "daglig_styrning" ? "Daglig styrning"
@@ -1305,9 +1329,181 @@ function SchemaPage() {
             </div>
           )}
 
-          {/* Day timeline view */}
+          {/* ── MOBILE CARD VIEW (sm and below) ─────────────────────────────── */}
           {viewMode === "day" && (
-            <div className="flex-1 overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)]">
+            <div className="sm:hidden" data-scroll-container ref={mobileListRef} style={{ touchAction: "pan-y" }}>
+              {loadingSchedule ? (
+                <div className="space-y-3">
+                  {[1,2,3,4,5].map(i => (
+                    <div key={i} className="rounded-2xl border border-border/60 bg-card p-4 flex items-center gap-4">
+                      <div className="h-10 w-10 animate-pulse rounded-full bg-muted shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 w-1/2 animate-pulse rounded-md bg-muted" />
+                        <div className="h-3 w-1/3 animate-pulse rounded-md bg-muted/60" />
+                      </div>
+                      <div className="h-6 w-20 animate-pulse rounded-full bg-muted/60 shrink-0" />
+                    </div>
+                  ))}
+                </div>
+              ) : displayRows.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+                    <Calendar className="h-6 w-6 text-muted-foreground/50" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-foreground">Inga pass schemalagda</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Kontrollera att rätt butik är vald eller uppdatera sidan.</p>
+                  </div>
+                  <button
+                    onClick={() => { if (activeImport) loadScheduleData(activeImport.id); }}
+                    className="flex items-center gap-2 rounded-full border border-border/60 bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/60 transition-colors min-h-[48px]"
+                  >
+                    <RefreshCw className="h-4 w-4" /> Uppdatera schema
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {/* Deliveries & meetings strip */}
+                  {(todayDeliveries.length > 0 || todayMeetings.length > 0) && (
+                    <div className="flex flex-wrap gap-1.5 pb-1">
+                      {todayDeliveries.map((d) => {
+                        const c = flowColor(d.flow_name);
+                        return (
+                          <div key={d.id} className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: c.bg, color: c.text, borderColor: c.text + "30" }}>
+                            <Truck className="h-3 w-3" />{d.delivery_time} {d.flow_name}
+                          </div>
+                        );
+                      })}
+                      {todayMeetings.map((m) => {
+                        const time = new Date(m.scheduled_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+                        return (
+                          <div key={m.id} className="flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700">
+                            <CalendarClock className="h-3 w-3" />{time}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {displayRows.map(({ emp, workShifts, absenceShift, appUser, initials, dayTasks }) => {
+                    const isAbsent = workShifts.length === 0 && !!absenceShift;
+                    const isSemester = absenceShift?.deviation_cause?.toLowerCase().includes("semester") || absenceShift?.shift_name?.toLowerCase() === "semester";
+                    const isLedig = workShifts.length === 0 && !absenceShift;
+                    const name = appUser?.display_name ?? emp.employee_name;
+
+                    // Compute now relative to shifts for fading
+                    const now = new Date();
+                    const nowMins = now.getHours() * 60 + now.getMinutes();
+                    const timeToMins2 = (t: string | null) => { if (!t) return 0; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+
+                    // Primary shift (first active/upcoming shift)
+                    const primaryShift = workShifts.sort((a, b) => timeToMins2(a.start_time) - timeToMins2(b.start_time))[0];
+                    const isPast = primaryShift ? timeToMins2(primaryShift.stop_time) < nowMins - 5 && currentDate === todayStr : false;
+
+                    if (isLedig) return null; // hidden when hideLedig is off they're already excluded by filter
+
+                    const startMins = primaryShift ? timeToMins2(primaryShift.start_time) : 0;
+                    const stopMins = primaryShift ? timeToMins2(primaryShift.stop_time) : 0;
+
+                    return (
+                      <div
+                        key={emp.id}
+                        data-shift-start={startMins}
+                        data-shift-stop={stopMins}
+                        className={cn(
+                          "rounded-2xl border bg-card p-4 transition-all",
+                          isSemester ? "border-red-200/60 bg-red-50/40" : isAbsent ? "border-warning/30 bg-warning/5" : "border-border/60",
+                          isPast && "opacity-60",
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Avatar */}
+                          <div
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                            style={{
+                              background: isSemester ? "#fca5a5" : appUser ? "oklch(0.5 0.16 148)" : "oklch(0.88 0.02 145)",
+                              color: isSemester ? "#7f1d1d" : appUser ? "white" : "oklch(0.4 0.05 145)",
+                            }}
+                          >
+                            {initials}
+                          </div>
+
+                          {/* Name + dept */}
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-sm leading-snug text-foreground">{name}</p>
+                            {primaryShift && (
+                              <p className="text-xs text-muted-foreground mt-0.5">{primaryShift.shift_name}</p>
+                            )}
+                            {isSemester && <p className="text-xs font-medium text-red-500">Semester</p>}
+                            {isAbsent && !isSemester && <p className="text-xs text-warning-foreground">{absenceShift?.deviation_cause || "Frånvaro"}</p>}
+                          </div>
+
+                          {/* Time block — primary info, bold */}
+                          <div className="shrink-0 text-right">
+                            {primaryShift ? (
+                              <>
+                                <p className="text-sm font-bold text-foreground tabular-nums leading-snug">
+                                  {primaryShift.start_time}–{primaryShift.stop_time}
+                                </p>
+                                {workShifts.length > 1 && (
+                                  <p className="text-[10px] text-muted-foreground">+{workShifts.length - 1} pass</p>
+                                )}
+                              </>
+                            ) : null}
+                          </div>
+
+                          {/* Shift type badge — color coded */}
+                          {primaryShift && (() => {
+                            const col = shiftColor(primaryShift.shift_name, primaryShift.color);
+                            const light = isLightColor(col);
+                            return (
+                              <div
+                                className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-snug hidden xs:block"
+                                style={{ backgroundColor: col, color: light ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.92)" }}
+                              >
+                                {primaryShift.shift_name || "–"}
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Additional shifts */}
+                        {workShifts.length > 1 && (
+                          <div className="mt-2 flex flex-wrap gap-1.5 pl-14">
+                            {workShifts.slice(1).map((s) => {
+                              const col = shiftColor(s.shift_name, s.color);
+                              return (
+                                <div key={s.id} className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ backgroundColor: col + "55", borderLeft: `2px solid ${col}` }}>
+                                  <span>{s.shift_name}</span>
+                                  <span className="opacity-70 font-mono">{s.start_time}–{s.stop_time}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Due tasks for this employee today */}
+                        {dayTasks.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1 pl-14">
+                            {dayTasks.map((t) => (
+                              <div key={t.id} className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                                <Timer className="h-2.5 w-2.5 shrink-0" />
+                                {t.title}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── DESKTOP TIMELINE VIEW (sm and above) ────────────────────────── */}
+          {viewMode === "day" && (
+            <div className="hidden flex-1 overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)] sm:flex sm:flex-col">
               <div className="sticky top-0 z-10 flex bg-card/95 backdrop-blur-sm border-b border-border/60">
                 <div className="w-48 shrink-0 border-r border-border/40 px-4 py-2.5">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Medarbetare</span>
@@ -1469,7 +1665,7 @@ function SchemaPage() {
             </div>
           )}
 
-          {/* Week overview */}
+          {/* ── WEEK OVERVIEW (desktop only) ─────────────────────────────── */}
           {viewMode === "week" && (
             <div className="overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)]">
               <div className="sticky top-0 z-10 grid bg-card/95 backdrop-blur-sm border-b border-border/60" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>

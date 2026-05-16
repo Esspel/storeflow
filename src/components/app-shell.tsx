@@ -23,20 +23,25 @@ import { supabase as _supabase } from "@/lib/supabase";
 
 // ── Offline snackbar ────────────────────────────────────────────────────────
 function OfflineSnackbar() {
-  const [status, setStatus] = useState<"online" | "offline" | "reconnected">(
-    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "online",
+  // "idle" = never been offline, snackbar never shows
+  const [status, setStatus] = useState<"idle" | "offline" | "reconnected">(
+    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "idle",
   );
-  // Timer ref to hide the "reconnected" banner after 2 s
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track whether we have ever gone offline this session
+  const wentOfflineRef = useRef(typeof navigator !== "undefined" && !navigator.onLine);
 
   useEffect(() => {
     const onOffline = () => {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      wentOfflineRef.current = true;
       setStatus("offline");
     };
     const onOnline = () => {
+      // Only show "reconnected" if we actually went offline first
+      if (!wentOfflineRef.current) return;
       setStatus("reconnected");
-      hideTimerRef.current = setTimeout(() => setStatus("online"), 2000);
+      hideTimerRef.current = setTimeout(() => setStatus("idle"), 2000);
     };
     window.addEventListener("offline", onOffline);
     window.addEventListener("online", onOnline);
@@ -101,14 +106,14 @@ export function AppShell() {
   const isManager = user?.role === "manager" || isAdmin;
 
   const nav = [
-    { to: "/", label: "Översikt" },
-    { to: "/uppgifter", label: "Uppgifter" },
-    { to: "/schema", label: "Schema" },
-    { to: "/avvikelser", label: "Avvikelser" },
-    { to: "/kundrunda", label: "Kundrunda" },
-    { to: "/moten", label: "Möten" },
-    ...(isManager ? [{ to: "/rapporter", label: "Rapporter" }] : []),
-    { to: "/mallar", label: "Mallar" },
+    { to: "/", label: "Översikt", mobileHidden: false },
+    { to: "/uppgifter", label: "Uppgifter", mobileHidden: false },
+    { to: "/schema", label: "Schema", mobileHidden: false },
+    { to: "/avvikelser", label: "Avvikelser", mobileHidden: false },
+    { to: "/kundrunda", label: "Kundrunda", mobileHidden: false },
+    { to: "/moten", label: "Möten", mobileHidden: false },
+    ...(isManager ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true }] : []),
+    { to: "/mallar", label: "Mallar", mobileHidden: true },
   ];
 
   useEffect(() => {
@@ -188,6 +193,25 @@ export function AppShell() {
                 {isActive(item.to) && (
                   <span className="absolute inset-x-3.5 -bottom-[14px] h-[3px] rounded-t-full bg-primary" />
                 )}
+              </Link>
+            ))}
+          </nav>
+          {/* Mobile bottom nav — core routes only */}
+          <nav className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-card md:hidden" data-safe-bottom>
+            {nav.filter((item) => !item.mobileHidden).map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={cn(
+                  "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
+                  isActive(item.to) ? "text-primary" : "text-muted-foreground",
+                )}
+              >
+                <span className={cn(
+                  "h-1 w-6 rounded-full transition-all",
+                  isActive(item.to) ? "bg-primary" : "bg-transparent",
+                )} />
+                {item.label}
               </Link>
             ))}
           </nav>
@@ -352,6 +376,9 @@ export function AppShell() {
                   )}
                 >
                   {item.label}
+                  {item.mobileHidden && (
+                    <span className="ml-2 text-[10px] text-muted-foreground/60">↗</span>
+                  )}
                 </Link>
               ))}
               {userStores.length > 1 && (
@@ -396,7 +423,7 @@ export function AppShell() {
         </div>
       )}
 
-      <main className="flex-1">
+      <main className="flex-1 pb-16 md:pb-0">
         <Outlet />
       </main>
 
