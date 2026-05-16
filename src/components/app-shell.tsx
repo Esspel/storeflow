@@ -1,6 +1,6 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { Bell, ChevronDown, ClipboardList, FlaskConical, Hop as Home, LogOut, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight } from "lucide-react";
+import { ChartBar as BarChart3, Bell, ChevronDown, ClipboardList, FlaskConical, Hop as Home, LogOut, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
 import { useEffect, useRef, useState } from "react";
@@ -191,6 +191,7 @@ export function AppShell() {
     { to: "/moten", label: "Möten", mobileHidden: false, Icon: MessageSquare },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }] : []),
     { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
+    ...(isAdmin ? [{ to: "/hk-dashboard", label: "HK-Dashboard", mobileHidden: true, Icon: BarChart3 }] : []),
   ];
 
   useEffect(() => {
@@ -449,6 +450,14 @@ export function AppShell() {
                     <Link to="/personal" className="cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
                       Administration
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+                {isAdmin && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/hk-dashboard" className="cursor-pointer">
+                      <BarChart3 className="mr-2 h-4 w-4" />
+                      HK-Dashboard
                     </Link>
                   </DropdownMenuItem>
                 )}

@@ -19,6 +19,7 @@ import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as KundrundaRouteImport } from './routes/kundrunda'
 import { Route as InstallningarRouteImport } from './routes/installningar'
+import { Route as HkDashboardRouteImport } from './routes/hk-dashboard'
 import { Route as AvvikelserRouteImport } from './routes/avvikelser'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -72,6 +73,11 @@ const InstallningarRoute = InstallningarRouteImport.update({
   path: '/installningar',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HkDashboardRoute = HkDashboardRouteImport.update({
+  id: '/hk-dashboard',
+  path: '/hk-dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AvvikelserRoute = AvvikelserRouteImport.update({
   id: '/avvikelser',
   path: '/avvikelser',
@@ -86,6 +92,7 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
+  '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/kundrunda': typeof KundrundaRoute
   '/login': typeof LoginRoute
@@ -100,6 +107,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
+  '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/kundrunda': typeof KundrundaRoute
   '/login': typeof LoginRoute
@@ -115,6 +123,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
+  '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/kundrunda': typeof KundrundaRoute
   '/login': typeof LoginRoute
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/avvikelser'
+    | '/hk-dashboard'
     | '/installningar'
     | '/kundrunda'
     | '/login'
@@ -145,6 +155,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/avvikelser'
+    | '/hk-dashboard'
     | '/installningar'
     | '/kundrunda'
     | '/login'
@@ -159,6 +170,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/avvikelser'
+    | '/hk-dashboard'
     | '/installningar'
     | '/kundrunda'
     | '/login'
@@ -174,6 +186,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AvvikelserRoute: typeof AvvikelserRoute
+  HkDashboardRoute: typeof HkDashboardRoute
   InstallningarRoute: typeof InstallningarRoute
   KundrundaRoute: typeof KundrundaRoute
   LoginRoute: typeof LoginRoute
@@ -258,6 +271,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InstallningarRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/hk-dashboard': {
+      id: '/hk-dashboard'
+      path: '/hk-dashboard'
+      fullPath: '/hk-dashboard'
+      preLoaderRoute: typeof HkDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/avvikelser': {
       id: '/avvikelser'
       path: '/avvikelser'
@@ -278,6 +298,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AvvikelserRoute: AvvikelserRoute,
+  HkDashboardRoute: HkDashboardRoute,
   InstallningarRoute: InstallningarRoute,
   KundrundaRoute: KundrundaRoute,
   LoginRoute: LoginRoute,
