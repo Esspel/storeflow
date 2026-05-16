@@ -48,3 +48,22 @@ export function generatePassword(length = 16): string {
   crypto.getRandomValues(arr);
   return Array.from(arr, (n) => PW_CHARS[n % PW_CHARS.length]).join("");
 }
+
+// Mask a Swedish personal number — show birth date, hide last 4 digits
+// e.g. "19900115-1234" → "19900115-XXXX"
+export function maskPersonalNumber(pn: string): string {
+  if (!pn) return "";
+  const clean = pn.replace(/\s/g, "");
+  const m = clean.match(/^(\d{6,8})-?(\d{4})$/);
+  if (!m) return "••••••-••••";
+  return `${m[1]}-XXXX`;
+}
+
+// Mask a phone number — show first 3 digits, hide the rest
+// e.g. "0701234567" → "070-XXX XX XX"
+export function maskPhone(phone: string): string {
+  if (!phone) return "";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 4) return "•••-••• •• ••";
+  return `${digits.slice(0, 3)}-XXX XX XX`;
+}

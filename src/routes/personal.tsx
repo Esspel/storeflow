@@ -2,11 +2,13 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   Building2,
+  FileUp,
   Hash,
   Mail,
   MapPin,
   Pencil,
   Plus,
+  Shield,
   Trash2,
   UserCog,
   Users,
@@ -39,8 +41,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase, type AppUser, type Store, type UserGroup, type UserGroupMember, logAudit } from "@/lib/supabase";
+import { supabase, type AppUser, type Store, type UserGroup, type UserGroupMember, logAudit, ROLE_LABELS } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { XmlImportModal } from "@/components/xml-import-modal";
+import { GdprExport } from "@/components/gdpr-export";
 
 const MIN_PW_LENGTH = 12;
 
@@ -49,9 +53,10 @@ export const Route = createFileRoute("/personal")({
 });
 
 function roleBadge(role: string) {
-  if (role === "admin") return <Badge className="bg-destructive/10 text-destructive">Admin</Badge>;
-  if (role === "manager") return <Badge className="bg-info/15 text-info">Chef</Badge>;
-  return <Badge variant="secondary">Anställd</Badge>;
+  const label = ROLE_LABELS[role] ?? role;
+  if (role === "admin") return <Badge className="bg-destructive/10 text-destructive">{label}</Badge>;
+  if (role === "manager") return <Badge className="bg-info/15 text-info">{label}</Badge>;
+  return <Badge variant="secondary">{label}</Badge>;
 }
 
 type UserWithStores = AppUser & { assignedStoreIds: string[] };
@@ -94,6 +99,8 @@ function AccountsPage() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showXmlImport, setShowXmlImport] = useState(false);
+  const [xmlImportStoreId, setXmlImportStoreId] = useState("");
 
   useEffect(() => {
     if (!isManager) { navigate({ to: "/" }); return; }
@@ -390,6 +397,11 @@ function AccountsPage() {
           <TabsTrigger value="groups" className="rounded-full px-5 data-[state=active]:bg-card data-[state=active]:shadow-sm">
             Grupper
           </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="gdpr" className="rounded-full px-5 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              <Shield className="mr-1.5 h-3.5 w-3.5" /> GDPR
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* USERS TAB */}
@@ -400,6 +412,18 @@ function AccountsPage() {
               <p className="text-sm text-muted-foreground">{users.filter(u => u.display_name !== "Gallrad användare").length} konton</p>
             </div>
             <div className="flex gap-2">
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  className="rounded-full"
+                  onClick={() => {
+                    setXmlImportStoreId(currentUserStores[0]?.id ?? stores[0]?.id ?? "");
+                    setShowXmlImport(true);
+                  }}
+                >
+                  <FileUp className="mr-2 h-4 w-4" /> Importera XML
+                </Button>
+              )}
               <Button className="rounded-full" onClick={() => { setShowCreateUser(true); setError(""); }}>
                 <Plus className="mr-2 h-4 w-4" /> Nytt konto
               </Button>
@@ -534,6 +558,19 @@ function AccountsPage() {
             </div>
           )}
         </TabsContent>
+
+        {/* GDPR TAB */}
+        {isAdmin && (
+          <TabsContent value="gdpr" className="mt-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold">GDPR &amp; Dataportalitet</h2>
+              <p className="text-sm text-muted-foreground">Artikel 20 — Exportera en anställds persondata på begäran.</p>
+            </div>
+            <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
+              <GdprExport />
+            </div>
+          </TabsContent>
+        )}
 
         {/* STORES TAB */}
         <TabsContent value="stores" className="mt-6">
@@ -956,6 +993,18 @@ function AccountsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* XML IMPORT MODAL */}
+      {isAdmin && (
+        <XmlImportModal
+          open={showXmlImport}
+          onOpenChange={setShowXmlImport}
+          storeId={xmlImportStoreId}
+          stores={stores}
+          existingUsernames={users.map((u) => u.username)}
+          onImported={fetchUsers}
+        />
+      )}
 
     </div>
   );
