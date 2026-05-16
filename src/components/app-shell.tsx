@@ -1,5 +1,5 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
-import { Bell, ChevronDown, ExternalLink, FlaskConical, LogOut, Menu, Settings, ShoppingCart, Trash2, User, X } from "lucide-react";
+import { Bell, ChevronDown, FlaskConical, LogOut, Menu, Settings, ShoppingCart, Trash2, User, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/lib/auth-context";
 import { supabase, type Notification, cleanOldNotifications } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -30,7 +29,6 @@ export function AppShell() {
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [mittCoopOpen, setMittCoopOpen] = useState(false);
   const [simActive, setSimActive] = useState(() => isSimulationActive());
 
   useEffect(() => {
@@ -107,7 +105,7 @@ export function AppShell() {
     : "?";
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-background">
+    <div className="flex min-h-screen w-full flex-col bg-background" style={{ isolation: "isolate" }}>
       <header className="sticky top-0 z-40 border-b border-border/60 bg-card">
         <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center gap-4 px-5 md:px-8">
           <Link to="/" className="flex shrink-0 items-center gap-2">
@@ -136,17 +134,17 @@ export function AppShell() {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            {/* Mitt Coop button — only when active store has SAP site ID */}
+            {/* Mitt Coop button — visible on all screens when active store has SAP site ID */}
             {activeStore?.sap_site_id && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="hidden rounded-full border-border/80 md:flex gap-1.5 text-xs"
-                onClick={() => setMittCoopOpen(true)}
+              <a
+                href={`https://mittcoop.coop.se/sortiment/articles?siteId=${activeStore.sap_site_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-background px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-accent-foreground active:opacity-75"
               >
                 <ShoppingCart className="h-3.5 w-3.5" />
-                Mitt Coop
-              </Button>
+                <span className="hidden sm:inline">Mitt Coop</span>
+              </a>
             )}
 
             {/* Store switcher */}
@@ -333,42 +331,10 @@ export function AppShell() {
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto" data-scroll-container>
+      <main className="flex-1">
         <Outlet />
       </main>
 
-      {/* Mitt Coop iframe panel */}
-      <Sheet open={mittCoopOpen} onOpenChange={setMittCoopOpen}>
-        <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-2xl">
-          <SheetHeader className="flex flex-row items-center justify-between border-b border-border/60 px-4 py-3 pr-12 space-y-0">
-            <SheetTitle className="flex items-center gap-2 text-sm">
-              <ShoppingCart className="h-4 w-4 text-primary" />
-              Mitt Coop Sortiment
-            </SheetTitle>
-            <a
-              href={`https://mittcoop.coop.se/sortiment/articles?siteId=${activeStore?.sap_site_id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ExternalLink className="h-3 w-3" /> Öppna i ny flik
-            </a>
-          </SheetHeader>
-          <div className="relative flex-1">
-            <p className="absolute inset-x-0 top-12 px-6 text-center text-xs text-muted-foreground">
-              Logga in med Entra ID (Microsoft) i rutan nedan för att söka i sortimentet.
-            </p>
-            {activeStore?.sap_site_id && (
-              <iframe
-                src={`https://mittcoop.coop.se/sortiment/articles?siteId=${activeStore.sap_site_id}`}
-                className="h-full w-full border-0"
-                title="Mitt Coop Sortiment"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
-              />
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }

@@ -492,11 +492,32 @@ function KundrundaPage() {
 
   const deleteSession = async () => {
     if (!deleteSessionTarget) return;
-    await supabase.from("kundrunda_response_images").delete().eq("session_id", deleteSessionTarget.id);
-    await supabase.from("kundrunda_responses").delete().eq("session_id", deleteSessionTarget.id);
-    await supabase.from("kundrunda_sessions").delete().eq("id", deleteSessionTarget.id);
-    logAudit(user?.id ?? null, "kundrunda.session.delete", "kundrunda_sessions", deleteSessionTarget.id, {});
+    const target = deleteSessionTarget;
     setDeleteSessionTarget(null);
+    // If the deleted session is the currently active one, reset active state
+    if (activeSession?.id === target.id) {
+      setActiveSession(null);
+      setResponses({});
+      setResponseImages({});
+      setView("home");
+    }
+    // Clear any matching localStorage draft (for all known store/user combos)
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key?.startsWith("kundrunda-draft-")) continue;
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed.sessionId === target.id) { localStorage.removeItem(key); break; }
+        } catch {}
+      }
+    } catch {}
+    await supabase.from("kundrunda_response_images").delete().eq("session_id", target.id);
+    await supabase.from("kundrunda_responses").delete().eq("session_id", target.id);
+    await supabase.from("kundrunda_sessions").delete().eq("id", target.id);
+    logAudit(user?.id ?? null, "kundrunda.session.delete", "kundrunda_sessions", target.id, {});
     await fetchData();
   };
 

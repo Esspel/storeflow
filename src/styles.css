@@ -184,20 +184,14 @@
   html, body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    /* Normal scrolling — do NOT add overflow:hidden or overscroll-behavior globally */
+    /* Allow natural body-level scrolling — Radix Dialog handles scroll lock */
   }
 
-  /* Contain overscroll only on explicit inner scroll containers */
+  /* Contain overscroll only on explicit inner scroll containers (e.g. kundrunda active view) */
   [data-scroll-container] {
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
-  }
-
-  /* Lock body scroll when a modal is open (set via JS: document.body.dataset.modalOpen = "1") */
-  body[data-modal-open="1"] {
-    overflow: hidden;
-    /* Keep page from jumping when scrollbar disappears */
-    padding-right: var(--scrollbar-width, 0px);
+    overflow-y: auto;
   }
 
   /* Swipe-to-complete: hidden on fine-pointer (mouse) devices */

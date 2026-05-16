@@ -20,8 +20,14 @@ import { supabase, type AppUser, type Task, type Meeting } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 
+function SchemaRoute() {
+  const { activeStore, user } = useAuth();
+  const storeId = activeStore?.id ?? user?.store_id ?? "none";
+  return <SchemaPage key={storeId} />;
+}
+
 export const Route = createFileRoute("/schema")({
-  component: SchemaPage,
+  component: SchemaRoute,
 });
 
 // ─── Types ────────────────────────────────────────────────────────────────────
