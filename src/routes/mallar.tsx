@@ -534,7 +534,7 @@ function MallarPage() {
 
       {/* CREATE DIALOG — two-panel layout */}
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setError(""); }}>
-        <DialogContent className="max-h-[92vh] w-full max-w-3xl overflow-hidden p-0 gap-0">
+        <DialogContent className="max-h-[92dvh] w-full sm:max-w-4xl sm:max-h-[92vh] overflow-hidden p-0 gap-0">
           {/* Header bar */}
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -549,7 +549,7 @@ function MallarPage() {
             </div>
           </div>
 
-          <div className="flex overflow-hidden" style={{ maxHeight: "calc(92vh - 56px)" }}>
+          <div className="flex overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
             {/* LEFT: Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 min-w-0">
               <input
@@ -776,7 +776,7 @@ function MallarPage() {
 
       {/* EDIT DIALOG */}
       <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
-        <DialogContent className="max-h-[92vh] w-full max-w-3xl overflow-hidden p-0 gap-0">
+        <DialogContent className="max-h-[92dvh] w-full sm:max-w-4xl sm:max-h-[92vh] overflow-hidden p-0 gap-0">
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <GripVertical className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground">Redigera mall</span>
@@ -789,7 +789,7 @@ function MallarPage() {
             </div>
           </div>
 
-          <div className="flex overflow-hidden" style={{ maxHeight: "calc(92vh - 56px)" }}>
+          <div className="flex overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
             {/* LEFT: Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 min-w-0">
               <input
