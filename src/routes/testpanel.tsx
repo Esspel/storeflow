@@ -1,12 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import {
-  Bell, ListChecks, TriangleAlert, FileText,
-  CircleCheck as CheckCircle2, Circle as XCircle, Clock,
-  Database, RefreshCw, Trash2, ChevronDown, ChevronUp,
-  Image as ImageIcon, Wifi, WifiOff, Shield, Users, CalendarDays,
-  Truck, HardDrive, Bug, FlaskConical, AlertTriangle,
-} from "lucide-react";
+import { Bell, ListChecks, TriangleAlert, FileText, CircleCheck as CheckCircle2, Circle as XCircle, Clock, Database, RefreshCw, Trash2, ChevronDown, ChevronUp, Image as ImageIcon, Wifi, WifiOff, Shield, Users, CalendarDays, Truck, HardDrive, Bug, FlaskConical, TriangleAlert as AlertTriangle } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -154,13 +148,10 @@ function TestPanel() {
 
   async function testBulkNotifications() {
     setRunning(true);
-    const rows = Array.from({ length: 5 }, (_, i) => ({
-      user_id: user!.id, type: "test",
-      title: `Bulk-notis ${i + 1}`, body: "Massa-test från testpanelen", link: "/testpanel",
-    }));
-    const { error } = await supabase.from("notifications").insert(rows);
-    if (error) addResult(false, `Bulk-notiser misslyckades: ${error.message}`);
-    else addResult(true, "5 bulk-notiser skickade.");
+    for (let i = 1; i <= 5; i++) {
+      createNotification(user!.id, "test", `Bulk-notis ${i}`, "Massa-test från testpanelen", "/testpanel");
+    }
+    addResult(true, "5 bulk-notiser skickade.");
     await loadStats();
     setRunning(false);
   }

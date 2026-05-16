@@ -93,7 +93,17 @@ self.addEventListener("push", (event) => {
     },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  // Only show OS notification if no app window is currently visible/focused.
+  // When the app is open the in-app notification tab handles it via polling.
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clients) => {
+        const appOpen = clients.some((c) => c.visibilityState === "visible");
+        if (appOpen) return;
+        return self.registration.showNotification(title, options);
+      }),
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {

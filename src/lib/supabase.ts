@@ -264,6 +264,18 @@ export function logAudit(
     .then(() => {});
 }
 
+const PUSH_EDGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`;
+const PUSH_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+function firePush(userIds: string[], title: string, body: string, url: string) {
+  if (!userIds.length) return;
+  fetch(PUSH_EDGE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${PUSH_ANON_KEY}` },
+    body: JSON.stringify({ user_ids: userIds, title, body, url }),
+  }).catch(() => {});
+}
+
 // Helper: create a notification
 export function createNotification(
   userId: string,
@@ -272,10 +284,8 @@ export function createNotification(
   body = "",
   link = "",
 ) {
-  return supabase
-    .from("notifications")
-    .insert({ user_id: userId, type, title, body, link })
-    .then(() => {});
+  supabase.from("notifications").insert({ user_id: userId, type, title, body, link }).then(() => {});
+  firePush([userId], title, body, link || "/");
 }
 
 // Helper: notify multiple users
@@ -289,6 +299,7 @@ export function notifyUsers(
   if (userIds.length === 0) return;
   const rows = userIds.map((uid) => ({ user_id: uid, type, title, body, link }));
   supabase.from("notifications").insert(rows).then(() => {});
+  firePush(userIds, title, body, link || "/");
 }
 
 // Helper: get public URL for a storage path
