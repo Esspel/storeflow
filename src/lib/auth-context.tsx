@@ -1,20 +1,23 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { type AppUser, type Store, supabase } from "./supabase";
+import { type AppUser, type Store, supabase, setSessionToken } from "./supabase";
 import { getStoredSession, storeSession, clearSession, login as doLogin, logout as doLogout, validateSession } from "./auth";
 
 type AuthContextType = {
   user: AppUser | null;
   token: string | null;
   loading: boolean;
-  // Stores the user is assigned to
   userStores: Store[];
-  // The currently active store (for filtering)
   activeStore: Store | null;
   setActiveStore: (store: Store | null) => void;
   login: (username: string, password: string) => Promise<{ error?: string; mustChangePassword?: boolean }>;
   logout: () => Promise<void>;
   refreshUser: (user: AppUser) => void;
   refreshUserStores: () => Promise<void>;
+  // Lock screen / quick user switch
+  lockScreenOpen: boolean;
+  openLockScreen: () => void;
+  closeLockScreen: () => void;
+  quickSwitch: (newUser: AppUser, newToken: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -25,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [userStores, setUserStores] = useState<Store[]>([]);
   const [activeStore, setActiveStoreState] = useState<Store | null>(null);
+  const [lockScreenOpen, setLockScreenOpen] = useState(false);
 
   const loadUserStores = async (userId: string, currentUser: AppUser) => {
     if (currentUser.role === "admin") {
@@ -59,17 +63,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    const stored = getStoredSession();
-    if (!stored) {
-      setLoading(false);
-      return;
-    }
-    validateSession(stored.token).then(async (validUser) => {
+    (async () => {
+      const stored = await getStoredSession();
+      if (!stored) {
+        setLoading(false);
+        return;
+      }
+      const validUser = await validateSession(stored.token);
       if (validUser) {
         setUser(validUser);
         setToken(stored.token);
         const stores = await loadUserStores(validUser.id, validUser);
-        // Restore active store
         if (validUser.active_store_id) {
           const active = stores.find((s) => s.id === validUser.active_store_id) ?? null;
           setActiveStoreState(active);
@@ -77,10 +81,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setActiveStoreState(stores[0]);
         }
       } else {
-        clearSession();
+        await clearSession();
       }
       setLoading(false);
-    });
+    })();
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -88,7 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if ("error" in result) return { error: result.error };
     setUser(result.user);
     setToken(result.token);
-    storeSession(result.token, result.user);
+    await storeSession(result.token, result.user);
     const stores = await loadUserStores(result.user.id, result.user);
     if (result.user.active_store_id) {
       const active = stores.find((s) => s.id === result.user.active_store_id) ?? null;
@@ -106,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     setUserStores([]);
     setActiveStoreState(null);
-    clearSession();
+    await clearSession();
   };
 
   const refreshUser = (updated: AppUser) => {
@@ -114,9 +118,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (token) storeSession(token, updated);
   };
 
+  const openLockScreen = () => setLockScreenOpen(true);
+  const closeLockScreen = () => setLockScreenOpen(false);
+
+  const quickSwitch = async (newUser: AppUser, newToken: string) => {
+    // Expire old session silently (best-effort)
+    if (token) {
+      supabase.from("app_sessions").delete().eq("token", token).then(() => {});
+    }
+    setSessionToken(newToken);
+    setUser(newUser);
+    setToken(newToken);
+    await storeSession(newToken, newUser);
+    // Load stores for new user
+    const stores = await loadUserStores(newUser.id, newUser);
+    if (newUser.active_store_id) {
+      const active = stores.find((s) => s.id === newUser.active_store_id) ?? null;
+      setActiveStoreState(active);
+    } else if (stores.length > 0) {
+      setActiveStoreState(stores[0]);
+    }
+    setLockScreenOpen(false);
+  };
+
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, userStores, activeStore, setActiveStore, login, logout, refreshUser, refreshUserStores }}
+      value={{ user, token, loading, userStores, activeStore, setActiveStore, login, logout, refreshUser, refreshUserStores, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch }}
     >
       {children}
     </AuthContext.Provider>

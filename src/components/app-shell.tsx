@@ -1,5 +1,6 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
-import { Bell, ChevronDown, ClipboardList, FlaskConical, Hop as Home, LogOut, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff } from "lucide-react";
+import { Bell, ChevronDown, ClipboardList, FlaskConical, Hop as Home, LogOut, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight } from "lucide-react";
+import { LockScreen } from "@/components/lock-screen";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -84,7 +85,7 @@ function OfflineSnackbar() {
 
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { user, logout, userStores, activeStore, setActiveStore } = useAuth();
+  const { user, logout, userStores, activeStore, setActiveStore, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch } = useAuth();
   const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -382,6 +383,11 @@ export function AppShell() {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
+                <DropdownMenuItem className="cursor-pointer" onClick={openLockScreen}>
+                  <ArrowLeftRight className="mr-2 h-4 w-4" />
+                  Växla användare
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Logga ut
@@ -421,6 +427,16 @@ export function AppShell() {
 
       {/* Global offline / reconnected snackbar */}
       <OfflineSnackbar />
+
+      {/* Lock screen / quick user switch */}
+      {lockScreenOpen && user && (
+        <LockScreen
+          currentUser={user}
+          activeStoreId={activeStore?.id ?? null}
+          onUnlock={quickSwitch}
+          onCancel={closeLockScreen}
+        />
+      )}
     </div>
   );
 }

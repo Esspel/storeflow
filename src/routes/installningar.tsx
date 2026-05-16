@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Eye, EyeOff, KeyRound, Store, User, Hash, Bell } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Store, User, Hash, Bell, ArrowLeftRight, Delete } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase, logAudit, type Store as StoreType } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { cn } from "@/lib/utils";
 import { PushNotificationSetup } from "@/components/push-notification-setup";
 
 export const Route = createFileRoute("/installningar")({
@@ -17,6 +18,67 @@ export const Route = createFileRoute("/installningar")({
 function SettingsPage() {
   const { user, refreshUser, userStores, activeStore } = useAuth();
   const isAdmin = user?.role === "admin";
+
+  // Quick PIN state
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [pinStep, setPinStep] = useState<"enter" | "confirm">("enter");
+  const [pinError, setPinError] = useState("");
+  const [pinSuccess, setPinSuccess] = useState(false);
+  const [pinSaving, setPinSaving] = useState(false);
+  const [hasPin, setHasPin] = useState(false);
+
+  // Load whether user already has a PIN
+  useState(() => {
+    if (!user) return;
+    supabase.from("app_users").select("quick_pin_hash").eq("id", user.id).maybeSingle()
+      .then(({ data }) => setHasPin(!!data?.quick_pin_hash));
+  });
+
+  const handlePinDigit = (digit: string) => {
+    if (pinStep === "enter") {
+      if (newPin.length >= 4) return;
+      const next = newPin + digit;
+      setNewPin(next);
+      setPinError("");
+      if (next.length === 4) setPinStep("confirm");
+    } else {
+      if (confirmPin.length >= 4) return;
+      const next = confirmPin + digit;
+      setConfirmPin(next);
+      setPinError("");
+      if (next.length === 4) {
+        if (next !== newPin) {
+          setPinError("PIN-koderna stämmer inte överens. Försök igen.");
+          setNewPin("");
+          setConfirmPin("");
+          setPinStep("enter");
+        }
+      }
+    }
+  };
+
+  const savePin = async () => {
+    if (!user || confirmPin.length !== 4 || confirmPin !== newPin) return;
+    setPinSaving(true);
+    const { data: hash } = await supabase.rpc("hash_password", { plain_password: confirmPin });
+    await supabase.from("app_users").update({ quick_pin_hash: hash }).eq("id", user.id);
+    logAudit(user.id, "user.set_quick_pin", "app_users", user.id, {});
+    setPinSaving(false);
+    setPinSuccess(true);
+    setHasPin(true);
+    setNewPin("");
+    setConfirmPin("");
+    setPinStep("enter");
+    setTimeout(() => setPinSuccess(false), 2000);
+  };
+
+  const clearPin = async () => {
+    if (!user) return;
+    await supabase.from("app_users").update({ quick_pin_hash: null }).eq("id", user.id);
+    logAudit(user.id, "user.clear_quick_pin", "app_users", user.id, {});
+    setHasPin(false);
+  };
 
   const [displayName, setDisplayName] = useState(user?.display_name ?? "");
   const [nameSaving, setNameSaving] = useState(false);
@@ -195,6 +257,102 @@ function SettingsPage() {
             </div>
           </div>
           <PushNotificationSetup />
+        </div>
+
+        {/* Quick PIN setup */}
+        <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+              <ArrowLeftRight className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="font-semibold">Snabbinloggning (PIN)</h2>
+              <p className="text-xs text-muted-foreground">
+                Ange en 4-siffrig PIN för snabbt användarbyte på delade Zebra-enheter.
+              </p>
+            </div>
+          </div>
+
+          {hasPin && !pinStep && (
+            <div className="flex items-center justify-between rounded-xl bg-success/10 px-4 py-3">
+              <p className="text-sm text-success-foreground">Du har en aktiv PIN-kod.</p>
+              <Button size="sm" variant="outline" className="rounded-full text-xs" onClick={clearPin}>
+                Ta bort PIN
+              </Button>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {pinStep === "enter" ? (hasPin ? "Ange ny PIN-kod:" : "Välj en 4-siffrig PIN:") : "Bekräfta PIN-koden:"}
+            </p>
+
+            {/* PIN dots */}
+            <div className="flex justify-center gap-4">
+              {[0, 1, 2, 3].map((i) => {
+                const active = pinStep === "enter" ? newPin : confirmPin;
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      "h-4 w-4 rounded-full border-2 transition-all duration-100",
+                      active.length > i ? "border-primary bg-primary scale-110" : "border-border bg-transparent",
+                    )}
+                  />
+                );
+              })}
+            </div>
+
+            {pinError && (
+              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">{pinError}</p>
+            )}
+            {pinSuccess && (
+              <p className="rounded-lg bg-success/10 px-3 py-2 text-center text-sm text-success-foreground">PIN sparad!</p>
+            )}
+
+            {/* PIN pad */}
+            <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
+              {["1","2","3","4","5","6","7","8","9"].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => handlePinDigit(d)}
+                  className="flex h-14 items-center justify-center rounded-xl border border-border/60 bg-card text-xl font-semibold transition-all active:scale-95 hover:bg-accent"
+                >
+                  {d}
+                </button>
+              ))}
+              <button
+                onClick={() => { setNewPin(""); setConfirmPin(""); setPinStep("enter"); setPinError(""); }}
+                className="flex h-14 items-center justify-center rounded-xl text-xs text-muted-foreground transition-all active:scale-95 hover:bg-muted"
+              >
+                Rensa
+              </button>
+              <button
+                onClick={() => handlePinDigit("0")}
+                className="flex h-14 items-center justify-center rounded-xl border border-border/60 bg-card text-xl font-semibold transition-all active:scale-95 hover:bg-accent"
+              >
+                0
+              </button>
+              <button
+                onClick={() => {
+                  if (pinStep === "enter") setNewPin(p => p.slice(0, -1));
+                  else setConfirmPin(p => p.slice(0, -1));
+                  setPinError("");
+                }}
+                className="flex h-14 items-center justify-center rounded-xl text-muted-foreground transition-all active:scale-95 hover:bg-muted"
+              >
+                <Delete className="h-4 w-4" />
+              </button>
+            </div>
+
+            {pinStep === "confirm" && confirmPin.length === 4 && confirmPin === newPin && (
+              <div className="flex justify-center">
+                <Button onClick={savePin} disabled={pinSaving} className="rounded-full">
+                  {pinSaving ? "Sparar..." : "Spara PIN-kod"}
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">

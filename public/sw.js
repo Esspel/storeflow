@@ -1,7 +1,17 @@
 // StoreFlow Service Worker — offline shell caching + Web Push
 // Strategy: Cache-First for static assets, Network-First for API/supabase calls.
 // Version bump this string to force cache refresh on deploy.
-const CACHE_NAME = "storeflow-shell-v2";
+const CACHE_NAME = "storeflow-shell-v3";
+
+// Session token for attaching x-session-token to background sync requests.
+// Populated via postMessage from the main thread after login.
+let _sessionToken = null;
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SET_TOKEN") {
+    _sessionToken = event.data.token ?? null;
+  }
+});
 
 // Static assets to pre-cache on install (app shell)
 const SHELL_URLS = ["/", "/login"];
