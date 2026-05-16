@@ -5,7 +5,6 @@ import { Camera, ChartBar as BarChart3, CircleCheck as CheckCircle2, ChevronLeft
 import { PageHeader } from "@/components/page-header";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -750,110 +749,147 @@ function KundrundaPage() {
           </div>
         </div>
 
-        {/* Flat checkpoint list — no zone grouping */}
+        {/* Zone accordion list */}
         <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-2xl px-3 py-3 sm:px-5 sm:py-4">
-            {/* Godkänn alla-knapp för kvarvarande */}
-            {answeredCount < totalCheckpoints && (
-              <div className="mb-3 flex items-center justify-between rounded-xl bg-muted/50 px-4 py-2.5">
-                <span className="text-xs text-muted-foreground">{totalCheckpoints - answeredCount} punkt{totalCheckpoints - answeredCount !== 1 ? "er" : ""} kvar</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 rounded-full gap-1 text-[11px] text-success border-success/40 hover:bg-success/10"
-                  onClick={() => zones.forEach(z => approveZone(z))}
-                >
-                  <CheckCircle2 className="h-3 w-3" /> Godkänn alla
-                </Button>
-              </div>
-            )}
-            <div className="overflow-hidden rounded-2xl border border-border/60 bg-card divide-y divide-border/40">
-              {zones.flatMap(zone => zone.checkpoints).map((cp) => {
-                const resp = responses[cp.id];
-                const isOk = resp?.result === "ok";
-                const isDefect = resp?.result === "avvikelse";
-                const refImages = checkpointRefImages[cp.id] ?? [];
+          <div className="mx-auto max-w-2xl px-3 py-3 sm:px-5 sm:py-4 space-y-2">
+            {zones.map((zone, zoneIdx) => {
+              const isExpanded = expandedZones.has(zoneIdx);
+              const zoneDone = zone.checkpoints.every(c => responses[c.id]?.result);
+              const zoneDefects = zone.checkpoints.filter(c => responses[c.id]?.result === "avvikelse").length;
+              const zoneAnswered = zone.checkpoints.filter(c => responses[c.id]?.result).length;
 
-                return (
-                  <div key={cp.id} className={cn(
-                    "p-4 transition-colors",
-                    isOk ? "bg-success/5" : isDefect ? "bg-destructive/5" : ""
-                  )}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <div className="mt-0.5 shrink-0">
-                          {isOk ? <CheckCircle2 className="h-5 w-5 text-success" />
-                            : isDefect ? <AlertTriangle className="h-5 w-5 text-destructive" />
-                            : <Circle className="h-5 w-5 text-muted-foreground/30" />
-                          }
-                        </div>
-                        <div className="min-w-0">
-                          <span className="font-medium text-sm leading-snug">{cp.label}</span>
-                          {cp.description && (
-                            <p className="mt-0.5 text-xs text-muted-foreground leading-snug">{cp.description}</p>
-                          )}
-                        </div>
-                      </div>
-                      {/* Action buttons — min 44x44px touch targets */}
-                      <div className="flex shrink-0 gap-2">
-                        <button
-                          onClick={() => { haptic.light(); recordOk(cp); }}
-                          className={cn(
-                            "flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95",
-                            isOk ? "border-success bg-success/15 text-success" : "border-border/60 text-muted-foreground hover:border-success/50 hover:text-success"
-                          )}
-                          aria-label="OK"
-                        >
-                          <CheckCircle2 className="h-5 w-5" />
-                        </button>
-                        <button
-                          onClick={() => openDefectDialog(cp)}
-                          className={cn(
-                            "flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95",
-                            isDefect ? "border-destructive bg-destructive/15 text-destructive" : "border-border/60 text-muted-foreground hover:border-destructive/50 hover:text-destructive"
-                          )}
-                          aria-label="Avvikelse"
-                        >
-                          <AlertTriangle className="h-5 w-5" />
-                        </button>
-                      </div>
+              return (
+                <div key={zone.id} className={cn(
+                  "overflow-hidden rounded-2xl border bg-card transition-colors",
+                  zoneDone ? "border-success/30" : "border-border/60"
+                )}>
+                  {/* Zone header — tap to expand/collapse */}
+                  <button
+                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
+                    onClick={() => setExpandedZones(prev => {
+                      const next = new Set(prev);
+                      if (next.has(zoneIdx)) next.delete(zoneIdx); else next.add(zoneIdx);
+                      return next;
+                    })}
+                  >
+                    <div className={cn(
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors",
+                      zoneDone ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"
+                    )}>
+                      {zoneDone ? <CheckCircle2 className="h-4 w-4" /> : zoneIdx + 1}
                     </div>
-
-                    {/* Reference images */}
-                    {refImages.length > 0 && (
-                      <div className="mt-3 pt-2">
-                        <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Referens</p>
-                        <div className="flex gap-1.5 overflow-x-auto">
-                          {refImages.map((img, idx) => (
-                            <button key={img.id} className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60" onClick={() => { setViewerImages(refImages.map(i => getPublicUrl(i.storage_path))); setViewerIdx(idx); }}>
-                              <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-semibold">{zone.name}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {zoneAnswered}/{zone.checkpoints.length}
+                        {zoneDefects > 0 && <span className="ml-1 text-destructive">{zoneDefects} avvik.</span>}
+                      </span>
+                    </div>
+                    {/* Zone approve-all button */}
+                    {!zoneDone && (
+                      <button
+                        className="mr-2 flex h-7 items-center gap-1 rounded-full border border-success/40 px-2 text-[11px] text-success hover:bg-success/10 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); approveZone(zone); }}
+                      >
+                        <CheckCircle2 className="h-3 w-3" /> Alla OK
+                      </button>
                     )}
+                    <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform", isExpanded && "rotate-90")} />
+                  </button>
 
-                    {isDefect && (
-                      <div className="mt-3 pt-2 space-y-1">
-                        {resp?.defect_description && <p className="text-xs text-destructive/80">{resp.defect_description}</p>}
-                        {resp?.sap_article_id && <p className="text-[11px] text-muted-foreground font-mono">SAP: {resp.sap_article_id}</p>}
-                        <button className="text-[11px] text-primary underline" onClick={() => openDefectDialog(cp)}>Redigera</button>
-                        {resp?.id && (responseImages[resp.id] ?? []).length > 0 && (
-                          <div className="flex gap-1.5 pt-1 overflow-x-auto">
-                            {(responseImages[resp.id] ?? []).map((img, idx) => (
-                              <button key={img.id} className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-border/60" onClick={() => { setViewerImages((responseImages[resp.id!] ?? []).map(i => getPublicUrl(i.storage_path))); setViewerIdx(idx); }}>
-                                <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
-                              </button>
-                            ))}
+                  {/* Checkpoint rows */}
+                  {isExpanded && (
+                    <div className="divide-y divide-border/40 border-t border-border/40">
+                      {zone.checkpoints.map((cp) => {
+                        const resp = responses[cp.id];
+                        const isOk = resp?.result === "ok";
+                        const isDefect = resp?.result === "avvikelse";
+                        const refImages = checkpointRefImages[cp.id] ?? [];
+
+                        return (
+                          <div key={cp.id} className={cn(
+                            "p-4 transition-colors",
+                            isOk ? "bg-success/5" : isDefect ? "bg-destructive/5" : ""
+                          )}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-3 min-w-0 flex-1">
+                                <div className="mt-0.5 shrink-0">
+                                  {isOk ? <CheckCircle2 className="h-5 w-5 text-success" />
+                                    : isDefect ? <AlertTriangle className="h-5 w-5 text-destructive" />
+                                    : <Circle className="h-5 w-5 text-muted-foreground/30" />
+                                  }
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="font-medium text-sm leading-snug">{cp.label}</span>
+                                  {cp.description && (
+                                    <p className="mt-0.5 text-xs text-muted-foreground leading-snug">{cp.description}</p>
+                                  )}
+                                </div>
+                              </div>
+                              {/* Action buttons — min 44x44px touch targets */}
+                              <div className="flex shrink-0 gap-2">
+                                <button
+                                  onClick={() => { haptic.light(); recordOk(cp); }}
+                                  className={cn(
+                                    "flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95",
+                                    isOk ? "border-success bg-success/15 text-success" : "border-border/60 text-muted-foreground hover:border-success/50 hover:text-success"
+                                  )}
+                                  aria-label="OK"
+                                >
+                                  <CheckCircle2 className="h-5 w-5" />
+                                </button>
+                                <button
+                                  onClick={() => openDefectDialog(cp)}
+                                  className={cn(
+                                    "flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95",
+                                    isDefect ? "border-destructive bg-destructive/15 text-destructive" : "border-border/60 text-muted-foreground hover:border-destructive/50 hover:text-destructive"
+                                  )}
+                                  aria-label="Avvikelse"
+                                >
+                                  <AlertTriangle className="h-5 w-5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Reference images */}
+                            {refImages.length > 0 && (
+                              <div className="mt-3 pt-2">
+                                <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Referens</p>
+                                <div className="flex gap-1.5 overflow-x-auto">
+                                  {refImages.map((img, idx) => (
+                                    <button key={img.id} className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60" onClick={() => { setViewerImages(refImages.map(i => getPublicUrl(i.storage_path))); setViewerIdx(idx); }}>
+                                      <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {isDefect && (
+                              <div className="mt-3 pt-2 space-y-1">
+                                {resp?.defect_description && <p className="text-xs text-destructive/80">{resp.defect_description}</p>}
+                                {resp?.sap_article_id && <p className="text-[11px] text-muted-foreground font-mono">SAP: {resp.sap_article_id}</p>}
+                                <button className="text-[11px] text-primary underline" onClick={() => openDefectDialog(cp)}>Redigera</button>
+                                {resp?.id && (responseImages[resp.id] ?? []).length > 0 && (
+                                  <div className="flex gap-1.5 pt-1 overflow-x-auto">
+                                    {(responseImages[resp.id] ?? []).map((img, idx) => (
+                                      <button key={img.id} className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-border/60" onClick={() => { setViewerImages((responseImages[resp.id!] ?? []).map(i => getPublicUrl(i.storage_path))); setViewerIdx(idx); }}>
+                                        <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            {/* Bottom padding for FAB */}
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {/* Bottom padding for nav */}
             <div className="h-4" />
           </div>
         </div>
@@ -1365,20 +1401,6 @@ function KundrundaPage() {
             </Button>
           </div>
         )}
-      </div>
-
-      {/* Zone overview */}
-      <div className="mb-6">
-        <h3 className="mb-3 text-sm font-semibold">Zoner ({zones.length})</h3>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {zones.map((z, i) => (
-            <div key={z.id} className="flex items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2.5">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">{i + 1}</span>
-              <span className="truncate text-xs font-medium">{z.name}</span>
-              <Badge variant="secondary" className="ml-auto text-[10px] shrink-0">{z.checkpoints.length}</Badge>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* Recent sessions */}
