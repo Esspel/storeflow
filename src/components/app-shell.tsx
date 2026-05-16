@@ -49,6 +49,8 @@ export function AppShell() {
     { to: "/uppgifter", label: "Uppgifter" },
     { to: "/schema", label: "Schema" },
     { to: "/avvikelser", label: "Avvikelser" },
+    { to: "/kundrunda", label: "Kundrunda" },
+    { to: "/moten", label: "Möten" },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter" }] : []),
     { to: "/mallar", label: "Mallar" },
   ];

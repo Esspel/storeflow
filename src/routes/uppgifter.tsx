@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2 } from "lucide-react";
+import { CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -25,7 +25,7 @@ import {
   type Store as StoreType, type AppUser,
   type ChecklistTemplate, type ChecklistTemplateItem, type ChecklistTemplateQuestion,
   type TaskAssignee, type UserGroup,
-  logAudit, createNotification, notifyUsers, uploadAttachment, getPublicUrl, deleteStorageFiles,
+  logAudit, createNotification, notifyUsers, uploadAttachment, getPublicUrl, deleteStorageFiles, mittCoopUrl,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -141,6 +141,7 @@ const emptyForm = (storeId: string) => ({
   recurrence_interval: 1,
   recurrence_start: "",
   recurrence_end: "",
+  sap_article_id: "",
   steps: [{ label: "", requires_photo: false }] as { label: string; requires_photo: boolean }[],
   questions: [] as FormQuestion[],
   assigneeUserIds: [] as string[],
@@ -855,6 +856,7 @@ function TasksPage() {
       recurrence_interval: newTask.recurrence_interval,
       recurrence_start: newTask.recurrence_start || null,
       recurrence_end: newTask.recurrence_end || null,
+      sap_article_id: newTask.sap_article_id?.trim() || null,
       created_by: user?.id,
       assigned_to: newTask.assigneeUserIds[0] ?? user?.id,
       status: "todo",
@@ -1200,6 +1202,24 @@ function TasksPage() {
               {detailTask.description && (
                 <p className="text-sm text-muted-foreground">{detailTask.description}</p>
               )}
+
+              {/* Mitt Coop deep link */}
+              {(() => {
+                const url = mittCoopUrl(detailTask.sap_article_id, detailTask.store?.sap_site_id);
+                if (!url) return null;
+                return (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary-soft px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
+                  >
+                    <Hash className="h-3 w-3" />
+                    SAP {detailTask.sap_article_id}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                );
+              })()}
 
               {/* Meta row */}
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -1641,6 +1661,19 @@ function TasksPage() {
                       {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* SAP artikel-ID */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-24 shrink-0 text-xs text-muted-foreground">SAP-artikel</span>
+                  <input
+                    value={newTask.sap_article_id}
+                    onChange={(e) => setNewTask(p => ({ ...p, sap_article_id: e.target.value }))}
+                    placeholder="t.ex. 1047133"
+                    inputMode="numeric"
+                    className="flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none"
+                  />
                 </div>
 
                 {/* Återkommande */}

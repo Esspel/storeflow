@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { CircleCheck as CheckCircle2, Eye, EyeOff, KeyRound, Store, User } from "lucide-react";
+import { CircleCheck as CheckCircle2, Eye, EyeOff, KeyRound, Store, User, Hash } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { supabase, logAudit } from "@/lib/supabase";
+import { supabase, logAudit, type Store as StoreType } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/installningar")({
@@ -16,9 +16,25 @@ export const Route = createFileRoute("/installningar")({
 
 function SettingsPage() {
   const { user, refreshUser, userStores, activeStore, setActiveStore } = useAuth();
+  const isAdmin = user?.role === "admin";
+
   const [displayName, setDisplayName] = useState(user?.display_name ?? "");
   const [nameSaving, setNameSaving] = useState(false);
   const [nameSuccess, setNameSuccess] = useState(false);
+
+  const [sapSiteIds, setSapSiteIds] = useState<Record<string, string>>({});
+  const [sapSaving, setSapSaving] = useState<Record<string, boolean>>({});
+  const [sapSuccess, setSapSuccess] = useState<Record<string, boolean>>({});
+
+  const saveSapSiteId = async (store: StoreType) => {
+    const val = sapSiteIds[store.id] ?? (store.sap_site_id ?? "");
+    setSapSaving(p => ({ ...p, [store.id]: true }));
+    await supabase.from("stores").update({ sap_site_id: val.trim() || null }).eq("id", store.id);
+    logAudit(user?.id ?? null, "store.sap_site_id", "stores", store.id, { sap_site_id: val });
+    setSapSaving(p => ({ ...p, [store.id]: false }));
+    setSapSuccess(p => ({ ...p, [store.id]: true }));
+    setTimeout(() => setSapSuccess(p => ({ ...p, [store.id]: false })), 2000);
+  };
 
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -121,30 +137,62 @@ function SettingsPage() {
               </div>
               <h2 className="font-semibold">Butiker</h2>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {userStores.map((store) => {
                 const isActive = activeStore?.id === store.id;
+                const sapVal = sapSiteIds[store.id] ?? (store.sap_site_id ?? "");
                 return (
                   <div
                     key={store.id}
-                    className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3"
+                    className="rounded-xl border border-border/60 overflow-hidden"
                   >
-                    <div className="flex items-center gap-2">
-                      {isActive && <CheckCircle2 className="h-4 w-4 text-success" />}
-                      <span className="text-sm font-medium">{store.name}</span>
-                      {store.region && <span className="text-xs text-muted-foreground">{store.region}</span>}
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {isActive && <CheckCircle2 className="h-4 w-4 text-success" />}
+                        <span className="text-sm font-medium">{store.name}</span>
+                        {store.region && <span className="text-xs text-muted-foreground">{store.region}</span>}
+                      </div>
+                      {!isActive && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-full text-xs"
+                          onClick={() => setActiveStore(store)}
+                        >
+                          Välj
+                        </Button>
+                      )}
+                      {isActive && <Badge variant="secondary" className="text-xs">Aktiv</Badge>}
                     </div>
-                    {!isActive && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-full text-xs"
-                        onClick={() => setActiveStore(store)}
-                      >
-                        Välj
-                      </Button>
+                    {isAdmin && (
+                      <div className="border-t border-border/40 bg-muted/20 px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Hash className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <Label className="w-28 shrink-0 text-xs">SAP-butiksnr</Label>
+                          <Input
+                            value={sapVal}
+                            onChange={(e) => setSapSiteIds(p => ({ ...p, [store.id]: e.target.value }))}
+                            placeholder="t.ex. 1452"
+                            className="h-7 flex-1 rounded-full text-xs"
+                            inputMode="numeric"
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-full text-xs h-7 px-3"
+                            disabled={sapSaving[store.id]}
+                            onClick={() => saveSapSiteId(store)}
+                          >
+                            {sapSaving[store.id] ? "..." : sapSuccess[store.id] ? "Sparat!" : "Spara"}
+                          </Button>
+                        </div>
+                        {store.sap_site_id && (
+                          <p className="mt-1 pl-[1.375rem] text-xs text-muted-foreground">
+                            Mitt Coop siteId: <span className="font-mono">{store.sap_site_id}</span>
+                          </p>
+                        )}
+                      </div>
                     )}
-                    {isActive && <Badge variant="secondary" className="text-xs">Aktiv</Badge>}
                   </div>
                 );
               })}

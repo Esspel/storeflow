@@ -14,8 +14,10 @@ import { Route as TestpanelRouteImport } from './routes/testpanel'
 import { Route as SchemaRouteImport } from './routes/schema'
 import { Route as RapporterRouteImport } from './routes/rapporter'
 import { Route as PersonalRouteImport } from './routes/personal'
+import { Route as MotenRouteImport } from './routes/moten'
 import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as KundrundaRouteImport } from './routes/kundrunda'
 import { Route as InstallningarRouteImport } from './routes/installningar'
 import { Route as AvvikelserRouteImport } from './routes/avvikelser'
 import { Route as IndexRouteImport } from './routes/index'
@@ -45,6 +47,11 @@ const PersonalRoute = PersonalRouteImport.update({
   path: '/personal',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MotenRoute = MotenRouteImport.update({
+  id: '/moten',
+  path: '/moten',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MallarRoute = MallarRouteImport.update({
   id: '/mallar',
   path: '/mallar',
@@ -53,6 +60,11 @@ const MallarRoute = MallarRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KundrundaRoute = KundrundaRouteImport.update({
+  id: '/kundrunda',
+  path: '/kundrunda',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InstallningarRoute = InstallningarRouteImport.update({
@@ -75,8 +87,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
   '/installningar': typeof InstallningarRoute
+  '/kundrunda': typeof KundrundaRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
+  '/moten': typeof MotenRoute
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
@@ -87,8 +101,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
   '/installningar': typeof InstallningarRoute
+  '/kundrunda': typeof KundrundaRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
+  '/moten': typeof MotenRoute
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
@@ -100,8 +116,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
   '/installningar': typeof InstallningarRoute
+  '/kundrunda': typeof KundrundaRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
+  '/moten': typeof MotenRoute
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
@@ -114,8 +132,10 @@ export interface FileRouteTypes {
     | '/'
     | '/avvikelser'
     | '/installningar'
+    | '/kundrunda'
     | '/login'
     | '/mallar'
+    | '/moten'
     | '/personal'
     | '/rapporter'
     | '/schema'
@@ -126,8 +146,10 @@ export interface FileRouteTypes {
     | '/'
     | '/avvikelser'
     | '/installningar'
+    | '/kundrunda'
     | '/login'
     | '/mallar'
+    | '/moten'
     | '/personal'
     | '/rapporter'
     | '/schema'
@@ -138,8 +160,10 @@ export interface FileRouteTypes {
     | '/'
     | '/avvikelser'
     | '/installningar'
+    | '/kundrunda'
     | '/login'
     | '/mallar'
+    | '/moten'
     | '/personal'
     | '/rapporter'
     | '/schema'
@@ -151,8 +175,10 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AvvikelserRoute: typeof AvvikelserRoute
   InstallningarRoute: typeof InstallningarRoute
+  KundrundaRoute: typeof KundrundaRoute
   LoginRoute: typeof LoginRoute
   MallarRoute: typeof MallarRoute
+  MotenRoute: typeof MotenRoute
   PersonalRoute: typeof PersonalRoute
   RapporterRoute: typeof RapporterRoute
   SchemaRoute: typeof SchemaRoute
@@ -197,6 +223,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PersonalRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/moten': {
+      id: '/moten'
+      path: '/moten'
+      fullPath: '/moten'
+      preLoaderRoute: typeof MotenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/mallar': {
       id: '/mallar'
       path: '/mallar'
@@ -209,6 +242,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kundrunda': {
+      id: '/kundrunda'
+      path: '/kundrunda'
+      fullPath: '/kundrunda'
+      preLoaderRoute: typeof KundrundaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/installningar': {
@@ -239,8 +279,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AvvikelserRoute: AvvikelserRoute,
   InstallningarRoute: InstallningarRoute,
+  KundrundaRoute: KundrundaRoute,
   LoginRoute: LoginRoute,
   MallarRoute: MallarRoute,
+  MotenRoute: MotenRoute,
   PersonalRoute: PersonalRoute,
   RapporterRoute: RapporterRoute,
   SchemaRoute: SchemaRoute,

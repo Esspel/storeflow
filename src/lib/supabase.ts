@@ -43,6 +43,7 @@ export type Store = {
   phone: string;
   email: string;
   is_active: boolean;
+  sap_site_id: string | null;
   created_at: string;
 };
 
@@ -76,6 +77,7 @@ export type Task = {
   last_spawned_at: string | null;
   recurrence_period_start: string | null;
   completed_at: string | null;
+  sap_article_id: string | null;
   created_at: string;
   store?: Store;
   assignee?: AppUser;
@@ -107,6 +109,7 @@ export type Incident = {
   sla_deadline: string | null;
   resolved_at: string | null;
   has_photo: boolean;
+  sap_article_id: string | null;
   created_at: string;
   store?: Store;
   reporter?: AppUser;
@@ -340,4 +343,100 @@ export async function uploadAttachment(file: File, folder: string): Promise<stri
 export function deleteStorageFiles(paths: string[]) {
   if (paths.length === 0) return;
   supabase.storage.from("attachments").remove(paths).then(() => {});
+}
+
+export type KundrundaZone = {
+  id: string;
+  name: string;
+  sort_order: number;
+  icon: string | null;
+  created_at: string;
+  checkpoints?: KundrundaCheckpoint[];
+};
+
+export type KundrundaCheckpoint = {
+  id: string;
+  zone_id: string;
+  label: string;
+  sort_order: number;
+  created_at: string;
+};
+
+export type KundrundaSession = {
+  id: string;
+  store_id: string | null;
+  conducted_by: string | null;
+  started_at: string;
+  completed_at: string | null;
+  status: "in_progress" | "completed";
+  total_score: number;
+  max_score: number;
+  created_at: string;
+  store?: Store;
+  conductor?: AppUser;
+  responses?: KundrundaResponse[];
+};
+
+export type KundrundaResponse = {
+  id: string;
+  session_id: string;
+  checkpoint_id: string;
+  zone_id: string;
+  result: "ok" | "avvikelse" | null;
+  defect_description: string | null;
+  action_taken: string | null;
+  responsible_user_id: string | null;
+  sap_article_id: string | null;
+  created_task_id: string | null;
+  created_at: string;
+};
+
+export type Meeting = {
+  id: string;
+  meeting_type: "ledningsgrupp" | "saljledare" | "daglig_styrning" | "veckostamning";
+  title: string;
+  store_id: string | null;
+  scheduled_at: string;
+  started_at: string | null;
+  ended_at: string | null;
+  status: "scheduled" | "in_progress" | "completed" | "cancelled";
+  moderator_id: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  store?: Store;
+  moderator?: AppUser;
+  agenda_items?: MeetingAgendaItem[];
+  decisions?: MeetingDecision[];
+};
+
+export type MeetingAgendaItem = {
+  id: string;
+  meeting_id: string;
+  title: string;
+  description: string | null;
+  duration_minutes: number;
+  sort_order: number;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+};
+
+export type MeetingDecision = {
+  id: string;
+  meeting_id: string;
+  description: string;
+  responsible_user_id: string | null;
+  due_date: string | null;
+  created_task_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  responsible?: AppUser;
+};
+
+// Helper: build a Mitt Coop deep-link for an SAP article
+// Returns null if either ID is missing
+export function mittCoopUrl(sapArticleId: string | null | undefined, sapSiteId: string | null | undefined): string | null {
+  if (!sapArticleId?.trim() || !sapSiteId?.trim()) return null;
+  return `https://mittcoop.coop.se/sortiment/articles/${sapArticleId.trim()}?siteId=${sapSiteId.trim()}`;
 }

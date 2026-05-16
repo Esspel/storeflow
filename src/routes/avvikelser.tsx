@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   TriangleAlert as AlertTriangle, Clock, Download, MessageSquare,
   Plus, Search, Send, Store, X, User, Image as ImageIcon, ZoomIn,
+  Hash, ExternalLink,
 } from "lucide-react";
 import { PhotoViewer } from "@/components/photo-viewer";
 
@@ -19,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   supabase, type Incident, type IncidentComment, type IncidentImage,
   type Store as StoreType, type AppUser, logAudit, createNotification, notifyUsers,
-  uploadAttachment, getPublicUrl, deleteStorageFiles,
+  uploadAttachment, getPublicUrl, deleteStorageFiles, mittCoopUrl,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -83,7 +84,7 @@ function IssuesPage() {
   const [newComment, setNewComment] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
   const INCIDENT_DRAFT_KEY = `sf-incident-draft-${user?.id ?? ""}`;
-  const emptyIncident = () => ({ title: "", description: "", category: "Drift", store_id: activeStore?.id ?? "", priority: "Medel", responsible_user_id: "" });
+  const emptyIncident = () => ({ title: "", description: "", category: "Drift", store_id: activeStore?.id ?? "", priority: "Medel", responsible_user_id: "", sap_article_id: "" });
   const [newIncident, _setNewIncident] = useState(() => {
     try {
       const saved = localStorage.getItem(`sf-incident-draft-${user?.id ?? ""}`);
@@ -168,6 +169,7 @@ function IssuesPage() {
       priority: newIncident.priority,
       reported_by: user?.id,
       responsible_user_id: newIncident.responsible_user_id || null,
+      sap_article_id: newIncident.sap_article_id?.trim() || null,
       status: "open",
     }).select().maybeSingle();
 
@@ -533,6 +535,19 @@ function IssuesPage() {
                   </Select>
                 </div>
 
+                {/* SAP artikel-ID */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">SAP-artikel</span>
+                  <input
+                    value={newIncident.sap_article_id}
+                    onChange={(e) => setNewIncident(p => ({ ...p, sap_article_id: e.target.value }))}
+                    placeholder="t.ex. 1047133"
+                    inputMode="numeric"
+                    className="flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none"
+                  />
+                </div>
+
               </div>
             </div>
           </div>
@@ -571,6 +586,24 @@ function IssuesPage() {
               {showDetail.description && (
                 <p className="text-sm text-muted-foreground">{showDetail.description}</p>
               )}
+
+              {/* Mitt Coop deep link */}
+              {(() => {
+                const url = mittCoopUrl(showDetail.sap_article_id, showDetail.store?.sap_site_id);
+                if (!url) return null;
+                return (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary-soft px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
+                  >
+                    <Hash className="h-3 w-3" />
+                    SAP {showDetail.sap_article_id}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                );
+              })()}
 
               {/* Responsible user */}
               {isManager && (
