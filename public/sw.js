@@ -213,17 +213,14 @@ self.addEventListener("push", (event) => {
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clients) => {
-        const appOpen = clients.some((c) => c.visibilityState === "visible");
-        if (appOpen) {
-          // Forward payload to the visible window for in-app notification
-          for (const client of clients) {
-            if (client.visibilityState === "visible") {
-              client.postMessage({ type: "PUSH_RECEIVED", payload });
-              break;
-            }
+        // Forward to visible window for in-app toast
+        for (const client of clients) {
+          if (client.visibilityState === "visible") {
+            client.postMessage({ type: "PUSH_RECEIVED", payload });
+            break;
           }
-          return;
         }
+        // Always show OS-level notification regardless of app visibility
         return self.registration.showNotification(title, options);
       }),
   );
