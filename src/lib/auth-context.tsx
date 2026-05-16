@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else if (stores.length > 0) {
       setActiveStoreState(stores[0]);
     }
-    if (result.user.must_change_password) return { mustChangePassword: true };
+    if (result.user.must_change_password || result.user.last_login === null) return { mustChangePassword: true };
     return {};
   };
 
