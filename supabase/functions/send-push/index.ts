@@ -8,6 +8,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+// Old FCM endpoint format deprecated by Google in June 2024.
+// Subscriptions using this format never deliver even though FCM returns 201.
+function isDeprecatedEndpoint(endpoint: string): boolean {
+  return endpoint.includes("fcm.googleapis.com/fcm/send/");
+}
+
 interface SendPushPayload {
   user_ids?: string[];
   store_id?: string;
@@ -49,7 +55,6 @@ Deno.serve(async (req: Request) => {
     if (user_ids && user_ids.length > 0) {
       query = query.in("user_id", user_ids);
     } else if (store_id) {
-      // Get all users for this store
       const { data: storeUsers } = await supabase
         .from("user_stores")
         .select("user_id")
@@ -70,28 +75,40 @@ Deno.serve(async (req: Request) => {
     const pushPayload = JSON.stringify({ title, body, url, tag });
     const staleEndpoints: string[] = [];
     let sent = 0;
+    let skipped = 0;
 
     await Promise.all(
       (subscriptions ?? []).map(async (sub: { endpoint: string; subscription_json: unknown }) => {
+        // Automatically remove deprecated FCM endpoints — they accept the request
+        // but silently drop the message, so there is no point in sending to them.
+        if (isDeprecatedEndpoint(sub.endpoint)) {
+          staleEndpoints.push(sub.endpoint);
+          skipped++;
+          return;
+        }
+
         try {
           await webpush.sendNotification(sub.subscription_json as webpush.PushSubscription, pushPayload);
           sent++;
         } catch (err: unknown) {
           const status = (err as { statusCode?: number }).statusCode;
+          // 410 Gone = subscription revoked, 404 Not Found = endpoint gone
           if (status === 410 || status === 404) {
             staleEndpoints.push(sub.endpoint);
+          } else {
+            console.error("Push send error for endpoint", sub.endpoint, err);
           }
         }
       }),
     );
 
-    // Clean up stale subscriptions
+    // Clean up stale and deprecated subscriptions
     if (staleEndpoints.length > 0) {
       await supabase.from("push_subscriptions").delete().in("endpoint", staleEndpoints);
     }
 
     return new Response(
-      JSON.stringify({ sent, removed: staleEndpoints.length }),
+      JSON.stringify({ sent, skipped, removed: staleEndpoints.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {

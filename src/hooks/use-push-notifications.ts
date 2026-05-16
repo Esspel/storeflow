@@ -12,6 +12,12 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return Uint8Array.from(rawData, (c) => c.charCodeAt(0));
 }
 
+// The old FCM endpoint format (deprecated June 2024) accepts push requests but
+// silently drops all messages. Subscriptions using it must be replaced.
+function isDeprecatedEndpoint(endpoint: string): boolean {
+  return endpoint.includes("fcm.googleapis.com/fcm/send/");
+}
+
 export type PushNotificationState = {
   isSupported: boolean;
   isSubscribed: boolean;
@@ -34,7 +40,7 @@ export function usePushNotifications(): PushNotificationState {
     "Notification" in window &&
     !!VAPID_PUBLIC_KEY;
 
-  // Check current subscription state on mount
+  // On mount: check subscription state and auto-fix deprecated endpoints.
   useEffect(() => {
     if (!isSupported || !user) {
       setIsLoading(false);
@@ -46,7 +52,37 @@ export function usePushNotifications(): PushNotificationState {
     navigator.serviceWorker.ready
       .then(async (reg) => {
         const sub = await reg.pushManager.getSubscription();
-        setIsSubscribed(!!sub);
+
+        if (!sub) {
+          setIsSubscribed(false);
+          return;
+        }
+
+        // If the browser still holds a subscription with the deprecated FCM
+        // endpoint, unsubscribe from it and remove from the database so the
+        // user is prompted to re-subscribe and get a valid V1 endpoint.
+        if (isDeprecatedEndpoint(sub.endpoint)) {
+          await supabase.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+          await sub.unsubscribe();
+          setIsSubscribed(false);
+          toast.info("Notisprenumerationen behövde förnyas. Aktivera notiser igen i inställningarna.");
+          return;
+        }
+
+        setIsSubscribed(true);
+
+        // Ensure this valid subscription is recorded in the database
+        // (covers cases where the DB row was deleted but browser still has it).
+        supabase.from("push_subscriptions").upsert(
+          {
+            user_id: user.id,
+            endpoint: sub.endpoint,
+            subscription_json: sub.toJSON(),
+            user_agent: navigator.userAgent,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "endpoint" },
+        ).then(() => {});
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
@@ -70,6 +106,15 @@ export function usePushNotifications(): PushNotificationState {
       }
 
       const reg = await navigator.serviceWorker.ready;
+
+      // Unsubscribe from any existing (possibly deprecated) subscription first
+      // so the browser always creates a fresh endpoint.
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) {
+        await supabase.from("push_subscriptions").delete().eq("endpoint", existing.endpoint);
+        await existing.unsubscribe();
+      }
+
       const subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
