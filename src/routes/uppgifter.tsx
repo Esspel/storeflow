@@ -579,8 +579,9 @@ function TasksPage() {
       : parent.due_date
         ? midnight(new Date(parent.due_date))
         : midnight(new Date(parent.created_at));
+    // Use full due_date (with time) to preserve the time-of-day in child tasks
     const durationMs = parent.due_date
-      ? Math.max(0, midnight(new Date(parent.due_date)).getTime() - originDate.getTime())
+      ? Math.max(0, new Date(parent.due_date).getTime() - originDate.getTime())
       : 0;
     // Ceiling: recurrence_end if set, otherwise 30 days from today
     const maxCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 30); d.setHours(0,0,0,0); return d; })();
@@ -647,8 +648,9 @@ function TasksPage() {
       const originDate: Date = t.recurrence_start
         ? midnight(new Date(t.recurrence_start))
         : t.due_date ? midnight(new Date(t.due_date)) : midnight(new Date(t.created_at));
+      // Use full due_date (with time) to preserve the time-of-day in child tasks
       const durationMs = t.due_date
-        ? Math.max(0, midnight(new Date(t.due_date)).getTime() - originDate.getTime()) : 0;
+        ? Math.max(0, new Date(t.due_date).getTime() - originDate.getTime()) : 0;
 
       const periodStarts = buildPeriodStarts(
         originDate, t.recurrence_rule!, t.recurrence_days ?? null,

@@ -69,11 +69,10 @@ export function usePushNotifications(): PushNotificationState {
           return;
         }
 
-        setIsSubscribed(true);
-
-        // Ensure this valid subscription is recorded in the database
-        // (covers cases where the DB row was deleted but browser still has it).
-        supabase.from("push_subscriptions").upsert(
+        // Ensure this subscription is recorded in the DB for the current user.
+        // Try upsert first; if it fails (e.g., endpoint owned by another user due
+        // to RLS), re-create the browser subscription to get a fresh endpoint.
+        const { error: upsertErr } = await supabase.from("push_subscriptions").upsert(
           {
             user_id: user.id,
             endpoint: sub.endpoint,
@@ -82,7 +81,36 @@ export function usePushNotifications(): PushNotificationState {
             updated_at: new Date().toISOString(),
           },
           { onConflict: "endpoint" },
-        ).then(() => {});
+        );
+
+        if (upsertErr) {
+          // Likely unique constraint violation due to another user owning this endpoint.
+          // Unsubscribe and re-subscribe to get a fresh endpoint for this user.
+          await sub.unsubscribe();
+          try {
+            const freshSub = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!),
+            });
+            const { error: insertErr } = await supabase.from("push_subscriptions").insert({
+              user_id: user.id,
+              endpoint: freshSub.endpoint,
+              subscription_json: freshSub.toJSON(),
+              user_agent: navigator.userAgent,
+            });
+            if (insertErr) {
+              console.error("Push subscription re-register failed:", insertErr);
+              setIsSubscribed(false);
+              return;
+            }
+          } catch (resubErr) {
+            console.error("Push re-subscribe failed:", resubErr);
+            setIsSubscribed(false);
+            return;
+          }
+        }
+
+        setIsSubscribed(true);
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
