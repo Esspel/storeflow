@@ -105,19 +105,21 @@ function AccountsPage() {
   useEffect(() => {
     // Wait until auth has finished loading before deciding to redirect
     if (authLoading) return;
+    if (!currentUser) return;
     if (!isManager) { navigate({ to: "/" }); return; }
     load();
-  }, [currentUser, authLoading]);
+  }, [currentUser, authLoading, currentUserStores]);
 
   // The stores a manager is allowed to manage (all for admin)
   const manageableStoreIds = isAdmin ? null : currentUserStores.map((s) => s.id);
 
   async function load() {
+    const managerStoreIds = currentUserStores.map(s => s.id);
     const [usersRes, storesRes, userStoresRes] = await Promise.all([
       supabase.from("app_users").select("*").order("created_at"),
-      isAdmin
+      isAdmin || managerStoreIds.length === 0
         ? supabase.from("stores").select("*").order("name")
-        : supabase.from("stores").select("*").in("id", currentUserStores.map(s => s.id)).order("name"),
+        : supabase.from("stores").select("*").in("id", managerStoreIds).order("name"),
       supabase.from("user_stores").select("user_id, store_id"),
     ]);
     const rawUsers = (usersRes.data ?? []) as AppUser[];
