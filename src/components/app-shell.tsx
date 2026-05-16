@@ -1,4 +1,5 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { Bell, ChevronDown, ClipboardList, FlaskConical, Hop as Home, LogOut, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
@@ -22,6 +23,81 @@ import { supabase, type Notification, cleanOldNotifications } from "@/lib/supaba
 import { cn } from "@/lib/utils";
 import { getSimulatedDate, setTimeOffsetMs, isSimulationActive } from "@/lib/time-simulation";
 import { supabase as _supabase } from "@/lib/supabase";
+
+// ── SW update banner ────────────────────────────────────────────────────────
+function SwUpdateBanner() {
+  const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
+  const [countdown, setCountdown] = useState(5);
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+
+    const reg = navigator.serviceWorker.getRegistration();
+    reg.then((r) => {
+      if (!r) return;
+
+      const attachWaiting = (sw: ServiceWorker) => {
+        if (sw.state === "installed") setWaiting(sw);
+        sw.addEventListener("statechange", () => {
+          if (sw.state === "installed") setWaiting(sw);
+        });
+      };
+
+      if (r.waiting) { attachWaiting(r.waiting); return; }
+
+      r.addEventListener("updatefound", () => {
+        const newSw = r.installing;
+        if (newSw) attachWaiting(newSw);
+      });
+
+      // Poll for updates every 60s so Zebra devices with long sessions catch deploys
+      const poll = setInterval(() => r.update(), 60_000);
+      return () => clearInterval(poll);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(timer);
+          applyUpdate(waiting);
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [waiting]);
+
+  function applyUpdate(sw: ServiceWorker) {
+    sw.postMessage({ type: "SKIP_WAITING" });
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      window.location.reload();
+    }, { once: true });
+  }
+
+  if (!waiting) return null;
+
+  return (
+    <div
+      role="alert"
+      className="sticky top-0 z-[60] flex items-center justify-between gap-3 border-b-2 border-amber-400 bg-amber-400 px-4 py-3 text-sm font-semibold text-amber-950"
+    >
+      <span>
+        En ny säkerhetsuppdatering är tillgänglig. Appen startas om automatiskt om{" "}
+        <strong>{countdown}</strong> sekund{countdown !== 1 ? "er" : ""}...
+      </span>
+      <button
+        onClick={() => applyUpdate(waiting)}
+        className="shrink-0 rounded-full bg-amber-950 px-3 py-1 text-xs font-bold text-amber-50 transition-opacity hover:opacity-80 active:opacity-70"
+      >
+        Starta om nu
+      </button>
+    </div>
+  );
+}
 
 // ── Offline snackbar ────────────────────────────────────────────────────────
 function OfflineSnackbar() {
@@ -168,6 +244,7 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-background" style={{ isolation: "isolate" }}>
+      <SwUpdateBanner />
       {/* Safe-area top spacer for notched devices */}
       <div className="pt-safe" />
 
@@ -420,7 +497,9 @@ export function AppShell() {
       )}
 
       <main className="flex-1 pb-24 md:pb-0">
-        <Outlet />
+        <ErrorBoundary section="Sida" storeId={activeStore?.id ?? null}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       {/* Safe-area bottom spacer */}

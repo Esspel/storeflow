@@ -1,7 +1,9 @@
 // StoreFlow Service Worker — offline shell caching + Web Push
 // Strategy: Cache-First for static assets, Network-First for API/supabase calls.
-// Version bump this string to force cache refresh on deploy.
-const CACHE_NAME = "storeflow-shell-v3";
+// Bump CACHE_VERSION on every production deploy to force a cache refresh and
+// trigger the update banner on all open tabs.
+const CACHE_VERSION = "v4";
+const CACHE_NAME = `storeflow-shell-${CACHE_VERSION}`;
 
 // Session token for attaching x-session-token to background sync requests.
 // Populated via postMessage from the main thread after login.
@@ -11,14 +13,21 @@ self.addEventListener("message", (event) => {
   if (event.data?.type === "SET_TOKEN") {
     _sessionToken = event.data.token ?? null;
   }
+  // Main thread sends SKIP_WAITING after the user confirms the update banner
+  // (or after the 5-second countdown). This activates the new SW immediately.
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 // Static assets to pre-cache on install (app shell)
 const SHELL_URLS = ["/", "/login"];
 
 self.addEventListener("install", (event) => {
+  // Pre-cache the app shell. Do NOT skipWaiting here — the update banner in
+  // the main thread controls when the new SW activates (after user is notified).
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS)).then(() => self.skipWaiting()),
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS)),
   );
 });
 

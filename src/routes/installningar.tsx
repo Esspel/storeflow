@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
-import { Eye, EyeOff, KeyRound, Store, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Eye, EyeOff, KeyRound, Store, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ import { supabase, logAudit, type Store as StoreType } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { PushNotificationSetup } from "@/components/push-notification-setup";
+
+const APP_VERSION = "2.4.1";
 
 export const Route = createFileRoute("/installningar")({
   component: SettingsPage,
@@ -151,6 +153,91 @@ function SettingsPage() {
   const [pwError, setPwError] = useState("");
   const [pwSuccess, setPwSuccess] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
+
+  // ── Diagnostics panel (hidden: tap version 7 times to unlock) ──────────────
+  const [versionTapCount, setVersionTapCount] = useState(0);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [diagOnline, setDiagOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [diagIdbUsage, setDiagIdbUsage] = useState("–");
+  const [diagLastError, setDiagLastError] = useState("–");
+  const [diagLocalDrafts, setDiagLocalDrafts] = useState(0);
+  const [diagRefreshing, setDiagRefreshing] = useState(false);
+
+  const refreshDiagnostics = useCallback(async () => {
+    setDiagRefreshing(true);
+    setDiagOnline(navigator.onLine);
+    try {
+      if (navigator.storage?.estimate) {
+        const est = await navigator.storage.estimate();
+        const used = est.usage ?? 0;
+        const quota = est.quota ?? 0;
+        setDiagIdbUsage(`${(used / 1024 / 1024).toFixed(2)} MB / ${(quota / 1024 / 1024).toFixed(0)} MB`);
+      }
+    } catch { setDiagIdbUsage("Ej tillgängligt"); }
+    try {
+      const draftKeys = Object.keys(localStorage).filter((k) => k.startsWith("sf_draft_") || k.startsWith("sf_queue_"));
+      setDiagLocalDrafts(draftKeys.length);
+    } catch { setDiagLocalDrafts(0); }
+    try {
+      const { data } = await supabase
+        .from("system_errors")
+        .select("error_message, created_at")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) {
+        const ts = new Date(data.created_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
+        setDiagLastError(`${ts}: ${(data.error_message as string).slice(0, 120)}`);
+      } else {
+        setDiagLastError("Inga registrerade fel");
+      }
+    } catch { setDiagLastError("Kunde inte hämta"); }
+    setDiagRefreshing(false);
+  }, []);
+
+  const handleVersionTap = () => {
+    const next = versionTapCount + 1;
+    setVersionTapCount(next);
+    if (versionTapTimer.current) clearTimeout(versionTapTimer.current);
+    if (next >= 7) {
+      setVersionTapCount(0);
+      setShowDiagnostics(true);
+      refreshDiagnostics();
+    } else {
+      versionTapTimer.current = setTimeout(() => setVersionTapCount(0), 2000);
+    }
+  };
+
+  const downloadDebugLog = () => {
+    const lines = [
+      `StoreFlow Debug Log — ${new Date().toISOString()}`,
+      `Version: ${APP_VERSION}`,
+      `User: ${user?.username ?? "–"} (${user?.role ?? "–"})`,
+      `Store: ${activeStore?.name ?? "–"} (${activeStore?.id ?? "–"})`,
+      `Online: ${diagOnline}`,
+      `IndexedDB: ${diagIdbUsage}`,
+      `Local drafts: ${diagLocalDrafts}`,
+      `Last error: ${diagLastError}`,
+      `User-Agent: ${navigator.userAgent}`,
+      `Screen: ${window.screen.width}x${window.screen.height} @ ${window.devicePixelRatio}x`,
+      `Viewport: ${window.innerWidth}x${window.innerHeight}`,
+      `Language: ${navigator.language}`,
+      `Platform: ${(navigator as { platform?: string }).platform ?? "–"}`,
+      `Service Worker: ${"serviceWorker" in navigator ? "supported" : "unsupported"}`,
+      ``,
+      `--- LocalStorage keys ---`,
+      ...Object.keys(localStorage).map((k) => `  ${k}`),
+    ];
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `storeflow-debug-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const saveDisplayName = async () => {
     if (!displayName.trim() || !user) return;
@@ -528,6 +615,107 @@ function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Diagnostics panel — revealed by tapping the version number 7 times */}
+        {showDiagnostics ? (
+          <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                  <Bug className="h-4 w-4" />
+                </div>
+                <div>
+                  <h2 className="font-semibold">Diagnostik</h2>
+                  <p className="text-xs text-muted-foreground">Realtidsstatus för Helpdesk-support.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={refreshDiagnostics}
+                  disabled={diagRefreshing}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
+                  aria-label="Uppdatera diagnostik"
+                >
+                  <RefreshCw className={cn("h-4 w-4", diagRefreshing && "animate-spin")} />
+                </button>
+                <button
+                  onClick={() => setShowDiagnostics(false)}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Stäng
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {/* Network status */}
+              <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  {diagOnline
+                    ? <Wifi className="h-4 w-4 text-success" />
+                    : <WifiOff className="h-4 w-4 text-destructive" />}
+                  Nätverksstatus
+                </div>
+                <span className={cn("text-sm font-semibold", diagOnline ? "text-success" : "text-destructive")}>
+                  {diagOnline ? "Online" : "Offline"}
+                </span>
+              </div>
+
+              {/* IndexedDB */}
+              <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <HardDrive className="h-4 w-4 text-muted-foreground" />
+                  IndexedDB-lagring
+                </div>
+                <span className="font-mono text-xs text-muted-foreground">{diagIdbUsage}</span>
+              </div>
+
+              {/* Local drafts */}
+              <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
+                <span className="text-sm font-medium">Lokala utkast (kö)</span>
+                <span className={cn("text-sm font-semibold tabular-nums", diagLocalDrafts > 0 ? "text-warning-foreground" : "text-muted-foreground")}>
+                  {diagLocalDrafts} poster
+                </span>
+              </div>
+
+              {/* Last error */}
+              <div className="rounded-lg border border-border/60 px-3 py-2.5">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Senaste systemfel</p>
+                <p className="break-all font-mono text-xs text-foreground/80">{diagLastError}</p>
+              </div>
+
+              {/* Version */}
+              <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
+                <span className="text-sm font-medium">App-version</span>
+                <span className="font-mono text-xs text-muted-foreground">{APP_VERSION}</span>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Button onClick={downloadDebugLog} className="w-full rounded-full gap-2">
+                <Download className="h-4 w-4" />
+                Exportera lokal debug-logg
+              </Button>
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                Ladda ned och skicka denna fil till Coops IT-Helpdesk.
+              </p>
+            </div>
+          </div>
+        ) : (
+          /* Version tap target — invisible but accessible */
+          <div className="flex justify-center pt-2 pb-4">
+            <button
+              onClick={handleVersionTap}
+              className="select-none rounded-full px-4 py-2 text-xs text-muted-foreground/40 transition-colors hover:text-muted-foreground/60 active:opacity-50"
+              aria-label="App-version"
+            >
+              v{APP_VERSION}
+              {versionTapCount > 0 && versionTapCount < 7 && (
+                <span className="ml-2 text-muted-foreground/60">({7 - versionTapCount} tryck kvar)</span>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

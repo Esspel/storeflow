@@ -324,9 +324,10 @@ export async function cleanOldNotifications(userId: string) {
   await supabase.from("notifications").delete().eq("user_id", userId).lt("created_at", cutoff);
 }
 
-// Compress an image file on the client before uploading.
-// Resizes to max 1920px on the longest side and encodes as JPEG at 82% quality.
-// Non-image files are returned as-is.
+// Compress an image and strip all EXIF metadata before uploading.
+// Drawing through canvas discards GPS, camera model, and timestamp metadata —
+// only raw pixel data is written to the output JPEG. Resizes to max 1920px.
+// Non-image files are returned unchanged.
 export async function compressImage(file: File, maxPx = 1920, quality = 0.82): Promise<File> {
   if (!file.type.startsWith("image/")) return file;
   return new Promise((resolve) => {

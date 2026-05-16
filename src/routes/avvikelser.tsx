@@ -30,6 +30,7 @@ import {
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import { GdprImageReminder } from "@/components/gdpr-image-reminder";
 
 export const Route = createFileRoute("/avvikelser")({
   component: IssuesPage,
@@ -679,6 +680,7 @@ function IssuesPage() {
               {/* Images */}
               <div className="space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Bilder</p>
+                <GdprImageReminder />
                 <input ref={fileInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden"
                   onChange={(e) => { if (e.target.files) setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]); }} />
                 {uploadFiles.length > 0 && (

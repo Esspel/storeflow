@@ -22,6 +22,7 @@ import {
   logAudit, createNotification, mittCoopUrl, uploadAttachment, getPublicUrl,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { GdprImageReminder } from "@/components/gdpr-image-reminder";
 import { cn } from "@/lib/utils";
 import { haptic } from "@/lib/haptic";
 
@@ -945,6 +946,7 @@ function KundrundaPage() {
                 {/* Photo upload for defect */}
                 <div className="space-y-1.5">
                   <Label className="text-xs">Foto på avvikelsen</Label>
+                  <GdprImageReminder />
                   <input ref={defectPhotoRef} type="file" accept="image/*" capture="environment" className="hidden"
                     onChange={async (e) => { const f = e.target.files?.[0]; if (f) await uploadDefectPhoto(f); e.target.value = ""; }}
                   />
