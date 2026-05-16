@@ -111,6 +111,7 @@ export type Incident = {
   resolved_at: string | null;
   has_photo: boolean;
   sap_article_id: string | null;
+  source: string | null;
   created_at: string;
   store?: Store;
   reporter?: AppUser;
@@ -360,6 +361,24 @@ export type KundrundaCheckpoint = {
   id: string;
   zone_id: string;
   label: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+  images?: KundrundaCheckpointImage[];
+};
+
+export type KundrundaCheckpointImage = {
+  id: string;
+  checkpoint_id: string;
+  storage_path: string;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
+export type KundrundaCommonDefect = {
+  id: string;
+  store_id: string | null;
+  label: string;
   sort_order: number;
   created_at: string;
 };
@@ -390,6 +409,17 @@ export type KundrundaResponse = {
   responsible_user_id: string | null;
   sap_article_id: string | null;
   created_task_id: string | null;
+  incident_id: string | null;
+  created_at: string;
+  images?: KundrundaResponseImage[];
+};
+
+export type KundrundaResponseImage = {
+  id: string;
+  response_id: string;
+  session_id: string;
+  storage_path: string;
+  uploaded_by: string | null;
   created_at: string;
 };
 

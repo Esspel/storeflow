@@ -722,6 +722,22 @@ function TasksPage() {
         if (task.created_by && task.created_by !== user?.id) notifyIds.add(task.created_by);
         task.assignees?.forEach(a => { if (a.user_id && a.user_id !== user?.id) notifyIds.add(a.user_id); });
         notifyUsers([...notifyIds], "task_done", `Uppgift klar: ${task.title}`, `Slutförd av ${user?.display_name}`, "/uppgifter");
+
+        // Auto-resolve any linked kundrunda incident and update the response result
+        const { data: krResponse } = await supabase
+          .from("kundrunda_responses")
+          .select("id, incident_id")
+          .eq("created_task_id", task.id)
+          .maybeSingle();
+        if (krResponse) {
+          if (krResponse.incident_id) {
+            await supabase.from("incidents").update({
+              status: "resolved",
+              resolved_at: new Date().toISOString(),
+            }).eq("id", krResponse.incident_id);
+          }
+          await supabase.from("kundrunda_responses").update({ result: "ok" }).eq("id", krResponse.id);
+        }
       } else {
         await supabase.from("task_steps").update({ is_done: false }).eq("task_id", task.id);
       }

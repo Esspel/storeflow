@@ -427,7 +427,12 @@ function IssuesPage() {
                     <div className="flex items-center gap-2">
                       <span className={cn("h-2 w-2 shrink-0 rounded-full", inc.priority === "Kritisk" ? "bg-destructive" : inc.priority === "Hög" ? "bg-warning-foreground" : inc.priority === "Medel" ? "bg-info" : "bg-muted-foreground")} />
                       <div>
-                        <p className="font-medium">{inc.title}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-medium">{inc.title}</p>
+                          {inc.source === "kundrunda" && (
+                            <span className="rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:bg-teal-900/40 dark:text-teal-400">Kundrunda</span>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground font-mono">{inc.ref_number}</p>
                       </div>
                     </div>
@@ -622,7 +627,12 @@ function IssuesPage() {
             <DialogHeader>
               <div className="flex items-center justify-between gap-2 pr-6">
                 <div>
-                  <DialogTitle className="text-base">{showDetail.title}</DialogTitle>
+                  <div className="flex items-center gap-2">
+                    <DialogTitle className="text-base">{showDetail.title}</DialogTitle>
+                    {showDetail.source === "kundrunda" && (
+                      <span className="rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:bg-teal-900/40 dark:text-teal-400">Kundrunda</span>
+                    )}
+                  </div>
                   <p className="font-mono text-xs text-muted-foreground">{showDetail.ref_number}</p>
                 </div>
                 {statusBadge(showDetail.status)}
