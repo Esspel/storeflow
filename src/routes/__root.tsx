@@ -75,15 +75,23 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "StoreFlow — Retail Operations Platform" },
       {
         name: "description",
         content:
           "Modern retail operations management för butikskedjor: uppgifter, avvikelser och realtidsuppföljning.",
       },
+      { name: "theme-color", content: "#3d8c5e" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+      { name: "apple-mobile-web-app-title", content: "StoreFlow" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "manifest", href: "/manifest.json" },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -111,6 +119,12 @@ function AppLayout() {
   const router = useRouter();
   const pathname = router.state.location.pathname;
   const isLoginPage = pathname === "/login";
+
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     if (loading) return;

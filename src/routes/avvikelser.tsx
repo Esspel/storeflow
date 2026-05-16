@@ -82,14 +82,22 @@ function IssuesPage() {
   const [detailImages, setDetailImages] = useState<IncidentImage[]>([]);
   const [newComment, setNewComment] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
-  const [newIncident, setNewIncident] = useState({
-    title: "",
-    description: "",
-    category: "Drift",
-    store_id: activeStore?.id ?? "",
-    priority: "Medel",
-    responsible_user_id: "",
+  const INCIDENT_DRAFT_KEY = `sf-incident-draft-${user?.id ?? ""}`;
+  const emptyIncident = () => ({ title: "", description: "", category: "Drift", store_id: activeStore?.id ?? "", priority: "Medel", responsible_user_id: "" });
+  const [newIncident, _setNewIncident] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`sf-incident-draft-${user?.id ?? ""}`);
+      if (saved) return JSON.parse(saved) as ReturnType<typeof emptyIncident>;
+    } catch {}
+    return emptyIncident();
   });
+  const setNewIncident = (v: ReturnType<typeof emptyIncident> | ((p: ReturnType<typeof emptyIncident>) => ReturnType<typeof emptyIncident>)) => {
+    _setNewIncident(prev => {
+      const next = typeof v === "function" ? v(prev) : v;
+      try { localStorage.setItem(INCIDENT_DRAFT_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
   const [saving, setSaving] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [viewerIdx, setViewerIdx] = useState<number | null>(null);
@@ -196,7 +204,8 @@ function IssuesPage() {
     setSaving(false);
     setShowCreate(false);
     setUploadFiles([]);
-    setNewIncident({ title: "", description: "", category: "Drift", store_id: activeStore?.id ?? "", priority: "Medel", responsible_user_id: "" });
+    try { localStorage.removeItem(INCIDENT_DRAFT_KEY); } catch {}
+    setNewIncident(emptyIncident());
   };
 
   const updateStatus = async (id: string, newStatus: string) => {
@@ -392,6 +401,15 @@ function IssuesPage() {
         </div>
       )}
 
+      {/* Mobile FAB — thumb-zone shortcut for creating incidents */}
+      <button
+        className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
+        aria-label="Ny avvikelse"
+        onClick={() => setShowCreate(true)}
+      >
+        <Plus className="h-6 w-6" />
+      </button>
+
       {/* CREATE DIALOG — two-panel layout */}
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setUploadFiles([]); }}>
         <DialogContent className="max-h-[92vh] w-full max-w-3xl overflow-hidden p-0 gap-0">
@@ -428,7 +446,7 @@ function IssuesPage() {
               {/* Images */}
               <div className="space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Bilder</p>
-                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
+                <input ref={fileInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden"
                   onChange={(e) => { if (e.target.files) setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]); }} />
                 {uploadFiles.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-2">

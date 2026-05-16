@@ -1,0 +1,38 @@
+{
+  "name": "StoreFlow",
+  "short_name": "StoreFlow",
+  "description": "Retail operations management för butikskedjor",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#fcfdfb",
+  "theme_color": "#3d8c5e",
+  "lang": "sv",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Uppgifter",
+      "url": "/uppgifter",
+      "description": "Se och hantera uppgifter"
+    },
+    {
+      "name": "Avvikelser",
+      "url": "/avvikelser",
+      "description": "Rapportera avvikelse"
+    }
+  ]
+}

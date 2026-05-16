@@ -196,10 +196,10 @@ export function AppShell() {
                           </div>
                           <button
                             onClick={() => deleteNotification(n.id)}
-                            className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 active:opacity-100"
                             aria-label="Ta bort notis"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
                       </div>
@@ -316,7 +316,7 @@ export function AppShell() {
         </div>
       )}
 
-      <main className="flex-1">
+      <main className="flex-1 overflow-y-auto" data-scroll-container>
         <Outlet />
       </main>
     </div>

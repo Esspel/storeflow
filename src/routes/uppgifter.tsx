@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2 } from "lucide-react";
+import { CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -148,6 +148,91 @@ const emptyForm = (storeId: string) => ({
 });
 
 
+// Swipeable card: right-swipe → complete, left-swipe → open detail (or delete hint for managers)
+function SwipeableCard({
+  done,
+  onSwipeRight,
+  onSwipeLeft,
+  onClick,
+  children,
+  className,
+}: {
+  done: boolean;
+  onSwipeRight: () => void;
+  onSwipeLeft: () => void;
+  onClick: () => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const deltaX = useRef(0);
+  const [offset, setOffset] = useState(0);
+  const [swiping, setSwiping] = useState(false);
+  const THRESHOLD = 72;
+
+  const onPtrDown = (e: React.PointerEvent) => {
+    startX.current = e.clientX;
+    startY.current = e.clientY;
+    deltaX.current = 0;
+    setSwiping(false);
+  };
+
+  const onPtrMove = (e: React.PointerEvent) => {
+    const dx = e.clientX - startX.current;
+    const dy = e.clientY - startY.current;
+    if (!swiping && Math.abs(dy) > Math.abs(dx)) return; // vertical scroll wins
+    if (Math.abs(dx) > 6) setSwiping(true);
+    deltaX.current = dx;
+    setOffset(Math.max(-THRESHOLD * 1.2, Math.min(THRESHOLD * 1.2, dx)));
+  };
+
+  const onPtrUp = () => {
+    const dx = deltaX.current;
+    setOffset(0);
+    setSwiping(false);
+    if (dx > THRESHOLD) { onSwipeRight(); return; }
+    if (dx < -THRESHOLD) { onSwipeLeft(); return; }
+  };
+
+  const isRight = offset > 20;
+  const isLeft = offset < -20;
+
+  return (
+    <div className="relative overflow-hidden rounded-xl">
+      {/* Right hint (complete) */}
+      <div className={cn(
+        "absolute inset-y-0 left-0 flex w-20 items-center justify-center rounded-l-xl transition-opacity",
+        done ? "bg-muted/60" : "bg-success/20",
+        isRight ? "opacity-100" : "opacity-0"
+      )}>
+        {done
+          ? <Circle className="h-6 w-6 text-muted-foreground" />
+          : <CheckCircle2 className="h-6 w-6 text-success" />
+        }
+      </div>
+      {/* Left hint (open) */}
+      <div className={cn(
+        "absolute inset-y-0 right-0 flex w-20 items-center justify-center rounded-r-xl bg-primary/10 transition-opacity",
+        isLeft ? "opacity-100" : "opacity-0"
+      )}>
+        <ChevronRight className="h-6 w-6 text-primary" />
+      </div>
+      <article
+        className={cn("relative z-10 touch-pan-y", className)}
+        style={{ transform: swiping ? `translateX(${offset}px)` : undefined, transition: swiping ? "none" : "transform 0.2s ease" }}
+        onPointerDown={onPtrDown}
+        onPointerMove={onPtrMove}
+        onPointerUp={onPtrUp}
+        onPointerCancel={onPtrUp}
+        onClick={() => { if (Math.abs(deltaX.current) < 6) onClick(); }}
+      >
+        {children}
+      </article>
+    </div>
+  );
+}
+
 function TasksPage() {
   const { user, activeStore, userStores } = useAuth();
   const isManager = user?.role === "manager" || user?.role === "admin";
@@ -163,7 +248,21 @@ function TasksPage() {
   const [tab, setTab] = useState("today");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [newTask, setNewTask] = useState(emptyForm(activeStore?.id ?? ""));
+  const TASK_DRAFT_KEY = `sf-task-draft-${user?.id ?? ""}`;
+  const [newTask, _setNewTask] = useState<ReturnType<typeof emptyForm>>(() => {
+    try {
+      const saved = localStorage.getItem(`sf-task-draft-${user?.id ?? ""}`);
+      if (saved) return JSON.parse(saved) as ReturnType<typeof emptyForm>;
+    } catch {}
+    return emptyForm(activeStore?.id ?? "");
+  });
+  const setNewTask = (v: ReturnType<typeof emptyForm> | ((p: ReturnType<typeof emptyForm>) => ReturnType<typeof emptyForm>)) => {
+    _setNewTask(prev => {
+      const next = typeof v === "function" ? v(prev) : v;
+      try { localStorage.setItem(TASK_DRAFT_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
@@ -832,6 +931,7 @@ function TasksPage() {
     await fetchTasks();
     setSaving(false);
     setShowCreate(false);
+    try { localStorage.removeItem(TASK_DRAFT_KEY); } catch {}
     setNewTask(emptyForm(activeStore?.id ?? ""));
     setUploadFiles([]);
   };
@@ -986,13 +1086,16 @@ function TasksPage() {
             const isKritisk = t.priority === "Kritisk";
             const weekdayShort = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
             return (
-              <article
+              <SwipeableCard
                 key={t.id}
+                done={done}
+                onSwipeRight={() => void completeTask(t)}
+                onSwipeLeft={() => openDetail(t)}
+                onClick={() => openDetail(t)}
                 className={cn(
                   "cursor-pointer overflow-hidden rounded-xl border bg-card shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)]",
                   done ? "opacity-60 border-border/40" : overdue ? "border-destructive/40" : "border-border/60"
                 )}
-                onClick={() => openDetail(t)}
               >
                 <div className="flex items-start gap-3 px-4 pt-4 pb-3">
                   {/* Priority indicator */}
@@ -1058,10 +1161,21 @@ function TasksPage() {
                     )}
                   </div>
                 </div>
-              </article>
+              </SwipeableCard>
             );
           })}
         </div>
+      )}
+
+      {/* Mobile FAB — thumb-zone shortcut, hidden on lg+ where header button is visible */}
+      {isManager && (
+        <button
+          className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
+          aria-label="Ny uppgift"
+          onClick={() => { setShowCreate(true); setSaveError(""); }}
+        >
+          <Plus className="h-6 w-6" />
+        </button>
       )}
 
       {/* DETAIL MODAL */}
@@ -1108,17 +1222,15 @@ function TasksPage() {
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Checkpoints</p>
                   {detailTask.steps.map((step) => (
-                    <label key={step.id} className="flex items-start gap-3 cursor-pointer group rounded-lg p-2 hover:bg-muted/40 transition-colors">
+                    <label key={step.id} className="flex min-h-[44px] items-center gap-3 cursor-pointer group rounded-xl px-3 py-2.5 hover:bg-muted/40 active:bg-muted/60 transition-colors">
                       <Checkbox
                         checked={step.is_done}
-                        onCheckedChange={(checked) => {
-                          void toggleStep(detailTask, step.id, step.is_done);
-                        }}
-                        className="mt-0.5"
+                        onCheckedChange={() => void toggleStep(detailTask, step.id, step.is_done)}
+                        className="h-5 w-5 shrink-0"
                       />
-                      <span className={cn("flex-1 text-sm", step.is_done && "line-through text-muted-foreground")}>{step.label}</span>
+                      <span className={cn("flex-1 text-sm leading-snug", step.is_done && "line-through text-muted-foreground")}>{step.label}</span>
                       {step.requires_photo && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground shrink-0">
                           <ImagePlus className="h-3 w-3" />foto
                         </span>
                       )}
@@ -1138,7 +1250,7 @@ function TasksPage() {
                         {q.is_required && <span className="ml-1 text-destructive">*</span>}
                       </Label>
                       {q.question_type === "yes_no" ? (
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-4">
                           {(["Ja", "Nej"] as const).map((opt) => {
                             const current = answerDraft[q.id] ?? q.answer ?? "";
                             const active = current === opt;
@@ -1149,7 +1261,7 @@ function TasksPage() {
                                 type="button"
                                 aria-label={opt}
                                 className={cn(
-                                  "flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all",
+                                  "flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all active:scale-95",
                                   active
                                     ? isYes
                                       ? "border-success bg-success/15 text-success scale-110"
@@ -1162,8 +1274,8 @@ function TasksPage() {
                                 }}
                               >
                                 {isYes
-                                  ? <CheckCircle2 className="h-5 w-5" />
-                                  : <X className="h-5 w-5" />
+                                  ? <CheckCircle2 className="h-6 w-6" />
+                                  : <X className="h-6 w-6" />
                                 }
                               </button>
                             );
@@ -1229,6 +1341,7 @@ function TasksPage() {
                   ref={detailFileInputRef}
                   type="file"
                   accept="image/*"
+                  capture="environment"
                   multiple
                   className="hidden"
                   onChange={(e) => {
@@ -1442,7 +1555,7 @@ function TasksPage() {
               {/* Images */}
               <div className="space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Bilder</p>
-                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
+                <input ref={fileInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden"
                   onChange={(e) => { if (e.target.files) setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]); }} />
                 {uploadFiles.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-2">

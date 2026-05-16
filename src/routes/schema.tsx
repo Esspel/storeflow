@@ -1159,8 +1159,8 @@ function SchemaPage() {
         <div className="flex flex-1 flex-col px-6 py-4">
           {/* Day picker + view toggle */}
           <div className="mb-4 flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setSelectedDayIndex((i) => Math.max(0, i - 1))} disabled={selectedDayIndex === 0}>
-              <ChevronLeft className="h-4 w-4" />
+            <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" onClick={() => setSelectedDayIndex((i) => Math.max(0, i - 1))} disabled={selectedDayIndex === 0}>
+              <ChevronLeft className="h-5 w-5" />
             </Button>
             <div className="flex flex-1 gap-1.5 overflow-x-auto">
               {weekDates.map((date, idx) => {
@@ -1188,8 +1188,8 @@ function SchemaPage() {
                 );
               })}
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setSelectedDayIndex((i) => Math.min(6, i + 1))} disabled={selectedDayIndex === 6}>
-              <ChevronRight className="h-4 w-4" />
+            <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" onClick={() => setSelectedDayIndex((i) => Math.min(6, i + 1))} disabled={selectedDayIndex === 6}>
+              <ChevronRight className="h-5 w-5" />
             </Button>
             <div className="ml-2 flex shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted/40">
               <button onClick={() => setViewMode("day")} className={["flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "day" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"].join(" ")}>

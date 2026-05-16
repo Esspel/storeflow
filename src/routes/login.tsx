@@ -54,6 +54,9 @@ function LoginPage() {
                 id="username"
                 type="text"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder="Ange ditt användarnamn"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}

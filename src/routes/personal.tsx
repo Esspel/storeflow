@@ -534,7 +534,8 @@ function AccountsPage() {
             <div className="space-y-1.5">
               <Label>Användarnamn *</Label>
               <Input placeholder="t.ex. anna.svensson" value={newUser.username}
-                onChange={(e) => setNewUser(p => ({ ...p, username: e.target.value }))} autoComplete="off" />
+                onChange={(e) => setNewUser(p => ({ ...p, username: e.target.value }))}
+                autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
             </div>
             <div className="space-y-1.5">
               <Label>Visningsnamn *</Label>

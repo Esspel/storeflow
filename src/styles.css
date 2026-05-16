@@ -177,11 +177,27 @@
 @layer base {
   * {
     border-color: var(--color-border);
+    /* Prevent iOS tap highlight flash on interactive elements */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    /* Prevent browser pull-to-refresh and overscroll bounce from eating scroll events */
+    overscroll-behavior-y: contain;
   }
 
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    /* Prevent rubber-band scroll on iOS triggering full page reload */
+    overscroll-behavior-y: contain;
+    /* Smooth momentum scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Ensure every scrollable container respects overscroll containment */
+  [data-scroll-container] {
+    overscroll-behavior-y: contain;
   }
 }
 
