@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Calendar, CalendarClock, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight, RefreshCw } from "lucide-react";
+import { Calendar, CalendarClock, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight, RefreshCw, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase, type AppUser, type Task, type Meeting } from "@/lib/supabase";
+import { generatePassword, usernameFromName } from "@/lib/text-utils";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -582,6 +583,7 @@ function SchemaPage() {
   const [weekMeetings, setWeekMeetings] = useState<Meeting[]>([]);
 
   const [loadingSchedule, setLoadingSchedule] = useState(false);
+  const [bulkCreatingAccounts, setBulkCreatingAccounts] = useState(false);
 
   const importInputRef = useRef<HTMLInputElement>(null);
   const mobileListRef = useRef<HTMLDivElement>(null);
@@ -783,6 +785,11 @@ function SchemaPage() {
           }
           const schedule = { ...result, storeName: result.storeName || activeStore?.name || "" };
           // Auto-match employees by display_name (normalized)
+          // Priority: 1) saved employee_nr mapping, 2) name match within this store's users, 3) no match → create new
+          const { data: storeUserLinks } = await supabase.from("user_stores").select("user_id").eq("store_id", storeId!);
+          const storeUserIds = new Set((storeUserLinks ?? []).map((r: { user_id: string }) => r.user_id));
+          const storeUsers = allUsers.filter((u) => storeUserIds.has(u.id));
+
           const usedUserIds = new Set<string>();
           const matched: MatchedEmployee[] = result.employees.map((emp) => {
             const savedMapping = mappings.find((m) => m.employee_nr === emp.employeeNr);
@@ -790,14 +797,14 @@ function SchemaPage() {
               usedUserIds.add(savedMapping.app_user_id);
               return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "existing" as const, appUserId: savedMapping.app_user_id, newUsername: "", newPassword: "" };
             }
-            // Try name match across all users
             const normEmp = normalizeName(emp.employeeName);
-            const byName = allUsers.find((u) => !usedUserIds.has(u.id) && normalizeName(u.display_name) === normEmp);
-            if (byName) {
-              usedUserIds.add(byName.id);
-              return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "existing" as const, appUserId: byName.id, newUsername: "", newPassword: "" };
+            // Prefer store-scoped name match to avoid cross-store collisions
+            const byStoreAndName = storeUsers.find((u) => !usedUserIds.has(u.id) && normalizeName(u.display_name) === normEmp);
+            if (byStoreAndName) {
+              usedUserIds.add(byStoreAndName.id);
+              return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "existing" as const, appUserId: byStoreAndName.id, newUsername: "", newPassword: "" };
             }
-            return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "new" as const, appUserId: null, newUsername: nameToUsername(emp.employeeName), newPassword: "Welcome1!" };
+            return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "new" as const, appUserId: null, newUsername: usernameFromName(emp.employeeName), newPassword: generatePassword(16) };
           });
           setParsed(schedule);
           setMatchedEmployees(matched);
@@ -872,6 +879,43 @@ function SchemaPage() {
     }
   }
 
+  async function bulkCreateUnmatchedAccounts() {
+    if (!storeId || !user) return;
+    setBulkCreatingAccounts(true);
+    const unmapped = Array.from(new Map(scheduleEmployees.map((e) => [e.employee_nr, e])).values())
+      .filter((emp) => !getMappedUserId(emp.employee_nr));
+
+    for (const emp of unmapped) {
+      const username = usernameFromName(emp.employee_name);
+      const password = generatePassword(16);
+      if (!username) continue;
+      let finalUsername = username;
+      const { data: existing } = await supabase.from("app_users").select("id").eq("username", finalUsername).maybeSingle();
+      if (existing) finalUsername = `${username}_${emp.employee_nr.slice(-4)}`;
+      const { data: hash } = await supabase.rpc("hash_password", { plain_password: password });
+      const role = groupToRole(emp.employee_group);
+      const { data: created } = await supabase.from("app_users").insert({
+        username: finalUsername, password_hash: hash, display_name: emp.employee_name,
+        role, employee_group: emp.employee_group, store_id: storeId, is_active: true,
+        must_change_password: true,
+      }).select("id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at").maybeSingle();
+      if (!created) continue;
+      const newUser = created as AppUser;
+      await supabase.from("user_stores").upsert({ user_id: newUser.id, store_id: storeId, is_primary: true }, { onConflict: "user_id,store_id" });
+      await supabase.from("employee_mappings").upsert(
+        { store_id: storeId, employee_nr: emp.employee_nr, app_user_id: newUser.id, created_by: user.id, updated_at: new Date().toISOString() },
+        { onConflict: "store_id,employee_nr" }
+      );
+      setAppUsers((p) => [...p, newUser]);
+      setAllUsers((p) => [...p, newUser]);
+      setMapping(emp.employee_nr, newUser.id);
+    }
+
+    await loadMappings();
+    setBulkCreatingAccounts(false);
+    toast.success(`${unmapped.length} konton skapade. De loggar in och byter lösenord vid första inloggning.`);
+  }
+
   async function confirmImport() {
     if (!parsed || !storeId || !user) return;
     setSavingImport(true);
@@ -896,8 +940,8 @@ function SchemaPage() {
           }
         } else if (me.matchType === "new") {
           // Create user
-          const username = me.newUsername || nameToUsername(me.employeeName);
-          const password = me.newPassword || "Welcome1!";
+          const username = me.newUsername || usernameFromName(me.employeeName);
+          const password = me.newPassword && me.newPassword.length >= 12 ? me.newPassword : generatePassword(16);
           if (!username) continue;
           // Check if username taken, append suffix if so
           let finalUsername = username;
@@ -908,6 +952,7 @@ function SchemaPage() {
           const { data: created, error: createErr } = await supabase.from("app_users").insert({
             username: finalUsername, password_hash: hash, display_name: me.employeeName,
             role, employee_group: me.employeeGroup, store_id: storeId, is_active: true,
+            must_change_password: true,
           }).select("id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at").single();
           if (createErr || !created) {
             toast.error(`Kunde inte skapa användare för ${me.employeeName}: ${createErr?.message}`);
@@ -2107,6 +2152,16 @@ function SchemaPage() {
             <Button variant="outline" size="sm" onClick={() => { if (!savingImport) { setMappingOpen(false); setParsed(null); setMatchedEmployees([]); } }} disabled={savingImport}>
               {parsed ? "Avbryt" : "Stäng"}
             </Button>
+            {!parsed && imports.length > 0 && (() => {
+              const unmappedCount = Array.from(new Map(scheduleEmployees.map((e) => [e.employee_nr, e])).values())
+                .filter((emp) => !getMappedUserId(emp.employee_nr)).length;
+              return unmappedCount > 0 ? (
+                <Button size="sm" variant="outline" onClick={bulkCreateUnmatchedAccounts} disabled={bulkCreatingAccounts} className="gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {bulkCreatingAccounts ? "Skapar konton…" : `Skapa konton för alla (${unmappedCount})`}
+                </Button>
+              ) : null;
+            })()}
             {!parsed && imports.length > 0 && (
               <Button size="sm" onClick={async () => { await saveMappings(); await loadMappings(); setMappingOpen(false); toast.success("Matchningar sparade!"); }}>
                 Spara matchningar
@@ -2214,8 +2269,8 @@ function MappingRow({ employeeNr, employeeName, employeeGroup, appUsers, mappedU
 }) {
   const [creating, setCreating] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [newUsername, setNewUsername] = useState(employeeName.toLowerCase().replace(/\s+/g, ".").replace(/[^a-z0-9.]/g, ""));
-  const [newPassword, setNewPassword] = useState("Welcome1!");
+  const [newUsername, setNewUsername] = useState(() => usernameFromName(employeeName));
+  const [newPassword] = useState(() => generatePassword(16));
   const [createError, setCreateError] = useState("");
 
   const role = groupToRole(employeeGroup);
@@ -2226,18 +2281,18 @@ function MappingRow({ employeeNr, employeeName, employeeGroup, appUsers, mappedU
     if (!storeId) return;
     setCreateError("");
     if (newUsername.length < 3) { setCreateError("Minst 3 tecken i användarnamnet."); return; }
-    if (newPassword.length < 6) { setCreateError("Minst 6 tecken i lösenordet."); return; }
     setCreating(true);
     try {
       const { data: existing } = await supabase.from("app_users").select("id").eq("username", newUsername.toLowerCase().trim()).maybeSingle();
       if (existing) { setCreateError("Användarnamnet är redan taget."); return; }
       const { data: hash } = await supabase.rpc("hash_password", { plain_password: newPassword });
-      const { data: created, error } = await supabase.from("app_users").insert({ username: newUsername.toLowerCase().trim(), password_hash: hash, display_name: employeeName, role, employee_group: employeeGroup, store_id: storeId, is_active: true })
-        .select("id, username, display_name, role, store_id, active_store_id, is_active, last_login, created_at").single();
+      const { data: created, error } = await supabase.from("app_users").insert({ username: newUsername.toLowerCase().trim(), password_hash: hash, display_name: employeeName, role, employee_group: employeeGroup, store_id: storeId, is_active: true, must_change_password: true })
+        .select("id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at").single();
       if (error || !created) { setCreateError(error?.message ?? "Något gick fel."); return; }
+      await supabase.from("user_stores").upsert({ user_id: (created as AppUser).id, store_id: storeId, is_primary: true }, { onConflict: "user_id,store_id" });
       onUserCreated(created as AppUser);
       setShowCreate(false);
-      toast.success(`Användare ${employeeName} skapad som ${roleLabel}!`);
+      toast.success(`Konto för ${employeeName} skapat. Lösenord byts vid första inloggning.`);
     } finally { setCreating(false); }
   }
 
