@@ -23,7 +23,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   supabase, type Incident, type IncidentComment, type IncidentImage,
-  type Store as StoreType, type AppUser, logAudit, createNotification, notifyUsers,
+  type Store as StoreType, type AppUser, type KundrundaCommonDefect,
+  logAudit, createNotification, notifyUsers,
   uploadAttachment, getPublicUrl, deleteStorageFiles, mittCoopUrl,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
@@ -111,6 +112,8 @@ function IssuesPage() {
   const [editTarget, setEditTarget] = useState<IncidentFull | null>(null);
   const [editForm, setEditForm] = useState({ title: "", description: "", category: "", priority: "", responsible_user_id: "", sap_article_id: "" });
   const [editSaving, setEditSaving] = useState(false);
+  const [commonDefects, setCommonDefects] = useState<KundrundaCommonDefect[]>([]);
+  const [createStep, setCreateStep] = useState<1 | 2>(1);
 
   const fetchIncidents = async () => {
     let q = supabase.from("incidents")
@@ -164,6 +167,19 @@ function IssuesPage() {
     }
 
     setNewIncident(p => ({ ...p, store_id: activeStore?.id ?? "" }));
+
+    // Load common defects for quick-select suggestions
+    supabase.from("kundrunda_common_defects")
+      .select("*, defect_checkpoints:kundrunda_defect_checkpoints(checkpoint_id)")
+      .order("sort_order")
+      .then(({ data }) => {
+        if (data) {
+          setCommonDefects((data as (KundrundaCommonDefect & { defect_checkpoints: { checkpoint_id: string }[] })[]).map(d => ({
+            ...d,
+            checkpoint_ids: d.defect_checkpoints?.map(dc => dc.checkpoint_id) ?? [],
+          })));
+        }
+      });
   }, [activeStore, user]);
 
   const createIncident = async () => {
@@ -361,10 +377,10 @@ function IssuesPage() {
         description={activeStore ? `Avvikelser för ${activeStore.name}` : "Rapportera och följ upp ärenden."}
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" className="rounded-full" onClick={exportCSV}>
+            <Button variant="outline" className="rounded-full hidden lg:flex" onClick={exportCSV}>
               <Download className="mr-2 h-4 w-4" /> Exportera CSV
             </Button>
-            <Button className="rounded-full" onClick={() => setShowCreate(true)}>
+            <Button className="rounded-full hidden lg:flex" onClick={() => setShowCreate(true)}>
               <Plus className="mr-2 h-4 w-4" /> Ny avvikelse
             </Button>
           </div>
@@ -482,30 +498,80 @@ function IssuesPage() {
       </button>
 
       {/* CREATE DIALOG — two-panel layout */}
-      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setUploadFiles([]); }}>
+      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setUploadFiles([]); setCreateStep(1); } }}>
         <DialogContent className="sm:max-h-[92vh] sm:max-w-4xl overflow-hidden p-0 gap-0">
           {/* Header bar */}
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            <AlertTriangle className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-sm font-medium text-muted-foreground hidden sm:block">Ny avvikelse</span>
             {newIncident.title && <span className="text-sm font-semibold text-foreground truncate max-w-[140px] sm:max-w-xs">{newIncident.title}</span>}
-            <div className="ml-auto flex items-center gap-2">
+            {/* Mobile step indicator */}
+            <div className="flex items-center gap-1 sm:hidden ml-auto">
+              <span className={cn("h-2 w-2 rounded-full transition-colors", createStep === 1 ? "bg-primary" : "bg-muted-foreground/30")} />
+              <span className={cn("h-2 w-2 rounded-full transition-colors", createStep === 2 ? "bg-primary" : "bg-muted-foreground/30")} />
+            </div>
+            <div className="ml-auto sm:ml-0 flex items-center gap-2">
               <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hidden sm:flex" onClick={() => setShowCreate(false)}>Avbryt</Button>
-              <Button size="sm" className="rounded-full text-xs" onClick={createIncident} disabled={saving || !newIncident.title.trim() || !newIncident.description.trim()}>
+              {/* Mobile nav */}
+              <div className="flex gap-1.5 sm:hidden">
+                {createStep === 1 ? (
+                  <Button size="sm" className="rounded-full text-xs" onClick={() => setCreateStep(2)} disabled={!newIncident.title.trim()}>
+                    Nästa
+                  </Button>
+                ) : (
+                  <>
+                    <Button variant="ghost" size="sm" className="rounded-full text-xs text-muted-foreground" onClick={() => setCreateStep(1)}>
+                      Tillbaka
+                    </Button>
+                    <Button size="sm" className="rounded-full text-xs" onClick={createIncident} disabled={saving || !newIncident.title.trim() || !newIncident.description.trim()}>
+                      {saving ? "Sparar..." : "Skapa"}
+                    </Button>
+                  </>
+                )}
+              </div>
+              {/* Desktop always-visible create */}
+              <Button size="sm" className="rounded-full text-xs hidden sm:flex" onClick={createIncident} disabled={saving || !newIncident.title.trim() || !newIncident.description.trim()}>
                 {saving ? "Sparar..." : "Skapa"}
               </Button>
             </div>
           </div>
 
           <div className="flex flex-col sm:flex-row overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
-            {/* CONTENT column */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 min-w-0">
+            {/* CONTENT column — always on desktop, step 1 on mobile */}
+            <div className={cn("flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 min-w-0", createStep === 2 && "hidden sm:block")}>
               <input
                 placeholder="Titel på avvikelsen..."
                 value={newIncident.title}
                 onChange={(e) => setNewIncident(p => ({ ...p, title: e.target.value }))}
                 className="w-full border-0 bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground/50 outline-none focus:outline-none"
               />
+              {/* Common defects quick-select */}
+              {commonDefects.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Snabbval — vanliga avvikelser</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {commonDefects.map(d => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        className={cn(
+                          "min-h-[36px] rounded-full border px-3 py-1.5 text-xs transition-colors",
+                          newIncident.description === d.label
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary"
+                        )}
+                        onClick={() => setNewIncident(p => ({
+                          ...p,
+                          description: p.description ? `${p.description}\n${d.label}` : d.label,
+                          title: p.title || d.label,
+                        }))}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <Textarea
                 placeholder="Beskriv avvikelsen — vad hände, var, när?"
                 value={newIncident.description}
@@ -542,8 +608,8 @@ function IssuesPage() {
               </div>
             </div>
 
-            {/* PROPERTIES sidebar */}
-            <div className="w-full sm:w-64 shrink-0 overflow-y-auto border-t sm:border-t-0 sm:border-l border-border/60 bg-muted/30">
+            {/* PROPERTIES sidebar — hidden on mobile step 1 */}
+            <div className={cn("w-full sm:w-64 shrink-0 overflow-y-auto border-t sm:border-t-0 sm:border-l border-border/60 bg-muted/30", createStep === 1 && "hidden sm:block")}>
               <div className="divide-y divide-border/50">
 
                 {/* Prioritet */}
@@ -630,7 +696,7 @@ function IssuesPage() {
                   </div>
                   {newIncident.sap_article_id && (
                     <a
-                      href={`https://mittcoop.coop.se/sortiment/articles/${newIncident.sap_article_id.trim()}${newIncident.store_id ? "" : ""}`}
+                      href={mittCoopUrl(newIncident.sap_article_id, activeStore?.sap_site_id ?? null) ?? `https://mittcoop.coop.se/sortiment/articles/${newIncident.sap_article_id.trim()}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"

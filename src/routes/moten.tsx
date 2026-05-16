@@ -210,6 +210,7 @@ function MeetingsPage() {
     moderator_id: "",
   });
   const [creating, setCreating] = useState(false);
+  const [createStep, setCreateStep] = useState<1 | 2>(1);
 
   const [newDecision, setNewDecision] = useState({ description: "", responsible_user_id: "", due_date: "", createTask: false });
   const [addingDecision, setAddingDecision] = useState(false);
@@ -394,7 +395,7 @@ function MeetingsPage() {
         description={activeStore ? `Möteshantering för ${activeStore.name}` : "Strukturerade möten med tidsbudget och beslutslogg."}
         actions={
           isManager ? (
-            <Button className="rounded-full" onClick={() => setShowCreate(true)}>
+            <Button className="rounded-full hidden lg:flex" onClick={() => setShowCreate(true)}>
               <Plus className="mr-2 h-4 w-4" /> Nytt möte
             </Button>
           ) : undefined
@@ -520,63 +521,99 @@ function MeetingsPage() {
       )}
 
       {/* CREATE DIALOG */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Nytt möte</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Mötestyp</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {MEETING_TYPES.map((t) => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    onClick={() => setNewMeeting(p => ({ ...p, type: t.value, title: t.label }))}
-                    className={cn(
-                      "rounded-xl border px-3 py-2.5 text-left text-xs transition-colors",
-                      newMeeting.type === t.value ? "border-primary bg-primary-soft text-primary" : "border-border/60 bg-card hover:bg-muted/40"
-                    )}
-                  >
-                    <p className="font-semibold">{t.label}</p>
-                    <p className="text-muted-foreground mt-0.5 leading-snug line-clamp-2">{t.description}</p>
-                  </button>
-                ))}
+      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setCreateStep(1); }}>
+        <DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
+            <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+            <DialogTitle className="text-sm font-medium">Nytt möte</DialogTitle>
+            {/* Mobile step indicator */}
+            <div className="flex items-center gap-1 sm:hidden ml-auto">
+              <span className={cn("h-2 w-2 rounded-full transition-colors", createStep === 1 ? "bg-primary" : "bg-muted-foreground/30")} />
+              <span className={cn("h-2 w-2 rounded-full transition-colors", createStep === 2 ? "bg-primary" : "bg-muted-foreground/30")} />
+            </div>
+          </div>
+
+          <div className="p-5 space-y-4">
+            {/* Step 1: Type + Title */}
+            <div className={cn(createStep === 2 && "hidden sm:block")}>
+              <div className="space-y-1.5 mb-4">
+                <Label className="text-xs">Mötestyp</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {MEETING_TYPES.map((t) => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setNewMeeting(p => ({ ...p, type: t.value, title: t.label }))}
+                      className={cn(
+                        "rounded-xl border px-3 py-2.5 text-left text-xs transition-colors",
+                        newMeeting.type === t.value ? "border-primary bg-primary-soft text-primary" : "border-border/60 bg-card hover:bg-muted/40"
+                      )}
+                    >
+                      <p className="font-semibold">{t.label}</p>
+                      <p className="text-muted-foreground mt-0.5 leading-snug line-clamp-2">{t.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Titel</Label>
+                <Input
+                  value={newMeeting.title}
+                  onChange={(e) => setNewMeeting(p => ({ ...p, title: e.target.value }))}
+                  className="text-sm"
+                />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Titel</Label>
-              <Input
-                value={newMeeting.title}
-                onChange={(e) => setNewMeeting(p => ({ ...p, title: e.target.value }))}
-                className="text-sm"
-              />
+
+            {/* Step 2: Date + Moderator */}
+            <div className={cn(createStep === 1 && "hidden sm:block")}>
+              <div className="space-y-1.5 mb-4">
+                <Label className="text-xs">Datum & tid</Label>
+                <input
+                  type="datetime-local"
+                  value={newMeeting.scheduled_at}
+                  onChange={(e) => setNewMeeting(p => ({ ...p, scheduled_at: e.target.value }))}
+                  className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Moderator</Label>
+                <Select value={newMeeting.moderator_id || "__none"} onValueChange={(v) => setNewMeeting(p => ({ ...p, moderator_id: v === "__none" ? "" : v }))}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Ingen" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Ingen</SelectItem>
+                    {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Datum & tid</Label>
-              <input
-                type="datetime-local"
-                value={newMeeting.scheduled_at}
-                onChange={(e) => setNewMeeting(p => ({ ...p, scheduled_at: e.target.value }))}
-                className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Moderator</Label>
-              <Select value={newMeeting.moderator_id || "__none"} onValueChange={(v) => setNewMeeting(p => ({ ...p, moderator_id: v === "__none" ? "" : v }))}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Ingen" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none">Ingen</SelectItem>
-                  {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowCreate(false)}>Avbryt</Button>
-              <Button size="sm" className="rounded-full" disabled={creating || !newMeeting.title.trim()} onClick={createMeeting}>
-                {creating ? "Skapar..." : "Skapa möte"}
-              </Button>
+
+            {/* Navigation buttons */}
+            <div className="flex justify-between gap-2 pt-1">
+              {/* Mobile step navigation */}
+              <div className="flex gap-2 sm:hidden">
+                {createStep === 1 ? (
+                  <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setShowCreate(false)}>Avbryt</Button>
+                ) : (
+                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => setCreateStep(1)}>Tillbaka</Button>
+                )}
+              </div>
+              {/* Desktop cancel always visible */}
+              <Button variant="outline" size="sm" className="rounded-full hidden sm:flex" onClick={() => setShowCreate(false)}>Avbryt</Button>
+              <div className="flex gap-2">
+                {/* Mobile: next on step 1, create on step 2 */}
+                {createStep === 1 && (
+                  <Button size="sm" className="rounded-full sm:hidden" disabled={!newMeeting.title.trim()} onClick={() => setCreateStep(2)}>
+                    Nästa
+                  </Button>
+                )}
+                {(createStep === 2 || true) && (
+                  <Button size="sm" className={cn("rounded-full", createStep === 1 && "hidden sm:flex")} disabled={creating || !newMeeting.title.trim()} onClick={createMeeting}>
+                    {creating ? "Skapar..." : "Skapa möte"}
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </DialogContent>

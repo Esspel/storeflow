@@ -393,6 +393,7 @@ export type KundrundaCommonDefect = {
   label: string;
   sort_order: number;
   created_at: string;
+  checkpoint_ids?: string[];
 };
 
 export type KundrundaSession = {

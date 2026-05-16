@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink } from "lucide-react";
+import { Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -332,6 +332,7 @@ function TasksPage() {
   };
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [createStep, setCreateStep] = useState<1 | 2>(1);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
@@ -1159,11 +1160,11 @@ function TasksPage() {
         description={activeStore ? `Uppgifter för ${activeStore.name}` : "Standardiserade rutiner."}
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" className="rounded-full" onClick={exportCSV}>
+            <Button variant="outline" className="rounded-full hidden lg:flex" onClick={exportCSV}>
               <Download className="mr-2 h-4 w-4" /> CSV
             </Button>
             {isManager && (
-              <Button className="rounded-full" onClick={() => { setShowCreate(true); setSaveError(""); }}>
+              <Button className="rounded-full hidden lg:flex" onClick={() => { setShowCreate(true); setSaveError(""); }}>
                 <Plus className="mr-2 h-4 w-4" /> Ny uppgift
               </Button>
             )}
@@ -1619,27 +1620,50 @@ function TasksPage() {
       )}
 
       {/* CREATE DIALOG — two-panel on desktop, single-column on mobile */}
-      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setSaveError(""); setUploadFiles([]); } }}>
+      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setSaveError(""); setUploadFiles([]); setCreateStep(1); } }}>
         <DialogContent className="sm:max-h-[92vh] sm:max-w-4xl overflow-hidden p-0 gap-0">
           {/* Header bar */}
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
-            <ListChecks className="h-4 w-4 text-muted-foreground" />
+            <ListChecks className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-sm font-medium text-muted-foreground hidden sm:block">Ny uppgift</span>
             {newTask.title && <span className="text-sm font-semibold text-foreground truncate max-w-[140px] sm:max-w-xs">{newTask.title}</span>}
-            <div className="ml-auto flex items-center gap-2">
+            {/* Mobile step indicator */}
+            <div className="flex items-center gap-1 sm:hidden ml-auto">
+              <span className={cn("h-2 w-2 rounded-full transition-colors", createStep === 1 ? "bg-primary" : "bg-muted-foreground/30")} />
+              <span className={cn("h-2 w-2 rounded-full transition-colors", createStep === 2 ? "bg-primary" : "bg-muted-foreground/30")} />
+            </div>
+            <div className="ml-auto sm:ml-0 flex items-center gap-2">
               {saveError && <span className="text-xs text-destructive hidden sm:block">{saveError}</span>}
               <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hidden sm:flex" onClick={() => setShowCreate(false)}>Avbryt</Button>
-              <Button size="sm" className="rounded-full gap-1.5 bg-primary text-primary-foreground text-xs" onClick={createTask} disabled={saving || !newTask.title.trim()}>
+              {/* Mobile: Next/Create button */}
+              <div className="flex gap-1.5 sm:hidden">
+                {createStep === 1 ? (
+                  <Button size="sm" className="rounded-full text-xs" onClick={() => setCreateStep(2)} disabled={!newTask.title.trim()}>
+                    Nästa
+                  </Button>
+                ) : (
+                  <>
+                    <Button variant="ghost" size="sm" className="rounded-full text-xs text-muted-foreground" onClick={() => setCreateStep(1)}>
+                      Tillbaka
+                    </Button>
+                    <Button size="sm" className="rounded-full text-xs" onClick={createTask} disabled={saving || !newTask.title.trim()}>
+                      {saving ? "Sparar..." : "Skapa"}
+                    </Button>
+                  </>
+                )}
+              </div>
+              {/* Desktop: always show create */}
+              <Button size="sm" className="rounded-full gap-1.5 bg-primary text-primary-foreground text-xs hidden sm:flex" onClick={createTask} disabled={saving || !newTask.title.trim()}>
                 {saving ? "Sparar..." : "Skapa"}
               </Button>
             </div>
           </div>
 
-          {/* Body: stacked on mobile, side-by-side on desktop */}
+          {/* Body: stacked on mobile (step-gated), side-by-side on desktop */}
           <div className="flex flex-col sm:flex-row overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
 
-            {/* CONTENT column */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-5 sm:p-6 sm:space-y-6 min-w-0">
+            {/* CONTENT column — always visible on desktop, step 1 on mobile */}
+            <div className={cn("flex-1 overflow-y-auto p-4 space-y-5 sm:p-6 sm:space-y-6 min-w-0", createStep === 2 && "hidden sm:block")}>
 
               {/* Template picker */}
               {templates.length > 0 && (
@@ -1682,7 +1706,24 @@ function TasksPage() {
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Checkpoints</p>
                 <div className="space-y-1.5">
                   {newTask.steps.map((step, i) => (
-                    <div key={i} className="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-colors hover:bg-muted/40">
+                    <div
+                      key={i}
+                      className="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-colors hover:bg-muted/40"
+                      draggable
+                      onDragStart={(e) => e.dataTransfer.setData("stepIdx", String(i))}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        const from = Number(e.dataTransfer.getData("stepIdx"));
+                        if (from === i) return;
+                        setNewTask(p => {
+                          const arr = [...p.steps];
+                          const [moved] = arr.splice(from, 1);
+                          arr.splice(i, 0, moved);
+                          return { ...p, steps: arr };
+                        });
+                      }}
+                    >
+                      <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/30 cursor-grab active:cursor-grabbing" />
                       <CheckCircle2 className="h-4 w-4 shrink-0 text-muted-foreground/30" />
                       <Input
                         placeholder={`Checkpoint ${i + 1}`}
@@ -1721,8 +1762,25 @@ function TasksPage() {
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Frågor</p>
                 <div className="space-y-2">
                   {newTask.questions.map((q, i) => (
-                    <div key={i} className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2">
+                    <div
+                      key={i}
+                      className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2"
+                      draggable
+                      onDragStart={(e) => e.dataTransfer.setData("qIdx", String(i))}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        const from = Number(e.dataTransfer.getData("qIdx"));
+                        if (from === i) return;
+                        setNewTask(p => {
+                          const arr = [...p.questions];
+                          const [moved] = arr.splice(from, 1);
+                          arr.splice(i, 0, moved);
+                          return { ...p, questions: arr };
+                        });
+                      }}
+                    >
                       <div className="flex items-center gap-2">
+                        <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/30 cursor-grab active:cursor-grabbing" />
                         <Input
                           placeholder={`Fråga ${i + 1}`}
                           value={q.label}
@@ -1791,8 +1849,8 @@ function TasksPage() {
               </div>
             </div>
 
-            {/* PROPERTIES sidebar — full-width on mobile, fixed 72 on desktop */}
-            <div className="w-full sm:w-72 shrink-0 overflow-y-auto border-t sm:border-t-0 sm:border-l border-border/60 bg-muted/30">
+            {/* PROPERTIES sidebar — hidden on mobile step 1, visible on mobile step 2, always visible on desktop */}
+            <div className={cn("w-full sm:w-72 shrink-0 overflow-y-auto border-t sm:border-t-0 sm:border-l border-border/60 bg-muted/30", createStep === 1 && "hidden sm:block")}>
 
               {/* Property rows */}
               <div className="divide-y divide-border/50">
@@ -1880,7 +1938,7 @@ function TasksPage() {
                   </div>
                   {newTask.sap_article_id && (
                     <a
-                      href={`https://mittcoop.coop.se/sortiment/articles/${newTask.sap_article_id.trim()}`}
+                      href={mittCoopUrl(newTask.sap_article_id, activeStore?.sap_site_id ?? null) ?? `https://mittcoop.coop.se/sortiment/articles/${newTask.sap_article_id.trim()}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
