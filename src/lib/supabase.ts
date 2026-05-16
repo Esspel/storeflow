@@ -425,7 +425,7 @@ export type KundrundaResponseImage = {
 
 export type Meeting = {
   id: string;
-  meeting_type: "ledningsgrupp" | "saljledare" | "daglig_styrning" | "veckostamning";
+  meeting_type: "ledningsgrupp" | "saljledare" | "daglig_styrning" | "veckostamning" | "personalmote" | "haccp" | "frankly" | "cap_genomgang" | "leverans_genomgang";
   title: string;
   store_id: string | null;
   scheduled_at: string;

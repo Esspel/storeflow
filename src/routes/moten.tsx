@@ -29,31 +29,71 @@ export const Route = createFileRoute("/moten")({
 });
 
 const MEETING_TYPES: { value: Meeting["meeting_type"]; label: string; description: string; defaultDurationMin: number }[] = [
+  { value: "daglig_styrning", label: "Daglig styrning", description: "Daglig uppföljning mån–fre kl 09:30, 15 min. Genomgång av StoreFlow-tavlan.", defaultDurationMin: 15 },
   { value: "ledningsgrupp", label: "Ledningsgrupp", description: "Veckogenomgång för ledningsgruppen. Fredag 13:00, 60 min.", defaultDurationMin: 60 },
-  { value: "saljledare", label: "Säljledare", description: "Månadsvis säljledaremöte. Första måndag 13:00, 60 min.", defaultDurationMin: 60 },
-  { value: "daglig_styrning", label: "Daglig Styrning", description: "Daglig uppföljning mån–fre kl 09:30. 15 min.", defaultDurationMin: 15 },
-  { value: "veckostamning", label: "Veckoavstämning", description: "Flexibel veckovisa uppstämning.", defaultDurationMin: 30 },
+  { value: "saljledare", label: "Säljledarmöte", description: "Månadsvis säljledaremöte. Första måndag 13:00, 60 min.", defaultDurationMin: 60 },
+  { value: "personalmote", label: "Personalmöte", description: "Butiksmöte med all personal. Genomgång av Relesys-nyheter, kampanjer och arbetsmiljö.", defaultDurationMin: 45 },
+  { value: "haccp", label: "HACCP / Livsmedelssäkerhet", description: "Månadsvis HACCP-uppföljning. Egenkontroll via GetCompliant, temperaturloggar.", defaultDurationMin: 30 },
+  { value: "frankly", label: "&frankly — Medarbetarenkät", description: "Genomgång av &frankly-resultat. Halvårsvis, 45 min.", defaultDurationMin: 45 },
+  { value: "cap_genomgang", label: "CAP / KPI-genomgång", description: "Genomgång av Power BI-rapporter från CAP (Coop Analytical Platform).", defaultDurationMin: 30 },
+  { value: "leverans_genomgang", label: "Leveransgenomgång", description: "Uppföljning av leveranser, CAO-avvikelser (SAP/Blue Yonder) och returer.", defaultDurationMin: 20 },
+  { value: "veckostamning", label: "Veckoavstämning", description: "Flexibel veckovis uppstämning.", defaultDurationMin: 30 },
 ];
 
 const DEFAULT_AGENDAS: Record<Meeting["meeting_type"], { title: string; duration: number }[]> = {
+  daglig_styrning: [
+    { title: "Pulstavlan (StoreFlow) — öppna uppgifter & avvikelser", duration: 5 },
+    { title: "Igår — vad gick bra / vad gick dåligt?", duration: 5 },
+    { title: "Dagens prioriteringar & bemanning", duration: 5 },
+  ],
   ledningsgrupp: [
-    { title: "Föregående protokoll — uppföljning", duration: 5 },
-    { title: "Försäljning & budget", duration: 15 },
-    { title: "Personal & schema", duration: 10 },
-    { title: "Avvikelser & incidenter", duration: 10 },
-    { title: "Kommande kampanjer", duration: 10 },
+    { title: "Föregående protokoll — uppföljning av beslut", duration: 5 },
+    { title: "Försäljning & budget (CAP / Power BI)", duration: 15 },
+    { title: "Personal, schema & SoftOne GO", duration: 10 },
+    { title: "Avvikelser & incidenter (StoreFlow)", duration: 10 },
+    { title: "Kommande kampanjer (GK Engage / Open Access)", duration: 10 },
     { title: "Beslut & åtgärder", duration: 10 },
   ],
   saljledare: [
-    { title: "Månadsresultat", duration: 15 },
-    { title: "Kampanjplanering", duration: 15 },
-    { title: "Kundtrender", duration: 10 },
-    { title: "Beslut", duration: 20 },
+    { title: "Månadsresultat per avdelning (CAP)", duration: 15 },
+    { title: "Kampanjplanering & Open Access-aktiveringar", duration: 15 },
+    { title: "Sortimentsfrågor — Mitt Coop / SAP FnR / A3 (kommande)", duration: 10 },
+    { title: "Kundtrender (Scan & Pay, Coop-appen)", duration: 10 },
+    { title: "Beslut", duration: 10 },
   ],
-  daglig_styrning: [
-    { title: "Dagens prioriteringar", duration: 5 },
-    { title: "Igår — vad gick bra/dåligt?", duration: 5 },
-    { title: "Akuta ärenden", duration: 5 },
+  personalmote: [
+    { title: "Nyheter från Relesys & Coopnet (Coop Direkt)", duration: 10 },
+    { title: "Försäljning & butikens resultat", duration: 10 },
+    { title: "Kampanjer & aktiviteter kommande period", duration: 10 },
+    { title: "Attensi Skills — utbildningsstatus", duration: 5 },
+    { title: "Arbetsmiljö & IA-systemet — avvikelser", duration: 5 },
+    { title: "Frågor & svar", duration: 5 },
+  ],
+  haccp: [
+    { title: "Temperaturloggar kyl & frys (RDM / Danfoss)", duration: 5 },
+    { title: "GetCompliant — egenkontrollstatus sedan sist", duration: 10 },
+    { title: "Datumkontroll (Upshop) — avvikelser", duration: 5 },
+    { title: "Rengöring & hygien — avvikelser från kundrundan", duration: 5 },
+    { title: "Åtgärder & uppföljning", duration: 5 },
+  ],
+  frankly: [
+    { title: "Presentation av &frankly-resultat", duration: 10 },
+    { title: "Analys — vad är bra, vad behöver förbättras?", duration: 15 },
+    { title: "Jämförelse mot föregående period", duration: 5 },
+    { title: "Prioriterade förbättringsområden", duration: 10 },
+    { title: "Åtgärdsplan & ansvariga (StoreFlow-uppgifter)", duration: 5 },
+  ],
+  cap_genomgang: [
+    { title: "Försäljning vs. budget (Power BI)", duration: 10 },
+    { title: "Svinn & kassation per avdelning", duration: 5 },
+    { title: "CAO-avvikelser (SAP / Blue Yonder / JDA)", duration: 5 },
+    { title: "Åtgärder utifrån data", duration: 10 },
+  ],
+  leverans_genomgang: [
+    { title: "Leveransplan — avvikelser mot CAO (SAP FnR)", duration: 5 },
+    { title: "Kvalitetsreklamationer & returer (Tomra / leverantör)", duration: 5 },
+    { title: "Svinn & markdowns", duration: 5 },
+    { title: "Åtgärder & uppföljning", duration: 5 },
   ],
   veckostamning: [
     { title: "Veckans mål", duration: 5 },
