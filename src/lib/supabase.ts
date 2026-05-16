@@ -31,8 +31,15 @@ export type AppUser = {
   store_id: string | null;
   active_store_id: string | null;
   is_active: boolean;
+  must_change_password: boolean;
   last_login: string | null;
   created_at: string;
+};
+
+export const ROLE_LABELS: Record<string, string> = {
+  admin: "Admin",
+  manager: "Chef",
+  employee: "Anställd",
 };
 
 export type Store = {
@@ -480,6 +487,25 @@ export type MeetingDecision = {
   created_at: string;
   responsible?: AppUser;
 };
+
+// Retry wrapper for transient network errors — waits 2^attempt * 200ms between retries
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxAttempts - 1) {
+        await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 200));
+      }
+    }
+  }
+  throw lastError;
+}
 
 // Helper: build a Mitt Coop deep-link for an SAP article
 // Returns null if either ID is missing

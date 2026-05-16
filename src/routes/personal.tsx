@@ -11,6 +11,9 @@ import {
   UserCog,
   Users,
   X,
+  Upload,
+  Copy,
+  Check,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -39,8 +42,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase, type AppUser, type Store, type UserGroup, type UserGroupMember, logAudit } from "@/lib/supabase";
+import { supabase, type AppUser, type Store, type UserGroup, type UserGroupMember, logAudit, ROLE_LABELS } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { usernameFromName, generatePassword, transliterate } from "@/lib/text-utils";
+
+const MIN_PW_LENGTH = 12;
 
 export const Route = createFileRoute("/personal")({
   component: AccountsPage,
@@ -52,15 +58,80 @@ function roleBadge(role: string) {
   return <Badge variant="secondary">Anställd</Badge>;
 }
 
+// SoftOne XML employee type
+type SoftOneEmployee = {
+  employeeId: string;
+  displayName: string;
+  username: string;
+  department: string;
+  employmentType: string;
+  generatedPassword: string;
+};
+
+function parseSoftOneXml(xmlText: string): SoftOneEmployee[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, "application/xml");
+  const parseError = doc.querySelector("parsererror");
+  if (parseError) return [];
+
+  const employees: SoftOneEmployee[] = [];
+  // SoftOne GO XML typically uses <Employee> or <Anstallda> elements
+  const nodes = doc.querySelectorAll("Employee, Anstallda, EMPLOYEE, employee");
+
+  nodes.forEach((node) => {
+    const getText = (...tags: string[]) => {
+      for (const tag of tags) {
+        const el = node.querySelector(tag);
+        if (el?.textContent?.trim()) return el.textContent.trim();
+      }
+      return "";
+    };
+
+    const firstName = getText("FirstName", "Fornamn", "FIRSTNAME", "fornamn");
+    const lastName = getText("LastName", "Efternamn", "LASTNAME", "efternamn");
+    const empId = getText("EmployeeId", "Anstallningsnr", "EMPLOYEEID", "employeeid");
+    const department = getText("Department", "Avdelning", "DEPARTMENT", "avdelning");
+    const empType = getText("EmploymentType", "Anstallningstyp", "Anstallningsform", "anstallningstyp");
+
+    if (!firstName && !lastName) return;
+
+    const fullName = [firstName, lastName].filter(Boolean).join(" ");
+    const username = usernameFromName(fullName);
+
+    employees.push({
+      employeeId: empId,
+      displayName: fullName,
+      username,
+      department: transliterate(department),
+      employmentType: transliterate(empType),
+      generatedPassword: generatePassword(16),
+    });
+  });
+
+  return employees;
+}
+
 type UserWithStores = AppUser & { assignedStoreIds: string[] };
 
 function AccountsPage() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, userStores: currentUserStores } = useAuth();
   const navigate = useNavigate();
+
+  const isAdmin = currentUser?.role === "admin";
+  const isManager = currentUser?.role === "manager" || isAdmin;
 
   const [users, setUsers] = useState<UserWithStores[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // XML import state
+  const xmlImportRef = { current: null as HTMLInputElement | null };
+  const [xmlEmployees, setXmlEmployees] = useState<SoftOneEmployee[]>([]);
+  const [xmlImportStore, setXmlImportStore] = useState("");
+  const [xmlImporting, setXmlImporting] = useState(false);
+  const [xmlDone, setXmlDone] = useState(false);
+  const [showXmlDialog, setShowXmlDialog] = useState(false);
+  const [copiedPw, setCopiedPw] = useState<Record<string, boolean>>({});
 
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [editUser, setEditUser] = useState<UserWithStores | null>(null);
@@ -91,22 +162,36 @@ function AccountsPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (currentUser?.role !== "admin") { navigate({ to: "/" }); return; }
+    if (!isManager) { navigate({ to: "/" }); return; }
     load();
   }, [currentUser]);
+
+  // The stores a manager is allowed to manage (all for admin)
+  const manageableStoreIds = isAdmin ? null : currentUserStores.map((s) => s.id);
 
   async function load() {
     const [usersRes, storesRes, userStoresRes] = await Promise.all([
       supabase.from("app_users").select("*").order("created_at"),
-      supabase.from("stores").select("*").order("name"),
+      isAdmin
+        ? supabase.from("stores").select("*").order("name")
+        : supabase.from("stores").select("*").in("id", currentUserStores.map(s => s.id)).order("name"),
       supabase.from("user_stores").select("user_id, store_id"),
     ]);
     const rawUsers = (usersRes.data ?? []) as AppUser[];
     const storeAssignments = (userStoresRes.data ?? []) as { user_id: string; store_id: string }[];
-    const usersWithStores: UserWithStores[] = rawUsers.map((u) => ({
+    let usersWithStores: UserWithStores[] = rawUsers.map((u) => ({
       ...u,
       assignedStoreIds: storeAssignments.filter((a) => a.user_id === u.id).map((a) => a.store_id),
     }));
+
+    // Chefer ser bara användare i sina egna butiker
+    if (!isAdmin) {
+      const myStoreIds = currentUserStores.map((s) => s.id);
+      usersWithStores = usersWithStores.filter((u) =>
+        u.assignedStoreIds.some((sid) => myStoreIds.includes(sid)) || u.id === currentUser?.id
+      );
+    }
+
     setUsers(usersWithStores);
     setStores((storesRes.data ?? []) as Store[]);
     setLoading(false);
@@ -120,10 +205,17 @@ function AccountsPage() {
     ]);
     const rawUsers = (usersRes.data ?? []) as AppUser[];
     const storeAssignments = (userStoresRes.data ?? []) as { user_id: string; store_id: string }[];
-    setUsers(rawUsers.map((u) => ({
+    let mapped: UserWithStores[] = rawUsers.map((u) => ({
       ...u,
       assignedStoreIds: storeAssignments.filter((a) => a.user_id === u.id).map((a) => a.store_id),
-    })));
+    }));
+    if (!isAdmin) {
+      const myStoreIds = currentUserStores.map((s) => s.id);
+      mapped = mapped.filter((u) =>
+        u.assignedStoreIds.some((sid) => myStoreIds.includes(sid)) || u.id === currentUser?.id
+      );
+    }
+    setUsers(mapped);
   }
 
   function toggleStoreSelection(storeId: string, selected: string[], set: (ids: string[]) => void) {
@@ -153,7 +245,7 @@ function AccountsPage() {
     if (!newUser.username.trim() || !newUser.password || !newUser.display_name.trim()) {
       setError("Fyll i alla obligatoriska fält."); return;
     }
-    if (newUser.password.length < 8) { setError("Lösenordet måste vara minst 8 tecken."); return; }
+    if (newUser.password.length < MIN_PW_LENGTH) { setError(`Lösenordet måste vara minst ${MIN_PW_LENGTH} tecken.`); return; }
     setSaving(true);
 
     const { data: existing } = await supabase
@@ -161,13 +253,16 @@ function AccountsPage() {
     if (existing) { setError("Användarnamnet är redan taget."); setSaving(false); return; }
 
     const { data: hash } = await supabase.rpc("hash_password", { plain_password: newUser.password });
+    // Chefer kan inte skapa admin-konton
+    const safeRole = !isAdmin && newUser.role === "admin" ? "employee" : newUser.role;
     const { data: created } = await supabase.from("app_users").insert({
       username: newUser.username.toLowerCase().trim(),
       password_hash: hash,
       display_name: newUser.display_name.trim(),
-      role: newUser.role,
+      role: safeRole,
       employee_group: newUser.employee_group.trim(),
       store_id: newUser.storeIds[0] ?? null,
+      must_change_password: true,
     }).select("id").maybeSingle();
 
     if (created?.id) {
@@ -183,7 +278,7 @@ function AccountsPage() {
 
   const updateUser = async () => {
     if (!editUser) return;
-    if (resetPw && resetPw.length < 8) { setError("Nytt lösenord måste vara minst 8 tecken."); return; }
+    if (resetPw && resetPw.length < MIN_PW_LENGTH) { setError(`Nytt lösenord måste vara minst ${MIN_PW_LENGTH} tecken.`); return; }
     setSaving(true);
 
     await supabase.from("app_users").update({
@@ -196,9 +291,9 @@ function AccountsPage() {
 
     await syncUserStores(editUser.id, editUser.assignedStoreIds);
 
-    if (resetPw.length >= 8) {
+    if (resetPw.length >= MIN_PW_LENGTH) {
       const { data: hash } = await supabase.rpc("hash_password", { plain_password: resetPw });
-      await supabase.from("app_users").update({ password_hash: hash }).eq("id", editUser.id);
+      await supabase.from("app_users").update({ password_hash: hash, must_change_password: true }).eq("id", editUser.id);
     }
 
     logAudit(currentUser?.id ?? null, "user.edit", "app_users", editUser.id, {});
@@ -286,6 +381,77 @@ function AccountsPage() {
     setSaving(false);
   };
 
+  // --- SoftOne XML Import ---
+  const handleXmlFile = async (file: File) => {
+    const text = await file.text();
+    const employees = parseSoftOneXml(text);
+    if (employees.length === 0) { setError("Kunde inte tolka XML-filen. Kontrollera formatet."); return; }
+    setXmlEmployees(employees);
+    setXmlDone(false);
+    setShowXmlDialog(true);
+    // Default to first manageable store
+    if (!xmlImportStore) setXmlImportStore(stores[0]?.id ?? "");
+  };
+
+  const executeXmlImport = async () => {
+    if (!xmlImportStore) { setError("Välj en butik för importen."); return; }
+    setXmlImporting(true);
+
+    // Get existing usernames to avoid duplicates
+    const { data: existingUsers } = await supabase.from("app_users").select("username");
+    const existingUsernames = new Set((existingUsers ?? []).map((u: { username: string }) => u.username));
+
+    const toImport = xmlEmployees.filter((e) => !existingUsernames.has(e.username));
+
+    for (const emp of toImport) {
+      const { data: hash } = await supabase.rpc("hash_password", { plain_password: emp.generatedPassword });
+      const { data: created } = await supabase.from("app_users").insert({
+        username: emp.username,
+        password_hash: hash,
+        display_name: emp.displayName,
+        role: "employee",
+        employee_group: emp.department || emp.employmentType || "",
+        must_change_password: true,
+      }).select("id").maybeSingle();
+
+      if (created?.id) {
+        await supabase.from("user_stores").insert({ user_id: created.id, store_id: xmlImportStore, is_primary: true });
+        await supabase.from("app_users").update({ store_id: xmlImportStore }).eq("id", created.id);
+
+        // Add to "Alla medarbetare" group for this store
+        const { data: allGroup } = await supabase.from("user_groups")
+          .select("id").eq("store_id", xmlImportStore).ilike("name", "Alla medarbetare").maybeSingle();
+        if (allGroup?.id) {
+          await supabase.from("user_group_members").insert({ group_id: allGroup.id, user_id: created.id }).onConflict("group_id,user_id" as never).ignoreDuplicates();
+        }
+
+        // Add to department group if present
+        if (emp.department) {
+          const deptName = emp.department.charAt(0).toUpperCase() + emp.department.slice(1);
+          let { data: deptGroup } = await supabase.from("user_groups")
+            .select("id").eq("store_id", xmlImportStore).ilike("name", deptName).maybeSingle();
+          if (!deptGroup) {
+            const maxOrder = await supabase.from("user_groups").select("sort_order").eq("store_id", xmlImportStore).order("sort_order", { ascending: false }).limit(1).maybeSingle();
+            const { data: newGroup } = await supabase.from("user_groups").insert({
+              name: deptName, store_id: xmlImportStore, sort_order: ((maxOrder?.data as { sort_order?: number })?.sort_order ?? 10) + 1,
+            }).select("id").maybeSingle();
+            deptGroup = newGroup;
+          }
+          if (deptGroup?.id) {
+            await supabase.from("user_group_members").insert({ group_id: deptGroup.id, user_id: created.id }).onConflict("group_id,user_id" as never).ignoreDuplicates();
+          }
+        }
+
+        logAudit(currentUser?.id ?? null, "user.import_xml", "app_users", created.id, { username: emp.username, store_id: xmlImportStore });
+      }
+    }
+
+    await fetchUsers();
+    await loadGroups();
+    setXmlImporting(false);
+    setXmlDone(true);
+  };
+
   // --- Groups ---
   async function loadGroups() {
     const { data } = await supabase
@@ -339,20 +505,36 @@ function AccountsPage() {
     setDeleteGroup(null);
   }
 
-  if (currentUser?.role !== "admin") return null;
+  if (!isManager) return null;
+
+  const xmlImportInputRef = { current: null as HTMLInputElement | null };
 
   return (
     <div className="mx-auto max-w-[1400px] px-5 py-8 md:px-8 md:py-10">
-      <PageHeader title="Administration" description="Hantera användarkonton och butiker." />
+      <PageHeader
+        title="Administration"
+        description={isAdmin ? "Hantera användarkonton, butiker och grupper." : "Hantera personal och grupper i dina butiker."}
+      />
+
+      {/* Hidden XML input */}
+      <input
+        type="file"
+        accept=".xml,application/xml,text/xml"
+        className="hidden"
+        ref={(el) => { xmlImportInputRef.current = el; }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleXmlFile(f); } e.target.value = ""; }}
+      />
 
       <Tabs defaultValue="users" className="mt-6">
         <TabsList className="rounded-full bg-muted/60 p-1">
           <TabsTrigger value="users" className="rounded-full px-5 data-[state=active]:bg-card data-[state=active]:shadow-sm">
             Användarkonton
           </TabsTrigger>
-          <TabsTrigger value="stores" className="rounded-full px-5 data-[state=active]:bg-card data-[state=active]:shadow-sm">
-            Butiker
-          </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="stores" className="rounded-full px-5 data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              Butiker
+            </TabsTrigger>
+          )}
           <TabsTrigger value="groups" className="rounded-full px-5 data-[state=active]:bg-card data-[state=active]:shadow-sm">
             Grupper
           </TabsTrigger>
@@ -360,14 +542,19 @@ function AccountsPage() {
 
         {/* USERS TAB */}
         <TabsContent value="users" className="mt-6">
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-6 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold">Användarkonton</h2>
-              <p className="text-sm text-muted-foreground">{users.length} konton totalt</p>
+              <p className="text-sm text-muted-foreground">{users.filter(u => u.display_name !== "Gallrad användare").length} konton</p>
             </div>
-            <Button className="rounded-full" onClick={() => { setShowCreateUser(true); setError(""); }}>
-              <Plus className="mr-2 h-4 w-4" /> Nytt konto
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" className="rounded-full gap-1.5" onClick={() => xmlImportInputRef.current?.click()}>
+                <Upload className="h-4 w-4" /> Importera XML
+              </Button>
+              <Button className="rounded-full" onClick={() => { setShowCreateUser(true); setError(""); }}>
+                <Plus className="mr-2 h-4 w-4" /> Nytt konto
+              </Button>
+            </div>
           </div>
 
           {loading ? (
@@ -579,8 +766,9 @@ function AccountsPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Lösenord *</Label>
-              <Input type="password" placeholder="Minst 8 tecken" value={newUser.password}
+              <Input type="password" placeholder={`Minst ${MIN_PW_LENGTH} tecken`} value={newUser.password}
                 onChange={(e) => setNewUser(p => ({ ...p, password: e.target.value }))} autoComplete="new-password" />
+              <p className="text-xs text-muted-foreground">Användaren tvingas byta lösenord vid första inlogg.</p>
             </div>
             <div className="space-y-1.5">
               <Label>Roll</Label>
@@ -589,7 +777,7 @@ function AccountsPage() {
                 <SelectContent>
                   <SelectItem value="employee">Anställd</SelectItem>
                   <SelectItem value="manager">Chef</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -645,7 +833,7 @@ function AccountsPage() {
                   <SelectContent>
                     <SelectItem value="employee">Anställd</SelectItem>
                     <SelectItem value="manager">Chef</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
+                    {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>
@@ -674,8 +862,9 @@ function AccountsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Nytt lösenord (lämna tomt för att behålla)</Label>
-                <Input type="password" placeholder="Minst 8 tecken" value={resetPw}
+                <Input type="password" placeholder={`Minst ${MIN_PW_LENGTH} tecken`} value={resetPw}
                   onChange={(e) => setResetPw(e.target.value)} autoComplete="new-password" />
+                {resetPw.length > 0 && <p className="text-xs text-muted-foreground">Användaren tvingas byta lösenord vid nästa inlogg.</p>}
               </div>
               {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
             </div>
@@ -918,6 +1107,93 @@ function AccountsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* XML IMPORT DIALOG */}
+      <Dialog open={showXmlDialog} onOpenChange={(o) => { if (!o) { setShowXmlDialog(false); setXmlEmployees([]); setXmlDone(false); } }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
+          <div className="px-5 py-4 border-b border-border/60">
+            <DialogTitle>Importera personal från SoftOne GO</DialogTitle>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {xmlEmployees.length} anställda hittade i XML-filen. Välj butik och granska innan import.
+            </p>
+          </div>
+
+          {!xmlDone ? (
+            <>
+              <div className="px-5 py-4 border-b border-border/60">
+                <div className="flex items-center gap-3">
+                  <Label className="shrink-0 text-sm">Importera till butik</Label>
+                  <Select value={xmlImportStore} onValueChange={setXmlImportStore}>
+                    <SelectTrigger className="flex-1"><SelectValue placeholder="Välj butik" /></SelectTrigger>
+                    <SelectContent>
+                      {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-muted/60">
+                    <tr className="border-b border-border/60">
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Namn</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Användarnamn</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground hidden sm:table-cell">Avdelning</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Tillfälligt lösenord</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {xmlEmployees.map((emp, i) => (
+                      <tr key={i} className="hover:bg-muted/20">
+                        <td className="px-4 py-2.5 font-medium">{emp.displayName}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{emp.username}</td>
+                        <td className="px-4 py-2.5 text-xs text-muted-foreground hidden sm:table-cell">{emp.department || "—"}</td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-xs">{emp.generatedPassword}</span>
+                            <button
+                              className="text-muted-foreground hover:text-primary transition-colors"
+                              onClick={() => {
+                                navigator.clipboard.writeText(emp.generatedPassword).then(() => {
+                                  setCopiedPw(p => ({ ...p, [emp.username]: true }));
+                                  setTimeout(() => setCopiedPw(p => ({ ...p, [emp.username]: false })), 2000);
+                                });
+                              }}
+                            >
+                              {copiedPw[emp.username] ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="border-t border-border/60 px-5 py-4 flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  Alla användare tilldelas rollen Anställd och tvingas byta lösenord vid första inlogg.
+                </p>
+                <div className="flex gap-2 shrink-0">
+                  <Button variant="outline" className="rounded-full" onClick={() => { setShowXmlDialog(false); setXmlEmployees([]); }}>Avbryt</Button>
+                  <Button className="rounded-full" disabled={xmlImporting || !xmlImportStore} onClick={executeXmlImport}>
+                    {xmlImporting ? "Importerar..." : `Skapa ${xmlEmployees.length} konton`}
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center flex-1 py-12 gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-success/15">
+                <Check className="h-7 w-7 text-success" />
+              </div>
+              <div className="text-center">
+                <p className="font-semibold">Import klar!</p>
+                <p className="text-sm text-muted-foreground mt-1">Alla nya konton har skapats och tillagts i "Alla medarbetare"-gruppen.</p>
+              </div>
+              <Button className="rounded-full" onClick={() => { setShowXmlDialog(false); setXmlEmployees([]); setXmlDone(false); }}>Stäng</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

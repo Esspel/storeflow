@@ -61,7 +61,7 @@ function SettingsPage() {
     setPwSuccess(false);
     if (!user) return;
     if (newPw !== confirmPw) { setPwError("Lösenorden stämmer inte överens."); return; }
-    if (newPw.length < 8) { setPwError("Lösenordet måste vara minst 8 tecken."); return; }
+    if (newPw.length < 12) { setPwError("Lösenordet måste vara minst 12 tecken."); return; }
 
     setPwSaving(true);
 

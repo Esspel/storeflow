@@ -11,7 +11,7 @@ type AuthContextType = {
   // The currently active store (for filtering)
   activeStore: Store | null;
   setActiveStore: (store: Store | null) => void;
-  login: (username: string, password: string) => Promise<{ error?: string }>;
+  login: (username: string, password: string) => Promise<{ error?: string; mustChangePassword?: boolean }>;
   logout: () => Promise<void>;
   refreshUser: (user: AppUser) => void;
   refreshUserStores: () => Promise<void>;
@@ -96,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else if (stores.length > 0) {
       setActiveStoreState(stores[0]);
     }
+    if (result.user.must_change_password) return { mustChangePassword: true };
     return {};
   };
 

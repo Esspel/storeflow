@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil, Store as StoreIcon } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,7 @@ function MallarPage() {
   const [editTarget, setEditTarget] = useState<(ChecklistTemplate & { storeIds: string[]; questions: ChecklistTemplateQuestion[] }) | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [broadcastConfirm, setBroadcastConfirm] = useState<"create" | "edit" | null>(null);
   const [editForm, setEditForm] = useState({
     title: "",
     description: "",
@@ -122,6 +123,10 @@ function MallarPage() {
   async function createTemplate() {
     setError("");
     if (!form.title.trim()) { setError("Titel är obligatorisk."); return; }
+    if (user?.role === "manager" && form.storeIds.length === 0) {
+      setError("Du måste välja minst en butik.");
+      return;
+    }
     setSaving(true);
 
     const { data: tmpl } = await supabase.from("checklist_templates").insert({
@@ -204,6 +209,10 @@ function MallarPage() {
     if (!editTarget) return;
     setError("");
     if (!editForm.title.trim()) { setError("Titel är obligatorisk."); return; }
+    if (user?.role === "manager" && editForm.storeIds.length === 0) {
+      setError("Du måste välja minst en butik.");
+      return;
+    }
     setSaving(true);
 
     await supabase.from("checklist_templates").update({
@@ -718,7 +727,21 @@ function MallarPage() {
                 {/* Tilldelade butiker */}
                 {displayStores.length > 0 && (
                   <div className="px-4 py-3 space-y-2">
-                    <span className="text-xs text-muted-foreground">Tilldelade butiker</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        Tilldelade butiker
+                        {user?.role === "manager" && <span className="ml-1 text-destructive">*</span>}
+                      </span>
+                      {user?.role === "admin" && (
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                          onClick={() => setBroadcastConfirm("create")}
+                        >
+                          <StoreIcon className="h-3 w-3" /> Alla butiker
+                        </button>
+                      )}
+                    </div>
                     <div className="space-y-0.5 max-h-48 overflow-y-auto">
                       {displayStores.map(s => (
                         <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
@@ -890,7 +913,21 @@ function MallarPage() {
                 </div>
                 {displayStores.length > 0 && (
                   <div className="px-4 py-3 space-y-2">
-                    <span className="text-xs text-muted-foreground">Tilldelade butiker</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        Tilldelade butiker
+                        {user?.role === "manager" && <span className="ml-1 text-destructive">*</span>}
+                      </span>
+                      {user?.role === "admin" && (
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                          onClick={() => setBroadcastConfirm("edit")}
+                        >
+                          <StoreIcon className="h-3 w-3" /> Alla butiker
+                        </button>
+                      )}
+                    </div>
                     <div className="space-y-0.5 max-h-48 overflow-y-auto">
                       {displayStores.map(s => (
                         <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
@@ -906,6 +943,32 @@ function MallarPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* BROADCAST CONFIRM */}
+      <AlertDialog open={!!broadcastConfirm} onOpenChange={(o) => !o && setBroadcastConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Skicka till alla butiker</AlertDialogTitle>
+            <AlertDialogDescription>
+              Denna mall kommer bli synlig i <strong>{allStores.length} butiker</strong>. Alla butiker i systemet får tillgång till mallen. Vill du fortsätta?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              const allIds = allStores.map((s) => s.id);
+              if (broadcastConfirm === "create") {
+                setForm(p => ({ ...p, storeIds: allIds }));
+              } else {
+                setEditForm(p => ({ ...p, storeIds: allIds }));
+              }
+              setBroadcastConfirm(null);
+            }}>
+              Skicka till alla
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* DELETE CONFIRM */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
