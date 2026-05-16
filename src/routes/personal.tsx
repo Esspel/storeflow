@@ -173,16 +173,18 @@ function AccountsPage() {
   }
 
   async function syncUserStores(userId: string, storeIds: string[]) {
+    // Managers may only assign users to stores they themselves manage
+    const allowedIds = isAdmin ? storeIds : storeIds.filter((sid) => manageableStoreIds?.includes(sid));
     await supabase.from("user_stores").delete().eq("user_id", userId);
-    if (storeIds.length > 0) {
+    if (allowedIds.length > 0) {
       await supabase.from("user_stores").insert(
-        storeIds.map((sid, i) => ({ user_id: userId, store_id: sid, is_primary: i === 0 }))
+        allowedIds.map((sid, i) => ({ user_id: userId, store_id: sid, is_primary: i === 0 }))
       );
     }
     // keep legacy store_id in sync with primary store
     await supabase
       .from("app_users")
-      .update({ store_id: storeIds[0] ?? null })
+      .update({ store_id: allowedIds[0] ?? null })
       .eq("id", userId);
   }
 
@@ -199,8 +201,11 @@ function AccountsPage() {
     if (existing) { setError("Användarnamnet är redan taget."); setSaving(false); return; }
 
     const { data: hash } = await supabase.rpc("hash_password", { plain_password: newUser.password });
-    // Chefer kan inte skapa admin-konton
+    // Managers cannot create admin accounts and must assign to their own stores only
     const safeRole = !isAdmin && newUser.role === "admin" ? "employee" : newUser.role;
+    const safeStoreIds = isAdmin
+      ? newUser.storeIds
+      : newUser.storeIds.filter((sid) => manageableStoreIds?.includes(sid));
 
     // Hash PIN if provided
     let pinHash: string | null = null;
@@ -221,14 +226,14 @@ function AccountsPage() {
       display_name: newUser.display_name.trim(),
       role: safeRole,
       employee_group: newUser.employee_group.trim(),
-      store_id: newUser.storeIds[0] ?? null,
+      store_id: safeStoreIds[0] ?? null,
       must_change_password: true,
       ...(pinHash ? { quick_pin_hash: pinHash } : {}),
       ...(newUser.barcode.trim() ? { barcode_id: newUser.barcode.trim() } : {}),
     }).select("id").maybeSingle();
 
     if (created?.id) {
-      await syncUserStores(created.id, newUser.storeIds);
+      await syncUserStores(created.id, safeStoreIds);
       logAudit(currentUser?.id ?? null, "user.create", "app_users", created.id, { username: newUser.username });
     }
 
@@ -242,6 +247,12 @@ function AccountsPage() {
     if (!editUser) return;
     if (resetPw && resetPw.length < MIN_PW_LENGTH) { setError(`Nytt lösenord måste vara minst ${MIN_PW_LENGTH} tecken.`); return; }
     if (editPin && editPin.length > 0 && editPin.length < 4) { setError("PIN måste vara minst 4 siffror."); return; }
+    // Prevent managers from editing users who don't share any of their stores
+    if (!isAdmin) {
+      const myStoreIds = currentUserStores.map((s) => s.id);
+      const sharesStore = editUser.assignedStoreIds.some((sid) => myStoreIds.includes(sid)) || editUser.id === currentUser?.id;
+      if (!sharesStore) { setError("Du har inte behörighet att redigera denna användare."); return; }
+    }
     setSaving(true);
 
     // Check barcode uniqueness if changed
@@ -293,6 +304,13 @@ function AccountsPage() {
 
   const confirmDeleteUser = async () => {
     if (!deleteUser) return;
+    // Managers can only delete users they share a store with
+    if (!isAdmin) {
+      const myStoreIds = currentUserStores.map((s) => s.id);
+      const target = users.find((u) => u.id === deleteUser.id);
+      const sharesStore = target?.assignedStoreIds.some((sid) => myStoreIds.includes(sid));
+      if (!sharesStore) { setSaving(false); setDeleteUser(null); return; }
+    }
     setSaving(true);
     // Soft-delete: anonymise the user record so all tasks/incidents/comments that
     // reference this user_id still resolve to a readable name instead of NULL.
@@ -365,16 +383,32 @@ function AccountsPage() {
 
   // --- Groups ---
   async function loadGroups() {
+    // RLS already restricts groups to the manager's stores, but we also
+    // apply client-side filtering as defence-in-depth.
     const { data } = await supabase
       .from("user_groups")
       .select("*, members:user_group_members(*, user:app_users(id, display_name, username))")
       .order("name");
-    setGroups((data ?? []) as typeof groups);
+    const allGroups = (data ?? []) as typeof groups;
+    if (isAdmin) {
+      setGroups(allGroups);
+    } else {
+      const myStoreIds = currentUserStores.map((s) => s.id);
+      setGroups(allGroups.filter((g) => g.store_id == null || myStoreIds.includes(g.store_id)));
+    }
   }
 
   async function createGroup() {
     setError("");
     if (!newGroup.name.trim()) { setError("Gruppnamn obligatoriskt."); return; }
+    // Managers must assign the group to one of their own stores
+    if (!isAdmin && newGroup.store_id && !manageableStoreIds?.includes(newGroup.store_id)) {
+      setError("Du kan bara skapa grupper i dina egna butiker."); return;
+    }
+    // Managers must specify a store (can't create global groups)
+    if (!isAdmin && !newGroup.store_id) {
+      setError("Välj vilken butik gruppen tillhör."); return;
+    }
     setSaving(true);
     const { data: created } = await supabase.from("user_groups").insert({
       name: newGroup.name.trim(),
@@ -394,6 +428,10 @@ function AccountsPage() {
 
   async function saveEditGroup() {
     if (!editGroup) return;
+    // Managers may only edit groups in their own stores
+    if (!isAdmin && editGroup.store_id && !manageableStoreIds?.includes(editGroup.store_id)) {
+      setError("Du har inte behörighet att redigera denna grupp."); return;
+    }
     setSaving(true);
     await supabase.from("user_groups").update({ name: editGroup.name }).eq("id", editGroup.id);
     await supabase.from("user_group_members").delete().eq("group_id", editGroup.id);
@@ -410,6 +448,8 @@ function AccountsPage() {
 
   async function confirmDeleteGroup() {
     if (!deleteGroup) return;
+    // Managers may only delete groups in their own stores
+    if (!isAdmin && deleteGroup.store_id && !manageableStoreIds?.includes(deleteGroup.store_id)) return;
     await supabase.from("user_groups").delete().eq("id", deleteGroup.id);
     logAudit(currentUser?.id ?? null, "group.delete", "user_groups", deleteGroup.id, { name: deleteGroup.name });
     setGroups((prev) => prev.filter((g) => g.id !== deleteGroup.id));
@@ -976,11 +1016,11 @@ function AccountsPage() {
                 onChange={(e) => setNewGroup(p => ({ ...p, name: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
-              <Label>Butik (valfritt)</Label>
+              <Label>{isAdmin ? "Butik (valfritt)" : "Butik"}</Label>
               <Select value={newGroup.store_id || "__none"} onValueChange={(v) => setNewGroup(p => ({ ...p, store_id: v === "__none" ? "" : v }))}>
-                <SelectTrigger><SelectValue placeholder="Alla butiker" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={isAdmin ? "Alla butiker" : "Välj butik"} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none">Alla butiker</SelectItem>
+                  {isAdmin && <SelectItem value="__none">Alla butiker (global)</SelectItem>}
                   {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
