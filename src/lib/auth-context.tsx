@@ -69,6 +69,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         return;
       }
+      // Set token on the Supabase client BEFORE any queries so RLS functions
+      // that read x-session-token work correctly during validation
+      setSessionToken(stored.token);
       const validUser = await validateSession(stored.token);
       if (validUser) {
         setUser(validUser);
@@ -81,6 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setActiveStoreState(stores[0]);
         }
       } else {
+        setSessionToken(null);
         await clearSession();
       }
       setLoading(false);
@@ -90,6 +94,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (username: string, password: string) => {
     const result = await doLogin(username, password);
     if ("error" in result) return { error: result.error };
+    // Set token on the Supabase client immediately so all subsequent queries
+    // include x-session-token and RLS policies resolve correctly
+    setSessionToken(result.token);
     setUser(result.user);
     setToken(result.token);
     await storeSession(result.token, result.user);
@@ -106,6 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     if (token) await doLogout(token);
+    setSessionToken(null);
     setUser(null);
     setToken(null);
     setUserStores([]);

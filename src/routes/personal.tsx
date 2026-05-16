@@ -108,7 +108,8 @@ function AccountsPage() {
     if (!currentUser) return;
     if (!isManager) { navigate({ to: "/" }); return; }
     load();
-  }, [currentUser, authLoading, currentUserStores]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, authLoading]);
 
   // The stores a manager is allowed to manage (all for admin)
   const manageableStoreIds = isAdmin ? null : currentUserStores.map((s) => s.id);
