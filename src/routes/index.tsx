@@ -10,6 +10,8 @@ import {
   Repeat,
   CircleCheck as CheckCircle2,
   Circle,
+  UserRound,
+  MessageSquare,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -302,13 +304,15 @@ function HubPage() {
 
         {/* Quick nav cards */}
         <div className={cn(
-          "grid grid-cols-1 gap-3 sm:grid-cols-2",
-          isManager ? "lg:grid-cols-4" : "lg:grid-cols-3"
+          "grid grid-cols-2 gap-3 sm:grid-cols-3",
+          isManager ? "lg:grid-cols-6" : "lg:grid-cols-5"
         )}>
-          <QuickCard to="/uppgifter" icon={ListChecks} title="Dagens uppgifter" desc="Rutiner, checklistor och kontroller" tone="blue" />
-          <QuickCard to="/avvikelser" icon={AlertTriangle} title="Avvikelser" desc="Rapportera och följ upp ärenden" tone="amber" />
-          <QuickCard to="/schema" icon={CalendarDays} title="Schema" desc="Skiftöversikt och leveransplan" tone="green" />
-          {isManager && <QuickCard to="/rapporter" icon={BarChart3} title="Rapporter" desc="KPI:er, trender och insikter" tone="green" />}
+          <QuickCard to="/uppgifter" icon={ListChecks} title="Uppgifter" desc="Rutiner och checklistor" tone="blue" />
+          <QuickCard to="/avvikelser" icon={AlertTriangle} title="Avvikelser" desc="Rapportera ärenden" tone="amber" />
+          <QuickCard to="/schema" icon={CalendarDays} title="Schema" desc="Skiftöversikt" tone="green" />
+          <QuickCard to="/kundrunda" icon={UserRound} title="Kundrunda" desc="Butikskontroll" tone="teal" />
+          <QuickCard to="/moten" icon={MessageSquare} title="Möten" desc="Agenda och protokoll" tone="slate" />
+          {isManager && <QuickCard to="/rapporter" icon={BarChart3} title="Rapporter" desc="KPI:er och insikter" tone="green" />}
         </div>
       </div>
     </div>
@@ -381,12 +385,14 @@ function StatCell({ label, value, icon: Icon, urgent = false }: {
 }
 
 function QuickCard({ to, icon: Icon, title, desc, tone }: {
-  to: string; icon: LucideIcon; title: string; desc: string; tone: "blue" | "amber" | "green";
+  to: string; icon: LucideIcon; title: string; desc: string; tone: "blue" | "amber" | "green" | "teal" | "slate";
 }) {
   const colors = {
     blue: "bg-info/10 text-info",
     amber: "bg-warning/15 text-warning-foreground",
     green: "bg-success/10 text-success",
+    teal: "bg-teal-500/10 text-teal-600",
+    slate: "bg-slate-500/10 text-slate-600",
   };
   return (
     <Link

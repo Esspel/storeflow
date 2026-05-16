@@ -1,3 +1,4 @@
+import React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -70,6 +71,70 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
 const STATUS_LABELS: Record<string, string> = {
   open: "Ny", in_progress: "Pågår", escalated: "Eskalerad", resolved: "Löst", closed: "Stängt",
 };
+
+// ── ResponsiblePicker ──────────────────────────────────────────────────────────
+// Compact searchable dropdown for picking responsible person or group.
+function ResponsiblePicker({
+  users, groups, selectedUserId, selectedGroupId, onSelectUser, onSelectGroup,
+}: {
+  users: AppUser[];
+  groups: UserGroup[];
+  selectedUserId: string;
+  selectedGroupId: string;
+  onSelectUser: (id: string) => void;
+  onSelectGroup: (id: string) => void;
+}) {
+  const [q, setQ] = React.useState("");
+  const lq = q.toLowerCase();
+  const filteredUsers = users.filter(u => u.display_name.toLowerCase().includes(lq));
+  const filteredGroups = groups.filter(g => g.name.toLowerCase().includes(lq));
+
+  return (
+    <div className="space-y-1.5">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Sök person eller grupp..."
+          className="h-7 w-full rounded-lg border border-border/60 bg-background pl-7 pr-3 text-xs outline-none placeholder:text-muted-foreground/50 focus:border-primary/40"
+        />
+      </div>
+      <div className="max-h-36 overflow-y-auto rounded-lg border border-border/60 bg-background divide-y divide-border/40">
+        <button
+          type="button"
+          className={cn("flex w-full items-center px-3 py-2 text-xs transition-colors hover:bg-muted/40", !selectedUserId && !selectedGroupId ? "bg-primary-soft text-primary font-medium" : "text-muted-foreground")}
+          onClick={() => { onSelectUser(""); onSelectGroup(""); }}
+        >
+          Ingen
+        </button>
+        {filteredGroups.map(g => (
+          <button key={g.id} type="button"
+            className={cn("flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors hover:bg-muted/40", selectedGroupId === g.id ? "bg-primary-soft text-primary font-medium" : "")}
+            onClick={() => { onSelectGroup(g.id); onSelectUser(""); }}
+          >
+            <Users className="h-3 w-3 shrink-0 text-muted-foreground/70" />
+            {g.name}
+          </button>
+        ))}
+        {filteredUsers.map(u => (
+          <button key={u.id} type="button"
+            className={cn("flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors hover:bg-muted/40", selectedUserId === u.id ? "bg-primary-soft text-primary font-medium" : "")}
+            onClick={() => { onSelectUser(u.id); onSelectGroup(""); }}
+          >
+            <span className="h-4 w-4 shrink-0 inline-flex items-center justify-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground">
+              {u.display_name.charAt(0).toUpperCase()}
+            </span>
+            {u.display_name}
+          </button>
+        ))}
+        {filteredGroups.length === 0 && filteredUsers.length === 0 && (
+          <p className="px-3 py-3 text-center text-xs text-muted-foreground">Inga träffar</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function IssuesPage() {
   const { user, activeStore, userStores } = useAuth();
@@ -569,7 +634,7 @@ function IssuesPage() {
 
           <div className="flex flex-col sm:flex-row overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
             {/* CONTENT column — always on desktop, step 1 on mobile */}
-            <div className={cn("flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 min-w-0", createStep === 2 && "hidden sm:block")}>
+            <div className={cn("flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 min-w-0", createStep === 2 && "hidden sm:block")}>
               <input
                 placeholder="Titel på avvikelsen..."
                 value={newIncident.title}
@@ -686,37 +751,21 @@ function IssuesPage() {
                   </Select>
                 </div>
 
-                {/* Ansvarig person */}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <User className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Person</span>
-                  <Select value={newIncident.responsible_user_id || "__none"} onValueChange={(v) => setNewIncident(p => ({ ...p, responsible_user_id: v === "__none" ? "" : v }))}>
-                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
-                      <SelectValue placeholder="Ingen" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none">Ingen</SelectItem>
-                      {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Ansvarig grupp */}
-                {groups.length > 0 && (
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <Users className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                    <span className="w-20 shrink-0 text-xs text-muted-foreground">Grupp</span>
-                    <Select value={newIncident.responsible_group_id || "__none"} onValueChange={(v) => setNewIncident(p => ({ ...p, responsible_group_id: v === "__none" ? "" : v }))}>
-                      <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
-                        <SelectValue placeholder="Ingen" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none">Ingen</SelectItem>
-                        {groups.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                {/* Ansvarig — sökbar */}
+                <div className="px-4 py-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <User className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <span className="text-xs text-muted-foreground">Ansvarig</span>
                   </div>
-                )}
+                  <ResponsiblePicker
+                    users={storeUsers}
+                    groups={groups}
+                    selectedUserId={newIncident.responsible_user_id}
+                    selectedGroupId={newIncident.responsible_group_id}
+                    onSelectUser={(id) => setNewIncident(p => ({ ...p, responsible_user_id: id, responsible_group_id: id ? "" : p.responsible_group_id }))}
+                    onSelectGroup={(id) => setNewIncident(p => ({ ...p, responsible_group_id: id, responsible_user_id: id ? "" : p.responsible_user_id }))}
+                  />
+                </div>
 
                 {/* SAP artikel-ID */}
                 <div className="px-4 py-3 min-w-0 space-y-1">
