@@ -11,6 +11,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   setActiveStore: (store: Store) => void;
   refreshUser: () => Promise<void>;
+  loginUser: (user: AppUser) => Promise<void>;
   logout: () => void;
 }
 
@@ -68,6 +69,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser();
   }, [refreshUser]);
 
+  const loginUser = useCallback(async (u: AppUser) => {
+    setUser(u);
+    setCurrentUser(u);
+    await loadStores(u.id);
+  }, [loadStores]);
+
   const setActiveStore = useCallback((store: Store) => {
     setActiveStoreState(store);
   }, []);
@@ -88,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: !!user,
       setActiveStore,
       refreshUser,
+      loginUser,
       logout,
     }}>
       {children}

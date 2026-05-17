@@ -21,7 +21,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { refreshUser } = useAuth();
+  const { loginUser } = useAuth();
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lockedUntil, setLockedUntil] = useState<string | null>(null);
@@ -34,8 +34,8 @@ function LoginPage() {
     setError(null);
     setLockedUntil(null);
     try {
-      await login(data.username, data.password);
-      await refreshUser();
+      const result = await login(data.username, data.password);
+      await loginUser(result.user);
       await navigate({ to: "/" });
     } catch (err: unknown) {
       const e = err as { message?: string; locked_until?: string };
