@@ -332,7 +332,8 @@ function parseXmlDay(
     if (!sName) break;
     const sStartRaw = getAttrOrText(dayEl, `${prefix}StartTime`);
     const sStopRaw = getAttrOrText(dayEl, `${prefix}StopTime`);
-    if (!sStartRaw && !sStopRaw) break;
+    // An absence/lended shift may have a name but no times — skip it but keep scanning
+    if (!sStartRaw && !sStopRaw) continue;
     const colRaw = getAttrOrText(dayEl, `${prefix}Color`);
     const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "";
     const grossMins = parseInt(getAttrOrText(dayEl, `${prefix}GrossTimeMinutes`) || "0", 10);
@@ -1935,7 +1936,7 @@ function SchemaPage() {
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <p className="font-semibold text-sm leading-snug text-foreground">{name}</p>
                               {emp.employment_percent != null && (
-                                <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 rounded-full px-1.5 py-0.5 leading-none">{emp.employment_percent}%</span>
+                                <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 rounded-full px-1.5 py-0.5 leading-none" title={`Sysselsättningsgrad: ${emp.employment_percent}%`}>{emp.employment_percent}%</span>
                               )}
                               {primaryShift?.is_borrowed && (
                                 <span className="flex items-center gap-0.5 text-[10px] font-medium text-sky-600 bg-sky-50 rounded-full px-1.5 py-0.5 leading-none"><ArrowLeftRight className="h-2.5 w-2.5" />Inlånad</span>
@@ -1953,9 +1954,16 @@ function SchemaPage() {
                             )}
                             {isSemester && <p className="text-xs font-medium text-red-500">Semester</p>}
                             {isAbsent && !isSemester && <p className="text-xs text-warning-foreground">{absenceShift?.deviation_cause || "Frånvaro"}</p>}
-                            {weekMinutes > 0 && (
-                              <p className="text-[10px] text-muted-foreground/60 mt-0.5">V: {minsToHours(weekMinutes)}</p>
-                            )}
+                            {(() => {
+                              const dayMins = workShifts.reduce((s, sh) => s + (sh.net_minutes > 0 ? sh.net_minutes : Math.max(0, sh.gross_minutes - sh.break_minutes)), 0);
+                              return (
+                                <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                                  {dayMins > 0 ? `${minsToHours(dayMins)} idag` : ""}
+                                  {dayMins > 0 && weekMinutes > 0 ? " · " : ""}
+                                  {weekMinutes > 0 ? `V: ${minsToHours(weekMinutes)}` : ""}
+                                </p>
+                              );
+                            })()}
                           </div>
 
                           {/* Time block — primary info, bold */}
@@ -2084,8 +2092,14 @@ function SchemaPage() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-semibold text-foreground leading-tight">{appUser?.display_name ?? emp.employee_name}</p>
                         <div className="flex items-center gap-1 flex-wrap mt-0.5">
-                          {emp.employment_percent != null && <span className="text-[9px] text-muted-foreground/70">{emp.employment_percent}%</span>}
-                          {weekMinutes > 0 && <span className="text-[9px] text-muted-foreground/70">{minsToHours(weekMinutes)}/v</span>}
+                          {emp.employment_percent != null && (
+                            <span className="text-[9px] text-muted-foreground/70" title={`Sysselsättningsgrad: ${emp.employment_percent}%`}>{emp.employment_percent}%</span>
+                          )}
+                          {weekMinutes > 0 && <span className="text-[9px] text-muted-foreground/70" title="Schemalagd tid denna vecka">{minsToHours(weekMinutes)}/v</span>}
+                          {(() => {
+                            const dayMins = workShifts.reduce((s, sh) => s + (sh.net_minutes > 0 ? sh.net_minutes : Math.max(0, sh.gross_minutes - sh.break_minutes)), 0);
+                            return dayMins > 0 ? <span className="text-[9px] font-medium text-foreground/60" title="Schemalagd tid idag">{minsToHours(dayMins)}/dag</span> : null;
+                          })()}
                         </div>
                         {isSemesterDay && <p className="truncate text-[10px] text-red-500 font-medium">Semester</p>}
                       </div>

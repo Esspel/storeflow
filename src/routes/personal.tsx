@@ -28,7 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase, type AppUser, type Store, type UserGroup, type UserGroupMember, logAudit, HIERARCHY_LABELS } from "@/lib/supabase";
+import { supabase, type AppUser, type Store, type UserGroup, type UserGroupMember, type Forening, type Distrikt, logAudit, HIERARCHY_LABELS } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { GdprExport } from "@/components/gdpr-export";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -38,6 +38,15 @@ const MIN_PW_LENGTH = 12;
 export const Route = createFileRoute("/personal")({
   component: AccountsPage,
 });
+
+// Hierarchy power order — higher index = higher privilege
+const HIERARCHY_ORDER: Record<string, number> = {
+  admin: 5, hk: 4, forening: 3, distrikt: 2, chef: 1, anvandare: 0,
+};
+
+function hierarchyRank(level: string | null | undefined): number {
+  return HIERARCHY_ORDER[level ?? "anvandare"] ?? 0;
+}
 
 function hierarchyBadge(level: string | null | undefined) {
   const key = level ?? "anvandare";
@@ -152,19 +161,25 @@ function AccountsPage() {
   const [storeSortDir, setStoreSortDir] = useState<SortDir>("asc");
   const [groupSearch, setGroupSearch] = useState("");
 
+  // Hierarchy data
+  const [foreningar, setForeningar] = useState<Forening[]>([]);
+  const [distrikt, setDistrikt] = useState<Distrikt[]>([]);
+
   // User dialogs
   const [showCreateUser, setShowCreateUser] = useState(false);
-  const [editUser, setEditUser] = useState<UserWithStores | null>(null);
+  const [editUser, setEditUser] = useState<(UserWithStores & { forening_id?: string | null; distrikt_id?: string | null }) | null>(null);
   const [deleteUser, setDeleteUser] = useState<AppUser | null>(null);
   const [newUser, setNewUser] = useState({
     username: "", password: "", display_name: "", role: "employee" as "admin" | "manager" | "employee",
     hierarchy_level: "anvandare" as string,
     employee_group: "", storeIds: [] as string[], pin: "", barcode: "",
+    forening_id: "" as string, distrikt_id: "" as string,
   });
   const [resetPw, setResetPw] = useState("");
   const [editPin, setEditPin] = useState("");
   const [editBarcode, setEditBarcode] = useState("");
   const [editStoreSearch, setEditStoreSearch] = useState("");
+  const [newStoreSearch, setNewStoreSearch] = useState("");
 
   // Store dialogs
   const [showCreateStore, setShowCreateStore] = useState(false);
@@ -200,12 +215,14 @@ function AccountsPage() {
 
   async function load() {
     const managerStoreIds = currentUserStores.map(s => s.id);
-    const [usersRes, storesRes, userStoresRes] = await Promise.all([
+    const [usersRes, storesRes, userStoresRes, foreningarRes, distriktRes] = await Promise.all([
       supabase.from("app_users").select("*").order("created_at"),
       isAdmin || managerStoreIds.length === 0
         ? supabase.from("stores").select("*").order("name")
         : supabase.from("stores").select("*").in("id", managerStoreIds).order("name"),
       supabase.from("user_stores").select("user_id, store_id"),
+      supabase.from("foreningar").select("*").order("name"),
+      supabase.from("distrikt").select("*").order("name"),
     ]);
     const rawUsers = (usersRes.data ?? []) as AppUser[];
     const storeAssignments = (userStoresRes.data ?? []) as { user_id: string; store_id: string }[];
@@ -220,6 +237,8 @@ function AccountsPage() {
     }
     setUsers(usersWithStores);
     setStores((storesRes.data ?? []) as Store[]);
+    setForeningar((foreningarRes.data ?? []) as Forening[]);
+    setDistrikt((distriktRes.data ?? []) as Distrikt[]);
     setLoading(false);
     loadGroups();
   }
@@ -265,13 +284,22 @@ function AccountsPage() {
       setError("Fyll i alla obligatoriska fält."); return;
     }
     if (newUser.password.length < MIN_PW_LENGTH) { setError(`Lösenordet måste vara minst ${MIN_PW_LENGTH} tecken.`); return; }
+    // Privilege escalation guard: non-admins/hk cannot create users with equal or higher hierarchy
+    const isUnrestricted = currentUser?.hierarchy_level === "admin" || currentUser?.hierarchy_level === "hk";
+    if (!isUnrestricted) {
+      const myRank = hierarchyRank(currentUser?.hierarchy_level);
+      const targetRank = hierarchyRank(newUser.hierarchy_level);
+      if (targetRank >= myRank) {
+        setError("Du kan inte skapa användare med samma eller högre hierarkinivå än dig själv."); return;
+      }
+    }
     setSaving(true);
     const { data: existing } = await supabase.from("app_users").select("id").eq("username", newUser.username.toLowerCase().trim()).maybeSingle();
     if (existing) { setError("Användarnamnet är redan taget."); setSaving(false); return; }
     const { data: hash } = await supabase.rpc("hash_password", { plain_password: newUser.password });
     const derivedRole = hierarchyLevelToRole(newUser.hierarchy_level);
-    const safeRole = !isAdmin && derivedRole === "admin" ? "employee" : derivedRole;
-    const safeStoreIds = isAdmin ? newUser.storeIds : newUser.storeIds.filter((sid) => manageableStoreIds?.includes(sid));
+    const safeRole = !isUnrestricted && derivedRole === "admin" ? "employee" : derivedRole;
+    const safeStoreIds = isUnrestricted ? newUser.storeIds : newUser.storeIds.filter((sid) => manageableStoreIds?.includes(sid));
     let pinHash: string | null = null;
     if (newUser.pin.length >= 4) {
       const { data: ph } = await supabase.rpc("hash_password", { plain_password: newUser.pin });
@@ -290,6 +318,8 @@ function AccountsPage() {
       employee_group: newUser.employee_group.trim(),
       store_id: safeStoreIds[0] ?? null,
       must_change_password: true,
+      forening_id: newUser.forening_id || null,
+      distrikt_id: newUser.distrikt_id || null,
       ...(pinHash ? { quick_pin_hash: pinHash } : {}),
       ...(newUser.barcode.trim() ? { barcode_id: newUser.barcode.trim() } : {}),
     }).select("id").maybeSingle();
@@ -300,17 +330,29 @@ function AccountsPage() {
     await fetchUsers();
     setSaving(false);
     setShowCreateUser(false);
-    setNewUser({ username: "", password: "", display_name: "", role: "employee", hierarchy_level: "anvandare", employee_group: "", storeIds: [], pin: "", barcode: "" });
+    setNewUser({ username: "", password: "", display_name: "", role: "employee", hierarchy_level: "anvandare", employee_group: "", storeIds: [], pin: "", barcode: "", forening_id: "", distrikt_id: "" });
+    setNewStoreSearch("");
   };
 
   const updateUser = async () => {
     if (!editUser) return;
     if (resetPw && resetPw.length < MIN_PW_LENGTH) { setError(`Nytt lösenord måste vara minst ${MIN_PW_LENGTH} tecken.`); return; }
     if (editPin && editPin.length > 0 && editPin.length < 4) { setError("PIN måste vara minst 4 siffror."); return; }
-    if (!isAdmin) {
+    const isUnrestricted = currentUser?.hierarchy_level === "admin" || currentUser?.hierarchy_level === "hk";
+    if (!isUnrestricted) {
       const myStoreIds = currentUserStores.map((s) => s.id);
       const sharesStore = editUser.assignedStoreIds.some((sid) => myStoreIds.includes(sid)) || editUser.id === currentUser?.id;
       if (!sharesStore) { setError("Du har inte behörighet att redigera denna användare."); return; }
+      // Cannot edit users with equal or higher hierarchy than self
+      const myRank = hierarchyRank(currentUser?.hierarchy_level);
+      const targetOriginal = users.find(u => u.id === editUser.id);
+      if (targetOriginal && hierarchyRank(targetOriginal.hierarchy_level) >= myRank) {
+        setError("Du kan inte redigera användare med samma eller högre hierarkinivå än dig själv."); return;
+      }
+      // Cannot escalate target to equal or higher level
+      if (hierarchyRank(editUser.hierarchy_level) >= myRank) {
+        setError("Du kan inte sätta en hierarkinivå som är lika hög eller högre än din egen."); return;
+      }
     }
     setSaving(true);
     if (editBarcode.trim()) {
@@ -324,6 +366,8 @@ function AccountsPage() {
       role_manually_set: true,
       employee_group: (editUser.employee_group ?? "").trim(),
       store_id: editUser.assignedStoreIds[0] ?? null,
+      forening_id: editUser.forening_id ?? null,
+      distrikt_id: editUser.distrikt_id ?? null,
     };
     if (editBarcode.trim()) updates.barcode_id = editBarcode.trim();
     else if (editBarcode === "") updates.barcode_id = null;
@@ -1021,8 +1065,8 @@ function AccountsPage() {
       {/* ──────────────────── DIALOGS ──────────────────── */}
 
       {/* CREATE USER */}
-      <Dialog open={showCreateUser} onOpenChange={(o) => { setShowCreateUser(o); if (!o) setError(""); }}>
-        <DialogContent className="max-w-md">
+      <Dialog open={showCreateUser} onOpenChange={(o) => { setShowCreateUser(o); if (!o) { setError(""); setNewStoreSearch(""); setNewUser({ username: "", password: "", display_name: "", role: "employee", hierarchy_level: "anvandare", employee_group: "", storeIds: [], pin: "", barcode: "", forening_id: "", distrikt_id: "" }); } }}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Nytt konto</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -1044,15 +1088,52 @@ function AccountsPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Hierarkinivå</Label>
-              <Select value={newUser.hierarchy_level} onValueChange={(v) => setNewUser(p => ({ ...p, hierarchy_level: v, role: hierarchyLevelToRole(v) }))}>
+              <Select value={newUser.hierarchy_level} onValueChange={(v) => setNewUser(p => ({ ...p, hierarchy_level: v, role: hierarchyLevelToRole(v), forening_id: "", distrikt_id: "" }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Object.entries(HIERARCHY_LABELS).filter(([val]) => isAdmin || val !== "admin").map(([val, label]) => (
+                  {Object.entries(HIERARCHY_LABELS).filter(([val]) => {
+                    const isUnrestricted = currentUser?.hierarchy_level === "admin" || currentUser?.hierarchy_level === "hk";
+                    if (isUnrestricted) return true;
+                    // Only show levels strictly lower than current user
+                    return hierarchyRank(val) < hierarchyRank(currentUser?.hierarchy_level);
+                  }).map(([val, label]) => (
                     <SelectItem key={val} value={val}>{label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+            {/* Förening selector — shown when hierarchy is forening */}
+            {newUser.hierarchy_level === "forening" && (
+              <div className="space-y-1.5">
+                <Label>Förening *</Label>
+                <Select value={newUser.forening_id || ""} onValueChange={(v) => setNewUser(p => ({ ...p, forening_id: v, distrikt_id: "" }))}>
+                  <SelectTrigger><SelectValue placeholder="Välj förening..." /></SelectTrigger>
+                  <SelectContent>
+                    <div className="px-2 pb-1">
+                      <input className="h-7 w-full rounded border border-border/60 bg-background px-2 text-xs outline-none placeholder:text-muted-foreground" placeholder="Sök förening..." onChange={(e) => { /* handled by filter below via closure */ }} id="new-forening-search" />
+                    </div>
+                    {foreningar.map(f => (
+                      <SelectItem key={f.id} value={f.id}>{f.name}{f.short_code ? ` (${f.short_code})` : ""}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {/* Distrikt selector — shown when hierarchy is distrikt */}
+            {newUser.hierarchy_level === "distrikt" && (
+              <div className="space-y-1.5">
+                <Label>Distrikt *</Label>
+                <Select value={newUser.distrikt_id || ""} onValueChange={(v) => setNewUser(p => ({ ...p, distrikt_id: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Välj distrikt..." /></SelectTrigger>
+                  <SelectContent>
+                    {distrikt.map(d => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                    {distrikt.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">Inga distrikt finns. Skapa distrikt i databasen.</div>}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Anställningsgrupp</Label>
               <Input placeholder="t.ex. Butik Timlön" value={newUser.employee_group}
@@ -1060,17 +1141,39 @@ function AccountsPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Butiker</Label>
+              <div className="relative mb-1.5">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Sök butik..."
+                  value={newStoreSearch}
+                  onChange={(e) => setNewStoreSearch(e.target.value)}
+                  className="h-8 w-full rounded-md border border-border/60 bg-background pl-8 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary/30"
+                />
+              </div>
               <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
-                {stores.map(s => (
-                  <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
-                    <Checkbox
-                      checked={newUser.storeIds.includes(s.id)}
-                      onCheckedChange={() => toggleStoreSelection(s.id, newUser.storeIds, (ids) => setNewUser(p => ({ ...p, storeIds: ids })))}
-                    />
-                    <span className="text-sm">{s.name}</span>
-                    {s.butiks_nr && <span className="text-xs text-muted-foreground">#{s.butiks_nr}</span>}
-                  </label>
-                ))}
+                {stores
+                  .filter(s => {
+                    const q = newStoreSearch.toLowerCase();
+                    return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
+                  })
+                  .map(s => (
+                    <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
+                      <Checkbox
+                        checked={newUser.storeIds.includes(s.id)}
+                        onCheckedChange={() => toggleStoreSelection(s.id, newUser.storeIds, (ids) => setNewUser(p => ({ ...p, storeIds: ids })))}
+                      />
+                      <span className="text-sm">{s.name}</span>
+                      {s.butiks_nr && <span className="text-xs text-muted-foreground">#{s.butiks_nr}</span>}
+                      {newUser.storeIds[0] === s.id && <span className="ml-auto text-xs text-primary">Primär</span>}
+                    </label>
+                  ))}
+                {stores.filter(s => {
+                  const q = newStoreSearch.toLowerCase();
+                  return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
+                }).length === 0 && (
+                  <p className="py-3 text-center text-xs text-muted-foreground">Inga butiker matchar sökningen</p>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1097,7 +1200,7 @@ function AccountsPage() {
       {/* EDIT USER */}
       <Dialog open={!!editUser} onOpenChange={(o) => { if (!o) { setEditUser(null); setError(""); setEditStoreSearch(""); } }}>
         {editUser && (
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Redigera konto</DialogTitle></DialogHeader>
             <div className="space-y-4 py-2">
               <div className="space-y-1.5">
@@ -1111,15 +1214,50 @@ function AccountsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Hierarkinivå</Label>
-                <Select value={editUser.hierarchy_level ?? "anvandare"} onValueChange={(v) => setEditUser(u => u ? { ...u, hierarchy_level: v as AppUser["hierarchy_level"], role: hierarchyLevelToRole(v) } : null)}>
+                <Select value={editUser.hierarchy_level ?? "anvandare"} onValueChange={(v) => setEditUser(u => u ? { ...u, hierarchy_level: v as AppUser["hierarchy_level"], role: hierarchyLevelToRole(v), forening_id: null, distrikt_id: null } : null)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(HIERARCHY_LABELS).filter(([val]) => isAdmin || val !== "admin").map(([val, label]) => (
+                    {Object.entries(HIERARCHY_LABELS).filter(([val]) => {
+                      const isUnrestricted = currentUser?.hierarchy_level === "admin" || currentUser?.hierarchy_level === "hk";
+                      if (isUnrestricted) return true;
+                      return hierarchyRank(val) < hierarchyRank(currentUser?.hierarchy_level);
+                    }).map(([val, label]) => (
                       <SelectItem key={val} value={val}>{label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              {/* Förening selector — shown when hierarchy is forening */}
+              {editUser.hierarchy_level === "forening" && (
+                <div className="space-y-1.5">
+                  <Label>Förening</Label>
+                  <Select value={editUser.forening_id ?? ""} onValueChange={(v) => setEditUser(u => u ? { ...u, forening_id: v || null, distrikt_id: null } : null)}>
+                    <SelectTrigger><SelectValue placeholder="Välj förening..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Ingen koppling</SelectItem>
+                      {foreningar.map(f => (
+                        <SelectItem key={f.id} value={f.id}>{f.name}{f.short_code ? ` (${f.short_code})` : ""}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {/* Distrikt selector — shown when hierarchy is distrikt */}
+              {editUser.hierarchy_level === "distrikt" && (
+                <div className="space-y-1.5">
+                  <Label>Distrikt</Label>
+                  <Select value={editUser.distrikt_id ?? ""} onValueChange={(v) => setEditUser(u => u ? { ...u, distrikt_id: v || null } : null)}>
+                    <SelectTrigger><SelectValue placeholder="Välj distrikt..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Ingen koppling</SelectItem>
+                      {distrikt.map(d => (
+                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                      ))}
+                      {distrikt.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">Inga distrikt finns.</div>}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label>Anställningsgrupp</Label>
                 <Input placeholder="t.ex. Butik Timlön" value={editUser.employee_group ?? ""}
@@ -1141,7 +1279,7 @@ function AccountsPage() {
                   {stores
                     .filter(s => {
                       const q = editStoreSearch.toLowerCase();
-                      return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q));
+                      return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
                     })
                     .map(s => (
                       <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
@@ -1158,7 +1296,7 @@ function AccountsPage() {
                     ))}
                   {stores.filter(s => {
                     const q = editStoreSearch.toLowerCase();
-                    return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q));
+                    return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
                   }).length === 0 && (
                     <p className="py-3 text-center text-xs text-muted-foreground">Inga butiker matchar sökningen</p>
                   )}
@@ -1187,7 +1325,7 @@ function AccountsPage() {
               {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => { setEditUser(null); setEditPin(""); setEditBarcode(""); setError(""); setStoreSearch(""); }}>
+              <Button variant="outline" onClick={() => { setEditUser(null); setEditPin(""); setEditBarcode(""); setError(""); setEditStoreSearch(""); }}>
                 <X className="mr-1.5 h-3.5 w-3.5" /> Avbryt
               </Button>
               <Button onClick={updateUser} disabled={saving}>{saving ? "Sparar..." : "Spara"}</Button>
