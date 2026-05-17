@@ -1218,9 +1218,10 @@ function SchemaPage() {
           await supabase.from("schedule_imports").delete().in("id", oldIds);
         }
 
+        const resolvedWeekStart = weekSchedule.weekStartDate || getWeekStartDate(weekSchedule.weekNumber, weekSchedule.year);
         const { data: importData, error: importErr } = await supabase
           .from("schedule_imports")
-          .insert({ store_id: storeId, week_start_date: weekSchedule.weekStartDate, week_number: weekSchedule.weekNumber, year: weekSchedule.year, imported_by: user.id, filename: `vecka_${weekSchedule.weekNumber}_${weekSchedule.year}.xml`, raw_employee_count: weekSchedule.employees.length })
+          .insert({ store_id: storeId, week_start_date: resolvedWeekStart, week_number: weekSchedule.weekNumber, year: weekSchedule.year, imported_by: user.id, filename: `vecka_${weekSchedule.weekNumber}_${weekSchedule.year}.xml`, raw_employee_count: weekSchedule.employees.length })
           .select().single();
         if (importErr || !importData) throw new Error(`schedule_imports vecka ${weekSchedule.weekNumber}: ${importErr?.message ?? "Import failed"}`);
         const importId = (importData as ImportRow).id;
@@ -1235,18 +1236,20 @@ function SchemaPage() {
           const isEmpBorrowed = borrowedMe?.isBorrowed === true;
 
           const rows = emp.days.flatMap((day) => {
+            // If the XML day has no ScheduleDate, derive it from the week start + dayNr (1=Mon)
+            const effectiveDayDate = day.scheduleDate || (day.dayNr >= 1 ? addDays(resolvedWeekStart, day.dayNr - 1) : "");
             const isAbsence = day.isAbsenceDay || day.isSemester;
             if (day.shifts.length > 0) {
               return day.shifts.map((s) => {
                 let startUtc: string | null = null;
                 let stopUtc: string | null = null;
-                if (s.startTime && day.scheduleDate) startUtc = stockholmToUtc(`${day.scheduleDate}T${s.startTime}`);
-                if (s.stopTime && day.scheduleDate) {
-                  const stopDay = (s.stopTime < s.startTime) ? addDays(day.scheduleDate, 1) : day.scheduleDate;
+                if (s.startTime && effectiveDayDate) startUtc = stockholmToUtc(`${effectiveDayDate}T${s.startTime}`);
+                if (s.stopTime && effectiveDayDate) {
+                  const stopDay = (s.stopTime < s.startTime) ? addDays(effectiveDayDate, 1) : effectiveDayDate;
                   stopUtc = stockholmToUtc(`${stopDay}T${s.stopTime}`);
                 }
                 return {
-                  schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate,
+                  schedule_employee_id: empId, import_id: importId, day_date: effectiveDayDate,
                   start_time: s.startTime || null, stop_time: s.stopTime || null,
                   start_time_utc: startUtc, stop_time_utc: stopUtc,
                   shift_name: s.shiftName,
@@ -1262,7 +1265,7 @@ function SchemaPage() {
             }
             if (isAbsence) {
               return [{
-                schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate,
+                schedule_employee_id: empId, import_id: importId, day_date: effectiveDayDate,
                 start_time: null, stop_time: null,
                 shift_name: day.isSemester ? "Semester" : "", color: day.isSemester ? "#fca5a5" : "#e0e0e0",
                 gross_minutes: 0, net_minutes: 0, break_minutes: 0, break_windows: [],
