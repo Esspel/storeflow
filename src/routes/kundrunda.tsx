@@ -323,18 +323,25 @@ function KundrundaPage() {
     setEditScope(isAdmin ? "global" : "local");
   }, [activeStore]);
 
-  // Auto-initialize local version when a manager opens the edit view
+  // Auto-initialize local version for managers who don't have one yet
+  // Runs when data finishes loading (localVersion transitions from undefined→null)
+  // and when entering the edit view.
   useEffect(() => {
-    if (view === "edit" && isManager && !isAdmin && activeStore && !localVersion) {
+    if (!loading && isManager && !isAdmin && activeStore && localVersion === null) {
       ensureLocalVersionRecord();
     }
-  }, [view]);
+  }, [loading, localVersion, view]);
+
+  // Zones used during a session: prefer store-local, fall back to global
+  const storeLocalZones = activeStore ? zones.filter(z => z.store_id === activeStore.id) : [];
+  const globalZones = zones.filter(z => !z.store_id);
+  const activeZones = storeLocalZones.length > 0 ? storeLocalZones : globalZones;
 
   // Zones filtered by current edit scope
   const editableZones = editScope === "global"
-    ? zones.filter(z => !z.store_id)
+    ? globalZones
     : activeStore
-      ? zones.filter(z => z.store_id === activeStore.id)
+      ? storeLocalZones
       : [];
 
   const publishCentralVersion = async () => {
@@ -365,41 +372,10 @@ function KundrundaPage() {
   const ensureLocalVersionRecord = async () => {
     if (!activeStore || !user) return;
     if (localVersion) return;
-    const { data } = await supabase.from("kundrunda_local_versions").insert({
-      store_id: activeStore.id,
-      version_type: "local",
-      central_version_pending: false,
-    }).select("*").maybeSingle();
-    if (data) setLocalVersion(data as LocalVersionRecord);
-
-    // Copy HK zones+checkpoints as the store's starting local version
-    const hkZones = zones.filter(z => !z.store_id);
-    for (const z of hkZones) {
-      const existingLocal = zones.find(lz => lz.store_id === activeStore.id && lz.name.toLowerCase() === z.name.toLowerCase());
-      if (existingLocal) continue;
-      const { data: newZone } = await supabase.from("kundrunda_zones").insert({
-        name: z.name, sort_order: z.sort_order,
-        store_id: activeStore.id, is_local_override: true,
-      }).select("id").maybeSingle();
-      if (!newZone?.id) continue;
-      const cps = z.checkpoints.map((cp, idx) => ({
-        zone_id: newZone.id, label: cp.label, description: cp.description ?? null,
-        sort_order: cp.sort_order ?? idx, store_id: activeStore.id, is_local_override: true,
-      }));
-      if (cps.length > 0) await supabase.from("kundrunda_checkpoints").insert(cps);
-    }
-
-    // Copy HK common defects as store's starting local defects
-    const hkDefects = commonDefects.filter(d => !d.store_id);
-    for (const d of hkDefects) {
-      await supabase.from("kundrunda_common_defects").insert({
-        store_id: activeStore.id,
-        label: d.label,
-        sort_order: d.sort_order,
-        hk_defect_id: d.id,
-        is_local_override: true,
-      });
-    }
+    // Use SECURITY DEFINER RPC to bypass RLS for cross-store inserts
+    await supabase.rpc("init_store_local_kundrunda", { p_store_id: activeStore.id });
+    // Refresh state after init
+    await fetchData();
   };
 
   const handleStartSession = async () => {
@@ -417,7 +393,7 @@ function KundrundaPage() {
       conducted_by: user?.id,
       status: "in_progress",
       total_score: 0,
-      max_score: zones.reduce((sum, z) => sum + z.checkpoints.length, 0),
+      max_score: activeZones.reduce((sum, z) => sum + z.checkpoints.length, 0),
     }).select("*, store:stores(id,name,sap_site_id)").maybeSingle();
     if (data) {
       setActiveSession(data as KundrundaSession);
@@ -446,7 +422,7 @@ function KundrundaPage() {
     setResponses(map);
     setResponseImages(imgMap);
     saveLocalDraft(session, map);
-    const firstIncomplete = zones.findIndex(z => !z.checkpoints.every(c => map[c.id]?.result));
+    const firstIncomplete = activeZones.findIndex(z => !z.checkpoints.every(c => map[c.id]?.result));
     setExpandedZones(new Set([Math.max(0, firstIncomplete)]));
     setView("active");
   };
@@ -472,13 +448,13 @@ function KundrundaPage() {
     setResponses(prev => {
       const updated = { ...prev, [checkpoint.id]: optimistic };
       saveLocalDraft(activeSession, updated);
-      const zoneIdx = zones.findIndex(z => z.id === checkpoint.zone_id);
+      const zoneIdx = activeZones.findIndex(z => z.id === checkpoint.zone_id);
       if (zoneIdx >= 0) {
-        const zone = zones[zoneIdx];
+        const zone = activeZones[zoneIdx];
         const allDone = zone.checkpoints.every(c => (c.id === checkpoint.id ? true : updated[c.id]?.result));
         if (allDone) {
           haptic.success();
-          if (zoneIdx < zones.length - 1) {
+          if (zoneIdx < activeZones.length - 1) {
             setExpandedZones(prev2 => {
               const next = new Set(prev2);
               next.delete(zoneIdx);
@@ -570,7 +546,7 @@ function KundrundaPage() {
     }));
 
     if (defectDialog.defect_description.trim() && responseId) {
-      const zone = zones.find(z => z.id === defectDialog.zone_id);
+      const zone = activeZones.find(z => z.id === defectDialog.zone_id);
       const checkpoint = zone?.checkpoints.find(c => c.id === defectDialog.checkpoint_id);
       const title = `Kundrunda: ${zone?.name ?? ""} — ${checkpoint?.label ?? ""}`;
       const due = new Date();
@@ -643,7 +619,7 @@ function KundrundaPage() {
     if (!activeSession) return;
     const { data: allResp } = await supabase.from("kundrunda_responses").select("result").eq("session_id", activeSession.id);
     const okCount = (allResp ?? []).filter((r: { result: string }) => r.result === "ok").length;
-    const total = zones.reduce((s, z) => s + z.checkpoints.length, 0);
+    const total = activeZones.reduce((s, z) => s + z.checkpoints.length, 0);
     await supabase.from("kundrunda_sessions").update({ total_score: okCount, max_score: total }).eq("id", activeSession.id);
     setActiveSession(p => p ? { ...p, total_score: okCount, max_score: total } : null);
   };
@@ -780,7 +756,7 @@ function KundrundaPage() {
     await Promise.all(cps.map((c, i) => supabase.from("kundrunda_checkpoints").update({ sort_order: i }).eq("id", c.id)));
   };
 
-  const allCheckpoints = zones.flatMap(z => z.checkpoints.map(cp => ({ ...cp, zoneName: z.name })));
+  const allCheckpoints = editableZones.flatMap(z => z.checkpoints.map(cp => ({ ...cp, zoneName: z.name })));
 
   const addCommonDefect = async () => {
     if (!newDefectLabel.trim()) return;
@@ -917,7 +893,7 @@ function KundrundaPage() {
     }
   };
 
-  const totalCheckpoints = zones.reduce((s, z) => s + z.checkpoints.length, 0);
+  const totalCheckpoints = activeZones.reduce((s, z) => s + z.checkpoints.length, 0);
   const answeredCount = Object.values(responses).filter(r => r.result).length;
   const defectCount = Object.values(responses).filter(r => r.result === "avvikelse").length;
 
@@ -952,7 +928,7 @@ function KundrundaPage() {
   if (view === "active" && activeSession !== null) {
     const sessionPct = totalCheckpoints > 0 ? answeredCount / totalCheckpoints : 0;
     const isAllDone = answeredCount === totalCheckpoints;
-    const incompleteZones = zones.filter(z => !z.checkpoints.every(c => responses[c.id]?.result));
+    const incompleteZones = activeZones.filter(z => !z.checkpoints.every(c => responses[c.id]?.result));
 
     return (
       <div className="flex min-h-screen flex-col bg-background">
@@ -989,7 +965,7 @@ function KundrundaPage() {
 
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-2xl px-3 py-3 sm:px-5 sm:py-4 space-y-2">
-            {zones.map((zone, zoneIdx) => {
+            {activeZones.map((zone, zoneIdx) => {
               const isExpanded = expandedZones.has(zoneIdx);
               const zoneDone = zone.checkpoints.every(c => responses[c.id]?.result);
               const zoneDefects = zone.checkpoints.filter(c => responses[c.id]?.result === "avvikelse").length;
