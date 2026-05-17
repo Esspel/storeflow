@@ -19,6 +19,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(() => getCurrentUser());
   const [activeStore, setActiveStoreState] = useState<Store | null>(() => {
+    if (typeof window === "undefined") return null;
     try {
       const raw = localStorage.getItem("active_store");
       return raw ? JSON.parse(raw) : null;

@@ -92,6 +92,7 @@ export interface OfflineItem {
 }
 
 export function getOfflineQueue(): OfflineItem[] {
+  if (typeof window === "undefined") return [];
   try {
     return JSON.parse(localStorage.getItem("offline_queue") ?? "[]");
   } catch {
@@ -100,11 +101,13 @@ export function getOfflineQueue(): OfflineItem[] {
 }
 
 export function addToOfflineQueue(action: string, payload: unknown) {
+  if (typeof window === "undefined") return;
   const queue = getOfflineQueue();
   queue.push({ id: crypto.randomUUID(), action, payload, timestamp: Date.now() });
   localStorage.setItem("offline_queue", JSON.stringify(queue));
 }
 
 export function clearOfflineQueue() {
+  if (typeof window === "undefined") return;
   localStorage.removeItem("offline_queue");
 }

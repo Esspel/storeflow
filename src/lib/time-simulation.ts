@@ -1,6 +1,7 @@
 const STORAGE_KEY = "sf_time_offset_ms";
 
 export function getTimeOffsetMs(): number {
+  if (typeof window === "undefined") return 0;
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     return stored ? parseInt(stored, 10) : 0;

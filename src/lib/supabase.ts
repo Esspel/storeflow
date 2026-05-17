@@ -361,19 +361,23 @@ export interface PushSubscription {
 // ─── Session helpers ────────────────────────────────────────────────────────
 
 export function getSessionToken(): string | null {
+  if (typeof window === "undefined") return null;
   return localStorage.getItem("session_token");
 }
 
 export function setSessionToken(token: string) {
+  if (typeof window === "undefined") return;
   localStorage.setItem("session_token", token);
 }
 
 export function clearSessionToken() {
+  if (typeof window === "undefined") return;
   localStorage.removeItem("session_token");
   localStorage.removeItem("current_user");
 }
 
 export function getCurrentUser(): AppUser | null {
+  if (typeof window === "undefined") return null;
   const raw = localStorage.getItem("current_user");
   if (!raw) return null;
   try {
@@ -384,6 +388,7 @@ export function getCurrentUser(): AppUser | null {
 }
 
 export function setCurrentUser(user: AppUser) {
+  if (typeof window === "undefined") return;
   localStorage.setItem("current_user", JSON.stringify(user));
 }
 
