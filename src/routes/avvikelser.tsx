@@ -181,6 +181,7 @@ function IssuesPage() {
   const [editForm, setEditForm] = useState({ title: "", description: "", category: "", priority: "", responsible_user_id: "", responsible_group_id: "", sap_article_id: "" });
   const [editSaving, setEditSaving] = useState(false);
   const [commonDefects, setCommonDefects] = useState<KundrundaCommonDefect[]>([]);
+  const [showSnabbval, setShowSnabbval] = useState(false);
   const [createStep, setCreateStep] = useState<1 | 2>(1);
 
   const fetchIncidents = async () => {
@@ -643,32 +644,45 @@ function IssuesPage() {
                 className="w-full border-0 bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground/50 outline-none focus:outline-none"
               />
               {/* Common defects quick-select */}
-              {commonDefects.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Snabbval — vanliga avvikelser</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {commonDefects.map(d => (
-                      <button
-                        key={d.id}
-                        type="button"
-                        className={cn(
-                          "min-h-[36px] rounded-full border px-3 py-1.5 text-xs transition-colors",
-                          newIncident.description === d.label
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary"
-                        )}
-                        onClick={() => setNewIncident(p => ({
-                          ...p,
-                          description: p.description ? `${p.description}\n${d.label}` : d.label,
-                          title: p.title || d.label,
-                        }))}
-                      >
-                        {d.label}
-                      </button>
-                    ))}
+              {commonDefects.length > 0 && (() => {
+                const uniqueDefects = Array.from(new Map(commonDefects.map(d => [d.label, d])).values());
+                return (
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowSnabbval(v => !v)}
+                      className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Snabbval — vanliga avvikelser
+                      <span className="text-[10px] rounded-full bg-muted px-1.5 py-0.5">{uniqueDefects.length}</span>
+                      <span className="text-[10px] text-muted-foreground/60">{showSnabbval ? "▲" : "▼"}</span>
+                    </button>
+                    {showSnabbval && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {uniqueDefects.map(d => (
+                          <button
+                            key={d.id}
+                            type="button"
+                            className={cn(
+                              "min-h-[36px] rounded-full border px-3 py-1.5 text-xs transition-colors",
+                              newIncident.description === d.label
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary"
+                            )}
+                            onClick={() => setNewIncident(p => ({
+                              ...p,
+                              description: p.description ? `${p.description}\n${d.label}` : d.label,
+                              title: p.title || d.label,
+                            }))}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
               <Textarea
                 placeholder="Beskriv avvikelsen — vad hände, var, när?"
                 value={newIncident.description}

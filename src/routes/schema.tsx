@@ -269,31 +269,18 @@ function getAttrOrText(el: Element, tag: string): string {
   return el.getAttribute(tag) || getText(el, tag);
 }
 
-function parseXml(xmlText: string): ParsedSchedule | null {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xmlText, "application/xml");
-  if (doc.querySelector("parsererror")) return null;
-  const root = doc.documentElement;
-  if (!root || root.nodeName !== "SOE_TimeEmployeeSchedule") return null;
-
-  const storeName =
-    getAttrOrText(root, "Company") ||
-    getText(root, "ReportHeader Company") ||
-    getText(root, "Store StoreName") ||
-    getText(root, "StoreName") || "";
-
-  const weekEl = root.querySelector("Week");
-  const weekNrText = weekEl ? (getAttrOrText(weekEl, "ScheduleWeekNr") || weekEl.getAttribute("WeekNr") || "") : "";
+function parseXmlWeek(weekEl: Element, storeName: string): ParsedSchedule | null {
+  const weekNrText = getAttrOrText(weekEl, "ScheduleWeekNr") || weekEl.getAttribute("WeekNr") || "";
   const weekNumber = parseInt(weekNrText, 10) || 0;
-  const yearText = weekEl ? (getAttrOrText(weekEl, "Year") || "") : "";
+  const yearText = getAttrOrText(weekEl, "Year") || "";
   const year = parseInt(yearText, 10) || new Date().getFullYear();
+  if (!weekNumber || !year) return null;
 
-  // Try to extract week start from ReportHeader DateInterval (format: "YYYY-MM-DD-YYYY-MM-DD")
-  const dateIntervalRaw = getText(root, "ReportHeader DateInterval") || getAttrOrText(root, "DateInterval");
+  const dateIntervalRaw = getAttrOrText(weekEl, "DateInterval") || "";
   const dateIntervalMatch = dateIntervalRaw.match(/(\d{4}-\d{2}-\d{2})/);
   let weekStartDate = dateIntervalMatch ? dateIntervalMatch[1] : "";
 
-  const employees: ParsedEmployee[] = Array.from(root.querySelectorAll("Employee")).map((empEl) => {
+  const employees: ParsedEmployee[] = Array.from(weekEl.querySelectorAll("Employee")).map((empEl) => {
     const employeeNr = getAttrOrText(empEl, "EmployeeNr");
     const employeeName = getAttrOrText(empEl, "EmployeeName");
     const employeeGroup = getAttrOrText(empEl, "EmployeeGroup");
@@ -418,6 +405,32 @@ function parseXml(xmlText: string): ParsedSchedule | null {
   });
 
   return { weekNumber, year, weekStartDate, storeName, employees };
+}
+
+function parseXml(xmlText: string): ParsedSchedule[] | null {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, "application/xml");
+  if (doc.querySelector("parsererror")) return null;
+  const root = doc.documentElement;
+  if (!root || root.nodeName !== "SOE_TimeEmployeeSchedule") return null;
+
+  const storeName =
+    getAttrOrText(root, "Company") ||
+    getText(root, "ReportHeader Company") ||
+    getText(root, "Store StoreName") ||
+    getText(root, "StoreName") || "";
+
+  const weekEls = Array.from(root.querySelectorAll(":scope > Week"));
+  if (weekEls.length > 0) {
+    const schedules = weekEls.map((w) => parseXmlWeek(w, storeName)).filter(Boolean) as ParsedSchedule[];
+    return schedules.length > 0 ? schedules : null;
+  }
+
+  // Fallback: single-week format where employees are direct children of root
+  const weekEl = root.querySelector("Week");
+  if (!weekEl) return null;
+  const single = parseXmlWeek(weekEl, storeName);
+  return single ? [single] : null;
 }
 
 // ─── PDF Delivery plan parser ─────────────────────────────────────────────────
@@ -569,7 +582,7 @@ function SchemaPage() {
   const [deliveryEntries, setDeliveryEntries] = useState<DeliveryEntry[]>([]);
   const [showDeliveries, setShowDeliveries] = useState(true);
 
-  const [parsed, setParsed] = useState<ParsedSchedule | null>(null);
+  const [parsed, setParsed] = useState<ParsedSchedule[] | null>(null);
   const [matchedEmployees, setMatchedEmployees] = useState<MatchedEmployee[]>([]);
   const [allUsers, setAllUsers] = useState<AppUser[]>([]);
   const [mappingOpen, setMappingOpen] = useState(false);
@@ -795,12 +808,21 @@ function SchemaPage() {
         const ext = file.name.split(".").pop()?.toLowerCase();
         if (ext === "xml") {
           const text = await readFileText(file);
-          const result = parseXml(text);
-          if (!result || result.employees.length === 0) {
+          const results = parseXml(text);
+          if (!results || results.length === 0) {
             toast.error(`Kunde inte läsa XML-filen: ${file.name}. Kontrollera att det är en SoftOne GO-export.`);
             continue;
           }
-          const schedule = { ...result, storeName: result.storeName || activeStore?.name || "" };
+          const schedules = results.map((r) => ({ ...r, storeName: r.storeName || activeStore?.name || "" }));
+          // Collect all unique employees across all weeks for mapping
+          const allEmpMap = new Map<string, ParsedEmployee>();
+          for (const s of schedules) {
+            for (const emp of s.employees) {
+              if (!allEmpMap.has(emp.employeeNr)) allEmpMap.set(emp.employeeNr, emp);
+            }
+          }
+          const allEmployees = Array.from(allEmpMap.values());
+
           // Auto-match employees by display_name (normalized)
           // Priority: 1) saved employee_nr mapping, 2) name match within this store's users, 3) no match → create new
           const { data: storeUserLinks } = await supabase.from("user_stores").select("user_id").eq("store_id", storeId!);
@@ -808,7 +830,7 @@ function SchemaPage() {
           const storeUsers = allUsers.filter((u) => storeUserIds.has(u.id));
 
           const usedUserIds = new Set<string>();
-          const matched: MatchedEmployee[] = result.employees.map((emp) => {
+          const matched: MatchedEmployee[] = allEmployees.map((emp) => {
             const savedMapping = mappings.find((m) => m.employee_nr === emp.employeeNr);
             if (savedMapping?.app_user_id) {
               usedUserIds.add(savedMapping.app_user_id);
@@ -831,7 +853,7 @@ function SchemaPage() {
             }
             return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "new" as const, appUserId: null, newUsername: usernameFromName(emp.employeeName), newPassword: generatePassword(16) };
           });
-          setParsed(schedule);
+          setParsed(schedules);
           setMatchedEmployees(matched);
           setImportDialogOpen(false);
           setImportFiles([]);
@@ -862,6 +884,13 @@ function SchemaPage() {
             if (isSpecialWeek) {
               toast.info(`Vecka ${weekNumber} innehåller helgdag: ${holidayName}. Importerar som specialvecka.`);
             }
+            // Delete existing plans for this store/week/year before inserting new
+            const { data: oldPlans } = await supabase.from("delivery_plans").select("id").eq("store_id", storeId).eq("week_number", weekNumber).eq("year", year);
+            if (oldPlans && oldPlans.length > 0) {
+              const oldPlanIds = oldPlans.map((p: { id: string }) => p.id);
+              await supabase.from("delivery_entries").delete().in("plan_id", oldPlanIds);
+              await supabase.from("delivery_plans").delete().in("id", oldPlanIds);
+            }
             const { data: plan, error: planErr } = await supabase.from("delivery_plans").insert({
               store_id: storeId, week_number: weekNumber, year, imported_by: user.id, filename: file.name,
               is_special_week: isSpecialWeek || userLabel !== "Standard", holiday_name: holidayName,
@@ -876,7 +905,8 @@ function SchemaPage() {
               delivery_date: deliveryDateForDay(e.deliveryDay, weekStart),
             }));
             await supabase.from("delivery_entries").insert(rows);
-            toast.success(`Leveransplan från ${file.name} importerad (${rows.length} leveranser)`);
+            const wasOverwrite = oldPlans && oldPlans.length > 0;
+            toast.success(`Leveransplan ${wasOverwrite ? "uppdaterad" : "importerad"} från ${file.name} (${rows.length} leveranser)`);
           } catch (err) {
             toast.error(`Fel vid läsning av ${file.name}`);
             console.error(err);
@@ -965,10 +995,8 @@ function SchemaPage() {
       for (const me of matchedEmployees) {
         if (me.matchType === "existing" && me.appUserId) {
           finalMappings.push({ employee_nr: me.employeeNr, app_user_id: me.appUserId });
-          // Borrowed staff: link them temporarily to this store without changing their primary store
           if (!me.isBorrowed) {
             await supabase.from("user_stores").upsert({ user_id: me.appUserId, store_id: storeId, is_primary: false }, { onConflict: "user_id,store_id" });
-            // Only update role from XML if it was not manually set by an admin
             const existingUser = allUsers.find((u) => u.id === me.appUserId);
             if (me.employeeGroup && !existingUser?.role_manually_set) {
               const role = groupToRole(me.employeeGroup);
@@ -977,13 +1005,10 @@ function SchemaPage() {
               await supabase.from("app_users").update({ employee_group: me.employeeGroup }).eq("id", me.appUserId);
             }
           }
-          // Mark shifts for borrowed staff with is_borrowed=true in the rows below
         } else if (me.matchType === "new") {
-          // Create user
           const username = me.newUsername || usernameFromName(me.employeeName);
           const password = me.newPassword && me.newPassword.length >= 12 ? me.newPassword : generatePassword(16);
           if (!username) continue;
-          // Check if username taken, append suffix if so
           let finalUsername = username;
           const { data: existing } = await supabase.from("app_users").select("id").eq("username", finalUsername).maybeSingle();
           if (existing) finalUsername = `${username}_${me.employeeNr.slice(-4)}`;
@@ -1000,7 +1025,6 @@ function SchemaPage() {
           }
           const newUser = created as AppUser;
           newlyCreated.push(newUser);
-          // Connect to store via user_stores
           await supabase.from("user_stores").insert({ user_id: newUser.id, store_id: storeId, is_primary: true });
           finalMappings.push({ employee_nr: me.employeeNr, app_user_id: newUser.id });
         }
@@ -1008,101 +1032,12 @@ function SchemaPage() {
 
       // Persist mappings
       for (const m of finalMappings) {
-        const { error: mapErr } = await supabase.from("employee_mappings").upsert(
+        await supabase.from("employee_mappings").upsert(
           { store_id: storeId, employee_nr: m.employee_nr, app_user_id: m.app_user_id || null, created_by: user.id, updated_at: new Date().toISOString() },
           { onConflict: "store_id,employee_nr" }
         );
-        if (mapErr) console.error("employee_mappings upsert error:", mapErr);
       }
       setMappings(finalMappings);
-
-      // Create schedule import record
-      const { data: importData, error: importErr } = await supabase
-        .from("schedule_imports")
-        .insert({ store_id: storeId, week_start_date: parsed.weekStartDate, week_number: parsed.weekNumber, year: parsed.year, imported_by: user.id, filename: `vecka_${parsed.weekNumber}_${parsed.year}.xml`, raw_employee_count: parsed.employees.length })
-        .select().single();
-      if (importErr || !importData) throw new Error(`schedule_imports: ${importErr?.message ?? "Import failed"}`);
-      const importId = (importData as ImportRow).id;
-
-      for (const emp of parsed.employees) {
-        const { data: empData, error: empErr } = await supabase.from("schedule_employees").insert({ import_id: importId, employee_nr: emp.employeeNr, employee_name: emp.employeeName, employee_group: emp.employeeGroup }).select().single();
-        if (empErr || !empData) continue;
-        const empId = (empData as ScheduleEmployee).id;
-        // Determine if this employee is borrowed staff
-        const empMapping = finalMappings.find((fm) => fm.employee_nr === emp.employeeNr);
-        const borrowedMe = matchedEmployees.find((me) => me.employeeNr === emp.employeeNr);
-        const isEmpBorrowed = borrowedMe?.isBorrowed === true;
-
-        const rows = emp.days.flatMap((day) => {
-          const isAbsence = day.isAbsenceDay || day.isSemester;
-          // Convert day date + shift times to UTC for DST-safe storage
-          // Times from SoftOne are in Stockholm local time
-          if (day.shifts.length > 0) {
-            // Absence takes priority: shifts become shadow shifts (metadata only, no worked time)
-            return day.shifts.map((s) => {
-              // Build UTC-safe timestamps for start/stop using Stockholm timezone
-              let startUtc: string | null = null;
-              let stopUtc: string | null = null;
-              if (s.startTime && day.scheduleDate) {
-                startUtc = stockholmToUtc(`${day.scheduleDate}T${s.startTime}`);
-              }
-              if (s.stopTime && day.scheduleDate) {
-                // Handle overnight shifts: if stop < start, add one day
-                const stopDay = (s.stopTime < s.startTime) ? addDays(day.scheduleDate, 1) : day.scheduleDate;
-                stopUtc = stockholmToUtc(`${stopDay}T${s.stopTime}`);
-              }
-              return {
-                schedule_employee_id: empId,
-                import_id: importId,
-                day_date: day.scheduleDate,
-                start_time: s.startTime || null,
-                stop_time: s.stopTime || null,
-                start_time_utc: startUtc,
-                stop_time_utc: stopUtc,
-                shift_name: s.shiftName,
-                color: isAbsence ? (day.isSemester ? "#fca5a5" : "#e0e0e0") : s.color,
-                gross_minutes: isAbsence ? 0 : s.grossMinutes,
-                net_minutes: isAbsence ? 0 : s.netMinutes,
-                break_minutes: isAbsence ? 0 : s.breakMinutes,
-                break_windows: isAbsence ? [] : s.breakWindows,
-                deviation_cause: s.deviationCause || (day.isSemester ? "Semester" : ""),
-                is_absence_day: isAbsence,
-                is_lended: s.isLended,
-                is_borrowed: isEmpBorrowed || s.isBorrowed,
-                shift_link: s.shiftLink,
-                is_shadow_shift: isAbsence && !!(s.startTime || s.shiftName),
-              };
-            });
-          }
-          if (isAbsence) {
-            return [{
-              schedule_employee_id: empId,
-              import_id: importId,
-              day_date: day.scheduleDate,
-              start_time: null,
-              stop_time: null,
-              shift_name: day.isSemester ? "Semester" : "",
-              color: day.isSemester ? "#fca5a5" : "#e0e0e0",
-              gross_minutes: 0,
-              net_minutes: 0,
-              break_minutes: 0,
-              break_windows: [],
-              deviation_cause: day.isSemester ? "Semester" : "",
-              is_absence_day: true,
-              is_lended: false,
-              is_borrowed: false,
-              shift_link: "",
-              is_shadow_shift: false,
-            }];
-          }
-          return [];
-        });
-        if (rows.length > 0) await supabase.from("schedule_shifts").insert(rows);
-      }
-
-      // Auto-create/update "Alla medarbetare" and "Ledning" user groups
-      const allUserIds = finalMappings.map((m) => m.app_user_id).filter(Boolean) as string[];
-      const managersInSchedule = allUsers.filter((u) => allUserIds.includes(u.id) && (u.role === "manager" || u.hierarchy_level === "chef")).map((u) => u.id);
 
       async function upsertGroup(name: string, memberIds: string[]) {
         let { data: grp } = await supabase.from("user_groups").select("id").eq("store_id", storeId!).eq("name", name).maybeSingle();
@@ -1111,21 +1046,101 @@ function SchemaPage() {
           grp = created;
         }
         if (!grp?.id || memberIds.length === 0) return;
-        // Upsert members (ignore conflicts)
         await supabase.from("user_group_members").upsert(memberIds.map((uid) => ({ group_id: grp!.id, user_id: uid })), { onConflict: "group_id,user_id" });
       }
+
+      // Import each week separately; overwrite any existing import for the same store/week/year
+      let lastImportData: ImportRow | null = null;
+      const allWeekNums: number[] = [];
+      for (const weekSchedule of parsed) {
+        // Delete existing import for this store/week/year (cascades to schedule_employees + schedule_shifts)
+        const { data: oldImports } = await supabase
+          .from("schedule_imports")
+          .select("id")
+          .eq("store_id", storeId)
+          .eq("week_number", weekSchedule.weekNumber)
+          .eq("year", weekSchedule.year);
+        if (oldImports && oldImports.length > 0) {
+          const oldIds = oldImports.map((r: { id: string }) => r.id);
+          await supabase.from("schedule_shifts").delete().in("import_id", oldIds);
+          await supabase.from("schedule_employees").delete().in("import_id", oldIds);
+          await supabase.from("schedule_imports").delete().in("id", oldIds);
+        }
+
+        const { data: importData, error: importErr } = await supabase
+          .from("schedule_imports")
+          .insert({ store_id: storeId, week_start_date: weekSchedule.weekStartDate, week_number: weekSchedule.weekNumber, year: weekSchedule.year, imported_by: user.id, filename: `vecka_${weekSchedule.weekNumber}_${weekSchedule.year}.xml`, raw_employee_count: weekSchedule.employees.length })
+          .select().single();
+        if (importErr || !importData) throw new Error(`schedule_imports vecka ${weekSchedule.weekNumber}: ${importErr?.message ?? "Import failed"}`);
+        const importId = (importData as ImportRow).id;
+        allWeekNums.push(weekSchedule.weekNumber);
+        lastImportData = importData as ImportRow;
+
+        for (const emp of weekSchedule.employees) {
+          const { data: empData } = await supabase.from("schedule_employees").insert({ import_id: importId, employee_nr: emp.employeeNr, employee_name: emp.employeeName, employee_group: emp.employeeGroup }).select().single();
+          if (!empData) continue;
+          const empId = (empData as ScheduleEmployee).id;
+          const borrowedMe = matchedEmployees.find((me) => me.employeeNr === emp.employeeNr);
+          const isEmpBorrowed = borrowedMe?.isBorrowed === true;
+
+          const rows = emp.days.flatMap((day) => {
+            const isAbsence = day.isAbsenceDay || day.isSemester;
+            if (day.shifts.length > 0) {
+              return day.shifts.map((s) => {
+                let startUtc: string | null = null;
+                let stopUtc: string | null = null;
+                if (s.startTime && day.scheduleDate) startUtc = stockholmToUtc(`${day.scheduleDate}T${s.startTime}`);
+                if (s.stopTime && day.scheduleDate) {
+                  const stopDay = (s.stopTime < s.startTime) ? addDays(day.scheduleDate, 1) : day.scheduleDate;
+                  stopUtc = stockholmToUtc(`${stopDay}T${s.stopTime}`);
+                }
+                return {
+                  schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate,
+                  start_time: s.startTime || null, stop_time: s.stopTime || null,
+                  start_time_utc: startUtc, stop_time_utc: stopUtc,
+                  shift_name: s.shiftName,
+                  color: isAbsence ? (day.isSemester ? "#fca5a5" : "#e0e0e0") : s.color,
+                  gross_minutes: isAbsence ? 0 : s.grossMinutes, net_minutes: isAbsence ? 0 : s.netMinutes,
+                  break_minutes: isAbsence ? 0 : s.breakMinutes, break_windows: isAbsence ? [] : s.breakWindows,
+                  deviation_cause: s.deviationCause || (day.isSemester ? "Semester" : ""),
+                  is_absence_day: isAbsence, is_lended: s.isLended,
+                  is_borrowed: isEmpBorrowed || s.isBorrowed, shift_link: s.shiftLink,
+                  is_shadow_shift: isAbsence && !!(s.startTime || s.shiftName),
+                };
+              });
+            }
+            if (isAbsence) {
+              return [{
+                schedule_employee_id: empId, import_id: importId, day_date: day.scheduleDate,
+                start_time: null, stop_time: null,
+                shift_name: day.isSemester ? "Semester" : "", color: day.isSemester ? "#fca5a5" : "#e0e0e0",
+                gross_minutes: 0, net_minutes: 0, break_minutes: 0, break_windows: [],
+                deviation_cause: day.isSemester ? "Semester" : "", is_absence_day: true,
+                is_lended: false, is_borrowed: false, shift_link: "", is_shadow_shift: false,
+              }];
+            }
+            return [];
+          });
+          if (rows.length > 0) await supabase.from("schedule_shifts").insert(rows);
+        }
+      }
+
+      // Auto-create/update "Alla medarbetare" and "Ledning" user groups
+      const allUserIds = finalMappings.map((m) => m.app_user_id).filter(Boolean) as string[];
+      const managersInSchedule = allUsers.filter((u) => allUserIds.includes(u.id) && (u.role === "manager" || u.hierarchy_level === "chef")).map((u) => u.id);
       await upsertGroup("Alla medarbetare", allUserIds);
       if (managersInSchedule.length > 0) await upsertGroup("Ledning", managersInSchedule);
 
       const createdCount = newlyCreated.length;
       const matchedCount = finalMappings.length - createdCount;
-      toast.success(`Schema vecka ${parsed.weekNumber} importerat. ${matchedCount} matchade · ${createdCount > 0 ? `${createdCount} nya konton skapade` : "inga nya konton"}.`);
+      const weekLabel = allWeekNums.length === 1 ? `vecka ${allWeekNums[0]}` : `veckorna ${allWeekNums.join(", ")}`;
+      toast.success(`Schema ${weekLabel} importerat. ${matchedCount} matchade · ${createdCount > 0 ? `${createdCount} nya konton skapade` : "inga nya konton"}.`);
       if (newlyCreated.length > 0) setAppUsers((p) => [...p, ...newlyCreated]);
       setMappingOpen(false);
       setParsed(null);
       setMatchedEmployees([]);
       await loadImports();
-      setActiveImport(importData as ImportRow);
+      if (lastImportData) setActiveImport(lastImportData);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`Import misslyckades: ${msg}`);
@@ -2127,9 +2142,13 @@ function SchemaPage() {
               <h2 className="text-sm font-semibold text-foreground">
                 {parsed ? "Granska och bekräfta import" : "Personalmatching"}
               </h2>
-              {parsed && (
+              {parsed && parsed.length > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  {parsed.storeName && `${parsed.storeName} · `}Vecka {parsed.weekNumber}, {parsed.year} · {parsed.employees.length} anställda
+                  {parsed[0].storeName && `${parsed[0].storeName} · `}
+                  {parsed.length === 1
+                    ? `Vecka ${parsed[0].weekNumber}, ${parsed[0].year}`
+                    : `Veckorna ${parsed.map(p => p.weekNumber).join(", ")}, ${parsed[0].year}`
+                  } · {matchedEmployees.length} anställda
                 </p>
               )}
             </div>

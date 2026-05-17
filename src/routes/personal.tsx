@@ -945,7 +945,7 @@ function AccountsPage() {
                 {(["name", "bolag", "distrikt_namn", "butiks_nr", "koncept"] as const).map(f => (
                   <button key={f} onClick={() => toggleSort(f, storeSortField, storeSortDir, setStoreSortField, setStoreSortDir)}
                     className={`flex items-center rounded-full px-2.5 py-1 transition-colors ${storeSortField === f ? "bg-primary/10 text-primary" : "hover:bg-muted"}`}>
-                    {{name:"Namn",bolag:"Bolag",distrikt_namn:"Distrikt",butiks_nr:"Butiksnr",koncept:"Koncept"}[f]}
+                    {{name:"Butiksnamn",bolag:"Bolag",distrikt_namn:"Distrikt",butiks_nr:"Butiksnr",koncept:"Koncept"}[f]}
                     <SortIcon field={f} current={storeSortField} dir={storeSortDir} />
                   </button>
                 ))}
@@ -1295,17 +1295,10 @@ function AccountsPage() {
                     onChange={(e) => setEditStore(s => s ? { ...s, kommun: e.target.value } : null)} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>SAP Site-ID (Mitt Coop)</Label>
-                  <Input value={editStore.site_id ?? ""}
-                    onChange={(e) => setEditStore(s => s ? { ...s, site_id: e.target.value, sap_site_id: e.target.value } : null)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Stad</Label>
-                  <Input value={editStore.city ?? ""}
-                    onChange={(e) => setEditStore(s => s ? { ...s, city: e.target.value } : null)} />
-                </div>
+              <div className="space-y-1.5">
+                <Label>SAP Site-ID (Mitt Coop)</Label>
+                <Input value={editStore.site_id ?? ""}
+                  onChange={(e) => setEditStore(s => s ? { ...s, site_id: e.target.value, sap_site_id: e.target.value } : null)} />
               </div>
               {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
             </div>
