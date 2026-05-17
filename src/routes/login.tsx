@@ -15,7 +15,7 @@ export const Route = createFileRoute("/login")({
 const MIN_PW_LENGTH = 12;
 
 function LoginPage() {
-  const { login, user, refreshUser } = useAuth();
+  const { login, user, refreshUser, isFirstLogin } = useAuth();
   const navigate = useNavigate();
 
   const [username, setUsername] = useState("");
@@ -80,7 +80,7 @@ function LoginPage() {
     setPwSaving(false);
 
     // Show first-time setup for butikschef who have never logged in
-    if (updatedUser.hierarchy_level === "chef" && user.last_login === null) {
+    if (updatedUser.hierarchy_level === "chef" && isFirstLogin) {
       setForcePwChange(false);
       setShowFirstTimeSetup(true);
     } else {

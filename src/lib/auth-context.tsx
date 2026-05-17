@@ -10,6 +10,7 @@ type AuthContextType = {
   activeStore: Store | null;
   setActiveStore: (store: Store | null) => void;
   effectiveStore: Store | null;
+  isFirstLogin: boolean;
   login: (username: string, password: string) => Promise<{ error?: string; mustChangePassword?: boolean }>;
   logout: () => Promise<void>;
   refreshUser: (user: AppUser) => void;
@@ -29,6 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userStores, setUserStores] = useState<Store[]>([]);
   const [activeStore, setActiveStoreState] = useState<Store | null>(null);
   const [lockScreenOpen, setLockScreenOpen] = useState(false);
+  const [isFirstLogin, setIsFirstLogin] = useState(false);
 
   // effectiveStore is always activeStore — kept for API compat
   const effectiveStore = activeStore;
@@ -114,11 +116,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setActiveStoreState(stores[0]);
     }
     if (result.user.must_change_password || result.user.last_login === null) {
+      const firstLogin = result.user.last_login === null;
+      setIsFirstLogin(firstLogin);
       const userWithFlag = { ...result.user, must_change_password: true };
       setUser(userWithFlag);
       await storeSession(result.token, userWithFlag);
       return { mustChangePassword: true };
     }
+    setIsFirstLogin(false);
     return {};
   };
 
@@ -160,7 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, userStores, activeStore, setActiveStore, effectiveStore, login, logout, refreshUser, refreshUserStores, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch }}
+      value={{ user, token, loading, userStores, activeStore, setActiveStore, effectiveStore, isFirstLogin, login, logout, refreshUser, refreshUserStores, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch }}
     >
       {children}
     </AuthContext.Provider>
