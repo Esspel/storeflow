@@ -943,19 +943,60 @@ function SchemaPage() {
         }
 
         if (allSchedules.length > 0) {
-          // Merge weeks: if two files share the same year+weekNumber, merge their employees
+          // Merge weeks from all files.
+          // If two files share year+weekNumber:
+          //   - new employees (by employeeNr) are appended
+          //   - existing employees get their days merged: days absent in the first file
+          //     are added from the second file; days present in both are merged by dayNr
+          //     (shifts from the later file are appended so no shift data is lost)
           const weekMap = new Map<string, ParsedSchedule>();
           for (const s of allSchedules) {
             const key = `${s.year}-${s.weekNumber}`;
             if (!weekMap.has(key)) {
-              weekMap.set(key, { ...s, employees: [...s.employees] });
+              // Deep-copy employees so later mutations don't affect the source arrays
+              weekMap.set(key, {
+                ...s,
+                weekStartDate: s.weekStartDate || getWeekStartDate(s.weekNumber, s.year),
+                employees: s.employees.map(e => ({ ...e, days: e.days.map(d => ({ ...d, shifts: [...d.shifts] })) })),
+              });
             } else {
               const existing = weekMap.get(key)!;
-              const empNrs = new Set(existing.employees.map((e) => e.employeeNr));
-              for (const emp of s.employees) {
-                if (!empNrs.has(emp.employeeNr)) {
-                  existing.employees.push(emp);
-                  empNrs.add(emp.employeeNr);
+              // Propagate weekStartDate if this file has one and existing doesn't
+              if (!existing.weekStartDate && s.weekStartDate) existing.weekStartDate = s.weekStartDate;
+              // Build a map of existing employees by employeeNr for O(1) lookup
+              const empByNr = new Map(existing.employees.map(e => [e.employeeNr, e]));
+              for (const incomingEmp of s.employees) {
+                const existingEmp = empByNr.get(incomingEmp.employeeNr);
+                if (!existingEmp) {
+                  // New employee — add them with a deep copy of their days
+                  const copy = { ...incomingEmp, days: incomingEmp.days.map(d => ({ ...d, shifts: [...d.shifts] })) };
+                  existing.employees.push(copy);
+                  empByNr.set(incomingEmp.employeeNr, copy);
+                } else {
+                  // Same employee — merge their days by dayNr
+                  const dayByNr = new Map(existingEmp.days.map(d => [d.dayNr, d]));
+                  for (const incomingDay of incomingEmp.days) {
+                    const existingDay = dayByNr.get(incomingDay.dayNr);
+                    if (!existingDay) {
+                      // Day only in this file — add it
+                      existingEmp.days.push({ ...incomingDay, shifts: [...incomingDay.shifts] });
+                    } else {
+                      // Day in both files — append shifts that aren't already present
+                      // (deduplicate by shiftName+startTime to avoid exact duplicates)
+                      const shiftKeys = new Set(existingDay.shifts.map(s => `${s.shiftName}|${s.startTime}`));
+                      for (const incomingShift of incomingDay.shifts) {
+                        const k = `${incomingShift.shiftName}|${incomingShift.startTime}`;
+                        if (!shiftKeys.has(k)) {
+                          existingDay.shifts.push(incomingShift);
+                          shiftKeys.add(k);
+                        }
+                      }
+                      // Propagate scheduleDate if missing
+                      if (!existingDay.scheduleDate && incomingDay.scheduleDate) {
+                        existingDay.scheduleDate = incomingDay.scheduleDate;
+                      }
+                    }
+                  }
                 }
               }
             }
