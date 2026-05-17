@@ -324,13 +324,18 @@ function KundrundaPage() {
   }, [activeStore]);
 
   // Auto-initialize local version for managers who don't have one yet
-  // Runs when data finishes loading (localVersion transitions from undefined→null)
-  // and when entering the edit view.
   useEffect(() => {
     if (!loading && isManager && !isAdmin && activeStore && localVersion === null) {
       ensureLocalVersionRecord();
     }
   }, [loading, localVersion, view]);
+
+  // Auto-open version choice popup when a pending central version is detected
+  useEffect(() => {
+    if (!loading && localVersion?.central_version_pending && !isAdmin) {
+      setShowVersionChoiceDialog(true);
+    }
+  }, [loading, localVersion?.central_version_pending]);
 
   // Zones used during a session: prefer store-local, fall back to global
   const storeLocalZones = activeStore ? zones.filter(z => z.store_id === activeStore.id) : [];
@@ -358,15 +363,20 @@ function KundrundaPage() {
 
   const resolveVersionChoice = async (choice: "central" | "local" | "parallel") => {
     if (!localVersion || !activeStore) return;
-    const updates: Partial<LocalVersionRecord> = {
-      central_version_pending: false,
-      pending_central_version_id: null,
-      version_type: choice,
-      central_version_id: localVersion.pending_central_version_id,
-    };
-    await supabase.from("kundrunda_local_versions").update(updates).eq("id", localVersion.id);
-    setLocalVersion(prev => prev ? { ...prev, ...updates } : null);
+    if (choice === "central") {
+      // Replace store-local zones with current HK zones server-side
+      await supabase.rpc("apply_central_kundrunda_to_store", { p_store_id: activeStore.id });
+    } else {
+      const updates: Partial<LocalVersionRecord> = {
+        central_version_pending: false,
+        pending_central_version_id: null,
+        version_type: choice,
+        central_version_id: localVersion.pending_central_version_id,
+      };
+      await supabase.from("kundrunda_local_versions").update(updates).eq("id", localVersion.id);
+    }
     setShowVersionChoiceDialog(false);
+    await fetchData();
   };
 
   const ensureLocalVersionRecord = async () => {
