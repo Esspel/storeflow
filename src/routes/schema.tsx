@@ -720,6 +720,11 @@ function SchemaPage() {
 
   const [imports, setImports] = useState<ImportRow[]>([]);
   const [activeImport, setActiveImport] = useState<ImportRow | null>(null);
+  // Selected week for navigation (may or may not have an import)
+  const [selectedWeek, setSelectedWeek] = useState<{ weekNumber: number; year: number }>(() => {
+    const now = new Date();
+    return { weekNumber: getISOWeek(now), year: now.getFullYear() };
+  });
   const [scheduleEmployees, setScheduleEmployees] = useState<ScheduleEmployee[]>([]);
   const [scheduleShifts, setScheduleShifts] = useState<ScheduleShift[]>([]);
   const [mappings, setMappings] = useState<EmployeeMapping[]>([]);
@@ -805,15 +810,22 @@ function SchemaPage() {
   }, [storeId]);
 
   useEffect(() => {
-    if (!activeImport) return;
-    loadScheduleData(activeImport.id);
-    loadMeetingsForWeek(activeImport.week_start_date);
-  }, [activeImport]);
+    if (activeImport) {
+      loadScheduleData(activeImport.id);
+      loadMeetingsForWeek(activeImport.week_start_date);
+    } else {
+      setScheduleEmployees([]);
+      setScheduleShifts([]);
+      const weekStart = getWeekStartDate(selectedWeek.weekNumber, selectedWeek.year);
+      loadMeetingsForWeek(weekStart);
+    }
+  }, [activeImport, selectedWeek.weekNumber, selectedWeek.year]);
 
   useEffect(() => {
-    if (!storeId || !activeImport) return;
-    const queryStart = addDays(activeImport.week_start_date, -1);
-    const queryEnd = addDays(activeImport.week_start_date, 7);
+    if (!storeId) return;
+    const weekStart = activeImport ? activeImport.week_start_date : getWeekStartDate(selectedWeek.weekNumber, selectedWeek.year);
+    const queryStart = addDays(weekStart, -1);
+    const queryEnd = addDays(weekStart, 7);
 
     async function loadAndSpawnTasks() {
       // First ensure recurring children are spawned for this week
@@ -889,7 +901,7 @@ function SchemaPage() {
     }
 
     loadAndSpawnTasks();
-  }, [storeId, activeImport, isAdmin]);
+  }, [storeId, activeImport, selectedWeek.weekNumber, selectedWeek.year, isAdmin]);
 
   async function loadImports() {
     if (!storeId) return;
@@ -897,9 +909,12 @@ function SchemaPage() {
     const rows = (data ?? []) as ImportRow[];
     setImports(rows);
     if (rows.length > 0 && !activeImport) {
-      const todayWeekStart = getWeekStartDate(getCurrentISOWeek(), new Date().getFullYear());
-      const current = rows.find((r) => r.week_start_date === todayWeekStart) ?? rows[0];
+      const now = new Date();
+      const currWeek = getISOWeek(now);
+      const currYear = now.getFullYear();
+      const current = rows.find((r) => r.week_number === currWeek && r.year === currYear) ?? rows[0];
       setActiveImport(current);
+      setSelectedWeek({ weekNumber: current.week_number, year: current.year });
     }
   }
 
@@ -1386,7 +1401,29 @@ function SchemaPage() {
 
   // ─── Derived data ─────────────────────────────────────────────────────────
 
-  const weekDates = activeImport ? Array.from({ length: 7 }, (_, i) => addDays(activeImport.week_start_date, i)) : [];
+  // Week start for selected week (always defined from selectedWeek state)
+  const selectedWeekStart = getWeekStartDate(selectedWeek.weekNumber, selectedWeek.year);
+  const selectedWeekImport = imports.find((r) => r.week_number === selectedWeek.weekNumber && r.year === selectedWeek.year) ?? null;
+
+  // Navigate to a week: update selectedWeek and sync activeImport
+  function navigateToWeek(weekNumber: number, year: number) {
+    setSelectedWeek({ weekNumber, year });
+    const imp = imports.find((r) => r.week_number === weekNumber && r.year === year) ?? null;
+    if (imp?.id !== activeImport?.id) {
+      setActiveImport(imp);
+      if (imp) {
+        loadScheduleData(imp.id);
+        loadMeetingsForWeek(imp.week_start_date);
+      } else {
+        setScheduleEmployees([]);
+        setScheduleShifts([]);
+        setWeekMeetings([]);
+      }
+    }
+  }
+
+  // weekDates always covers the 7 days of the selected week
+  const weekDates = Array.from({ length: 7 }, (_, i) => addDays(selectedWeekStart, i));
   const currentDate = weekDates[selectedDayIndex] ?? null;
   const currentNowPercent = currentDate === todayStr ? nowPercent() : -1;
 
@@ -1425,28 +1462,49 @@ function SchemaPage() {
     }
   }
 
-  const employeeRows = scheduleEmployees
-    .filter((emp) => scheduleShifts.some((s) => s.schedule_employee_id === emp.id))
-    .map((emp) => {
-      const allShifts = scheduleShifts.filter((s) => s.schedule_employee_id === emp.id);
-      const dayShifts = allShifts.filter((s) => s.day_date === currentDate);
-      const workShifts = dayShifts.filter((s) => !s.is_absence_day && s.start_time);
-      const shadowShifts = dayShifts.filter((s) => s.is_absence_day && s.is_shadow_shift && s.start_time);
-      const absenceShift = dayShifts.find((s) => s.is_absence_day);
-      const mapping = mappings.find((m) => m.employee_nr === emp.employee_nr);
-      const appUser = mapping?.app_user_id ? appUsers.find((u) => u.id === mapping.app_user_id) : null;
-      const weekMinutes = allShifts.filter((s) => !s.is_absence_day && s.start_time).reduce((sum, s) => sum + (s.net_minutes > 0 ? s.net_minutes : Math.max(0, s.gross_minutes - s.break_minutes)), 0);
-      const initials = (appUser?.display_name ?? emp.employee_name).split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase();
-      const dayTasks = appUser
-        ? scheduleTasks.filter((t) => {
-            if (!t.due_date || toLocalDateStr(t.due_date) !== currentDate) return false;
-            if (t.assigned_to === appUser.id) return true;
-            return scheduleTaskAssignees.some(a => a.task_id === t.id && a.user_id === appUser.id);
-          })
-        : [];
-      const isAutoBorrowed = autoBorrowedEmployeeIds.has(emp.id);
-      return { emp, dayShifts, workShifts, shadowShifts, absenceShift, appUser, weekMinutes, initials, dayTasks, isAutoBorrowed };
-    });
+  const employeeRows = selectedWeekImport
+    ? scheduleEmployees
+        .filter((emp) => scheduleShifts.some((s) => s.schedule_employee_id === emp.id))
+        .map((emp) => {
+          const allShifts = scheduleShifts.filter((s) => s.schedule_employee_id === emp.id);
+          const dayShifts = allShifts.filter((s) => s.day_date === currentDate);
+          const workShifts = dayShifts.filter((s) => !s.is_absence_day && s.start_time);
+          const shadowShifts = dayShifts.filter((s) => s.is_absence_day && s.is_shadow_shift && s.start_time);
+          const absenceShift = dayShifts.find((s) => s.is_absence_day);
+          const mapping = mappings.find((m) => m.employee_nr === emp.employee_nr);
+          const appUser = mapping?.app_user_id ? appUsers.find((u) => u.id === mapping.app_user_id) : null;
+          const weekMinutes = allShifts.filter((s) => !s.is_absence_day && s.start_time).reduce((sum, s) => sum + (s.net_minutes > 0 ? s.net_minutes : Math.max(0, s.gross_minutes - s.break_minutes)), 0);
+          const initials = (appUser?.display_name ?? emp.employee_name).split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase();
+          const dayTasks = appUser
+            ? scheduleTasks.filter((t) => {
+                if (!t.due_date || toLocalDateStr(t.due_date) !== currentDate) return false;
+                if (t.assigned_to === appUser.id) return true;
+                return scheduleTaskAssignees.some(a => a.task_id === t.id && a.user_id === appUser.id);
+              })
+            : [];
+          const isAutoBorrowed = autoBorrowedEmployeeIds.has(emp.id);
+          return { emp, dayShifts, workShifts, shadowShifts, absenceShift, appUser, weekMinutes, initials, dayTasks, isAutoBorrowed };
+        })
+    : appUsers.map((u) => {
+        // Fallback row when no schedule import exists — show user with their tasks
+        const fakeEmp: ScheduleEmployee = {
+          id: u.id,
+          import_id: "",
+          employee_nr: u.id,
+          employee_name: u.display_name,
+          employee_group: u.employee_group ?? "",
+          employee_category: "",
+          employment_percent: null,
+          work_time_week: null,
+        };
+        const dayTasks = scheduleTasks.filter((t) => {
+          if (!t.due_date || toLocalDateStr(t.due_date) !== currentDate) return false;
+          if (t.assigned_to === u.id) return true;
+          return scheduleTaskAssignees.some(a => a.task_id === t.id && a.user_id === u.id);
+        });
+        const initials = u.display_name.split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase();
+        return { emp: fakeEmp, dayShifts: [], workShifts: [], shadowShifts: [], absenceShift: undefined, appUser: u, weekMinutes: 0, initials, dayTasks, isAutoBorrowed: false };
+      });
 
   const workingToday = employeeRows.filter((r) => r.workShifts.length > 0).length;
   const absentToday = employeeRows.filter((r) => r.workShifts.length === 0 && r.absenceShift).length;
@@ -1546,37 +1604,83 @@ function SchemaPage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Schema</h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {activeImport ? `Vecka ${activeImport.week_number}, ${activeImport.year} · ${activeImport.raw_employee_count} medarbetare` : "Importera schema från SoftOne GO"}
+              {selectedWeekImport
+                ? `Vecka ${selectedWeek.weekNumber}, ${selectedWeek.year} · ${selectedWeekImport.raw_employee_count} medarbetare`
+                : `Vecka ${selectedWeek.weekNumber}, ${selectedWeek.year} · ${new Date(selectedWeekStart).toLocaleDateString("sv-SE", { day: "numeric", month: "short" })}`}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {imports.length > 0 && (() => {
-              const sorted = [...imports].sort((a, b) => a.year !== b.year ? a.year - b.year : a.week_number - b.week_number);
-              const idx = sorted.findIndex((i) => i.id === activeImport?.id);
+            {(() => {
+              const currYear = selectedWeek.year;
+              // Build all weeks for the year (w1..w52/53)
+              const allWeeks: Array<{ weekNumber: number; year: number; weekStart: string }> = [];
+              for (let w = 1; w <= 53; w++) {
+                const ws = getWeekStartDate(w, currYear);
+                const wsYear = parseInt(ws.slice(0, 4), 10);
+                // week belongs to this year if its Monday is in the year or w=1 starts just before
+                if (w === 1 && wsYear < currYear) { allWeeks.push({ weekNumber: w, year: currYear, weekStart: ws }); continue; }
+                if (wsYear > currYear) break;
+                // Check week 53 actually exists for this year
+                if (w === 53) {
+                  const testDate = new Date(parseInt(ws.slice(0,4)), parseInt(ws.slice(5,7))-1, parseInt(ws.slice(8,10)));
+                  if (getISOWeek(testDate) !== 53) break;
+                }
+                allWeeks.push({ weekNumber: w, year: currYear, weekStart: ws });
+              }
+              const currIdx = allWeeks.findIndex((w) => w.weekNumber === selectedWeek.weekNumber);
               return (
                 <div className="flex items-center gap-1">
                   <button
                     className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
-                    onClick={() => { if (idx > 0) setActiveImport(sorted[idx - 1]); }}
-                    disabled={idx <= 0}
+                    onClick={() => {
+                      if (currIdx > 0) {
+                        const prev = allWeeks[currIdx - 1];
+                        navigateToWeek(prev.weekNumber, prev.year);
+                      } else {
+                        navigateToWeek(selectedWeek.weekNumber, selectedWeek.year - 1);
+                      }
+                    }}
                     aria-label="Föregående vecka"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
-                  <Select value={activeImport?.id ?? ""} onValueChange={(v) => { const imp = sorted.find((i) => i.id === v); if (imp) setActiveImport(imp); }}>
-                    <SelectTrigger className="h-9 w-36 text-sm font-medium"><SelectValue placeholder="Välj vecka" /></SelectTrigger>
-                    <SelectContent>
-                      {sorted.map((imp) => (
-                        <SelectItem key={imp.id} value={imp.id}>
-                          V{imp.week_number} {imp.year !== new Date().getFullYear() ? imp.year : ""}
-                        </SelectItem>
-                      ))}
+                  <Select
+                    value={`${currYear}-${selectedWeek.weekNumber}`}
+                    onValueChange={(v) => {
+                      const [y, w] = v.split("-").map(Number);
+                      navigateToWeek(w, y);
+                    }}
+                  >
+                    <SelectTrigger className="h-9 w-40 text-sm font-medium">
+                      <SelectValue placeholder="Välj vecka" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-64">
+                      {allWeeks.map((wk) => {
+                        const hasImport = imports.some((i) => i.week_number === wk.weekNumber && i.year === wk.year);
+                        const monthStr = new Date(parseInt(wk.weekStart.slice(0,4)), parseInt(wk.weekStart.slice(5,7))-1, parseInt(wk.weekStart.slice(8,10)))
+                          .toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
+                        return (
+                          <SelectItem key={`${wk.year}-${wk.weekNumber}`} value={`${wk.year}-${wk.weekNumber}`}>
+                            <span className="flex items-center gap-2">
+                              <span>V{wk.weekNumber}</span>
+                              <span className="text-muted-foreground text-xs">{monthStr}</span>
+                              {!hasImport && <span className="text-[10px] text-muted-foreground/50">–</span>}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                   <button
                     className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
-                    onClick={() => { if (idx < sorted.length - 1) setActiveImport(sorted[idx + 1]); }}
-                    disabled={idx >= sorted.length - 1}
+                    onClick={() => {
+                      if (currIdx < allWeeks.length - 1) {
+                        const next = allWeeks[currIdx + 1];
+                        navigateToWeek(next.weekNumber, next.year);
+                      } else {
+                        navigateToWeek(1, selectedWeek.year + 1);
+                      }
+                    }}
                     aria-label="Nästa vecka"
                   >
                     <ChevronRight className="h-4 w-4" />
@@ -1633,7 +1737,9 @@ function SchemaPage() {
         <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 dark:border-amber-800/40 dark:bg-amber-950/20">
           <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <p className="text-sm text-amber-800 dark:text-amber-300">
-            Ingen leveransplan importerad. Importera en leveransplan (CSV) för att se leveranser.
+            {isAdmin
+              ? "Ingen leveransplan importerad. Importera en leveransplan (CSV) för att se leveranser."
+              : "Leveransplan saknas för denna vecka. Kontakta din chef för information om leveranser."}
           </p>
           {isAdmin && (
             <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
@@ -1647,7 +1753,9 @@ function SchemaPage() {
         <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 dark:border-amber-800/40 dark:bg-amber-950/20">
           <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <p className="text-sm text-amber-800 dark:text-amber-300">
-            <span className="font-medium">Helgvecka ({activeWeekIsHoliday})</span> — ingen specialleveransplan importerad. Visar standardplan. Importera en specialplan för denna vecka om leveranserna avviker.
+            {isAdmin
+              ? <><span className="font-medium">Helgvecka ({activeWeekIsHoliday})</span> — ingen specialleveransplan importerad. Visar standardplan. Importera en specialplan för denna vecka om leveranserna avviker.</>
+              : <><span className="font-medium">Helgvecka ({activeWeekIsHoliday})</span> — standardplan visas. Leveranserna kan avvika denna vecka, fråga din chef om du är osäker.</>}
           </p>
           {isAdmin && (
             <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
@@ -1682,11 +1790,42 @@ function SchemaPage() {
         </div>
       )}
 
+      {/* Empty week state — shown when no import exists for the selected week */}
+      {!selectedWeekImport && weekDates.length > 0 && imports.length > 0 && (
+        <div className="mx-3 my-4 sm:mx-6">
+          {isAdmin ? (
+            <div className="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5 px-6 py-10 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+                <CalendarClock className="h-8 w-8 text-primary/60" />
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-foreground">Inget schema importerat för vecka {selectedWeek.weekNumber}</p>
+                <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">Exportera schema för vecka {selectedWeek.weekNumber}, {selectedWeek.year} från SoftOne GO och importera det här.</p>
+              </div>
+              <Button className="gap-2 rounded-full" onClick={() => { setImportFiles([]); setPdfPreviews({}); setCsvWeekNumber(selectedWeek.weekNumber); setCsvYear(selectedWeek.year); setImportDialogOpen(true); }}>
+                <Upload className="h-4 w-4" />
+                Importera schema för V{selectedWeek.weekNumber}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/60 bg-card px-6 py-10 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+                <Calendar className="h-7 w-7 text-muted-foreground/50" />
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">Inget schema för vecka {selectedWeek.weekNumber}</p>
+                <p className="mt-1 text-sm text-muted-foreground">Schemat för denna vecka har ännu inte lagts till. Fråga din chef om du behöver information.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Main content */}
-      {activeImport && weekDates.length > 0 && (
+      {weekDates.length > 0 && (selectedWeekImport || appUsers.length > 0) && (
         <div className="flex flex-1 flex-col px-3 py-3 sm:px-6 sm:py-4">
           {/* Sticky day strip — touch-action: pan-x so only horizontal swipe changes day */}
-          <div className="sticky top-14 z-20 -mx-3 mb-3 flex items-center gap-1 border-b border-border/40 bg-background/95 px-2 py-2 backdrop-blur-sm sm:-mx-6 sm:top-16 sm:px-4" style={{ touchAction: "pan-x" }}>
+          <div className="sticky top-14 z-20 -mx-3 mb-3 flex items-center gap-1 border-b border-border/40 bg-background/95 px-2 py-2 backdrop-blur-sm sm:-mx-6 sm:top-16 sm:px-4">
             <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors" onClick={() => setSelectedDayIndex((i) => Math.max(0, i - 1))} disabled={selectedDayIndex === 0} aria-label="Föregående dag">
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -1699,13 +1838,24 @@ function SchemaPage() {
                 const isSelected = selectedDayIndex === idx;
                 return (
                   <button key={date} onClick={() => setSelectedDayIndex(idx)}
-                    className={["relative flex min-w-[52px] flex-col items-center rounded-xl px-1 py-2 text-center transition-all",
+                    className={["relative flex min-w-[44px] flex-col items-center rounded-xl px-1.5 py-2 text-center transition-all",
                       isSelected ? "bg-primary text-primary-foreground shadow-[var(--shadow-md)]" : isToday ? "bg-primary-soft text-primary border border-primary/30" : "bg-card text-foreground hover:bg-muted border border-border/60"].join(" ")}
                   >
-                    <span className="text-[9px] font-semibold uppercase tracking-widest">{DAY_SHORT[idx]}</span>
-                    <span className="mt-0.5 text-sm font-bold leading-none">{fmtDate(date).split(" ")[0]}</span>
-                    <span className={["mt-0.5 text-[9px] font-medium", isSelected ? "text-primary-foreground/70" : count > 0 ? "text-muted-foreground" : "text-muted-foreground/40"].join(" ")}>
-                      {count > 0 ? `${count}p` : "–"}
+                    <span className="text-[9px] font-semibold uppercase tracking-widest leading-none">{DAY_SHORT[idx]}</span>
+                    {(() => {
+                      const [y, m, d] = date.split("-").map(Number);
+                      const dateObj = new Date(y, m - 1, d);
+                      return (
+                        <>
+                          <span className="mt-1 text-base font-bold leading-none tabular-nums">{dateObj.getDate()}</span>
+                          <span className={["text-[9px] font-medium leading-none mt-0.5", isSelected ? "text-primary-foreground/70" : "text-muted-foreground"].join(" ")}>
+                            {dateObj.toLocaleDateString("sv-SE", { month: "short" })}
+                          </span>
+                        </>
+                      );
+                    })()}
+                    <span className={["mt-0.5 text-[9px] font-medium leading-none", isSelected ? "text-primary-foreground/70" : count > 0 ? "text-muted-foreground" : "text-muted-foreground/40"].join(" ")}>
+                      {activeImport ? (count > 0 ? `${count}p` : "–") : ""}
                     </span>
                     {delivCount > 0 && (
                       <span className={["text-[8px] font-medium leading-none", isSelected ? "text-primary-foreground/60" : "text-info"].join(" ")}>
@@ -1834,7 +1984,7 @@ function SchemaPage() {
 
           {/* ── MOBILE CARD VIEW (sm and below) ─────────────────────────────── */}
           {viewMode === "day" && (
-            <div className="sm:hidden" data-scroll-container ref={mobileListRef} style={{ touchAction: "pan-y" }}>
+            <div className="sm:hidden" data-scroll-container ref={mobileListRef}>
               {loadingSchedule ? (
                 <div className="space-y-3">
                   {[1,2,3,4,5].map(i => (
