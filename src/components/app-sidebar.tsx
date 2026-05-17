@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, ListChecks, TriangleAlert as AlertTriangle, MessageSquare, ClipboardCheck, ChartBar as BarChart3, Monitor, Users, Store, Settings, Sparkles, CalendarDays } from "lucide-react";
+import { LayoutDashboard, ListChecks, TriangleAlert as AlertTriangle, MessageSquare, ClipboardCheck, ChartBar as BarChart3, Monitor, Users, Store, Settings, Sparkles, CalendarDays, ChartBar as BarChart2 } from "lucide-react";
 
 import {
   Sidebar,
@@ -13,6 +13,7 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/lib/auth-context";
 
 const main = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -36,8 +37,16 @@ const admin = [
 
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { user } = useAuth();
   const isActive = (path: string) =>
     path === "/" ? pathname === "/" : pathname.startsWith(path);
+
+  const hierarchyLevel = user?.hierarchy_level;
+  const showHkDashboard =
+    user?.role === "admin" ||
+    hierarchyLevel === "hk" ||
+    hierarchyLevel === "forening" ||
+    hierarchyLevel === "distrikt";
 
   const renderItem = (item: { title: string; url: string; icon: typeof Store }) => (
     <SidebarMenuItem key={item.url}>
@@ -49,6 +58,15 @@ export function AppSidebar() {
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
+
+  const displayName = user?.display_name ?? "–";
+  const initials = displayName.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
+  const roleLabel = hierarchyLevel === "hk" ? "Huvudkontor"
+    : hierarchyLevel === "forening" ? "Förening"
+    : hierarchyLevel === "distrikt" ? "Distrikt"
+    : hierarchyLevel === "chef" ? "Butikschef"
+    : user?.role === "admin" ? "Admin"
+    : "Medarbetare";
 
   return (
     <Sidebar collapsible="icon">
@@ -72,6 +90,24 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {showHkDashboard && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Styrning</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive("/hk-dashboard")} tooltip="HK-Dashboard">
+                    <Link to="/hk-dashboard" className="gap-3">
+                      <BarChart2 className="h-4 w-4" />
+                      <span>HK-Dashboard</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
         <SidebarGroup>
           <SidebarGroupLabel>Operations</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -89,12 +125,12 @@ export function AppSidebar() {
 
       <SidebarFooter>
         <div className="flex items-center gap-3 rounded-lg p-2 group-data-[collapsible=icon]:hidden">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-accent-foreground">
-            EA
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-accent-foreground">
+            {initials}
           </div>
-          <div className="flex flex-col leading-tight">
-            <span className="text-sm font-medium">Emma Andersson</span>
-            <span className="text-[11px] text-muted-foreground">Regionchef · Syd</span>
+          <div className="flex flex-col leading-tight min-w-0">
+            <span className="text-sm font-medium truncate">{displayName}</span>
+            <span className="text-[11px] text-muted-foreground">{roleLabel}</span>
           </div>
         </div>
       </SidebarFooter>

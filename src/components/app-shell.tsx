@@ -517,7 +517,7 @@ export function AppShell() {
                     </Link>
                   </DropdownMenuItem>
                 )}
-                {isAdmin && (
+                {(isAdmin || user?.hierarchy_level === "hk" || user?.hierarchy_level === "forening" || user?.hierarchy_level === "distrikt") && (
                   <DropdownMenuItem asChild>
                     <Link to="/hk-dashboard" className="cursor-pointer">
                       <BarChart3 className="mr-2 h-4 w-4" />
