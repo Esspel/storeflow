@@ -65,13 +65,14 @@ type CsvImportResult = {
 };
 
 // Store CSV row mapping (all 32 fields)
+// "Butik / Enhet" is the primary display name; "Namn" is stored as namn2 (internal name)
 const CSV_HEADERS: Record<string, keyof Store | null> = {
   "Bolag": "bolag",
   "Koncept": "koncept",
   "Kommentar": "kommentar",
   "Butiks nr": "butiks_nr",
-  "Namn": "name",
-  "Butik / Enhet": "butik_enhet",
+  "Namn": "namn2",
+  "Butik / Enhet": "name",
   "Företag": "foretag",
   "Enhet": "enhet",
   "Organisationsnummer": "organisationsnummer",
@@ -109,12 +110,10 @@ function parseStoreCsv(text: string): { rows: Record<string, string>[]; headers:
   const sep = lines[0].includes(";") ? ";" : ",";
   const headers = lines[0].split(sep).map(h => h.trim().replace(/^["']|["']$/g, ""));
 
-  // Validate required headers
-  const requiredHeaders = ["Namn", "Butiks nr"];
-  for (const req of requiredHeaders) {
-    if (!headers.includes(req)) {
-      return { rows: [], headers, error: `Importen avbröts: Saknad obligatorisk kolumn "${req}". Kontrollera att filen har rätt format.` };
-    }
+  // Validate required headers — accept either "Butik / Enhet" or "Namn" for the name column
+  const hasName = headers.includes("Butik / Enhet") || headers.includes("Namn");
+  if (!hasName) {
+    return { rows: [], headers, error: `Importen avbröts: Saknad obligatorisk kolumn "Butik / Enhet". Kontrollera att filen har rätt format.` };
   }
 
   const rows: Record<string, string>[] = [];
@@ -475,59 +474,68 @@ function AccountsPage() {
         const row = rows[i];
         const rowNum = i + 2; // +2 because 1-indexed and row 1 is header
 
-        // Validate Site-ID if present
+        // Primary name from "Butik / Enhet", fallback to "Namn"
         const siteId = row["Site-ID"]?.trim();
         const butikNr = row["Butiks nr"]?.trim();
-        const name = row["Namn"]?.trim();
+        const displayName = row["Butik / Enhet"]?.trim() || row["Namn"]?.trim();
 
-        if (!name) {
-          result.errors.push(`Rad ${rowNum}: Saknar butiksnamn.`);
+        if (!displayName) {
+          result.errors.push(`Rad ${rowNum}: Saknar butiksnamn (Butik / Enhet).`);
           result.skipped++;
           continue;
         }
 
-        // Build upsert payload from CSV_HEADERS mapping
+        // Build payload from CSV_HEADERS mapping
         const payload: Record<string, unknown> = {};
         for (const [csvKey, dbKey] of Object.entries(CSV_HEADERS)) {
-          if (dbKey === null) continue; // handled specially
+          if (dbKey === null) continue;
           const val = row[csvKey]?.trim();
           if (val !== undefined && val !== "") {
             payload[dbKey] = val;
           }
         }
+        // Ensure name is always set from Butik / Enhet (CSV_HEADERS maps it to "name")
+        if (!payload["name"]) payload["name"] = displayName;
 
         // Special fields
         const franchiseVal = row["Franchise"]?.trim().toLowerCase();
         if (franchiseVal) payload.franchise = franchiseVal === "ja" || franchiseVal === "yes" || franchiseVal === "true" || franchiseVal === "1";
-        if (siteId) payload.site_id = siteId;
-        if (siteId) payload.sap_site_id = siteId; // keep legacy field in sync
+        if (siteId) { payload.site_id = siteId; payload.sap_site_id = siteId; }
 
-        // Upsert by butiks_nr if available, otherwise by name
         try {
           if (butikNr) {
-            const { error: upsertErr } = await supabase
-              .from("stores")
-              .upsert({ ...payload, butiks_nr: butikNr }, { onConflict: "butiks_nr", ignoreDuplicates: false });
-            if (upsertErr) {
-              // Try insert as new
-              const { error: insertErr } = await supabase.from("stores").insert(payload);
-              if (insertErr) {
-                result.errors.push(`Rad ${rowNum} (${name}): ${insertErr.message}`);
-                result.skipped++;
-                continue;
-              }
+            // Check if a store with this butiks_nr already exists
+            const { data: existing } = await supabase
+              .from("stores").select("id").eq("butiks_nr", butikNr).maybeSingle();
+            if (existing) {
+              // Already in database — skip (no overwrite)
+              result.skipped++;
+              continue;
+            }
+            const { error: insertErr } = await supabase.from("stores").insert({ ...payload, butiks_nr: butikNr });
+            if (insertErr) {
+              result.errors.push(`Rad ${rowNum} (${displayName}): ${insertErr.message}`);
+              result.skipped++;
+              continue;
             }
           } else {
+            // No butiks_nr — check by name to avoid duplicate
+            const { data: existing } = await supabase
+              .from("stores").select("id").eq("name", displayName).maybeSingle();
+            if (existing) {
+              result.skipped++;
+              continue;
+            }
             const { error: insertErr } = await supabase.from("stores").insert(payload);
             if (insertErr) {
-              result.errors.push(`Rad ${rowNum} (${name}): ${insertErr.message}`);
+              result.errors.push(`Rad ${rowNum} (${displayName}): ${insertErr.message}`);
               result.skipped++;
               continue;
             }
           }
           result.success++;
         } catch (err) {
-          result.errors.push(`Rad ${rowNum} (${name}): Okänt fel.`);
+          result.errors.push(`Rad ${rowNum} (${displayName}): Okänt fel.`);
           result.skipped++;
         }
       }
@@ -1299,6 +1307,84 @@ function AccountsPage() {
                 <Label>SAP Site-ID (Mitt Coop)</Label>
                 <Input value={editStore.site_id ?? ""}
                   onChange={(e) => setEditStore(s => s ? { ...s, site_id: e.target.value, sap_site_id: e.target.value } : null)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>BC Telefon</Label>
+                  <Input value={editStore.bc_telefon ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, bc_telefon: e.target.value } : null)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Mobil</Label>
+                  <Input value={editStore.mobil ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, mobil: e.target.value } : null)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Marknadsområde</Label>
+                  <Input value={editStore.marknadsomrade ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, marknadsomrade: e.target.value } : null)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Distriktschef (DC)</Label>
+                  <Input value={editStore.distriktschef ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, distriktschef: e.target.value } : null)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Direktör Försäljning</Label>
+                  <Input value={editStore.direktor_forsaljning ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, direktor_forsaljning: e.target.value } : null)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Försäljningschef</Label>
+                  <Input value={editStore.forsaljningschef ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, forsaljningschef: e.target.value } : null)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Företag</Label>
+                  <Input value={editStore.foretag ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, foretag: e.target.value } : null)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Enhet</Label>
+                  <Input value={editStore.enhet ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, enhet: e.target.value } : null)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Org.nummer</Label>
+                  <Input value={editStore.organisationsnummer ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, organisationsnummer: e.target.value } : null)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>K Ställe</Label>
+                  <Input value={editStore.k_stalle ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, k_stalle: e.target.value } : null)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Gamla butiksnummer</Label>
+                  <Input value={editStore.gamla_butiksnummer ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, gamla_butiksnummer: e.target.value } : null)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Säljplan</Label>
+                  <Input value={editStore.saljplan ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, saljplan: e.target.value } : null)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>HR Generalist</Label>
+                  <Input value={editStore.hr_generalist ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, hr_generalist: e.target.value } : null)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Bemanningsspecialist</Label>
+                  <Input value={editStore.bemanningsspecialist ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, bemanningsspecialist: e.target.value } : null)} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Säk, kval & Arbetsmiljö samordnare</Label>
+                <Input value={editStore.sak_kval_samordnare ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, sak_kval_samordnare: e.target.value } : null)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Kommentar</Label>
+                <Input value={editStore.kommentar ?? ""} onChange={(e) => setEditStore(s => s ? { ...s, kommentar: e.target.value } : null)} />
               </div>
               {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
             </div>

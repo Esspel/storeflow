@@ -420,17 +420,81 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
     getText(root, "Store StoreName") ||
     getText(root, "StoreName") || "";
 
-  const weekEls = Array.from(root.querySelectorAll(":scope > Week"));
-  if (weekEls.length > 0) {
-    const schedules = weekEls.map((w) => parseXmlWeek(w, storeName)).filter(Boolean) as ParsedSchedule[];
-    return schedules.length > 0 ? schedules : null;
+  // Case 1: Multiple <Week> direct children (multi-week export)
+  const directWeekEls = Array.from(root.children).filter(c => c.nodeName === "Week");
+  if (directWeekEls.length > 0) {
+    const schedules = directWeekEls.map((w) => parseXmlWeek(w, storeName)).filter(Boolean) as ParsedSchedule[];
+    if (schedules.length > 0) return schedules;
   }
 
-  // Fallback: single-week format where employees are direct children of root
+  // Case 2: Single <Week> anywhere in the tree
   const weekEl = root.querySelector("Week");
-  if (!weekEl) return null;
-  const single = parseXmlWeek(weekEl, storeName);
-  return single ? [single] : null;
+  if (weekEl) {
+    const single = parseXmlWeek(weekEl, storeName);
+    if (single) return [single];
+  }
+
+  // Case 3: No <Week> element — SoftOne format where week data is on the root and
+  // employees are direct children of root. Build a synthetic week element from root.
+  const weekNrText =
+    getAttrOrText(root, "ScheduleWeekNr") ||
+    getAttrOrText(root, "WeekNr") ||
+    getText(root, "ReportHeader WeekNr") || "";
+  const yearText =
+    getAttrOrText(root, "Year") ||
+    getText(root, "ReportHeader Year") || "";
+  const weekNumber = parseInt(weekNrText, 10) || 0;
+  const year = parseInt(yearText, 10) || new Date().getFullYear();
+
+  // Treat root as the week element — employees are direct children
+  const rootEmployees = Array.from(root.children).filter(c => c.nodeName === "Employee");
+  if (rootEmployees.length > 0 || weekNumber > 0) {
+    const dateIntervalRaw = getAttrOrText(root, "DateInterval") || getText(root, "ReportHeader DateInterval") || "";
+    const dateIntervalMatch = dateIntervalRaw.match(/(\d{4}-\d{2}-\d{2})/);
+    let weekStartDate = dateIntervalMatch ? dateIntervalMatch[1] : "";
+
+    const employees: ParsedEmployee[] = rootEmployees.map((empEl) => {
+      const employeeNr = getAttrOrText(empEl as Element, "EmployeeNr");
+      const employeeName = getAttrOrText(empEl as Element, "EmployeeName");
+      const employeeGroup = getAttrOrText(empEl as Element, "EmployeeGroup");
+
+      const days: XmlDay[] = Array.from(empEl.querySelectorAll("Day")).map((dayEl) => {
+        const dayNr = parseInt(getAttrOrText(dayEl, "DayNr") || "0", 10);
+        const scheduleDateRaw = getAttrOrText(dayEl, "ScheduleDate");
+        const scheduleDate = scheduleDateRaw.slice(0, 10);
+        const absenceRaw = getAttrOrText(dayEl, "IsAbsenceDay") || "0";
+        const isAbsenceDay = absenceRaw === "1" || absenceRaw.toLowerCase() === "true";
+        const absenceName = getAttrOrText(dayEl, "AbsencePayrollProductName");
+        if (dayNr === 1 && scheduleDate && !weekStartDate) weekStartDate = scheduleDate;
+        const dayShiftLink = getAttrOrText(dayEl, "ShiftLink") || "";
+        const dayScheduleCost = parseFloat((getAttrOrText(dayEl, "ScheduleTotalCost") || "-1").replace(",", "."));
+        const isDayLendedOut = !isAbsenceDay && dayShiftLink.length > 8 && dayScheduleCost === 0;
+        const shifts: XmlShift[] = [];
+        for (let sIdx = 1; sIdx <= 15; sIdx++) {
+          const prefix = `Shift${sIdx}`;
+          const sName = getAttrOrText(dayEl, `${prefix}Name`);
+          if (!sName) break;
+          const sStartRaw = getAttrOrText(dayEl, `${prefix}StartTime`);
+          const sStopRaw = getAttrOrText(dayEl, `${prefix}StopTime`);
+          if (!sStartRaw && !sStopRaw) break;
+          const colRaw = getAttrOrText(dayEl, `${prefix}Color`);
+          const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "";
+          const netMins = parseInt(getAttrOrText(dayEl, `${prefix}NetTimeMinutes`) || "0", 10);
+          const deviationCause = getAttrOrText(dayEl, `${prefix}TimeDeviationCauseName`) || absenceName;
+          shifts.push({ shiftName: sName, startTime: parseTime(sStartRaw), stopTime: parseTime(sStopRaw), color: xmlCol && xmlCol !== "#000000" && xmlCol !== "#FFFFFF" && xmlCol !== "#ffffff" ? xmlCol : shiftColor(sName, xmlCol), grossMinutes: netMins, netMinutes: netMins, breakMinutes: 0, breakWindows: [], deviationCause, totalCost: dayScheduleCost, isLended: isDayLendedOut, shiftLink: dayShiftLink, isBorrowed: false });
+        }
+        const anyShiftSemester = shifts.some(s => s.deviationCause.toLowerCase().includes("semester") || s.deviationCause.toLowerCase().includes("holiday"));
+        const isSemester = isAbsenceDay && (absenceName.toLowerCase().includes("semester") || absenceName.toLowerCase().includes("holiday") || anyShiftSemester);
+        return { dayNr, scheduleDate, isAbsenceDay, isSemester, shifts };
+      });
+      return { employeeNr, employeeName, employeeGroup, days };
+    });
+    if (employees.length > 0 || weekNumber > 0) {
+      return [{ weekNumber, year, weekStartDate, storeName, employees }];
+    }
+  }
+
+  return null;
 }
 
 // ─── PDF Delivery plan parser ─────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FirstTimeSetup } from "@/components/first-time-setup";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -25,6 +26,7 @@ function LoginPage() {
 
   // Forced password change state
   const [forcePwChange, setForcePwChange] = useState(false);
+  const [showFirstTimeSetup, setShowFirstTimeSetup] = useState(false);
   const [newPw, setNewPw] = useState("");
   const [newPwConfirm, setNewPwConfirm] = useState("");
   const [showNewPw, setShowNewPw] = useState(false);
@@ -73,10 +75,22 @@ function LoginPage() {
       setPwSaving(false);
       return;
     }
-    refreshUser({ ...user, must_change_password: false });
+    const updatedUser = { ...user, must_change_password: false };
+    refreshUser(updatedUser);
     setPwSaving(false);
-    navigate({ to: "/" });
+
+    // Show first-time setup for butikschef who have never logged in
+    if (updatedUser.hierarchy_level === "chef" && user.last_login === null) {
+      setForcePwChange(false);
+      setShowFirstTimeSetup(true);
+    } else {
+      navigate({ to: "/" });
+    }
   };
+
+  if (showFirstTimeSetup) {
+    return <FirstTimeSetup onComplete={() => navigate({ to: "/" })} />;
+  }
 
   if (forcePwChange) {
     return (

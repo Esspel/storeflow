@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Camera, ChartBar as BarChart3, CircleCheck as CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, CreditCard as Edit2, GripVertical, MapPin, Plus, Trash2, TriangleAlert as AlertTriangle, X, ArrowRight, Hash, ZoomIn, Image as ImageIcon } from "lucide-react";
+import { Camera, ChartBar as BarChart3, CircleCheck as CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, CreditCard as Edit2, GripVertical, MapPin, Plus, Trash2, TriangleAlert as AlertTriangle, X, ArrowRight, Hash, ZoomIn, Image as ImageIcon, GitMerge, Upload, Copy, RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -127,8 +127,24 @@ function KundrundaPage() {
   const [showManageDefects, setShowManageDefects] = useState(false);
   const [newDefectLabel, setNewDefectLabel] = useState("");
 
+  // Version management state
+  type LocalVersionRecord = {
+    id: string;
+    store_id: string;
+    version_type: "local" | "central" | "parallel";
+    central_version_id: number | null;
+    central_version_pending: boolean;
+    pending_central_version_id: number | null;
+    parallel_choice: "central" | "local" | null;
+  };
+  const [localVersion, setLocalVersion] = useState<LocalVersionRecord | null>(null);
+  const [showVersionChoiceDialog, setShowVersionChoiceDialog] = useState(false);
+  const [showParallelChoiceDialog, setShowParallelChoiceDialog] = useState(false);
+  const [pendingSessionStart, setPendingSessionStart] = useState(false);
+  const [publishingVersion, setPublishingVersion] = useState(false);
+
   const fetchData = async () => {
-    const [zonesRes, sessionsRes, defectsRes] = await Promise.all([
+    const [zonesRes, sessionsRes, defectsRes, localVersionRes] = await Promise.all([
       supabase.from("kundrunda_zones").select("*, checkpoints:kundrunda_checkpoints(*, images:kundrunda_checkpoint_images(*))").order("sort_order"),
       (() => {
         let q = supabase
@@ -141,6 +157,9 @@ function KundrundaPage() {
         return q;
       })(),
       supabase.from("kundrunda_common_defects").select("*, defect_checkpoints:kundrunda_defect_checkpoints(checkpoint_id)").order("sort_order"),
+      activeStore
+        ? supabase.from("kundrunda_local_versions").select("*").eq("store_id", activeStore.id).maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
     if (zonesRes.data) {
       const z = zonesRes.data as ZoneWithCheckpoints[];
@@ -161,6 +180,11 @@ function KundrundaPage() {
         checkpoint_ids: d.defect_checkpoints?.map(dc => dc.checkpoint_id) ?? [],
       }));
       setCommonDefects(defects);
+    }
+    if (localVersionRes.data) {
+      setLocalVersion(localVersionRes.data as LocalVersionRecord);
+    } else {
+      setLocalVersion(null);
     }
     setLoading(false);
   };
@@ -219,6 +243,66 @@ function KundrundaPage() {
         .then(({ data }) => { if (data) setStoreUsers(data as AppUser[]); });
     }
   }, [activeStore]);
+
+  // Publish current zones+checkpoints as a new central version (admin only)
+  const publishCentralVersion = async () => {
+    if (!user) return;
+    setPublishingVersion(true);
+    const snapshot = zones.map(z => ({
+      id: z.id,
+      name: z.name,
+      sort_order: z.sort_order,
+      checkpoints: z.checkpoints.map(c => ({
+        id: c.id,
+        label: c.label,
+        description: c.description,
+        sort_order: c.sort_order,
+      })),
+    }));
+    const label = new Date().toLocaleDateString("sv-SE");
+    const { data: version } = await supabase.from("kundrunda_central_versions").insert({
+      published_by: user.id,
+      label,
+      snapshot,
+    }).select("id").maybeSingle();
+
+    if (version) {
+      // Notify all stores that have a local version record
+      const { data: allLocalVersions } = await supabase.from("kundrunda_local_versions").select("id");
+      if (allLocalVersions && allLocalVersions.length > 0) {
+        await supabase.from("kundrunda_local_versions").update({
+          central_version_pending: true,
+          pending_central_version_id: version.id,
+        }).in("id", allLocalVersions.map((v: { id: string }) => v.id));
+      }
+    }
+    setPublishingVersion(false);
+    await fetchData();
+  };
+
+  // Chef responds to pending central version: accept / keep / parallel
+  const resolveVersionChoice = async (choice: "central" | "local" | "parallel") => {
+    if (!localVersion || !activeStore) return;
+    const updates: Partial<LocalVersionRecord> = {
+      central_version_pending: false,
+      pending_central_version_id: null,
+      version_type: choice,
+      central_version_id: localVersion.pending_central_version_id,
+    };
+    await supabase.from("kundrunda_local_versions").update(updates).eq("id", localVersion.id);
+    setLocalVersion(prev => prev ? { ...prev, ...updates } : null);
+    setShowVersionChoiceDialog(false);
+  };
+
+  // Start a session, handling parallel version choice first
+  const handleStartSession = async () => {
+    if (localVersion?.version_type === "parallel") {
+      setShowParallelChoiceDialog(true);
+      setPendingSessionStart(true);
+      return;
+    }
+    await startSession();
+  };
 
   const startSession = async () => {
     const { data } = await supabase.from("kundrunda_sessions").insert({
@@ -1083,6 +1167,18 @@ function KundrundaPage() {
             <p className="text-xs text-muted-foreground">Hantera zoner, kontrollpunkter och referensbilder</p>
           </div>
           <div className="ml-auto flex gap-2">
+            {user?.role === "admin" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full gap-1.5"
+                onClick={publishCentralVersion}
+                disabled={publishingVersion}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {publishingVersion ? "Publicerar..." : "Publicera central version"}
+              </Button>
+            )}
             <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowManageDefects(true)}>
               Vanliga avvikelser
             </Button>
@@ -1352,6 +1448,32 @@ function KundrundaPage() {
         ) : undefined}
       />
 
+      {/* Pending central version notification */}
+      {localVersion?.central_version_pending && !user?.role !== "admin" as unknown as boolean && (
+        <div className="mb-4 rounded-2xl border border-warning/40 bg-warning/10 p-4">
+          <div className="flex items-start gap-3">
+            <RefreshCw className="mt-0.5 h-5 w-5 shrink-0 text-warning-foreground" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-warning-foreground">Ny central version tillgänglig</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Huvudkontoret har publicerat en uppdaterad kundrundamall. Välj hur du vill hantera din lokala version.
+              </p>
+            </div>
+            <Button size="sm" className="rounded-full shrink-0 bg-warning/20 text-warning-foreground hover:bg-warning/30 border-0" onClick={() => setShowVersionChoiceDialog(true)}>
+              Hantera
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Version type badge for parallel */}
+      {localVersion?.version_type === "parallel" && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <GitMerge className="h-3.5 w-3.5 shrink-0" />
+          Parallell version aktiv — du kan välja Central eller Lokal version vid varje runda.
+        </div>
+      )}
+
       {/* Start / Resume */}
       <div className="mb-8 rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
         {inProgressSession ? (
@@ -1379,7 +1501,7 @@ function KundrundaPage() {
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               )}
-              <Button size="sm" variant="outline" className="rounded-full gap-1.5 shrink-0 text-xs" onClick={startSession}>
+              <Button size="sm" variant="outline" className="rounded-full gap-1.5 shrink-0 text-xs" onClick={handleStartSession}>
                 Ny runda
               </Button>
               <Button className="rounded-full gap-1.5 shrink-0" onClick={() => resumeSession(inProgressSession)}>
@@ -1398,7 +1520,7 @@ function KundrundaPage() {
                 <p className="text-xs text-muted-foreground">{zones.length} zoner · {totalCheckpoints} kontrollpunkter</p>
               </div>
             </div>
-            <Button className="rounded-full gap-1.5 shrink-0" onClick={startSession}>
+            <Button className="rounded-full gap-1.5 shrink-0" onClick={handleStartSession}>
               <Plus className="h-4 w-4" /> Starta
             </Button>
           </div>
@@ -1467,6 +1589,110 @@ function KundrundaPage() {
       {viewerIdx !== null && (
         <PhotoViewer images={viewerImages} initialIndex={viewerIdx} onClose={() => setViewerIdx(null)} />
       )}
+
+      {/* Version choice dialog — shown when central_version_pending */}
+      <Dialog open={showVersionChoiceDialog} onOpenChange={(o) => { if (!o) setShowVersionChoiceDialog(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Ny central version tillgänglig</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Huvudkontoret har publicerat en ny kundrundamall. Välj hur din butik ska hantera uppdateringen.
+          </p>
+          <div className="space-y-2 mt-2">
+            <button
+              className="w-full flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
+              onClick={() => resolveVersionChoice("central")}
+            >
+              <Upload className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+              <div>
+                <p className="text-sm font-semibold">Uppdatera till central version</p>
+                <p className="text-xs text-muted-foreground">Ersätt din lokala mall med den nya centrala versionen.</p>
+              </div>
+            </button>
+            <button
+              className="w-full flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
+              onClick={() => resolveVersionChoice("local")}
+            >
+              <Copy className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-semibold">Behåll lokal version</p>
+                <p className="text-xs text-muted-foreground">Fortsätt använda din befintliga lokala mall utan förändringar.</p>
+              </div>
+            </button>
+            <button
+              className="w-full flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
+              onClick={() => resolveVersionChoice("parallel")}
+            >
+              <GitMerge className="mt-0.5 h-5 w-5 shrink-0 text-info" />
+              <div>
+                <p className="text-sm font-semibold">Kör båda parallellt</p>
+                <p className="text-xs text-muted-foreground">Välj vid varje runda om du vill använda central eller lokal version.</p>
+              </div>
+            </button>
+          </div>
+          <div className="flex justify-end mt-2">
+            <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setShowVersionChoiceDialog(false)}>
+              Bestäm senare
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Parallel version choice — shown when starting a session in parallel mode */}
+      <Dialog open={showParallelChoiceDialog} onOpenChange={(o) => { if (!o) { setShowParallelChoiceDialog(false); setPendingSessionStart(false); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Välj mall för denna runda</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Du kör parallell version. Vilken mall vill du använda för denna runda?
+          </p>
+          <div className="space-y-2 mt-2">
+            <button
+              className="w-full flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
+              onClick={async () => {
+                setShowParallelChoiceDialog(false);
+                setPendingSessionStart(false);
+                if (localVersion) {
+                  await supabase.from("kundrunda_local_versions").update({ parallel_choice: "central" }).eq("id", localVersion.id);
+                  setLocalVersion(prev => prev ? { ...prev, parallel_choice: "central" } : null);
+                }
+                await startSession();
+              }}
+            >
+              <Upload className="h-5 w-5 shrink-0 text-primary" />
+              <div>
+                <p className="text-sm font-semibold">Central version</p>
+                <p className="text-xs text-muted-foreground">Använd HK:s mall för denna runda.</p>
+              </div>
+            </button>
+            <button
+              className="w-full flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
+              onClick={async () => {
+                setShowParallelChoiceDialog(false);
+                setPendingSessionStart(false);
+                if (localVersion) {
+                  await supabase.from("kundrunda_local_versions").update({ parallel_choice: "local" }).eq("id", localVersion.id);
+                  setLocalVersion(prev => prev ? { ...prev, parallel_choice: "local" } : null);
+                }
+                await startSession();
+              }}
+            >
+              <Copy className="h-5 w-5 shrink-0 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-semibold">Lokal version</p>
+                <p className="text-xs text-muted-foreground">Använd butikens anpassade mall för denna runda.</p>
+              </div>
+            </button>
+          </div>
+          <div className="flex justify-end mt-2">
+            <Button variant="ghost" size="sm" className="rounded-full" onClick={() => { setShowParallelChoiceDialog(false); setPendingSessionStart(false); }}>
+              Avbryt
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
