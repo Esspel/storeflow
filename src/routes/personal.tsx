@@ -1115,10 +1115,10 @@ function AccountsPage() {
             {newUser.hierarchy_level !== "hk" && newUser.hierarchy_level !== "admin" && (
               <div className="space-y-1.5">
                 <Label>Förening {newUser.hierarchy_level === "forening" ? "*" : ""}</Label>
-                <Select value={newUser.forening_id || ""} onValueChange={(v) => setNewUser(p => ({ ...p, forening_id: v, distrikt_id: "", storeIds: [] }))}>
+                <Select value={newUser.forening_id || "__none__"} onValueChange={(v) => setNewUser(p => ({ ...p, forening_id: v === "__none__" ? "" : v, distrikt_id: "", storeIds: [] }))}>
                   <SelectTrigger><SelectValue placeholder="Välj förening..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Ingen koppling</SelectItem>
+                    <SelectItem value="__none__">Ingen koppling</SelectItem>
                     {foreningar.map(f => (
                       <SelectItem key={f.id} value={f.id}>{f.name}{f.short_code ? ` (${f.short_code})` : ""}</SelectItem>
                     ))}
@@ -1131,15 +1131,15 @@ function AccountsPage() {
               <div className="space-y-1.5">
                 <Label>Distrikt {newUser.hierarchy_level === "distrikt" ? "*" : ""}</Label>
                 <Select
-                  value={newUser.distrikt_id || ""}
+                  value={newUser.distrikt_id || "__none__"}
                   onValueChange={(v) => {
                     const d = distrikt.find(x => x.id === v);
-                    setNewUser(p => ({ ...p, distrikt_id: v, forening_id: d?.forening_id || p.forening_id, storeIds: [] }));
+                    setNewUser(p => ({ ...p, distrikt_id: v === "__none__" ? "" : v, forening_id: d?.forening_id || p.forening_id, storeIds: [] }));
                   }}
                 >
                   <SelectTrigger><SelectValue placeholder="Välj distrikt..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Inget distrikt</SelectItem>
+                    <SelectItem value="__none__">Inget distrikt</SelectItem>
                     {distrikt
                       .filter(d => !newUser.forening_id || d.forening_id === newUser.forening_id)
                       .map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
@@ -1257,10 +1257,10 @@ function AccountsPage() {
               {editUser.hierarchy_level !== "hk" && editUser.hierarchy_level !== "admin" && (
                 <div className="space-y-1.5">
                   <Label>Förening {editUser.hierarchy_level === "forening" ? "*" : ""}</Label>
-                  <Select value={editUser.forening_id ?? ""} onValueChange={(v) => setEditUser(u => u ? { ...u, forening_id: v || null, distrikt_id: null, assignedStoreIds: [] } : null)}>
+                  <Select value={editUser.forening_id ?? "__none__"} onValueChange={(v) => setEditUser(u => u ? { ...u, forening_id: v === "__none__" ? null : v, distrikt_id: null, assignedStoreIds: [] } : null)}>
                     <SelectTrigger><SelectValue placeholder="Välj förening..." /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Ingen koppling</SelectItem>
+                      <SelectItem value="__none__">Ingen koppling</SelectItem>
                       {foreningar.map(f => (
                         <SelectItem key={f.id} value={f.id}>{f.name}{f.short_code ? ` (${f.short_code})` : ""}</SelectItem>
                       ))}
@@ -1273,15 +1273,15 @@ function AccountsPage() {
                 <div className="space-y-1.5">
                   <Label>Distrikt {editUser.hierarchy_level === "distrikt" ? "*" : ""}</Label>
                   <Select
-                    value={editUser.distrikt_id ?? ""}
+                    value={editUser.distrikt_id ?? "__none__"}
                     onValueChange={(v) => {
                       const d = distrikt.find(x => x.id === v);
-                      setEditUser(u => u ? { ...u, distrikt_id: v || null, forening_id: d?.forening_id ?? u.forening_id, assignedStoreIds: [] } : null);
+                      setEditUser(u => u ? { ...u, distrikt_id: v === "__none__" ? null : v, forening_id: d?.forening_id ?? u.forening_id, assignedStoreIds: [] } : null);
                     }}
                   >
                     <SelectTrigger><SelectValue placeholder="Välj distrikt..." /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Ingen koppling</SelectItem>
+                      <SelectItem value="__none__">Ingen koppling</SelectItem>
                       {distrikt
                         .filter(d => !editUser.forening_id || d.forening_id === editUser.forening_id)
                         .map(d => (
