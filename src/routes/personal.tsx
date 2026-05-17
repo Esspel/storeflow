@@ -28,7 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase, type AppUser, type Store, type UserGroup, type UserGroupMember, logAudit, ROLE_LABELS, HIERARCHY_LABELS } from "@/lib/supabase";
+import { supabase, type AppUser, type Store, type UserGroup, type UserGroupMember, logAudit, HIERARCHY_LABELS } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { GdprExport } from "@/components/gdpr-export";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -39,11 +39,19 @@ export const Route = createFileRoute("/personal")({
   component: AccountsPage,
 });
 
-function roleBadge(role: string) {
-  const label = ROLE_LABELS[role] ?? role;
-  if (role === "admin") return <Badge className="bg-destructive/10 text-destructive">{label}</Badge>;
-  if (role === "manager") return <Badge className="bg-info/15 text-info">{label}</Badge>;
+function hierarchyBadge(level: string | null | undefined) {
+  const key = level ?? "anvandare";
+  const label = HIERARCHY_LABELS[key] ?? key;
+  if (key === "admin") return <Badge className="bg-destructive/10 text-destructive">{label}</Badge>;
+  if (key === "hk" || key === "forening" || key === "distrikt") return <Badge className="bg-info/15 text-info">{label}</Badge>;
+  if (key === "chef") return <Badge className="bg-warning/15 text-warning">{label}</Badge>;
   return <Badge variant="secondary">{label}</Badge>;
+}
+
+function hierarchyLevelToRole(level: string): "admin" | "manager" | "employee" {
+  if (level === "admin") return "admin";
+  if (level === "hk" || level === "forening" || level === "distrikt" || level === "chef") return "manager";
+  return "employee";
 }
 
 type UserWithStores = AppUser & { assignedStoreIds: string[] };
@@ -78,13 +86,14 @@ const CSV_HEADERS: Record<string, keyof Store | null> = {
   "Mobil": "mobil",
   "Direktör Försäljning": "direktor_forsaljning",
   "Försäljningschef": "forsaljningschef",
-  "Marknadsområde": "marknadsorrade",
+  "Marknadsområde": "marknadsomrade",
   "Distriktschef (DC)": "distriktschef",
   "Distrikt": "distrikt_namn",
   "K Ställe": "k_stalle",
   "Namn2": "namn2",
   "Gamla butiksnummer": "gamla_butiksnummer",
   "Säljplan": "saljplan",
+  "Säk kval & Arbetsmiljö samordnare": "sak_kval_samordnare",
   "Säk, kval & Arbetsmiljö samordnare": "sak_kval_samordnare",
   "Kommun": "kommun",
   "HR Generalist": "hr_generalist",
@@ -260,7 +269,8 @@ function AccountsPage() {
     const { data: existing } = await supabase.from("app_users").select("id").eq("username", newUser.username.toLowerCase().trim()).maybeSingle();
     if (existing) { setError("Användarnamnet är redan taget."); setSaving(false); return; }
     const { data: hash } = await supabase.rpc("hash_password", { plain_password: newUser.password });
-    const safeRole = !isAdmin && newUser.role === "admin" ? "employee" : newUser.role;
+    const derivedRole = hierarchyLevelToRole(newUser.hierarchy_level);
+    const safeRole = !isAdmin && derivedRole === "admin" ? "employee" : derivedRole;
     const safeStoreIds = isAdmin ? newUser.storeIds : newUser.storeIds.filter((sid) => manageableStoreIds?.includes(sid));
     let pinHash: string | null = null;
     if (newUser.pin.length >= 4) {
@@ -309,7 +319,7 @@ function AccountsPage() {
     }
     const updates: Record<string, unknown> = {
       display_name: editUser.display_name.trim(),
-      role: editUser.role,
+      role: hierarchyLevelToRole(editUser.hierarchy_level ?? "anvandare"),
       hierarchy_level: editUser.hierarchy_level ?? "anvandare",
       role_manually_set: true,
       employee_group: (editUser.employee_group ?? "").trim(),
@@ -737,7 +747,7 @@ function AccountsPage() {
                       <th className="px-4 py-3 text-center">
                         <button className="flex items-center justify-center text-xs font-medium text-muted-foreground hover:text-foreground mx-auto"
                           onClick={() => toggleSort("role", userSortField, userSortDir, setUserSortField, setUserSortDir)}>
-                          Roll <SortIcon field="role" current={userSortField} dir={userSortDir} />
+                          Hierarkinivå <SortIcon field="role" current={userSortField} dir={userSortDir} />
                         </button>
                       </th>
                       <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground">Aktiv</th>
@@ -775,7 +785,7 @@ function AccountsPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-center">{roleBadge(u.role)}</td>
+                        <td className="px-4 py-3 text-center">{hierarchyBadge(u.hierarchy_level)}</td>
                         <td className="px-4 py-3 text-center">
                           <Switch checked={u.is_active} onCheckedChange={() => u.id !== currentUser?.id && toggleUserActive(u.id, u.is_active)} disabled={u.id === currentUser?.id} />
                         </td>
@@ -1023,29 +1033,16 @@ function AccountsPage() {
                 onChange={(e) => setNewUser(p => ({ ...p, password: e.target.value }))} autoComplete="new-password" />
               <p className="text-xs text-muted-foreground">Användaren tvingas byta lösenord vid första inlogg.</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Roll</Label>
-                <Select value={newUser.role} onValueChange={(v) => setNewUser(p => ({ ...p, role: v as "admin" | "manager" | "employee" }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="employee">Anställd</SelectItem>
-                    <SelectItem value="manager">Chef</SelectItem>
-                    {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Hierarkinivå</Label>
-                <Select value={newUser.hierarchy_level} onValueChange={(v) => setNewUser(p => ({ ...p, hierarchy_level: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(HIERARCHY_LABELS).map(([val, label]) => (
-                      <SelectItem key={val} value={val}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-1.5">
+              <Label>Hierarkinivå</Label>
+              <Select value={newUser.hierarchy_level} onValueChange={(v) => setNewUser(p => ({ ...p, hierarchy_level: v, role: hierarchyLevelToRole(v) }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(HIERARCHY_LABELS).filter(([val]) => isAdmin || val !== "admin").map(([val, label]) => (
+                    <SelectItem key={val} value={val}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label>Anställningsgrupp</Label>
@@ -1103,29 +1100,16 @@ function AccountsPage() {
                 <Input value={editUser.display_name}
                   onChange={(e) => setEditUser(u => u ? { ...u, display_name: e.target.value } : null)} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Roll</Label>
-                  <Select value={editUser.role} onValueChange={(v) => setEditUser(u => u ? { ...u, role: v as "admin" | "manager" | "employee" } : null)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="employee">Anställd</SelectItem>
-                      <SelectItem value="manager">Chef</SelectItem>
-                      {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Hierarkinivå</Label>
-                  <Select value={editUser.hierarchy_level ?? "anvandare"} onValueChange={(v) => setEditUser(u => u ? { ...u, hierarchy_level: v as AppUser["hierarchy_level"] } : null)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(HIERARCHY_LABELS).map(([val, label]) => (
-                        <SelectItem key={val} value={val}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-1.5">
+                <Label>Hierarkinivå</Label>
+                <Select value={editUser.hierarchy_level ?? "anvandare"} onValueChange={(v) => setEditUser(u => u ? { ...u, hierarchy_level: v as AppUser["hierarchy_level"], role: hierarchyLevelToRole(v) } : null)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(HIERARCHY_LABELS).filter(([val]) => isAdmin || val !== "admin").map(([val, label]) => (
+                      <SelectItem key={val} value={val}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Anställningsgrupp</Label>

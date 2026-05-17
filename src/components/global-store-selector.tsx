@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 export function GlobalStoreSelector() {
-  const { user, userStores, globalContextStore, setGlobalContextStore, activeStore } = useAuth();
+  const { user, userStores, activeStore, setActiveStore } = useAuth();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [allStores, setAllStores] = useState<Store[]>([]);
@@ -25,21 +25,13 @@ export function GlobalStoreSelector() {
     setLoading(true);
     let query = supabase
       .from("stores")
-      .select("id, name, city, bolag, butiks_nr, distrikt_namn, forening:foreningar(name, short_code)")
+      .select("*")
       .order("name");
 
     if (hierarchyLevel === "forening" && user?.forening_id) {
-      query = supabase
-        .from("stores")
-        .select("id, name, city, bolag, butiks_nr, distrikt_namn, forening:foreningar(name, short_code)")
-        .eq("forening_id", user.forening_id)
-        .order("name");
+      query = supabase.from("stores").select("*").eq("forening_id", user.forening_id).order("name");
     } else if (hierarchyLevel === "distrikt" && user?.distrikt_id) {
-      query = supabase
-        .from("stores")
-        .select("id, name, city, bolag, butiks_nr, distrikt_namn, forening:foreningar(name, short_code)")
-        .eq("distrikt_id", user.distrikt_id)
-        .order("name");
+      query = supabase.from("stores").select("*").eq("distrikt_id", user.distrikt_id).order("name");
     }
 
     query.then(({ data }) => {
@@ -72,26 +64,16 @@ export function GlobalStoreSelector() {
       )
     : stores;
 
-  const displayStore = globalContextStore ?? activeStore;
-
   return (
     <div ref={containerRef} className="relative hidden md:flex">
       <Button
         variant="outline"
         size="sm"
         onClick={() => setOpen((v) => !v)}
-        className={cn(
-          "flex items-center gap-1.5 rounded-full border-border/80 text-xs max-w-[280px]",
-          globalContextStore && "border-blue-400/60 bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300",
-        )}
+        className="flex items-center gap-1.5 rounded-full border-border/80 text-xs max-w-[280px]"
       >
         <Building2 className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">{displayStore?.name ?? "Välj butik"}</span>
-        {globalContextStore && (
-          <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-blue-600 dark:bg-blue-900/40 dark:text-blue-300">
-            Global
-          </span>
-        )}
+        <span className="truncate">{activeStore?.name ?? "Välj butik"}</span>
         <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       </Button>
 
@@ -116,18 +98,6 @@ export function GlobalStoreSelector() {
             </div>
           </div>
 
-          {globalContextStore && (
-            <div className="border-b border-border/40 p-2">
-              <button
-                onClick={() => { setGlobalContextStore(null); setOpen(false); }}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:bg-muted/60 transition-colors"
-              >
-                <X className="h-3.5 w-3.5 shrink-0" />
-                Återgå till min butik
-              </button>
-            </div>
-          )}
-
           <div className="max-h-72 overflow-y-auto">
             {loading ? (
               <p className="px-4 py-6 text-center text-sm text-muted-foreground">Laddar...</p>
@@ -135,11 +105,11 @@ export function GlobalStoreSelector() {
               <p className="px-4 py-6 text-center text-sm text-muted-foreground">Inga butiker hittades</p>
             ) : (
               filtered.map((s) => {
-                const isSelected = (globalContextStore ?? activeStore)?.id === s.id;
+                const isSelected = activeStore?.id === s.id;
                 return (
                   <button
                     key={s.id}
-                    onClick={() => { setGlobalContextStore(s); setOpen(false); setSearch(""); }}
+                    onClick={() => { setActiveStore(s); setOpen(false); setSearch(""); }}
                     className={cn(
                       "flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/50",
                       isSelected && "bg-primary/5 text-primary",

@@ -9,16 +9,11 @@ type AuthContextType = {
   userStores: Store[];
   activeStore: Store | null;
   setActiveStore: (store: Store | null) => void;
-  // Global context store — for HQ/Forening/Distrikt users browsing another store's data
-  globalContextStore: Store | null;
-  setGlobalContextStore: (store: Store | null) => void;
-  // Effective store: globalContextStore if set, otherwise activeStore
   effectiveStore: Store | null;
   login: (username: string, password: string) => Promise<{ error?: string; mustChangePassword?: boolean }>;
   logout: () => Promise<void>;
   refreshUser: (user: AppUser) => void;
   refreshUserStores: () => Promise<void>;
-  // Lock screen / quick user switch
   lockScreenOpen: boolean;
   openLockScreen: () => void;
   closeLockScreen: () => void;
@@ -33,29 +28,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [userStores, setUserStores] = useState<Store[]>([]);
   const [activeStore, setActiveStoreState] = useState<Store | null>(null);
-  const [globalContextStore, setGlobalContextStoreState] = useState<Store | null>(() => {
-    try {
-      const raw = localStorage.getItem("sf-global-context-store");
-      return raw ? (JSON.parse(raw) as Store) : null;
-    } catch { return null; }
-  });
   const [lockScreenOpen, setLockScreenOpen] = useState(false);
 
-  const effectiveStore = globalContextStore ?? activeStore;
-
-  const setGlobalContextStore = (store: Store | null) => {
-    setGlobalContextStoreState(store);
-    try {
-      if (store) localStorage.setItem("sf-global-context-store", JSON.stringify(store));
-      else localStorage.removeItem("sf-global-context-store");
-    } catch {}
-  };
+  // effectiveStore is always activeStore — kept for API compat
+  const effectiveStore = activeStore;
 
   const loadUserStores = async (userId: string, currentUser: AppUser) => {
     const hierarchyLevel = currentUser.hierarchy_level;
     const isAboveStore = currentUser.role === "admin" || hierarchyLevel === "hk" || hierarchyLevel === "forening" || hierarchyLevel === "distrikt";
     if (isAboveStore) {
-      // HQ/Admin/Forening/Distrikt users see stores scoped to their hierarchy
       let query = supabase.from("stores").select("*, forening:foreningar(*), distrikt:distrikt(*)").order("name");
       if (hierarchyLevel === "forening" && currentUser.forening_id) {
         query = supabase.from("stores").select("*, forening:foreningar(*), distrikt:distrikt(*)").eq("forening_id", currentUser.forening_id).order("name");
@@ -98,8 +79,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         return;
       }
-      // Set token on the Supabase client BEFORE any queries so RLS functions
-      // that read x-session-token work correctly during validation
       setSessionToken(stored.token);
       const validUser = await validateSession(stored.token);
       if (validUser) {
@@ -123,8 +102,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (username: string, password: string) => {
     const result = await doLogin(username, password);
     if ("error" in result) return { error: result.error };
-    // Set token on the Supabase client immediately so all subsequent queries
-    // include x-session-token and RLS policies resolve correctly
     setSessionToken(result.token);
     setUser(result.user);
     setToken(result.token);
@@ -137,7 +114,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setActiveStoreState(stores[0]);
     }
     if (result.user.must_change_password || result.user.last_login === null) {
-      // Ensure user state reflects the forced change so root layout doesn't redirect away
       const userWithFlag = { ...result.user, must_change_password: true };
       setUser(userWithFlag);
       await storeSession(result.token, userWithFlag);
@@ -153,8 +129,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     setUserStores([]);
     setActiveStoreState(null);
-    setGlobalContextStoreState(null);
-    try { localStorage.removeItem("sf-global-context-store"); } catch {}
     await clearSession();
   };
 
@@ -167,7 +141,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const closeLockScreen = () => setLockScreenOpen(false);
 
   const quickSwitch = async (newUser: AppUser, newToken: string) => {
-    // Expire old session silently (best-effort)
     if (token) {
       supabase.from("app_sessions").delete().eq("token", token).then(() => {});
     }
@@ -175,7 +148,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(newUser);
     setToken(newToken);
     await storeSession(newToken, newUser);
-    // Load stores for new user
     const stores = await loadUserStores(newUser.id, newUser);
     if (newUser.active_store_id) {
       const active = stores.find((s) => s.id === newUser.active_store_id) ?? null;
@@ -188,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, userStores, activeStore, setActiveStore, globalContextStore, setGlobalContextStore, effectiveStore, login, logout, refreshUser, refreshUserStores, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch }}
+      value={{ user, token, loading, userStores, activeStore, setActiveStore, effectiveStore, login, logout, refreshUser, refreshUserStores, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch }}
     >
       {children}
     </AuthContext.Provider>

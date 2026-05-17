@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase, logAudit } from "@/lib/supabase";
+import { supabase, logAudit, HIERARCHY_LABELS } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { PushNotificationSetup } from "@/components/push-notification-setup";
@@ -296,8 +296,8 @@ function SettingsPage() {
               <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Ditt namn" />
             </div>
             <div className="space-y-1.5">
-              <Label>Roll</Label>
-              <Input value={user?.role ?? ""} disabled className="bg-muted/40 capitalize" />
+              <Label>Hierarkinivå</Label>
+              <Input value={HIERARCHY_LABELS[user?.hierarchy_level ?? "anvandare"] ?? (user?.hierarchy_level ?? "")} disabled className="bg-muted/40" />
             </div>
             <div className="flex items-center gap-3">
               <Button onClick={saveDisplayName} disabled={nameSaving} className="rounded-full">

@@ -24,9 +24,8 @@ import { toast } from "sonner";
 import { getSpecialWeekHoliday, stockholmToUtc, formatStockholmTime, isoWeekNumber } from "@/lib/swedish-holidays";
 
 function SchemaRoute() {
-  const { effectiveStore, activeStore, user } = useAuth();
-  const store = effectiveStore ?? activeStore;
-  const storeId = store?.id ?? user?.store_id ?? "none";
+  const { activeStore, user } = useAuth();
+  const storeId = activeStore?.id ?? user?.store_id ?? "none";
   return <SchemaPage key={storeId} />;
 }
 
@@ -547,7 +546,7 @@ function isLightColor(hex: string): boolean {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 function SchemaPage() {
-  const { user, activeStore, effectiveStore } = useAuth();
+  const { user, activeStore } = useAuth();
   // Both Admin and Chef (manager) can import schedules and delivery plans
   const isAdmin = user?.role === "admin" || user?.role === "manager";
 
@@ -2041,18 +2040,16 @@ function SchemaPage() {
                                 onChange={(e) => setCsvFileLabels((p) => ({ ...p, [f.name]: { ...lbl, year: parseInt(e.target.value) || new Date().getFullYear() } }))}
                                 className="w-18 rounded border border-border/60 bg-background px-1.5 py-0.5 text-center text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
                               />
-                              <span className="text-[11px] font-medium text-foreground ml-2 shrink-0">Typ:</span>
-                              <select value={lbl.label}
-                                onChange={(e) => setCsvFileLabels((p) => ({ ...p, [f.name]: { ...lbl, label: e.target.value } }))}
-                                className="rounded border border-border/60 bg-background px-1.5 py-0.5 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                              >
-                                <option value="Standard">Standard</option>
-                                <option value="Specialvecka">Specialvecka</option>
-                                <option value="Julvecka">Julvecka</option>
-                                <option value="Påskvecka">Påskvecka</option>
-                                <option value="Sommar">Sommar</option>
-                                <option value="Annan">Annan</option>
-                              </select>
+                              <label className="ml-2 flex items-center gap-1.5 cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={lbl.label === "Specialvecka" || holiday !== null}
+                                  disabled={holiday !== null}
+                                  onChange={(e) => setCsvFileLabels((p) => ({ ...p, [f.name]: { ...lbl, label: e.target.checked ? "Specialvecka" : "Standard" } }))}
+                                  className="rounded accent-amber-600"
+                                />
+                                <span className="text-[11px] font-medium text-foreground">Specialvecka</span>
+                              </label>
                             </div>
                             {holiday && (
                               <div className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">

@@ -163,7 +163,7 @@ function OfflineSnackbar() {
 
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { user, logout, userStores, activeStore, setActiveStore, globalContextStore, effectiveStore, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch } = useAuth();
+  const { user, logout, userStores, activeStore, setActiveStore, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch } = useAuth();
   const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -357,9 +357,9 @@ export function AppShell() {
             {isAboveStore && <GlobalStoreSelector />}
 
             {/* Mitt Coop button */}
-            {(effectiveStore ?? activeStore)?.sap_site_id && (
+            {activeStore?.sap_site_id && (
               <a
-                href={`https://mittcoop.coop.se/sortiment/articles?siteId=${(effectiveStore ?? activeStore)!.sap_site_id}`}
+                href={`https://mittcoop.coop.se/sortiment/articles?siteId=${activeStore.sap_site_id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-background px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-accent-foreground active:opacity-75"
@@ -463,11 +463,8 @@ export function AppShell() {
                       ? (HIERARCHY_LABELS[user.hierarchy_level] ?? ROLE_LABELS[user.role] ?? user.role)
                       : (user?.role ? (ROLE_LABELS[user.role] ?? user.role) : "")}
                   </p>
-                  {(effectiveStore ?? activeStore) && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      {globalContextStore && <Building2 className="h-3 w-3 shrink-0 text-blue-500" />}
-                      {(effectiveStore ?? activeStore)!.name}
-                    </p>
+                  {activeStore && (
+                    <p className="text-xs text-muted-foreground">{activeStore.name}</p>
                   )}
                 </div>
                 {/* Store switcher in dropdown — mobile only, hidden for above-store users */}
