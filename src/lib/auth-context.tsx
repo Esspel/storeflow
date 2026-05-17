@@ -33,13 +33,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [userStores, setUserStores] = useState<Store[]>([]);
   const [activeStore, setActiveStoreState] = useState<Store | null>(null);
-  const [globalContextStore, setGlobalContextStoreState] = useState<Store | null>(null);
+  const [globalContextStore, setGlobalContextStoreState] = useState<Store | null>(() => {
+    try {
+      const raw = localStorage.getItem("sf-global-context-store");
+      return raw ? (JSON.parse(raw) as Store) : null;
+    } catch { return null; }
+  });
   const [lockScreenOpen, setLockScreenOpen] = useState(false);
 
   const effectiveStore = globalContextStore ?? activeStore;
 
   const setGlobalContextStore = (store: Store | null) => {
     setGlobalContextStoreState(store);
+    try {
+      if (store) localStorage.setItem("sf-global-context-store", JSON.stringify(store));
+      else localStorage.removeItem("sf-global-context-store");
+    } catch {}
   };
 
   const loadUserStores = async (userId: string, currentUser: AppUser) => {
@@ -145,6 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserStores([]);
     setActiveStoreState(null);
     setGlobalContextStoreState(null);
+    try { localStorage.removeItem("sf-global-context-store"); } catch {}
     await clearSession();
   };
 

@@ -28,7 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase, type AppUser, type Store, type UserGroup, type UserGroupMember, logAudit, ROLE_LABELS } from "@/lib/supabase";
+import { supabase, type AppUser, type Store, type UserGroup, type UserGroupMember, logAudit, ROLE_LABELS, HIERARCHY_LABELS } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { GdprExport } from "@/components/gdpr-export";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -140,7 +140,7 @@ function AccountsPage() {
   const [userSortField, setUserSortField] = useState<"display_name" | "role" | "created_at">("display_name");
   const [userSortDir, setUserSortDir] = useState<SortDir>("asc");
   const [storeSearch, setStoreSearch] = useState("");
-  const [storeSortField, setStoreSortField] = useState<"name" | "bolag" | "distrikt_namn" | "butiks_nr">("name");
+  const [storeSortField, setStoreSortField] = useState<"name" | "bolag" | "distrikt_namn" | "butiks_nr" | "koncept">("name");
   const [storeSortDir, setStoreSortDir] = useState<SortDir>("asc");
   const [groupSearch, setGroupSearch] = useState("");
 
@@ -150,6 +150,7 @@ function AccountsPage() {
   const [deleteUser, setDeleteUser] = useState<AppUser | null>(null);
   const [newUser, setNewUser] = useState({
     username: "", password: "", display_name: "", role: "employee" as "admin" | "manager" | "employee",
+    hierarchy_level: "anvandare" as string,
     employee_group: "", storeIds: [] as string[], pin: "", barcode: "",
   });
   const [resetPw, setResetPw] = useState("");
@@ -275,6 +276,7 @@ function AccountsPage() {
       password_hash: hash,
       display_name: newUser.display_name.trim(),
       role: safeRole,
+      hierarchy_level: newUser.hierarchy_level || "anvandare",
       employee_group: newUser.employee_group.trim(),
       store_id: safeStoreIds[0] ?? null,
       must_change_password: true,
@@ -288,7 +290,7 @@ function AccountsPage() {
     await fetchUsers();
     setSaving(false);
     setShowCreateUser(false);
-    setNewUser({ username: "", password: "", display_name: "", role: "employee", employee_group: "", storeIds: [], pin: "", barcode: "" });
+    setNewUser({ username: "", password: "", display_name: "", role: "employee", hierarchy_level: "anvandare", employee_group: "", storeIds: [], pin: "", barcode: "" });
   };
 
   const updateUser = async () => {
@@ -308,6 +310,7 @@ function AccountsPage() {
     const updates: Record<string, unknown> = {
       display_name: editUser.display_name.trim(),
       role: editUser.role,
+      hierarchy_level: editUser.hierarchy_level ?? "anvandare",
       role_manually_set: true,
       employee_group: (editUser.employee_group ?? "").trim(),
       store_id: editUser.assignedStoreIds[0] ?? null,
@@ -647,6 +650,7 @@ function AccountsPage() {
       else if (storeSortField === "bolag") { av = a.bolag ?? ""; bv = b.bolag ?? ""; }
       else if (storeSortField === "distrikt_namn") { av = a.distrikt_namn ?? ""; bv = b.distrikt_namn ?? ""; }
       else if (storeSortField === "butiks_nr") { av = a.butiks_nr ?? ""; bv = b.butiks_nr ?? ""; }
+      else if (storeSortField === "koncept") { av = a.koncept ?? ""; bv = b.koncept ?? ""; }
       const cmp = av.localeCompare(bv, "sv");
       return storeSortDir === "asc" ? cmp : -cmp;
     });
@@ -928,10 +932,10 @@ function AccountsPage() {
               </div>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <span>Sortera:</span>
-                {(["name", "bolag", "distrikt_namn", "butiks_nr"] as const).map(f => (
+                {(["name", "bolag", "distrikt_namn", "butiks_nr", "koncept"] as const).map(f => (
                   <button key={f} onClick={() => toggleSort(f, storeSortField, storeSortDir, setStoreSortField, setStoreSortDir)}
                     className={`flex items-center rounded-full px-2.5 py-1 transition-colors ${storeSortField === f ? "bg-primary/10 text-primary" : "hover:bg-muted"}`}>
-                    {{name:"Namn",bolag:"Bolag",distrikt_namn:"Distrikt",butiks_nr:"Butiksnr"}[f]}
+                    {{name:"Namn",bolag:"Bolag",distrikt_namn:"Distrikt",butiks_nr:"Butiksnr",koncept:"Koncept"}[f]}
                     <SortIcon field={f} current={storeSortField} dir={storeSortDir} />
                   </button>
                 ))}
@@ -972,7 +976,6 @@ function AccountsPage() {
                       </div>
                     </div>
                     <h3 className="mt-3 text-base font-semibold">{store.name}</h3>
-                    {store.namn2 && <p className="text-xs text-muted-foreground">{store.namn2}</p>}
                     <div className="mt-3 space-y-1 text-xs text-muted-foreground">
                       {store.butiks_nr && <div className="flex items-center gap-1.5"><Hash className="h-3.5 w-3.5 shrink-0" /><span className="font-mono">#{store.butiks_nr}</span></div>}
                       {store.bolag && <div className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 shrink-0" /><span>{store.bolag}</span></div>}
@@ -1020,16 +1023,29 @@ function AccountsPage() {
                 onChange={(e) => setNewUser(p => ({ ...p, password: e.target.value }))} autoComplete="new-password" />
               <p className="text-xs text-muted-foreground">Användaren tvingas byta lösenord vid första inlogg.</p>
             </div>
-            <div className="space-y-1.5">
-              <Label>Roll</Label>
-              <Select value={newUser.role} onValueChange={(v) => setNewUser(p => ({ ...p, role: v as "admin" | "manager" | "employee" }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="employee">Anställd</SelectItem>
-                  <SelectItem value="manager">Chef</SelectItem>
-                  {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Roll</Label>
+                <Select value={newUser.role} onValueChange={(v) => setNewUser(p => ({ ...p, role: v as "admin" | "manager" | "employee" }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="employee">Anställd</SelectItem>
+                    <SelectItem value="manager">Chef</SelectItem>
+                    {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Hierarkinivå</Label>
+                <Select value={newUser.hierarchy_level} onValueChange={(v) => setNewUser(p => ({ ...p, hierarchy_level: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(HIERARCHY_LABELS).map(([val, label]) => (
+                      <SelectItem key={val} value={val}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Anställningsgrupp</Label>
@@ -1087,16 +1103,29 @@ function AccountsPage() {
                 <Input value={editUser.display_name}
                   onChange={(e) => setEditUser(u => u ? { ...u, display_name: e.target.value } : null)} />
               </div>
-              <div className="space-y-1.5">
-                <Label>Roll</Label>
-                <Select value={editUser.role} onValueChange={(v) => setEditUser(u => u ? { ...u, role: v as "admin" | "manager" | "employee" } : null)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="employee">Anställd</SelectItem>
-                    <SelectItem value="manager">Chef</SelectItem>
-                    {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Roll</Label>
+                  <Select value={editUser.role} onValueChange={(v) => setEditUser(u => u ? { ...u, role: v as "admin" | "manager" | "employee" } : null)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="employee">Anställd</SelectItem>
+                      <SelectItem value="manager">Chef</SelectItem>
+                      {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Hierarkinivå</Label>
+                  <Select value={editUser.hierarchy_level ?? "anvandare"} onValueChange={(v) => setEditUser(u => u ? { ...u, hierarchy_level: v as AppUser["hierarchy_level"] } : null)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(HIERARCHY_LABELS).map(([val, label]) => (
+                        <SelectItem key={val} value={val}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label>Anställningsgrupp</Label>
@@ -1212,17 +1241,10 @@ function AccountsPage() {
           <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
             <DialogHeader><DialogTitle>Redigera butik</DialogTitle></DialogHeader>
             <div className="space-y-4 py-2">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Butiksnamn *</Label>
-                  <Input value={editStore.name}
-                    onChange={(e) => setEditStore(s => s ? { ...s, name: e.target.value } : null)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Namn2</Label>
-                  <Input value={editStore.namn2 ?? ""}
-                    onChange={(e) => setEditStore(s => s ? { ...s, namn2: e.target.value } : null)} />
-                </div>
+              <div className="space-y-1.5">
+                <Label>Butiksnamn *</Label>
+                <Input value={editStore.name}
+                  onChange={(e) => setEditStore(s => s ? { ...s, name: e.target.value } : null)} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -1260,7 +1282,7 @@ function AccountsPage() {
                     onChange={(e) => setEditStore(s => s ? { ...s, postnr: e.target.value } : null)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Postadress</Label>
+                  <Label>Stad</Label>
                   <Input value={editStore.postadress ?? ""}
                     onChange={(e) => setEditStore(s => s ? { ...s, postadress: e.target.value } : null)} />
                 </div>
@@ -1272,7 +1294,7 @@ function AccountsPage() {
                     onChange={(e) => setEditStore(s => s ? { ...s, butikschef: e.target.value } : null)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>E-post SM-chef</Label>
+                  <Label>E-post chef</Label>
                   <Input type="email" value={editStore.email_sm_chef ?? ""}
                     onChange={(e) => setEditStore(s => s ? { ...s, email_sm_chef: e.target.value } : null)} />
                 </div>

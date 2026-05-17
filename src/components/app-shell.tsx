@@ -247,7 +247,6 @@ export function AppShell() {
     { to: "/moten", label: "Möten", mobileHidden: false, Icon: MessageSquare },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }] : []),
     { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
-    ...(isAdmin ? [{ to: "/hk-dashboard", label: "HK-Dashboard", mobileHidden: true, Icon: BarChart3 }] : []),
   ];
 
   useEffect(() => {

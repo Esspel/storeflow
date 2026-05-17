@@ -582,6 +582,9 @@ function SchemaPage() {
   const [pdfPreviews, setPdfPreviews] = useState<Record<string, ParsedDelivery[]>>({});
   const [csvWeekNumber, setCsvWeekNumber] = useState<number>(() => getISOWeek(new Date()));
   const [csvYear, setCsvYear] = useState<number>(() => new Date().getFullYear());
+  // Per-file CSV labels: { filename: { weekNumber, year, label } }
+  type CsvFileLabel = { weekNumber: number; year: number; label: string };
+  const [csvFileLabels, setCsvFileLabels] = useState<Record<string, CsvFileLabel>>({});
   const [scheduleTasks, setScheduleTasks] = useState<Task[]>([]);
   const [scheduleTaskAssignees, setScheduleTaskAssignees] = useState<{ task_id: string; user_id: string | null }[]>([]);
   const [weekMeetings, setWeekMeetings] = useState<Meeting[]>([]);
@@ -597,6 +600,16 @@ function SchemaPage() {
   async function addImportFiles(newFiles: File[]) {
     const merged = [...importFiles, ...newFiles].filter((f, i, arr) => arr.findIndex((x) => x.name === f.name) === i);
     setImportFiles(merged);
+    // Initialize per-file labels for new CSVs
+    setCsvFileLabels((prev) => {
+      const next = { ...prev };
+      for (const f of newFiles) {
+        if (f.name.toLowerCase().endsWith(".csv") && !next[f.name]) {
+          next[f.name] = { weekNumber: csvWeekNumber, year: csvYear, label: "Standard" };
+        }
+      }
+      return next;
+    });
     // Parse CSVs immediately for preview
     for (const f of newFiles) {
       if (!f.name.toLowerCase().endsWith(".csv") || pdfPreviews[f.name] !== undefined) continue;
@@ -613,6 +626,7 @@ function SchemaPage() {
   function removeImportFile(name: string) {
     setImportFiles((p) => p.filter((f) => f.name !== name));
     setPdfPreviews((p) => { const n = { ...p }; delete n[name]; return n; });
+    setCsvFileLabels((p) => { const n = { ...p }; delete n[name]; return n; });
   }
 
   useEffect(() => {
@@ -823,6 +837,7 @@ function SchemaPage() {
           setImportDialogOpen(false);
           setImportFiles([]);
           setPdfPreviews({});
+          setCsvFileLabels({});
           setMappingOpen(true);
           return; // XML opens mapping dialog; only handle first XML
         } else if (ext === "csv") {
@@ -837,8 +852,10 @@ function SchemaPage() {
               toast.error(`Inga leveranser hittades i ${file.name}`);
               continue;
             }
-            const weekNumber = csvWeekNumber;
-            const year = csvYear;
+            const fileLabel = csvFileLabels[file.name];
+            const weekNumber = fileLabel?.weekNumber ?? csvWeekNumber;
+            const year = fileLabel?.year ?? csvYear;
+            const userLabel = fileLabel?.label ?? "Standard";
             const weekStart = getWeekStartDate(weekNumber, year);
             // Detect Swedish special weeks (holidays)
             const holidayName = getSpecialWeekHoliday(year, weekNumber);
@@ -848,8 +865,9 @@ function SchemaPage() {
             }
             const { data: plan, error: planErr } = await supabase.from("delivery_plans").insert({
               store_id: storeId, week_number: weekNumber, year, imported_by: user.id, filename: file.name,
-              is_special_week: isSpecialWeek, holiday_name: holidayName,
-              is_default_template: !isSpecialWeek,
+              is_special_week: isSpecialWeek || userLabel !== "Standard", holiday_name: holidayName,
+              is_default_template: userLabel === "Standard" && !isSpecialWeek,
+              notes: userLabel !== "Standard" ? userLabel : (holidayName ?? null),
             }).select().single();
             if (planErr || !plan) { toast.error(`Fel vid sparande av leveransplan: ${planErr?.message}`); continue; }
             const planId = (plan as DeliveryPlan).id;
@@ -871,6 +889,7 @@ function SchemaPage() {
       setImportDialogOpen(false);
       setImportFiles([]);
       setPdfPreviews({});
+      setCsvFileLabels({});
       await loadDeliveryPlans();
     } finally {
       setImportProcessing(false);
@@ -1081,6 +1100,23 @@ function SchemaPage() {
         });
         if (rows.length > 0) await supabase.from("schedule_shifts").insert(rows);
       }
+
+      // Auto-create/update "Alla medarbetare" and "Ledning" user groups
+      const allUserIds = finalMappings.map((m) => m.app_user_id).filter(Boolean) as string[];
+      const managersInSchedule = allUsers.filter((u) => allUserIds.includes(u.id) && (u.role === "manager" || u.hierarchy_level === "chef")).map((u) => u.id);
+
+      async function upsertGroup(name: string, memberIds: string[]) {
+        let { data: grp } = await supabase.from("user_groups").select("id").eq("store_id", storeId!).eq("name", name).maybeSingle();
+        if (!grp) {
+          const { data: created } = await supabase.from("user_groups").insert({ name, store_id: storeId! }).select("id").maybeSingle();
+          grp = created;
+        }
+        if (!grp?.id || memberIds.length === 0) return;
+        // Upsert members (ignore conflicts)
+        await supabase.from("user_group_members").upsert(memberIds.map((uid) => ({ group_id: grp!.id, user_id: uid })), { onConflict: "group_id,user_id" });
+      }
+      await upsertGroup("Alla medarbetare", allUserIds);
+      if (managersInSchedule.length > 0) await upsertGroup("Ledning", managersInSchedule);
 
       const createdCount = newlyCreated.length;
       const matchedCount = finalMappings.length - createdCount;
@@ -1914,46 +1950,25 @@ function SchemaPage() {
               </div>
             </div>
 
-            {/* Week picker for CSV with special week detection */}
-            {(() => {
-              const holidayForWeek = getSpecialWeekHoliday(csvYear, csvWeekNumber);
-              return (
-                <div className={["flex flex-col gap-2 rounded-xl border px-4 py-3", holidayForWeek ? "border-amber-400/60 bg-amber-50/60 dark:bg-amber-950/20" : "border-border/60 bg-muted/20"].join(" ")}>
-                  <div className="flex items-center gap-3">
-                    <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="text-xs font-medium text-foreground shrink-0">Leveransplan gäller vecka</span>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={1}
-                        max={53}
-                        value={csvWeekNumber}
-                        onChange={(e) => setCsvWeekNumber(Math.max(1, Math.min(53, parseInt(e.target.value) || 1)))}
-                        className="w-16 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      />
-                      <span className="text-xs text-muted-foreground">/</span>
-                      <input
-                        type="number"
-                        min={2020}
-                        max={2099}
-                        value={csvYear}
-                        onChange={(e) => setCsvYear(parseInt(e.target.value) || new Date().getFullYear())}
-                        className="w-20 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      />
-                    </div>
-                    <span className="text-[11px] text-muted-foreground ml-auto">
-                      {getWeekStartDate(csvWeekNumber, csvYear)} →
-                    </span>
-                  </div>
-                  {holidayForWeek && (
-                    <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
-                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                      <span>Specialvecka: <strong>{holidayForWeek}</strong> — denna leveransplan sparas som en helgdagsspecifik variant.</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+            {/* Default week picker — used as starting values for newly added CSV files */}
+            <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+              <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="text-xs font-medium text-foreground shrink-0">Standardvecka för ny CSV</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min={1} max={53} value={csvWeekNumber}
+                  onChange={(e) => setCsvWeekNumber(Math.max(1, Math.min(53, parseInt(e.target.value) || 1)))}
+                  className="w-16 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+                <span className="text-xs text-muted-foreground">/</span>
+                <input
+                  type="number" min={2020} max={2099} value={csvYear}
+                  onChange={(e) => setCsvYear(parseInt(e.target.value) || new Date().getFullYear())}
+                  className="w-20 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+              <span className="text-[11px] text-muted-foreground ml-auto">Ange vecka/år per fil nedan</span>
+            </div>
 
             {/* Drop zone */}
             <div
@@ -2007,6 +2022,47 @@ function SchemaPage() {
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
+
+                      {/* Per-file week + label controls (CSV only) */}
+                      {isCsv && (() => {
+                        const lbl = csvFileLabels[f.name] ?? { weekNumber: csvWeekNumber, year: csvYear, label: "Standard" };
+                        const holiday = getSpecialWeekHoliday(lbl.year, lbl.weekNumber);
+                        return (
+                          <div className={["border-t border-border/40 px-3 py-2.5 space-y-2", holiday ? "bg-amber-50/40 dark:bg-amber-950/10" : "bg-muted/20"].join(" ")}>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              <span className="text-[11px] font-medium text-foreground shrink-0">Vecka:</span>
+                              <input type="number" min={1} max={53} value={lbl.weekNumber}
+                                onChange={(e) => setCsvFileLabels((p) => ({ ...p, [f.name]: { ...lbl, weekNumber: Math.max(1, Math.min(53, parseInt(e.target.value) || 1)) } }))}
+                                className="w-14 rounded border border-border/60 bg-background px-1.5 py-0.5 text-center text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                              />
+                              <span className="text-[11px] text-muted-foreground">/</span>
+                              <input type="number" min={2020} max={2099} value={lbl.year}
+                                onChange={(e) => setCsvFileLabels((p) => ({ ...p, [f.name]: { ...lbl, year: parseInt(e.target.value) || new Date().getFullYear() } }))}
+                                className="w-18 rounded border border-border/60 bg-background px-1.5 py-0.5 text-center text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                              />
+                              <span className="text-[11px] font-medium text-foreground ml-2 shrink-0">Typ:</span>
+                              <select value={lbl.label}
+                                onChange={(e) => setCsvFileLabels((p) => ({ ...p, [f.name]: { ...lbl, label: e.target.value } }))}
+                                className="rounded border border-border/60 bg-background px-1.5 py-0.5 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                              >
+                                <option value="Standard">Standard</option>
+                                <option value="Specialvecka">Specialvecka</option>
+                                <option value="Julvecka">Julvecka</option>
+                                <option value="Påskvecka">Påskvecka</option>
+                                <option value="Sommar">Sommar</option>
+                                <option value="Annan">Annan</option>
+                              </select>
+                            </div>
+                            {holiday && (
+                              <div className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                                <AlertCircle className="h-3 w-3 shrink-0" />
+                                <span>Helgdag: <strong>{holiday}</strong></span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* CSV delivery preview table */}
                       {isCsv && preview && preview.length > 0 && (

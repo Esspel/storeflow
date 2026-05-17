@@ -16,6 +16,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { supabase, type ChecklistTemplate, type ChecklistTemplateItem, type ChecklistTemplateQuestion, type Store, logAudit } from "@/lib/supabase";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -60,6 +61,7 @@ function MallarPage() {
     due_date_offset: "" as string,
     storeIds: [] as string[],
     isGlobal: false,
+    isLocked: false,
     items: [{ id: "", label: "", requires_photo: false }] as { id: string; label: string; requires_photo: boolean }[],
     questions: [] as { id: string; label: string; question_type: "text" | "yes_no"; is_required: boolean }[],
   });
@@ -74,6 +76,7 @@ function MallarPage() {
     due_date_offset: "" as string,
     storeIds: [] as string[],
     isGlobal: false,
+    isLocked: false,
     items: [{ label: "", requires_photo: false }] as { label: string; requires_photo: boolean }[],
     questions: [] as { label: string; question_type: "text" | "yes_no"; is_required: boolean }[],
   });
@@ -142,6 +145,7 @@ function MallarPage() {
       due_date_offset: form.due_date_offset !== "" ? parseInt(form.due_date_offset) : null,
       created_by: user?.id ?? null,
       is_global: form.isGlobal,
+      locked_by_admin: form.isLocked,
     }).select("id").maybeSingle();
 
     if (!tmpl?.id) { setSaving(false); return; }
@@ -181,7 +185,7 @@ function MallarPage() {
     await load();
     setSaving(false);
     setShowCreate(false);
-    setForm({ title: "", description: "", category: "", priority: "Medel", recurrence_rule: "", recurrence_days: [], due_date_offset: "", storeIds: [], isGlobal: false, items: [{ label: "", requires_photo: false }], questions: [] as { label: string; question_type: "text" | "yes_no"; is_required: boolean }[] });
+    setForm({ title: "", description: "", category: "", priority: "Medel", recurrence_rule: "", recurrence_days: [], due_date_offset: "", storeIds: [], isGlobal: false, isLocked: false, items: [{ label: "", requires_photo: false }], questions: [] as { label: string; question_type: "text" | "yes_no"; is_required: boolean }[] });
   }
 
   async function deleteTemplate() {
@@ -204,6 +208,7 @@ function MallarPage() {
       due_date_offset: t.due_date_offset != null ? String(t.due_date_offset) : "",
       storeIds: t.storeIds,
       isGlobal: t.is_global ?? false,
+      isLocked: t.locked_by_admin ?? false,
       items: (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ id: it.id, label: it.label, requires_photo: it.requires_photo })),
       questions: (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q) => ({ id: q.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required })),
     });
@@ -229,6 +234,7 @@ function MallarPage() {
       recurrence_days: editForm.recurrence_rule === "weekly" && editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
       due_date_offset: editForm.due_date_offset !== "" ? parseInt(editForm.due_date_offset) : null,
       is_global: editForm.isGlobal,
+      locked_by_admin: editForm.isLocked,
     }).eq("id", editTarget.id);
 
     // Replace items: delete all existing, insert new
@@ -776,6 +782,32 @@ function MallarPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Global + Låst — admin only */}
+                {user?.role === "admin" && (
+                  <>
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <div>
+                        <span className="text-xs font-medium text-muted-foreground">Global</span>
+                        <p className="text-[10px] text-muted-foreground/60">Visas i alla butiker</p>
+                      </div>
+                      <Switch
+                        checked={form.isGlobal}
+                        onCheckedChange={(v) => setForm(p => ({ ...p, isGlobal: v, storeIds: v ? [] : p.storeIds }))}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <div>
+                        <span className="text-xs font-medium text-muted-foreground">Låst</span>
+                        <p className="text-[10px] text-muted-foreground/60">Chefer kan inte redigera</p>
+                      </div>
+                      <Switch
+                        checked={form.isLocked}
+                        onCheckedChange={(v) => setForm(p => ({ ...p, isLocked: v }))}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -957,6 +989,24 @@ function MallarPage() {
                       ))}
                     </div>
                   </div>
+                )}
+                {user?.role === "admin" && (
+                  <>
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <div>
+                        <span className="text-xs font-medium text-muted-foreground">Global</span>
+                        <p className="text-[10px] text-muted-foreground/60">Visas i alla butiker</p>
+                      </div>
+                      <Switch checked={editForm.isGlobal} onCheckedChange={(v) => setEditForm(p => ({ ...p, isGlobal: v, storeIds: v ? [] : p.storeIds }))} />
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <div>
+                        <span className="text-xs font-medium text-muted-foreground">Låst</span>
+                        <p className="text-[10px] text-muted-foreground/60">Chefer kan inte redigera</p>
+                      </div>
+                      <Switch checked={editForm.isLocked} onCheckedChange={(v) => setEditForm(p => ({ ...p, isLocked: v }))} />
+                    </div>
+                  </>
                 )}
               </div>
             </div>

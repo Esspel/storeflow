@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Bell, ListChecks, TriangleAlert, FileText, CircleCheck as CheckCircle2, Circle as XCircle, Clock, Database, RefreshCw, Trash2, ChevronDown, ChevronUp, Image as ImageIcon, Wifi, WifiOff, Shield, Users, CalendarDays, Truck, HardDrive, Bug, FlaskConical, TriangleAlert as AlertTriangle } from "lucide-react";
+import { Bell, ListChecks, TriangleAlert, FileText, CircleCheck as CheckCircle2, Circle as XCircle, Clock, Database, RefreshCw, Trash2, ChevronDown, ChevronUp, Image as ImageIcon, Wifi, WifiOff, Shield, Users, CalendarDays, Bug, FlaskConical, TriangleAlert as AlertTriangle, FileSearch, Upload } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -644,6 +644,130 @@ function TestPanel() {
     setRunning(false);
   }
 
+  // ---- File format inspector ----
+  type FileInspection = {
+    name: string;
+    type: "csv" | "xml";
+    encoding: string;
+    sizeKb: number;
+    columns?: string[];
+    rowCount?: number;
+    sampleRows?: Record<string, string>[];
+    rootTags?: string[];
+    recordTag?: string;
+    sampleFields?: { tag: string; sample: string }[];
+    recordCount?: number;
+    error?: string;
+  };
+
+  const [fileInspections, setFileInspections] = useState<FileInspection[]>([]);
+  const fileInspectorRef = useRef<HTMLInputElement>(null);
+
+  async function inspectFile(file: File): Promise<FileInspection> {
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const isXml = ext === "xml";
+    const isCsv = ext === "csv";
+    const sizeKb = Math.round(file.size / 1024 * 10) / 10;
+
+    // Detect encoding
+    const buf = await file.arrayBuffer();
+    const utf8Text = new TextDecoder("utf-8", { fatal: false }).decode(buf);
+    const hasReplacement = utf8Text.includes("\uFFFD");
+    const encoding = hasReplacement ? "Windows-1252 (ISO-8859-1)" : "UTF-8";
+    const text = hasReplacement
+      ? (() => { try { return new TextDecoder("windows-1252").decode(buf); } catch { return utf8Text; } })()
+      : utf8Text;
+
+    if (isXml) {
+      try {
+        const doc = new DOMParser().parseFromString(text, "text/xml");
+        if (doc.querySelector("parsererror")) {
+          return { name: file.name, type: "xml", encoding, sizeKb, error: "Ogiltig XML — parsererror." };
+        }
+        const root = doc.documentElement.tagName;
+        // Find repeating tags by counting tag occurrences at second level
+        const children = Array.from(doc.documentElement.children);
+        const tagCounts: Record<string, number> = {};
+        children.forEach(c => { tagCounts[c.tagName] = (tagCounts[c.tagName] ?? 0) + 1; });
+        // Also check grandchildren
+        const grandChildCounts: Record<string, number> = {};
+        children.forEach(c => Array.from(c.children).forEach(gc => { grandChildCounts[gc.tagName] = (grandChildCounts[gc.tagName] ?? 0) + 1; }));
+
+        // Find the record tag (most repeated)
+        let recordTag = "";
+        let recordCount = 0;
+        let sampleEl: Element | null = null;
+
+        const allTags = { ...tagCounts, ...grandChildCounts };
+        for (const [tag, count] of Object.entries(allTags)) {
+          if (count > recordCount) { recordCount = count; recordTag = tag; }
+        }
+
+        if (recordTag) {
+          sampleEl = doc.querySelector(recordTag);
+        }
+
+        const sampleFields = sampleEl
+          ? Array.from(sampleEl.children).slice(0, 15).map(c => ({ tag: c.tagName, sample: c.textContent?.trim().slice(0, 60) ?? "" }))
+          : [];
+
+        const rootTags = [root, ...Object.keys(tagCounts).slice(0, 5)];
+        return { name: file.name, type: "xml", encoding, sizeKb, rootTags, recordTag, recordCount, sampleFields };
+      } catch (e) {
+        return { name: file.name, type: "xml", encoding, sizeKb, error: String(e) };
+      }
+    }
+
+    if (isCsv) {
+      try {
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        if (lines.length === 0) return { name: file.name, type: "csv", encoding, sizeKb, error: "Tom fil." };
+
+        // Detect delimiter: try ; then , then \t
+        const firstLine = lines[0];
+        const delim = firstLine.includes(";") ? ";" : firstLine.includes("\t") ? "\t" : ",";
+
+        const parseRow = (line: string) => {
+          const result: string[] = [];
+          let current = "";
+          let inQuotes = false;
+          for (let i = 0; i < line.length; i++) {
+            const c = line[i];
+            if (c === '"') { inQuotes = !inQuotes; continue; }
+            if (c === delim && !inQuotes) { result.push(current.trim()); current = ""; continue; }
+            current += c;
+          }
+          result.push(current.trim());
+          return result;
+        };
+
+        const columns = parseRow(lines[0]);
+        const rowCount = lines.length - 1;
+        const sampleRows = lines.slice(1, 4).map(l => {
+          const vals = parseRow(l);
+          const row: Record<string, string> = {};
+          columns.forEach((col, i) => { row[col] = vals[i] ?? ""; });
+          return row;
+        });
+
+        return { name: file.name, type: "csv", encoding, sizeKb, columns, rowCount, sampleRows };
+      } catch (e) {
+        return { name: file.name, type: "csv", encoding, sizeKb, error: String(e) };
+      }
+    }
+
+    return { name: file.name, type: "csv", encoding, sizeKb, error: "Okänt filformat. Endast CSV och XML stöds." };
+  }
+
+  async function handleInspectorFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setFileInspections([]);
+    const results = await Promise.all(files.map(inspectFile));
+    setFileInspections(results);
+    if (fileInspectorRef.current) fileInspectorRef.current.value = "";
+  }
+
   // ---- Debug / cleanup ----
   async function deleteTestData() {
     setRunning(true);
@@ -878,6 +1002,122 @@ function TestPanel() {
             <ActionBtn label="Rensa utgångna sessioner" onClick={purgeExpiredSessions} disabled={running} danger />
             <ActionBtn label="Rensa audit-logg äldre än 30 dagar" onClick={purgeOldAuditLog} disabled={running} danger />
           </div>
+        </Section>
+
+        {/* File Format Inspector */}
+        <Section icon={FileSearch} title="Filformatsinspektör" span2>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Ladda upp CSV- eller XML-filer för att se struktur, kolumner, taggar och exempelvärden. Hjälper till att konfigurera importers korrekt.
+          </p>
+          <div
+            className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border/60 bg-muted/30 px-6 py-8 transition hover:border-primary/40 hover:bg-muted/50"
+            onClick={() => fileInspectorRef.current?.click()}
+          >
+            <Upload className="mb-2 h-7 w-7 text-muted-foreground/60" />
+            <p className="text-sm font-medium">Välj en eller flera CSV/XML-filer</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Klicka för att bläddra — flera filer kan väljas</p>
+            <input ref={fileInspectorRef} type="file" accept=".csv,.xml,text/csv,text/xml" multiple className="hidden" onChange={handleInspectorFiles} />
+          </div>
+
+          {fileInspections.length > 0 && (
+            <div className="mt-4 space-y-4">
+              {fileInspections.map((ins, i) => (
+                <div key={i} className="rounded-xl border border-border/60 overflow-hidden">
+                  <div className="flex items-center justify-between gap-2 bg-muted/40 px-4 py-2.5 border-b border-border/60">
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
+                        ins.type === "csv" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"
+                      )}>{ins.type}</span>
+                      <span className="text-sm font-medium">{ins.name}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                      <span>{ins.sizeKb} KB</span>
+                      <span className={cn("rounded-full px-2 py-0.5", ins.encoding.includes("Windows") ? "bg-warning/15 text-warning-foreground" : "bg-success/10 text-success")}>{ins.encoding}</span>
+                    </div>
+                  </div>
+
+                  {ins.error ? (
+                    <div className="px-4 py-3 text-sm text-destructive">{ins.error}</div>
+                  ) : ins.type === "csv" ? (
+                    <div className="p-4 space-y-3">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-1.5">{ins.columns?.length} kolumner ({ins.rowCount} rader)</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {ins.columns?.map((col, ci) => (
+                            <span key={ci} className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">{col || `(tom ${ci + 1})`}</span>
+                          ))}
+                        </div>
+                      </div>
+                      {(ins.sampleRows ?? []).length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-1.5">Exempelrader</p>
+                          <div className="overflow-x-auto rounded-lg border border-border/50">
+                            <table className="w-full text-[11px]">
+                              <thead>
+                                <tr className="border-b border-border/50 bg-muted/40">
+                                  {ins.columns?.map((col, ci) => (
+                                    <th key={ci} className="px-2.5 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap">{col || `(${ci + 1})`}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-border/40">
+                                {ins.sampleRows?.map((row, ri) => (
+                                  <tr key={ri} className="hover:bg-muted/20">
+                                    {ins.columns?.map((col, ci) => (
+                                      <td key={ci} className="px-2.5 py-1.5 font-mono text-muted-foreground max-w-[200px] truncate">{row[col] || "—"}</td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-4 space-y-3">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-1.5">Struktur</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {ins.rootTags?.map((tag, ti) => (
+                            <span key={ti} className="rounded-full bg-orange-100 text-orange-700 px-2.5 py-0.5 text-[11px] font-medium">{`<${tag}>`}</span>
+                          ))}
+                        </div>
+                      </div>
+                      {ins.recordTag && (
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-1.5">
+                            Postelement: <span className="font-mono text-orange-700">&lt;{ins.recordTag}&gt;</span> ({ins.recordCount} poster)
+                          </p>
+                          {(ins.sampleFields ?? []).length > 0 && (
+                            <div className="overflow-hidden rounded-lg border border-border/50">
+                              <table className="w-full text-[11px]">
+                                <thead>
+                                  <tr className="border-b border-border/50 bg-muted/40">
+                                    <th className="px-2.5 py-1.5 text-left font-medium text-muted-foreground">Tagg</th>
+                                    <th className="px-2.5 py-1.5 text-left font-medium text-muted-foreground">Exempelvärde</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/40">
+                                  {ins.sampleFields?.map((f, fi) => (
+                                    <tr key={fi} className="hover:bg-muted/20">
+                                      <td className="px-2.5 py-1.5 font-mono text-orange-700">&lt;{f.tag}&gt;</td>
+                                      <td className="px-2.5 py-1.5 text-muted-foreground">{f.sample || "—"}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </Section>
 
         {/* Debug */}
