@@ -329,7 +329,7 @@ function parseXmlDay(
   for (let sIdx = 1; sIdx <= 15; sIdx++) {
     const prefix = `Shift${sIdx}`;
     const sName = getAttrOrText(dayEl, `${prefix}Name`);
-    if (!sName) break;
+    if (!sName) continue;
     const sStartRaw = getAttrOrText(dayEl, `${prefix}StartTime`);
     const sStopRaw = getAttrOrText(dayEl, `${prefix}StopTime`);
     // An absence/lended shift may have a name but no times — skip it but keep scanning

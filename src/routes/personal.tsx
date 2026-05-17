@@ -48,6 +48,15 @@ function hierarchyRank(level: string | null | undefined): number {
   return HIERARCHY_ORDER[level ?? "anvandare"] ?? 0;
 }
 
+function effectiveRank(user: AppUser | null | undefined): number {
+  if (!user) return 0;
+  if (user.hierarchy_level) return hierarchyRank(user.hierarchy_level);
+  // Fallback: derive from role when hierarchy_level is not set
+  if (user.role === "admin") return 5;
+  if (user.role === "manager") return 1; // treat unset managers as chef-level
+  return 0;
+}
+
 function hierarchyBadge(level: string | null | undefined) {
   const key = level ?? "anvandare";
   const label = HIERARCHY_LABELS[key] ?? key;
@@ -285,9 +294,9 @@ function AccountsPage() {
     }
     if (newUser.password.length < MIN_PW_LENGTH) { setError(`Lösenordet måste vara minst ${MIN_PW_LENGTH} tecken.`); return; }
     // Privilege escalation guard: non-admins/hk cannot create users with equal or higher hierarchy
-    const isUnrestricted = currentUser?.hierarchy_level === "admin" || currentUser?.hierarchy_level === "hk";
+    const isUnrestricted = effectiveRank(currentUser) >= 4;
     if (!isUnrestricted) {
-      const myRank = hierarchyRank(currentUser?.hierarchy_level);
+      const myRank = effectiveRank(currentUser);
       const targetRank = hierarchyRank(newUser.hierarchy_level);
       if (targetRank >= myRank) {
         setError("Du kan inte skapa användare med samma eller högre hierarkinivå än dig själv."); return;
@@ -1092,26 +1101,24 @@ function AccountsPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(HIERARCHY_LABELS).filter(([val]) => {
-                    const isUnrestricted = currentUser?.hierarchy_level === "admin" || currentUser?.hierarchy_level === "hk";
-                    if (isUnrestricted) return true;
-                    // Only show levels strictly lower than current user
-                    return hierarchyRank(val) < hierarchyRank(currentUser?.hierarchy_level);
+                    const myRank = effectiveRank(currentUser);
+                    if (myRank >= 4) return true; // admin & hk see all levels
+                    // Others see only levels strictly below their own
+                    return hierarchyRank(val) < myRank;
                   }).map(([val, label]) => (
                     <SelectItem key={val} value={val}>{label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            {/* Förening selector — shown when hierarchy is forening */}
-            {newUser.hierarchy_level === "forening" && (
+            {/* Förening — shown for forening/distrikt/chef hierarchy, hidden for hk/admin */}
+            {newUser.hierarchy_level !== "hk" && newUser.hierarchy_level !== "admin" && (
               <div className="space-y-1.5">
-                <Label>Förening *</Label>
-                <Select value={newUser.forening_id || ""} onValueChange={(v) => setNewUser(p => ({ ...p, forening_id: v, distrikt_id: "" }))}>
+                <Label>Förening {newUser.hierarchy_level === "forening" ? "*" : ""}</Label>
+                <Select value={newUser.forening_id || ""} onValueChange={(v) => setNewUser(p => ({ ...p, forening_id: v, distrikt_id: "", storeIds: [] }))}>
                   <SelectTrigger><SelectValue placeholder="Välj förening..." /></SelectTrigger>
                   <SelectContent>
-                    <div className="px-2 pb-1">
-                      <input className="h-7 w-full rounded border border-border/60 bg-background px-2 text-xs outline-none placeholder:text-muted-foreground" placeholder="Sök förening..." onChange={(e) => { /* handled by filter below via closure */ }} id="new-forening-search" />
-                    </div>
+                    <SelectItem value="">Ingen koppling</SelectItem>
                     {foreningar.map(f => (
                       <SelectItem key={f.id} value={f.id}>{f.name}{f.short_code ? ` (${f.short_code})` : ""}</SelectItem>
                     ))}
@@ -1119,17 +1126,26 @@ function AccountsPage() {
                 </Select>
               </div>
             )}
-            {/* Distrikt selector — shown when hierarchy is distrikt */}
-            {newUser.hierarchy_level === "distrikt" && (
+            {/* Distrikt — shown for distrikt/chef hierarchy, hidden for forening/hk/admin */}
+            {newUser.hierarchy_level !== "hk" && newUser.hierarchy_level !== "admin" && newUser.hierarchy_level !== "forening" && (
               <div className="space-y-1.5">
-                <Label>Distrikt *</Label>
-                <Select value={newUser.distrikt_id || ""} onValueChange={(v) => setNewUser(p => ({ ...p, distrikt_id: v }))}>
+                <Label>Distrikt {newUser.hierarchy_level === "distrikt" ? "*" : ""}</Label>
+                <Select
+                  value={newUser.distrikt_id || ""}
+                  onValueChange={(v) => {
+                    const d = distrikt.find(x => x.id === v);
+                    setNewUser(p => ({ ...p, distrikt_id: v, forening_id: d?.forening_id || p.forening_id, storeIds: [] }));
+                  }}
+                >
                   <SelectTrigger><SelectValue placeholder="Välj distrikt..." /></SelectTrigger>
                   <SelectContent>
-                    {distrikt.map(d => (
-                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                    ))}
-                    {distrikt.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">Inga distrikt finns. Skapa distrikt i databasen.</div>}
+                    <SelectItem value="">Inget distrikt</SelectItem>
+                    {distrikt
+                      .filter(d => !newUser.forening_id || d.forening_id === newUser.forening_id)
+                      .map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                    {distrikt.filter(d => !newUser.forening_id || d.forening_id === newUser.forening_id).length === 0 && (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">Inga distrikt för vald förening.</div>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -1152,28 +1168,38 @@ function AccountsPage() {
                 />
               </div>
               <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
-                {stores
-                  .filter(s => {
+                {(() => {
+                  const filtered = stores.filter(s => {
+                    // Cascade filter: restrict by distrikt first, then förening, then search
+                    if (newUser.distrikt_id && s.distrikt_id !== newUser.distrikt_id) return false;
+                    if (!newUser.distrikt_id && newUser.forening_id && s.forening_id !== newUser.forening_id) return false;
                     const q = newStoreSearch.toLowerCase();
                     return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
-                  })
-                  .map(s => (
+                  });
+                  return filtered.length > 0 ? filtered.map(s => (
                     <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
                       <Checkbox
                         checked={newUser.storeIds.includes(s.id)}
-                        onCheckedChange={() => toggleStoreSelection(s.id, newUser.storeIds, (ids) => setNewUser(p => ({ ...p, storeIds: ids })))}
+                        onCheckedChange={() => {
+                          toggleStoreSelection(s.id, newUser.storeIds, (ids) => {
+                            // Auto-populate forening/distrikt from the first selected store
+                            const firstStore = stores.find(x => x.id === ids[0]);
+                            setNewUser(p => ({
+                              ...p,
+                              storeIds: ids,
+                              forening_id: p.forening_id || firstStore?.forening_id || "",
+                              distrikt_id: p.distrikt_id || firstStore?.distrikt_id || "",
+                            }));
+                          });
+                        }}
                       />
                       <span className="text-sm">{s.name}</span>
                       {s.butiks_nr && <span className="text-xs text-muted-foreground">#{s.butiks_nr}</span>}
+                      {s.distrikt_namn && <span className="text-xs text-muted-foreground/60">{s.distrikt_namn}</span>}
                       {newUser.storeIds[0] === s.id && <span className="ml-auto text-xs text-primary">Primär</span>}
                     </label>
-                  ))}
-                {stores.filter(s => {
-                  const q = newStoreSearch.toLowerCase();
-                  return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
-                }).length === 0 && (
-                  <p className="py-3 text-center text-xs text-muted-foreground">Inga butiker matchar sökningen</p>
-                )}
+                  )) : <p className="py-3 text-center text-xs text-muted-foreground">Inga butiker matchar</p>;
+                })()}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1227,11 +1253,11 @@ function AccountsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {/* Förening selector — shown when hierarchy is forening */}
-              {editUser.hierarchy_level === "forening" && (
+              {/* Förening — shown for forening/distrikt/chef/anvandare hierarchy, hidden for hk/admin */}
+              {editUser.hierarchy_level !== "hk" && editUser.hierarchy_level !== "admin" && (
                 <div className="space-y-1.5">
-                  <Label>Förening</Label>
-                  <Select value={editUser.forening_id ?? ""} onValueChange={(v) => setEditUser(u => u ? { ...u, forening_id: v || null, distrikt_id: null } : null)}>
+                  <Label>Förening {editUser.hierarchy_level === "forening" ? "*" : ""}</Label>
+                  <Select value={editUser.forening_id ?? ""} onValueChange={(v) => setEditUser(u => u ? { ...u, forening_id: v || null, distrikt_id: null, assignedStoreIds: [] } : null)}>
                     <SelectTrigger><SelectValue placeholder="Välj förening..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="">Ingen koppling</SelectItem>
@@ -1242,18 +1268,28 @@ function AccountsPage() {
                   </Select>
                 </div>
               )}
-              {/* Distrikt selector — shown when hierarchy is distrikt */}
-              {editUser.hierarchy_level === "distrikt" && (
+              {/* Distrikt — shown for distrikt/chef/anvandare, hidden for forening/hk/admin */}
+              {editUser.hierarchy_level !== "hk" && editUser.hierarchy_level !== "admin" && editUser.hierarchy_level !== "forening" && (
                 <div className="space-y-1.5">
-                  <Label>Distrikt</Label>
-                  <Select value={editUser.distrikt_id ?? ""} onValueChange={(v) => setEditUser(u => u ? { ...u, distrikt_id: v || null } : null)}>
+                  <Label>Distrikt {editUser.hierarchy_level === "distrikt" ? "*" : ""}</Label>
+                  <Select
+                    value={editUser.distrikt_id ?? ""}
+                    onValueChange={(v) => {
+                      const d = distrikt.find(x => x.id === v);
+                      setEditUser(u => u ? { ...u, distrikt_id: v || null, forening_id: d?.forening_id ?? u.forening_id, assignedStoreIds: [] } : null);
+                    }}
+                  >
                     <SelectTrigger><SelectValue placeholder="Välj distrikt..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="">Ingen koppling</SelectItem>
-                      {distrikt.map(d => (
-                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                      ))}
-                      {distrikt.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">Inga distrikt finns.</div>}
+                      {distrikt
+                        .filter(d => !editUser.forening_id || d.forening_id === editUser.forening_id)
+                        .map(d => (
+                          <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                        ))}
+                      {distrikt.filter(d => !editUser.forening_id || d.forening_id === editUser.forening_id).length === 0 && (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">Inga distrikt finns.</div>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1276,16 +1312,29 @@ function AccountsPage() {
                   />
                 </div>
                 <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
-                  {stores
-                    .filter(s => {
+                  {(() => {
+                    const filtered = stores.filter(s => {
+                      if (editUser.distrikt_id && s.distrikt_id !== editUser.distrikt_id) return false;
+                      if (!editUser.distrikt_id && editUser.forening_id && s.forening_id !== editUser.forening_id) return false;
                       const q = editStoreSearch.toLowerCase();
                       return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
-                    })
-                    .map(s => (
+                    });
+                    return filtered.length > 0 ? filtered.map(s => (
                       <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
                         <Checkbox
                           checked={editUser.assignedStoreIds.includes(s.id)}
-                          onCheckedChange={() => toggleStoreSelection(s.id, editUser.assignedStoreIds, (ids) => setEditUser(u => u ? { ...u, assignedStoreIds: ids } : null))}
+                          onCheckedChange={() => {
+                            const newIds = editUser.assignedStoreIds.includes(s.id)
+                              ? editUser.assignedStoreIds.filter(id => id !== s.id)
+                              : [...editUser.assignedStoreIds, s.id];
+                            const firstStore = stores.find(st => st.id === newIds[0]);
+                            setEditUser(u => u ? {
+                              ...u,
+                              assignedStoreIds: newIds,
+                              forening_id: u.forening_id || firstStore?.forening_id || null,
+                              distrikt_id: u.distrikt_id || firstStore?.distrikt_id || null,
+                            } : null);
+                          }}
                         />
                         <span className="text-sm">{s.name}</span>
                         {s.butiks_nr && <span className="text-xs text-muted-foreground">#{s.butiks_nr}</span>}
@@ -1293,13 +1342,8 @@ function AccountsPage() {
                           <span className="ml-auto text-xs text-primary">Primär</span>
                         )}
                       </label>
-                    ))}
-                  {stores.filter(s => {
-                    const q = editStoreSearch.toLowerCase();
-                    return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
-                  }).length === 0 && (
-                    <p className="py-3 text-center text-xs text-muted-foreground">Inga butiker matchar sökningen</p>
-                  )}
+                    )) : <p className="py-3 text-center text-xs text-muted-foreground">Inga butiker matchar</p>;
+                  })()}
                 </div>
               </div>
               <div className="space-y-1.5">

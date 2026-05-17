@@ -462,9 +462,11 @@ function IssuesPage() {
         description={activeStore ? `Avvikelser för ${activeStore.name}` : "Rapportera och följ upp ärenden."}
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" className="rounded-full hidden lg:flex" onClick={exportCSV}>
-              <Download className="mr-2 h-4 w-4" /> Exportera CSV
-            </Button>
+            {isManager && (
+              <Button variant="outline" className="rounded-full hidden lg:flex" onClick={exportCSV}>
+                <Download className="mr-2 h-4 w-4" /> Exportera CSV
+              </Button>
+            )}
             <Button className="rounded-full hidden lg:flex" onClick={() => setShowCreate(true)}>
               <Plus className="mr-2 h-4 w-4" /> Ny avvikelse
             </Button>

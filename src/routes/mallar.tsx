@@ -412,12 +412,16 @@ function MallarPage() {
               className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) importCSV(f); e.target.value = ""; }}
             />
-            <Button variant="outline" className="rounded-full" onClick={downloadBlankTemplate}>
-              <Download className="mr-2 h-4 w-4" /> CSV-mall
-            </Button>
-            <Button variant="outline" className="rounded-full" onClick={exportCSV}>
-              <Download className="mr-2 h-4 w-4" /> Exportera
-            </Button>
+            {isManager && (
+              <Button variant="outline" className="rounded-full" onClick={downloadBlankTemplate}>
+                <Download className="mr-2 h-4 w-4" /> CSV-mall
+              </Button>
+            )}
+            {isManager && (
+              <Button variant="outline" className="rounded-full" onClick={exportCSV}>
+                <Download className="mr-2 h-4 w-4" /> Exportera
+              </Button>
+            )}
             {isManager && (
               <Button variant="outline" className="rounded-full" disabled={importing} onClick={() => importInputRef.current?.click()}>
                 <Upload className="mr-2 h-4 w-4" /> {importing ? "Importerar..." : "Importera CSV"}

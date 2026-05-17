@@ -1230,9 +1230,11 @@ function TasksPage() {
         description={activeStore ? `Uppgifter för ${activeStore.name}` : "Standardiserade rutiner."}
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" className="rounded-full hidden lg:flex" onClick={exportCSV}>
-              <Download className="mr-2 h-4 w-4" /> CSV
-            </Button>
+            {isManager && (
+              <Button variant="outline" className="rounded-full hidden lg:flex" onClick={exportCSV}>
+                <Download className="mr-2 h-4 w-4" /> CSV
+              </Button>
+            )}
             {isManager && (
               <Button className="rounded-full hidden lg:flex" onClick={() => { setShowCreate(true); setSaveError(""); }}>
                 <Plus className="mr-2 h-4 w-4" /> Ny uppgift
