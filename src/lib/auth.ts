@@ -88,5 +88,8 @@ export async function validateSession(token: string): Promise<AppUser | null> {
     must_change_password: user.must_change_password ?? false,
     last_login: user.last_login,
     created_at: user.created_at,
+    hierarchy_level: user.hierarchy_level ?? undefined,
+    forening_id: user.forening_id ?? null,
+    distrikt_id: user.distrikt_id ?? null,
   };
 }

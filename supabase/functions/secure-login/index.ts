@@ -59,7 +59,7 @@ Deno.serve(async (req: Request) => {
     // 2. Fetch user
     const { data: user, error: userError } = await supabase
       .from("app_users")
-      .select("id, username, password_hash, is_active, failed_login_count, locked_until, display_name, role, role_manually_set, employee_group, store_id, active_store_id, must_change_password, last_login, created_at")
+      .select("id, username, password_hash, is_active, failed_login_count, locked_until, display_name, role, role_manually_set, employee_group, store_id, active_store_id, must_change_password, last_login, created_at, hierarchy_level, forening_id, distrikt_id")
       .eq("username", username)
       .eq("is_active", true)
       .maybeSingle();
@@ -152,6 +152,9 @@ Deno.serve(async (req: Request) => {
       must_change_password: user.must_change_password ?? false,
       last_login: user.last_login,
       created_at: user.created_at,
+      hierarchy_level: user.hierarchy_level ?? null,
+      forening_id: user.forening_id ?? null,
+      distrikt_id: user.distrikt_id ?? null,
     };
 
     return new Response(JSON.stringify({ user: appUser, token }), {
