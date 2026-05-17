@@ -28,6 +28,7 @@ import {
   logAudit, createNotification, notifyUsers, uploadAttachment, getPublicUrl, deleteStorageFiles, mittCoopUrl,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
+import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
 import { cn } from "@/lib/utils";
 import { getSimulatedNow } from "@/lib/time-simulation";
 
@@ -395,6 +396,7 @@ function TasksPage() {
   const detailFileInputRef = useRef<HTMLInputElement>(null);
   const stepPhotoInputRef = useRef<HTMLInputElement>(null);
   const taskImportInputRef = useRef<HTMLInputElement>(null);
+  const [showTaskImportDialog, setShowTaskImportDialog] = useState(false);
   const [pendingPhotoStepId, setPendingPhotoStepId] = useState<string | null>(null);
 
   // Detail modal
@@ -1181,7 +1183,9 @@ function TasksPage() {
     URL.revokeObjectURL(url);
   };
 
-  const importTaskCSV = async (file: File) => {
+  const importTaskCSV = async (result: ImportDialogResult) => {
+    setShowTaskImportDialog(false);
+    const file = result.file;
     const text = await file.text();
     const cleaned = text.startsWith("\ufeff") ? text.slice(1) : text;
     const lines = cleaned.split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"));
@@ -1199,6 +1203,10 @@ function TasksPage() {
       return cols;
     };
 
+    const defaultCategory = String(result.options.category ?? "Övrigt");
+    const defaultPriority = String(result.options.priority ?? "Medel");
+    const assignToStore = result.options.assignToStore !== false;
+
     const rows = lines.slice(1).map(parseRow);
     for (const cols of rows) {
       const [title, description, category, priority, recurrence, dueDays, stepsRaw, questionsRaw] = cols;
@@ -1211,10 +1219,10 @@ function TasksPage() {
       const { data: task } = await supabase.from("tasks").insert({
         title: title.trim(),
         description: (description ?? "").trim(),
-        category: (category ?? "Övrigt").trim() || "Övrigt",
-        priority: (priority ?? "Medel").trim() || "Medel",
+        category: (category ?? "").trim() || defaultCategory,
+        priority: (priority ?? "").trim() || defaultPriority,
         status: "todo",
-        store_id: activeStore?.id ?? null,
+        store_id: assignToStore ? (activeStore?.id ?? null) : null,
         created_by: user?.id ?? null,
         recurrence_rule: (recurrence ?? "").trim() || null,
         due_date: dueDate,
@@ -1333,12 +1341,50 @@ function TasksPage() {
         description={activeStore ? `Uppgifter för ${activeStore.name}` : "Standardiserade rutiner."}
         actions={
           <div className="flex gap-2">
-            <input
-              ref={taskImportInputRef}
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) importTaskCSV(f); e.target.value = ""; }}
+            {/* Task CSV import dialog */}
+            <ImportDialog
+              open={showTaskImportDialog}
+              onClose={() => setShowTaskImportDialog(false)}
+              onImport={importTaskCSV}
+              title="Importera uppgifter"
+              description="Ladda upp en CSV-fil med uppgifter, steg och frågor"
+              loading={false}
+              importLabel="Importera uppgifter"
+              options={[
+                {
+                  key: "category",
+                  type: "select",
+                  label: "Standardkategori",
+                  description: "Används för rader som saknar kategori",
+                  options: [
+                    { value: "Övrigt", label: "Övrigt" },
+                    { value: "Drift", label: "Drift" },
+                    { value: "Säkerhet", label: "Säkerhet" },
+                    { value: "Kundärenden", label: "Kundärenden" },
+                  ],
+                  defaultValue: "Övrigt",
+                },
+                {
+                  key: "priority",
+                  type: "select",
+                  label: "Standardprioritet",
+                  description: "Används för rader som saknar prioritet",
+                  options: [
+                    { value: "Medel", label: "Medel" },
+                    { value: "Låg", label: "Låg" },
+                    { value: "Hög", label: "Hög" },
+                    { value: "Kritisk", label: "Kritisk" },
+                  ],
+                  defaultValue: "Medel",
+                },
+                {
+                  key: "assignToStore",
+                  type: "checkbox",
+                  label: "Tilldela till aktiv butik",
+                  description: "Koppla alla importerade uppgifter till den butik du är inloggad på",
+                  defaultValue: true,
+                },
+              ]}
             />
             {isManager && (
               <Button variant="outline" className="rounded-full hidden lg:flex" onClick={downloadTaskTemplate}>
@@ -1351,7 +1397,7 @@ function TasksPage() {
               </Button>
             )}
             {isManager && (
-              <Button variant="outline" className="rounded-full hidden lg:flex" onClick={() => taskImportInputRef.current?.click()}>
+              <Button variant="outline" className="rounded-full hidden lg:flex" onClick={() => setShowTaskImportDialog(true)}>
                 <Upload className="mr-2 h-4 w-4" /> Importera CSV
               </Button>
             )}

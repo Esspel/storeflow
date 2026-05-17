@@ -1629,12 +1629,11 @@ function SchemaPage() {
                 <div className="flex items-center gap-1">
                   <button
                     className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
+                    disabled={currIdx <= 0}
                     onClick={() => {
                       if (currIdx > 0) {
                         const prev = allWeeks[currIdx - 1];
                         navigateToWeek(prev.weekNumber, prev.year);
-                      } else {
-                        navigateToWeek(selectedWeek.weekNumber, selectedWeek.year - 1);
                       }
                     }}
                     aria-label="Föregående vecka"
@@ -1670,12 +1669,11 @@ function SchemaPage() {
                   </Select>
                   <button
                     className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
+                    disabled={currIdx >= allWeeks.length - 1}
                     onClick={() => {
                       if (currIdx < allWeeks.length - 1) {
                         const next = allWeeks[currIdx + 1];
                         navigateToWeek(next.weekNumber, next.year);
-                      } else {
-                        navigateToWeek(1, selectedWeek.year + 1);
                       }
                     }}
                     aria-label="Nästa vecka"
@@ -1689,8 +1687,7 @@ function SchemaPage() {
               <Button size="sm" variant={showDeliveries ? "default" : "outline"} onClick={() => setShowDeliveries((v) => !v)} className="gap-1.5">
                 <Truck className="h-4 w-4" />
                 {activeWeekPlan?.is_special_week ? "Specialleveranser" : "Leveranser"}
-                {missingAnyPlan && <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
-                {missingSpecialPlan && !missingAnyPlan && <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
+                {(missingAnyPlan || missingSpecialPlan) && <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
               </Button>
             )}
             {isAdmin && imports.length > 0 && (
@@ -1742,7 +1739,7 @@ function SchemaPage() {
           )}
         </div>
       )}
-      {showDeliveries && missingSpecialPlan && !missingAnyPlan && (
+      {showDeliveries && missingSpecialPlan && (
         <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 dark:border-amber-800/40 dark:bg-amber-950/20">
           <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <p className="text-sm text-amber-800 dark:text-amber-300">

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical,
   Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil,
@@ -24,6 +24,7 @@ import {
 } from "@/lib/supabase";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
+import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
 import { cn } from "@/lib/utils";
 
 const RECURRENCE_OPTIONS = [
@@ -118,8 +119,8 @@ function MallarPage() {
   const [form, setForm] = useState<FormState>(emptyForm());
   const [editForm, setEditForm] = useState<FormState>(emptyForm());
 
-  const importInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   // View filter: "all" | "hk" | "forening" | "store"
   const [viewFilter, setViewFilter] = useState<"all" | "hk" | "forening" | "store">("all");
@@ -432,13 +433,17 @@ function MallarPage() {
     return cols;
   }
 
-  const importCSV = async (file: File) => {
+  const importCSV = async (result: ImportDialogResult) => {
     setImporting(true);
-    const text = await file.text();
+    setShowImportDialog(false);
+    const text = await result.file.text();
     const cleaned = text.startsWith("\ufeff") ? text.slice(1) : text;
-    // Skip comment lines (start with #) and blank lines
     const lines = cleaned.split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"));
     if (lines.length < 2) { setImporting(false); return; }
+
+    const importScope = isAdmin
+      ? String(result.options.scope ?? "store")
+      : isForening ? "forening" : "store";
 
     const rows = lines.slice(1).map(parseRow);
     for (const cols of rows) {
@@ -453,7 +458,9 @@ function MallarPage() {
         recurrence_rule: (recurrence ?? "").trim() || null,
         due_date_offset: dueDays?.trim() ? parseInt(dueDays.trim()) : null,
         created_by: user?.id ?? null,
-        hierarchy_scope: "store",
+        hierarchy_scope: importScope,
+        is_global: importScope === "hk",
+        forening_id: importScope === "forening" ? (user?.forening_id ?? result.options.foreningId as string ?? null) : null,
       }).select("id").maybeSingle();
 
       if (!tmpl?.id) continue;
@@ -479,7 +486,12 @@ function MallarPage() {
         if (questions.length > 0) await supabase.from("checklist_template_questions").insert(questions);
       }
 
-      logAudit(user?.id ?? null, "template.import", "checklist_templates", tmpl.id, { title: title.trim() });
+      // Assign to active store for store-scope templates
+      if (importScope === "store" && activeStore) {
+        await supabase.from("template_stores").insert({ template_id: tmpl.id, store_id: activeStore.id });
+      }
+
+      logAudit(user?.id ?? null, "template.import", "checklist_templates", tmpl.id, { title: title.trim(), scope: importScope });
     }
 
     await load();
@@ -775,12 +787,46 @@ function MallarPage() {
         description="Återanvändbara checklistor och rutiner."
         actions={
           <div className="flex flex-wrap gap-2">
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) importCSV(f); e.target.value = ""; }}
+            {/* Import dialog */}
+            <ImportDialog
+              open={showImportDialog}
+              onClose={() => setShowImportDialog(false)}
+              onImport={importCSV}
+              title="Importera mallar"
+              description="Ladda upp en CSV-fil med mallar. Rader som börjar med # ignoreras."
+              loading={importing}
+              importLabel="Importera mallar"
+              options={[
+                ...(isAdmin ? [{
+                  key: "scope",
+                  type: "select" as const,
+                  label: "Malltyp",
+                  description: "Välj om mallarna ska skapas som HK-, förenings- eller butiksmallar",
+                  options: [
+                    { value: "store", label: "Butiksmall (aktiv butik)" },
+                    { value: "hk", label: "HK-mall (global)" },
+                    { value: "forening", label: "Föreningsmall" },
+                  ],
+                  defaultValue: "store",
+                }, {
+                  key: "foreningId",
+                  type: "select" as const,
+                  label: "Förening",
+                  description: "Vilken förening ska föreningsmallar publiceras till",
+                  options: [{ value: "", label: "Välj förening..." }, ...allForeningar.map(f => ({ value: f.id, label: f.name }))],
+                  defaultValue: "",
+                  showWhen: { key: "scope", value: "forening" },
+                }] : isForening ? [{
+                  key: "scope",
+                  type: "select" as const,
+                  label: "Malltyp",
+                  options: [
+                    { value: "forening", label: "Föreningsmall" },
+                    { value: "store", label: "Butiksmall" },
+                  ],
+                  defaultValue: "forening",
+                }] : []),
+              ]}
             />
             {isManager && (
               <Button variant="outline" className="rounded-full" onClick={downloadBlankTemplate}>
@@ -793,7 +839,7 @@ function MallarPage() {
               </Button>
             )}
             {isManager && (
-              <Button variant="outline" className="rounded-full" disabled={importing} onClick={() => importInputRef.current?.click()}>
+              <Button variant="outline" className="rounded-full" disabled={importing} onClick={() => setShowImportDialog(true)}>
                 <Upload className="mr-2 h-4 w-4" /> {importing ? "Importerar..." : "Importera CSV"}
               </Button>
             )}

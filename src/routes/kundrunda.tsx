@@ -4,7 +4,7 @@ import {
   Camera, ChartBar as BarChart3, CircleCheck as CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   Circle, Clock, CreditCard as Edit2, Download, FileText, GripVertical, MapPin, Plus, Trash2,
   TriangleAlert as AlertTriangle, Upload, X, ArrowRight, Hash, ZoomIn, Image as ImageIcon,
-  GitMerge, Copy, RefreshCw
+  GitMerge, Copy, RefreshCw, Info
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -28,6 +28,7 @@ import {
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { GdprImageReminder } from "@/components/gdpr-image-reminder";
+import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
 import { cn } from "@/lib/utils";
 import { haptic } from "@/lib/haptic";
 
@@ -175,7 +176,6 @@ function KundrundaPage() {
 
   const defectPhotoRef = useRef<HTMLInputElement>(null);
   const refPhotoRef = useRef<HTMLInputElement>(null);
-  const csvImportRef = useRef<HTMLInputElement>(null);
   const [pendingRefCheckpointId, setPendingRefCheckpointId] = useState<string | null>(null);
   const [checkpointRefImages, setCheckpointRefImages] = useState<Record<string, { id: string; storage_path: string }[]>>({});
 
@@ -206,6 +206,8 @@ function KundrundaPage() {
   const [defectCheckpointSearch, setDefectCheckpointSearch] = useState("");
 
   const [importingCsv, setImportingCsv] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showDefectsMergeDialog, setShowDefectsMergeDialog] = useState(false);
 
   type LocalVersionRecord = {
     id: string;
@@ -215,6 +217,8 @@ function KundrundaPage() {
     central_version_pending: boolean;
     pending_central_version_id: number | null;
     parallel_choice: "central" | "local" | null;
+    defects_pending_hk_update: boolean;
+    pending_defects_snapshot: { id: string; label: string; sort_order: number }[] | null;
   };
   const [localVersion, setLocalVersion] = useState<LocalVersionRecord | null>(null);
   const [showVersionChoiceDialog, setShowVersionChoiceDialog] = useState(false);
@@ -334,6 +338,9 @@ function KundrundaPage() {
       id: z.id, name: z.name, sort_order: z.sort_order,
       checkpoints: z.checkpoints.map(c => ({ id: c.id, label: c.label, description: c.description, sort_order: c.sort_order })),
     }));
+    const globalDefects = commonDefects.filter(d => !d.store_id);
+    const defectsSnapshot = globalDefects.map(d => ({ id: d.id, label: d.label, sort_order: d.sort_order }));
+
     const label = new Date().toLocaleDateString("sv-SE");
     const { data: version } = await supabase.from("kundrunda_central_versions").insert({
       published_by: user.id, label, snapshot,
@@ -345,6 +352,8 @@ function KundrundaPage() {
         await supabase.from("kundrunda_local_versions").update({
           central_version_pending: true,
           pending_central_version_id: version.id,
+          defects_pending_hk_update: true,
+          pending_defects_snapshot: defectsSnapshot,
         }).in("id", allLocalVersions.map((v: { id: string }) => v.id));
       }
     }
@@ -374,6 +383,35 @@ function KundrundaPage() {
       central_version_pending: false,
     }).select("*").maybeSingle();
     if (data) setLocalVersion(data as LocalVersionRecord);
+
+    // Copy HK zones+checkpoints as the store's starting local version
+    const hkZones = zones.filter(z => !z.store_id);
+    for (const z of hkZones) {
+      const existingLocal = zones.find(lz => lz.store_id === activeStore.id && lz.name.toLowerCase() === z.name.toLowerCase());
+      if (existingLocal) continue;
+      const { data: newZone } = await supabase.from("kundrunda_zones").insert({
+        name: z.name, sort_order: z.sort_order,
+        store_id: activeStore.id, is_local_override: true,
+      }).select("id").maybeSingle();
+      if (!newZone?.id) continue;
+      const cps = z.checkpoints.map((cp, idx) => ({
+        zone_id: newZone.id, label: cp.label, description: cp.description ?? null,
+        sort_order: cp.sort_order ?? idx, store_id: activeStore.id, is_local_override: true,
+      }));
+      if (cps.length > 0) await supabase.from("kundrunda_checkpoints").insert(cps);
+    }
+
+    // Copy HK common defects as store's starting local defects
+    const hkDefects = commonDefects.filter(d => !d.store_id);
+    for (const d of hkDefects) {
+      await supabase.from("kundrunda_common_defects").insert({
+        store_id: activeStore.id,
+        label: d.label,
+        sort_order: d.sort_order,
+        hk_defect_id: d.id,
+        is_local_override: true,
+      });
+    }
   };
 
   const handleStartSession = async () => {
@@ -790,49 +828,97 @@ function KundrundaPage() {
     setCommonDefects(p => p.filter(d => d.id !== id));
   };
 
-  // CSV import: create zones/checkpoints in current edit scope
-  const handleCsvImport = async (file: File) => {
+  const mergeHKDefects = async () => {
+    if (!activeStore || !localVersion?.pending_defects_snapshot) return;
+    const snapshot = localVersion.pending_defects_snapshot as { id: string; label: string; sort_order: number }[];
+    for (const hkDef of snapshot) {
+      // Check if store already has a local copy linked to this HK defect
+      const existingLocal = commonDefects.find(d => d.store_id === activeStore.id && d.hk_defect_id === hkDef.id);
+      if (existingLocal) {
+        // Update the label if HK changed it
+        if (existingLocal.label !== hkDef.label) {
+          await supabase.from("kundrunda_common_defects").update({ label: hkDef.label }).eq("id", existingLocal.id);
+        }
+      } else {
+        // New HK defect — add as local copy
+        await supabase.from("kundrunda_common_defects").insert({
+          store_id: activeStore.id,
+          label: hkDef.label,
+          sort_order: hkDef.sort_order,
+          hk_defect_id: hkDef.id,
+          is_local_override: true,
+        });
+      }
+    }
+    // Clear the pending flag
+    await supabase.from("kundrunda_local_versions").update({
+      defects_pending_hk_update: false,
+      pending_defects_snapshot: null,
+    }).eq("id", localVersion.id);
+    setShowDefectsMergeDialog(false);
+    await fetchData();
+  };
+
+  // CSV import: create zones/checkpoints in specified scope, optionally replacing all existing
+  const handleCsvImport = async (result: ImportDialogResult) => {
     if (!isManager) return;
     setImportingCsv(true);
+    setShowImportDialog(false);
     try {
-      const text = await file.text();
-      const rows = parseTemplateCsv(text);
+      const rows = parseTemplateCsv(await result.file.text());
       if (rows.length === 0) return;
 
-      await ensureLocalVersionRecord();
+      const importScope = isAdmin ? String(result.options.scope ?? editScope) : "local";
+      const shouldReplace = !!result.options.replace;
+      const isLocalScope = importScope === "local";
+      const storeId = isLocalScope ? (activeStore?.id ?? null) : null;
 
-      // Group rows by zone name
-      const zoneMap = new Map<string, string[]>();
-      for (const row of rows) {
-        if (!zoneMap.has(row.zoneName)) zoneMap.set(row.zoneName, []);
-        zoneMap.get(row.zoneName)!.push(row.checkpointLabel);
+      if (isLocalScope) await ensureLocalVersionRecord();
+
+      const targetZones = isLocalScope
+        ? zones.filter(z => z.store_id === activeStore?.id)
+        : zones.filter(z => !z.store_id);
+
+      // Replace mode: delete all existing zones in this scope first
+      if (shouldReplace && targetZones.length > 0) {
+        for (const z of targetZones) {
+          await supabase.from("kundrunda_checkpoints").delete().eq("zone_id", z.id);
+        }
+        await supabase.from("kundrunda_zones").delete().in("id", targetZones.map(z => z.id));
       }
 
-      const storeId = editScope === "local" ? (activeStore?.id ?? null) : null;
-      let sortIdx = editableZones.length;
+      // Re-derive editable zones after potential delete
+      const currentZones = shouldReplace ? [] : targetZones;
 
-      for (const [zoneName, checkpoints] of zoneMap) {
-        // Check if zone already exists in scope
-        let zoneId: string | null = editableZones.find(z => z.name.toLowerCase().trim() === zoneName.toLowerCase().trim())?.id ?? null;
+      // Group rows by zone name
+      const zoneMap = new Map<string, ParsedCsvRow[]>();
+      for (const row of rows) {
+        if (!zoneMap.has(row.zoneName)) zoneMap.set(row.zoneName, []);
+        zoneMap.get(row.zoneName)!.push(row);
+      }
+
+      let sortIdx = currentZones.length;
+      for (const [zoneName, zoneRows] of zoneMap) {
+        let zoneId: string | null = currentZones.find(z => z.name.toLowerCase().trim() === zoneName.toLowerCase().trim())?.id ?? null;
         if (!zoneId) {
           const { data: z } = await supabase.from("kundrunda_zones").insert({
             name: zoneName, sort_order: sortIdx++,
-            store_id: storeId, is_local_override: editScope === "local",
+            store_id: storeId, is_local_override: isLocalScope,
           }).select("id").maybeSingle();
           zoneId = z?.id ?? null;
         }
         if (!zoneId) continue;
 
-        const zone = zones.find(z => z.id === zoneId);
-        let cpSortIdx = zone?.checkpoints.length ?? 0;
-        for (const row of rows.filter(r => r.zoneName === zoneName)) {
-          const exists = zone?.checkpoints.some(c => c.label.toLowerCase().trim() === row.checkpointLabel.toLowerCase().trim());
+        const existingZone = currentZones.find(z => z.id === zoneId);
+        let cpSortIdx = existingZone?.checkpoints.length ?? 0;
+        for (const row of zoneRows) {
+          const exists = !shouldReplace && existingZone?.checkpoints.some(c => c.label.toLowerCase().trim() === row.checkpointLabel.toLowerCase().trim());
           if (!exists) {
             await supabase.from("kundrunda_checkpoints").insert({
               zone_id: zoneId, label: row.checkpointLabel,
               description: row.description || null,
               sort_order: cpSortIdx++,
-              store_id: storeId, is_local_override: editScope === "local",
+              store_id: storeId, is_local_override: isLocalScope,
             });
           }
         }
@@ -1211,7 +1297,7 @@ function KundrundaPage() {
             <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={() => exportTemplateCsv(displayZones)}>
               <Download className="h-3.5 w-3.5" /> Exportera CSV
             </Button>
-            <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={() => csvImportRef.current?.click()} disabled={importingCsv}>
+            <Button variant="outline" size="sm" className="rounded-full gap-1.5" disabled={importingCsv} onClick={() => setShowImportDialog(true)}>
               <Upload className="h-3.5 w-3.5" /> {importingCsv ? "Importerar..." : "Importera CSV"}
             </Button>
             <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowManageDefects(true)}>
@@ -1245,8 +1331,59 @@ function KundrundaPage() {
           </div>
         )}
 
-        <input ref={csvImportRef} type="file" accept=".csv" className="hidden"
-          onChange={async (e) => { const f = e.target.files?.[0]; if (f) await handleCsvImport(f); e.target.value = ""; }} />
+        {/* Defects merge pending banner */}
+        {isManager && localVersion?.defects_pending_hk_update && (
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/20">
+            <Info className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">HK har uppdaterat sina vanliga avvikelser</p>
+              <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">Välj om du vill slå ihop HKs uppdateringar med din butiks lokala avvikelser.</p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button size="sm" variant="outline" className="rounded-full text-xs h-8 border-amber-300 text-amber-700 hover:bg-amber-100"
+                onClick={async () => {
+                  await supabase.from("kundrunda_local_versions").update({ defects_pending_hk_update: false, pending_defects_snapshot: null }).eq("id", localVersion.id);
+                  setLocalVersion(p => p ? { ...p, defects_pending_hk_update: false, pending_defects_snapshot: null } : null);
+                }}>
+                Ignorera
+              </Button>
+              <Button size="sm" className="rounded-full text-xs h-8" onClick={() => setShowDefectsMergeDialog(true)}>
+                <GitMerge className="h-3.5 w-3.5 mr-1" /> Slå ihop
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Kundrunda CSV Import Dialog */}
+        <ImportDialog
+          open={showImportDialog}
+          onClose={() => setShowImportDialog(false)}
+          onImport={handleCsvImport}
+          title="Importera kundrunda-mall"
+          description="Ladda upp en CSV-fil med zoner och kontrollpunkter"
+          loading={importingCsv}
+          importLabel="Importera"
+          options={[
+            {
+              key: "replace",
+              type: "checkbox",
+              label: "Ersätt befintliga data",
+              description: "Tar bort alla nuvarande zoner och kontrollpunkter i valt scope och ersätter med CSV-filens innehåll",
+              defaultValue: false,
+            },
+            ...(canEditGlobal ? [{
+              key: "scope",
+              type: "select" as const,
+              label: "Importera till",
+              description: "Välj om importen ska gälla HK-versionen eller den aktiva butikens lokala version",
+              options: [
+                { value: "local", label: "Butiksversion (lokal)" },
+                { value: "global", label: "Central version (HK)" },
+              ],
+              defaultValue: editScope,
+            }] : []),
+          ]}
+        />
 
         {/* Add zone */}
         <div className="mb-6 flex gap-2">
@@ -1651,6 +1788,22 @@ function KundrundaPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Defects merge confirmation */}
+      <AlertDialog open={showDefectsMergeDialog} onOpenChange={(o) => !o && setShowDefectsMergeDialog(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Slå ihop avvikelser med HK</AlertDialogTitle>
+            <AlertDialogDescription>
+              HKs nya avvikelser läggs till i din butiks lista. Befintliga lokala avvikelser påverkas inte. Länkade avvikelser vars text ändrats hos HK uppdateras.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction onClick={mergeHKDefects}>Slå ihop</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Parallel version choice */}
       <Dialog open={showParallelChoiceDialog} onOpenChange={(o) => { if (!o) { setShowParallelChoiceDialog(false); setPendingSessionStart(false); } }}>

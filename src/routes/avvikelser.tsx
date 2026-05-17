@@ -241,16 +241,21 @@ function IssuesPage() {
 
     setNewIncident(p => ({ ...p, store_id: activeStore?.id ?? "" }));
 
-    // Load common defects for quick-select suggestions
+    // Load common defects: prefer store-local defects if they exist, fall back to global HK defects
     supabase.from("kundrunda_common_defects")
       .select("*, defect_checkpoints:kundrunda_defect_checkpoints(checkpoint_id)")
       .order("sort_order")
       .then(({ data }) => {
         if (data) {
-          setCommonDefects((data as (KundrundaCommonDefect & { defect_checkpoints: { checkpoint_id: string }[] })[]).map(d => ({
+          const all = (data as (KundrundaCommonDefect & { store_id?: string | null; defect_checkpoints: { checkpoint_id: string }[] })[]).map(d => ({
             ...d,
             checkpoint_ids: d.defect_checkpoints?.map(dc => dc.checkpoint_id) ?? [],
-          })));
+          }));
+          const storeId = activeStore?.id ?? null;
+          // Use local defects if the store has any, otherwise use global HK defects
+          const localDefects = storeId ? all.filter(d => d.store_id === storeId) : [];
+          const globalDefects = all.filter(d => !d.store_id);
+          setCommonDefects(localDefects.length > 0 ? localDefects : globalDefects);
         }
       });
   }, [activeStore, user]);
