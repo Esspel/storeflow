@@ -39,6 +39,7 @@ type BreakWindow = { start: string; minutes: number };
 
 type XmlShift = {
   shiftName: string;
+  description: string;
   startTime: string;
   stopTime: string;
   color: string;
@@ -58,6 +59,8 @@ type XmlDay = {
   scheduleDate: string;
   isAbsenceDay: boolean;
   isSemester: boolean;
+  isPreliminary: boolean;
+  isZeroScheduleDay: boolean;
   shifts: XmlShift[];
 };
 
@@ -65,6 +68,9 @@ type ParsedEmployee = {
   employeeNr: string;
   employeeName: string;
   employeeGroup: string;
+  employeeCategory: string;
+  employmentPercent: number | null;
+  workTimeWeek: number | null;
   days: XmlDay[];
 };
 
@@ -98,6 +104,9 @@ type ScheduleEmployee = {
   employee_nr: string;
   employee_name: string;
   employee_group: string;
+  employee_category: string;
+  employment_percent: number | null;
+  work_time_week: number | null;
 };
 
 type ScheduleShift = {
@@ -107,6 +116,7 @@ type ScheduleShift = {
   start_time: string | null;
   stop_time: string | null;
   shift_name: string;
+  shift_description: string;
   color: string;
   gross_minutes: number;
   net_minutes: number;
@@ -114,6 +124,8 @@ type ScheduleShift = {
   break_windows: BreakWindow[];
   deviation_cause: string;
   is_absence_day: boolean;
+  is_preliminary: boolean;
+  is_zero_schedule_day: boolean;
   is_lended: boolean;
   is_borrowed: boolean;
   is_shadow_shift: boolean;
@@ -290,6 +302,10 @@ function parseXmlDay(
   const absenceRaw = getAttrOrText(dayEl, "IsAbsenceDay") || "0";
   const isAbsenceDay = absenceRaw === "1" || absenceRaw.toLowerCase() === "true";
   const absenceName = getAttrOrText(dayEl, "AbsencePayrollProductName") || absenceNameFallback;
+  const isPreliminaryRaw = getAttrOrText(dayEl, "IsPreliminary") || "0";
+  const isPreliminary = isPreliminaryRaw === "1" || isPreliminaryRaw.toLowerCase() === "true";
+  const isZeroRaw = getAttrOrText(dayEl, "IsZeroScheduleDay") || "0";
+  const isZeroScheduleDay = isZeroRaw === "1" || isZeroRaw.toLowerCase() === "true";
 
   // DayNr=1 is Monday — use it to anchor the week start date
   if (dayNr === 1 && scheduleDate) onMonday(scheduleDate);
@@ -321,6 +337,7 @@ function parseXmlDay(
     const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "";
     const grossMins = parseInt(getAttrOrText(dayEl, `${prefix}GrossTimeMinutes`) || "0", 10);
     const netMins = parseInt(getAttrOrText(dayEl, `${prefix}NetTimeMinutes`) || "0", 10);
+    const sDescription = getAttrOrText(dayEl, `${prefix}Description`) || "";
     const deviationCause = getAttrOrText(dayEl, `${prefix}TimeDeviationCauseName`) || absenceName;
     const shiftLendedRaw = getAttrOrText(dayEl, `${prefix}Lended`) || "";
     const isShiftLended = shiftLendedRaw === "1" || shiftLendedRaw.toLowerCase() === "true" || isDayLendedOut;
@@ -330,6 +347,7 @@ function parseXmlDay(
     const effectiveGross = grossMins > 0 ? grossMins : netMins + shiftBreakMins;
     shifts.push({
       shiftName: sName,
+      description: sDescription,
       startTime: parseTime(sStartRaw),
       stopTime: parseTime(sStopRaw),
       color: xmlCol && xmlCol !== "#000000" && xmlCol !== "#FFFFFF" && xmlCol !== "#ffffff"
@@ -362,6 +380,7 @@ function parseXmlDay(
       const isShiftLended = shiftLendedRaw === "1" || shiftLendedRaw.toLowerCase() === "true" || isDayLendedOut;
       shifts.push({
         shiftName: sName,
+        description: g("ShiftDescription") || "",
         startTime: parseTime(g("ShiftStartTime")),
         stopTime: parseTime(g("ShiftStopTime")),
         color: xmlCol && xmlCol !== "#000000" ? xmlCol : shiftColor(sName, xmlCol),
@@ -405,7 +424,7 @@ function parseXmlDay(
     absenceName.toLowerCase().includes("holiday") ||
     anyShiftSemester
   );
-  return { dayNr, scheduleDate, isAbsenceDay, isSemester, shifts };
+  return { dayNr, scheduleDate, isAbsenceDay, isSemester, isPreliminary, isZeroScheduleDay, shifts };
 }
 
 function parseXml(xmlText: string): ParsedSchedule[] | null {
@@ -436,6 +455,11 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
       const employeeNr = getAttrOrText(empEl, "EmployeeNr");
       const employeeName = getAttrOrText(empEl, "EmployeeName");
       const employeeGroup = getAttrOrText(empEl, "EmployeeGroup");
+      const employeeCategory = getAttrOrText(empEl, "EmployeeCategory") || "";
+      const employmentPercentRaw = getAttrOrText(empEl, "EmploymentPercent") || getAttrOrText(empEl, "EmployeeGroupRuleWorkTimeYear") || "";
+      const employmentPercent = employmentPercentRaw ? parseFloat(employmentPercentRaw.replace(",", ".")) || null : null;
+      const workTimeWeekRaw = getAttrOrText(empEl, "EmploymentWorkTimeWeek") || getAttrOrText(empEl, "EmployeeGroupRuleWorkTimeWeek") || "";
+      const workTimeWeek = workTimeWeekRaw ? parseFloat(workTimeWeekRaw.replace(",", ".")) || null : null;
 
       const weekEls = Array.from(empEl.children).filter(c => c.nodeName === "Week");
       for (const weekEl of weekEls) {
@@ -472,7 +496,7 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
         } else if (!weekMap.get(key)!.weekStartDate && weekStartDate) {
           weekMap.get(key)!.weekStartDate = weekStartDate;
         }
-        weekMap.get(key)!.employees.push({ employeeNr, employeeName, employeeGroup, days });
+        weekMap.get(key)!.employees.push({ employeeNr, employeeName, employeeGroup, employeeCategory, employmentPercent, workTimeWeek, days });
       }
     }
 
@@ -508,10 +532,15 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
               if (!weekStartDate) weekStartDate = date;
               if (!year && date.length >= 4) year = parseInt(date.slice(0, 4), 10);
             }));
+          const epRaw = getAttrOrText(empEl, "EmploymentPercent") || "";
+          const wtwRaw = getAttrOrText(empEl, "EmploymentWorkTimeWeek") || getAttrOrText(empEl, "EmployeeGroupRuleWorkTimeWeek") || "";
           return {
             employeeNr: getAttrOrText(empEl, "EmployeeNr"),
             employeeName: getAttrOrText(empEl, "EmployeeName"),
             employeeGroup: getAttrOrText(empEl, "EmployeeGroup"),
+            employeeCategory: getAttrOrText(empEl, "EmployeeCategory") || "",
+            employmentPercent: epRaw ? parseFloat(epRaw.replace(",", ".")) || null : null,
+            workTimeWeek: wtwRaw ? parseFloat(wtwRaw.replace(",", ".")) || null : null,
             days,
           };
         });
@@ -538,10 +567,15 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
           if (!weekStartDate) weekStartDate = date;
           if (!year && date.length >= 4) year = parseInt(date.slice(0, 4), 10);
         }));
+      const epRaw = getAttrOrText(empEl, "EmploymentPercent") || "";
+      const wtwRaw = getAttrOrText(empEl, "EmploymentWorkTimeWeek") || getAttrOrText(empEl, "EmployeeGroupRuleWorkTimeWeek") || "";
       return {
         employeeNr: getAttrOrText(empEl, "EmployeeNr"),
         employeeName: getAttrOrText(empEl, "EmployeeName"),
         employeeGroup: getAttrOrText(empEl, "EmployeeGroup"),
+        employeeCategory: getAttrOrText(empEl, "EmployeeCategory") || "",
+        employmentPercent: epRaw ? parseFloat(epRaw.replace(",", ".")) || null : null,
+        workTimeWeek: wtwRaw ? parseFloat(wtwRaw.replace(",", ".")) || null : null,
         days,
       };
     });
@@ -1270,7 +1304,7 @@ function SchemaPage() {
         lastImportData = importData as ImportRow;
 
         for (const emp of weekSchedule.employees) {
-          const { data: empData } = await supabase.from("schedule_employees").insert({ import_id: importId, employee_nr: emp.employeeNr, employee_name: emp.employeeName, employee_group: emp.employeeGroup }).select().single();
+          const { data: empData } = await supabase.from("schedule_employees").insert({ import_id: importId, employee_nr: emp.employeeNr, employee_name: emp.employeeName, employee_group: emp.employeeGroup, employee_category: emp.employeeCategory || "", employment_percent: emp.employmentPercent ?? null, work_time_week: emp.workTimeWeek ?? null }).select().single();
           if (!empData) continue;
           const empId = (empData as ScheduleEmployee).id;
           const borrowedMe = matchedEmployees.find((me) => me.employeeNr === emp.employeeNr);
@@ -1294,6 +1328,7 @@ function SchemaPage() {
                   start_time: s.startTime || null, stop_time: s.stopTime || null,
                   start_time_utc: startUtc, stop_time_utc: stopUtc,
                   shift_name: s.shiftName,
+                  shift_description: s.description || "",
                   color: isAbsence ? (day.isSemester ? "#fca5a5" : "#e0e0e0") : s.color,
                   gross_minutes: isAbsence ? 0 : s.grossMinutes, net_minutes: isAbsence ? 0 : s.netMinutes,
                   break_minutes: isAbsence ? 0 : s.breakMinutes, break_windows: isAbsence ? [] : s.breakWindows,
@@ -1301,6 +1336,8 @@ function SchemaPage() {
                   is_absence_day: isAbsence, is_lended: s.isLended,
                   is_borrowed: isEmpBorrowed || s.isBorrowed, shift_link: s.shiftLink,
                   is_shadow_shift: isAbsence && !!(s.startTime || s.shiftName),
+                  is_preliminary: day.isPreliminary,
+                  is_zero_schedule_day: day.isZeroScheduleDay,
                 };
               });
             }
@@ -1309,9 +1346,10 @@ function SchemaPage() {
                 schedule_employee_id: empId, import_id: importId, day_date: effectiveDayDate,
                 start_time: null, stop_time: null,
                 shift_name: day.isSemester ? "Semester" : "", color: day.isSemester ? "#fca5a5" : "#e0e0e0",
-                gross_minutes: 0, net_minutes: 0, break_minutes: 0, break_windows: [],
+                shift_description: "", gross_minutes: 0, net_minutes: 0, break_minutes: 0, break_windows: [],
                 deviation_cause: day.isSemester ? "Semester" : "", is_absence_day: true,
                 is_lended: false, is_borrowed: false, shift_link: "", is_shadow_shift: false,
+                is_preliminary: day.isPreliminary, is_zero_schedule_day: day.isZeroScheduleDay,
               }];
             }
             return [];
@@ -1849,7 +1887,7 @@ function SchemaPage() {
                     </div>
                   )}
 
-                  {displayRows.map(({ emp, workShifts, absenceShift, appUser, initials, dayTasks }) => {
+                  {displayRows.map(({ emp, workShifts, absenceShift, appUser, initials, dayTasks, weekMinutes }) => {
                     const isAbsent = workShifts.length === 0 && !!absenceShift;
                     const isSemester = absenceShift?.deviation_cause?.toLowerCase().includes("semester") || absenceShift?.shift_name?.toLowerCase() === "semester";
                     const isLedig = workShifts.length === 0 && !absenceShift;
@@ -1894,12 +1932,30 @@ function SchemaPage() {
 
                           {/* Name + dept */}
                           <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-sm leading-snug text-foreground">{name}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-semibold text-sm leading-snug text-foreground">{name}</p>
+                              {emp.employment_percent != null && (
+                                <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 rounded-full px-1.5 py-0.5 leading-none">{emp.employment_percent}%</span>
+                              )}
+                              {primaryShift?.is_borrowed && (
+                                <span className="flex items-center gap-0.5 text-[10px] font-medium text-sky-600 bg-sky-50 rounded-full px-1.5 py-0.5 leading-none"><ArrowLeftRight className="h-2.5 w-2.5" />Inlånad</span>
+                              )}
+                              {primaryShift?.is_preliminary && (
+                                <span className="text-[10px] font-medium text-amber-600 bg-amber-50 rounded-full px-1.5 py-0.5 leading-none">Preliminär</span>
+                              )}
+                            </div>
                             {primaryShift && (
-                              <p className="text-xs text-muted-foreground mt-0.5">{primaryShift.shift_name}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {primaryShift.shift_name}
+                                {primaryShift.shift_description ? ` · ${primaryShift.shift_description}` : ""}
+                                {primaryShift.deviation_cause && !isAbsent ? ` · ${primaryShift.deviation_cause}` : ""}
+                              </p>
                             )}
                             {isSemester && <p className="text-xs font-medium text-red-500">Semester</p>}
                             {isAbsent && !isSemester && <p className="text-xs text-warning-foreground">{absenceShift?.deviation_cause || "Frånvaro"}</p>}
+                            {weekMinutes > 0 && (
+                              <p className="text-[10px] text-muted-foreground/60 mt-0.5">V: {minsToHours(weekMinutes)}</p>
+                            )}
                           </div>
 
                           {/* Time block — primary info, bold */}
@@ -2027,6 +2083,10 @@ function SchemaPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-semibold text-foreground leading-tight">{appUser?.display_name ?? emp.employee_name}</p>
+                        <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                          {emp.employment_percent != null && <span className="text-[9px] text-muted-foreground/70">{emp.employment_percent}%</span>}
+                          {weekMinutes > 0 && <span className="text-[9px] text-muted-foreground/70">{minsToHours(weekMinutes)}/v</span>}
+                        </div>
                         {isSemesterDay && <p className="truncate text-[10px] text-red-500 font-medium">Semester</p>}
                       </div>
                     </div>
@@ -2074,12 +2134,18 @@ function SchemaPage() {
                                   style={{ backgroundColor: col, color: light ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.92)", borderLeft: `2px solid ${light ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.3)"}` }}
                                   title={[
                                     `${shift.shift_name || emp.employee_name}: ${shift.start_time} – ${shift.stop_time}`,
+                                    shift.shift_description ? `Beskrivning: ${shift.shift_description}` : null,
                                     `Brutto: ${minsToHours(shift.gross_minutes)}`,
                                     shift.break_minutes > 0 ? `Rast: ${shift.break_minutes} min` : null,
                                     `Netto: ${minsToHours(shift.net_minutes > 0 ? shift.net_minutes : Math.max(0, shift.gross_minutes - shift.break_minutes))}`,
+                                    shift.deviation_cause && !shift.is_absence_day ? `Avvikelse: ${shift.deviation_cause}` : null,
                                     shift.is_lended ? "↔ Utlånad till annan enhet" : null,
+                                    shift.is_borrowed ? "↔ Inlånad från annan enhet" : null,
+                                    shift.is_preliminary ? "⚠ Preliminärt pass" : null,
                                   ].filter(Boolean).join("\n")}>
                                   {shift.is_lended && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
+                                  {shift.is_borrowed && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
+                                  {shift.is_preliminary && <span className="shrink-0 text-[9px] opacity-70">※</span>}
                                   <span className="truncate leading-tight">
                                     {shift.shift_name ? <>{shift.shift_name}<br /><span className="opacity-70">{shift.start_time}–{shift.stop_time}</span></> : `${shift.start_time}–${shift.stop_time}`}
                                   </span>
@@ -2164,6 +2230,10 @@ function SchemaPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-semibold text-foreground">{appUser?.display_name ?? emp.employee_name}</p>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {emp.employment_percent != null && <span className="text-[9px] text-muted-foreground/60">{emp.employment_percent}%</span>}
+                          {weekMinutes > 0 && <span className="text-[9px] text-muted-foreground/60">{minsToHours(weekMinutes)}</span>}
+                        </div>
                       </div>
                     </div>
                     {weekDates.map((date, idx) => {
@@ -2182,11 +2252,23 @@ function SchemaPage() {
                           )}
                           {work.map((s) => {
                             const col = shiftColor(s.shift_name, s.color);
+                            const tooltipParts = [
+                              s.shift_name ? `${s.shift_name}: ${s.start_time}–${s.stop_time}` : `${s.start_time}–${s.stop_time}`,
+                              s.shift_description ? `Beskrivning: ${s.shift_description}` : null,
+                              s.gross_minutes > 0 ? `Brutto: ${minsToHours(s.gross_minutes)}` : null,
+                              s.break_minutes > 0 ? `Rast: ${s.break_minutes} min` : null,
+                              s.net_minutes > 0 ? `Netto: ${minsToHours(s.net_minutes)}` : null,
+                              s.deviation_cause && !s.is_absence_day ? `Avvikelse: ${s.deviation_cause}` : null,
+                              s.is_lended ? "↔ Utlånad till annan enhet" : null,
+                              s.is_borrowed ? "↔ Inlånad från annan enhet" : null,
+                              s.is_preliminary ? "⚠ Preliminärt pass" : null,
+                            ].filter(Boolean).join("\n");
                             return (
                               <div key={s.id} className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-semibold truncate"
                                 style={{ backgroundColor: col + "55", borderLeft: `2px solid ${col}`, color: isLightColor(col) ? "oklch(0.25 0.05 145)" : "oklch(0.15 0.05 145)" }}
-                                title={s.is_lended ? "↔ Utlånad till annan enhet" : undefined}>
-                                {s.is_lended && <ArrowLeftRight className="h-2 w-2 shrink-0" />}
+                                title={tooltipParts}>
+                                {(s.is_lended || s.is_borrowed) && <ArrowLeftRight className="h-2 w-2 shrink-0" />}
+                                {s.is_preliminary && <span className="shrink-0 opacity-60">※</span>}
                                 <span className="truncate">{s.start_time}–{s.stop_time}</span>
                               </div>
                             );
