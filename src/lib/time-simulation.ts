@@ -1,14 +1,23 @@
-let _timeOffset = 0;
+const STORAGE_KEY = "sf_time_offset_ms";
 
 export function getTimeOffsetMs(): number {
-  return _timeOffset;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? parseInt(stored, 10) : 0;
+  } catch {
+    return 0;
+  }
 }
 
 export function setTimeOffsetMs(ms: number): void {
-  _timeOffset = ms;
-  if (typeof window !== "undefined") {
+  try {
+    if (ms === 0) {
+      localStorage.removeItem(STORAGE_KEY);
+    } else {
+      localStorage.setItem(STORAGE_KEY, String(ms));
+    }
     window.dispatchEvent(new CustomEvent("sf-time-changed"));
-  }
+  } catch {}
 }
 
 export function getSimulatedDate(): Date {

@@ -7,37 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase, type AuditLog } from "@/lib/supabase";
-
-async function createNotification(userId: string, type: string, title: string, body: string, link: string) {
-  return supabase.from("notifications").insert({ user_id: userId, type, title, body, link, is_read: false });
-}
-async function logAudit(actorId: string, action: string, table: string, recordId: string | null, diff: object) {
-  return supabase.from("audit_log").insert({ actor_id: actorId, action, target_table: table, target_id: recordId, diff });
-}
-async function deleteStorageFiles(paths: string[]) {
-  if (paths.length === 0) return;
-  await supabase.storage.from("task-images").remove(paths);
-}
-async function compressImage(file: File): Promise<File> {
-  return new Promise(resolve => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const maxDim = 1200;
-      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(blob => {
-        URL.revokeObjectURL(url);
-        resolve(blob ? new File([blob], file.name, { type: "image/jpeg" }) : file);
-      }, "image/jpeg", 0.8);
-    };
-    img.src = url;
-  });
-}
+import { supabase, createNotification, logAudit, type AuditLog, deleteStorageFiles, compressImage } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { getTimeOffsetMs, setTimeOffsetMs, getSimulatedDate } from "@/lib/time-simulation";

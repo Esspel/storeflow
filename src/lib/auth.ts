@@ -1,75 +1,92 @@
-import { supabase, type AppUser, setSessionToken, setCurrentUser, clearSessionToken, getSessionToken } from "./supabase";
+import { supabase, setSessionToken, type AppUser } from "./supabase";
+import { secureGetSession, secureSetSession, secureClearSession } from "./secure-storage";
 
-const EDGE_FN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+const SECURE_LOGIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/secure-login`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-export interface LoginResult {
-  user: AppUser;
-  token: string;
+export async function getStoredSession(): Promise<{ token: string; user: AppUser } | null> {
+  return secureGetSession<AppUser>();
 }
 
-export async function login(username: string, password: string): Promise<LoginResult> {
-  const res = await fetch(`${EDGE_FN_URL}/secure-login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${ANON_KEY}`,
-    },
-    body: JSON.stringify({ username, password }),
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    throw new Error(data.error ?? "Inloggning misslyckades");
-  }
-
-  const { user, token } = data as LoginResult;
-  setSessionToken(token);
-  setCurrentUser(user);
-  return { user, token };
+export async function storeSession(token: string, user: AppUser): Promise<void> {
+  await secureSetSession(token, user);
 }
 
-export async function logout() {
-  const token = getSessionToken();
-  if (token) {
-    await supabase
-      .from("app_sessions")
-      .delete()
-      .eq("token", token)
-      .then(() => {});
+export async function clearSession(): Promise<void> {
+  await secureClearSession();
+}
+
+export async function login(
+  username: string,
+  password: string,
+): Promise<{ user: AppUser; token: string } | { error: string }> {
+  try {
+    const res = await fetch(SECURE_LOGIN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ANON_KEY}`,
+      },
+      body: JSON.stringify({ username, password }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      return { error: data.error ?? "Ogiltigt användarnamn eller lösenord." };
+    }
+
+    setSessionToken(data.token);
+    return { user: data.user as AppUser, token: data.token };
+  } catch {
+    return { error: "Kan inte ansluta till servern. Kontrollera din internetanslutning." };
   }
-  clearSessionToken();
+}
+
+export async function logout(token: string) {
+  await supabase.from("app_sessions").delete().eq("token", token);
+  setSessionToken(null);
+  clearSession();
 }
 
 export async function validateSession(token: string): Promise<AppUser | null> {
-  const { data, error } = await supabase
+  // Set token early so RLS policies can validate the caller for any writes
+  setSessionToken(token);
+
+  const { data: session } = await supabase
     .from("app_sessions")
-    .select("user_id, expires_at, app_users(id, username, display_name, role, hierarchy_level, role_manually_set, employee_group, store_id, active_store_id, forening_id, distrikt_id, is_active, must_change_password, last_login, created_at)")
+    .select("user_id, expires_at")
     .eq("token", token)
-    .gt("expires_at", new Date().toISOString())
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (!session) { setSessionToken(null); return null; }
+  if (new Date(session.expires_at) < new Date()) {
+    await supabase.from("app_sessions").delete().eq("token", token);
+    setSessionToken(null);
+    return null;
+  }
 
-  const u = (data as { app_users: AppUser | null }).app_users;
-  if (!u) return null;
-
-  setCurrentUser(u);
-  return u;
-}
-
-export async function changePassword(userId: string, newPassword: string): Promise<void> {
-  const { data: hashed, error: hashErr } = await supabase.rpc("hash_password", {
-    plain_password: newPassword,
-  });
-
-  if (hashErr || !hashed) throw new Error("Kunde inte hasha lösenord");
-
-  const { error } = await supabase
+  const { data: user } = await supabase
     .from("app_users")
-    .update({ password_hash: hashed, must_change_password: false })
-    .eq("id", userId);
+    .select("*")
+    .eq("id", session.user_id)
+    .eq("is_active", true)
+    .maybeSingle();
 
-  if (error) throw error;
+  if (!user) return null;
+
+  return {
+    id: user.id,
+    username: user.username,
+    display_name: user.display_name,
+    role: user.role,
+    role_manually_set: user.role_manually_set ?? false,
+    employee_group: user.employee_group ?? "",
+    store_id: user.store_id,
+    active_store_id: user.active_store_id ?? null,
+    is_active: user.is_active,
+    must_change_password: user.must_change_password ?? false,
+    last_login: user.last_login,
+    created_at: user.created_at,
+  };
 }

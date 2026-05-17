@@ -3,104 +3,76 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Mutable session token used to stamp every PostgREST request header
+let _sessionToken: string | null = null;
 
-// ─── Core Types ────────────────────────────────────────────────────────────
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    fetch: (url, options = {}) => {
+      const headers = new Headers((options.headers as HeadersInit) ?? {});
+      if (_sessionToken) headers.set("x-session-token", _sessionToken);
+      return fetch(url, { ...options, headers });
+    },
+  },
+});
 
-export type UserRole = "admin" | "manager" | "employee";
-export type HierarchyLevel = "admin" | "hk" | "forening" | "distrikt" | "chef" | "anvandare";
+// Call after login / on session restore so RLS policies can validate the caller
+export function setSessionToken(token: string | null) {
+  _sessionToken = token;
+}
 
-export interface AppUser {
+export type AppUser = {
   id: string;
   username: string;
   display_name: string;
-  role: UserRole;
-  hierarchy_level: HierarchyLevel;
+  role: "admin" | "manager" | "employee";
   role_manually_set: boolean;
   employee_group: string;
   store_id: string | null;
   active_store_id: string | null;
-  forening_id: string | null;
-  distrikt_id: string | null;
   is_active: boolean;
   must_change_password: boolean;
   last_login: string | null;
   created_at: string;
-  quick_pin_hash?: string | null;
-  barcode_id?: string | null;
-}
+};
 
-export interface Store {
+export const ROLE_LABELS: Record<string, string> = {
+  admin: "Admin",
+  manager: "Chef",
+  employee: "Anställd",
+};
+
+export type Region = {
+  id: string;
+  name: string;
+  code: string | null;
+  created_at: string;
+};
+
+export type Store = {
   id: string;
   name: string;
   city: string;
   region: string;
+  region_id: string | null;
   address: string;
   phone: string;
   email: string;
   is_active: boolean;
-  sap_store_number?: string;
+  sap_site_id: string | null;
   created_at: string;
-  updated_at: string;
-  // Enterprise fields
-  butiks_nr?: string;
-  site_id?: string;
-  bolag?: string;
-  forening_id?: string | null;
-  distrikt_id?: string | null;
-  koncept?: string;
-  kommentar?: string;
-  butik_enhet?: string;
-  foretag?: string;
-  enhet?: string;
-  organisationsnummer?: string;
-  franchise?: string;
-  gatuadress?: string;
-  postnr?: string;
-  postadress?: string;
-  email_sm_chef?: string;
-  butikschef?: string;
-  bc_telefon?: string;
-  mobil?: string;
-  direktor_forsaljning?: string;
-  forsaljningschef?: string;
-  marknadsomrade?: string;
-  distriktschef?: string;
-  distrikt_name?: string;
-  k_stalle?: string;
-  namn2?: string;
-  gamla_butiksnummer?: string;
-  saljplan?: string;
-  sak_kval_samordnare?: string;
-  kommun?: string;
-  hr_generalist?: string;
-  bemanningsspecialist?: string;
-  // Relations
-  foreningar?: Forening;
-  distrikt?: Distrikt;
-}
+};
 
-export interface Forening {
+export type UserStore = {
   id: string;
-  name: string;
-  short_code: string;
-  region: string;
-  contact_email: string;
-  is_active: boolean;
+  user_id: string;
+  store_id: string;
+  is_primary: boolean;
   created_at: string;
-}
+  store?: Store;
+};
 
-export interface Distrikt {
-  id: string;
-  name: string;
-  forening_id: string | null;
-  distriktschef_name: string;
-  is_active: boolean;
-  created_at: string;
-  foreningar?: Forening;
-}
-
-export interface Task {
+export type Task = {
   id: string;
   title: string;
   description: string;
@@ -109,156 +81,353 @@ export interface Task {
   assigned_to: string | null;
   created_by: string | null;
   priority: "Låg" | "Medel" | "Hög" | "Kritisk";
-  status: "todo" | "progress" | "done" | "late";
+  status: "todo" | "progress" | "done" | "late" | "cancelled";
   due_date: string | null;
   recurring: string | null;
+  recurrence_rule: string | null;
+  recurrence_days: number[] | null;
+  recurrence_interval: number | null;
+  recurrence_start: string | null;
+  recurrence_end: string | null;
+  parent_task_id: string | null;
+  last_spawned_at: string | null;
+  recurrence_period_start: string | null;
   completed_at: string | null;
+  sap_article_id: string | null;
   created_at: string;
-  updated_at: string;
-  template_task_id?: string | null;
-  app_users?: { display_name: string } | null;
-  stores?: { name: string } | null;
-  task_steps?: TaskStep[];
-  task_assignees?: { user_id: string; app_users?: { display_name: string } }[];
-}
+  store?: Store;
+  assignee?: AppUser;
+  steps?: TaskStep[];
+  questions?: TaskQuestion[];
+};
 
-export interface TaskStep {
+export type TaskStep = {
   id: string;
   task_id: string;
   label: string;
   is_done: boolean;
   requires_photo: boolean;
   sort_order: number;
-  step_id?: string | null;
-}
+};
 
-export interface TaskQuestion {
-  id: string;
-  task_id: string;
-  question_text: string;
-  question_type: "yes_no" | "text";
-  answer: string | null;
-  sort_order: number;
-}
-
-export interface Incident {
+export type Incident = {
   id: string;
   ref_number: string;
   title: string;
   description: string;
   category: string;
-  priority: "Låg" | "Medel" | "Hög" | "Kritisk";
-  status: "open" | "in_progress" | "escalated" | "resolved" | "closed";
   store_id: string | null;
   reported_by: string | null;
   assigned_to: string | null;
+  responsible_user_id: string | null;
+  responsible_group_id: string | null;
+  priority: "Låg" | "Medel" | "Hög" | "Kritisk";
+  status: "open" | "in_progress" | "escalated" | "resolved" | "closed";
   sla_deadline: string | null;
   resolved_at: string | null;
-  source?: string;
-  responsible_group_id?: string | null;
+  has_photo: boolean;
+  sap_article_id: string | null;
+  source: string | null;
   created_at: string;
-  updated_at: string;
-  app_users?: { display_name: string } | null;
-  stores?: { name: string } | null;
-}
+  store?: Store;
+  reporter?: AppUser;
+  responsible?: AppUser;
+  responsible_group?: UserGroup;
+  comments?: IncidentComment[];
+  images?: IncidentImage[];
+};
 
-export interface ChecklistTemplate {
+export type IncidentComment = {
+  id: string;
+  incident_id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
+  author?: AppUser;
+};
+
+export type IncidentImage = {
+  id: string;
+  incident_id: string;
+  storage_path: string;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
+export type ChecklistTemplate = {
   id: string;
   title: string;
   description: string;
   category: string;
+  priority: string;
+  recurrence_rule: string | null;
+  recurrence_days: number[] | null;
+  recurrence_interval: number | null;
+  due_date_offset: number | null;
   created_by: string | null;
   is_global: boolean;
-  is_frozen: boolean;
-  is_system_locked: boolean;
-  is_store_specific: boolean;
-  hierarchy_scope: string;
-  forening_id: string | null;
-  distrikt_id: string | null;
+  locked_by_admin: boolean;
   created_at: string;
   updated_at: string;
-  checklist_template_items?: TemplateItem[];
-}
+  items?: ChecklistTemplateItem[];
+  stores?: Store[];
+};
 
-export interface TemplateItem {
+export type ChecklistTemplateItem = {
   id: string;
   template_id: string;
   label: string;
   requires_photo: boolean;
   sort_order: number;
-  question_type?: "yes_no" | "text" | null;
-}
+};
 
-export interface ScheduleShift {
+export type ChecklistTemplateQuestion = {
   id: string;
-  store_id: string | null;
-  import_id: string | null;
-  employee_id: string | null;
-  date: string;
-  start_time: string;
-  end_time: string;
-  is_lended: boolean;
-  is_borrowed: boolean;
-  break_start?: string | null;
-  break_end?: string | null;
+  template_id: string;
+  label: string;
+  question_type: "text" | "yes_no";
+  is_required: boolean;
+  sort_order: number;
+};
+
+export type TaskQuestion = {
+  id: string;
+  task_id: string;
+  label: string;
+  answer: string;
+  question_type: "text" | "yes_no";
+  is_required: boolean;
+  sort_order: number;
+  answered_by: string | null;
+  answered_at: string | null;
   created_at: string;
-  schedule_employees?: { name: string; employee_number?: string };
-}
+};
 
-export interface ScheduleEmployee {
+export type TaskQuestionAnswer = {
   id: string;
-  import_id: string;
-  store_id: string | null;
+  task_question_id: string;
+  task_id: string;
+  answer: string;
+  answered_by: string | null;
+  created_at: string;
+};
+
+export type Notification = {
+  id: string;
+  user_id: string;
+  type: string;
+  title: string;
+  body: string;
+  link: string;
+  is_read: boolean;
+  created_at: string;
+};
+
+export type UserGroup = {
+  id: string;
   name: string;
-  employee_number?: string;
+  store_id: string | null;
   created_at: string;
+  members?: UserGroupMember[];
+};
+
+export type UserGroupMember = {
+  id: string;
+  group_id: string;
+  user_id: string;
+  created_at: string;
+  user?: AppUser;
+};
+
+export type TaskAssignee = {
+  id: string;
+  task_id: string;
+  user_id: string | null;
+  group_id: string | null;
+  created_at: string;
+  user?: AppUser;
+  group?: UserGroup;
+};
+
+export type TaskImage = {
+  id: string;
+  task_id: string;
+  step_id: string | null;
+  storage_path: string;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
+export type AuditLog = {
+  id: string;
+  actor_id: string | null;
+  action: string;
+  entity: string;
+  entity_id: string | null;
+  meta: Record<string, unknown>;
+  created_at: string;
+  actor?: AppUser;
+};
+
+// Helper: write an audit log entry (fire-and-forget)
+export function logAudit(
+  actorId: string | null,
+  action: string,
+  entity: string,
+  entityId: string | null,
+  meta: Record<string, unknown> = {},
+) {
+  supabase
+    .from("audit_log")
+    .insert({ actor_id: actorId, action, entity, entity_id: entityId, meta })
+    .then(() => {});
 }
 
-export interface ScheduleImport {
+const PUSH_EDGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`;
+const PUSH_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+function firePush(userIds: string[], title: string, body: string, url: string) {
+  if (!userIds.length) return;
+  fetch(PUSH_EDGE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${PUSH_ANON_KEY}` },
+    body: JSON.stringify({ user_ids: userIds, title, body, url }),
+  })
+    .then(async (res) => {
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        console.error("firePush failed:", res.status, json);
+      } else if (json?.errors?.length) {
+        console.warn("firePush partial errors:", json.errors);
+      }
+    })
+    .catch((err) => console.error("firePush network error:", err));
+}
+
+// Helper: create a notification
+export function createNotification(
+  userId: string,
+  type: string,
+  title: string,
+  body = "",
+  link = "",
+) {
+  supabase.from("notifications").insert({ user_id: userId, type, title, body, link }).then(() => {});
+  firePush([userId], title, body, link || "/");
+}
+
+// Helper: notify multiple users
+export function notifyUsers(
+  userIds: string[],
+  type: string,
+  title: string,
+  body = "",
+  link = "",
+) {
+  if (userIds.length === 0) return;
+  const rows = userIds.map((uid) => ({ user_id: uid, type, title, body, link }));
+  supabase.from("notifications").insert(rows).then(() => {});
+  firePush(userIds, title, body, link || "/");
+}
+
+// Helper: get public URL for a storage path
+export function getPublicUrl(path: string) {
+  return supabase.storage.from("attachments").getPublicUrl(path).data.publicUrl;
+}
+
+// Helper: delete old notifications (>3 days) for a user
+export async function cleanOldNotifications(userId: string) {
+  const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  await supabase.from("notifications").delete().eq("user_id", userId).lt("created_at", cutoff);
+}
+
+// Compress an image and strip all EXIF metadata before uploading.
+// Drawing through canvas discards GPS, camera model, and timestamp metadata —
+// only raw pixel data is written to the output JPEG. Resizes to max 1920px.
+// Non-image files are returned unchanged.
+export async function compressImage(file: File, maxPx = 1920, quality = 0.82): Promise<File> {
+  if (!file.type.startsWith("image/")) return file;
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxPx || height > maxPx) {
+        if (width >= height) { height = Math.round((height / width) * maxPx); width = maxPx; }
+        else { width = Math.round((width / height) * maxPx); height = maxPx; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => resolve(blob ? new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }) : file),
+        "image/jpeg",
+        quality,
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+// Helper: upload file to attachments bucket (compresses images automatically)
+export async function uploadAttachment(file: File, folder: string): Promise<string | null> {
+  const toUpload = await compressImage(file);
+  const ext = toUpload.name.split(".").pop() ?? "bin";
+  const path = `${folder}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage.from("attachments").upload(path, toUpload);
+  if (error) return null;
+  return path;
+}
+
+// Helper: remove storage files for a list of paths (fire-and-forget, best-effort)
+export function deleteStorageFiles(paths: string[]) {
+  if (paths.length === 0) return;
+  supabase.storage.from("attachments").remove(paths).then(() => {});
+}
+
+export type KundrundaZone = {
+  id: string;
+  name: string;
+  sort_order: number;
+  icon: string | null;
+  created_at: string;
+  checkpoints?: KundrundaCheckpoint[];
+};
+
+export type KundrundaCheckpoint = {
+  id: string;
+  zone_id: string;
+  label: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+  images?: KundrundaCheckpointImage[];
+};
+
+export type KundrundaCheckpointImage = {
+  id: string;
+  checkpoint_id: string;
+  storage_path: string;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
+export type KundrundaCommonDefect = {
   id: string;
   store_id: string | null;
-  import_date: string;
-  file_name: string;
+  checkpoint_id: string | null;
+  label: string;
+  sort_order: number;
   created_at: string;
-}
+  checkpoint_ids?: string[];
+};
 
-export interface EmployeeMapping {
-  id: string;
-  store_id: string;
-  schedule_employee_id: string;
-  app_user_id: string;
-  created_at: string;
-  schedule_employees?: ScheduleEmployee;
-  app_users?: { display_name: string };
-}
-
-export interface DeliveryPlan {
+export type KundrundaSession = {
   id: string;
   store_id: string | null;
-  delivery_date: string;
-  week_number?: number | null;
-  year?: number | null;
-  is_special_week: boolean;
-  is_default_template: boolean;
-  holiday_name?: string;
-  notes?: string;
-  created_at: string;
-  delivery_items?: DeliveryItem[];
-}
-
-export interface DeliveryItem {
-  id: string;
-  plan_id: string;
-  article_name: string;
-  quantity: number;
-  unit: string;
-  scheduled_time?: string | null;
-  created_at: string;
-}
-
-export interface KundrundaSession {
-  id: string;
-  store_id: string;
   conducted_by: string | null;
   started_at: string;
   completed_at: string | null;
@@ -266,44 +435,39 @@ export interface KundrundaSession {
   total_score: number;
   max_score: number;
   created_at: string;
-  stores?: { name: string };
-  app_users?: { display_name: string };
-}
+  store?: Store;
+  conductor?: AppUser;
+  responses?: KundrundaResponse[];
+};
 
-export interface KundrundaZone {
-  id: string;
-  name: string;
-  sort_order: number;
-  icon?: string | null;
-  kundrunda_checkpoints?: KundrundaCheckpoint[];
-}
-
-export interface KundrundaCheckpoint {
-  id: string;
-  zone_id: string;
-  title: string;
-  description: string;
-  reference_photo_url?: string | null;
-  sort_order: number;
-  hierarchy_scope?: string;
-  forening_id?: string | null;
-}
-
-export interface KundrundaResponse {
+export type KundrundaResponse = {
   id: string;
   session_id: string;
   checkpoint_id: string;
+  zone_id: string;
   result: "ok" | "avvikelse" | null;
-  defect_description?: string | null;
-  action_taken?: string | null;
-  responsible_user_id?: string | null;
-  created_task_id?: string | null;
+  defect_description: string | null;
+  action_taken: string | null;
+  responsible_user_id: string | null;
+  sap_article_id: string | null;
+  created_task_id: string | null;
+  incident_id: string | null;
   created_at: string;
-}
+  images?: KundrundaResponseImage[];
+};
 
-export interface Meeting {
+export type KundrundaResponseImage = {
   id: string;
-  meeting_type: "ledningsgrupp" | "saljledare" | "daglig_styrning" | "veckostamning";
+  response_id: string;
+  session_id: string;
+  storage_path: string;
+  uploaded_by: string | null;
+  created_at: string;
+};
+
+export type Meeting = {
+  id: string;
+  meeting_type: "ledningsgrupp" | "saljledare" | "daglig_styrning" | "veckostamning" | "personalmote" | "haccp" | "frankly" | "cap_genomgang" | "leverans_genomgang";
   title: string;
   store_id: string | null;
   scheduled_at: string;
@@ -311,120 +475,61 @@ export interface Meeting {
   ended_at: string | null;
   status: "scheduled" | "in_progress" | "completed" | "cancelled";
   moderator_id: string | null;
-  notes: string;
+  notes: string | null;
   created_by: string | null;
   created_at: string;
-  meeting_agenda_items?: MeetingAgendaItem[];
-  stores?: { name: string };
-}
+  store?: Store;
+  moderator?: AppUser;
+  agenda_items?: MeetingAgendaItem[];
+  decisions?: MeetingDecision[];
+};
 
-export interface MeetingAgendaItem {
+export type MeetingAgendaItem = {
   id: string;
   meeting_id: string;
   title: string;
-  description: string;
+  description: string | null;
   duration_minutes: number;
   sort_order: number;
   started_at: string | null;
   completed_at: string | null;
-}
-
-export interface UserGroup {
-  id: string;
-  name: string;
-  store_id: string;
-  display_name: string;
   created_at: string;
-  user_group_members?: { user_id: string; app_users?: { display_name: string } }[];
-}
+};
 
-export interface Notification {
+export type MeetingDecision = {
   id: string;
-  user_id: string;
-  type: string;
-  title: string;
-  body: string;
-  link?: string | null;
-  is_read: boolean;
+  meeting_id: string;
+  description: string;
+  responsible_user_id: string | null;
+  due_date: string | null;
+  created_task_id: string | null;
+  created_by: string | null;
   created_at: string;
-}
+  responsible?: AppUser;
+};
 
-export interface PushSubscription {
-  id: string;
-  user_id: string;
-  endpoint: string;
-  subscription_json: object;
-  user_agent: string;
-  created_at: string;
-}
-
-// ─── Session helpers (cookie + in-memory, SSR-safe) ────────────────────────
-
-function getCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-function setCookie(name: string, value: string, days = 7) {
-  if (typeof document === "undefined") return;
-  const expires = new Date(Date.now() + days * 864e5).toUTCString();
-  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
-}
-
-function deleteCookie(name: string) {
-  if (typeof document === "undefined") return;
-  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
-}
-
-let _cachedUser: AppUser | null = null;
-
-export function getSessionToken(): string | null {
-  return getCookie("sf_session");
-}
-
-export function setSessionToken(token: string) {
-  setCookie("sf_session", token, 7);
-}
-
-export function clearSessionToken() {
-  deleteCookie("sf_session");
-  _cachedUser = null;
-}
-
-export function getCurrentUser(): AppUser | null {
-  return _cachedUser;
-}
-
-export function setCurrentUser(user: AppUser) {
-  _cachedUser = user;
-}
-
-// Supabase client configured with session token header
-export function getAuthHeaders(): Record<string, string> {
-  const token = getSessionToken();
-  if (!token) return {};
-  return { "x-session-token": token };
-}
-
-// ─── DB helpers with session header ─────────────────────────────────────────
-
-export async function dbSelect<T>(
-  table: string,
-  query: (q: ReturnType<typeof supabase.from>) => Promise<{ data: T[] | null; error: unknown }>,
-): Promise<T[]> {
-  const token = getSessionToken();
-  if (token) {
-    supabase.functions.setAuth(token);
+// Retry wrapper for transient network errors — waits 2^attempt * 200ms between retries
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxAttempts - 1) {
+        await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 200));
+      }
+    }
   }
-  const result = await query(supabase.from(table));
-  if (result.error) throw result.error;
-  return result.data ?? [];
+  throw lastError;
 }
 
-// Edge function URL helper
-export function edgeFnUrl(name: string): string {
-  return `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`;
+// Helper: build a Mitt Coop deep-link for an SAP article
+// Returns null if either ID is missing
+export function mittCoopUrl(sapArticleId: string | null | undefined, sapSiteId: string | null | undefined): string | null {
+  if (!sapArticleId?.trim() || !sapSiteId?.trim()) return null;
+  return `https://mittcoop.coop.se/sortiment/articles/${sapArticleId.trim()}?siteId=${sapSiteId.trim()}`;
 }
-
-export const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string;
