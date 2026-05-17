@@ -44,8 +44,8 @@ function DashboardPage() {
   async function loadDashboard(storeId: string) {
     setIsLoading(true);
     const [tasksRes, incidentsRes] = await Promise.all([
-      supabase.from("tasks").select("*").eq("store_id", storeId).in("status", ["todo", "progress", "late"]).order("created_at", { ascending: false }).limit(5),
-      supabase.from("incidents").select("*").eq("store_id", storeId).in("status", ["open", "in_progress", "escalated"]).order("created_at", { ascending: false }).limit(5),
+      supabase.from("tasks").select("id, title, category, status, priority, due_date, created_at, store_id").eq("store_id", storeId).in("status", ["todo", "progress", "late"]).order("created_at", { ascending: false }).limit(5),
+      supabase.from("incidents").select("id, title, ref_number, status, priority, category, created_at, store_id").eq("store_id", storeId).in("status", ["open", "in_progress", "escalated"]).order("created_at", { ascending: false }).limit(5),
     ]);
 
     const tasks = (tasksRes.data ?? []) as Task[];

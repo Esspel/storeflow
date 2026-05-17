@@ -173,7 +173,7 @@ function UsersTab({ isMobile, isAdmin, activeStore }: { isMobile: boolean; isAdm
 
   const load = useCallback(async () => {
     setLoading(true);
-    let q = supabase.from("app_users").select("*").eq("is_active", true);
+    let q = supabase.from("app_users").select("id, username, display_name, role, store_id, is_active, must_change_password, role_manually_set, created_at").eq("is_active", true);
     if (!isAdmin && activeStore) {
       const { data: storeUserIds } = await supabase.from("user_stores").select("user_id").eq("store_id", activeStore.id);
       const ids = (storeUserIds ?? []).map((r: { user_id: string }) => r.user_id);
@@ -183,7 +183,7 @@ function UsersTab({ isMobile, isAdmin, activeStore }: { isMobile: boolean; isAdm
     setUsers((data ?? []) as AppUser[]);
 
     if (activeStore) {
-      const { data: gData } = await supabase.from("user_groups").select("*").eq("store_id", activeStore.id);
+      const { data: gData } = await supabase.from("user_groups").select("id, name, display_name, store_id, created_at").eq("store_id", activeStore.id);
       setGroups((gData ?? []) as UserGroup[]);
     }
     setLoading(false);
@@ -211,9 +211,11 @@ function UsersTab({ isMobile, isAdmin, activeStore }: { isMobile: boolean; isAdm
 
   async function deleteUser(id: string) {
     if (!confirm("Är du säker? Användaren inaktiveras.")) return;
-    await supabase.from("app_users").update({ is_active: false }).eq("id", id);
+    const prev = users;
+    setUsers(u => u.filter(x => x.id !== id));
+    const { error } = await supabase.from("app_users").update({ is_active: false }).eq("id", id);
+    if (error) { setUsers(prev); toast.error("Kunde inte inaktivera användaren"); return; }
     toast.success("Användare inaktiverad");
-    load();
   }
 
   return (
@@ -375,9 +377,11 @@ function GroupsTab({ isMobile, isAdmin, activeStore }: { isMobile: boolean; isAd
 
   async function deleteGroup(id: string) {
     if (!confirm("Ta bort grupp?")) return;
-    await supabase.from("user_groups").delete().eq("id", id);
+    const prev = groups;
+    setGroups(g => g.filter(x => x.id !== id));
+    const { error } = await supabase.from("user_groups").delete().eq("id", id);
+    if (error) { setGroups(prev); toast.error("Kunde inte ta bort gruppen"); return; }
     toast.success("Grupp borttagen");
-    load();
   }
 
   return (
@@ -849,7 +853,7 @@ function GroupDialog({ group, activeStore, onClose, onSave }: {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    supabase.from("app_users").select("*").eq("is_active", true).then(({ data }) => setAllUsers((data ?? []) as AppUser[]));
+    supabase.from("app_users").select("id, username, display_name, role, store_id, is_active, must_change_password, role_manually_set, created_at").eq("is_active", true).then(({ data }) => setAllUsers((data ?? []) as AppUser[]));
     if (group) {
       supabase.from("user_group_members").select("user_id").eq("group_id", group.id).then(({ data }) => {
         setSelectedUsers((data ?? []).map((r: { user_id: string }) => r.user_id));
@@ -999,7 +1003,7 @@ function EmployeeMappingDialog({ onClose, activeStore }: { onClose: () => void; 
     if (!activeStore) { setLoading(false); return; }
     Promise.all([
       supabase.from("schedule_employees").select("id, name").eq("store_id", activeStore.id),
-      supabase.from("app_users").select("*").eq("is_active", true),
+      supabase.from("app_users").select("id, username, display_name, role, store_id, is_active, must_change_password, role_manually_set, created_at").eq("is_active", true),
       supabase.from("employee_mappings").select("schedule_employee_id, app_user_id").eq("store_id", activeStore.id),
     ]).then(([empRes, usersRes, mapRes]) => {
       const maps: Record<string, string> = {};

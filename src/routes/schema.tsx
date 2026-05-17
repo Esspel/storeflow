@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Calendar, Upload, Plus, ChevronLeft, ChevronRight, Clock, Truck, Users, RefreshCw, TriangleAlert as AlertTriangle, Check, X, FileText, Info, ChevronDown } from "lucide-react";
 import { supabase, type ScheduleShift, type ScheduleEmployee, type DeliveryPlan, type AppUser, type Store as StoreType } from "@/lib/supabase";
 import { useAuth, useIsManager } from "@/lib/auth-context";
@@ -185,13 +186,13 @@ function SchemaPage() {
     const [startDate, endDate] = [weekDates[0], weekDates[6]];
 
     const [shiftsRes, empRes, planRes] = await Promise.all([
-      supabase.from("schedule_shifts").select("*, schedule_employees(name, employee_number)")
+      supabase.from("schedule_shifts").select("id, store_id, import_id, employee_id, date, start_time, end_time, is_lended, is_borrowed, schedule_employees(id, name, employee_number)")
         .eq("store_id", activeStore.id)
         .gte("date", startDate)
         .lte("date", endDate)
         .order("date").order("start_time"),
-      supabase.from("schedule_employees").select("*").eq("store_id", activeStore.id),
-      supabase.from("delivery_plans").select("*, delivery_items(*)")
+      supabase.from("schedule_employees").select("id, store_id, name, employee_number, import_id").eq("store_id", activeStore.id),
+      supabase.from("delivery_plans").select("id, store_id, delivery_date, week_number, year, is_default_template, is_special_week, delivery_items(id, plan_id, article_name, quantity, unit)")
         .eq("store_id", activeStore.id)
         .gte("delivery_date", startDate)
         .lte("delivery_date", endDate),
@@ -350,6 +351,42 @@ function SchemaPage() {
   );
 }
 
+// ─── Mobile Shift List (virtualized) ───────────────────────────────────────
+function MobileShiftList({ dayShifts }: { dayShifts: ScheduleShift[] }) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: dayShifts.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 76,
+    overscan: 5,
+  });
+
+  if (dayShifts.length === 0) {
+    return (
+      <div className="py-8 text-center text-sm text-muted-foreground bg-card border border-border rounded-xl">
+        Inga pass denna dag
+      </div>
+    );
+  }
+
+  return (
+    <div ref={parentRef} style={{ maxHeight: "60vh", overflowY: "auto" }}>
+      <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+        {virtualizer.getVirtualItems().map(vItem => (
+          <div
+            key={vItem.key}
+            data-index={vItem.index}
+            ref={virtualizer.measureElement}
+            style={{ position: "absolute", top: 0, left: 0, right: 0, transform: `translateY(${vItem.start}px)`, paddingBottom: "8px" }}
+          >
+            <ShiftCard shift={dayShifts[vItem.index]} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Schedule View ─────────────────────────────────────────────────────────
 interface ScheduleViewProps {
   weekDates: string[];
@@ -409,15 +446,7 @@ function ScheduleView({ weekDates, shifts, employees, loading, isMobile, todaySt
           </div>
         )}
 
-        <div className="space-y-2">
-          {dayShifts.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground bg-card border border-border rounded-xl">Inga pass denna dag</div>
-          ) : (
-            dayShifts.map(shift => (
-              <ShiftCard key={shift.id} shift={shift} />
-            ))
-          )}
-        </div>
+        <MobileShiftList dayShifts={dayShifts} />
       </div>
     );
   }
@@ -548,12 +577,13 @@ function XmlImportDialog({ activeStore, onClose, onImported }: {
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
   const [mappings, setMappings] = useState<Record<string, string | null>>({});
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
   const [step, setStep] = useState<1 | 2>(1);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!activeStore) return;
-    supabase.from("app_users").select("*").eq("is_active", true).then(({ data }) => {
+    supabase.from("app_users").select("id, display_name, username, role").eq("is_active", true).then(({ data }) => {
       const users = (data ?? []) as AppUser[];
       setAppUsers(users);
     });
@@ -590,7 +620,7 @@ function XmlImportDialog({ activeStore, onClose, onImported }: {
   const [data, setData] = useState<AppUser[]>([]);
   useEffect(() => {
     if (!activeStore) return;
-    supabase.from("app_users").select("*").eq("is_active", true).then(({ data: d }) => {
+    supabase.from("app_users").select("id, display_name, username, role").eq("is_active", true).then(({ data: d }) => {
       setData((d ?? []) as AppUser[]);
       setAppUsers((d ?? []) as AppUser[]);
     });
@@ -644,10 +674,11 @@ function XmlImportDialog({ activeStore, onClose, onImported }: {
         }
       }
 
-      // Create shifts in batches of 50 to avoid timeouts
-      const BATCH = 50;
-      for (let i = 0; i < parsed.shifts.length; i += BATCH) {
-        const batch = parsed.shifts.slice(i, i + BATCH);
+      // Create shifts in batches of 100 with progress tracking
+      const SHIFT_CHUNK = 100;
+      setImportProgress({ current: 0, total: parsed.shifts.length });
+      for (let i = 0; i < parsed.shifts.length; i += SHIFT_CHUNK) {
+        const batch = parsed.shifts.slice(i, i + SHIFT_CHUNK);
         await supabase.from("schedule_shifts").insert(
           batch.map(s => ({
             store_id: activeStore.id,
@@ -660,7 +691,9 @@ function XmlImportDialog({ activeStore, onClose, onImported }: {
             is_borrowed: false,
           }))
         );
+        setImportProgress({ current: Math.min(i + SHIFT_CHUNK, parsed.shifts.length), total: parsed.shifts.length });
       }
+      setImportProgress(null);
 
       toast.success(`Import klar: ${parsed.shifts.length} pass för ${parsed.employees.length} anställda`);
       onImported();
@@ -728,8 +761,23 @@ function XmlImportDialog({ activeStore, onClose, onImported }: {
                 </div>
               </div>
 
+              {importProgress && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Importerar pass {importProgress.current}–{Math.min(importProgress.current + 100, importProgress.total)} av {importProgress.total}...</span>
+                    <span>{Math.round(importProgress.current / importProgress.total * 100)}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all duration-300"
+                      style={{ width: `${Math.round(importProgress.current / importProgress.total * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                <button onClick={() => setStep(1)} className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted">Tillbaka</button>
+                <button onClick={() => setStep(1)} className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted" disabled={importing}>Tillbaka</button>
                 <button
                   onClick={importShifts}
                   disabled={importing}
@@ -758,6 +806,7 @@ function DeliveryImportDialog({ activeStore, currentYear, onClose, onImported, h
   const [weekOverride, setWeekOverride] = useState<number | null>(null);
   const [specialWeekFiles, setSpecialWeekFiles] = useState<Record<number, { date: string; items: { article: string; qty: number; unit: string }[] }[]>>({});
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const specialFileRef = useRef<HTMLInputElement>(null);
 
@@ -817,44 +866,33 @@ function DeliveryImportDialog({ activeStore, currentYear, onClose, onImported, h
     if (!activeStore || csvData.length === 0) return;
     setImporting(true);
     try {
-      for (const dayData of csvData) {
-        if (!dayData.date || dayData.date === "Invalid Date") continue;
+      // Combine standard + special week entries for unified progress tracking
+      const allDays: { date: string; items: { article: string; qty: number; unit: string }[]; weekNum?: number; isSpecial: boolean }[] = [
+        ...csvData.filter(d => d.date && d.date !== "Invalid Date").map(d => ({ ...d, isSpecial: false })),
+        ...Object.entries(specialWeekFiles).flatMap(([wn, days]) =>
+          days.map(d => ({ ...d, weekNum: parseInt(wn), isSpecial: true }))
+        ),
+      ];
+
+      const DELIVERY_CHUNK = 100;
+      setImportProgress({ current: 0, total: allDays.length });
+
+      for (let i = 0; i < allDays.length; i++) {
+        const dayData = allDays[i];
         const { data: plan } = await supabase.from("delivery_plans").insert({
           store_id: activeStore.id,
           delivery_date: dayData.date,
-          is_default_template: isDefault,
-          is_special_week: false,
-          week_number: weekOverride ?? getWeekNumber(new Date(dayData.date)),
+          is_default_template: dayData.isSpecial ? false : isDefault,
+          is_special_week: dayData.isSpecial,
+          week_number: dayData.weekNum ?? (weekOverride ?? getWeekNumber(new Date(dayData.date))),
           year: currentYear,
         }).select().single();
 
-        if (plan) {
-          await supabase.from("delivery_items").insert(
-            dayData.items.map(item => ({
-              plan_id: plan.id,
-              article_name: item.article,
-              quantity: item.qty,
-              unit: item.unit,
-            }))
-          );
-        }
-      }
-
-      // Import special week files
-      for (const [weekNum, weekData] of Object.entries(specialWeekFiles)) {
-        for (const dayData of weekData) {
-          const { data: plan } = await supabase.from("delivery_plans").insert({
-            store_id: activeStore.id,
-            delivery_date: dayData.date,
-            is_special_week: true,
-            is_default_template: false,
-            week_number: parseInt(weekNum),
-            year: currentYear,
-          }).select().single();
-
-          if (plan) {
+        if (plan && dayData.items.length > 0) {
+          // Insert items in chunks of DELIVERY_CHUNK
+          for (let j = 0; j < dayData.items.length; j += DELIVERY_CHUNK) {
             await supabase.from("delivery_items").insert(
-              dayData.items.map(item => ({
+              dayData.items.slice(j, j + DELIVERY_CHUNK).map(item => ({
                 plan_id: plan.id,
                 article_name: item.article,
                 quantity: item.qty,
@@ -863,8 +901,11 @@ function DeliveryImportDialog({ activeStore, currentYear, onClose, onImported, h
             );
           }
         }
+
+        setImportProgress({ current: i + 1, total: allDays.length });
       }
 
+      setImportProgress(null);
       toast.success("Leveransplan importerad");
       onImported();
     } catch (e: unknown) {
@@ -964,8 +1005,23 @@ function DeliveryImportDialog({ activeStore, currentYear, onClose, onImported, h
                 </div>
               )}
 
+              {importProgress && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Importerar dag {importProgress.current} av {importProgress.total}...</span>
+                    <span>{Math.round(importProgress.current / importProgress.total * 100)}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all duration-300"
+                      style={{ width: `${Math.round(importProgress.current / importProgress.total * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                <button onClick={() => setStep(1)} className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted">Tillbaka</button>
+                <button onClick={() => setStep(1)} className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted" disabled={importing}>Tillbaka</button>
                 <button
                   onClick={doImport}
                   disabled={importing}

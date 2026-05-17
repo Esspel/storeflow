@@ -206,7 +206,7 @@ function ActiveRunda({ session, onComplete, onCancel, storeId, userId }: {
   useEffect(() => {
     Promise.all([
       supabase.from("kundrunda_zones").select("*, kundrunda_checkpoints(*)").order("sort_order"),
-      supabase.from("kundrunda_responses").select("*").eq("session_id", session.id),
+      supabase.from("kundrunda_responses").select("id, session_id, checkpoint_id, result, defect_description, created_at").eq("session_id", session.id),
     ]).then(([zonesRes, respRes]) => {
       setZones((zonesRes.data ?? []) as KundrundaZone[]);
       const respMap: Record<string, KundrundaResponse> = {};
@@ -218,14 +218,38 @@ function ActiveRunda({ session, onComplete, onCancel, storeId, userId }: {
 
   async function respond(checkpointId: string, result: "ok" | "avvikelse") {
     const existing = responses[checkpointId];
+    const prevResponses = responses;
+
     if (existing) {
-      await supabase.from("kundrunda_responses").update({ result }).eq("id", existing.id);
+      // Optimistic update
       setResponses(r => ({ ...r, [checkpointId]: { ...existing, result } }));
+      const { error } = await supabase.from("kundrunda_responses").update({ result }).eq("id", existing.id);
+      if (error) {
+        setResponses(prevResponses);
+        toast.error("Kunde inte spara svar");
+        return;
+      }
     } else {
-      const { data } = await supabase.from("kundrunda_responses").insert({
+      // Optimistic insert with temp ID
+      const tempId = `temp-${checkpointId}`;
+      const optimistic: KundrundaResponse = {
+        id: tempId,
+        session_id: session.id,
+        checkpoint_id: checkpointId,
+        result,
+        defect_description: null,
+        created_at: new Date().toISOString(),
+      };
+      setResponses(r => ({ ...r, [checkpointId]: optimistic }));
+      const { data, error } = await supabase.from("kundrunda_responses").insert({
         session_id: session.id, checkpoint_id: checkpointId, result,
-      }).select().single();
-      if (data) setResponses(r => ({ ...r, [checkpointId]: data as KundrundaResponse }));
+      }).select("id, session_id, checkpoint_id, result, defect_description, created_at").single();
+      if (error || !data) {
+        setResponses(prevResponses);
+        toast.error("Kunde inte spara svar");
+        return;
+      }
+      setResponses(r => ({ ...r, [checkpointId]: data as KundrundaResponse }));
     }
     if (result === "avvikelse") setShowDefectForm(checkpointId);
   }

@@ -1,20 +1,17 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useState, useEffect, useCallback } from "react";
-import { ChartBar as BarChart2, TrendingUp, TriangleAlert as AlertTriangle, SquareCheck as CheckSquare, Store, RefreshCw } from "lucide-react";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, PieChart, Pie, Cell, Legend,
-} from "recharts";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { ChartBar as BarChart2, TriangleAlert as AlertTriangle, SquareCheck as CheckSquare, Store, RefreshCw } from "lucide-react";
 import { supabase, getSessionToken } from "@/lib/supabase";
 import { useAuth, useIsAdmin } from "@/lib/auth-context";
-import { cn, formatDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+
+const TaskTrendChart = lazy(() => import("@/components/rapporter-charts").then(m => ({ default: m.TaskTrendChart })));
+const IncidentsPieChart = lazy(() => import("@/components/rapporter-charts").then(m => ({ default: m.IncidentsPieChart })));
 
 export const Route = createFileRoute("/rapporter")({
   beforeLoad: () => { if (!getSessionToken()) throw redirect({ to: "/login" }); },
   component: RapporterPage,
 });
-
-const CHART_COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
 
 interface StoreStats {
   store_id: string;
@@ -26,8 +23,12 @@ interface StoreStats {
   kundrunda_avg: number;
 }
 
+function ChartSkeleton() {
+  return <div className="w-full h-[200px] bg-muted animate-pulse rounded-xl" />;
+}
+
 function RapporterPage() {
-  const { user, activeStore } = useAuth();
+  const { activeStore } = useAuth();
   const isAdmin = useIsAdmin();
   const [storeStats, setStoreStats] = useState<StoreStats | null>(null);
   const [taskTrend, setTaskTrend] = useState<{ week: string; completed: number; created: number }[]>([]);
@@ -101,6 +102,8 @@ function RapporterPage() {
     ? Math.round(storeStats.completed_tasks / storeStats.total_tasks * 100)
     : 0;
 
+  void isAdmin;
+
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
@@ -154,43 +157,18 @@ function RapporterPage() {
       {/* Task trend chart */}
       <div className="bg-card border border-border rounded-2xl p-4">
         <h2 className="text-sm font-semibold text-foreground mb-4">Uppgifter per vecka</h2>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={taskTrend}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-            <XAxis dataKey="week" tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} />
-            <YAxis tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} />
-            <Tooltip contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", fontSize: 12 }} />
-            <Bar dataKey="created" name="Skapade" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="completed" name="Klara" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <Suspense fallback={<ChartSkeleton />}>
+          <TaskTrendChart data={taskTrend} />
+        </Suspense>
       </div>
 
       {/* Incidents by category */}
       {incidentsByCategory.length > 0 && (
         <div className="bg-card border border-border rounded-2xl p-4">
           <h2 className="text-sm font-semibold text-foreground mb-4">Avvikelser per kategori</h2>
-          <div className="flex flex-col md:flex-row gap-4 items-center">
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={incidentsByCategory} dataKey="count" nameKey="category" cx="50%" cy="50%" outerRadius={80} label={({ category, percent }) => `${category} ${Math.round(percent * 100)}%`}>
-                  {incidentsByCategory.map((_, i) => (
-                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "12px", fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="space-y-1.5 shrink-0">
-              {incidentsByCategory.map((item, i) => (
-                <div key={item.category} className="flex items-center gap-2 text-sm">
-                  <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                  <span className="text-foreground">{item.category}</span>
-                  <span className="text-muted-foreground ml-auto pl-4">{item.count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <Suspense fallback={<ChartSkeleton />}>
+            <IncidentsPieChart data={incidentsByCategory} />
+          </Suspense>
         </div>
       )}
     </div>
