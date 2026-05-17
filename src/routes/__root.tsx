@@ -12,6 +12,7 @@ import { useEffect } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { FirstTimeSetup } from "@/components/first-time-setup";
 import { BarcodeProvider } from "@/lib/barcode-context";
 import appCss from "../styles.css?url";
 
@@ -115,7 +116,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function AppLayout() {
-  const { user, loading } = useAuth();
+  const { user, loading, showFirstTimeSetup, dismissFirstTimeSetup } = useAuth();
   const navigate = useNavigate();
   const router = useRouter();
   const pathname = router.state.location.pathname;
@@ -149,6 +150,10 @@ function AppLayout() {
   }
 
   if (!user) return null;
+
+  if (showFirstTimeSetup) {
+    return <FirstTimeSetup onComplete={dismissFirstTimeSetup} />;
+  }
 
   return <AppShell />;
 }

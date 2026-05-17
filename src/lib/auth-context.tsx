@@ -11,6 +11,9 @@ type AuthContextType = {
   setActiveStore: (store: Store | null) => void;
   effectiveStore: Store | null;
   isFirstLogin: boolean;
+  showFirstTimeSetup: boolean;
+  triggerFirstTimeSetup: () => void;
+  dismissFirstTimeSetup: () => void;
   login: (username: string, password: string) => Promise<{ error?: string; mustChangePassword?: boolean }>;
   logout: () => Promise<void>;
   refreshUser: (user: AppUser) => void;
@@ -31,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [activeStore, setActiveStoreState] = useState<Store | null>(null);
   const [lockScreenOpen, setLockScreenOpen] = useState(false);
   const [isFirstLogin, setIsFirstLogin] = useState(false);
+  const [showFirstTimeSetup, setShowFirstTimeSetup] = useState(false);
 
   // effectiveStore is always activeStore — kept for API compat
   const effectiveStore = activeStore;
@@ -144,6 +148,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const openLockScreen = () => setLockScreenOpen(true);
   const closeLockScreen = () => setLockScreenOpen(false);
+  const triggerFirstTimeSetup = () => setShowFirstTimeSetup(true);
+  const dismissFirstTimeSetup = () => setShowFirstTimeSetup(false);
 
   const quickSwitch = async (newUser: AppUser, newToken: string) => {
     if (token) {
@@ -165,7 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, userStores, activeStore, setActiveStore, effectiveStore, isFirstLogin, login, logout, refreshUser, refreshUserStores, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch }}
+      value={{ user, token, loading, userStores, activeStore, setActiveStore, effectiveStore, isFirstLogin, showFirstTimeSetup, triggerFirstTimeSetup, dismissFirstTimeSetup, login, logout, refreshUser, refreshUserStores, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch }}
     >
       {children}
     </AuthContext.Provider>
