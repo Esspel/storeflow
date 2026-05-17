@@ -34,6 +34,10 @@ export type AppUser = {
   must_change_password: boolean;
   last_login: string | null;
   created_at: string;
+  // Enterprise hierarchy
+  hierarchy_level?: "admin" | "hk" | "forening" | "distrikt" | "chef" | "anvandare";
+  forening_id?: string | null;
+  distrikt_id?: string | null;
 };
 
 export const ROLE_LABELS: Record<string, string> = {
@@ -42,11 +46,28 @@ export const ROLE_LABELS: Record<string, string> = {
   employee: "Anställd",
 };
 
-export type Region = {
+export const HIERARCHY_LABELS: Record<string, string> = {
+  admin: "Admin",
+  hk: "Huvudkontor",
+  forening: "Förening",
+  distrikt: "Distrikt",
+  chef: "Butikschef",
+  anvandare: "Användare",
+};
+
+export type Forening = {
   id: string;
   name: string;
-  code: string | null;
+  short_code: string;
   created_at: string;
+};
+
+export type Distrikt = {
+  id: string;
+  forening_id: string;
+  name: string;
+  created_at: string;
+  forening?: Forening;
 };
 
 export type Store = {
@@ -61,6 +82,43 @@ export type Store = {
   is_active: boolean;
   sap_site_id: string | null;
   created_at: string;
+  // Enterprise hierarchy
+  forening_id?: string | null;
+  distrikt_id?: string | null;
+  forening?: Forening;
+  distrikt?: Distrikt;
+  // CSV store directory fields (all 32 columns)
+  butiks_nr?: string | null;
+  bolag?: string | null;
+  koncept?: string | null;
+  kommentar?: string | null;
+  butik_enhet?: string | null;
+  foretag?: string | null;
+  enhet?: string | null;
+  organisationsnummer?: string | null;
+  franchise?: boolean;
+  gatuadress?: string | null;
+  postnr?: string | null;
+  postadress?: string | null;
+  email_sm_chef?: string | null;
+  butikschef?: string | null;
+  telefon_butik?: string | null;
+  bc_telefon?: string | null;
+  mobil?: string | null;
+  direktor_forsaljning?: string | null;
+  forsaljningschef?: string | null;
+  marknadsorrade?: string | null;
+  distriktschef?: string | null;
+  distrikt_namn?: string | null;
+  k_stalle?: string | null;
+  namn2?: string | null;
+  gamla_butiksnummer?: string | null;
+  saljplan?: string | null;
+  sak_kval_samordnare?: string | null;
+  kommun?: string | null;
+  hr_generalist?: string | null;
+  bemanningsspecialist?: string | null;
+  site_id?: string | null;
 };
 
 export type UserStore = {

@@ -9,6 +9,11 @@ type AuthContextType = {
   userStores: Store[];
   activeStore: Store | null;
   setActiveStore: (store: Store | null) => void;
+  // Global context store — for HQ/Forening/Distrikt users browsing another store's data
+  globalContextStore: Store | null;
+  setGlobalContextStore: (store: Store | null) => void;
+  // Effective store: globalContextStore if set, otherwise activeStore
+  effectiveStore: Store | null;
   login: (username: string, password: string) => Promise<{ error?: string; mustChangePassword?: boolean }>;
   logout: () => Promise<void>;
   refreshUser: (user: AppUser) => void;
@@ -28,19 +33,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [userStores, setUserStores] = useState<Store[]>([]);
   const [activeStore, setActiveStoreState] = useState<Store | null>(null);
+  const [globalContextStore, setGlobalContextStoreState] = useState<Store | null>(null);
   const [lockScreenOpen, setLockScreenOpen] = useState(false);
 
+  const effectiveStore = globalContextStore ?? activeStore;
+
+  const setGlobalContextStore = (store: Store | null) => {
+    setGlobalContextStoreState(store);
+  };
+
   const loadUserStores = async (userId: string, currentUser: AppUser) => {
-    if (currentUser.role === "admin") {
-      // Admins see all stores
-      const { data } = await supabase.from("stores").select("*").order("name");
+    const hierarchyLevel = currentUser.hierarchy_level;
+    const isAboveStore = currentUser.role === "admin" || hierarchyLevel === "hk" || hierarchyLevel === "forening" || hierarchyLevel === "distrikt";
+    if (isAboveStore) {
+      // HQ/Admin/Forening/Distrikt users see stores scoped to their hierarchy
+      let query = supabase.from("stores").select("*, forening:foreningar(*), distrikt:distrikt(*)").order("name");
+      if (hierarchyLevel === "forening" && currentUser.forening_id) {
+        query = supabase.from("stores").select("*, forening:foreningar(*), distrikt:distrikt(*)").eq("forening_id", currentUser.forening_id).order("name");
+      } else if (hierarchyLevel === "distrikt" && currentUser.distrikt_id) {
+        query = supabase.from("stores").select("*, forening:foreningar(*), distrikt:distrikt(*)").eq("distrikt_id", currentUser.distrikt_id).order("name");
+      }
+      const { data } = await query;
       const stores = (data ?? []) as Store[];
       setUserStores(stores);
       return stores;
     }
     const { data } = await supabase
       .from("user_stores")
-      .select("store:stores(*)")
+      .select("store:stores(*, forening:foreningar(*), distrikt:distrikt(*))")
       .eq("user_id", userId);
     const stores = ((data ?? []).map((r: { store: unknown }) => r.store).filter(Boolean)) as Store[];
     setUserStores(stores);
@@ -124,6 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     setUserStores([]);
     setActiveStoreState(null);
+    setGlobalContextStoreState(null);
     await clearSession();
   };
 
@@ -157,7 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, userStores, activeStore, setActiveStore, login, logout, refreshUser, refreshUserStores, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch }}
+      value={{ user, token, loading, userStores, activeStore, setActiveStore, globalContextStore, setGlobalContextStore, effectiveStore, login, logout, refreshUser, refreshUserStores, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch }}
     >
       {children}
     </AuthContext.Provider>

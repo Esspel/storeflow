@@ -1,8 +1,9 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { ChartBar as BarChart3, Bell, ChevronDown, ClipboardList, FlaskConical, Hop as Home, LogOut, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight } from "lucide-react";
-import { ROLE_LABELS } from "@/lib/supabase";
+import { ChartBar as BarChart3, Bell, ChevronDown, ClipboardList, FlaskConical, Hop as Home, LogOut, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Building2 } from "lucide-react";
+import { ROLE_LABELS, HIERARCHY_LABELS } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
+import { GlobalStoreSelector } from "@/components/global-store-selector";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -162,7 +163,7 @@ function OfflineSnackbar() {
 
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { user, logout, userStores, activeStore, setActiveStore, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch } = useAuth();
+  const { user, logout, userStores, activeStore, setActiveStore, globalContextStore, effectiveStore, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch } = useAuth();
   const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -235,6 +236,7 @@ export function AppShell() {
 
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "manager" || isAdmin;
+  const isAboveStore = isAdmin || user?.hierarchy_level === "hk" || user?.hierarchy_level === "forening" || user?.hierarchy_level === "distrikt";
 
   const nav = [
     { to: "/", label: "Översikt", mobileHidden: false, Icon: Home },
@@ -352,10 +354,13 @@ export function AppShell() {
           </nav>
 
           <div className="ml-auto flex items-center gap-1.5 md:gap-2">
+            {/* Global context store selector — HQ/Förening/Distrikt/Admin only */}
+            {isAboveStore && <GlobalStoreSelector />}
+
             {/* Mitt Coop button */}
-            {activeStore?.sap_site_id && (
+            {(effectiveStore ?? activeStore)?.sap_site_id && (
               <a
-                href={`https://mittcoop.coop.se/sortiment/articles?siteId=${activeStore.sap_site_id}`}
+                href={`https://mittcoop.coop.se/sortiment/articles?siteId=${(effectiveStore ?? activeStore)!.sap_site_id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-background px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-accent-foreground active:opacity-75"
@@ -454,8 +459,17 @@ export function AppShell() {
               <DropdownMenuContent align="end" className="w-56">
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-medium">{user?.display_name}</p>
-                  <p className="text-xs text-muted-foreground">{user?.role ? (ROLE_LABELS[user.role] ?? user.role) : ""}</p>
-                  {activeStore && <p className="text-xs text-muted-foreground">{activeStore.name}</p>}
+                  <p className="text-xs text-muted-foreground">
+                    {user?.hierarchy_level
+                      ? (HIERARCHY_LABELS[user.hierarchy_level] ?? ROLE_LABELS[user.role] ?? user.role)
+                      : (user?.role ? (ROLE_LABELS[user.role] ?? user.role) : "")}
+                  </p>
+                  {(effectiveStore ?? activeStore) && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      {globalContextStore && <Building2 className="h-3 w-3 shrink-0 text-blue-500" />}
+                      {(effectiveStore ?? activeStore)!.name}
+                    </p>
+                  )}
                 </div>
                 {/* Store switcher in dropdown — mobile only (desktop has header button) */}
                 {userStores.length > 1 && (

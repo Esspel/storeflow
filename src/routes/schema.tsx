@@ -21,10 +21,12 @@ import { generatePassword, usernameFromName } from "@/lib/text-utils";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { getSpecialWeekHoliday, stockholmToUtc, formatStockholmTime, isoWeekNumber } from "@/lib/swedish-holidays";
 
 function SchemaRoute() {
-  const { activeStore, user } = useAuth();
-  const storeId = activeStore?.id ?? user?.store_id ?? "none";
+  const { effectiveStore, activeStore, user } = useAuth();
+  const store = effectiveStore ?? activeStore;
+  const storeId = store?.id ?? user?.store_id ?? "none";
   return <SchemaPage key={storeId} />;
 }
 
@@ -149,6 +151,7 @@ type MatchedEmployee = {
   appUserId: string | null; // set for "existing" or after creation
   newUsername: string;
   newPassword: string;
+  isBorrowed?: boolean; // true if user belongs to another store (Lånad Personal)
 };
 
 // ─── Shift colour mapping ─────────────────────────────────────────────────────
@@ -544,7 +547,8 @@ function isLightColor(hex: string): boolean {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 function SchemaPage() {
-  const { user, activeStore } = useAuth();
+  const { user, activeStore, effectiveStore } = useAuth();
+  // Both Admin and Chef (manager) can import schedules and delivery plans
   const isAdmin = user?.role === "admin" || user?.role === "manager";
 
   const [imports, setImports] = useState<ImportRow[]>([]);
@@ -804,6 +808,14 @@ function SchemaPage() {
               usedUserIds.add(byStoreAndName.id);
               return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "existing" as const, appUserId: byStoreAndName.id, newUsername: "", newPassword: "" };
             }
+            // Cross-store borrowed staff detection: if a global user matches by name but belongs to another store,
+            // link them as borrowed — do NOT create a duplicate account
+            const globalNameMatch = allUsers.find((u) => !usedUserIds.has(u.id) && normalizeName(u.display_name) === normEmp && !storeUserIds.has(u.id));
+            if (globalNameMatch) {
+              usedUserIds.add(globalNameMatch.id);
+              toast.info(`${emp.employeeName} identifierad som Lånad Personal från annan butik.`);
+              return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "existing" as const, appUserId: globalNameMatch.id, newUsername: "", newPassword: "", isBorrowed: true };
+            }
             return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "new" as const, appUserId: null, newUsername: usernameFromName(emp.employeeName), newPassword: generatePassword(16) };
           });
           setParsed(schedule);
@@ -828,8 +840,16 @@ function SchemaPage() {
             const weekNumber = csvWeekNumber;
             const year = csvYear;
             const weekStart = getWeekStartDate(weekNumber, year);
+            // Detect Swedish special weeks (holidays)
+            const holidayName = getSpecialWeekHoliday(year, weekNumber);
+            const isSpecialWeek = holidayName !== null;
+            if (isSpecialWeek) {
+              toast.info(`Vecka ${weekNumber} innehåller helgdag: ${holidayName}. Importerar som specialvecka.`);
+            }
             const { data: plan, error: planErr } = await supabase.from("delivery_plans").insert({
               store_id: storeId, week_number: weekNumber, year, imported_by: user.id, filename: file.name,
+              is_special_week: isSpecialWeek, holiday_name: holidayName,
+              is_default_template: !isSpecialWeek,
             }).select().single();
             if (planErr || !plan) { toast.error(`Fel vid sparande av leveransplan: ${planErr?.message}`); continue; }
             const planId = (plan as DeliveryPlan).id;
@@ -927,17 +947,19 @@ function SchemaPage() {
       for (const me of matchedEmployees) {
         if (me.matchType === "existing" && me.appUserId) {
           finalMappings.push({ employee_nr: me.employeeNr, app_user_id: me.appUserId });
-          // Ensure this user is connected to the current store
-          await supabase.from("user_stores").upsert({ user_id: me.appUserId, store_id: storeId, is_primary: false }, { onConflict: "user_id,store_id" });
-          // Only update role from XML if it was not manually set by an admin
-          const existingUser = allUsers.find((u) => u.id === me.appUserId);
-          if (me.employeeGroup && !existingUser?.role_manually_set) {
-            const role = groupToRole(me.employeeGroup);
-            await supabase.from("app_users").update({ role, employee_group: me.employeeGroup }).eq("id", me.appUserId);
-          } else if (me.employeeGroup) {
-            // Still update employee_group even if role is manually locked
-            await supabase.from("app_users").update({ employee_group: me.employeeGroup }).eq("id", me.appUserId);
+          // Borrowed staff: link them temporarily to this store without changing their primary store
+          if (!me.isBorrowed) {
+            await supabase.from("user_stores").upsert({ user_id: me.appUserId, store_id: storeId, is_primary: false }, { onConflict: "user_id,store_id" });
+            // Only update role from XML if it was not manually set by an admin
+            const existingUser = allUsers.find((u) => u.id === me.appUserId);
+            if (me.employeeGroup && !existingUser?.role_manually_set) {
+              const role = groupToRole(me.employeeGroup);
+              await supabase.from("app_users").update({ role, employee_group: me.employeeGroup }).eq("id", me.appUserId);
+            } else if (me.employeeGroup) {
+              await supabase.from("app_users").update({ employee_group: me.employeeGroup }).eq("id", me.appUserId);
+            }
           }
+          // Mark shifts for borrowed staff with is_borrowed=true in the rows below
         } else if (me.matchType === "new") {
           // Create user
           const username = me.newUsername || usernameFromName(me.employeeName);
@@ -988,30 +1010,51 @@ function SchemaPage() {
         const { data: empData, error: empErr } = await supabase.from("schedule_employees").insert({ import_id: importId, employee_nr: emp.employeeNr, employee_name: emp.employeeName, employee_group: emp.employeeGroup }).select().single();
         if (empErr || !empData) continue;
         const empId = (empData as ScheduleEmployee).id;
+        // Determine if this employee is borrowed staff
+        const empMapping = finalMappings.find((fm) => fm.employee_nr === emp.employeeNr);
+        const borrowedMe = matchedEmployees.find((me) => me.employeeNr === emp.employeeNr);
+        const isEmpBorrowed = borrowedMe?.isBorrowed === true;
+
         const rows = emp.days.flatMap((day) => {
           const isAbsence = day.isAbsenceDay || day.isSemester;
+          // Convert day date + shift times to UTC for DST-safe storage
+          // Times from SoftOne are in Stockholm local time
           if (day.shifts.length > 0) {
             // Absence takes priority: shifts become shadow shifts (metadata only, no worked time)
-            return day.shifts.map((s) => ({
-              schedule_employee_id: empId,
-              import_id: importId,
-              day_date: day.scheduleDate,
-              start_time: s.startTime || null,
-              stop_time: s.stopTime || null,
-              shift_name: s.shiftName,
-              color: isAbsence ? (day.isSemester ? "#fca5a5" : "#e0e0e0") : s.color,
-              // Absence day: no counted minutes regardless of what XML shift says
-              gross_minutes: isAbsence ? 0 : s.grossMinutes,
-              net_minutes: isAbsence ? 0 : s.netMinutes,
-              break_minutes: isAbsence ? 0 : s.breakMinutes,
-              break_windows: isAbsence ? [] : s.breakWindows,
-              deviation_cause: s.deviationCause || (day.isSemester ? "Semester" : ""),
-              is_absence_day: isAbsence,
-              is_lended: s.isLended,
-              is_borrowed: s.isBorrowed,
-              shift_link: s.shiftLink,
-              is_shadow_shift: isAbsence && !!(s.startTime || s.shiftName),
-            }));
+            return day.shifts.map((s) => {
+              // Build UTC-safe timestamps for start/stop using Stockholm timezone
+              let startUtc: string | null = null;
+              let stopUtc: string | null = null;
+              if (s.startTime && day.scheduleDate) {
+                startUtc = stockholmToUtc(`${day.scheduleDate}T${s.startTime}`);
+              }
+              if (s.stopTime && day.scheduleDate) {
+                // Handle overnight shifts: if stop < start, add one day
+                const stopDay = (s.stopTime < s.startTime) ? addDays(day.scheduleDate, 1) : day.scheduleDate;
+                stopUtc = stockholmToUtc(`${stopDay}T${s.stopTime}`);
+              }
+              return {
+                schedule_employee_id: empId,
+                import_id: importId,
+                day_date: day.scheduleDate,
+                start_time: s.startTime || null,
+                stop_time: s.stopTime || null,
+                start_time_utc: startUtc,
+                stop_time_utc: stopUtc,
+                shift_name: s.shiftName,
+                color: isAbsence ? (day.isSemester ? "#fca5a5" : "#e0e0e0") : s.color,
+                gross_minutes: isAbsence ? 0 : s.grossMinutes,
+                net_minutes: isAbsence ? 0 : s.netMinutes,
+                break_minutes: isAbsence ? 0 : s.breakMinutes,
+                break_windows: isAbsence ? [] : s.breakWindows,
+                deviation_cause: s.deviationCause || (day.isSemester ? "Semester" : ""),
+                is_absence_day: isAbsence,
+                is_lended: s.isLended,
+                is_borrowed: isEmpBorrowed || s.isBorrowed,
+                shift_link: s.shiftLink,
+                is_shadow_shift: isAbsence && !!(s.startTime || s.shiftName),
+              };
+            });
           }
           if (isAbsence) {
             return [{
@@ -1153,20 +1196,27 @@ function SchemaPage() {
   const hourMarkers = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => TIMELINE_START + i);
 
   // Auto-scroll mobile list to first active/upcoming shift
+  // Uses container-relative scrollTop to avoid conflict with page-level scroll
   useEffect(() => {
     if (!mobileListRef.current || currentDate !== todayStr) return;
+    const container = mobileListRef.current;
     const now = new Date();
     const nowMins = now.getHours() * 60 + now.getMinutes();
-    // Find the first card whose shift contains or is upcoming within 30 min
-    const cards = mobileListRef.current.querySelectorAll<HTMLElement>("[data-shift-start]");
+    const cards = container.querySelectorAll<HTMLElement>("[data-shift-start]");
     let targetEl: HTMLElement | null = null;
     for (const card of Array.from(cards)) {
-      const start = parseInt(card.dataset.shiftStart ?? "9999", 10);
       const stop = parseInt(card.dataset.shiftStop ?? "9999", 10);
       if (stop > nowMins - 15) { targetEl = card; break; }
     }
     if (targetEl) {
-      setTimeout(() => targetEl!.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
+      setTimeout(() => {
+        if (!targetEl) return;
+        // Scroll within the page (window) rather than the container to avoid
+        // double-scrolling conflicts with the sticky day nav bar
+        const rect = targetEl.getBoundingClientRect();
+        const offset = window.scrollY + rect.top - 120; // 120px clearance below sticky nav
+        window.scrollTo({ top: Math.max(0, offset), behavior: "smooth" });
+      }, 300);
     }
   }, [currentDate, displayRows, loadingSchedule]);
 
@@ -1864,33 +1914,46 @@ function SchemaPage() {
               </div>
             </div>
 
-            {/* Week picker for CSV */}
-            <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-              <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="text-xs font-medium text-foreground shrink-0">Leveransplan gäller vecka</span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={53}
-                  value={csvWeekNumber}
-                  onChange={(e) => setCsvWeekNumber(Math.max(1, Math.min(53, parseInt(e.target.value) || 1)))}
-                  className="w-16 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-                <span className="text-xs text-muted-foreground">/</span>
-                <input
-                  type="number"
-                  min={2020}
-                  max={2099}
-                  value={csvYear}
-                  onChange={(e) => setCsvYear(parseInt(e.target.value) || new Date().getFullYear())}
-                  className="w-20 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-              </div>
-              <span className="text-[11px] text-muted-foreground ml-auto">
-                {getWeekStartDate(csvWeekNumber, csvYear)} →
-              </span>
-            </div>
+            {/* Week picker for CSV with special week detection */}
+            {(() => {
+              const holidayForWeek = getSpecialWeekHoliday(csvYear, csvWeekNumber);
+              return (
+                <div className={["flex flex-col gap-2 rounded-xl border px-4 py-3", holidayForWeek ? "border-amber-400/60 bg-amber-50/60 dark:bg-amber-950/20" : "border-border/60 bg-muted/20"].join(" ")}>
+                  <div className="flex items-center gap-3">
+                    <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="text-xs font-medium text-foreground shrink-0">Leveransplan gäller vecka</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={53}
+                        value={csvWeekNumber}
+                        onChange={(e) => setCsvWeekNumber(Math.max(1, Math.min(53, parseInt(e.target.value) || 1)))}
+                        className="w-16 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                      <span className="text-xs text-muted-foreground">/</span>
+                      <input
+                        type="number"
+                        min={2020}
+                        max={2099}
+                        value={csvYear}
+                        onChange={(e) => setCsvYear(parseInt(e.target.value) || new Date().getFullYear())}
+                        className="w-20 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                    </div>
+                    <span className="text-[11px] text-muted-foreground ml-auto">
+                      {getWeekStartDate(csvWeekNumber, csvYear)} →
+                    </span>
+                  </div>
+                  {holidayForWeek && (
+                    <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      <span>Specialvecka: <strong>{holidayForWeek}</strong> — denna leveransplan sparas som en helgdagsspecifik variant.</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Drop zone */}
             <div
