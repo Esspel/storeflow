@@ -81,15 +81,33 @@ function ScoreRing({ score, max }: { score: number; max: number }) {
 
 // ── CSV helpers ───────────────────────────────────────────────────────────────
 
+// Comment lines (starting with #) are injected into every downloadable template
+// and are skipped by the importer so they don't create bad data.
+const KUNDRUNDA_CSV_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
+# Kolumner: Zon,Kontrollpunkt,Beskrivning
+#
+# Zon: Namnet på zonen (t.ex. "Ingång", "Mejeri")
+# Kontrollpunkt: Beskrivning av vad som ska kontrolleras
+# Beskrivning: Mer detaljerad information (valfritt)
+#
+# Regler:
+#   - Varje rad skapar en kontrollpunkt i angiven zon
+#   - Rader med samma zonnamn grupperas automatiskt
+#   - Importera ersätter INTE befintliga data — den lägger till
+#
+# Tips: Spara filen i UTF-8-format och använd kommatecken (,) som separator
+`;
+
 function exportTemplateCsv(zones: ZoneWithCheckpoints[]): void {
-  const rows: string[] = ["Zon,Kontrollpunkt,Beskrivning"];
+  const escape = (s: string) => `"${(s ?? "").replace(/"/g, '""')}"`;
+  const dataRows = ["Zon,Kontrollpunkt,Beskrivning"];
   for (const z of zones) {
     for (const cp of z.checkpoints) {
-      const escape = (s: string) => `"${(s ?? "").replace(/"/g, '""')}"`;
-      rows.push([escape(z.name), escape(cp.label), escape(cp.description ?? "")].join(","));
+      dataRows.push([escape(z.name), escape(cp.label), escape(cp.description ?? "")].join(","));
     }
   }
-  const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const content = KUNDRUNDA_CSV_INSTRUCTIONS + dataRows.join("\n");
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -99,9 +117,9 @@ function exportTemplateCsv(zones: ZoneWithCheckpoints[]): void {
 }
 
 function exportSessionsCsv(sessions: KundrundaSession[]): void {
+  const escape = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
   const rows: string[] = ["Datum,Utförd av,Poäng,Max poäng,Procent,Status"];
   for (const s of sessions) {
-    const escape = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
     const date = s.completed_at ? new Date(s.completed_at).toLocaleDateString("sv-SE") : new Date(s.started_at).toLocaleDateString("sv-SE");
     const conductor = (s as KundrundaSession & { conductor?: { display_name: string } }).conductor?.display_name ?? "Okänd";
     const pct = s.max_score > 0 ? Math.round((s.total_score / s.max_score) * 100) : 0;
@@ -120,7 +138,8 @@ function exportSessionsCsv(sessions: KundrundaSession[]): void {
 type ParsedCsvRow = { zoneName: string; checkpointLabel: string; description: string };
 
 function parseTemplateCsv(text: string): ParsedCsvRow[] {
-  const lines = text.split(/\r?\n/).filter(Boolean);
+  // Skip comment lines and blank lines
+  const lines = text.split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"));
   if (lines.length < 2) return [];
   const rows: ParsedCsvRow[] = [];
   for (let i = 1; i < lines.length; i++) {
@@ -129,7 +148,7 @@ function parseTemplateCsv(text: string): ParsedCsvRow[] {
     const clean = (s: string) => s.replace(/^"|"$/g, "").replace(/""/g, '"').trim();
     rows.push({ zoneName: clean(cols[0] ?? ""), checkpointLabel: clean(cols[1] ?? ""), description: clean(cols[2] ?? "") });
   }
-  return rows.filter(r => r.zoneName && r.checkpointLabel);
+  return rows.filter((r) => r.zoneName && r.checkpointLabel);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

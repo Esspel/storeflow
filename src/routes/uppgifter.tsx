@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink } from "lucide-react";
+import { Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, Upload } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -394,6 +394,7 @@ function TasksPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
   const stepPhotoInputRef = useRef<HTMLInputElement>(null);
+  const taskImportInputRef = useRef<HTMLInputElement>(null);
   const [pendingPhotoStepId, setPendingPhotoStepId] = useState<string | null>(null);
 
   // Detail modal
@@ -1146,6 +1147,108 @@ function TasksPage() {
     setUploadFiles([]);
   };
 
+  // Comment lines starting with # are ignored by importer
+  const TASK_CSV_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
+# Kolumner: Titel;Beskrivning;Kategori;Prioritet;Återkommande;Förfaller om (dagar);Steg;Frågor
+#
+# Prioritet: Låg | Medel | Hög | Kritisk
+# Kategori: Drift | Säkerhet | Kundärenden | Övrigt
+# Återkommande: daily | every_other_day | weekly | monthly | yearly (lämna tomt för ingen)
+# Förfaller om (dagar): antal dagar tills uppgiften förfaller (t.ex. 1)
+#
+# Steg: separera med " | " — lägg till [foto] om foto krävs
+#   Exempel: "1. Torka hyllor | 2. Kontrollera kyl [foto]"
+#
+# Frågor: separera med " | " — lägg till [obligatorisk] och/eller [ja_nej]
+#   Exempel: "1. Är allt klart? [obligatorisk] [ja_nej] | 2. Kommentar"
+#
+# Tips: Spara filen i UTF-8-format och använd semikolon (;) som separator
+`;
+
+  const downloadTaskTemplate = () => {
+    const headers = ["Titel", "Beskrivning", "Kategori", "Prioritet", "Återkommande", "Förfaller om (dagar)", "Steg", "Frågor"];
+    const example = [
+      "Morgonkontroll", "Kontroll av butikens öppning", "Drift", "Medel", "daily", "1",
+      "1. Kolla temperaturer [foto] | 2. Öppna kassor | 3. Kontrollera ingång",
+      "1. Är allt klart? [obligatorisk] [ja_nej]",
+    ];
+    const csv = TASK_CSV_INSTRUCTIONS
+      + [headers, example].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "uppgifter-import-mall.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importTaskCSV = async (file: File) => {
+    const text = await file.text();
+    const cleaned = text.startsWith("\ufeff") ? text.slice(1) : text;
+    const lines = cleaned.split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"));
+    if (lines.length < 2) return;
+
+    const parseRow = (line: string): string[] => {
+      const cols: string[] = []; let cur = ""; let inQuote = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuote && line[i + 1] === '"') { cur += '"'; i++; } else inQuote = !inQuote;
+        } else if (ch === ";" && !inQuote) { cols.push(cur); cur = ""; } else { cur += ch; }
+      }
+      cols.push(cur);
+      return cols;
+    };
+
+    const rows = lines.slice(1).map(parseRow);
+    for (const cols of rows) {
+      const [title, description, category, priority, recurrence, dueDays, stepsRaw, questionsRaw] = cols;
+      if (!title?.trim()) continue;
+
+      const dueDate = dueDays?.trim()
+        ? (() => { const d = new Date(); d.setDate(d.getDate() + parseInt(dueDays.trim())); return d.toISOString().slice(0, 10); })()
+        : null;
+
+      const { data: task } = await supabase.from("tasks").insert({
+        title: title.trim(),
+        description: (description ?? "").trim(),
+        category: (category ?? "Övrigt").trim() || "Övrigt",
+        priority: (priority ?? "Medel").trim() || "Medel",
+        status: "todo",
+        store_id: activeStore?.id ?? null,
+        created_by: user?.id ?? null,
+        recurrence_rule: (recurrence ?? "").trim() || null,
+        due_date: dueDate,
+      }).select("id").maybeSingle();
+
+      if (!task?.id) continue;
+
+      if (stepsRaw?.trim()) {
+        const steps = stepsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => ({
+          task_id: task.id,
+          label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[foto\]/i, "").trim(),
+          requires_photo: /\[foto\]/i.test(part),
+          is_done: false,
+          sort_order: idx,
+        }));
+        if (steps.length > 0) await supabase.from("task_steps").insert(steps);
+      }
+
+      if (questionsRaw?.trim()) {
+        const questions = questionsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => ({
+          task_id: task.id,
+          label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[obligatorisk\]/i, "").replace(/\s*\[ja_nej\]/i, "").trim(),
+          question_type: /\[ja_nej\]/i.test(part) ? "yes_no" : "text",
+          is_required: /\[obligatorisk\]/i.test(part),
+          sort_order: idx,
+        }));
+        if (questions.length > 0) await supabase.from("task_questions").insert(questions);
+      }
+
+      logAudit(user?.id ?? null, "task.import", "tasks", task.id, { title: title.trim() });
+    }
+    await fetchTasks();
+  };
+
   const exportCSV = () => {
     const rows = [
       ["Titel", "Beskrivning", "Kategori", "Prioritet", "Status", "Butik", "Tilldelade", "Förfallodatum", "Återkommande", "Checkpoints", "Frågor & svar", "Slutförd", "Skapad"],
@@ -1230,9 +1333,26 @@ function TasksPage() {
         description={activeStore ? `Uppgifter för ${activeStore.name}` : "Standardiserade rutiner."}
         actions={
           <div className="flex gap-2">
+            <input
+              ref={taskImportInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) importTaskCSV(f); e.target.value = ""; }}
+            />
+            {isManager && (
+              <Button variant="outline" className="rounded-full hidden lg:flex" onClick={downloadTaskTemplate}>
+                <Download className="mr-2 h-4 w-4" /> CSV-mall
+              </Button>
+            )}
             {isManager && (
               <Button variant="outline" className="rounded-full hidden lg:flex" onClick={exportCSV}>
-                <Download className="mr-2 h-4 w-4" /> CSV
+                <Download className="mr-2 h-4 w-4" /> Exportera
+              </Button>
+            )}
+            {isManager && (
+              <Button variant="outline" className="rounded-full hidden lg:flex" onClick={() => taskImportInputRef.current?.click()}>
+                <Upload className="mr-2 h-4 w-4" /> Importera CSV
               </Button>
             )}
             {isManager && (

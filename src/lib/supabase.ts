@@ -225,6 +225,10 @@ export type ChecklistTemplate = {
   created_by: string | null;
   is_global: boolean;
   locked_by_admin: boolean;
+  is_system_locked?: boolean;
+  hierarchy_scope?: "store" | "hk" | "forening" | null;
+  forening_id?: string | null;
+  distrikt_id?: string | null;
   created_at: string;
   updated_at: string;
   items?: ChecklistTemplateItem[];
