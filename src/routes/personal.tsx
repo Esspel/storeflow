@@ -78,6 +78,7 @@ type SortDir = "asc" | "desc";
 // CSV Import result
 type CsvImportResult = {
   success: number;
+  updated: number;
   skipped: number;
   errors: string[];
 };
@@ -522,7 +523,7 @@ function AccountsPage() {
         return;
       }
 
-      const result: CsvImportResult = { success: 0, skipped: 0, errors: [] };
+      const result: CsvImportResult & { updated: number } = { success: 0, updated: 0, skipped: 0, errors: [] };
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
@@ -548,22 +549,28 @@ function AccountsPage() {
             payload[dbKey] = val;
           }
         }
-        // Ensure name is always set from Butik / Enhet (CSV_HEADERS maps it to "name")
         if (!payload["name"]) payload["name"] = displayName;
 
-        // Special fields
         const franchiseVal = row["Franchise"]?.trim().toLowerCase();
         if (franchiseVal) payload.franchise = franchiseVal === "ja" || franchiseVal === "yes" || franchiseVal === "true" || franchiseVal === "1";
         if (siteId) { payload.site_id = siteId; payload.sap_site_id = siteId; }
 
         try {
           if (butikNr) {
-            // Check if a store with this butiks_nr already exists
             const { data: existing } = await supabase
               .from("stores").select("id").eq("butiks_nr", butikNr).maybeSingle();
             if (existing) {
-              // Already in database — skip (no overwrite)
-              result.skipped++;
+              // Update existing store with latest CSV data
+              const { error: updateErr } = await supabase
+                .from("stores")
+                .update({ ...payload, butiks_nr: butikNr })
+                .eq("id", existing.id);
+              if (updateErr) {
+                result.errors.push(`Rad ${rowNum} (${displayName}): ${updateErr.message}`);
+                result.skipped++;
+              } else {
+                result.updated++;
+              }
               continue;
             }
             const { error: insertErr } = await supabase.from("stores").insert({ ...payload, butiks_nr: butikNr });
@@ -573,11 +580,19 @@ function AccountsPage() {
               continue;
             }
           } else {
-            // No butiks_nr — check by name to avoid duplicate
             const { data: existing } = await supabase
               .from("stores").select("id").eq("name", displayName).maybeSingle();
             if (existing) {
-              result.skipped++;
+              const { error: updateErr } = await supabase
+                .from("stores")
+                .update(payload)
+                .eq("id", existing.id);
+              if (updateErr) {
+                result.errors.push(`Rad ${rowNum} (${displayName}): ${updateErr.message}`);
+                result.skipped++;
+              } else {
+                result.updated++;
+              }
               continue;
             }
             const { error: insertErr } = await supabase.from("stores").insert(payload);
@@ -983,7 +998,9 @@ function AccountsPage() {
               <div className="mb-4 rounded-xl border border-border/60 bg-card p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <CheckCircle2 className="h-4 w-4 text-success" />
-                  <p className="text-sm font-medium">Import klar — {csvResult.success} butiker importerade, {csvResult.skipped} hoppades över</p>
+                  <p className="text-sm font-medium">
+                    Import klar — {csvResult.success} nya, {csvResult.updated} uppdaterade{csvResult.skipped > 0 ? `, ${csvResult.skipped} hoppades över` : ""}
+                  </p>
                   <button onClick={() => setCsvResult(null)} className="ml-auto text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
                 </div>
                 {csvResult.errors.length > 0 && (

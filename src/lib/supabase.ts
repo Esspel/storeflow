@@ -107,7 +107,7 @@ export type Store = {
   mobil?: string | null;
   direktor_forsaljning?: string | null;
   forsaljningschef?: string | null;
-  marknadsorrade?: string | null;
+  marknadsomrade?: string | null;
   distriktschef?: string | null;
   distrikt_namn?: string | null;
   k_stalle?: string | null;

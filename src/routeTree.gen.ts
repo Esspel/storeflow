@@ -20,6 +20,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as KundrundaRouteImport } from './routes/kundrunda'
 import { Route as InstallningarRouteImport } from './routes/installningar'
 import { Route as HkDashboardRouteImport } from './routes/hk-dashboard'
+import { Route as ButiksregisterRouteImport } from './routes/butiksregister'
 import { Route as AvvikelserRouteImport } from './routes/avvikelser'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -78,6 +79,11 @@ const HkDashboardRoute = HkDashboardRouteImport.update({
   path: '/hk-dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ButiksregisterRoute = ButiksregisterRouteImport.update({
+  id: '/butiksregister',
+  path: '/butiksregister',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AvvikelserRoute = AvvikelserRouteImport.update({
   id: '/avvikelser',
   path: '/avvikelser',
@@ -92,6 +98,7 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
+  '/butiksregister': typeof ButiksregisterRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/kundrunda': typeof KundrundaRoute
@@ -107,6 +114,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
+  '/butiksregister': typeof ButiksregisterRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/kundrunda': typeof KundrundaRoute
@@ -123,6 +131,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
+  '/butiksregister': typeof ButiksregisterRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/kundrunda': typeof KundrundaRoute
@@ -140,6 +149,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/avvikelser'
+    | '/butiksregister'
     | '/hk-dashboard'
     | '/installningar'
     | '/kundrunda'
@@ -155,6 +165,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/avvikelser'
+    | '/butiksregister'
     | '/hk-dashboard'
     | '/installningar'
     | '/kundrunda'
@@ -170,6 +181,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/avvikelser'
+    | '/butiksregister'
     | '/hk-dashboard'
     | '/installningar'
     | '/kundrunda'
@@ -186,6 +198,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AvvikelserRoute: typeof AvvikelserRoute
+  ButiksregisterRoute: typeof ButiksregisterRoute
   HkDashboardRoute: typeof HkDashboardRoute
   InstallningarRoute: typeof InstallningarRoute
   KundrundaRoute: typeof KundrundaRoute
@@ -278,6 +291,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HkDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/butiksregister': {
+      id: '/butiksregister'
+      path: '/butiksregister'
+      fullPath: '/butiksregister'
+      preLoaderRoute: typeof ButiksregisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/avvikelser': {
       id: '/avvikelser'
       path: '/avvikelser'
@@ -298,6 +318,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AvvikelserRoute: AvvikelserRoute,
+  ButiksregisterRoute: ButiksregisterRoute,
   HkDashboardRoute: HkDashboardRoute,
   InstallningarRoute: InstallningarRoute,
   KundrundaRoute: KundrundaRoute,
