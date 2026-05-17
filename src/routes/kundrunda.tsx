@@ -1277,15 +1277,15 @@ function KundrundaPage() {
           </div>
           <div className="ml-auto flex flex-wrap gap-2">
             {canEditGlobal && (
-              <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={publishCentralVersion} disabled={publishingVersion}>
+              <Button variant="outline" size="sm" className="hidden sm:flex rounded-full gap-1.5" onClick={publishCentralVersion} disabled={publishingVersion}>
                 <Upload className="h-3.5 w-3.5" />
                 {publishingVersion ? "Publicerar..." : "Publicera central"}
               </Button>
             )}
-            <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={() => exportTemplateCsv(displayZones)}>
+            <Button variant="outline" size="sm" className="hidden sm:flex rounded-full gap-1.5" onClick={() => exportTemplateCsv(displayZones)}>
               <Download className="h-3.5 w-3.5" /> Exportera CSV
             </Button>
-            <Button variant="outline" size="sm" className="rounded-full gap-1.5" disabled={importingCsv} onClick={() => setShowImportDialog(true)}>
+            <Button variant="outline" size="sm" className="hidden sm:flex rounded-full gap-1.5" disabled={importingCsv} onClick={() => setShowImportDialog(true)}>
               <Upload className="h-3.5 w-3.5" /> {importingCsv ? "Importerar..." : "Importera CSV"}
             </Button>
             <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowManageDefects(true)}>

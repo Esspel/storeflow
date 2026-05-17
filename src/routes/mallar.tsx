@@ -829,32 +829,32 @@ function MallarPage() {
               ]}
             />
             {isManager && (
-              <Button variant="outline" className="rounded-full" onClick={downloadBlankTemplate}>
+              <Button variant="outline" className="hidden sm:flex rounded-full" onClick={downloadBlankTemplate}>
                 <Download className="mr-2 h-4 w-4" /> CSV-mall
               </Button>
             )}
             {isManager && (
-              <Button variant="outline" className="rounded-full" onClick={exportCSV}>
+              <Button variant="outline" className="hidden sm:flex rounded-full" onClick={exportCSV}>
                 <Download className="mr-2 h-4 w-4" /> Exportera
               </Button>
             )}
             {isManager && (
-              <Button variant="outline" className="rounded-full" disabled={importing} onClick={() => setShowImportDialog(true)}>
+              <Button variant="outline" className="hidden sm:flex rounded-full" disabled={importing} onClick={() => setShowImportDialog(true)}>
                 <Upload className="mr-2 h-4 w-4" /> {importing ? "Importerar..." : "Importera CSV"}
               </Button>
             )}
             {canCreateHK && (
-              <Button variant="outline" className="rounded-full border-blue-300 text-blue-600 hover:bg-blue-50" onClick={() => openCreate("hk")}>
+              <Button variant="outline" className="hidden sm:flex rounded-full border-blue-300 text-blue-600 hover:bg-blue-50" onClick={() => openCreate("hk")}>
                 <Plus className="mr-2 h-4 w-4" /> Ny HK-mall
               </Button>
             )}
             {canCreateForening && (
-              <Button variant="outline" className="rounded-full border-teal-300 text-teal-600 hover:bg-teal-50" onClick={() => openCreate("forening")}>
+              <Button variant="outline" className="hidden sm:flex rounded-full border-teal-300 text-teal-600 hover:bg-teal-50" onClick={() => openCreate("forening")}>
                 <Building2 className="mr-2 h-4 w-4" /> Ny föreningsmall
               </Button>
             )}
             {isManager && (
-              <Button className="rounded-full" onClick={() => openCreate("store")}>
+              <Button className="hidden sm:flex rounded-full" onClick={() => openCreate("store")}>
                 <Plus className="mr-2 h-4 w-4" /> Ny butiksmall
               </Button>
             )}

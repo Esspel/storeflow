@@ -1691,13 +1691,13 @@ function SchemaPage() {
               </Button>
             )}
             {isAdmin && imports.length > 0 && (
-              <Button size="sm" variant="outline" onClick={() => setMappingOpen(true)} className="gap-1.5">
+              <Button size="sm" variant="outline" onClick={() => setMappingOpen(true)} className="hidden sm:flex gap-1.5">
                 <Users className="h-4 w-4" />
                 Personal
               </Button>
             )}
             {isAdmin && (
-              <Button size="sm" className="gap-1.5" onClick={() => { setImportFiles([]); setPdfPreviews({}); if (activeImport) { setCsvWeekNumber(activeImport.week_number + 1 > 53 ? 1 : activeImport.week_number + 1); setCsvYear(activeImport.year); } setImportDialogOpen(true); }}>
+              <Button size="sm" className="hidden sm:flex gap-1.5" onClick={() => { setImportFiles([]); setPdfPreviews({}); if (activeImport) { setCsvWeekNumber(activeImport.week_number + 1 > 53 ? 1 : activeImport.week_number + 1); setCsvYear(activeImport.year); } setImportDialogOpen(true); }}>
                 <Upload className="h-4 w-4" />
                 Importera
               </Button>
