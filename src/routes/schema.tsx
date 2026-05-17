@@ -127,6 +127,10 @@ type DeliveryPlan = {
   year: number;
   filename: string;
   imported_at: string;
+  is_special_week: boolean;
+  is_default_template: boolean;
+  holiday_name: string | null;
+  notes: string | null;
 };
 
 type DeliveryEntry = {
@@ -1351,8 +1355,42 @@ function SchemaPage() {
       return 0;
     });
 
+  // Resolve which delivery plan applies to the active week:
+  // 1. A plan imported specifically for this week (exact match)
+  // 2. Else a special-week plan for this week (is_special_week=true, same week/year)
+  // 3. Else the default template (is_default_template=true)
+  const activeWeekPlan: DeliveryPlan | null = (() => {
+    if (!activeImport) return null;
+    const { week_number, year } = activeImport;
+    // Exact week match (plan was imported for this specific week)
+    const exactMatch = deliveryPlans.find((p) => p.week_number === week_number && p.year === year);
+    if (exactMatch) return exactMatch;
+    // Fall back to default template
+    return deliveryPlans.find((p) => p.is_default_template) ?? null;
+  })();
+
+  // Re-derive delivery dates for the active week's Monday
+  // This way a standard template imported for week 10 correctly shows on week 22 etc.
+  const activeWeekEntries: DeliveryEntry[] = (() => {
+    if (!activeWeekPlan || !activeImport?.week_start_date) return [];
+    const entries = deliveryEntries.filter((d) => d.plan_id === activeWeekPlan.id);
+    const weekStart = activeImport.week_start_date;
+    return entries.map((d) => ({
+      ...d,
+      delivery_date: deliveryDateForDay(d.delivery_day, weekStart) ?? d.delivery_date,
+    }));
+  })();
+
+  // Delivery plan status for the active week
+  const activeWeekHasSpecialPlan = activeImport
+    ? deliveryPlans.some((p) => p.week_number === activeImport.week_number && p.year === activeImport.year && p.is_special_week)
+    : false;
+  const activeWeekIsHoliday = activeImport ? getSpecialWeekHoliday(activeImport.year, activeImport.week_number) : null;
+  const missingSpecialPlan = activeWeekIsHoliday && !activeWeekHasSpecialPlan;
+  const missingAnyPlan = activeImport && !activeWeekPlan;
+
   // Deliveries for current day
-  const todayDeliveries = deliveryEntries.filter((d) => d.delivery_date === currentDate);
+  const todayDeliveries = activeWeekEntries.filter((d) => d.delivery_date === currentDate);
 
   // Meetings for current day
   const todayMeetings = weekMeetings.filter((m) => toLocalDateStr(m.scheduled_at) === currentDate);
@@ -1396,18 +1434,50 @@ function SchemaPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {imports.length > 1 && (
-              <Select value={activeImport?.id ?? ""} onValueChange={(v) => { const imp = imports.find((i) => i.id === v); if (imp) setActiveImport(imp); }}>
-                <SelectTrigger className="h-9 w-40 text-sm"><SelectValue placeholder="Välj vecka" /></SelectTrigger>
-                <SelectContent>
-                  {imports.map((imp) => (<SelectItem key={imp.id} value={imp.id}>Vecka {imp.week_number}, {imp.year}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            )}
+            {imports.length > 0 && (() => {
+              const sorted = [...imports].sort((a, b) => a.year !== b.year ? a.year - b.year : a.week_number - b.week_number);
+              const idx = sorted.findIndex((i) => i.id === activeImport?.id);
+              return (
+                <div className="flex items-center gap-1">
+                  <button
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
+                    onClick={() => { if (idx > 0) setActiveImport(sorted[idx - 1]); }}
+                    disabled={idx <= 0}
+                    aria-label="Föregående vecka"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <Select value={activeImport?.id ?? ""} onValueChange={(v) => { const imp = sorted.find((i) => i.id === v); if (imp) setActiveImport(imp); }}>
+                    <SelectTrigger className="h-9 w-36 text-sm font-medium"><SelectValue placeholder="Välj vecka" /></SelectTrigger>
+                    <SelectContent>
+                      {sorted.map((imp) => (
+                        <SelectItem key={imp.id} value={imp.id}>
+                          V{imp.week_number} {imp.year !== new Date().getFullYear() ? imp.year : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <button
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
+                    onClick={() => { if (idx < sorted.length - 1) setActiveImport(sorted[idx + 1]); }}
+                    disabled={idx >= sorted.length - 1}
+                    aria-label="Nästa vecka"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              );
+            })()}
             {activeImport && (
               <Button size="sm" variant={showDeliveries ? "default" : "outline"} onClick={() => setShowDeliveries((v) => !v)} className="gap-1.5">
                 <Truck className="h-4 w-4" />
-                {deliveryPlans.length > 0 ? `Leveranser (${deliveryPlans.length})` : "Leveranser"}
+                {activeWeekPlan
+                  ? activeWeekPlan.is_special_week
+                    ? "Specialleveranser"
+                    : "Leveranser"
+                  : "Leveranser"}
+                {missingAnyPlan && <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
+                {missingSpecialPlan && !missingAnyPlan && <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
               </Button>
             )}
             {isAdmin && imports.length > 0 && (
@@ -1442,6 +1512,38 @@ function SchemaPage() {
         </div>
       )}
 
+      {/* Delivery plan warning banners */}
+      {activeImport && showDeliveries && missingAnyPlan && (
+        <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 dark:border-amber-800/40 dark:bg-amber-950/20">
+          <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="text-sm text-amber-800 dark:text-amber-300">
+            Ingen leveransplan importerad. Importera en leveransplan (CSV) för att se leveranser.
+          </p>
+          {isAdmin && (
+            <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
+              onClick={() => setImportDialogOpen(true)}>
+              Importera
+            </Button>
+          )}
+        </div>
+      )}
+      {activeImport && showDeliveries && missingSpecialPlan && !missingAnyPlan && (
+        <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 dark:border-amber-800/40 dark:bg-amber-950/20">
+          <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="text-sm text-amber-800 dark:text-amber-300">
+            <span className="font-medium">Helgvecka ({activeWeekIsHoliday})</span> — ingen specialleveransplan importerad. Visar standardplan. Importera en specialplan för denna vecka om leveranserna avviker.
+          </p>
+          {isAdmin && (
+            <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
+              onClick={() => setImportDialogOpen(true)}>
+              Importera specialplan
+            </Button>
+          )}
+        </div>
+      )}
+      {activeImport && showDeliveries && activeWeekPlan && !activeWeekPlan.is_special_week && activeWeekIsHoliday && activeWeekHasSpecialPlan === false && (
+        <div className="hidden" /> /* covered by missingSpecialPlan above */
+      )}
 
       {/* Empty state — no schedule imported */}
       {imports.length === 0 && (
@@ -1476,7 +1578,7 @@ function SchemaPage() {
               {weekDates.map((date, idx) => {
                 const isToday = date === todayStr;
                 const count = scheduleEmployees.filter((emp) => scheduleShifts.some((s) => s.schedule_employee_id === emp.id && s.day_date === date && !s.is_absence_day && s.start_time)).length;
-                const delivCount = deliveryEntries.filter((d) => d.delivery_date === date).length;
+                const delivCount = activeWeekEntries.filter((d) => d.delivery_date === date).length;
                 const meetCount = weekMeetings.filter((m) => toLocalDateStr(m.scheduled_at) === date).length;
                 const isSelected = selectedDayIndex === idx;
                 return (
@@ -1934,7 +2036,7 @@ function SchemaPage() {
                 </div>
                 {weekDates.map((date, idx) => {
                   const isToday = date === todayStr;
-                  const delivCount = deliveryEntries.filter((d) => d.delivery_date === date).length;
+                  const delivCount = activeWeekEntries.filter((d) => d.delivery_date === date).length;
                   return (
                     <div key={date} className={["border-r border-border/30 last:border-r-0 px-2 py-2.5 text-center cursor-pointer hover:bg-muted/30 transition-colors", isToday ? "bg-primary-soft/40" : ""].join(" ")} onClick={() => { setSelectedDayIndex(idx); setViewMode("day"); }}>
                       <p className={["text-[10px] font-semibold uppercase tracking-wide", isToday ? "text-primary" : "text-muted-foreground"].join(" ")}>{DAY_SHORT[idx]}</p>
@@ -2002,7 +2104,7 @@ function SchemaPage() {
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Leveranser</span>
                   </div>
                   {weekDates.map((date, idx) => {
-                    const dayDeliveries = deliveryEntries.filter((d) => d.delivery_date === date);
+                    const dayDeliveries = activeWeekEntries.filter((d) => d.delivery_date === date);
                     const isToday = date === todayStr;
                     return (
                       <div key={idx} className={["border-r border-border/20 last:border-r-0 px-1.5 py-1.5 flex flex-col gap-0.5", isToday ? "bg-primary-soft/10" : ""].join(" ")}>
