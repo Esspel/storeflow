@@ -922,27 +922,55 @@ function SchemaPage() {
     if (!storeId || !user || files.length === 0) return;
     setImportProcessing(true);
     try {
-      for (const file of files) {
-        const ext = file.name.split(".").pop()?.toLowerCase();
-        if (ext === "xml") {
+      // ── Pass 1: parse all XML files first, then open mapping dialog once ──
+      const xmlFiles = files.filter((f) => f.name.split(".").pop()?.toLowerCase() === "xml");
+      const csvFiles = files.filter((f) => f.name.split(".").pop()?.toLowerCase() === "csv");
+
+      if (xmlFiles.length > 0) {
+        const allSchedules: ParsedSchedule[] = [];
+        for (const file of xmlFiles) {
           const text = await readFileText(file);
           const results = parseXml(text);
           if (!results || results.length === 0) {
             toast.error(`Kunde inte läsa XML-filen: ${file.name}. Kontrollera att det är en SoftOne GO-export.`);
             continue;
           }
-          const schedules = results.map((r) => ({ ...r, storeName: r.storeName || activeStore?.name || "" }));
-          // Collect all unique employees across all weeks for mapping
+          for (const r of results) {
+            allSchedules.push({ ...r, storeName: r.storeName || activeStore?.name || "" });
+          }
+        }
+
+        if (allSchedules.length > 0) {
+          // Merge weeks: if two files share the same year+weekNumber, merge their employees
+          const weekMap = new Map<string, ParsedSchedule>();
+          for (const s of allSchedules) {
+            const key = `${s.year}-${s.weekNumber}`;
+            if (!weekMap.has(key)) {
+              weekMap.set(key, { ...s, employees: [...s.employees] });
+            } else {
+              const existing = weekMap.get(key)!;
+              const empNrs = new Set(existing.employees.map((e) => e.employeeNr));
+              for (const emp of s.employees) {
+                if (!empNrs.has(emp.employeeNr)) {
+                  existing.employees.push(emp);
+                  empNrs.add(emp.employeeNr);
+                }
+              }
+            }
+          }
+          const mergedSchedules = Array.from(weekMap.values()).sort(
+            (a, b) => a.year !== b.year ? a.year - b.year : a.weekNumber - b.weekNumber
+          );
+
+          // Collect unique employees across all weeks for the mapping dialog
           const allEmpMap = new Map<string, ParsedEmployee>();
-          for (const s of schedules) {
+          for (const s of mergedSchedules) {
             for (const emp of s.employees) {
               if (!allEmpMap.has(emp.employeeNr)) allEmpMap.set(emp.employeeNr, emp);
             }
           }
           const allEmployees = Array.from(allEmpMap.values());
 
-          // Auto-match employees by display_name (normalized)
-          // Priority: 1) saved employee_nr mapping, 2) name match within this store's users, 3) no match → create new
           const { data: storeUserLinks } = await supabase.from("user_stores").select("user_id").eq("store_id", storeId!);
           const storeUserIds = new Set((storeUserLinks ?? []).map((r: { user_id: string }) => r.user_id));
           const storeUsers = allUsers.filter((u) => storeUserIds.has(u.id));
@@ -955,14 +983,11 @@ function SchemaPage() {
               return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "existing" as const, appUserId: savedMapping.app_user_id, newUsername: "", newPassword: "" };
             }
             const normEmp = normalizeName(emp.employeeName);
-            // Prefer store-scoped name match to avoid cross-store collisions
             const byStoreAndName = storeUsers.find((u) => !usedUserIds.has(u.id) && normalizeName(u.display_name) === normEmp);
             if (byStoreAndName) {
               usedUserIds.add(byStoreAndName.id);
               return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "existing" as const, appUserId: byStoreAndName.id, newUsername: "", newPassword: "" };
             }
-            // Cross-store borrowed staff detection: if a global user matches by name but belongs to another store,
-            // link them as borrowed — do NOT create a duplicate account
             const globalNameMatch = allUsers.find((u) => !usedUserIds.has(u.id) && normalizeName(u.display_name) === normEmp && !storeUserIds.has(u.id));
             if (globalNameMatch) {
               usedUserIds.add(globalNameMatch.id);
@@ -971,15 +996,24 @@ function SchemaPage() {
             }
             return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "new" as const, appUserId: null, newUsername: usernameFromName(emp.employeeName), newPassword: generatePassword(16) };
           });
-          setParsed(schedules);
+
+          const weekNums = mergedSchedules.map((s) => s.weekNumber);
+          const weekLabel = weekNums.length === 1 ? `vecka ${weekNums[0]}` : `veckorna ${weekNums.join(", ")}`;
+          toast.info(`${xmlFiles.length} fil${xmlFiles.length > 1 ? "er" : ""} tolkade — ${weekLabel} · ${allEmployees.length} medarbetare`);
+
+          setParsed(mergedSchedules);
           setMatchedEmployees(matched);
           setImportDialogOpen(false);
           setImportFiles([]);
           setPdfPreviews({});
           setCsvFileLabels({});
           setMappingOpen(true);
-          return; // XML opens mapping dialog; only handle first XML
-        } else if (ext === "csv") {
+          return; // mapping dialog handles the rest; CSV files can be imported separately
+        }
+      }
+
+      // ── Pass 2: CSV delivery plans ──
+      for (const file of csvFiles) {
           try {
             // Re-use already-parsed preview if available
             let entries = pdfPreviews[file.name];
@@ -1029,9 +1063,6 @@ function SchemaPage() {
             toast.error(`Fel vid läsning av ${file.name}`);
             console.error(err);
           }
-        } else {
-          toast.error(`Okänt filformat: ${file.name}. Ladda upp .xml (schema) eller .csv (leveransplan).`);
-        }
       }
       setImportDialogOpen(false);
       setImportFiles([]);
