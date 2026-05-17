@@ -370,8 +370,8 @@ export function AppShell() {
               </a>
             )}
 
-            {/* Store switcher */}
-            {userStores.length > 1 && (
+            {/* Store switcher — hidden for above-store users who have GlobalStoreSelector */}
+            {userStores.length > 1 && !isAboveStore && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="hidden rounded-full border-border/80 md:flex gap-1.5 max-w-[240px]">
@@ -471,8 +471,8 @@ export function AppShell() {
                     </p>
                   )}
                 </div>
-                {/* Store switcher in dropdown — mobile only (desktop has header button) */}
-                {userStores.length > 1 && (
+                {/* Store switcher in dropdown — mobile only, hidden for above-store users */}
+                {userStores.length > 1 && !isAboveStore && (
                   <div className="md:hidden">
                     <DropdownMenuSeparator />
                     <div className="px-2 py-1">
