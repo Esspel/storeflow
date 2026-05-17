@@ -261,150 +261,134 @@ function getText(el: Element, selector: string): string {
 }
 
 function parseTime(raw: string): string {
-  const match = raw.match(/T(\d{2}:\d{2})/);
-  return match ? match[1] : "";
+  // Handles "T08:00", "08:00", "2026-02-03T08:00:00+01:00"
+  const iso = raw.match(/T(\d{2}:\d{2})/);
+  if (iso) return iso[1];
+  const plain = raw.match(/^(\d{2}:\d{2})/);
+  if (plain) return plain[1];
+  return "";
 }
 
 function getAttrOrText(el: Element, tag: string): string {
   return el.getAttribute(tag) || getText(el, tag);
 }
 
-function parseXmlWeek(weekEl: Element, storeName: string): ParsedSchedule | null {
-  const weekNrText = getAttrOrText(weekEl, "ScheduleWeekNr") || weekEl.getAttribute("WeekNr") || "";
-  const weekNumber = parseInt(weekNrText, 10) || 0;
-  const yearText = getAttrOrText(weekEl, "Year") || "";
-  const year = parseInt(yearText, 10) || new Date().getFullYear();
-  if (!weekNumber || !year) return null;
+// Parse a single <Day> element into XmlDay. weekStartDate is mutated by reference via callback.
+function parseXmlDay(
+  dayEl: Element,
+  absenceNameFallback: string,
+  onMonday: (date: string) => void,
+): XmlDay {
+  const dayNr = parseInt(getAttrOrText(dayEl, "DayNr") || "0", 10);
+  const scheduleDateRaw = getAttrOrText(dayEl, "ScheduleDate");
+  // ScheduleDate may be "2026-02-03T00:00:00+01:00" or "2026-02-03"
+  const scheduleDate = scheduleDateRaw.length >= 10 ? scheduleDateRaw.slice(0, 10) : "";
+  const absenceRaw = getAttrOrText(dayEl, "IsAbsenceDay") || "0";
+  const isAbsenceDay = absenceRaw === "1" || absenceRaw.toLowerCase() === "true";
+  const absenceName = getAttrOrText(dayEl, "AbsencePayrollProductName") || absenceNameFallback;
 
-  const dateIntervalRaw = getAttrOrText(weekEl, "DateInterval") || "";
-  const dateIntervalMatch = dateIntervalRaw.match(/(\d{4}-\d{2}-\d{2})/);
-  let weekStartDate = dateIntervalMatch ? dateIntervalMatch[1] : "";
+  // DayNr=1 is Monday — use it to anchor the week start date
+  if (dayNr === 1 && scheduleDate) onMonday(scheduleDate);
 
-  const employees: ParsedEmployee[] = Array.from(weekEl.querySelectorAll("Employee")).map((empEl) => {
-    const employeeNr = getAttrOrText(empEl, "EmployeeNr");
-    const employeeName = getAttrOrText(empEl, "EmployeeName");
-    const employeeGroup = getAttrOrText(empEl, "EmployeeGroup");
+  const dayShiftLink = getAttrOrText(dayEl, "ShiftLink") || "";
+  const dayScheduleCost = parseFloat((getAttrOrText(dayEl, "ScheduleTotalCost") || "-1").replace(",", "."));
+  const isDayLendedOut = !isAbsenceDay && dayShiftLink.length > 8 && dayScheduleCost === 0;
 
-    const days: XmlDay[] = Array.from(empEl.querySelectorAll("Day")).map((dayEl) => {
-      const dayNr = parseInt(getAttrOrText(dayEl, "DayNr") || "0", 10);
-      const scheduleDateRaw = getAttrOrText(dayEl, "ScheduleDate");
-      const scheduleDate = scheduleDateRaw.slice(0, 10);
-      const absenceRaw = getAttrOrText(dayEl, "IsAbsenceDay") || "0";
-      const isAbsenceDay = absenceRaw === "1" || absenceRaw.toLowerCase() === "true";
-      const absenceName = getAttrOrText(dayEl, "AbsencePayrollProductName");
-      if (dayNr === 1 && scheduleDate && !weekStartDate) weekStartDate = scheduleDate;
+  // Break windows (ScheduleBreak1Start..ScheduleBreak4Start)
+  const dayBreakWindows: BreakWindow[] = [];
+  for (let bIdx = 1; bIdx <= 4; bIdx++) {
+    const bStartRaw = getAttrOrText(dayEl, `ScheduleBreak${bIdx}Start`);
+    const bMins = parseInt(getAttrOrText(dayEl, `ScheduleBreak${bIdx}Minutes`) || "0", 10);
+    const bStart = parseTime(bStartRaw);
+    if (bStart && bMins > 0) dayBreakWindows.push({ start: bStart, minutes: bMins });
+  }
+  const dayBreakTotal = parseInt(getAttrOrText(dayEl, "ScheduleBreakTime") || "0", 10);
 
-      // Day-level lended-out detection: ShiftLink (GUID) + ScheduleTotalCost = 0 + NOT absence
-      const dayShiftLink = getAttrOrText(dayEl, "ShiftLink") || "";
-      const dayScheduleCost = parseFloat((getAttrOrText(dayEl, "ScheduleTotalCost") || "-1").replace(",", "."));
-      const isDayLendedOut = !isAbsenceDay && dayShiftLink.length > 8 && dayScheduleCost === 0;
-
-      // Day-level break windows (ScheduleBreak1Start..ScheduleBreak4Start)
-      const dayBreakWindows: BreakWindow[] = [];
-      for (let bIdx = 1; bIdx <= 4; bIdx++) {
-        const bStartRaw = getAttrOrText(dayEl, `ScheduleBreak${bIdx}Start`);
-        const bMins = parseInt(getAttrOrText(dayEl, `ScheduleBreak${bIdx}Minutes`) || "0", 10);
-        if (bStartRaw && bMins > 0) {
-          dayBreakWindows.push({ start: parseTime(bStartRaw), minutes: bMins });
-        }
-      }
-      const dayBreakTotal = parseInt(getAttrOrText(dayEl, "ScheduleBreakTime") || "0", 10);
-
-      // Shifts are Shift1..Shift15 as direct child elements or attributes
-      const shifts: XmlShift[] = [];
-      for (let sIdx = 1; sIdx <= 15; sIdx++) {
-        const prefix = `Shift${sIdx}`;
-        // Try child element first, then attribute on dayEl
-        const sName = getAttrOrText(dayEl, `${prefix}Name`);
-        if (!sName) break;
-        const sStartRaw = getAttrOrText(dayEl, `${prefix}StartTime`);
-        const sStopRaw = getAttrOrText(dayEl, `${prefix}StopTime`);
-        if (!sStartRaw && !sStopRaw) break;
-        const colRaw = getAttrOrText(dayEl, `${prefix}Color`);
-        // Color may be 6-char hex without #
-        const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "";
-        const netMins = parseInt(getAttrOrText(dayEl, `${prefix}NetTimeMinutes`) || "0", 10);
-        const deviationCause = getAttrOrText(dayEl, `${prefix}TimeDeviationCauseName`) || absenceName;
-        shifts.push({
-          shiftName: sName,
-          startTime: parseTime(sStartRaw),
-          stopTime: parseTime(sStopRaw),
-          color: xmlCol && xmlCol !== "#000000" && xmlCol !== "#FFFFFF" && xmlCol !== "#ffffff" ? xmlCol : shiftColor(sName, xmlCol),
-          grossMinutes: netMins + (sIdx === 1 ? dayBreakTotal : 0),
-          netMinutes: netMins,
-          breakMinutes: sIdx === 1 ? dayBreakTotal : 0,
-          breakWindows: [], // will be distributed below after all shifts are collected
-          deviationCause,
-          totalCost: dayScheduleCost,
-          isLended: isDayLendedOut,
-          shiftLink: dayShiftLink,
-          isBorrowed: false,
-        });
-      }
-
-      // Distribute day-level break windows to the shift segment that contains each break start time
-      if (dayBreakWindows.length > 0 && shifts.length > 0) {
-        const timeToMins = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
-        for (const bw of dayBreakWindows) {
-          const bStart = timeToMins(bw.start);
-          // Find the shift whose time range contains this break start
-          let target = shifts.find((s) => {
-            if (!s.startTime || !s.stopTime) return false;
-            const sStart = timeToMins(s.startTime);
-            const sStop = timeToMins(s.stopTime);
-            return bStart >= sStart && bStart < sStop;
-          });
-          // Fallback: assign to the shift with start time closest to (but before) the break
-          if (!target) {
-            const before = shifts.filter((s) => s.startTime && timeToMins(s.startTime) <= bStart);
-            if (before.length > 0) target = before[before.length - 1];
-            else target = shifts[0];
-          }
-          if (target) target.breakWindows.push(bw);
-        }
-      }
-
-      // Fallback: try <Shifts> child elements (older format)
-      if (shifts.length === 0) {
-        Array.from(dayEl.querySelectorAll("Shifts")).forEach((sEl) => {
-          const sName = getText(sEl, "ShiftName") || getAttrOrText(sEl, "ShiftName");
-          const colRaw = getText(sEl, "Color") || getAttrOrText(sEl, "Color");
-          const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "#4CAF50";
-          const grossMinutes = parseInt(getText(sEl, "ShiftGrossTimeMinutes") || "0", 10);
-          const xmlNet = parseInt(getText(sEl, "ShiftNetTimeMinutes") || "0", 10);
-          const netMinutes = xmlNet > 0 ? xmlNet : Math.max(0, grossMinutes - dayBreakTotal);
-          shifts.push({
-            shiftName: sName,
-            startTime: parseTime(getText(sEl, "ShiftStartTime")),
-            stopTime: parseTime(getText(sEl, "ShiftStopTime")),
-            color: xmlCol && xmlCol !== "#4CAF50" ? xmlCol : shiftColor(sName, xmlCol),
-            grossMinutes,
-            netMinutes,
-            breakMinutes: dayBreakTotal,
-            breakWindows: dayBreakWindows,
-            deviationCause: absenceName || getText(sEl, "ShiftTimeDeviationCauseName"),
-            totalCost: dayScheduleCost,
-            isLended: isDayLendedOut,
-            shiftLink: dayShiftLink,
-            isBorrowed: false,
-          });
-        });
-      }
-
-      const anyShiftSemester = shifts.some((s) =>
-        s.deviationCause.toLowerCase().includes("semester") || s.deviationCause.toLowerCase().includes("holiday")
-      );
-      const isSemester = isAbsenceDay && (
-        absenceName.toLowerCase().includes("semester") ||
-        absenceName.toLowerCase().includes("holiday") ||
-        anyShiftSemester
-      );
-      return { dayNr, scheduleDate, isAbsenceDay, isSemester, shifts };
+  // Shifts: Shift1Name..Shift15Name as attributes or child elements on Day
+  const shifts: XmlShift[] = [];
+  for (let sIdx = 1; sIdx <= 15; sIdx++) {
+    const prefix = `Shift${sIdx}`;
+    const sName = getAttrOrText(dayEl, `${prefix}Name`);
+    if (!sName) break;
+    const sStartRaw = getAttrOrText(dayEl, `${prefix}StartTime`);
+    const sStopRaw = getAttrOrText(dayEl, `${prefix}StopTime`);
+    if (!sStartRaw && !sStopRaw) break;
+    const colRaw = getAttrOrText(dayEl, `${prefix}Color`);
+    const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "";
+    const netMins = parseInt(getAttrOrText(dayEl, `${prefix}NetTimeMinutes`) || "0", 10);
+    const deviationCause = getAttrOrText(dayEl, `${prefix}TimeDeviationCauseName`) || absenceName;
+    shifts.push({
+      shiftName: sName,
+      startTime: parseTime(sStartRaw),
+      stopTime: parseTime(sStopRaw),
+      color: xmlCol && xmlCol !== "#000000" && xmlCol !== "#FFFFFF" && xmlCol !== "#ffffff"
+        ? xmlCol : shiftColor(sName, xmlCol),
+      grossMinutes: netMins + (sIdx === 1 ? dayBreakTotal : 0),
+      netMinutes: netMins,
+      breakMinutes: sIdx === 1 ? dayBreakTotal : 0,
+      breakWindows: [],
+      deviationCause,
+      totalCost: dayScheduleCost,
+      isLended: isDayLendedOut,
+      shiftLink: dayShiftLink,
+      isBorrowed: false,
     });
-    return { employeeNr, employeeName, employeeGroup, days };
-  });
+  }
 
-  return { weekNumber, year, weekStartDate, storeName, employees };
+  // Fallback: <Shifts> child elements (older/alternative format)
+  if (shifts.length === 0) {
+    for (const sEl of Array.from(dayEl.children).filter(c => c.nodeName === "Shifts")) {
+      const sName = getText(sEl, "ShiftName") || getAttrOrText(sEl, "ShiftName");
+      const colRaw = getText(sEl, "Color") || getAttrOrText(sEl, "Color");
+      const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "";
+      const grossMinutes = parseInt(getAttrOrText(sEl, "ShiftGrossTimeMinutes") || getText(sEl, "ShiftGrossTimeMinutes") || "0", 10);
+      const xmlNet = parseInt(getAttrOrText(sEl, "ShiftNetTimeMinutes") || getText(sEl, "ShiftNetTimeMinutes") || "0", 10);
+      const netMinutes = xmlNet > 0 ? xmlNet : Math.max(0, grossMinutes - dayBreakTotal);
+      shifts.push({
+        shiftName: sName,
+        startTime: parseTime(getAttrOrText(sEl, "ShiftStartTime") || getText(sEl, "ShiftStartTime")),
+        stopTime: parseTime(getAttrOrText(sEl, "ShiftStopTime") || getText(sEl, "ShiftStopTime")),
+        color: xmlCol && xmlCol !== "#000000" ? xmlCol : shiftColor(sName, xmlCol),
+        grossMinutes,
+        netMinutes,
+        breakMinutes: dayBreakTotal,
+        breakWindows: dayBreakWindows,
+        deviationCause: absenceName || getAttrOrText(sEl, "ShiftTimeDeviationCauseName"),
+        totalCost: dayScheduleCost,
+        isLended: isDayLendedOut,
+        shiftLink: dayShiftLink,
+        isBorrowed: false,
+      });
+    }
+  }
+
+  // Distribute day-level break windows to the shift that contains each break start
+  if (shifts.length > 0 && dayBreakWindows.length > 0) {
+    const toMins = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+    for (const bw of dayBreakWindows) {
+      const bStart = toMins(bw.start);
+      let target = shifts.find((s) => {
+        if (!s.startTime || !s.stopTime) return false;
+        const ss = toMins(s.startTime), se = toMins(s.stopTime);
+        return bStart >= ss && bStart < se;
+      });
+      if (!target) {
+        const before = shifts.filter((s) => s.startTime && toMins(s.startTime) <= bStart);
+        target = before.length > 0 ? before[before.length - 1] : shifts[0];
+      }
+      if (target) target.breakWindows.push(bw);
+    }
+  }
+
+  const anyShiftSemester = shifts.some((s) =>
+    s.deviationCause.toLowerCase().includes("semester") || s.deviationCause.toLowerCase().includes("holiday")
+  );
+  const isSemester = isAbsenceDay && (
+    absenceName.toLowerCase().includes("semester") ||
+    absenceName.toLowerCase().includes("holiday") ||
+    anyShiftSemester
+  );
+  return { dayNr, scheduleDate, isAbsenceDay, isSemester, shifts };
 }
 
 function parseXml(xmlText: string): ParsedSchedule[] | null {
@@ -420,78 +404,128 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
     getText(root, "Store StoreName") ||
     getText(root, "StoreName") || "";
 
-  // Case 1: Multiple <Week> direct children (multi-week export)
+  // ── Primary structure: Employee > Week > Day ────────────────────────────────
+  // This is the documented SoftOne GO multi-week format.
+  // Each Employee has multiple Week children; each Week has Day children.
+  const employeeEls = Array.from(root.children).filter(c => c.nodeName === "Employee");
+  if (employeeEls.length > 0 && employeeEls.some(e => e.querySelector("Week"))) {
+    // Collect all unique week numbers across all employees to build per-week schedules
+    const weekMap = new Map<string, { weekNumber: number; year: number; weekStartDate: string; employees: ParsedEmployee[] }>();
+
+    for (const empEl of employeeEls) {
+      const employeeNr = getAttrOrText(empEl, "EmployeeNr");
+      const employeeName = getAttrOrText(empEl, "EmployeeName");
+      const employeeGroup = getAttrOrText(empEl, "EmployeeGroup");
+
+      const weekEls = Array.from(empEl.children).filter(c => c.nodeName === "Week");
+      for (const weekEl of weekEls) {
+        const weekNrText = getAttrOrText(weekEl, "ScheduleWeekNr") || getAttrOrText(weekEl, "WeekNr") || "";
+        const weekNumber = parseInt(weekNrText, 10) || 0;
+        if (!weekNumber) continue;
+
+        // Year: try Week element first, then ReportHeader, then derive from first day date
+        const yearText = getAttrOrText(weekEl, "Year") || getText(root, "ReportHeader Year") || "";
+        let year = parseInt(yearText, 10) || 0;
+
+        let weekStartDate = "";
+        const onMonday = (date: string) => {
+          if (!weekStartDate) weekStartDate = date;
+          if (!year && date.length >= 4) year = parseInt(date.slice(0, 4), 10);
+        };
+
+        const days: XmlDay[] = Array.from(weekEl.children)
+          .filter(c => c.nodeName === "Day")
+          .map(dayEl => parseXmlDay(dayEl, "", onMonday));
+
+        if (!year) year = new Date().getFullYear();
+
+        // Derive weekStartDate from DateInterval if still missing
+        if (!weekStartDate) {
+          const diRaw = getAttrOrText(weekEl, "DateInterval") || getAttrOrText(root, "DateInterval") || getText(root, "ReportHeader DateInterval") || "";
+          const diMatch = diRaw.match(/(\d{4}-\d{2}-\d{2})/);
+          if (diMatch) weekStartDate = diMatch[1];
+        }
+
+        const key = `${year}-${weekNumber}`;
+        if (!weekMap.has(key)) {
+          weekMap.set(key, { weekNumber, year, weekStartDate, employees: [] });
+        } else if (!weekMap.get(key)!.weekStartDate && weekStartDate) {
+          weekMap.get(key)!.weekStartDate = weekStartDate;
+        }
+        weekMap.get(key)!.employees.push({ employeeNr, employeeName, employeeGroup, days });
+      }
+    }
+
+    if (weekMap.size > 0) {
+      return Array.from(weekMap.values())
+        .filter(s => s.weekNumber > 0)
+        .sort((a, b) => a.year !== b.year ? a.year - b.year : a.weekNumber - b.weekNumber)
+        .map(s => ({ ...s, storeName }));
+    }
+  }
+
+  // ── Fallback A: Week elements are direct children of root (Week > Employee > Day) ──
   const directWeekEls = Array.from(root.children).filter(c => c.nodeName === "Week");
   if (directWeekEls.length > 0) {
-    const schedules = directWeekEls.map((w) => parseXmlWeek(w, storeName)).filter(Boolean) as ParsedSchedule[];
-    if (schedules.length > 0) return schedules;
-  }
+    const results: ParsedSchedule[] = [];
+    for (const weekEl of directWeekEls) {
+      const weekNrText = getAttrOrText(weekEl, "ScheduleWeekNr") || getAttrOrText(weekEl, "WeekNr") || "";
+      const weekNumber = parseInt(weekNrText, 10) || 0;
+      if (!weekNumber) continue;
+      const yearText = getAttrOrText(weekEl, "Year") || getText(root, "ReportHeader Year") || "";
+      let year = parseInt(yearText, 10) || new Date().getFullYear();
+      let weekStartDate = (() => {
+        const r = getAttrOrText(weekEl, "DateInterval") || "";
+        const m = r.match(/(\d{4}-\d{2}-\d{2})/);
+        return m ? m[1] : "";
+      })();
 
-  // Case 2: Single <Week> anywhere in the tree
-  const weekEl = root.querySelector("Week");
-  if (weekEl) {
-    const single = parseXmlWeek(weekEl, storeName);
-    if (single) return [single];
-  }
-
-  // Case 3: No <Week> element — SoftOne format where week data is on the root and
-  // employees are direct children of root. Build a synthetic week element from root.
-  const weekNrText =
-    getAttrOrText(root, "ScheduleWeekNr") ||
-    getAttrOrText(root, "WeekNr") ||
-    getText(root, "ReportHeader WeekNr") || "";
-  const yearText =
-    getAttrOrText(root, "Year") ||
-    getText(root, "ReportHeader Year") || "";
-  const weekNumber = parseInt(weekNrText, 10) || 0;
-  const year = parseInt(yearText, 10) || new Date().getFullYear();
-
-  // Treat root as the week element — employees are direct children
-  const rootEmployees = Array.from(root.children).filter(c => c.nodeName === "Employee");
-  if (rootEmployees.length > 0 || weekNumber > 0) {
-    const dateIntervalRaw = getAttrOrText(root, "DateInterval") || getText(root, "ReportHeader DateInterval") || "";
-    const dateIntervalMatch = dateIntervalRaw.match(/(\d{4}-\d{2}-\d{2})/);
-    let weekStartDate = dateIntervalMatch ? dateIntervalMatch[1] : "";
-
-    const employees: ParsedEmployee[] = rootEmployees.map((empEl) => {
-      const employeeNr = getAttrOrText(empEl as Element, "EmployeeNr");
-      const employeeName = getAttrOrText(empEl as Element, "EmployeeName");
-      const employeeGroup = getAttrOrText(empEl as Element, "EmployeeGroup");
-
-      const days: XmlDay[] = Array.from(empEl.querySelectorAll("Day")).map((dayEl) => {
-        const dayNr = parseInt(getAttrOrText(dayEl, "DayNr") || "0", 10);
-        const scheduleDateRaw = getAttrOrText(dayEl, "ScheduleDate");
-        const scheduleDate = scheduleDateRaw.slice(0, 10);
-        const absenceRaw = getAttrOrText(dayEl, "IsAbsenceDay") || "0";
-        const isAbsenceDay = absenceRaw === "1" || absenceRaw.toLowerCase() === "true";
-        const absenceName = getAttrOrText(dayEl, "AbsencePayrollProductName");
-        if (dayNr === 1 && scheduleDate && !weekStartDate) weekStartDate = scheduleDate;
-        const dayShiftLink = getAttrOrText(dayEl, "ShiftLink") || "";
-        const dayScheduleCost = parseFloat((getAttrOrText(dayEl, "ScheduleTotalCost") || "-1").replace(",", "."));
-        const isDayLendedOut = !isAbsenceDay && dayShiftLink.length > 8 && dayScheduleCost === 0;
-        const shifts: XmlShift[] = [];
-        for (let sIdx = 1; sIdx <= 15; sIdx++) {
-          const prefix = `Shift${sIdx}`;
-          const sName = getAttrOrText(dayEl, `${prefix}Name`);
-          if (!sName) break;
-          const sStartRaw = getAttrOrText(dayEl, `${prefix}StartTime`);
-          const sStopRaw = getAttrOrText(dayEl, `${prefix}StopTime`);
-          if (!sStartRaw && !sStopRaw) break;
-          const colRaw = getAttrOrText(dayEl, `${prefix}Color`);
-          const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "";
-          const netMins = parseInt(getAttrOrText(dayEl, `${prefix}NetTimeMinutes`) || "0", 10);
-          const deviationCause = getAttrOrText(dayEl, `${prefix}TimeDeviationCauseName`) || absenceName;
-          shifts.push({ shiftName: sName, startTime: parseTime(sStartRaw), stopTime: parseTime(sStopRaw), color: xmlCol && xmlCol !== "#000000" && xmlCol !== "#FFFFFF" && xmlCol !== "#ffffff" ? xmlCol : shiftColor(sName, xmlCol), grossMinutes: netMins, netMinutes: netMins, breakMinutes: 0, breakWindows: [], deviationCause, totalCost: dayScheduleCost, isLended: isDayLendedOut, shiftLink: dayShiftLink, isBorrowed: false });
-        }
-        const anyShiftSemester = shifts.some(s => s.deviationCause.toLowerCase().includes("semester") || s.deviationCause.toLowerCase().includes("holiday"));
-        const isSemester = isAbsenceDay && (absenceName.toLowerCase().includes("semester") || absenceName.toLowerCase().includes("holiday") || anyShiftSemester);
-        return { dayNr, scheduleDate, isAbsenceDay, isSemester, shifts };
-      });
-      return { employeeNr, employeeName, employeeGroup, days };
-    });
-    if (employees.length > 0 || weekNumber > 0) {
-      return [{ weekNumber, year, weekStartDate, storeName, employees }];
+      const employees: ParsedEmployee[] = Array.from(weekEl.children)
+        .filter(c => c.nodeName === "Employee")
+        .map(empEl => {
+          const days: XmlDay[] = Array.from(empEl.querySelectorAll("Day"))
+            .map(dayEl => parseXmlDay(dayEl, "", (date) => {
+              if (!weekStartDate) weekStartDate = date;
+              if (!year && date.length >= 4) year = parseInt(date.slice(0, 4), 10);
+            }));
+          return {
+            employeeNr: getAttrOrText(empEl, "EmployeeNr"),
+            employeeName: getAttrOrText(empEl, "EmployeeName"),
+            employeeGroup: getAttrOrText(empEl, "EmployeeGroup"),
+            days,
+          };
+        });
+      results.push({ weekNumber, year, weekStartDate, storeName, employees });
     }
+    if (results.length > 0) return results;
+  }
+
+  // ── Fallback B: No Week elements — week metadata is on root, employees are direct children ──
+  const rootEmpEls = Array.from(root.children).filter(c => c.nodeName === "Employee");
+  if (rootEmpEls.length > 0) {
+    const weekNrText = getAttrOrText(root, "ScheduleWeekNr") || getAttrOrText(root, "WeekNr") || getText(root, "ReportHeader WeekNr") || "";
+    const weekNumber = parseInt(weekNrText, 10) || 0;
+    let year = parseInt(getAttrOrText(root, "Year") || getText(root, "ReportHeader Year") || "0", 10) || new Date().getFullYear();
+    let weekStartDate = (() => {
+      const r = getAttrOrText(root, "DateInterval") || getText(root, "ReportHeader DateInterval") || "";
+      const m = r.match(/(\d{4}-\d{2}-\d{2})/);
+      return m ? m[1] : "";
+    })();
+
+    const employees: ParsedEmployee[] = rootEmpEls.map(empEl => {
+      const days: XmlDay[] = Array.from(empEl.querySelectorAll("Day"))
+        .map(dayEl => parseXmlDay(dayEl, "", (date) => {
+          if (!weekStartDate) weekStartDate = date;
+          if (!year && date.length >= 4) year = parseInt(date.slice(0, 4), 10);
+        }));
+      return {
+        employeeNr: getAttrOrText(empEl, "EmployeeNr"),
+        employeeName: getAttrOrText(empEl, "EmployeeName"),
+        employeeGroup: getAttrOrText(empEl, "EmployeeGroup"),
+        days,
+      };
+    });
+    return [{ weekNumber, year, weekStartDate, storeName, employees }];
   }
 
   return null;
