@@ -315,50 +315,63 @@ function parseXmlDay(
     if (!sStartRaw && !sStopRaw) break;
     const colRaw = getAttrOrText(dayEl, `${prefix}Color`);
     const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "";
+    const grossMins = parseInt(getAttrOrText(dayEl, `${prefix}GrossTimeMinutes`) || "0", 10);
     const netMins = parseInt(getAttrOrText(dayEl, `${prefix}NetTimeMinutes`) || "0", 10);
     const deviationCause = getAttrOrText(dayEl, `${prefix}TimeDeviationCauseName`) || absenceName;
+    const shiftLendedRaw = getAttrOrText(dayEl, `${prefix}Lended`) || "";
+    const isShiftLended = shiftLendedRaw === "1" || shiftLendedRaw.toLowerCase() === "true" || isDayLendedOut;
+    const shiftLink = getAttrOrText(dayEl, `${prefix}Link`) || dayShiftLink;
+    // Break applies to first shift only (day-level break belongs to first work segment)
+    const shiftBreakMins = sIdx === 1 ? dayBreakTotal : 0;
+    const effectiveGross = grossMins > 0 ? grossMins : netMins + shiftBreakMins;
     shifts.push({
       shiftName: sName,
       startTime: parseTime(sStartRaw),
       stopTime: parseTime(sStopRaw),
       color: xmlCol && xmlCol !== "#000000" && xmlCol !== "#FFFFFF" && xmlCol !== "#ffffff"
         ? xmlCol : shiftColor(sName, xmlCol),
-      grossMinutes: netMins + (sIdx === 1 ? dayBreakTotal : 0),
+      grossMinutes: effectiveGross,
       netMinutes: netMins,
-      breakMinutes: sIdx === 1 ? dayBreakTotal : 0,
+      breakMinutes: shiftBreakMins,
       breakWindows: [],
       deviationCause,
       totalCost: dayScheduleCost,
-      isLended: isDayLendedOut,
-      shiftLink: dayShiftLink,
+      isLended: isShiftLended,
+      shiftLink,
       isBorrowed: false,
     });
   }
 
-  // Fallback: <Shifts> child elements (older/alternative format)
+  // Fallback: <Shifts> child elements (used alongside flat Shift1..15 in the same file)
+  // Parse these even when flat shifts exist — they may carry the <Shifts id="N"> list
   if (shifts.length === 0) {
+    let isFirst = true;
     for (const sEl of Array.from(dayEl.children).filter(c => c.nodeName === "Shifts")) {
-      const sName = getText(sEl, "ShiftName") || getAttrOrText(sEl, "ShiftName");
-      const colRaw = getText(sEl, "Color") || getAttrOrText(sEl, "Color");
+      const g = (attr: string) => getAttrOrText(sEl, attr) || getText(sEl, attr);
+      const sName = g("ShiftName");
+      const colRaw = g("Color");
       const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "";
-      const grossMinutes = parseInt(getAttrOrText(sEl, "ShiftGrossTimeMinutes") || getText(sEl, "ShiftGrossTimeMinutes") || "0", 10);
-      const xmlNet = parseInt(getAttrOrText(sEl, "ShiftNetTimeMinutes") || getText(sEl, "ShiftNetTimeMinutes") || "0", 10);
-      const netMinutes = xmlNet > 0 ? xmlNet : Math.max(0, grossMinutes - dayBreakTotal);
+      const grossMinutes = parseInt(g("ShiftGrossTimeMinutes") || "0", 10);
+      const xmlNet = parseInt(g("ShiftNetTimeMinutes") || "0", 10);
+      const netMinutes = xmlNet > 0 ? xmlNet : Math.max(0, grossMinutes - (isFirst ? dayBreakTotal : 0));
+      const shiftLendedRaw = g("ShiftLended");
+      const isShiftLended = shiftLendedRaw === "1" || shiftLendedRaw.toLowerCase() === "true" || isDayLendedOut;
       shifts.push({
         shiftName: sName,
-        startTime: parseTime(getAttrOrText(sEl, "ShiftStartTime") || getText(sEl, "ShiftStartTime")),
-        stopTime: parseTime(getAttrOrText(sEl, "ShiftStopTime") || getText(sEl, "ShiftStopTime")),
+        startTime: parseTime(g("ShiftStartTime")),
+        stopTime: parseTime(g("ShiftStopTime")),
         color: xmlCol && xmlCol !== "#000000" ? xmlCol : shiftColor(sName, xmlCol),
-        grossMinutes,
+        grossMinutes: grossMinutes > 0 ? grossMinutes : netMinutes + (isFirst ? dayBreakTotal : 0),
         netMinutes,
-        breakMinutes: dayBreakTotal,
-        breakWindows: dayBreakWindows,
-        deviationCause: absenceName || getAttrOrText(sEl, "ShiftTimeDeviationCauseName"),
+        breakMinutes: isFirst ? dayBreakTotal : 0,
+        breakWindows: isFirst ? dayBreakWindows : [],
+        deviationCause: g("ShiftTimeDeviationCauseName") || absenceName,
         totalCost: dayScheduleCost,
-        isLended: isDayLendedOut,
+        isLended: isShiftLended,
         shiftLink: dayShiftLink,
         isBorrowed: false,
       });
+      isFirst = false;
     }
   }
 
@@ -398,16 +411,19 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
   const root = doc.documentElement;
   if (!root || root.nodeName !== "SOE_TimeEmployeeSchedule") return null;
 
+  // Company name lives in ReportHeader which is inside TimeEmployeeSchedule
   const storeName =
-    getAttrOrText(root, "Company") ||
     getText(root, "ReportHeader Company") ||
-    getText(root, "Store StoreName") ||
-    getText(root, "StoreName") || "";
+    getText(root, "TimeEmployeeSchedule ReportHeader Company") ||
+    getAttrOrText(root, "Company") ||
+    getText(root, "Store StoreName") || "";
+
+  // The actual data container — may be wrapped in <TimeEmployeeSchedule>
+  const dataRoot: Element = root.querySelector("TimeEmployeeSchedule") ?? root;
 
   // ── Primary structure: Employee > Week > Day ────────────────────────────────
-  // This is the documented SoftOne GO multi-week format.
-  // Each Employee has multiple Week children; each Week has Day children.
-  const employeeEls = Array.from(root.children).filter(c => c.nodeName === "Employee");
+  // SoftOne GO format: TimeEmployeeSchedule > Employee > Week > Day
+  const employeeEls = Array.from(dataRoot.children).filter(c => c.nodeName === "Employee");
   if (employeeEls.length > 0 && employeeEls.some(e => e.querySelector("Week"))) {
     // Collect all unique week numbers across all employees to build per-week schedules
     const weekMap = new Map<string, { weekNumber: number; year: number; weekStartDate: string; employees: ParsedEmployee[] }>();
@@ -423,8 +439,8 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
         const weekNumber = parseInt(weekNrText, 10) || 0;
         if (!weekNumber) continue;
 
-        // Year: try Week element first, then ReportHeader, then derive from first day date
-        const yearText = getAttrOrText(weekEl, "Year") || getText(root, "ReportHeader Year") || "";
+        // Year: try Week element first, then ReportHeader (inside dataRoot), then from day dates
+        const yearText = getAttrOrText(weekEl, "Year") || getText(dataRoot, "ReportHeader Year") || getText(root, "ReportHeader Year") || "";
         let year = parseInt(yearText, 10) || 0;
 
         let weekStartDate = "";
@@ -464,8 +480,8 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
     }
   }
 
-  // ── Fallback A: Week elements are direct children of root (Week > Employee > Day) ──
-  const directWeekEls = Array.from(root.children).filter(c => c.nodeName === "Week");
+  // ── Fallback A: Week elements are direct children of dataRoot (Week > Employee > Day) ──
+  const directWeekEls = Array.from(dataRoot.children).filter(c => c.nodeName === "Week");
   if (directWeekEls.length > 0) {
     const results: ParsedSchedule[] = [];
     for (const weekEl of directWeekEls) {
@@ -500,14 +516,14 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
     if (results.length > 0) return results;
   }
 
-  // ── Fallback B: No Week elements — week metadata is on root, employees are direct children ──
-  const rootEmpEls = Array.from(root.children).filter(c => c.nodeName === "Employee");
+  // ── Fallback B: No Week elements — week metadata on dataRoot, employees are direct children ──
+  const rootEmpEls = Array.from(dataRoot.children).filter(c => c.nodeName === "Employee");
   if (rootEmpEls.length > 0) {
-    const weekNrText = getAttrOrText(root, "ScheduleWeekNr") || getAttrOrText(root, "WeekNr") || getText(root, "ReportHeader WeekNr") || "";
+    const weekNrText = getAttrOrText(dataRoot, "ScheduleWeekNr") || getAttrOrText(dataRoot, "WeekNr") || getText(root, "ReportHeader WeekNr") || "";
     const weekNumber = parseInt(weekNrText, 10) || 0;
-    let year = parseInt(getAttrOrText(root, "Year") || getText(root, "ReportHeader Year") || "0", 10) || new Date().getFullYear();
+    let year = parseInt(getAttrOrText(dataRoot, "Year") || getText(root, "ReportHeader Year") || "0", 10) || new Date().getFullYear();
     let weekStartDate = (() => {
-      const r = getAttrOrText(root, "DateInterval") || getText(root, "ReportHeader DateInterval") || "";
+      const r = getAttrOrText(dataRoot, "DateInterval") || getText(root, "ReportHeader DateInterval") || "";
       const m = r.match(/(\d{4}-\d{2}-\d{2})/);
       return m ? m[1] : "";
     })();
