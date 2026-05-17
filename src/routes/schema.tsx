@@ -1529,39 +1529,36 @@ function SchemaPage() {
       return 0;
     });
 
-  // Resolve which delivery plan applies to the active week:
+  // Resolve which delivery plan applies to the selected week:
+  // Uses selectedWeek (not activeImport) so deliveries show even on weeks without a schedule import.
   // 1. A plan imported specifically for this week (exact match)
   // 2. Else a special-week plan for this week (is_special_week=true, same week/year)
   // 3. Else the default template (is_default_template=true)
   const activeWeekPlan: DeliveryPlan | null = (() => {
-    if (!activeImport) return null;
-    const { week_number, year } = activeImport;
-    // Exact week match (plan was imported for this specific week)
-    const exactMatch = deliveryPlans.find((p) => p.week_number === week_number && p.year === year);
+    const { weekNumber, year } = selectedWeek;
+    const exactMatch = deliveryPlans.find((p) => p.week_number === weekNumber && p.year === year);
     if (exactMatch) return exactMatch;
-    // Fall back to default template
     return deliveryPlans.find((p) => p.is_default_template) ?? null;
   })();
 
-  // Re-derive delivery dates for the active week's Monday
-  // This way a standard template imported for week 10 correctly shows on week 22 etc.
+  // Re-derive delivery dates for the selected week's Monday
+  // This way a standard template correctly shows regardless of which week is selected.
   const activeWeekEntries: DeliveryEntry[] = (() => {
-    if (!activeWeekPlan || !activeImport?.week_start_date) return [];
+    if (!activeWeekPlan) return [];
     const entries = deliveryEntries.filter((d) => d.plan_id === activeWeekPlan.id);
-    const weekStart = activeImport.week_start_date;
     return entries.map((d) => ({
       ...d,
-      delivery_date: deliveryDateForDay(d.delivery_day, weekStart) ?? d.delivery_date,
+      delivery_date: deliveryDateForDay(d.delivery_day, selectedWeekStart) ?? d.delivery_date,
     }));
   })();
 
-  // Delivery plan status for the active week
-  const activeWeekHasSpecialPlan = activeImport
-    ? deliveryPlans.some((p) => p.week_number === activeImport.week_number && p.year === activeImport.year && p.is_special_week)
-    : false;
-  const activeWeekIsHoliday = activeImport ? getSpecialWeekHoliday(activeImport.year, activeImport.week_number) : null;
+  // Delivery plan status for the selected week
+  const activeWeekHasSpecialPlan = deliveryPlans.some(
+    (p) => p.week_number === selectedWeek.weekNumber && p.year === selectedWeek.year && p.is_special_week
+  );
+  const activeWeekIsHoliday = getSpecialWeekHoliday(selectedWeek.year, selectedWeek.weekNumber);
   const missingSpecialPlan = activeWeekIsHoliday && !activeWeekHasSpecialPlan;
-  const missingAnyPlan = activeImport && !activeWeekPlan;
+  const missingAnyPlan = deliveryPlans.length > 0 && !activeWeekPlan;
 
   // Deliveries for current day
   const todayDeliveries = activeWeekEntries.filter((d) => d.delivery_date === currentDate);
@@ -1688,14 +1685,10 @@ function SchemaPage() {
                 </div>
               );
             })()}
-            {activeImport && (
+            {deliveryPlans.length > 0 && (
               <Button size="sm" variant={showDeliveries ? "default" : "outline"} onClick={() => setShowDeliveries((v) => !v)} className="gap-1.5">
                 <Truck className="h-4 w-4" />
-                {activeWeekPlan
-                  ? activeWeekPlan.is_special_week
-                    ? "Specialleveranser"
-                    : "Leveranser"
-                  : "Leveranser"}
+                {activeWeekPlan?.is_special_week ? "Specialleveranser" : "Leveranser"}
                 {missingAnyPlan && <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
                 {missingSpecialPlan && !missingAnyPlan && <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
               </Button>
@@ -1733,7 +1726,7 @@ function SchemaPage() {
       )}
 
       {/* Delivery plan warning banners */}
-      {activeImport && showDeliveries && missingAnyPlan && (
+      {showDeliveries && missingAnyPlan && (
         <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 dark:border-amber-800/40 dark:bg-amber-950/20">
           <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <p className="text-sm text-amber-800 dark:text-amber-300">
@@ -1749,7 +1742,7 @@ function SchemaPage() {
           )}
         </div>
       )}
-      {activeImport && showDeliveries && missingSpecialPlan && !missingAnyPlan && (
+      {showDeliveries && missingSpecialPlan && !missingAnyPlan && (
         <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 dark:border-amber-800/40 dark:bg-amber-950/20">
           <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <p className="text-sm text-amber-800 dark:text-amber-300">
@@ -1765,7 +1758,7 @@ function SchemaPage() {
           )}
         </div>
       )}
-      {activeImport && showDeliveries && activeWeekPlan && !activeWeekPlan.is_special_week && activeWeekIsHoliday && activeWeekHasSpecialPlan === false && (
+      {showDeliveries && activeWeekPlan && !activeWeekPlan.is_special_week && activeWeekIsHoliday && !activeWeekHasSpecialPlan && (
         <div className="hidden" /> /* covered by missingSpecialPlan above */
       )}
 

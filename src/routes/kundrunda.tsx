@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Camera, ChartBar as BarChart3, CircleCheck as CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, CreditCard as Edit2, GripVertical, MapPin, Plus, Trash2, TriangleAlert as AlertTriangle, X, ArrowRight, Hash, ZoomIn, Image as ImageIcon, GitMerge, Upload, Copy, RefreshCw } from "lucide-react";
+import {
+  Camera, ChartBar as BarChart3, CircleCheck as CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
+  Circle, Clock, CreditCard as Edit2, Download, FileText, GripVertical, MapPin, Plus, Trash2,
+  TriangleAlert as AlertTriangle, Upload, X, ArrowRight, Hash, ZoomIn, Image as ImageIcon,
+  GitMerge, Copy, RefreshCw
+} from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -30,7 +35,11 @@ export const Route = createFileRoute("/kundrunda")({
   component: KundrundaPage,
 });
 
-type ZoneWithCheckpoints = KundrundaZone & { checkpoints: KundrundaCheckpoint[] };
+type ZoneWithCheckpoints = KundrundaZone & {
+  checkpoints: KundrundaCheckpoint[];
+  store_id?: string | null;
+  is_local_override?: boolean;
+};
 type ResponseMap = Record<string, KundrundaResponse>;
 
 type DefectForm = {
@@ -70,9 +79,65 @@ function ScoreRing({ score, max }: { score: number; max: number }) {
   );
 }
 
+// ── CSV helpers ───────────────────────────────────────────────────────────────
+
+function exportTemplateCsv(zones: ZoneWithCheckpoints[]): void {
+  const rows: string[] = ["Zon,Kontrollpunkt,Beskrivning"];
+  for (const z of zones) {
+    for (const cp of z.checkpoints) {
+      const escape = (s: string) => `"${(s ?? "").replace(/"/g, '""')}"`;
+      rows.push([escape(z.name), escape(cp.label), escape(cp.description ?? "")].join(","));
+    }
+  }
+  const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `kundrunda-mall-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportSessionsCsv(sessions: KundrundaSession[]): void {
+  const rows: string[] = ["Datum,Utförd av,Poäng,Max poäng,Procent,Status"];
+  for (const s of sessions) {
+    const escape = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
+    const date = s.completed_at ? new Date(s.completed_at).toLocaleDateString("sv-SE") : new Date(s.started_at).toLocaleDateString("sv-SE");
+    const conductor = (s as KundrundaSession & { conductor?: { display_name: string } }).conductor?.display_name ?? "Okänd";
+    const pct = s.max_score > 0 ? Math.round((s.total_score / s.max_score) * 100) : 0;
+    const status = s.status === "completed" ? "Slutförd" : "Pågående";
+    rows.push([escape(date), escape(conductor), String(s.total_score), String(s.max_score), `${pct}%`, status].join(","));
+  }
+  const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `kundrunda-historik-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+type ParsedCsvRow = { zoneName: string; checkpointLabel: string; description: string };
+
+function parseTemplateCsv(text: string): ParsedCsvRow[] {
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+  const rows: ParsedCsvRow[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+    if (cols.length < 2) continue;
+    const clean = (s: string) => s.replace(/^"|"$/g, "").replace(/""/g, '"').trim();
+    rows.push({ zoneName: clean(cols[0] ?? ""), checkpointLabel: clean(cols[1] ?? ""), description: clean(cols[2] ?? "") });
+  }
+  return rows.filter(r => r.zoneName && r.checkpointLabel);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function KundrundaPage() {
   const { user, activeStore, userStores } = useAuth();
   const isManager = user?.role === "manager" || user?.role === "admin";
+  const isAdmin = user?.role === "admin";
 
   const [zones, setZones] = useState<ZoneWithCheckpoints[]>([]);
   const [sessions, setSessions] = useState<KundrundaSession[]>([]);
@@ -80,7 +145,6 @@ function KundrundaPage() {
   const [commonDefects, setCommonDefects] = useState<KundrundaCommonDefect[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Active session state
   const [activeSession, setActiveSession] = useState<KundrundaSession | null>(null);
   const [responses, setResponses] = useState<ResponseMap>({});
   const [responseImages, setResponseImages] = useState<Record<string, KundrundaResponseImage[]>>({});
@@ -88,26 +152,21 @@ function KundrundaPage() {
   const [savingDefect, setSavingDefect] = useState(false);
   const [viewerImages, setViewerImages] = useState<string[]>([]);
   const [viewerIdx, setViewerIdx] = useState<number | null>(null);
+  const [showCommonDefects, setShowCommonDefects] = useState(false);
 
-  // Photo refs
   const defectPhotoRef = useRef<HTMLInputElement>(null);
   const refPhotoRef = useRef<HTMLInputElement>(null);
+  const csvImportRef = useRef<HTMLInputElement>(null);
   const [pendingRefCheckpointId, setPendingRefCheckpointId] = useState<string | null>(null);
   const [checkpointRefImages, setCheckpointRefImages] = useState<Record<string, { id: string; storage_path: string }[]>>({});
 
   const [view, setView] = useState<"home" | "active" | "edit">("home");
-
-  // Accordion: which zone indexes are expanded (active session view)
   const [expandedZones, setExpandedZones] = useState<Set<number>>(new Set([0]));
-
-  // Finish/abort confirmation dialog
   const [showFinishWarning, setShowFinishWarning] = useState(false);
 
-  // Offline sync state
   const [syncStatus, setSyncStatus] = useState<"online" | "offline" | "syncing">("online");
   const pendingSyncRef = useRef<Record<string, KundrundaResponse>>({});
 
-  // Zone/checkpoint editing
   const [editZone, setEditZone] = useState<ZoneWithCheckpoints | null>(null);
   const [editZoneForm, setEditZoneForm] = useState({ name: "" });
   const [editCheckpoint, setEditCheckpoint] = useState<KundrundaCheckpoint | null>(null);
@@ -119,15 +178,16 @@ function KundrundaPage() {
   const [deleteCheckpointTarget, setDeleteCheckpointTarget] = useState<{ checkpoint: KundrundaCheckpoint; zoneId: string } | null>(null);
   const [deleteSessionTarget, setDeleteSessionTarget] = useState<KundrundaSession | null>(null);
 
-  // Drag reorder state
   const [dragZoneIdx, setDragZoneIdx] = useState<number | null>(null);
   const [dragCpKey, setDragCpKey] = useState<{ zoneId: string; idx: number } | null>(null);
 
-  // Common defects management
   const [showManageDefects, setShowManageDefects] = useState(false);
   const [newDefectLabel, setNewDefectLabel] = useState("");
+  const [newDefectCheckpointIds, setNewDefectCheckpointIds] = useState<string[]>([]);
+  const [defectCheckpointSearch, setDefectCheckpointSearch] = useState("");
 
-  // Version management state
+  const [importingCsv, setImportingCsv] = useState(false);
+
   type LocalVersionRecord = {
     id: string;
     store_id: string;
@@ -143,6 +203,9 @@ function KundrundaPage() {
   const [pendingSessionStart, setPendingSessionStart] = useState(false);
   const [publishingVersion, setPublishingVersion] = useState(false);
 
+  // Edit scope: "global" = admin editing central zones, "local" = chef editing store-local zones
+  const [editScope, setEditScope] = useState<"global" | "local">("local");
+
   const fetchData = async () => {
     const [zonesRes, sessionsRes, defectsRes, localVersionRes] = await Promise.all([
       supabase.from("kundrunda_zones").select("*, checkpoints:kundrunda_checkpoints(*, images:kundrunda_checkpoint_images(*))").order("sort_order"),
@@ -151,7 +214,7 @@ function KundrundaPage() {
           .from("kundrunda_sessions")
           .select("*, store:stores(id,name,sap_site_id), conductor:app_users!conducted_by(id,display_name)")
           .order("created_at", { ascending: false })
-          .limit(20);
+          .limit(50);
         if (activeStore) q = q.eq("store_id", activeStore.id);
         else if (userStores.length > 0) q = q.in("store_id", userStores.map(s => s.id));
         return q;
@@ -164,7 +227,6 @@ function KundrundaPage() {
     if (zonesRes.data) {
       const z = zonesRes.data as ZoneWithCheckpoints[];
       setZones(z);
-      // Build ref images map
       const refMap: Record<string, { id: string; storage_path: string }[]> = {};
       for (const zone of z) {
         for (const cp of zone.checkpoints) {
@@ -181,25 +243,18 @@ function KundrundaPage() {
       }));
       setCommonDefects(defects);
     }
-    if (localVersionRes.data) {
-      setLocalVersion(localVersionRes.data as LocalVersionRecord);
-    } else {
-      setLocalVersion(null);
-    }
+    setLocalVersion(localVersionRes.data as LocalVersionRecord | null ?? null);
     setLoading(false);
   };
 
-  // localStorage draft key — per user + store
   const draftKey = `kundrunda-draft-${user?.id ?? "anon"}-${activeStore?.id ?? "all"}`;
 
-  // Persist responses to localStorage (offline autosave)
   const saveLocalDraft = (session: KundrundaSession, respMap: ResponseMap) => {
     try {
       localStorage.setItem(draftKey, JSON.stringify({ sessionId: session.id, responses: respMap, savedAt: new Date().toISOString() }));
     } catch {}
   };
 
-  // Background sync: flush pendingSyncRef to Supabase
   const flushPendingSync = async () => {
     const pending = { ...pendingSyncRef.current };
     if (Object.keys(pending).length === 0) return;
@@ -221,7 +276,6 @@ function KundrundaPage() {
     }
   };
 
-  // Network reconnect → flush
   useEffect(() => {
     const onOnline = () => { setSyncStatus("online"); void flushPendingSync(); };
     const onOffline = () => setSyncStatus("offline");
@@ -242,32 +296,31 @@ function KundrundaPage() {
       supabase.from("app_users").select("*").eq("is_active", true)
         .then(({ data }) => { if (data) setStoreUsers(data as AppUser[]); });
     }
+    // Default edit scope: admin uses global, manager uses local
+    setEditScope(isAdmin ? "global" : "local");
   }, [activeStore]);
 
-  // Publish current zones+checkpoints as a new central version (admin only)
+  // Zones filtered by current edit scope
+  const editableZones = editScope === "global"
+    ? zones.filter(z => !z.store_id)
+    : activeStore
+      ? zones.filter(z => z.store_id === activeStore.id)
+      : [];
+
   const publishCentralVersion = async () => {
     if (!user) return;
     setPublishingVersion(true);
-    const snapshot = zones.map(z => ({
-      id: z.id,
-      name: z.name,
-      sort_order: z.sort_order,
-      checkpoints: z.checkpoints.map(c => ({
-        id: c.id,
-        label: c.label,
-        description: c.description,
-        sort_order: c.sort_order,
-      })),
+    const globalZones = zones.filter(z => !z.store_id);
+    const snapshot = globalZones.map(z => ({
+      id: z.id, name: z.name, sort_order: z.sort_order,
+      checkpoints: z.checkpoints.map(c => ({ id: c.id, label: c.label, description: c.description, sort_order: c.sort_order })),
     }));
     const label = new Date().toLocaleDateString("sv-SE");
     const { data: version } = await supabase.from("kundrunda_central_versions").insert({
-      published_by: user.id,
-      label,
-      snapshot,
+      published_by: user.id, label, snapshot,
     }).select("id").maybeSingle();
 
     if (version) {
-      // Notify all stores that have a local version record
       const { data: allLocalVersions } = await supabase.from("kundrunda_local_versions").select("id");
       if (allLocalVersions && allLocalVersions.length > 0) {
         await supabase.from("kundrunda_local_versions").update({
@@ -280,7 +333,6 @@ function KundrundaPage() {
     await fetchData();
   };
 
-  // Chef responds to pending central version: accept / keep / parallel
   const resolveVersionChoice = async (choice: "central" | "local" | "parallel") => {
     if (!localVersion || !activeStore) return;
     const updates: Partial<LocalVersionRecord> = {
@@ -294,7 +346,17 @@ function KundrundaPage() {
     setShowVersionChoiceDialog(false);
   };
 
-  // Start a session, handling parallel version choice first
+  const ensureLocalVersionRecord = async () => {
+    if (!activeStore || !user) return;
+    if (localVersion) return;
+    const { data } = await supabase.from("kundrunda_local_versions").insert({
+      store_id: activeStore.id,
+      version_type: "local",
+      central_version_pending: false,
+    }).select("*").maybeSingle();
+    if (data) setLocalVersion(data as LocalVersionRecord);
+  };
+
   const handleStartSession = async () => {
     if (localVersion?.version_type === "parallel") {
       setShowParallelChoiceDialog(true);
@@ -339,7 +401,6 @@ function KundrundaPage() {
     setResponses(map);
     setResponseImages(imgMap);
     saveLocalDraft(session, map);
-    // Find first incomplete zone and expand it
     const firstIncomplete = zones.findIndex(z => !z.checkpoints.every(c => map[c.id]?.result));
     setExpandedZones(new Set([Math.max(0, firstIncomplete)]));
     setView("active");
@@ -348,18 +409,10 @@ function KundrundaPage() {
   const recordOk = async (checkpoint: KundrundaCheckpoint) => {
     if (!activeSession) return;
     const existing = responses[checkpoint.id];
-
-    // If overwriting a defect that had a linked incident/task, delete them
     if (existing?.result === "avvikelse") {
-      if (existing.incident_id) {
-        await supabase.from("incidents").delete().eq("id", existing.incident_id);
-      }
-      if (existing.created_task_id) {
-        await supabase.from("tasks").delete().eq("id", existing.created_task_id);
-      }
+      if (existing.incident_id) await supabase.from("incidents").delete().eq("id", existing.incident_id);
+      if (existing.created_task_id) await supabase.from("tasks").delete().eq("id", existing.created_task_id);
     }
-
-    // Optimistic update
     const optimistic: KundrundaResponse = {
       ...(existing ?? {} as KundrundaResponse),
       checkpoint_id: checkpoint.id,
@@ -371,11 +424,9 @@ function KundrundaPage() {
       responsible_user_id: null,
       sap_article_id: null,
     };
-    const newResponses = (p: ResponseMap) => ({ ...p, [checkpoint.id]: optimistic });
     setResponses(prev => {
-      const updated = newResponses(prev);
+      const updated = { ...prev, [checkpoint.id]: optimistic };
       saveLocalDraft(activeSession, updated);
-      // Auto-expand next zone if current zone is now complete
       const zoneIdx = zones.findIndex(z => z.id === checkpoint.zone_id);
       if (zoneIdx >= 0) {
         const zone = zones[zoneIdx];
@@ -394,7 +445,6 @@ function KundrundaPage() {
       }
       return updated;
     });
-
     if (navigator.onLine) {
       if (existing) {
         await supabase.from("kundrunda_responses").update({ result: "ok", defect_description: null, action_taken: null, responsible_user_id: null, sap_article_id: null }).eq("id", existing.id);
@@ -408,14 +458,11 @@ function KundrundaPage() {
       pendingSyncRef.current[checkpoint.id] = optimistic;
       setSyncStatus("offline");
     }
-
     await updateScore();
   };
 
   const approveZone = async (zone: ZoneWithCheckpoints) => {
-    if (!activeSession) return;
     for (const cp of zone.checkpoints) {
-      // Skip checkpoints that are already ok or have a defect
       if (responses[cp.id]?.result) continue;
       await recordOk(cp);
     }
@@ -431,6 +478,7 @@ function KundrundaPage() {
       responsible_user_id: existing?.responsible_user_id ?? "",
       sap_article_id: existing?.sap_article_id ?? "",
     });
+    setShowCommonDefects(false);
   };
 
   const saveDefect = async () => {
@@ -476,41 +524,26 @@ function KundrundaPage() {
       },
     }));
 
-    // Auto-create incident and task if description provided
     if (defectDialog.defect_description.trim() && responseId) {
       const zone = zones.find(z => z.id === defectDialog.zone_id);
       const checkpoint = zone?.checkpoints.find(c => c.id === defectDialog.checkpoint_id);
       const title = `Kundrunda: ${zone?.name ?? ""} — ${checkpoint?.label ?? ""}`;
       const due = new Date();
       due.setDate(due.getDate() + 1);
-
-      // Create incident in avvikelser
       const { data: incident } = await supabase.from("incidents").insert({
-        title,
-        description: defectDialog.defect_description,
-        category: "Drift",
-        priority: "Medel",
-        store_id: activeSession.store_id,
-        reported_by: user?.id,
+        title, description: defectDialog.defect_description, category: "Drift", priority: "Medel",
+        store_id: activeSession.store_id, reported_by: user?.id,
         responsible_user_id: defectDialog.responsible_user_id || null,
         sap_article_id: defectDialog.sap_article_id || null,
-        status: "open",
-        source: "kundrunda",
+        status: "open", source: "kundrunda",
       }).select("id").maybeSingle();
-
       let taskId: string | null = null;
       if (defectDialog.responsible_user_id) {
         const { data: task } = await supabase.from("tasks").insert({
-          title,
-          description: defectDialog.defect_description,
-          category: "Drift",
-          priority: "Medel",
-          store_id: activeSession.store_id,
-          assigned_to: defectDialog.responsible_user_id,
-          created_by: user?.id,
-          sap_article_id: defectDialog.sap_article_id || null,
-          due_date: due.toISOString(),
-          status: "todo",
+          title, description: defectDialog.defect_description, category: "Drift", priority: "Medel",
+          store_id: activeSession.store_id, assigned_to: defectDialog.responsible_user_id,
+          created_by: user?.id, sap_article_id: defectDialog.sap_article_id || null,
+          due_date: due.toISOString(), status: "todo",
         }).select("id").maybeSingle();
         if (task) {
           taskId = task.id;
@@ -519,12 +552,8 @@ function KundrundaPage() {
           }
         }
       }
-
       if (responseId) {
-        await supabase.from("kundrunda_responses").update({
-          created_task_id: taskId,
-          incident_id: incident?.id ?? null,
-        }).eq("id", responseId);
+        await supabase.from("kundrunda_responses").update({ created_task_id: taskId, incident_id: incident?.id ?? null }).eq("id", responseId);
       }
     }
 
@@ -556,9 +585,7 @@ function KundrundaPage() {
     const path = await uploadAttachment(file, `kundrunda/ref/${checkpointId}`);
     if (path) {
       const { data } = await supabase.from("kundrunda_checkpoint_images").insert({ checkpoint_id: checkpointId, storage_path: path, uploaded_by: user?.id }).select("id").maybeSingle();
-      if (data) {
-        setCheckpointRefImages(p => ({ ...p, [checkpointId]: [...(p[checkpointId] ?? []), { id: data.id, storage_path: path }] }));
-      }
+      if (data) setCheckpointRefImages(p => ({ ...p, [checkpointId]: [...(p[checkpointId] ?? []), { id: data.id, storage_path: path }] }));
     }
   };
 
@@ -578,11 +605,7 @@ function KundrundaPage() {
 
   const completeSession = async (force = false) => {
     if (!activeSession) return;
-    // If not all checked and not forcing, show warning
-    if (!force && answeredCount < totalCheckpoints) {
-      setShowFinishWarning(true);
-      return;
-    }
+    if (!force && answeredCount < totalCheckpoints) { setShowFinishWarning(true); return; }
     await supabase.from("kundrunda_sessions").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", activeSession.id);
     logAudit(user?.id ?? null, "kundrunda.session.complete", "kundrunda_sessions", activeSession.id, {});
     try { localStorage.removeItem(draftKey); } catch {}
@@ -595,7 +618,6 @@ function KundrundaPage() {
   };
 
   const suspendSession = () => {
-    // Save draft and go to home without completing
     if (activeSession) saveLocalDraft(activeSession, responses);
     setShowFinishWarning(false);
     setView("home");
@@ -605,24 +627,16 @@ function KundrundaPage() {
     if (!deleteSessionTarget) return;
     const target = deleteSessionTarget;
     setDeleteSessionTarget(null);
-    // If the deleted session is the currently active one, reset active state
     if (activeSession?.id === target.id) {
-      setActiveSession(null);
-      setResponses({});
-      setResponseImages({});
-      setView("home");
+      setActiveSession(null); setResponses({}); setResponseImages({}); setView("home");
     }
-    // Clear any matching localStorage draft (for all known store/user combos)
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (!key?.startsWith("kundrunda-draft-")) continue;
         const raw = localStorage.getItem(key);
         if (!raw) continue;
-        try {
-          const parsed = JSON.parse(raw);
-          if (parsed.sessionId === target.id) { localStorage.removeItem(key); break; }
-        } catch {}
+        try { const p = JSON.parse(raw); if (p.sessionId === target.id) { localStorage.removeItem(key); break; } } catch {}
       }
     } catch {}
     await supabase.from("kundrunda_response_images").delete().eq("session_id", target.id);
@@ -632,7 +646,7 @@ function KundrundaPage() {
     await fetchData();
   };
 
-  // Zone / checkpoint CRUD
+  // Zone / checkpoint CRUD — scope-aware
   const saveZone = async () => {
     if (!editZone || !editZoneForm.name.trim()) return;
     await supabase.from("kundrunda_zones").update({ name: editZoneForm.name.trim() }).eq("id", editZone.id);
@@ -642,8 +656,14 @@ function KundrundaPage() {
 
   const addZone = async () => {
     if (!newZoneName.trim()) return;
-    const maxOrder = Math.max(0, ...zones.map(z => z.sort_order));
-    await supabase.from("kundrunda_zones").insert({ name: newZoneName.trim(), sort_order: maxOrder + 1 });
+    const scopeZones = editScope === "global" ? zones.filter(z => !z.store_id) : zones.filter(z => z.store_id === activeStore?.id);
+    const maxOrder = Math.max(0, ...scopeZones.map(z => z.sort_order));
+    await supabase.from("kundrunda_zones").insert({
+      name: newZoneName.trim(),
+      sort_order: maxOrder + 1,
+      store_id: editScope === "local" ? (activeStore?.id ?? null) : null,
+      is_local_override: editScope === "local",
+    });
     setNewZoneName("");
     await fetchData();
   };
@@ -667,7 +687,14 @@ function KundrundaPage() {
     if (!newCheckpointLabel.trim()) return;
     const zone = zones.find(z => z.id === zoneId);
     const maxOrder = Math.max(0, ...(zone?.checkpoints ?? []).map(c => c.sort_order));
-    await supabase.from("kundrunda_checkpoints").insert({ zone_id: zoneId, label: newCheckpointLabel.trim(), description: newCheckpointDesc.trim() || null, sort_order: maxOrder + 1 });
+    await supabase.from("kundrunda_checkpoints").insert({
+      zone_id: zoneId,
+      label: newCheckpointLabel.trim(),
+      description: newCheckpointDesc.trim() || null,
+      sort_order: maxOrder + 1,
+      store_id: editScope === "local" ? (activeStore?.id ?? null) : null,
+      is_local_override: editScope === "local",
+    });
     setNewCheckpointLabel("");
     setNewCheckpointDesc("");
     await fetchData();
@@ -683,11 +710,11 @@ function KundrundaPage() {
 
   const reorderZones = async (fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx) return;
-    const reordered = [...zones];
+    const reordered = [...editableZones];
     const [moved] = reordered.splice(fromIdx, 1);
     reordered.splice(toIdx, 0, moved);
     const updated = reordered.map((z, i) => ({ ...z, sort_order: i }));
-    setZones(updated);
+    setZones(prev => prev.map(z => { const u = updated.find(u => u.id === z.id); return u ? { ...z, sort_order: u.sort_order } : z; }));
     await Promise.all(updated.map(z => supabase.from("kundrunda_zones").update({ sort_order: z.sort_order }).eq("id", z.id)));
   };
 
@@ -707,9 +734,6 @@ function KundrundaPage() {
     cps.splice(toIdx, 0, moved);
     await Promise.all(cps.map((c, i) => supabase.from("kundrunda_checkpoints").update({ sort_order: i }).eq("id", c.id)));
   };
-
-  const [newDefectCheckpointIds, setNewDefectCheckpointIds] = useState<string[]>([]);
-  const [defectCheckpointSearch, setDefectCheckpointSearch] = useState("");
 
   const allCheckpoints = zones.flatMap(z => z.checkpoints.map(cp => ({ ...cp, zoneName: z.name })));
 
@@ -747,6 +771,59 @@ function KundrundaPage() {
     setCommonDefects(p => p.filter(d => d.id !== id));
   };
 
+  // CSV import: create zones/checkpoints in current edit scope
+  const handleCsvImport = async (file: File) => {
+    if (!isManager) return;
+    setImportingCsv(true);
+    try {
+      const text = await file.text();
+      const rows = parseTemplateCsv(text);
+      if (rows.length === 0) return;
+
+      await ensureLocalVersionRecord();
+
+      // Group rows by zone name
+      const zoneMap = new Map<string, string[]>();
+      for (const row of rows) {
+        if (!zoneMap.has(row.zoneName)) zoneMap.set(row.zoneName, []);
+        zoneMap.get(row.zoneName)!.push(row.checkpointLabel);
+      }
+
+      const storeId = editScope === "local" ? (activeStore?.id ?? null) : null;
+      let sortIdx = editableZones.length;
+
+      for (const [zoneName, checkpoints] of zoneMap) {
+        // Check if zone already exists in scope
+        let zoneId: string | null = editableZones.find(z => z.name.toLowerCase().trim() === zoneName.toLowerCase().trim())?.id ?? null;
+        if (!zoneId) {
+          const { data: z } = await supabase.from("kundrunda_zones").insert({
+            name: zoneName, sort_order: sortIdx++,
+            store_id: storeId, is_local_override: editScope === "local",
+          }).select("id").maybeSingle();
+          zoneId = z?.id ?? null;
+        }
+        if (!zoneId) continue;
+
+        const zone = zones.find(z => z.id === zoneId);
+        let cpSortIdx = zone?.checkpoints.length ?? 0;
+        for (const row of rows.filter(r => r.zoneName === zoneName)) {
+          const exists = zone?.checkpoints.some(c => c.label.toLowerCase().trim() === row.checkpointLabel.toLowerCase().trim());
+          if (!exists) {
+            await supabase.from("kundrunda_checkpoints").insert({
+              zone_id: zoneId, label: row.checkpointLabel,
+              description: row.description || null,
+              sort_order: cpSortIdx++,
+              store_id: storeId, is_local_override: editScope === "local",
+            });
+          }
+        }
+      }
+      await fetchData();
+    } finally {
+      setImportingCsv(false);
+    }
+  };
+
   const totalCheckpoints = zones.reduce((s, z) => s + z.checkpoints.length, 0);
   const answeredCount = Object.values(responses).filter(r => r.result).length;
   const defectCount = Object.values(responses).filter(r => r.result === "avvikelse").length;
@@ -772,7 +849,6 @@ function KundrundaPage() {
               <div className="h-3.5 w-2/5 animate-pulse rounded-md bg-muted" />
               <div className="h-3 w-1/4 animate-pulse rounded-md bg-muted/60" />
             </div>
-            <div className="h-4 w-4 animate-pulse rounded-md bg-muted/50 shrink-0" />
           </div>
         ))}
       </div>
@@ -783,21 +859,14 @@ function KundrundaPage() {
   if (view === "active" && activeSession !== null) {
     const sessionPct = totalCheckpoints > 0 ? answeredCount / totalCheckpoints : 0;
     const isAllDone = answeredCount === totalCheckpoints;
-
-    // Build list of incomplete zones for finish warning
     const incompleteZones = zones.filter(z => !z.checkpoints.every(c => responses[c.id]?.result));
 
     return (
       <div className="flex min-h-screen flex-col bg-background">
-        {/* Session header — sticky so it stays at top while body scrolls */}
         <div className="sticky top-0 z-20 shrink-0 border-b border-border/60 bg-card px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <button
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted hover:bg-muted/70 active:scale-95 transition-all"
-                onClick={suspendSession}
-                aria-label="Spara och stäng"
-              >
+              <button className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted hover:bg-muted/70 active:scale-95 transition-all" onClick={suspendSession} aria-label="Spara och stäng">
                 <X className="h-4 w-4" />
               </button>
               <div className="min-w-0">
@@ -806,12 +875,8 @@ function KundrundaPage() {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-3">
-              {/* Offline indicator */}
               {syncStatus !== "online" && (
-                <div className={cn(
-                  "flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium",
-                  syncStatus === "offline" ? "bg-warning/20 text-warning-foreground" : "bg-muted text-muted-foreground"
-                )}>
+                <div className={cn("flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium", syncStatus === "offline" ? "bg-warning/20 text-warning-foreground" : "bg-muted text-muted-foreground")}>
                   <span className={cn("h-1.5 w-1.5 rounded-full", syncStatus === "offline" ? "bg-warning-foreground" : "bg-muted-foreground animate-pulse")} />
                   {syncStatus === "offline" ? "Sparat lokalt" : "Synkar..."}
                 </div>
@@ -822,19 +887,13 @@ function KundrundaPage() {
                   <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${sessionPct * 100}%` }} />
                 </div>
               </div>
-              {/* Always-visible finish button */}
-              <Button
-                size="sm"
-                className={cn("rounded-full text-xs shrink-0", isAllDone ? "bg-success text-success-foreground hover:bg-success/90" : "")}
-                onClick={() => completeSession(false)}
-              >
+              <Button size="sm" className={cn("rounded-full text-xs shrink-0", isAllDone ? "bg-success text-success-foreground hover:bg-success/90" : "")} onClick={() => completeSession(false)}>
                 {isAllDone ? <><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Slutför</> : "Avsluta"}
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Zone accordion list */}
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-2xl px-3 py-3 sm:px-5 sm:py-4 space-y-2">
             {zones.map((zone, zoneIdx) => {
@@ -844,23 +903,9 @@ function KundrundaPage() {
               const zoneAnswered = zone.checkpoints.filter(c => responses[c.id]?.result).length;
 
               return (
-                <div key={zone.id} className={cn(
-                  "overflow-hidden rounded-2xl border bg-card transition-colors",
-                  zoneDone ? "border-success/30" : "border-border/60"
-                )}>
-                  {/* Zone header — tap to expand/collapse */}
-                  <button
-                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
-                    onClick={() => setExpandedZones(prev => {
-                      const next = new Set(prev);
-                      if (next.has(zoneIdx)) next.delete(zoneIdx); else next.add(zoneIdx);
-                      return next;
-                    })}
-                  >
-                    <div className={cn(
-                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors",
-                      zoneDone ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"
-                    )}>
+                <div key={zone.id} className={cn("overflow-hidden rounded-2xl border bg-card transition-colors", zoneDone ? "border-success/30" : "border-border/60")}>
+                  <button className="flex w-full items-center gap-3 px-4 py-3.5 text-left" onClick={() => setExpandedZones(prev => { const next = new Set(prev); if (next.has(zoneIdx)) next.delete(zoneIdx); else next.add(zoneIdx); return next; })}>
+                    <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors", zoneDone ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")}>
                       {zoneDone ? <CheckCircle2 className="h-4 w-4" /> : zoneIdx + 1}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -870,19 +915,14 @@ function KundrundaPage() {
                         {zoneDefects > 0 && <span className="ml-1 text-destructive">{zoneDefects} avvik.</span>}
                       </span>
                     </div>
-                    {/* Zone approve-all button */}
                     {!zoneDone && (
-                      <button
-                        className="mr-2 flex h-7 items-center gap-1 rounded-full border border-success/40 px-2 text-[11px] text-success hover:bg-success/10 transition-colors"
-                        onClick={(e) => { e.stopPropagation(); approveZone(zone); }}
-                      >
+                      <button className="mr-2 flex h-7 items-center gap-1 rounded-full border border-success/40 px-2 text-[11px] text-success hover:bg-success/10 transition-colors" onClick={(e) => { e.stopPropagation(); approveZone(zone); }}>
                         <CheckCircle2 className="h-3 w-3" /> Alla OK
                       </button>
                     )}
                     <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform", isExpanded && "rotate-90")} />
                   </button>
 
-                  {/* Checkpoint rows */}
                   {isExpanded && (
                     <div className="divide-y divide-border/40 border-t border-border/40">
                       {zone.checkpoints.map((cp) => {
@@ -890,12 +930,8 @@ function KundrundaPage() {
                         const isOk = resp?.result === "ok";
                         const isDefect = resp?.result === "avvikelse";
                         const refImages = checkpointRefImages[cp.id] ?? [];
-
                         return (
-                          <div key={cp.id} className={cn(
-                            "p-4 transition-colors",
-                            isOk ? "bg-success/5" : isDefect ? "bg-destructive/5" : ""
-                          )}>
+                          <div key={cp.id} className={cn("p-4 transition-colors", isOk ? "bg-success/5" : isDefect ? "bg-destructive/5" : "")}>
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex items-start gap-3 min-w-0 flex-1">
                                 <div className="mt-0.5 shrink-0">
@@ -911,32 +947,20 @@ function KundrundaPage() {
                                   )}
                                 </div>
                               </div>
-                              {/* Action buttons — min 44x44px touch targets */}
                               <div className="flex shrink-0 gap-2">
-                                <button
-                                  onClick={() => { haptic.light(); recordOk(cp); }}
-                                  className={cn(
-                                    "flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95",
-                                    isOk ? "border-success bg-success/15 text-success" : "border-border/60 text-muted-foreground hover:border-success/50 hover:text-success"
-                                  )}
-                                  aria-label="OK"
-                                >
+                                <button onClick={() => { haptic.light(); recordOk(cp); }}
+                                  className={cn("flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95", isOk ? "border-success bg-success/15 text-success" : "border-border/60 text-muted-foreground hover:border-success/50 hover:text-success")}
+                                  aria-label="OK">
                                   <CheckCircle2 className="h-5 w-5" />
                                 </button>
-                                <button
-                                  onClick={() => openDefectDialog(cp)}
-                                  className={cn(
-                                    "flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95",
-                                    isDefect ? "border-destructive bg-destructive/15 text-destructive" : "border-border/60 text-muted-foreground hover:border-destructive/50 hover:text-destructive"
-                                  )}
-                                  aria-label="Avvikelse"
-                                >
+                                <button onClick={() => openDefectDialog(cp)}
+                                  className={cn("flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95", isDefect ? "border-destructive bg-destructive/15 text-destructive" : "border-border/60 text-muted-foreground hover:border-destructive/50 hover:text-destructive")}
+                                  aria-label="Avvikelse">
                                   <AlertTriangle className="h-5 w-5" />
                                 </button>
                               </div>
                             </div>
 
-                            {/* Reference images */}
                             {refImages.length > 0 && (
                               <div className="mt-3 pt-2">
                                 <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Referens</p>
@@ -974,37 +998,45 @@ function KundrundaPage() {
                 </div>
               );
             })}
-            {/* Bottom padding for nav */}
             <div className="h-4" />
           </div>
         </div>
 
         {/* Defect dialog */}
-        <Dialog open={!!defectDialog} onOpenChange={(o) => { if (!o) setDefectDialog(null); }}>
+        <Dialog open={!!defectDialog} onOpenChange={(o) => { if (!o) { setDefectDialog(null); setShowCommonDefects(false); } }}>
           {defectDialog && (
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle className="text-base">Avvikelse — detaljer</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                {/* Common defect quick-select — filtered to current checkpoint */}
+                {/* Common defect quick-select — collapsible */}
                 {(() => {
                   const filtered = commonDefects.filter(d =>
                     !d.checkpoint_ids?.length || d.checkpoint_ids.includes(defectDialog.checkpoint_id)
                   );
                   return filtered.length > 0 ? (
                     <div className="space-y-1.5">
-                      <Label className="text-xs">Vanliga avvikelser</Label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {filtered.map(d => (
-                          <button key={d.id} type="button"
-                            className="min-h-[44px] rounded-full border border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
-                            onClick={() => setDefectDialog(p => p ? { ...p, defect_description: d.label } : null)}
-                          >
-                            {d.label}
-                          </button>
-                        ))}
-                      </div>
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
+                        onClick={() => setShowCommonDefects(v => !v)}
+                      >
+                        <span>Vanliga avvikelser ({filtered.length})</span>
+                        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showCommonDefects && "rotate-180")} />
+                      </button>
+                      {showCommonDefects && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {filtered.map(d => (
+                            <button key={d.id} type="button"
+                              className="min-h-[36px] rounded-full border border-border/60 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                              onClick={() => { setDefectDialog(p => p ? { ...p, defect_description: d.label } : null); setShowCommonDefects(false); }}
+                            >
+                              {d.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ) : null;
                 })()}
@@ -1027,7 +1059,6 @@ function KundrundaPage() {
                     className="text-sm"
                   />
                 </div>
-                {/* Photo upload for defect */}
                 <div className="space-y-1.5">
                   <Label className="text-xs">Foto på avvikelsen</Label>
                   <GdprImageReminder />
@@ -1059,11 +1090,7 @@ function KundrundaPage() {
                       value={defectDialog.sap_article_id}
                       onChange={(e) => setDefectDialog(p => p ? { ...p, sap_article_id: e.target.value } : null)}
                       placeholder="t.ex. 1047133"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      autoCorrect="off"
-                      autoCapitalize="none"
-                      spellCheck={false}
+                      inputMode="numeric" pattern="[0-9]*" autoCorrect="off" autoCapitalize="none" spellCheck={false}
                       className="flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground/40"
                     />
                     {defectDialog.sap_article_id && (
@@ -1091,17 +1118,12 @@ function KundrundaPage() {
                     <p className="text-[11px] text-muted-foreground">En uppgift och en avvikelse skapas automatiskt.</p>
                   )}
                 </div>
-                {defectDialog && (!defectDialog.defect_description.trim() || !defectDialog.action_taken.trim()) && savingDefect === false && (defectDialog.defect_description.length > 0 || defectDialog.action_taken.length > 0) && (
+                {(!defectDialog.defect_description.trim() || !defectDialog.action_taken.trim()) && !savingDefect && (defectDialog.defect_description.length > 0 || defectDialog.action_taken.length > 0) && (
                   <p className="text-xs text-destructive">Beskrivning och åtgärd är obligatoriska fält.</p>
                 )}
                 <div className="flex justify-end gap-2 pt-1">
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => setDefectDialog(null)}>Avbryt</Button>
-                  <Button
-                    size="sm"
-                    className="rounded-full"
-                    disabled={savingDefect || !defectDialog?.defect_description.trim() || !defectDialog?.action_taken.trim()}
-                    onClick={saveDefect}
-                  >
+                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => { setDefectDialog(null); setShowCommonDefects(false); }}>Avbryt</Button>
+                  <Button size="sm" className="rounded-full" disabled={savingDefect || !defectDialog?.defect_description.trim() || !defectDialog?.action_taken.trim()} onClick={saveDefect}>
                     {savingDefect ? "Sparar..." : "Spara avvikelse"}
                   </Button>
                 </div>
@@ -1110,7 +1132,6 @@ function KundrundaPage() {
           )}
         </Dialog>
 
-        {/* Finish warning dialog */}
         <AlertDialog open={showFinishWarning} onOpenChange={setShowFinishWarning}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -1133,29 +1154,24 @@ function KundrundaPage() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
-              <Button variant="outline" className="rounded-full w-full sm:w-auto" onClick={suspendSession}>
-                Spara som utkast
-              </Button>
+              <Button variant="outline" className="rounded-full w-full sm:w-auto" onClick={suspendSession}>Spara som utkast</Button>
               <AlertDialogCancel className="sm:hidden">Fortsätt rundan</AlertDialogCancel>
-              <Button variant="outline" className="rounded-full w-full sm:w-auto hidden sm:flex" onClick={() => setShowFinishWarning(false)}>
-                Fortsätt rundan
-              </Button>
-              <AlertDialogAction className="rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => completeSession(true)}>
-                Avsluta ändå
-              </AlertDialogAction>
+              <Button variant="outline" className="rounded-full w-full sm:w-auto hidden sm:flex" onClick={() => setShowFinishWarning(false)}>Fortsätt rundan</Button>
+              <AlertDialogAction className="rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => completeSession(true)}>Avsluta ändå</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
 
-        {viewerIdx !== null && (
-          <PhotoViewer images={viewerImages} initialIndex={viewerIdx} onClose={() => setViewerIdx(null)} />
-        )}
+        {viewerIdx !== null && <PhotoViewer images={viewerImages} initialIndex={viewerIdx} onClose={() => setViewerIdx(null)} />}
       </div>
     );
   }
 
   // ── EDIT VIEW ─────────────────────────────────────────────────────────────
   if (view === "edit" && isManager) {
+    const canEditGlobal = isAdmin;
+    const displayZones = editableZones;
+
     return (
       <div className="mx-auto max-w-3xl px-5 py-8 md:px-8 md:py-10">
         <div className="mb-6 flex items-center gap-3">
@@ -1166,24 +1182,52 @@ function KundrundaPage() {
             <h1 className="text-xl font-bold">Redigera kundrunda</h1>
             <p className="text-xs text-muted-foreground">Hantera zoner, kontrollpunkter och referensbilder</p>
           </div>
-          <div className="ml-auto flex gap-2">
-            {user?.role === "admin" && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-full gap-1.5"
-                onClick={publishCentralVersion}
-                disabled={publishingVersion}
-              >
+          <div className="ml-auto flex flex-wrap gap-2">
+            {canEditGlobal && (
+              <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={publishCentralVersion} disabled={publishingVersion}>
                 <Upload className="h-3.5 w-3.5" />
-                {publishingVersion ? "Publicerar..." : "Publicera central version"}
+                {publishingVersion ? "Publicerar..." : "Publicera central"}
               </Button>
             )}
+            <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={() => exportTemplateCsv(displayZones)}>
+              <Download className="h-3.5 w-3.5" /> Exportera CSV
+            </Button>
+            <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={() => csvImportRef.current?.click()} disabled={importingCsv}>
+              <Upload className="h-3.5 w-3.5" /> {importingCsv ? "Importerar..." : "Importera CSV"}
+            </Button>
             <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowManageDefects(true)}>
               Vanliga avvikelser
             </Button>
           </div>
         </div>
+
+        {/* Scope toggle for admin */}
+        {canEditGlobal && (
+          <div className="mb-5 flex overflow-hidden rounded-xl border border-border/60 bg-muted/30">
+            <button
+              className={cn("flex-1 px-4 py-2.5 text-sm font-medium transition-colors", editScope === "global" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              onClick={() => setEditScope("global")}
+            >
+              Central version (HK)
+            </button>
+            <button
+              className={cn("flex-1 px-4 py-2.5 text-sm font-medium transition-colors", editScope === "local" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              onClick={() => setEditScope("local")}
+            >
+              Butiksversion (lokal)
+            </button>
+          </div>
+        )}
+
+        {editScope === "local" && !canEditGlobal && (
+          <div className="mb-4 flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground">
+            <Edit2 className="h-3.5 w-3.5 shrink-0" />
+            Din butiks lokala version. Ändringar påverkar bara din butik.
+          </div>
+        )}
+
+        <input ref={csvImportRef} type="file" accept=".csv" className="hidden"
+          onChange={async (e) => { const f = e.target.files?.[0]; if (f) await handleCsvImport(f); e.target.value = ""; }} />
 
         {/* Add zone */}
         <div className="mb-6 flex gap-2">
@@ -1193,21 +1237,22 @@ function KundrundaPage() {
           </Button>
         </div>
 
+        {displayZones.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-border/60 bg-card px-6 py-10 text-center">
+            <p className="text-sm text-muted-foreground">Inga zoner i denna version. Lägg till en zon eller importera en CSV-mall.</p>
+          </div>
+        )}
+
         <div className="space-y-4">
-          {zones.map((zone, zoneIdx) => (
-            <div
-              key={zone.id}
-              className={cn("rounded-2xl border border-border/60 bg-card overflow-hidden transition-opacity", dragZoneIdx === zoneIdx && "opacity-50")}
-              draggable
-              onDragStart={() => setDragZoneIdx(zoneIdx)}
-              onDragEnd={() => setDragZoneIdx(null)}
-              onDragOver={(e) => { e.preventDefault(); if (dragZoneIdx !== null && dragZoneIdx !== zoneIdx) reorderZones(dragZoneIdx, zoneIdx).then(() => setDragZoneIdx(zoneIdx)); }}
-            >
-              {/* Zone header */}
+          {displayZones.map((zone, zoneIdx) => (
+            <div key={zone.id} className={cn("rounded-2xl border border-border/60 bg-card overflow-hidden transition-opacity", dragZoneIdx === zoneIdx && "opacity-50")}
+              draggable onDragStart={() => setDragZoneIdx(zoneIdx)} onDragEnd={() => setDragZoneIdx(null)}
+              onDragOver={(e) => { e.preventDefault(); if (dragZoneIdx !== null && dragZoneIdx !== zoneIdx) reorderZones(dragZoneIdx, zoneIdx).then(() => setDragZoneIdx(zoneIdx)); }}>
               <div className="flex items-center justify-between gap-2 border-b border-border/40 bg-muted/20 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <GripVertical className="h-4 w-4 text-muted-foreground/40 cursor-grab active:cursor-grabbing shrink-0" />
                   <h3 className="font-semibold text-sm">{zone.name}</h3>
+                  {zone.is_local_override && <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold text-primary">Lokal</span>}
                 </div>
                 <div className="flex gap-1">
                   <button className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary" onClick={() => { setEditZone(zone); setEditZoneForm({ name: zone.name }); }}><Edit2 className="h-3.5 w-3.5" /></button>
@@ -1215,20 +1260,14 @@ function KundrundaPage() {
                 </div>
               </div>
 
-              {/* Checkpoints */}
               <div className="divide-y divide-border/40">
                 {zone.checkpoints.map((cp, cpIdx) => {
                   const refs = checkpointRefImages[cp.id] ?? [];
                   const isDraggingCp = dragCpKey?.zoneId === zone.id && dragCpKey?.idx === cpIdx;
                   return (
-                    <div
-                      key={cp.id}
-                      className={cn("px-4 py-3 space-y-2 transition-opacity", isDraggingCp && "opacity-50")}
-                      draggable
-                      onDragStart={(e) => { e.stopPropagation(); setDragCpKey({ zoneId: zone.id, idx: cpIdx }); }}
-                      onDragEnd={() => setDragCpKey(null)}
-                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dragCpKey?.zoneId === zone.id && dragCpKey.idx !== cpIdx) reorderCheckpoints(zone.id, dragCpKey.idx, cpIdx).then(() => setDragCpKey({ zoneId: zone.id, idx: cpIdx })); }}
-                    >
+                    <div key={cp.id} className={cn("px-4 py-3 space-y-2 transition-opacity", isDraggingCp && "opacity-50")}
+                      draggable onDragStart={(e) => { e.stopPropagation(); setDragCpKey({ zoneId: zone.id, idx: cpIdx }); }} onDragEnd={() => setDragCpKey(null)}
+                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dragCpKey?.zoneId === zone.id && dragCpKey.idx !== cpIdx) reorderCheckpoints(zone.id, dragCpKey.idx, cpIdx).then(() => setDragCpKey({ zoneId: zone.id, idx: cpIdx })); }}>
                       <div className="flex items-start gap-2">
                         <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/40 cursor-grab active:cursor-grabbing" />
                         <div className="flex-1 min-w-0">
@@ -1240,7 +1279,6 @@ function KundrundaPage() {
                           <button className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-destructive" onClick={() => setDeleteCheckpointTarget({ checkpoint: cp, zoneId: zone.id })}><Trash2 className="h-3.5 w-3.5" /></button>
                         </div>
                       </div>
-                      {/* Reference images */}
                       <div className="flex items-center gap-2">
                         {refs.map((img) => (
                           <div key={img.id} className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60">
@@ -1250,10 +1288,8 @@ function KundrundaPage() {
                             </button>
                           </div>
                         ))}
-                        <button
-                          className="flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-border/60 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
-                          onClick={() => { setPendingRefCheckpointId(cp.id); refPhotoRef.current?.click(); }}
-                        >
+                        <button className="flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-border/60 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+                          onClick={() => { setPendingRefCheckpointId(cp.id); refPhotoRef.current?.click(); }}>
                           <ImageIcon className="h-4 w-4" />
                           <span className="text-[9px]">Ref-bild</span>
                         </button>
@@ -1262,7 +1298,6 @@ function KundrundaPage() {
                   );
                 })}
 
-                {/* Add checkpoint row */}
                 <div className="px-4 py-3 space-y-2">
                   <Input placeholder="Ny kontrollpunkt..." value={newCheckpointLabel} onChange={(e) => setNewCheckpointLabel(e.target.value)} className="text-sm" onKeyDown={(e) => { if (e.key === "Enter") addCheckpoint(zone.id); }} />
                   <Textarea placeholder="Beskrivning (valfritt)..." value={newCheckpointDesc} onChange={(e) => setNewCheckpointDesc(e.target.value)} rows={2} className="resize-none text-xs" />
@@ -1275,10 +1310,8 @@ function KundrundaPage() {
           ))}
         </div>
 
-        {/* Hidden ref photo input */}
         <input ref={refPhotoRef} type="file" accept="image/*" className="hidden"
-          onChange={async (e) => { const f = e.target.files?.[0]; if (f && pendingRefCheckpointId) await uploadRefPhoto(f, pendingRefCheckpointId); e.target.value = ""; setPendingRefCheckpointId(null); }}
-        />
+          onChange={async (e) => { const f = e.target.files?.[0]; if (f && pendingRefCheckpointId) await uploadRefPhoto(f, pendingRefCheckpointId); e.target.value = ""; setPendingRefCheckpointId(null); }} />
 
         {/* Edit zone dialog */}
         <Dialog open={!!editZone} onOpenChange={(o) => { if (!o) setEditZone(null); }}>
@@ -1359,19 +1392,15 @@ function KundrundaPage() {
                       <span className="flex-1 text-sm font-medium">{d.label}</span>
                       <button onClick={() => deleteCommonDefect(d.id)} className="shrink-0 text-muted-foreground hover:text-destructive mt-0.5"><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>
-                    {/* Linked checkpoints */}
                     <div className="flex flex-wrap gap-1">
                       {linked.length === 0 && <span className="text-[11px] text-muted-foreground/60 italic">Gäller alla punkter</span>}
                       {linked.map(cp => (
                         <span key={cp.id} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
                           {cp.label}
-                          <button type="button" onClick={() => updateDefectCheckpoints(d.id, (d.checkpoint_ids ?? []).filter(id => id !== cp.id))}>
-                            <X className="h-2.5 w-2.5" />
-                          </button>
+                          <button type="button" onClick={() => updateDefectCheckpoints(d.id, (d.checkpoint_ids ?? []).filter(id => id !== cp.id))}><X className="h-2.5 w-2.5" /></button>
                         </span>
                       ))}
                     </div>
-                    {/* Suggested checkpoints (not yet linked) */}
                     <div>
                       <p className="text-[10px] text-muted-foreground mb-1">Lägg till koppling:</p>
                       <div className="flex flex-wrap gap-1">
@@ -1379,9 +1408,7 @@ function KundrundaPage() {
                           <button key={cp.id} type="button"
                             className="rounded-full border border-border/50 px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
                             onClick={() => updateDefectCheckpoints(d.id, [...(d.checkpoint_ids ?? []), cp.id])}
-                          >
-                            + {cp.label}
-                          </button>
+                          >+ {cp.label}</button>
                         ))}
                       </div>
                     </div>
@@ -1389,28 +1416,19 @@ function KundrundaPage() {
                 );
               })}
             </div>
-            {/* Add new defect */}
             <div className="border-t border-border/60 px-5 py-4 space-y-3">
               <div className="flex gap-2">
                 <Input placeholder="Ny vanlig avvikelse..." value={newDefectLabel} onChange={(e) => setNewDefectLabel(e.target.value)} className="text-sm" onKeyDown={(e) => { if (e.key === "Enter" && newDefectLabel.trim()) addCommonDefect(); }} />
                 <Button size="sm" className="rounded-full shrink-0" disabled={!newDefectLabel.trim()} onClick={addCommonDefect}><Plus className="h-4 w-4" /></Button>
               </div>
-              {/* Checkpoint suggestions for new defect */}
               {newDefectLabel.trim() && (
                 <div className="space-y-1.5">
                   <p className="text-[11px] text-muted-foreground">Koppla till kontrollpunkter (valfritt):</p>
                   <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
                     {allCheckpoints.map(cp => (
                       <button key={cp.id} type="button"
-                        className={cn(
-                          "rounded-full border px-2 py-0.5 text-[11px] transition-colors",
-                          newDefectCheckpointIds.includes(cp.id)
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border/50 text-muted-foreground hover:border-primary/40 hover:text-primary"
-                        )}
-                        onClick={() => setNewDefectCheckpointIds(prev =>
-                          prev.includes(cp.id) ? prev.filter(id => id !== cp.id) : [...prev, cp.id]
-                        )}
+                        className={cn("rounded-full border px-2 py-0.5 text-[11px] transition-colors", newDefectCheckpointIds.includes(cp.id) ? "border-primary bg-primary/10 text-primary" : "border-border/50 text-muted-foreground hover:border-primary/40 hover:text-primary")}
+                        onClick={() => setNewDefectCheckpointIds(prev => prev.includes(cp.id) ? prev.filter(id => id !== cp.id) : [...prev, cp.id])}
                       >
                         {newDefectCheckpointIds.includes(cp.id) ? "✓ " : ""}{cp.label}
                       </button>
@@ -1429,7 +1447,6 @@ function KundrundaPage() {
   const inProgressSession = sessions.find(s => s.status === "in_progress");
   const completedSessions = sessions.filter(s => s.status === "completed");
 
-  // Check for a local draft that might be newer than remote
   let localDraftTime: string | null = null;
   try {
     const raw = localStorage.getItem(draftKey);
@@ -1441,15 +1458,24 @@ function KundrundaPage() {
       <PageHeader
         title="Kundrunda"
         description={activeStore ? `Butiksrond för ${activeStore.name}` : "Digital butiksinspektion."}
-        actions={isManager ? (
-          <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={() => setView("edit")}>
-            <Edit2 className="h-4 w-4" /> Redigera
-          </Button>
-        ) : undefined}
+        actions={
+          <div className="flex items-center gap-2">
+            {completedSessions.length > 0 && (
+              <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={() => exportSessionsCsv(sessions)}>
+                <Download className="h-4 w-4" /> Exportera historik
+              </Button>
+            )}
+            {isManager && (
+              <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={() => setView("edit")}>
+                <Edit2 className="h-4 w-4" /> Redigera
+              </Button>
+            )}
+          </div>
+        }
       />
 
       {/* Pending central version notification */}
-      {localVersion?.central_version_pending && !user?.role !== "admin" as unknown as boolean && (
+      {localVersion?.central_version_pending && user?.role !== "admin" && (
         <div className="mb-4 rounded-2xl border border-warning/40 bg-warning/10 p-4">
           <div className="flex items-start gap-3">
             <RefreshCw className="mt-0.5 h-5 w-5 shrink-0 text-warning-foreground" />
@@ -1466,7 +1492,6 @@ function KundrundaPage() {
         </div>
       )}
 
-      {/* Version type badge for parallel */}
       {localVersion?.version_type === "parallel" && (
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           <GitMerge className="h-3.5 w-3.5 shrink-0" />
@@ -1486,12 +1511,7 @@ function KundrundaPage() {
                 <p className="font-semibold">Pågående runda</p>
                 <p className="text-xs text-muted-foreground">
                   Startad kl {new Date(inProgressSession.started_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}
-                  {localDraftTime && (
-                    <span className="ml-1 text-muted-foreground/70">· Autosparat {new Date(localDraftTime).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}</span>
-                  )}
-                </p>
-                <p className="mt-0.5 text-xs text-warning-foreground font-medium">
-                  Vill du återuppta eller starta en ny?
+                  {localDraftTime && <span className="ml-1 text-muted-foreground/70">· Autosparat {new Date(localDraftTime).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}</span>}
                 </p>
               </div>
             </div>
@@ -1501,9 +1521,7 @@ function KundrundaPage() {
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               )}
-              <Button size="sm" variant="outline" className="rounded-full gap-1.5 shrink-0 text-xs" onClick={handleStartSession}>
-                Ny runda
-              </Button>
+              <Button size="sm" variant="outline" className="rounded-full gap-1.5 shrink-0 text-xs" onClick={handleStartSession}>Ny runda</Button>
               <Button className="rounded-full gap-1.5 shrink-0" onClick={() => resumeSession(inProgressSession)}>
                 Återuppta <ArrowRight className="h-4 w-4" />
               </Button>
@@ -1550,12 +1568,7 @@ function KundrundaPage() {
                     <span className={cn("text-base font-bold tabular-nums", scoreColor)}>{Math.round(pct * 100)}%</span>
                     <p className="text-[10px] text-muted-foreground">{s.total_score}/{s.max_score}</p>
                   </div>
-                  <button
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:bg-primary-soft hover:text-primary"
-                    onClick={() => resumeSession(s)}
-                    aria-label="Granska"
-                    title="Granska / redigera"
-                  >
+                  <button className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:bg-primary-soft hover:text-primary" onClick={() => resumeSession(s)} aria-label="Granska">
                     <ZoomIn className="h-3.5 w-3.5" />
                   </button>
                   {isManager && (
@@ -1575,9 +1588,7 @@ function KundrundaPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort kundrunda</AlertDialogTitle>
-            <AlertDialogDescription>
-              Är du säker? Alla svar och bilder för denna runda tas bort permanent.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Är du säker? Alla svar och bilder för denna runda tas bort permanent.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
@@ -1586,45 +1597,30 @@ function KundrundaPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {viewerIdx !== null && (
-        <PhotoViewer images={viewerImages} initialIndex={viewerIdx} onClose={() => setViewerIdx(null)} />
-      )}
+      {viewerIdx !== null && <PhotoViewer images={viewerImages} initialIndex={viewerIdx} onClose={() => setViewerIdx(null)} />}
 
-      {/* Version choice dialog — shown when central_version_pending */}
+      {/* Version choice dialog */}
       <Dialog open={showVersionChoiceDialog} onOpenChange={(o) => { if (!o) setShowVersionChoiceDialog(false); }}>
         <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Ny central version tillgänglig</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Huvudkontoret har publicerat en ny kundrundamall. Välj hur din butik ska hantera uppdateringen.
-          </p>
+          <DialogHeader><DialogTitle>Ny central version tillgänglig</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground leading-relaxed">Huvudkontoret har publicerat en ny kundrundamall. Välj hur din butik ska hantera uppdateringen.</p>
           <div className="space-y-2 mt-2">
-            <button
-              className="w-full flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
-              onClick={() => resolveVersionChoice("central")}
-            >
+            <button className="w-full flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors" onClick={() => resolveVersionChoice("central")}>
               <Upload className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
               <div>
                 <p className="text-sm font-semibold">Uppdatera till central version</p>
                 <p className="text-xs text-muted-foreground">Ersätt din lokala mall med den nya centrala versionen.</p>
               </div>
             </button>
-            <button
-              className="w-full flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
-              onClick={() => resolveVersionChoice("local")}
-            >
+            <button className="w-full flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors" onClick={() => resolveVersionChoice("local")}>
               <Copy className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
               <div>
                 <p className="text-sm font-semibold">Behåll lokal version</p>
                 <p className="text-xs text-muted-foreground">Fortsätt använda din befintliga lokala mall utan förändringar.</p>
               </div>
             </button>
-            <button
-              className="w-full flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
-              onClick={() => resolveVersionChoice("parallel")}
-            >
-              <GitMerge className="mt-0.5 h-5 w-5 shrink-0 text-info" />
+            <button className="w-full flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors" onClick={() => resolveVersionChoice("parallel")}>
+              <GitMerge className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
               <div>
                 <p className="text-sm font-semibold">Kör båda parallellt</p>
                 <p className="text-xs text-muted-foreground">Välj vid varje runda om du vill använda central eller lokal version.</p>
@@ -1632,53 +1628,35 @@ function KundrundaPage() {
             </button>
           </div>
           <div className="flex justify-end mt-2">
-            <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setShowVersionChoiceDialog(false)}>
-              Bestäm senare
-            </Button>
+            <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setShowVersionChoiceDialog(false)}>Bestäm senare</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Parallel version choice — shown when starting a session in parallel mode */}
+      {/* Parallel version choice */}
       <Dialog open={showParallelChoiceDialog} onOpenChange={(o) => { if (!o) { setShowParallelChoiceDialog(false); setPendingSessionStart(false); } }}>
         <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Välj mall för denna runda</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Du kör parallell version. Vilken mall vill du använda för denna runda?
-          </p>
+          <DialogHeader><DialogTitle>Välj mall för denna runda</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Du kör parallell version. Vilken mall vill du använda för denna runda?</p>
           <div className="space-y-2 mt-2">
-            <button
-              className="w-full flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
+            <button className="w-full flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
               onClick={async () => {
-                setShowParallelChoiceDialog(false);
-                setPendingSessionStart(false);
-                if (localVersion) {
-                  await supabase.from("kundrunda_local_versions").update({ parallel_choice: "central" }).eq("id", localVersion.id);
-                  setLocalVersion(prev => prev ? { ...prev, parallel_choice: "central" } : null);
-                }
+                setShowParallelChoiceDialog(false); setPendingSessionStart(false);
+                if (localVersion) { await supabase.from("kundrunda_local_versions").update({ parallel_choice: "central" }).eq("id", localVersion.id); setLocalVersion(prev => prev ? { ...prev, parallel_choice: "central" } : null); }
                 await startSession();
-              }}
-            >
+              }}>
               <Upload className="h-5 w-5 shrink-0 text-primary" />
               <div>
                 <p className="text-sm font-semibold">Central version</p>
                 <p className="text-xs text-muted-foreground">Använd HK:s mall för denna runda.</p>
               </div>
             </button>
-            <button
-              className="w-full flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
+            <button className="w-full flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
               onClick={async () => {
-                setShowParallelChoiceDialog(false);
-                setPendingSessionStart(false);
-                if (localVersion) {
-                  await supabase.from("kundrunda_local_versions").update({ parallel_choice: "local" }).eq("id", localVersion.id);
-                  setLocalVersion(prev => prev ? { ...prev, parallel_choice: "local" } : null);
-                }
+                setShowParallelChoiceDialog(false); setPendingSessionStart(false);
+                if (localVersion) { await supabase.from("kundrunda_local_versions").update({ parallel_choice: "local" }).eq("id", localVersion.id); setLocalVersion(prev => prev ? { ...prev, parallel_choice: "local" } : null); }
                 await startSession();
-              }}
-            >
+              }}>
               <Copy className="h-5 w-5 shrink-0 text-muted-foreground" />
               <div>
                 <p className="text-sm font-semibold">Lokal version</p>
@@ -1687,9 +1665,7 @@ function KundrundaPage() {
             </button>
           </div>
           <div className="flex justify-end mt-2">
-            <Button variant="ghost" size="sm" className="rounded-full" onClick={() => { setShowParallelChoiceDialog(false); setPendingSessionStart(false); }}>
-              Avbryt
-            </Button>
+            <Button variant="ghost" size="sm" className="rounded-full" onClick={() => { setShowParallelChoiceDialog(false); setPendingSessionStart(false); }}>Avbryt</Button>
           </div>
         </DialogContent>
       </Dialog>
