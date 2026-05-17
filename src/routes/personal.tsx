@@ -434,7 +434,12 @@ function AccountsPage() {
     setCsvImporting(true);
 
     try {
-      const text = await file.text();
+      // Try UTF-8 first; fall back to Windows-1252 (covers Swedish ISO-8859-1) if replacement chars appear
+      const buf = await file.arrayBuffer();
+      const utf8 = new TextDecoder("utf-8", { fatal: false }).decode(buf);
+      const text = utf8.includes("\uFFFD")
+        ? (() => { try { return new TextDecoder("windows-1252").decode(buf); } catch { return utf8; } })()
+        : utf8;
       const { rows, error: parseError } = parseStoreCsv(text);
 
       if (parseError) {

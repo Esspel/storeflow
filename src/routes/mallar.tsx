@@ -451,8 +451,16 @@ function MallarPage() {
                     <p className="font-medium">{t.title}</p>
                     <div className="mt-0.5 flex items-center gap-2">
                       {t.category && <Badge variant="secondary" className="text-xs">{t.category}</Badge>}
-                      {t.is_global && <Badge variant="outline" className="text-xs border-blue-300 text-blue-600">Global</Badge>}
-                      {t.locked_by_admin && <Badge variant="outline" className="text-xs border-amber-300 text-amber-600">Låst</Badge>}
+                      {t.is_global && (
+                        <span title="Skapad av HK – visas i alla butiker, kan bara redigeras av admin">
+                          <Badge variant="outline" className="text-xs border-blue-300 text-blue-600">HK-mall</Badge>
+                        </span>
+                      )}
+                      {t.locked_by_admin && !t.is_global && (
+                        <span title="Skrivskyddad av admin – kan inte redigeras av butikschefer">
+                          <Badge variant="outline" className="text-xs border-amber-300 text-amber-600">Skrivskyddad</Badge>
+                        </span>
+                      )}
                       <span className="text-xs text-muted-foreground">{t.items?.length ?? 0} steg</span>
                       {(t.questions?.length ?? 0) > 0 && <span className="text-xs text-muted-foreground">{t.questions?.length} frågor</span>}
                     </div>

@@ -61,9 +61,16 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
     setImportResult(null);
 
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
-        const xmlText = ev.target?.result as string;
+        // Try UTF-8; if replacement chars appear (mangled åäö), re-read as Windows-1252
+        let xmlText = ev.target?.result as string;
+        if (xmlText.includes("\uFFFD")) {
+          try {
+            const buf = await file.arrayBuffer();
+            xmlText = new TextDecoder("windows-1252").decode(buf);
+          } catch { /* keep utf-8 result */ }
+        }
         const doc = new DOMParser().parseFromString(xmlText, "text/xml");
 
         const parseErr = doc.querySelector("parsererror");
