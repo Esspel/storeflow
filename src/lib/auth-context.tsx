@@ -18,15 +18,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(() => getCurrentUser());
-  const [activeStore, setActiveStoreState] = useState<Store | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = localStorage.getItem("active_store");
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [activeStore, setActiveStoreState] = useState<Store | null>(null);
   const [stores, setStores] = useState<Store[]>([]);
   const [isLoading, setIsLoading] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -41,12 +33,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data) {
       const storeList = data.map((r: { stores: Store }) => r.stores).filter(Boolean) as Store[];
       setStores(storeList);
-      if (!activeStore && storeList.length > 0) {
-        setActiveStoreState(storeList[0]);
-        localStorage.setItem("active_store", JSON.stringify(storeList[0]));
+      if (storeList.length > 0) {
+        setActiveStoreState((prev) => prev ?? storeList[0]);
       }
     }
-  }, [activeStore]);
+  }, []);
 
   const refreshUser = useCallback(async () => {
     const token = getSessionToken();
@@ -59,6 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = await validateSession(token);
       if (u) {
         setUser(u);
+        setCurrentUser(u);
         await loadStores(u.id);
       } else {
         clearSessionToken();
@@ -78,7 +70,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setActiveStore = useCallback((store: Store) => {
     setActiveStoreState(store);
-    localStorage.setItem("active_store", JSON.stringify(store));
   }, []);
 
   const logout = useCallback(() => {
@@ -86,7 +77,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setActiveStoreState(null);
     setStores([]);
-    localStorage.removeItem("active_store");
   }, []);
 
   return (

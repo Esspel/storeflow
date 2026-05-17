@@ -1,12 +1,14 @@
-// Secure session storage using IndexedDB.
-// Replaces localStorage for token storage to allow Service Worker access
-// while keeping XSS attack surface minimal (no window-level global exposure).
+// Secure session storage using IndexedDB. SSR-safe, no localStorage.
 
 const DB_NAME = "storeflow_secure";
 const DB_VERSION = 1;
 const STORE_NAME = "session";
 const TOKEN_KEY = "sf_token";
 const USER_KEY = "sf_user";
+
+function isClient(): boolean {
+  return typeof window !== "undefined" && typeof indexedDB !== "undefined";
+}
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -43,7 +45,7 @@ async function idbSet(key: string, value: unknown): Promise<void> {
       tx.onerror = () => reject(tx.error);
     });
   } catch {
-    // Silently fail — auth will just require re-login
+    // Silently fail
   }
 }
 
@@ -61,48 +63,23 @@ async function idbDelete(key: string): Promise<void> {
   }
 }
 
-// Synchronous localStorage fallback for environments where IDB isn't available (SSR)
-function isIDBAvailable(): boolean {
-  return typeof window !== "undefined" && typeof indexedDB !== "undefined";
-}
-
-function isServer(): boolean {
-  return typeof window === "undefined";
-}
-
 export async function secureGetToken(): Promise<string | null> {
-  if (isServer()) return null;
-  if (!isIDBAvailable()) return localStorage.getItem("sf_session_token");
+  if (!isClient()) return null;
   return idbGet<string>(TOKEN_KEY);
 }
 
 export async function secureGetUser<T>(): Promise<T | null> {
-  if (isServer()) return null;
-  if (!isIDBAvailable()) {
-    const raw = localStorage.getItem("sf_user");
-    if (!raw) return null;
-    try { return JSON.parse(raw) as T; } catch { return null; }
-  }
+  if (!isClient()) return null;
   return idbGet<T>(USER_KEY);
 }
 
 export async function secureSetSession(token: string, user: unknown): Promise<void> {
-  if (isServer()) return;
-  if (!isIDBAvailable()) {
-    localStorage.setItem("sf_session_token", token);
-    localStorage.setItem("sf_user", JSON.stringify(user));
-    return;
-  }
+  if (!isClient()) return;
   await Promise.all([idbSet(TOKEN_KEY, token), idbSet(USER_KEY, user)]);
 }
 
 export async function secureClearSession(): Promise<void> {
-  if (isServer()) return;
-  if (!isIDBAvailable()) {
-    localStorage.removeItem("sf_session_token");
-    localStorage.removeItem("sf_user");
-    return;
-  }
+  if (!isClient()) return;
   await Promise.all([idbDelete(TOKEN_KEY), idbDelete(USER_KEY)]);
 }
 

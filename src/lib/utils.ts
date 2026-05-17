@@ -91,23 +91,16 @@ export interface OfflineItem {
   timestamp: number;
 }
 
+let _offlineQueue: OfflineItem[] = [];
+
 export function getOfflineQueue(): OfflineItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(localStorage.getItem("offline_queue") ?? "[]");
-  } catch {
-    return [];
-  }
+  return _offlineQueue;
 }
 
 export function addToOfflineQueue(action: string, payload: unknown) {
-  if (typeof window === "undefined") return;
-  const queue = getOfflineQueue();
-  queue.push({ id: crypto.randomUUID(), action, payload, timestamp: Date.now() });
-  localStorage.setItem("offline_queue", JSON.stringify(queue));
+  _offlineQueue.push({ id: crypto.randomUUID(), action, payload, timestamp: Date.now() });
 }
 
 export function clearOfflineQueue() {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem("offline_queue");
+  _offlineQueue = [];
 }

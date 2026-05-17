@@ -44,7 +44,7 @@ function InstallningarPage() {
     const newTheme = theme === "light" ? "dark" : "light";
     setTheme(newTheme);
     document.documentElement.classList.toggle("dark", newTheme === "dark");
-    localStorage.setItem("theme", newTheme);
+    document.cookie = `sf_theme=${newTheme}; path=/; SameSite=Lax; max-age=${365 * 86400}`;
   }
 
   async function togglePush() {

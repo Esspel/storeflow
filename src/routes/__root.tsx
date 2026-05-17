@@ -1,9 +1,10 @@
-import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
+import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/app-shell";
 import { useState, useEffect } from "react";
+import appCss from "@/styles.css?url";
 
 interface RouterContext {
   queryClient: QueryClient;
@@ -50,7 +51,7 @@ function OfflineSnackbar() {
   return (
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
       <span className="bg-gray-800 text-white text-sm px-4 py-2 rounded-full shadow-lg">
-        Offline – ändringar sparas lokalt
+        Offline
       </span>
     </div>
   );
@@ -59,15 +60,30 @@ function OfflineSnackbar() {
 const rootQueryClient = new QueryClient();
 
 export const Route = createRootRouteWithContext<RouterContext>()({
+  head: () => ({
+    links: [{ rel: "stylesheet", href: appCss }],
+    meta: [
+      { charSet: "utf-8" },
+      { name: "viewport", content: "width=device-width, initial-scale=1" },
+    ],
+  }),
   component: function Root() {
     return (
-      <AuthProvider>
-        <QueryClientProvider client={rootQueryClient}>
-          <RootContent />
-          <Toaster position="top-right" richColors />
-          <OfflineSnackbar />
-        </QueryClientProvider>
-      </AuthProvider>
+      <html lang="sv" className="light">
+        <head>
+          <HeadContent />
+        </head>
+        <body className="min-h-screen bg-background font-sans antialiased">
+          <AuthProvider>
+            <QueryClientProvider client={rootQueryClient}>
+              <RootContent />
+              <Toaster position="top-right" richColors />
+              <OfflineSnackbar />
+            </QueryClientProvider>
+          </AuthProvider>
+          <Scripts />
+        </body>
+      </html>
     );
   },
 });

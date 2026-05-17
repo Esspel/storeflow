@@ -358,38 +358,46 @@ export interface PushSubscription {
   created_at: string;
 }
 
-// ─── Session helpers ────────────────────────────────────────────────────────
+// ─── Session helpers (cookie + in-memory, SSR-safe) ────────────────────────
+
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function setCookie(name: string, value: string, days = 7) {
+  if (typeof document === "undefined") return;
+  const expires = new Date(Date.now() + days * 864e5).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+}
+
+function deleteCookie(name: string) {
+  if (typeof document === "undefined") return;
+  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax`;
+}
+
+let _cachedUser: AppUser | null = null;
 
 export function getSessionToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("session_token");
+  return getCookie("sf_session");
 }
 
 export function setSessionToken(token: string) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem("session_token", token);
+  setCookie("sf_session", token, 7);
 }
 
 export function clearSessionToken() {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem("session_token");
-  localStorage.removeItem("current_user");
+  deleteCookie("sf_session");
+  _cachedUser = null;
 }
 
 export function getCurrentUser(): AppUser | null {
-  if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem("current_user");
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as AppUser;
-  } catch {
-    return null;
-  }
+  return _cachedUser;
 }
 
 export function setCurrentUser(user: AppUser) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem("current_user", JSON.stringify(user));
+  _cachedUser = user;
 }
 
 // Supabase client configured with session token header
