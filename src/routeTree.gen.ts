@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UppgifterRouteImport } from './routes/uppgifter'
-import { Route as TestpanelRouteImport } from './routes/testpanel'
 import { Route as SchemaRouteImport } from './routes/schema'
 import { Route as RapporterRouteImport } from './routes/rapporter'
 import { Route as PersonalRouteImport } from './routes/personal'
@@ -19,18 +18,12 @@ import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as KundrundaRouteImport } from './routes/kundrunda'
 import { Route as InstallningarRouteImport } from './routes/installningar'
-import { Route as HkDashboardRouteImport } from './routes/hk-dashboard'
 import { Route as AvvikelserRouteImport } from './routes/avvikelser'
 import { Route as IndexRouteImport } from './routes/index'
 
 const UppgifterRoute = UppgifterRouteImport.update({
   id: '/uppgifter',
   path: '/uppgifter',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TestpanelRoute = TestpanelRouteImport.update({
-  id: '/testpanel',
-  path: '/testpanel',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SchemaRoute = SchemaRouteImport.update({
@@ -73,11 +66,6 @@ const InstallningarRoute = InstallningarRouteImport.update({
   path: '/installningar',
   getParentRoute: () => rootRouteImport,
 } as any)
-const HkDashboardRoute = HkDashboardRouteImport.update({
-  id: '/hk-dashboard',
-  path: '/hk-dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AvvikelserRoute = AvvikelserRouteImport.update({
   id: '/avvikelser',
   path: '/avvikelser',
@@ -92,7 +80,6 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
-  '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/kundrunda': typeof KundrundaRoute
   '/login': typeof LoginRoute
@@ -101,13 +88,11 @@ export interface FileRoutesByFullPath {
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
-  '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
-  '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/kundrunda': typeof KundrundaRoute
   '/login': typeof LoginRoute
@@ -116,14 +101,12 @@ export interface FileRoutesByTo {
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
-  '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
-  '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/kundrunda': typeof KundrundaRoute
   '/login': typeof LoginRoute
@@ -132,7 +115,6 @@ export interface FileRoutesById {
   '/personal': typeof PersonalRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
-  '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRouteTypes {
@@ -140,7 +122,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/avvikelser'
-    | '/hk-dashboard'
     | '/installningar'
     | '/kundrunda'
     | '/login'
@@ -149,13 +130,11 @@ export interface FileRouteTypes {
     | '/personal'
     | '/rapporter'
     | '/schema'
-    | '/testpanel'
     | '/uppgifter'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/avvikelser'
-    | '/hk-dashboard'
     | '/installningar'
     | '/kundrunda'
     | '/login'
@@ -164,13 +143,11 @@ export interface FileRouteTypes {
     | '/personal'
     | '/rapporter'
     | '/schema'
-    | '/testpanel'
     | '/uppgifter'
   id:
     | '__root__'
     | '/'
     | '/avvikelser'
-    | '/hk-dashboard'
     | '/installningar'
     | '/kundrunda'
     | '/login'
@@ -179,14 +156,12 @@ export interface FileRouteTypes {
     | '/personal'
     | '/rapporter'
     | '/schema'
-    | '/testpanel'
     | '/uppgifter'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AvvikelserRoute: typeof AvvikelserRoute
-  HkDashboardRoute: typeof HkDashboardRoute
   InstallningarRoute: typeof InstallningarRoute
   KundrundaRoute: typeof KundrundaRoute
   LoginRoute: typeof LoginRoute
@@ -195,7 +170,6 @@ export interface RootRouteChildren {
   PersonalRoute: typeof PersonalRoute
   RapporterRoute: typeof RapporterRoute
   SchemaRoute: typeof SchemaRoute
-  TestpanelRoute: typeof TestpanelRoute
   UppgifterRoute: typeof UppgifterRoute
 }
 
@@ -206,13 +180,6 @@ declare module '@tanstack/react-router' {
       path: '/uppgifter'
       fullPath: '/uppgifter'
       preLoaderRoute: typeof UppgifterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/testpanel': {
-      id: '/testpanel'
-      path: '/testpanel'
-      fullPath: '/testpanel'
-      preLoaderRoute: typeof TestpanelRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/schema': {
@@ -271,13 +238,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InstallningarRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/hk-dashboard': {
-      id: '/hk-dashboard'
-      path: '/hk-dashboard'
-      fullPath: '/hk-dashboard'
-      preLoaderRoute: typeof HkDashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/avvikelser': {
       id: '/avvikelser'
       path: '/avvikelser'
@@ -298,7 +258,6 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AvvikelserRoute: AvvikelserRoute,
-  HkDashboardRoute: HkDashboardRoute,
   InstallningarRoute: InstallningarRoute,
   KundrundaRoute: KundrundaRoute,
   LoginRoute: LoginRoute,
@@ -307,7 +266,6 @@ const rootRouteChildren: RootRouteChildren = {
   PersonalRoute: PersonalRoute,
   RapporterRoute: RapporterRoute,
   SchemaRoute: SchemaRoute,
-  TestpanelRoute: TestpanelRoute,
   UppgifterRoute: UppgifterRoute,
 }
 export const routeTree = rootRouteImport

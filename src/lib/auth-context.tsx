@@ -1,171 +1,117 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { type AppUser, type Store, supabase, setSessionToken } from "./supabase";
-import { getStoredSession, storeSession, clearSession, login as doLogin, logout as doLogout, validateSession } from "./auth";
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
+import type { AppUser, Store } from "./supabase";
+import { supabase, getSessionToken, getCurrentUser, setCurrentUser, clearSessionToken } from "./supabase";
+import { validateSession } from "./auth";
 
-type AuthContextType = {
+interface AuthContextValue {
   user: AppUser | null;
-  token: string | null;
-  loading: boolean;
-  userStores: Store[];
   activeStore: Store | null;
-  setActiveStore: (store: Store | null) => void;
-  login: (username: string, password: string) => Promise<{ error?: string; mustChangePassword?: boolean }>;
-  logout: () => Promise<void>;
-  refreshUser: (user: AppUser) => void;
-  refreshUserStores: () => Promise<void>;
-  // Lock screen / quick user switch
-  lockScreenOpen: boolean;
-  openLockScreen: () => void;
-  closeLockScreen: () => void;
-  quickSwitch: (newUser: AppUser, newToken: string) => Promise<void>;
-};
+  stores: Store[];
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  setActiveStore: (store: Store) => void;
+  refreshUser: () => Promise<void>;
+  logout: () => void;
+}
 
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AppUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [userStores, setUserStores] = useState<Store[]>([]);
-  const [activeStore, setActiveStoreState] = useState<Store | null>(null);
-  const [lockScreenOpen, setLockScreenOpen] = useState(false);
-
-  const loadUserStores = async (userId: string, currentUser: AppUser) => {
-    if (currentUser.role === "admin") {
-      // Admins see all stores
-      const { data } = await supabase.from("stores").select("*").order("name");
-      const stores = (data ?? []) as Store[];
-      setUserStores(stores);
-      return stores;
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<AppUser | null>(() => getCurrentUser());
+  const [activeStore, setActiveStoreState] = useState<Store | null>(() => {
+    try {
+      const raw = localStorage.getItem("active_store");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
     }
+  });
+  const [stores, setStores] = useState<Store[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadStores = useCallback(async (userId: string) => {
     const { data } = await supabase
       .from("user_stores")
-      .select("store:stores(*)")
+      .select("store_id, stores(*)")
       .eq("user_id", userId);
-    const stores = ((data ?? []).map((r: { store: unknown }) => r.store).filter(Boolean)) as Store[];
-    setUserStores(stores);
-    return stores;
-  };
-
-  const setActiveStore = async (store: Store | null) => {
-    setActiveStoreState(store);
-    if (user) {
-      await supabase
-        .from("app_users")
-        .update({ active_store_id: store?.id ?? null })
-        .eq("id", user.id);
+    if (data) {
+      const storeList = data.map((r: { stores: Store }) => r.stores).filter(Boolean) as Store[];
+      setStores(storeList);
+      if (!activeStore && storeList.length > 0) {
+        setActiveStoreState(storeList[0]);
+        localStorage.setItem("active_store", JSON.stringify(storeList[0]));
+      }
     }
-  };
+  }, [activeStore]);
 
-  const refreshUserStores = async () => {
-    if (!user) return;
-    await loadUserStores(user.id, user);
-  };
+  const refreshUser = useCallback(async () => {
+    const token = getSessionToken();
+    if (!token) {
+      setUser(null);
+      setIsLoading(false);
+      return;
+    }
+    const u = await validateSession(token);
+    if (u) {
+      setUser(u);
+      await loadStores(u.id);
+    } else {
+      clearSessionToken();
+      setUser(null);
+    }
+    setIsLoading(false);
+  }, [loadStores]);
 
   useEffect(() => {
-    (async () => {
-      const stored = await getStoredSession();
-      if (!stored) {
-        setLoading(false);
-        return;
-      }
-      // Set token on the Supabase client BEFORE any queries so RLS functions
-      // that read x-session-token work correctly during validation
-      setSessionToken(stored.token);
-      const validUser = await validateSession(stored.token);
-      if (validUser) {
-        setUser(validUser);
-        setToken(stored.token);
-        const stores = await loadUserStores(validUser.id, validUser);
-        if (validUser.active_store_id) {
-          const active = stores.find((s) => s.id === validUser.active_store_id) ?? null;
-          setActiveStoreState(active);
-        } else if (stores.length > 0) {
-          setActiveStoreState(stores[0]);
-        }
-      } else {
-        setSessionToken(null);
-        await clearSession();
-      }
-      setLoading(false);
-    })();
+    refreshUser();
+  }, [refreshUser]);
+
+  const setActiveStore = useCallback((store: Store) => {
+    setActiveStoreState(store);
+    localStorage.setItem("active_store", JSON.stringify(store));
   }, []);
 
-  const login = async (username: string, password: string) => {
-    const result = await doLogin(username, password);
-    if ("error" in result) return { error: result.error };
-    // Set token on the Supabase client immediately so all subsequent queries
-    // include x-session-token and RLS policies resolve correctly
-    setSessionToken(result.token);
-    setUser(result.user);
-    setToken(result.token);
-    await storeSession(result.token, result.user);
-    const stores = await loadUserStores(result.user.id, result.user);
-    if (result.user.active_store_id) {
-      const active = stores.find((s) => s.id === result.user.active_store_id) ?? null;
-      setActiveStoreState(active);
-    } else if (stores.length > 0) {
-      setActiveStoreState(stores[0]);
-    }
-    if (result.user.must_change_password || result.user.last_login === null) {
-      // Ensure user state reflects the forced change so root layout doesn't redirect away
-      const userWithFlag = { ...result.user, must_change_password: true };
-      setUser(userWithFlag);
-      await storeSession(result.token, userWithFlag);
-      return { mustChangePassword: true };
-    }
-    return {};
-  };
-
-  const logout = async () => {
-    if (token) await doLogout(token);
-    setSessionToken(null);
+  const logout = useCallback(() => {
+    clearSessionToken();
     setUser(null);
-    setToken(null);
-    setUserStores([]);
     setActiveStoreState(null);
-    await clearSession();
-  };
-
-  const refreshUser = (updated: AppUser) => {
-    setUser(updated);
-    if (token) storeSession(token, updated);
-  };
-
-  const openLockScreen = () => setLockScreenOpen(true);
-  const closeLockScreen = () => setLockScreenOpen(false);
-
-  const quickSwitch = async (newUser: AppUser, newToken: string) => {
-    // Expire old session silently (best-effort)
-    if (token) {
-      supabase.from("app_sessions").delete().eq("token", token).then(() => {});
-    }
-    setSessionToken(newToken);
-    setUser(newUser);
-    setToken(newToken);
-    await storeSession(newToken, newUser);
-    // Load stores for new user
-    const stores = await loadUserStores(newUser.id, newUser);
-    if (newUser.active_store_id) {
-      const active = stores.find((s) => s.id === newUser.active_store_id) ?? null;
-      setActiveStoreState(active);
-    } else if (stores.length > 0) {
-      setActiveStoreState(stores[0]);
-    }
-    setLockScreenOpen(false);
-  };
+    setStores([]);
+    localStorage.removeItem("active_store");
+  }, []);
 
   return (
-    <AuthContext.Provider
-      value={{ user, token, loading, userStores, activeStore, setActiveStore, login, logout, refreshUser, refreshUserStores, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch }}
-    >
+    <AuthContext.Provider value={{
+      user,
+      activeStore,
+      stores,
+      isLoading,
+      isAuthenticated: !!user,
+      setActiveStore,
+      refreshUser,
+      logout,
+    }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
+}
+
+export function useIsAdmin(): boolean {
+  const { user } = useAuth();
+  return user?.role === "admin";
+}
+
+export function useIsManager(): boolean {
+  const { user } = useAuth();
+  return user?.role === "manager" || user?.role === "admin";
+}
+
+export function useActiveStoreId(): string | null {
+  const { activeStore } = useAuth();
+  return activeStore?.id ?? null;
 }

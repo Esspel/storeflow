@@ -1,652 +1,272 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Eye, EyeOff, KeyRound, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw } from "lucide-react";
-
-import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { supabase, logAudit } from "@/lib/supabase";
-import { useAuth } from "@/lib/auth-context";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
+import {
+  Settings, Bell, Shield, Moon, Sun, Store, User, Key,
+  LogOut, ChevronRight, Check, X, Smartphone,
+} from "lucide-react";
+import { supabase, VAPID_PUBLIC_KEY, getSessionToken } from "@/lib/supabase";
+import { useAuth, useIsAdmin } from "@/lib/auth-context";
+import { changePassword } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { PushNotificationSetup } from "@/components/push-notification-setup";
-
-const APP_VERSION = "2.4.1";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/installningar")({
-  component: SettingsPage,
+  beforeLoad: () => { if (!getSessionToken()) throw redirect({ to: "/login" }); },
+  component: InstallningarPage,
 });
 
-function SettingsPage() {
-  const { user, refreshUser } = useAuth();
-
-  // Quick PIN state
-  const [newPin, setNewPin] = useState("");
-  const [confirmPin, setConfirmPin] = useState("");
-  const [pinStep, setPinStep] = useState<"enter" | "confirm">("enter");
-  const [pinError, setPinError] = useState("");
-  const [pinSuccess, setPinSuccess] = useState(false);
-  const [pinSaving, setPinSaving] = useState(false);
-  const [hasPin, setHasPin] = useState(false);
-
-  // Barcode ID state
-  const [barcodeId, setBarcodeId] = useState("");
-  const [barcodeSaving, setBarcodeSaving] = useState(false);
-  const [barcodeSuccess, setBarcodeSuccess] = useState(false);
-  const [barcodeError, setBarcodeError] = useState("");
-
-  // Load current PIN and barcode status
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("app_users")
-      .select("quick_pin_hash, barcode_id")
-      .eq("id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        setHasPin(!!data?.quick_pin_hash);
-        setBarcodeId(data?.barcode_id ?? "");
-      });
-  }, [user?.id]);
-
-  const handlePinDigit = (digit: string) => {
-    if (pinStep === "enter") {
-      if (newPin.length >= 4) return;
-      const next = newPin + digit;
-      setNewPin(next);
-      setPinError("");
-      if (next.length === 4) setPinStep("confirm");
-    } else {
-      if (confirmPin.length >= 4) return;
-      const next = confirmPin + digit;
-      setConfirmPin(next);
-      setPinError("");
-      if (next.length === 4) {
-        if (next !== newPin) {
-          setPinError("PIN-koderna stämmer inte överens. Försök igen.");
-          setNewPin("");
-          setConfirmPin("");
-          setPinStep("enter");
-        }
-      }
-    }
-  };
-
-  const savePin = async () => {
-    if (!user || confirmPin.length !== 4 || confirmPin !== newPin) return;
-    setPinSaving(true);
-    const { data: hash } = await supabase.rpc("hash_password", { plain_password: confirmPin });
-    await supabase.from("app_users").update({ quick_pin_hash: hash }).eq("id", user.id);
-    logAudit(user.id, "user.set_quick_pin", "app_users", user.id, {});
-    setPinSaving(false);
-    setPinSuccess(true);
-    setHasPin(true);
-    setNewPin("");
-    setConfirmPin("");
-    setPinStep("enter");
-    setTimeout(() => setPinSuccess(false), 2000);
-  };
-
-  const clearPin = async () => {
-    if (!user) return;
-    await supabase.from("app_users").update({ quick_pin_hash: null }).eq("id", user.id);
-    logAudit(user.id, "user.clear_quick_pin", "app_users", user.id, {});
-    setHasPin(false);
-  };
-
-  const saveBarcode = async () => {
-    if (!user) return;
-    setBarcodeError("");
-    const trimmed = barcodeId.trim();
-    if (!trimmed) return;
-    setBarcodeSaving(true);
-    // Check uniqueness across users in same store(s)
-    const { data: existing } = await supabase
-      .from("app_users")
-      .select("id, display_name")
-      .eq("barcode_id", trimmed)
-      .neq("id", user.id)
-      .maybeSingle();
-    if (existing) {
-      setBarcodeError(`Streckkoden är redan registrerad på ${existing.display_name}.`);
-      setBarcodeSaving(false);
-      return;
-    }
-    await supabase.from("app_users").update({ barcode_id: trimmed }).eq("id", user.id);
-    logAudit(user.id, "user.set_barcode", "app_users", user.id, {});
-    setBarcodeSaving(false);
-    setBarcodeSuccess(true);
-    setTimeout(() => setBarcodeSuccess(false), 2000);
-  };
-
-  const clearBarcode = async () => {
-    if (!user) return;
-    await supabase.from("app_users").update({ barcode_id: null }).eq("id", user.id);
-    logAudit(user.id, "user.clear_barcode", "app_users", user.id, {});
-    setBarcodeId("");
-  };
-
-  const [displayName, setDisplayName] = useState(user?.display_name ?? "");
-  const [nameSaving, setNameSaving] = useState(false);
-  const [nameSuccess, setNameSuccess] = useState(false);
-
-  const [currentPw, setCurrentPw] = useState("");
+function InstallningarPage() {
+  const { user, activeStore, logout } = useAuth();
+  const isAdmin = useIsAdmin();
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    document.documentElement.classList.contains("dark") ? "dark" : "light"
+  );
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [showChangePw, setShowChangePw] = useState(false);
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
-  const [showCurrentPw, setShowCurrentPw] = useState(false);
-  const [showNewPw, setShowNewPw] = useState(false);
-  const [pwError, setPwError] = useState("");
-  const [pwSuccess, setPwSuccess] = useState(false);
-  const [pwSaving, setPwSaving] = useState(false);
+  const [savingPw, setSavingPw] = useState(false);
 
-  // ── Diagnostics panel (hidden: tap version 7 times to unlock) ──────────────
-  const [versionTapCount, setVersionTapCount] = useState(0);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const [diagOnline, setDiagOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
-  const [diagIdbUsage, setDiagIdbUsage] = useState("–");
-  const [diagLastError, setDiagLastError] = useState("–");
-  const [diagLocalDrafts, setDiagLocalDrafts] = useState(0);
-  const [diagRefreshing, setDiagRefreshing] = useState(false);
-
-  const refreshDiagnostics = useCallback(async () => {
-    setDiagRefreshing(true);
-    setDiagOnline(navigator.onLine);
-    try {
-      if (navigator.storage?.estimate) {
-        const est = await navigator.storage.estimate();
-        const used = est.usage ?? 0;
-        const quota = est.quota ?? 0;
-        setDiagIdbUsage(`${(used / 1024 / 1024).toFixed(2)} MB / ${(quota / 1024 / 1024).toFixed(0)} MB`);
-      }
-    } catch { setDiagIdbUsage("Ej tillgängligt"); }
-    try {
-      const draftKeys = Object.keys(localStorage).filter((k) => k.startsWith("sf_draft_") || k.startsWith("sf_queue_"));
-      setDiagLocalDrafts(draftKeys.length);
-    } catch { setDiagLocalDrafts(0); }
-    try {
-      const { data } = await supabase
-        .from("system_errors")
-        .select("error_message, created_at")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (data) {
-        const ts = new Date(data.created_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
-        setDiagLastError(`${ts}: ${(data.error_message as string).slice(0, 120)}`);
-      } else {
-        setDiagLastError("Inga registrerade fel");
-      }
-    } catch { setDiagLastError("Kunde inte hämta"); }
-    setDiagRefreshing(false);
+  useEffect(() => {
+    checkPushStatus();
   }, []);
 
-  const handleVersionTap = () => {
-    const next = versionTapCount + 1;
-    setVersionTapCount(next);
-    if (versionTapTimer.current) clearTimeout(versionTapTimer.current);
-    if (next >= 7) {
-      setVersionTapCount(0);
-      setShowDiagnostics(true);
-      refreshDiagnostics();
-    } else {
-      versionTapTimer.current = setTimeout(() => setVersionTapCount(0), 2000);
-    }
-  };
+  async function checkPushStatus() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return;
+    const sub = await reg.pushManager.getSubscription();
+    setPushEnabled(!!sub);
+  }
 
-  const downloadDebugLog = () => {
-    const lines = [
-      `StoreFlow Debug Log — ${new Date().toISOString()}`,
-      `Version: ${APP_VERSION}`,
-      `User: ${user?.username ?? "–"} (${user?.role ?? "–"})`,
-      `Store: ${activeStore?.name ?? "–"} (${activeStore?.id ?? "–"})`,
-      `Online: ${diagOnline}`,
-      `IndexedDB: ${diagIdbUsage}`,
-      `Local drafts: ${diagLocalDrafts}`,
-      `Last error: ${diagLastError}`,
-      `User-Agent: ${navigator.userAgent}`,
-      `Screen: ${window.screen.width}x${window.screen.height} @ ${window.devicePixelRatio}x`,
-      `Viewport: ${window.innerWidth}x${window.innerHeight}`,
-      `Language: ${navigator.language}`,
-      `Platform: ${(navigator as { platform?: string }).platform ?? "–"}`,
-      `Service Worker: ${"serviceWorker" in navigator ? "supported" : "unsupported"}`,
-      ``,
-      `--- LocalStorage keys ---`,
-      ...Object.keys(localStorage).map((k) => `  ${k}`),
-    ];
-    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `storeflow-debug-${Date.now()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  function toggleTheme() {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    document.documentElement.classList.toggle("dark", newTheme === "dark");
+    localStorage.setItem("theme", newTheme);
+  }
 
-  const saveDisplayName = async () => {
-    if (!displayName.trim() || !user) return;
-    setNameSaving(true);
-    await supabase.from("app_users").update({ display_name: displayName.trim() }).eq("id", user.id);
-    logAudit(user.id, "user.edit", "app_users", user.id, { field: "display_name" });
-    refreshUser({ ...user, display_name: displayName.trim() });
-    setNameSaving(false);
-    setNameSuccess(true);
-    setTimeout(() => setNameSuccess(false), 2000);
-  };
-
-  const changePassword = async () => {
-    setPwError("");
-    setPwSuccess(false);
+  async function togglePush() {
     if (!user) return;
-    if (newPw !== confirmPw) { setPwError("Lösenorden stämmer inte överens."); return; }
-    if (newPw.length < 12) { setPwError("Lösenordet måste vara minst 12 tecken."); return; }
+    setPushLoading(true);
+    try {
+      if (pushEnabled) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        const sub = await reg?.pushManager.getSubscription();
+        if (sub) {
+          await sub.unsubscribe();
+          await supabase.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+          setPushEnabled(false);
+          toast.success("Push-notiser avaktiverade");
+        }
+      } else {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") { toast.error("Behörighet nekad"); setPushLoading(false); return; }
 
-    setPwSaving(true);
+        let reg = await navigator.serviceWorker.getRegistration();
+        if (!reg) reg = await navigator.serviceWorker.register("/sw.js");
 
-    const { data: userData } = await supabase
-      .from("app_users")
-      .select("password_hash")
-      .eq("id", user.id)
-      .maybeSingle();
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
 
-    const { data: verified } = await supabase.rpc("verify_password", {
-      plain_password: currentPw,
-      hashed_password: userData?.password_hash ?? "",
-    });
+        await supabase.from("push_subscriptions").upsert({
+          user_id: user.id,
+          endpoint: sub.endpoint,
+          subscription_json: sub.toJSON(),
+          user_agent: navigator.userAgent,
+        }, { onConflict: "endpoint" });
 
-    if (!verified) {
-      setPwError("Nuvarande lösenord är felaktigt.");
-      setPwSaving(false);
-      return;
+        setPushEnabled(true);
+        toast.success("Push-notiser aktiverade");
+      }
+    } catch (e: unknown) {
+      toast.error("Fel: " + String(e));
     }
+    setPushLoading(false);
+  }
 
-    const { data: hash } = await supabase.rpc("hash_password", { plain_password: newPw });
-    await supabase.from("app_users").update({ password_hash: hash }).eq("id", user.id);
-    logAudit(user.id, "user.password_change", "app_users", user.id, {});
-
-    setPwSaving(false);
-    setPwSuccess(true);
-    setCurrentPw("");
-    setNewPw("");
-    setConfirmPw("");
-    setTimeout(() => setPwSuccess(false), 2000);
-  };
+  async function savePassword() {
+    if (!user) return;
+    if (newPw.length < 6) { toast.error("Lösenord måste vara minst 6 tecken"); return; }
+    if (newPw !== confirmPw) { toast.error("Lösenorden matchar inte"); return; }
+    setSavingPw(true);
+    try {
+      await changePassword(user.id, newPw);
+      toast.success("Lösenord ändrat");
+      setShowChangePw(false);
+      setNewPw("");
+      setConfirmPw("");
+    } catch (e: unknown) {
+      toast.error("Fel: " + String(e));
+    }
+    setSavingPw(false);
+  }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 md:px-8 md:py-10">
-      <PageHeader title="Inställningar" description="Hantera ditt konto och lösenord." />
+    <div className="p-4 md:p-6 space-y-4 max-w-xl mx-auto">
+      <div>
+        <h1 className="text-xl font-bold text-foreground">Inställningar</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Konto och appinställningar</p>
+      </div>
 
-      <div className="space-y-6">
-        <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
-              <User className="h-4 w-4" />
-            </div>
-            <h2 className="font-semibold">Profil</h2>
+      {/* Profile */}
+      <Section title="Profil">
+        <div className="flex items-center gap-3 p-4">
+          <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-lg font-bold text-primary-foreground shrink-0">
+            {user?.display_name?.[0]?.toUpperCase()}
           </div>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Användarnamn</Label>
-              <Input value={user?.username ?? ""} disabled className="bg-muted/40" />
-              <p className="text-xs text-muted-foreground">Användarnamn kan inte ändras.</p>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Visningsnamn</Label>
-              <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Ditt namn" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Roll</Label>
-              <Input value={user?.role ?? ""} disabled className="bg-muted/40 capitalize" />
-            </div>
-            <div className="flex items-center gap-3">
-              <Button onClick={saveDisplayName} disabled={nameSaving} className="rounded-full">
-                {nameSaving ? "Sparar..." : "Spara ändringar"}
-              </Button>
-              {nameSuccess && <span className="text-sm text-success">Sparat!</span>}
-            </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-foreground">{user?.display_name}</p>
+            <p className="text-sm text-muted-foreground">@{user?.username}</p>
+            <p className="text-xs text-muted-foreground capitalize">{user?.role} · {user?.hierarchy_level}</p>
           </div>
         </div>
-
-        <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
-              <Bell className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="font-semibold">Push-notiser</h2>
-              <p className="text-xs text-muted-foreground">Få aviseringar direkt på enheten när uppgifter tilldelas eller deadlines nalkas.</p>
-            </div>
-          </div>
-          <PushNotificationSetup />
-        </div>
-
-        {/* Quick switch: barcode + PIN */}
-        <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
-              <ArrowLeftRight className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="font-semibold">Snabbt användarbyte</h2>
-              <p className="text-xs text-muted-foreground">
-                Registrera streckkod och/eller PIN för att ta över en delad Zebra-enhet på sekunder.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            {/* ── Barcode section ── */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <ScanBarcode className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Passerkortets streckkod</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Scanna ditt passerkort med Zebra-skannern i fältet nedan, eller skriv in streckkodsvärdet manuellt.
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  value={barcodeId}
-                  onChange={(e) => { setBarcodeId(e.target.value); setBarcodeError(""); }}
-                  placeholder="Scanna kort eller ange ID manuellt"
-                  className="flex-1 font-mono text-sm"
-                  autoComplete="off"
-                  onKeyDown={(e) => { if (e.key === "Enter") saveBarcode(); }}
-                />
-                {barcodeId.trim() && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full shrink-0"
-                    onClick={clearBarcode}
-                  >
-                    Rensa
-                  </Button>
-                )}
-              </div>
-              {barcodeError && (
-                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{barcodeError}</p>
-              )}
-              <div className="flex items-center gap-3">
-                <Button
-                  onClick={saveBarcode}
-                  disabled={barcodeSaving || !barcodeId.trim()}
-                  size="sm"
-                  className="rounded-full"
-                >
-                  {barcodeSaving ? "Sparar..." : "Spara streckkod"}
-                </Button>
-                {barcodeSuccess && <span className="text-sm text-success">Sparat!</span>}
-              </div>
-            </div>
-
-            <div className="border-t border-border/60" />
-
-            {/* ── PIN section ── */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Hash className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">4-siffrig PIN-kod</span>
-                </div>
-                {hasPin && (
-                  <button
-                    onClick={clearPin}
-                    className="text-xs text-destructive hover:underline"
-                  >
-                    Ta bort PIN
-                  </button>
-                )}
-              </div>
-
-              {hasPin && pinStep === "enter" && newPin.length === 0 && (
-                <p className="text-xs text-muted-foreground">Du har en aktiv PIN. Ange nedan för att byta.</p>
-              )}
-
-              <p className="text-sm text-muted-foreground">
-                {pinStep === "enter"
-                  ? (hasPin ? "Ange ny PIN-kod:" : "Välj en 4-siffrig PIN:")
-                  : "Bekräfta PIN-koden:"}
-              </p>
-
-              {/* PIN dots */}
-              <div className="flex justify-center gap-4 py-1">
-                {[0, 1, 2, 3].map((i) => {
-                  const active = pinStep === "enter" ? newPin : confirmPin;
-                  return (
-                    <div
-                      key={i}
-                      className={cn(
-                        "h-4 w-4 rounded-full border-2 transition-all duration-100",
-                        active.length > i ? "border-primary bg-primary scale-110" : "border-border bg-transparent",
-                      )}
-                    />
-                  );
-                })}
-              </div>
-
-              {pinError && (
-                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">{pinError}</p>
-              )}
-              {pinSuccess && (
-                <p className="rounded-lg bg-success/10 px-3 py-2 text-center text-sm text-success-foreground">PIN sparad!</p>
-              )}
-
-              {/* PIN pad */}
-              <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
-                {["1","2","3","4","5","6","7","8","9"].map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => handlePinDigit(d)}
-                    className="flex h-14 items-center justify-center rounded-xl border border-border/60 bg-card text-xl font-semibold transition-all active:scale-95 hover:bg-accent"
-                  >
-                    {d}
-                  </button>
-                ))}
-                <button
-                  onClick={() => { setNewPin(""); setConfirmPin(""); setPinStep("enter"); setPinError(""); }}
-                  className="flex h-14 items-center justify-center rounded-xl text-xs text-muted-foreground transition-all active:scale-95 hover:bg-muted"
-                >
-                  Rensa
-                </button>
-                <button
-                  onClick={() => handlePinDigit("0")}
-                  className="flex h-14 items-center justify-center rounded-xl border border-border/60 bg-card text-xl font-semibold transition-all active:scale-95 hover:bg-accent"
-                >
-                  0
-                </button>
-                <button
-                  onClick={() => {
-                    if (pinStep === "enter") setNewPin(p => p.slice(0, -1));
-                    else setConfirmPin(p => p.slice(0, -1));
-                    setPinError("");
-                  }}
-                  className="flex h-14 items-center justify-center rounded-xl text-muted-foreground transition-all active:scale-95 hover:bg-muted"
-                >
-                  <Delete className="h-4 w-4" />
-                </button>
-              </div>
-
-              {pinStep === "confirm" && confirmPin.length === 4 && confirmPin === newPin && (
-                <div className="flex justify-center">
-                  <Button onClick={savePin} disabled={pinSaving} className="rounded-full">
-                    {pinSaving ? "Sparar..." : "Spara PIN-kod"}
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
-              <KeyRound className="h-4 w-4" />
-            </div>
-            <h2 className="font-semibold">Byt lösenord</h2>
-          </div>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Nuvarande lösenord</Label>
-              <div className="relative">
-                <Input
-                  type={showCurrentPw ? "text" : "password"}
-                  value={currentPw}
-                  onChange={(e) => setCurrentPw(e.target.value)}
-                  placeholder="••••••••"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowCurrentPw((v) => !v)}
-                >
-                  {showCurrentPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Nytt lösenord</Label>
-              <div className="relative">
-                <Input
-                  type={showNewPw ? "text" : "password"}
-                  value={newPw}
-                  onChange={(e) => setNewPw(e.target.value)}
-                  placeholder="Minst 6 tecken"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowNewPw((v) => !v)}
-                >
-                  {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Bekräfta nytt lösenord</Label>
-              <Input
-                type="password"
-                value={confirmPw}
-                onChange={(e) => setConfirmPw(e.target.value)}
-                placeholder="Upprepa lösenordet"
-              />
-            </div>
-            {pwError && (
-              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{pwError}</p>
-            )}
-            <div className="flex items-center gap-3">
-              <Button onClick={changePassword} disabled={pwSaving || !currentPw || !newPw || !confirmPw} className="rounded-full">
-                {pwSaving ? "Byter lösenord..." : "Byt lösenord"}
-              </Button>
-              {pwSuccess && <span className="text-sm text-success">Lösenord bytt!</span>}
-            </div>
-          </div>
-        </div>
-
-        {/* Diagnostics panel — revealed by tapping the version number 7 times */}
-        {showDiagnostics ? (
-          <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                  <Bug className="h-4 w-4" />
-                </div>
-                <div>
-                  <h2 className="font-semibold">Diagnostik</h2>
-                  <p className="text-xs text-muted-foreground">Realtidsstatus för Helpdesk-support.</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={refreshDiagnostics}
-                  disabled={diagRefreshing}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
-                  aria-label="Uppdatera diagnostik"
-                >
-                  <RefreshCw className={cn("h-4 w-4", diagRefreshing && "animate-spin")} />
-                </button>
-                <button
-                  onClick={() => setShowDiagnostics(false)}
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Stäng
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {/* Network status */}
-              <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  {diagOnline
-                    ? <Wifi className="h-4 w-4 text-success" />
-                    : <WifiOff className="h-4 w-4 text-destructive" />}
-                  Nätverksstatus
-                </div>
-                <span className={cn("text-sm font-semibold", diagOnline ? "text-success" : "text-destructive")}>
-                  {diagOnline ? "Online" : "Offline"}
-                </span>
-              </div>
-
-              {/* IndexedDB */}
-              <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <HardDrive className="h-4 w-4 text-muted-foreground" />
-                  IndexedDB-lagring
-                </div>
-                <span className="font-mono text-xs text-muted-foreground">{diagIdbUsage}</span>
-              </div>
-
-              {/* Local drafts */}
-              <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
-                <span className="text-sm font-medium">Lokala utkast (kö)</span>
-                <span className={cn("text-sm font-semibold tabular-nums", diagLocalDrafts > 0 ? "text-warning-foreground" : "text-muted-foreground")}>
-                  {diagLocalDrafts} poster
-                </span>
-              </div>
-
-              {/* Last error */}
-              <div className="rounded-lg border border-border/60 px-3 py-2.5">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Senaste systemfel</p>
-                <p className="break-all font-mono text-xs text-foreground/80">{diagLastError}</p>
-              </div>
-
-              {/* Version */}
-              <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
-                <span className="text-sm font-medium">App-version</span>
-                <span className="font-mono text-xs text-muted-foreground">{APP_VERSION}</span>
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <Button onClick={downloadDebugLog} className="w-full rounded-full gap-2">
-                <Download className="h-4 w-4" />
-                Exportera lokal debug-logg
-              </Button>
-              <p className="mt-2 text-center text-xs text-muted-foreground">
-                Ladda ned och skicka denna fil till Coops IT-Helpdesk.
-              </p>
-            </div>
-          </div>
-        ) : (
-          /* Version tap target — invisible but accessible */
-          <div className="flex justify-center pt-2 pb-4">
-            <button
-              onClick={handleVersionTap}
-              className="select-none rounded-full px-4 py-2 text-xs text-muted-foreground/40 transition-colors hover:text-muted-foreground/60 active:opacity-50"
-              aria-label="App-version"
-            >
-              v{APP_VERSION}
-              {versionTapCount > 0 && versionTapCount < 7 && (
-                <span className="ml-2 text-muted-foreground/60">({7 - versionTapCount} tryck kvar)</span>
-              )}
+        <Divider />
+        <SettingRow
+          icon={<Key className="w-4 h-4" />}
+          label="Ändra lösenord"
+          onClick={() => setShowChangePw(!showChangePw)}
+        />
+        {showChangePw && (
+          <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
+            <input
+              type="password"
+              value={newPw}
+              onChange={e => setNewPw(e.target.value)}
+              placeholder="Nytt lösenord"
+              className="w-full h-10 px-3 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <input
+              type="password"
+              value={confirmPw}
+              onChange={e => setConfirmPw(e.target.value)}
+              placeholder="Bekräfta lösenord"
+              className="w-full h-10 px-3 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <button onClick={savePassword} disabled={savingPw} className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-70">
+              {savingPw ? "Sparar..." : "Spara lösenord"}
             </button>
           </div>
         )}
-      </div>
+      </Section>
+
+      {/* Butik */}
+      {activeStore && (
+        <Section title="Aktiv butik">
+          <div className="px-4 py-3 flex items-center gap-3">
+            <Store className="w-4 h-4 text-muted-foreground shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground">{activeStore.name}</p>
+              <p className="text-xs text-muted-foreground">{activeStore.butiks_nr ?? activeStore.city}</p>
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {/* Notifications */}
+      <Section title="Notifikationer">
+        <SettingRow
+          icon={<Bell className="w-4 h-4" />}
+          label="Push-notiser"
+          sub={pushEnabled ? "Aktiva" : "Inaktiva"}
+          right={
+            <button
+              onClick={togglePush}
+              disabled={pushLoading}
+              className={cn(
+                "w-11 h-6 rounded-full transition-all relative",
+                pushEnabled ? "bg-primary" : "bg-muted",
+                pushLoading && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              <span className={cn(
+                "absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform",
+                pushEnabled ? "translate-x-5" : "translate-x-0.5"
+              )} />
+            </button>
+          }
+        />
+      </Section>
+
+      {/* Appearance */}
+      <Section title="Utseende">
+        <SettingRow
+          icon={theme === "dark" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+          label={theme === "dark" ? "Mörkt läge" : "Ljust läge"}
+          right={
+            <button
+              onClick={toggleTheme}
+              className={cn("w-11 h-6 rounded-full transition-all relative", theme === "dark" ? "bg-primary" : "bg-muted")}
+            >
+              <span className={cn("absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform", theme === "dark" ? "translate-x-5" : "translate-x-0.5")} />
+            </button>
+          }
+        />
+      </Section>
+
+      {/* Security */}
+      <Section title="Säkerhet">
+        <SettingRow icon={<Shield className="w-4 h-4" />} label="Tvåfaktorsautentisering" sub="Ej aktiverad" />
+        <Divider />
+        <SettingRow icon={<Smartphone className="w-4 h-4" />} label="Aktiva sessioner" sub="Se inloggade enheter" />
+      </Section>
+
+      {/* Sign out */}
+      <button
+        onClick={logout}
+        className="w-full flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-2xl text-destructive hover:bg-red-50 transition-colors"
+      >
+        <LogOut className="w-4 h-4" />
+        <span className="text-sm font-medium">Logga ut</span>
+      </button>
+
+      <p className="text-center text-xs text-muted-foreground pb-4">StoreFlow · Version 1.0</p>
     </div>
   );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">{title}</p>
+      <div className="bg-card border border-border rounded-2xl overflow-hidden">{children}</div>
+    </div>
+  );
+}
+
+function Divider() {
+  return <div className="h-px bg-border mx-4" />;
+}
+
+function SettingRow({ icon, label, sub, right, onClick }: {
+  icon: React.ReactNode; label: string; sub?: string;
+  right?: React.ReactNode; onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-full flex items-center gap-3 px-4 py-3 text-left",
+        onClick && "hover:bg-muted/50 transition-colors cursor-pointer",
+        !onClick && "cursor-default"
+      )}
+    >
+      <span className="text-muted-foreground shrink-0">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-foreground">{label}</p>
+        {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+      </div>
+      {right ?? (onClick && <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />)}
+    </button>
+  );
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from(rawData, c => c.charCodeAt(0));
 }

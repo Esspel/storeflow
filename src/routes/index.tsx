@@ -1,412 +1,251 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  TriangleAlert as AlertTriangle,
-  ArrowRight,
-  ChartBar as BarChart3,
-  CalendarDays,
-  ListChecks,
-  Clock,
-  TrendingUp,
-  Repeat,
-  CircleCheck as CheckCircle2,
-  Circle,
-  UserRound,
-  MessageSquare,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-
-import { cn } from "@/lib/utils";
+import { Link } from "@tanstack/react-router";
+import { SquareCheck as CheckSquare, TriangleAlert as AlertTriangle, ClipboardList, Calendar, MessageSquare, TrendingUp, Users, Clock, ArrowRight, CircleCheck as CheckCircle2, Circle, CircleAlert as AlertCircle } from "lucide-react";
+import { supabase, type Task, type Incident } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
-import { supabase } from "@/lib/supabase";
-import { getSimulatedNow } from "@/lib/time-simulation";
+import { cn, formatDate, statusColor, statusLabel, priorityColor } from "@/lib/utils";
+import { getSessionToken } from "@/lib/supabase";
 
 export const Route = createFileRoute("/")({
-  component: HubPage,
+  beforeLoad: () => {
+    if (!getSessionToken()) throw redirect({ to: "/login" });
+  },
+  component: DashboardPage,
 });
 
-type TaskRow = {
-  id: string;
-  title: string;
-  status: string;
-  due_date: string | null;
-  recurrence_rule: string | null;
-  parent_task_id: string | null;
-  steps_total: number;
-  steps_done: number;
-  priority: string;
-  recurrence_days: number[] | null;
-};
-
-type IncidentRow = {
-  id: string;
-  title: string;
-  status: string;
-  priority: string;
-  ref_number: string | null;
-  created_at: string;
-};
-
-type Stats = {
-  todosCompleted: number;
-  openTasks: number;
-  overdueTasks: number;
+interface Stats {
+  tasksTodo: number;
+  tasksLate: number;
   openIncidents: number;
-};
-
-const RECURRENCE_LABELS: Record<string, string> = {
-  daily: "Dagligen",
-  every_other_day: "Varannan dag",
-  weekly: "Varje vecka",
-  monthly: "Varje månad",
-  yearly: "Varje år",
-};
-
-const WEEKDAY_SHORT = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
-
-function recurrenceLabel(task: TaskRow): string {
-  const base = RECURRENCE_LABELS[task.recurrence_rule ?? ""] ?? task.recurrence_rule ?? "";
-  if (task.recurrence_rule === "weekly" && task.recurrence_days && task.recurrence_days.length > 0) {
-    const days = [...task.recurrence_days].sort((a, b) => a - b).map((d) => WEEKDAY_SHORT[d]).join(", ");
-    return `${base} · ${days}`;
-  }
-  return base;
+  criticalIncidents: number;
 }
 
-function isEffectivelyLate(t: { status: string; due_date: string | null }, now: number): boolean {
-  return t.status !== "done" && t.status !== "cancelled" && t.due_date != null && new Date(t.due_date).getTime() < now;
-}
-
-function incidentPriorityDot(priority: string): string {
-  if (priority === "Kritisk") return "bg-destructive";
-  if (priority === "Hög") return "bg-warning";
-  if (priority === "Medel") return "bg-info";
-  return "bg-muted-foreground/40";
-}
-
-function incidentStatusLabel(status: string): { text: string; cls: string } {
-  if (status === "escalated") return { text: "Eskalerad", cls: "text-destructive bg-destructive/10" };
-  if (status === "in_progress") return { text: "Pågår", cls: "text-info bg-info/10" };
-  if (status === "resolved") return { text: "Löst", cls: "text-success bg-success/10" };
-  if (status === "closed") return { text: "Stängt", cls: "text-muted-foreground bg-muted" };
-  return { text: "Ny", cls: "text-muted-foreground bg-muted" };
-}
-
-function HubPage() {
+function DashboardPage() {
   const { user, activeStore } = useAuth();
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [oneOffTasks, setOneOffTasks] = useState<TaskRow[]>([]);
-  const [recurringTasks, setRecurringTasks] = useState<TaskRow[]>([]);
-  const [recentIncidents, setRecentIncidents] = useState<IncidentRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const isManager = user?.role === "manager" || user?.role === "admin";
+  const [stats, setStats] = useState<Stats>({ tasksTodo: 0, tasksLate: 0, openIncidents: 0, criticalIncidents: 0 });
+  const [recentTasks, setRecentTasks] = useState<Task[]>([]);
+  const [recentIncidents, setRecentIncidents] = useState<Incident[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const storeFilter = activeStore?.id ?? null;
-      const now = getSimulatedNow();
+    if (!activeStore) { setIsLoading(false); return; }
+    loadDashboard(activeStore.id);
 
-      let tasksQ = supabase
-        .from("tasks")
-        .select("id, title, status, due_date, recurrence_rule, parent_task_id, priority, recurrence_days, steps:task_steps(id, is_done)")
-        .order("created_at", { ascending: false });
-      if (storeFilter) tasksQ = tasksQ.eq("store_id", storeFilter);
-      const { data: rawTasks } = await tasksQ;
+    const channel = supabase
+      .channel(`dashboard-${activeStore.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks", filter: `store_id=eq.${activeStore.id}` }, () => loadDashboard(activeStore.id))
+      .on("postgres_changes", { event: "*", schema: "public", table: "incidents", filter: `store_id=eq.${activeStore.id}` }, () => loadDashboard(activeStore.id))
+      .subscribe();
 
-      let incQ = supabase
-        .from("incidents")
-        .select("id, title, status, priority, ref_number, created_at")
-        .order("created_at", { ascending: false })
-        .limit(6);
-      if (storeFilter) incQ = incQ.eq("store_id", storeFilter);
-      const { data: incidents } = await incQ;
+    return () => { supabase.removeChannel(channel); };
+  }, [activeStore]);
 
-      const tasks = (rawTasks ?? []) as (Omit<TaskRow, "steps_total" | "steps_done"> & { steps: { id: string; is_done: boolean }[] })[];
-      const mapped: TaskRow[] = tasks.map((t) => ({
-        ...t,
-        steps: undefined as never,
-        steps_total: t.steps?.length ?? 0,
-        steps_done: t.steps?.filter((s) => s.is_done).length ?? 0,
-      }));
+  async function loadDashboard(storeId: string) {
+    setIsLoading(true);
+    const [tasksRes, incidentsRes] = await Promise.all([
+      supabase.from("tasks").select("*").eq("store_id", storeId).in("status", ["todo", "progress", "late"]).order("created_at", { ascending: false }).limit(5),
+      supabase.from("incidents").select("*").eq("store_id", storeId).in("status", ["open", "in_progress", "escalated"]).order("created_at", { ascending: false }).limit(5),
+    ]);
 
-      const done = mapped.filter((t) => t.status === "done").length;
-      const openTasks = mapped.filter((t) => (t.status === "todo" || t.status === "progress") && !isEffectivelyLate(t, now)).length;
-      const overdueTasks = mapped.filter((t) => t.status === "late" || isEffectivelyLate(t, now)).length;
-      const inc = (incidents ?? []) as IncidentRow[];
-      const openIncidents = inc.filter((i) => ["open", "in_progress", "escalated"].includes(i.status)).length;
+    const tasks = (tasksRes.data ?? []) as Task[];
+    const incidents = (incidentsRes.data ?? []) as Incident[];
 
-      setStats({ todosCompleted: done, openTasks, overdueTasks, openIncidents });
-      // Hide closed and resolved incidents from dashboard overview
-      setRecentIncidents(inc.filter((i) => i.status !== "closed" && i.status !== "resolved"));
+    setRecentTasks(tasks);
+    setRecentIncidents(incidents);
+    setStats({
+      tasksTodo: tasks.filter(t => t.status === "todo").length,
+      tasksLate: tasks.filter(t => t.status === "late").length,
+      openIncidents: incidents.length,
+      criticalIncidents: incidents.filter(i => i.priority === "Kritisk").length,
+    });
+    setIsLoading(false);
+  }
 
-      const parentIdsWithChildren = new Set(mapped.filter((t) => t.parent_task_id).map((t) => t.parent_task_id!));
-      const simTodayStart = new Date(now); simTodayStart.setHours(0,0,0,0);
-      const simTodayEnd = new Date(now); simTodayEnd.setHours(23,59,59,999);
-
-      // Uppgifter idag: non-recurring tasks due today (not in the past, not done)
-      const todayTasks = mapped.filter((t) => {
-        if (t.recurrence_rule || t.status === "done" || t.status === "cancelled") return false;
-        if (parentIdsWithChildren.has(t.id)) return false;
-        if (!t.due_date) return false;
-        const d = new Date(t.due_date);
-        return d >= simTodayStart && d <= simTodayEnd;
-      });
-      setOneOffTasks(todayTasks.slice(0, 5));
-
-      // Återkommande: parent recurring tasks, hide done, deduplicate by title (show each once)
-      const seenTitles = new Set<string>();
-      const recurringUnique = mapped.filter((t) => {
-        if (!t.recurrence_rule || t.parent_task_id) return false;
-        if (t.status === "done" || t.status === "cancelled") return false;
-        if (seenTitles.has(t.title)) return false;
-        seenTitles.add(t.title);
-        return true;
-      });
-      setRecurringTasks(recurringUnique.slice(0, 5));
-      setLoading(false);
-    };
-    load();
-  }, [user, activeStore]);
-
-  const firstName = user?.display_name?.split(" ")[0] ?? "";
-
-  return (
-    /* Dashboard gets the mint-green background; everything else in the app uses white */
-    <div className="min-h-full" style={{ background: "oklch(0.94 0.04 145)" }}>
-      <div className="mx-auto w-full max-w-[1400px] px-5 py-10 md:px-8 md:py-14">
-
-        {/* Hero heading */}
-        <div className="mb-8 md:mb-10">
-          {firstName && (
-            <p className="mb-1 text-base font-medium text-primary/80">Hej, {firstName}</p>
-          )}
-          <h1 className="text-3xl font-black tracking-tight text-foreground md:text-5xl">
-            Vad ska du göra idag?
-          </h1>
-          {activeStore && (
-            <p className="mt-2 text-sm text-muted-foreground">{activeStore.name}</p>
-          )}
-        </div>
-
-        {/* Main panel */}
-        <div className="mb-6 overflow-hidden rounded-2xl border border-border/60 bg-white shadow-[var(--shadow-sm)]">
-
-          {/* Three-column top: tasks today | recurring | avvikelser */}
-          <div className="grid grid-cols-1 divide-y divide-border/50 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-
-            {/* Uppgifter idag */}
-            <div className="p-5 md:p-6">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-primary" />
-                  <h2 className="text-sm font-semibold text-foreground">Uppgifter idag</h2>
-                </div>
-                <Link to="/uppgifter" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                  Se alla <ArrowRight className="h-3 w-3" />
-                </Link>
-              </div>
-              {loading ? (
-                <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-11 animate-pulse rounded-lg bg-muted/50" />)}</div>
-              ) : oneOffTasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <CheckCircle2 className="mb-2 h-7 w-7 text-success/60" />
-                  <p className="text-xs font-medium text-muted-foreground">Inga aktiva uppgifter</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-border/40">
-                  {oneOffTasks.map((t) => <TaskPreviewRow key={t.id} task={t} />)}
-                </div>
-              )}
-            </div>
-
-            {/* Återkommande uppgifter */}
-            <div className="p-5 md:p-6">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-success" />
-                  <h2 className="text-sm font-semibold text-foreground">Återkommande uppgifter</h2>
-                </div>
-                <Link to="/uppgifter" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                  Se alla <ArrowRight className="h-3 w-3" />
-                </Link>
-              </div>
-              {loading ? (
-                <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-11 animate-pulse rounded-lg bg-muted/50" />)}</div>
-              ) : recurringTasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Repeat className="mb-2 h-7 w-7 text-muted-foreground/40" />
-                  <p className="text-xs font-medium text-muted-foreground">Inga återkommande uppgifter</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-border/40">
-                  {recurringTasks.map((t) => <TaskPreviewRow key={t.id} task={t} recurring />)}
-                </div>
-              )}
-            </div>
-
-            {/* Avvikelser */}
-            <div className="p-5 md:p-6">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-warning" />
-                  <h2 className="text-sm font-semibold text-foreground">Avvikelser</h2>
-                </div>
-                <Link to="/avvikelser" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                  Se alla <ArrowRight className="h-3 w-3" />
-                </Link>
-              </div>
-              {loading ? (
-                <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-11 animate-pulse rounded-lg bg-muted/50" />)}</div>
-              ) : recentIncidents.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <AlertTriangle className="mb-2 h-7 w-7 text-muted-foreground/40" />
-                  <p className="text-xs font-medium text-muted-foreground">Inga avvikelser</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-border/40">
-                  {recentIncidents.map((inc) => {
-                    const status = incidentStatusLabel(inc.status);
-                    return (
-                      <Link
-                        key={inc.id}
-                        to="/avvikelser"
-                        className="group flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg hover:bg-muted/30 transition-colors"
-                      >
-                        <div className={cn("h-2 w-2 shrink-0 rounded-full", incidentPriorityDot(inc.priority))} />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{inc.title}</p>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground">
-                            {new Date(inc.created_at).toLocaleDateString("sv-SE", { month: "short", day: "numeric" })}
-                          </p>
-                        </div>
-                        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium", status.cls)}>
-                          {status.text}
-                        </span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Stats bar */}
-          {stats && (
-            <div className="grid grid-cols-2 divide-x divide-y divide-border/50 border-t border-border/50 md:grid-cols-4 md:divide-y-0">
-              <StatCell label="Slutförda uppgifter" value={stats.todosCompleted} icon={CheckCircle2} />
-              <StatCell label="Öppna uppgifter" value={stats.openTasks} icon={ListChecks} />
-              <StatCell label="Försenade" value={stats.overdueTasks} icon={Clock} urgent={stats.overdueTasks > 0} />
-              <StatCell label="Öppna avvikelser" value={stats.openIncidents} icon={AlertTriangle} urgent={stats.openIncidents > 0} />
-            </div>
-          )}
-        </div>
-
-        {/* Quick nav cards */}
-        <div className={cn(
-          "grid grid-cols-2 gap-3 sm:grid-cols-3",
-          isManager ? "lg:grid-cols-6" : "lg:grid-cols-5"
-        )}>
-          <QuickCard to="/uppgifter" icon={ListChecks} title="Uppgifter" desc="Rutiner och checklistor" tone="blue" />
-          <QuickCard to="/avvikelser" icon={AlertTriangle} title="Avvikelser" desc="Rapportera ärenden" tone="amber" />
-          <QuickCard to="/schema" icon={CalendarDays} title="Schema" desc="Skiftöversikt" tone="green" />
-          <QuickCard to="/kundrunda" icon={UserRound} title="Kundrunda" desc="Butikskontroll" tone="teal" />
-          <QuickCard to="/moten" icon={MessageSquare} title="Möten" desc="Agenda och protokoll" tone="slate" />
-          {isManager && <QuickCard to="/rapporter" icon={BarChart3} title="Rapporter" desc="KPI:er och insikter" tone="green" />}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TaskPreviewRow({ task, recurring = false }: { task: TaskRow; recurring?: boolean }) {
-  const now = getSimulatedNow();
-  const late = isEffectivelyLate(task, now);
-  const done = task.status === "done";
-  const progress = task.steps_total > 0 ? task.steps_done / task.steps_total : done ? 1 : 0;
-
-  return (
-    <Link
-      to="/uppgifter"
-      className="group flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg hover:bg-muted/30 transition-colors"
-    >
-      <div className={cn(
-        "h-2 w-2 shrink-0 rounded-full",
-        done ? "bg-success" : late ? "bg-destructive" : task.priority === "Kritisk" ? "bg-destructive" : "bg-border"
-      )} />
-      <div className="min-w-0 flex-1">
-        <p className={cn("truncate text-sm font-medium", done && "line-through text-muted-foreground")}>
-          {task.title}
-        </p>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">
-          {recurring && task.recurrence_rule
-            ? recurrenceLabel(task)
-            : task.due_date
-              ? new Date(task.due_date).toLocaleDateString("sv-SE", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
-              : "Inget datum"
-          }
-        </p>
-      </div>
-      <div className="w-16 shrink-0">
-        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-          <div
-            className={cn("h-full rounded-full transition-all", done ? "bg-success" : "bg-primary")}
-            style={{ width: `${Math.round(progress * 100)}%` }}
-          />
-        </div>
-      </div>
-      {done
-        ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
-        : <Circle className="h-4 w-4 shrink-0 text-border group-hover:text-muted-foreground transition-colors" />
-      }
-    </Link>
-  );
-}
-
-function StatCell({ label, value, icon: Icon, urgent = false }: {
-  label: string; value: number; icon: LucideIcon; urgent?: boolean;
-}) {
-  const fmt = value >= 1000 ? `${(value / 1000).toFixed(2)}k` : String(value);
-  return (
-    <div className="flex items-start gap-3 p-4 md:p-5">
-      <div className={cn(
-        "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-        urgent ? "bg-destructive/10 text-destructive" : "bg-success/10 text-success"
-      )}>
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xl font-black tracking-tight text-foreground md:text-2xl">{fmt}</p>
-        <p className="mt-0.5 text-[11px] text-muted-foreground leading-tight">{label}</p>
-      </div>
-      <TrendingUp className="ml-auto mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground/30" />
-    </div>
-  );
-}
-
-function QuickCard({ to, icon: Icon, title, desc, tone }: {
-  to: string; icon: LucideIcon; title: string; desc: string; tone: "blue" | "amber" | "green" | "teal" | "slate";
-}) {
-  const colors = {
-    blue: "bg-info/10 text-info",
-    amber: "bg-warning/15 text-warning-foreground",
-    green: "bg-success/10 text-success",
-    teal: "bg-teal-500/10 text-teal-600",
-    slate: "bg-slate-500/10 text-slate-600",
+  const greeting = () => {
+    const h = new Date().getHours();
+    if (h < 10) return "God morgon";
+    if (h < 12) return "God förmiddag";
+    if (h < 17) return "God eftermiddag";
+    return "God kväll";
   };
+
   return (
-    <Link
-      to={to}
-      className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-white p-4 shadow-[var(--shadow-sm)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]"
-    >
-      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", colors[tone])}>
-        <Icon className="h-5 w-5" />
+    <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
+      {/* Header */}
+      <div>
+        <h2 className="text-xl font-semibold text-foreground">
+          {greeting()}, {user?.display_name?.split(" ")[0]}
+        </h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {activeStore ? activeStore.name : "Välj en butik för att börja"}
+          {" · "}{formatDate(new Date().toISOString(), { weekday: "long", day: "numeric", month: "long" })}
+        </p>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="font-semibold text-sm text-foreground">{title}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{desc}</p>
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard
+          label="Uppgifter att göra"
+          value={stats.tasksTodo}
+          icon={<CheckSquare className="w-5 h-5" />}
+          color="text-blue-600 bg-blue-50"
+          to="/uppgifter"
+        />
+        <StatCard
+          label="Försenade"
+          value={stats.tasksLate}
+          icon={<Clock className="w-5 h-5" />}
+          color="text-red-600 bg-red-50"
+          to="/uppgifter"
+        />
+        <StatCard
+          label="Öppna avvikelser"
+          value={stats.openIncidents}
+          icon={<AlertTriangle className="w-5 h-5" />}
+          color="text-orange-600 bg-orange-50"
+          to="/avvikelser"
+        />
+        <StatCard
+          label="Kritiska"
+          value={stats.criticalIncidents}
+          icon={<AlertCircle className="w-5 h-5" />}
+          color="text-red-600 bg-red-50"
+          to="/avvikelser"
+        />
       </div>
-      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5" />
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { to: "/uppgifter", label: "Uppgifter", icon: CheckSquare, desc: "Hantera dagens uppgifter" },
+          { to: "/avvikelser", label: "Avvikelser", icon: AlertTriangle, desc: "Rapportera avvikelser" },
+          { to: "/kundrunda", label: "Kundrunda", icon: ClipboardList, desc: "Starta en kundrundan" },
+          { to: "/schema", label: "Schema", icon: Calendar, desc: "Se veckans schema" },
+          { to: "/moten", label: "Möten", icon: MessageSquare, desc: "Planera och dokumentera" },
+          { to: "/rapporter", label: "Rapporter", icon: TrendingUp, desc: "Analysera prestanda" },
+        ].map(item => {
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              className="bg-card border border-border rounded-xl p-4 hover:border-primary/30 hover:shadow-md transition-all group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-primary-soft flex items-center justify-center mb-3 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                <Icon className="w-4.5 h-4.5 text-primary group-hover:text-primary-foreground transition-colors" />
+              </div>
+              <p className="font-semibold text-sm text-foreground">{item.label}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Recent tasks + incidents */}
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* Tasks */}
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+            <h3 className="font-semibold text-sm text-foreground">Senaste uppgifter</h3>
+            <Link to="/uppgifter" className="text-xs text-primary flex items-center gap-1 hover:underline">
+              Visa alla <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="divide-y divide-border">
+            {isLoading ? (
+              <LoadingRows count={3} />
+            ) : recentTasks.length === 0 ? (
+              <EmptyState message="Inga aktiva uppgifter" />
+            ) : (
+              recentTasks.map(task => (
+                <div key={task.id} className="px-4 py-3 flex items-center gap-3">
+                  {task.status === "done" ? (
+                    <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                  ) : task.status === "late" ? (
+                    <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+                  ) : (
+                    <Circle className="w-4 h-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
+                    <p className="text-xs text-muted-foreground">{task.category}</p>
+                  </div>
+                  <span className={cn("text-[11px] px-2 py-0.5 rounded-full font-medium", statusColor(task.status))}>
+                    {statusLabel(task.status)}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Incidents */}
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+            <h3 className="font-semibold text-sm text-foreground">Öppna avvikelser</h3>
+            <Link to="/avvikelser" className="text-xs text-primary flex items-center gap-1 hover:underline">
+              Visa alla <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="divide-y divide-border">
+            {isLoading ? (
+              <LoadingRows count={3} />
+            ) : recentIncidents.length === 0 ? (
+              <EmptyState message="Inga öppna avvikelser" />
+            ) : (
+              recentIncidents.map(inc => (
+                <div key={inc.id} className="px-4 py-3 flex items-center gap-3">
+                  <AlertTriangle className={cn("w-4 h-4 shrink-0",
+                    inc.priority === "Kritisk" ? "text-destructive" : "text-warning-foreground"
+                  )} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{inc.title}</p>
+                    <p className="text-xs text-muted-foreground">{inc.ref_number}</p>
+                  </div>
+                  <span className={cn("text-[11px] px-2 py-0.5 rounded-full font-medium", priorityColor(inc.priority))}>
+                    {inc.priority}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, icon, color, to }: { label: string; value: number; icon: React.ReactNode; color: string; to: string }) {
+  return (
+    <Link to={to} className="bg-card border border-border rounded-xl p-4 hover:shadow-md transition-all">
+      <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center mb-2", color)}>
+        {icon}
+      </div>
+      <p className="text-2xl font-bold text-foreground">{value}</p>
+      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
     </Link>
+  );
+}
+
+function LoadingRows({ count }: { count: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="px-4 py-3 flex items-center gap-3 animate-pulse">
+          <div className="w-4 h-4 rounded-full bg-muted shrink-0" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-3 bg-muted rounded w-3/4" />
+            <div className="h-2.5 bg-muted rounded w-1/2" />
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="px-4 py-6 text-center text-sm text-muted-foreground">{message}</div>
   );
 }

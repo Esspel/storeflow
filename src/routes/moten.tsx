@@ -1,852 +1,383 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { Calendar, CircleCheck as CheckCircle2, Clock, Pause, Pencil, Play, Plus, Trash2, Users, X, FileText } from "lucide-react";
-
-import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  supabase,
-  type Meeting, type MeetingAgendaItem, type MeetingDecision, type AppUser,
-  logAudit, createNotification,
-} from "@/lib/supabase";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useState, useEffect, useCallback } from "react";
+import { MessageSquare, Plus, Play, Square, CircleCheck as CheckCircle2, Clock, Users, X, Calendar, ChevronRight } from "lucide-react";
+import { supabase, type Meeting, getSessionToken } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
-import { cn } from "@/lib/utils";
+import { cn, formatDate, formatDateTime, statusColor, statusLabel } from "@/lib/utils";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/moten")({
-  component: MeetingsPage,
+  beforeLoad: () => { if (!getSessionToken()) throw redirect({ to: "/login" }); },
+  component: MotenPage,
 });
 
-const MEETING_TYPES: { value: Meeting["meeting_type"]; label: string; description: string; defaultDurationMin: number }[] = [
-  { value: "daglig_styrning", label: "Daglig styrning", description: "Daglig uppföljning mån–fre kl 09:30, 15 min. Genomgång av StoreFlow-tavlan.", defaultDurationMin: 15 },
-  { value: "ledningsgrupp", label: "Ledningsgrupp", description: "Veckogenomgång för ledningsgruppen. Fredag 13:00, 60 min. Schema via SoftOne GO.", defaultDurationMin: 60 },
-  { value: "saljledare", label: "Säljledarmöte", description: "Månadsvis säljledaremöte. Första måndag 13:00, 60 min.", defaultDurationMin: 60 },
-  { value: "personalmote", label: "Personalmöte", description: "Butiksmöte med all personal. Genomgång av nyheter från Relesys (kommunikationskanal) och Coopnet, kampanjer och arbetsmiljö.", defaultDurationMin: 45 },
-  { value: "haccp", label: "HACCP / Livsmedelssäkerhet", description: "Månadsvis HACCP-uppföljning. Egenkontroll via GetCompliant, temperaturloggar.", defaultDurationMin: 30 },
-  { value: "frankly", label: "&frankly — Medarbetarenkät", description: "Genomgång av &frankly-resultat. Halvårsvis, 45 min.", defaultDurationMin: 45 },
-  { value: "cap_genomgang", label: "CAP / KPI-genomgång", description: "Genomgång av Power BI-rapporter från CAP (Coop Analytical Platform).", defaultDurationMin: 30 },
-  { value: "leverans_genomgang", label: "Leveransgenomgång", description: "Uppföljning av leveranser, CAO-avvikelser (SAP/Blue Yonder) och returer.", defaultDurationMin: 20 },
-  { value: "veckostamning", label: "Veckoavstämning", description: "Flexibel veckovis uppstämning.", defaultDurationMin: 30 },
-];
-
-const DEFAULT_AGENDAS: Record<Meeting["meeting_type"], { title: string; duration: number }[]> = {
-  daglig_styrning: [
-    { title: "Pulstavlan (StoreFlow) — öppna uppgifter & avvikelser", duration: 5 },
-    { title: "Igår — vad gick bra / vad gick dåligt?", duration: 5 },
-    { title: "Dagens prioriteringar & bemanning", duration: 5 },
-  ],
-  ledningsgrupp: [
-    { title: "Föregående protokoll — uppföljning av beslut", duration: 5 },
-    { title: "Försäljning & budget (CAP / Power BI)", duration: 15 },
-    { title: "Personal, schema & SoftOne GO", duration: 10 },
-    { title: "Avvikelser & incidenter (StoreFlow)", duration: 10 },
-    { title: "Kommande kampanjer (Open Access / Coopnet)", duration: 10 },
-    { title: "Beslut & åtgärder", duration: 10 },
-  ],
-  saljledare: [
-    { title: "Månadsresultat per avdelning (CAP)", duration: 15 },
-    { title: "Kampanjplanering & Open Access-aktiveringar", duration: 15 },
-    { title: "Sortimentsfrågor — Mitt Coop / SAP FnR / A3 (kommande)", duration: 10 },
-    { title: "Kundtrender (Scan & Pay, Coop-appen)", duration: 10 },
-    { title: "Beslut", duration: 10 },
-  ],
-  personalmote: [
-    { title: "Nyheter från Relesys (kommunikationskanal) & Coopnet (intranät)", duration: 10 },
-    { title: "Försäljning & butikens resultat", duration: 10 },
-    { title: "Kampanjer & aktiviteter kommande period", duration: 10 },
-    { title: "Attensi Skills — utbildningsstatus", duration: 5 },
-    { title: "Arbetsmiljö & IA-systemet — avvikelser", duration: 5 },
-    { title: "Frågor & svar", duration: 5 },
-  ],
-  haccp: [
-    { title: "Temperaturloggar kyl & frys (RDM / Danfoss)", duration: 5 },
-    { title: "GetCompliant — egenkontrollstatus sedan sist", duration: 10 },
-    { title: "Datumkontroll (Upshop) — avvikelser", duration: 5 },
-    { title: "Rengöring & hygien — avvikelser från kundrundan", duration: 5 },
-    { title: "Åtgärder & uppföljning", duration: 5 },
-  ],
-  frankly: [
-    { title: "Presentation av &frankly-resultat", duration: 10 },
-    { title: "Analys — vad är bra, vad behöver förbättras?", duration: 15 },
-    { title: "Jämförelse mot föregående period", duration: 5 },
-    { title: "Prioriterade förbättringsområden", duration: 10 },
-    { title: "Åtgärdsplan & ansvariga (StoreFlow-uppgifter)", duration: 5 },
-  ],
-  cap_genomgang: [
-    { title: "Försäljning vs. budget (Power BI)", duration: 10 },
-    { title: "Svinn & kassation per avdelning", duration: 5 },
-    { title: "CAO-avvikelser (SAP / Blue Yonder / JDA)", duration: 5 },
-    { title: "Åtgärder utifrån data", duration: 10 },
-  ],
-  leverans_genomgang: [
-    { title: "Leveransplan — avvikelser mot CAO (SAP FnR)", duration: 5 },
-    { title: "Kvalitetsreklamationer & returer (Tomra / leverantör)", duration: 5 },
-    { title: "Svinn & markdowns", duration: 5 },
-    { title: "Åtgärder & uppföljning", duration: 5 },
-  ],
-  veckostamning: [
-    { title: "Veckans mål", duration: 5 },
-    { title: "Uppföljning", duration: 10 },
-    { title: "Kommande vecka", duration: 10 },
-    { title: "Övrigt", duration: 5 },
-  ],
+const MEETING_TYPES: Record<string, string> = {
+  ledningsgrupp: "Ledningsgruppsmöte",
+  saljledare: "Säljledarmöte",
+  daglig_styrning: "Daglig styrning",
+  veckostamning: "Veckostämning",
 };
 
-function statusBadge(s: Meeting["status"]) {
-  if (s === "in_progress") return <Badge className="bg-warning/15 text-warning-foreground">Pågår</Badge>;
-  if (s === "completed") return <Badge className="bg-success/15 text-success">Slutfört</Badge>;
-  if (s === "cancelled") return <Badge variant="secondary">Inställt</Badge>;
-  return <Badge variant="secondary">Planerat</Badge>;
-}
+function MotenPage() {
+  const { user, activeStore } = useAuth();
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [selected, setSelected] = useState<Meeting | null>(null);
 
-function pad(n: number) { return String(n).padStart(2, "0"); }
-function fmtSecs(s: number) { return `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; }
+  const load = useCallback(async () => {
+    if (!activeStore) { setLoading(false); return; }
+    setLoading(true);
+    const { data } = await supabase
+      .from("meetings")
+      .select("*, meeting_agenda_items(*), stores(name)")
+      .eq("store_id", activeStore.id)
+      .order("scheduled_at", { ascending: false });
+    setMeetings((data ?? []) as Meeting[]);
+    setLoading(false);
+  }, [activeStore]);
 
-function AgendaTimer({ item, onComplete }: { item: MeetingAgendaItem; onComplete: () => void }) {
-  const budget = item.duration_minutes * 60;
-  const elapsed = item.started_at && !item.completed_at
-    ? Math.floor((Date.now() - new Date(item.started_at).getTime()) / 1000)
-    : item.started_at && item.completed_at
-      ? Math.floor((new Date(item.completed_at).getTime() - new Date(item.started_at).getTime()) / 1000)
-      : 0;
-  const [secs, setSecs] = useState(elapsed);
-  const [running, setRunning] = useState(!!item.started_at && !item.completed_at);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    if (running) {
-      intervalRef.current = setInterval(() => setSecs(s => s + 1), 1000);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running]);
+  async function startMeeting(id: string) {
+    await supabase.from("meetings").update({ status: "in_progress", started_at: new Date().toISOString() }).eq("id", id);
+    toast.success("Möte startat");
+    load();
+    const updated = meetings.find(m => m.id === id);
+    if (updated) setSelected({ ...updated, status: "in_progress", started_at: new Date().toISOString() });
+  }
 
-  const pct = Math.min(1, secs / budget);
-  const over = secs > budget;
+  async function endMeeting(id: string) {
+    await supabase.from("meetings").update({ status: "completed", ended_at: new Date().toISOString() }).eq("id", id);
+    toast.success("Möte avslutat");
+    load();
+    setSelected(null);
+  }
 
   return (
-    <div className="flex items-center gap-2">
-      <div className={cn("font-mono text-sm tabular-nums font-medium", over ? "text-destructive" : "text-foreground")}>
-        {fmtSecs(secs)}
-        <span className="text-[10px] text-muted-foreground">/{pad(item.duration_minutes)}:00</span>
+    <div className="p-4 md:p-6 space-y-4 max-w-4xl mx-auto">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-foreground">Möten</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{activeStore?.name}</p>
+        </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex items-center gap-2 px-3 h-9 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
+        >
+          <Plus className="w-4 h-4" />
+          Planera möte
+        </button>
       </div>
-      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
-        <div
-          className={cn("h-full rounded-full transition-all", over ? "bg-destructive" : "bg-primary")}
-          style={{ width: `${pct * 100}%` }}
+
+      {/* Active meetings */}
+      {meetings.filter(m => m.status === "in_progress").map(m => (
+        <div key={m.id} className="bg-primary-soft border border-primary/30 rounded-2xl p-4 flex items-center gap-4">
+          <div className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">{MEETING_TYPES[m.meeting_type] ?? m.meeting_type}</p>
+            <p className="text-xs text-muted-foreground">Startade {formatDateTime(m.started_at ?? "")}</p>
+          </div>
+          <button onClick={() => setSelected(m)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium">
+            Öppna <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ))}
+
+      <div className="space-y-2">
+        {loading ? (
+          Array.from({ length: 2 }).map((_, i) => <div key={i} className="bg-card border border-border rounded-2xl p-4 animate-pulse h-20" />)
+        ) : meetings.filter(m => m.status !== "in_progress").length === 0 ? (
+          <div className="py-12 text-center bg-card border border-border rounded-2xl">
+            <MessageSquare className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Inga möten planerade</p>
+          </div>
+        ) : (
+          meetings.filter(m => m.status !== "in_progress").map(m => (
+            <div
+              key={m.id}
+              onClick={() => setSelected(m)}
+              className="bg-card border border-border rounded-2xl p-4 hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer"
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                  <MessageSquare className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-foreground truncate">{MEETING_TYPES[m.meeting_type] ?? m.meeting_type}</p>
+                    <span className={cn("text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0", statusColor(m.status))}>
+                      {statusLabel(m.status)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      {formatDate(m.scheduled_at)}
+                    </span>
+                    {m.meeting_agenda_items && (
+                      <span className="text-xs text-muted-foreground">
+                        {m.meeting_agenda_items.length} punkter
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {m.status === "scheduled" && (user?.role === "manager" || user?.role === "admin") && (
+                  <button
+                    onClick={e => { e.stopPropagation(); startMeeting(m.id); }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium shrink-0"
+                  >
+                    <Play className="w-3 h-3" />
+                    Starta
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {showCreate && (
+        <MeetingDialog
+          activeStore={activeStore}
+          userId={user?.id ?? ""}
+          onClose={() => setShowCreate(false)}
+          onSave={() => { setShowCreate(false); load(); }}
         />
-      </div>
-      {!item.completed_at && (
-        <button
-          onClick={() => { setRunning(r => !r); }}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-border/60 bg-card hover:bg-muted/50"
-        >
-          {running ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-        </button>
       )}
-      {running && !item.completed_at && (
-        <button
-          onClick={onComplete}
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-success/15 text-success hover:bg-success/25"
-        >
-          <CheckCircle2 className="h-3 w-3" />
-        </button>
+
+      {selected && (
+        <MeetingDetailDialog
+          meeting={selected}
+          onClose={() => { setSelected(null); load(); }}
+          onEnd={() => endMeeting(selected.id)}
+          isManager={user?.role === "manager" || user?.role === "admin"}
+          userId={user?.id ?? ""}
+          storeId={activeStore?.id ?? ""}
+        />
       )}
     </div>
   );
 }
 
-type MeetingFull = Meeting & {
-  agenda_items?: MeetingAgendaItem[];
-  decisions?: (MeetingDecision & { responsible?: { display_name: string } })[];
-  moderator?: { display_name: string };
-};
+function MeetingDialog({ activeStore, userId, onClose, onSave }: {
+  activeStore: { id: string } | null; userId: string; onClose: () => void; onSave: () => void;
+}) {
+  const [type, setType] = useState<Meeting["meeting_type"]>("daglig_styrning");
+  const [scheduledAt, setScheduledAt] = useState(new Date().toISOString().slice(0, 16));
+  const [agendaItems, setAgendaItems] = useState<{ title: string; duration: number }[]>([
+    { title: "Genomgång av gårdagen", duration: 5 },
+    { title: "Dagens prioriteringar", duration: 10 },
+    { title: "Övrigt", duration: 5 },
+  ]);
+  const [newItem, setNewItem] = useState("");
+  const [saving, setSaving] = useState(false);
 
-function MeetingsPage() {
-  const { user, activeStore, userStores } = useAuth();
-  const isManager = user?.role === "manager" || user?.role === "admin";
-
-  // Wake lock: keep screen on during active meetings
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const wakeLockRef = useRef<any>(null);
-  const acquireWakeLock = async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if ("wakeLock" in navigator && !wakeLockRef.current) {
-      try { wakeLockRef.current = await (navigator as any).wakeLock.request("screen"); } catch {}
-    }
-  };
-  const releaseWakeLock = () => {
-    if (wakeLockRef.current) { wakeLockRef.current.release().catch(() => {}); wakeLockRef.current = null; }
-  };
-  useEffect(() => () => releaseWakeLock(), []);
-
-  const [meetings, setMeetings] = useState<MeetingFull[]>([]);
-  const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [showDetail, setShowDetail] = useState<MeetingFull | null>(null);
-
-  const [newMeeting, setNewMeeting] = useState<{
-    type: Meeting["meeting_type"];
-    title: string;
-    scheduled_at: string;
-    moderator_id: string;
-  }>({
-    type: "daglig_styrning",
-    title: "Daglig Styrning",
-    scheduled_at: (() => { const d = new Date(); d.setMinutes(0, 0, 0); return d.toISOString().slice(0, 16); })(),
-    moderator_id: "",
-  });
-  const [creating, setCreating] = useState(false);
-  const [createStep, setCreateStep] = useState<1 | 2>(1);
-
-  const [newDecision, setNewDecision] = useState({ description: "", responsible_user_id: "", due_date: "", createTask: false });
-  const [addingDecision, setAddingDecision] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<MeetingFull | null>(null);
-  const [editTarget, setEditTarget] = useState<MeetingFull | null>(null);
-  const [editForm, setEditForm] = useState({ title: "", scheduled_at: "", moderator_id: "" });
-  const [editSaving, setEditSaving] = useState(false);
-
-  const fetchMeetings = async () => {
-    let q = supabase
-      .from("meetings")
-      .select("*, moderator:app_users!moderator_id(id,display_name), agenda_items:meeting_agenda_items(*), decisions:meeting_decisions(*, responsible:app_users!responsible_user_id(id,display_name))")
-      .order("scheduled_at", { ascending: false })
-      .limit(30);
-    if (activeStore) q = q.eq("store_id", activeStore.id);
-    else if (userStores.length > 0) q = q.in("store_id", userStores.map(s => s.id));
-    const { data } = await q;
-    if (data) setMeetings(data as MeetingFull[]);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchMeetings();
-    if (activeStore) {
-      supabase.from("user_stores").select("user:app_users(*)").eq("store_id", activeStore.id)
-        .then(({ data }) => {
-          if (data) setStoreUsers((data as { user: AppUser }[]).map(d => d.user).filter(Boolean));
-        });
-    } else {
-      supabase.from("app_users").select("*").eq("is_active", true)
-        .then(({ data }) => { if (data) setStoreUsers(data as AppUser[]); });
-    }
-  }, [activeStore]);
-
-  const createMeeting = async () => {
-    if (!newMeeting.title.trim()) return;
-    setCreating(true);
-    const { data: meeting } = await supabase.from("meetings").insert({
-      meeting_type: newMeeting.type,
-      title: newMeeting.title.trim(),
-      store_id: activeStore?.id ?? null,
-      scheduled_at: new Date(newMeeting.scheduled_at).toISOString(),
-      status: "scheduled",
-      moderator_id: newMeeting.moderator_id || null,
-      created_by: user?.id,
-    }).select().maybeSingle();
-
-    if (meeting) {
-      const agenda = DEFAULT_AGENDAS[newMeeting.type];
-      if (agenda.length > 0) {
+  async function save() {
+    if (!activeStore) return;
+    setSaving(true);
+    try {
+      const { data } = await supabase.from("meetings").insert({
+        meeting_type: type,
+        title: MEETING_TYPES[type],
+        store_id: activeStore.id,
+        scheduled_at: scheduledAt,
+        status: "scheduled",
+        created_by: userId,
+        moderator_id: userId,
+        notes: "",
+      }).select().single();
+      if (data && agendaItems.length > 0) {
         await supabase.from("meeting_agenda_items").insert(
-          agenda.map((a, i) => ({ meeting_id: meeting.id, title: a.title, duration_minutes: a.duration, sort_order: i }))
+          agendaItems.map((item, i) => ({
+            meeting_id: data.id,
+            title: item.title,
+            description: "",
+            duration_minutes: item.duration,
+            sort_order: i,
+          }))
         );
       }
-      logAudit(user?.id ?? null, "meeting.create", "meetings", meeting.id, { type: newMeeting.type });
+      toast.success("Möte skapat");
+      onSave();
+    } catch (e: unknown) {
+      toast.error("Fel: " + String(e));
     }
+    setSaving(false);
+  }
 
-    setCreating(false);
-    setShowCreate(false);
-    await fetchMeetings();
-  };
-
-  const updateMeetingStatus = async (id: string, status: Meeting["status"]) => {
-    const updates: Record<string, unknown> = { status };
-    if (status === "in_progress") { updates.started_at = new Date().toISOString(); void acquireWakeLock(); }
-    if (status === "completed" || status === "cancelled") { updates.ended_at = new Date().toISOString(); releaseWakeLock(); }
-    await supabase.from("meetings").update(updates).eq("id", id);
-    logAudit(user?.id ?? null, "meeting.status", "meetings", id, { status });
-    await fetchMeetings();
-    if (showDetail?.id === id) setShowDetail(p => p ? { ...p, status, ...updates } as MeetingFull : null);
-  };
-
-  const completeAgendaItem = async (meetingId: string, itemId: string) => {
-    await supabase.from("meeting_agenda_items").update({ completed_at: new Date().toISOString() }).eq("id", itemId);
-    await fetchMeetings();
-    if (showDetail?.id === meetingId) {
-      setShowDetail(p => p ? {
-        ...p,
-        agenda_items: p.agenda_items?.map(a => a.id === itemId ? { ...a, completed_at: new Date().toISOString() } : a),
-      } : null);
-    }
-  };
-
-  const addDecision = async () => {
-    if (!showDetail || !newDecision.description.trim()) return;
-    setAddingDecision(true);
-
-    let createdTaskId: string | null = null;
-    if (newDecision.createTask && newDecision.responsible_user_id) {
-      const { data: task } = await supabase.from("tasks").insert({
-        title: newDecision.description.trim(),
-        category: "Drift",
-        priority: "Medel",
-        store_id: activeStore?.id ?? null,
-        assigned_to: newDecision.responsible_user_id,
-        created_by: user?.id,
-        due_date: newDecision.due_date ? new Date(newDecision.due_date).toISOString() : null,
-        status: "todo",
-      }).select().maybeSingle();
-      if (task) {
-        createdTaskId = task.id;
-        if (newDecision.responsible_user_id !== user?.id) {
-          createNotification(
-            newDecision.responsible_user_id,
-            "task_assigned",
-            `Mötesuppgift: ${newDecision.description.slice(0, 60)}`,
-            `Från möte: ${showDetail.title}`,
-            "/uppgifter",
-          );
-        }
-      }
-    }
-
-    await supabase.from("meeting_decisions").insert({
-      meeting_id: showDetail.id,
-      description: newDecision.description.trim(),
-      responsible_user_id: newDecision.responsible_user_id || null,
-      due_date: newDecision.due_date || null,
-      created_task_id: createdTaskId,
-      created_by: user?.id,
-    });
-
-    logAudit(user?.id ?? null, "meeting.decision.add", "meeting_decisions", showDetail.id, { description: newDecision.description });
-
-    setNewDecision({ description: "", responsible_user_id: "", due_date: "", createTask: false });
-    setAddingDecision(false);
-    await fetchMeetings();
-    const { data: updated } = await supabase
-      .from("meetings")
-      .select("*, moderator:app_users!moderator_id(id,display_name), agenda_items:meeting_agenda_items(*), decisions:meeting_decisions(*, responsible:app_users!responsible_user_id(id,display_name))")
-      .eq("id", showDetail.id)
-      .maybeSingle();
-    if (updated) setShowDetail(updated as MeetingFull);
-  };
-
-  const deleteMeeting = async () => {
-    if (!deleteTarget) return;
-    await supabase.from("meeting_decisions").delete().eq("meeting_id", deleteTarget.id);
-    await supabase.from("meeting_agenda_items").delete().eq("meeting_id", deleteTarget.id);
-    await supabase.from("meetings").delete().eq("id", deleteTarget.id);
-    logAudit(user?.id ?? null, "meeting.delete", "meetings", deleteTarget.id, { title: deleteTarget.title });
-    setDeleteTarget(null);
-    if (showDetail?.id === deleteTarget.id) setShowDetail(null);
-    await fetchMeetings();
-  };
-
-  const openEditMeeting = (m: MeetingFull) => {
-    setEditTarget(m);
-    setEditForm({
-      title: m.title,
-      scheduled_at: new Date(m.scheduled_at).toISOString().slice(0, 16),
-      moderator_id: m.moderator_id ?? "",
-    });
-  };
-
-  const saveEditMeeting = async () => {
-    if (!editTarget || !editForm.title.trim()) return;
-    setEditSaving(true);
-    await supabase.from("meetings").update({
-      title: editForm.title.trim(),
-      scheduled_at: new Date(editForm.scheduled_at).toISOString(),
-      moderator_id: editForm.moderator_id || null,
-    }).eq("id", editTarget.id);
-    logAudit(user?.id ?? null, "meeting.edit", "meetings", editTarget.id, { title: editForm.title });
-    setEditSaving(false);
-    setEditTarget(null);
-    if (showDetail?.id === editTarget.id) {
-      setShowDetail(p => p ? { ...p, title: editForm.title.trim(), scheduled_at: new Date(editForm.scheduled_at).toISOString(), moderator_id: editForm.moderator_id || null } : null);
-    }
-    await fetchMeetings();
-  };
-
-  const typeInfo = (type: Meeting["meeting_type"]) => MEETING_TYPES.find(t => t.value === type);
-
-  const upcoming = meetings.filter(m => m.status === "scheduled" || m.status === "in_progress");
-  const past = meetings.filter(m => m.status === "completed" || m.status === "cancelled");
+  const inputCls = "w-full h-10 px-3 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
   return (
-    <div className="mx-auto max-w-[1400px] px-5 py-8 md:px-8 md:py-10">
-      <PageHeader
-        title="Möten"
-        description={activeStore ? `Möteshantering för ${activeStore.name}` : "Strukturerade möten med tidsbudget och beslutslogg."}
-        actions={
-          isManager ? (
-            <Button className="rounded-full hidden lg:flex" onClick={() => setShowCreate(true)}>
-              <Plus className="mr-2 h-4 w-4" /> Nytt möte
-            </Button>
-          ) : undefined
-        }
-      />
-
-      {loading ? (
-        <div className="space-y-3">
-          {[1,2,3].map(i => (
-            <div key={i} className="rounded-2xl border border-border/60 bg-card p-4 flex items-center gap-4">
-              <div className="h-12 w-12 animate-pulse rounded-xl bg-muted shrink-0" />
-              <div className="flex-1 space-y-2">
-                <div className="h-4 w-2/3 animate-pulse rounded-md bg-muted" />
-                <div className="h-3 w-1/3 animate-pulse rounded-md bg-muted/60" />
-              </div>
-              <div className="h-5 w-20 animate-pulse rounded-full bg-muted/60 shrink-0" />
-            </div>
-          ))}
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-card rounded-2xl border border-border shadow-lg w-full sm:max-w-md max-h-[90vh] overflow-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <h2 className="font-semibold">Planera möte</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
-      ) : (
-        <div className="space-y-8">
-          {/* Upcoming / In progress */}
-          <div>
-            <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">Planerade & pågående</h2>
-            {upcoming.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-12 text-center">
-                <Calendar className="mb-3 h-8 w-8 text-muted-foreground/40" />
-                <p className="text-sm text-muted-foreground">Inga planerade möten</p>
-                {isManager && (
-                  <Button size="sm" className="mt-4 rounded-full" onClick={() => setShowCreate(true)}>
-                    <Plus className="mr-1.5 h-3.5 w-3.5" /> Skapa möte
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {upcoming.map((m) => {
-                  const info = typeInfo(m.meeting_type);
-                  const decisionsCount = m.decisions?.length ?? 0;
-                  const doneItems = m.agenda_items?.filter(a => a.completed_at).length ?? 0;
-                  const totalItems = m.agenda_items?.length ?? 0;
-                  return (
-                    <div
-                      key={m.id}
-                      className="cursor-pointer rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)]"
-                      onClick={() => setShowDetail(m)}
-                    >
-                      <div className="mb-3 flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-sm">{m.title}</p>
-                          <p className="text-xs text-muted-foreground">{info?.label}</p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {statusBadge(m.status)}
-                          {isManager && (
-                            <>
-                              <button className="ml-1 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary" onClick={(e) => { e.stopPropagation(); openEditMeeting(m); }} aria-label="Redigera">
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <button className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteTarget(m); }} aria-label="Ta bort">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
-                        <Clock className="h-3.5 w-3.5" />
-                        {new Date(m.scheduled_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}
-                        <span className="ml-1">· {info?.defaultDurationMin} min</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{totalItems > 0 ? `${doneItems}/${totalItems} punkter` : "Ingen agenda"}</span>
-                        {decisionsCount > 0 && <span>{decisionsCount} beslut</span>}
-                      </div>
-                      {totalItems > 0 && (
-                        <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
-                          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(doneItems / totalItems) * 100}%` }} />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+        <div className="p-5 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Mötestyp</label>
+            <select value={type} onChange={e => setType(e.target.value as Meeting["meeting_type"])} className={inputCls}>
+              {Object.entries(MEETING_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
           </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Datum & tid</label>
+            <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)} className={inputCls} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dagordning</label>
+            {agendaItems.map((item, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="flex-1 text-sm bg-muted/50 rounded-xl px-3 py-2 text-foreground">{item.title}</span>
+                <span className="text-xs text-muted-foreground shrink-0">{item.duration} min</span>
+                <button onClick={() => setAgendaItems(a => a.filter((_, j) => j !== i))} className="p-1 text-muted-foreground hover:text-destructive">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            <div className="flex gap-2">
+              <input
+                value={newItem}
+                onChange={e => setNewItem(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && newItem.trim()) { setAgendaItems(a => [...a, { title: newItem.trim(), duration: 5 }]); setNewItem(""); } }}
+                placeholder="Ny punkt..."
+                className={cn(inputCls, "flex-1")}
+              />
+              <button
+                onClick={() => { if (newItem.trim()) { setAgendaItems(a => [...a, { title: newItem.trim(), duration: 5 }]); setNewItem(""); } }}
+                className="px-3 h-10 rounded-xl bg-muted hover:bg-muted/80 text-sm font-medium"
+              >+</button>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted">Avbryt</button>
+            <button onClick={save} disabled={saving} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-70">
+              {saving ? "Sparar..." : "Spara"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-          {/* Past meetings */}
-          {past.length > 0 && (
+function MeetingDetailDialog({ meeting, onClose, onEnd, isManager, userId, storeId }: {
+  meeting: Meeting; onClose: () => void; onEnd: () => void;
+  isManager: boolean; userId: string; storeId: string;
+}) {
+  const [decisions, setDecisions] = useState<{ description: string; responsible: string }[]>([]);
+  const [newDecision, setNewDecision] = useState("");
+  const [notes, setNotes] = useState(meeting.notes ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function saveAndEnd() {
+    setSaving(true);
+    try {
+      await supabase.from("meetings").update({ notes, status: meeting.status === "in_progress" ? "completed" : meeting.status, ended_at: meeting.status === "in_progress" ? new Date().toISOString() : undefined }).eq("id", meeting.id);
+      for (const d of decisions) {
+        const { data: decisionRec } = await supabase.from("meeting_decisions").insert({
+          meeting_id: meeting.id,
+          description: d.description,
+          responsible_user_id: userId,
+          due_date: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+        }).select().single();
+        // Create task from decision
+        if (decisionRec) {
+          await supabase.from("tasks").insert({
+            title: d.description,
+            description: `Åtgärdspunkt från möte: ${MEETING_TYPES[meeting.meeting_type]}`,
+            category: "Administration",
+            store_id: storeId,
+            assigned_to: userId,
+            created_by: userId,
+            priority: "Medel",
+            status: "todo",
+            due_date: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+          });
+        }
+      }
+      toast.success("Möte sparat");
+      onEnd();
+    } catch (e: unknown) {
+      toast.error("Fel: " + String(e));
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-card rounded-2xl border border-border shadow-lg w-full sm:max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+          <div>
+            <h2 className="font-semibold text-foreground">{MEETING_TYPES[meeting.meeting_type]}</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">{formatDate(meeting.scheduled_at)}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="flex-1 overflow-auto p-5 space-y-4" data-scroll-container>
+          {/* Agenda */}
+          {meeting.meeting_agenda_items && meeting.meeting_agenda_items.length > 0 && (
             <div>
-              <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">Tidigare möten</h2>
-              <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border/60">
-                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Möte</th>
-                      <th className="hidden px-5 py-3 text-left text-xs font-medium text-muted-foreground sm:table-cell">Typ</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Datum</th>
-                      <th className="hidden px-5 py-3 text-center text-xs font-medium text-muted-foreground md:table-cell">Beslut</th>
-                      <th className="px-5 py-3 text-center text-xs font-medium text-muted-foreground">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {past.slice(0, 10).map((m) => (
-                      <tr key={m.id} className="cursor-pointer hover:bg-muted/30" onClick={() => setShowDetail(m)}>
-                        <td className="px-5 py-3 font-medium">{m.title}</td>
-                        <td className="hidden px-5 py-3 text-xs text-muted-foreground sm:table-cell">{typeInfo(m.meeting_type)?.label}</td>
-                        <td className="px-5 py-3 text-xs text-muted-foreground">
-                          {new Date(m.scheduled_at).toLocaleDateString("sv-SE")}
-                        </td>
-                        <td className="hidden px-5 py-3 text-center text-xs text-muted-foreground md:table-cell">
-                          {m.decisions?.length ?? 0}
-                        </td>
-                        <td className="px-5 py-3 text-center">{statusBadge(m.status)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <h3 className="text-sm font-semibold text-foreground mb-2">Dagordning</h3>
+              <div className="space-y-1.5">
+                {meeting.meeting_agenda_items.map((item, i) => (
+                  <div key={item.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/50">
+                    <span className="text-xs text-muted-foreground font-medium w-5 shrink-0">{i + 1}.</span>
+                    <p className="text-sm text-foreground flex-1">{item.title}</p>
+                    <span className="text-xs text-muted-foreground shrink-0">{item.duration_minutes} min</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Mobile FAB */}
-      {isManager && (
-        <button
-          className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
-          aria-label="Nytt möte"
-          onClick={() => setShowCreate(true)}
-        >
-          <Plus className="h-6 w-6" />
-        </button>
-      )}
-
-      {/* CREATE DIALOG */}
-      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setCreateStep(1); }}>
-        <DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
-            <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-            <DialogTitle className="text-sm font-medium">Nytt möte</DialogTitle>
-            {/* Mobile step indicator */}
-            <div className="flex items-center gap-1 sm:hidden ml-auto">
-              <span className={cn("h-2 w-2 rounded-full transition-colors", createStep === 1 ? "bg-primary" : "bg-muted-foreground/30")} />
-              <span className={cn("h-2 w-2 rounded-full transition-colors", createStep === 2 ? "bg-primary" : "bg-muted-foreground/30")} />
-            </div>
+          {/* Notes */}
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-2">Anteckningar</h3>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Notera viktiga diskussioner och beslut..."
+              rows={4}
+              className="w-full px-3 py-2 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
           </div>
 
-          <div className="p-5 space-y-4">
-            {/* Step 1: Type + Title */}
-            <div className={cn(createStep === 2 && "hidden sm:block")}>
-              <div className="space-y-1.5 mb-4">
-                <Label className="text-xs">Mötestyp</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {MEETING_TYPES.map((t) => (
-                    <button
-                      key={t.value}
-                      type="button"
-                      onClick={() => setNewMeeting(p => ({ ...p, type: t.value, title: t.label }))}
-                      className={cn(
-                        "rounded-xl border px-3 py-2.5 text-left text-xs transition-colors",
-                        newMeeting.type === t.value ? "border-primary bg-primary-soft text-primary" : "border-border/60 bg-card hover:bg-muted/40"
-                      )}
-                    >
-                      <p className="font-semibold">{t.label}</p>
-                      <p className="text-muted-foreground mt-0.5 leading-snug line-clamp-2">{t.description}</p>
-                    </button>
-                  ))}
-                </div>
+          {/* Decisions / Action items */}
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-2">Åtgärdspunkter</h3>
+            {decisions.map((d, i) => (
+              <div key={i} className="flex items-center gap-2 mb-1.5">
+                <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                <span className="text-sm text-foreground flex-1">{d.description}</span>
+                <button onClick={() => setDecisions(dd => dd.filter((_, j) => j !== i))} className="p-1 text-muted-foreground hover:text-destructive"><X className="w-3.5 h-3.5" /></button>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Titel</Label>
-                <Input
-                  value={newMeeting.title}
-                  onChange={(e) => setNewMeeting(p => ({ ...p, title: e.target.value }))}
-                  className="text-sm"
-                />
-              </div>
-            </div>
-
-            {/* Step 2: Date + Moderator */}
-            <div className={cn(createStep === 1 && "hidden sm:block")}>
-              <div className="space-y-1.5 mb-4">
-                <Label className="text-xs">Datum & tid</Label>
-                <input
-                  type="datetime-local"
-                  value={newMeeting.scheduled_at}
-                  onChange={(e) => setNewMeeting(p => ({ ...p, scheduled_at: e.target.value }))}
-                  className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Moderator</Label>
-                <Select value={newMeeting.moderator_id || "__none"} onValueChange={(v) => setNewMeeting(p => ({ ...p, moderator_id: v === "__none" ? "" : v }))}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Ingen" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">Ingen</SelectItem>
-                    {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Navigation buttons */}
-            <div className="flex justify-between gap-2 pt-1">
-              {/* Mobile step navigation */}
-              <div className="flex gap-2 sm:hidden">
-                {createStep === 1 ? (
-                  <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setShowCreate(false)}>Avbryt</Button>
-                ) : (
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => setCreateStep(1)}>Tillbaka</Button>
-                )}
-              </div>
-              {/* Desktop cancel always visible */}
-              <Button variant="outline" size="sm" className="rounded-full hidden sm:flex" onClick={() => setShowCreate(false)}>Avbryt</Button>
-              <div className="flex gap-2">
-                {/* Mobile: next on step 1, create on step 2 */}
-                {createStep === 1 && (
-                  <Button size="sm" className="rounded-full sm:hidden" disabled={!newMeeting.title.trim()} onClick={() => setCreateStep(2)}>
-                    Nästa
-                  </Button>
-                )}
-                {(createStep === 2 || true) && (
-                  <Button size="sm" className={cn("rounded-full", createStep === 1 && "hidden sm:flex")} disabled={creating || !newMeeting.title.trim()} onClick={createMeeting}>
-                    {creating ? "Skapar..." : "Skapa möte"}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* DETAIL DIALOG */}
-      <Dialog open={!!showDetail} onOpenChange={(o) => { if (!o) setShowDetail(null); }}>
-        {showDetail && (
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <div className="flex items-start justify-between gap-3 pr-6">
-                <div className="min-w-0">
-                  <DialogTitle className="text-base">{showDetail.title}</DialogTitle>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {typeInfo(showDetail.meeting_type)?.label} · {new Date(showDetail.scheduled_at).toLocaleString("sv-SE", { dateStyle: "medium", timeStyle: "short" })}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {statusBadge(showDetail.status)}
-                  {isManager && (
-                    <>
-                      <button className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary" onClick={() => openEditMeeting(showDetail)} aria-label="Redigera">
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-destructive" onClick={() => setDeleteTarget(showDetail)} aria-label="Ta bort">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </DialogHeader>
-
-            <div className="space-y-6">
-              {/* Status actions */}
-              {isManager && (
-                <div className="flex flex-wrap gap-2">
-                  {showDetail.status === "scheduled" && (
-                    <Button size="sm" className="rounded-full gap-1.5" onClick={() => updateMeetingStatus(showDetail.id, "in_progress")}>
-                      <Play className="h-3.5 w-3.5" /> Starta möte
-                    </Button>
-                  )}
-                  {showDetail.status === "in_progress" && (
-                    <Button size="sm" className="rounded-full gap-1.5 bg-success hover:bg-success/90" onClick={() => updateMeetingStatus(showDetail.id, "completed")}>
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Avsluta möte
-                    </Button>
-                  )}
-                  {(showDetail.status === "scheduled" || showDetail.status === "in_progress") && (
-                    <Button size="sm" variant="outline" className="rounded-full gap-1.5 text-muted-foreground" onClick={() => updateMeetingStatus(showDetail.id, "cancelled")}>
-                      <X className="h-3.5 w-3.5" /> Ställ in
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              {/* Agenda */}
-              {showDetail.agenda_items && showDetail.agenda_items.length > 0 && (
-                <div>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Agenda</h3>
-                  <div className="space-y-2">
-                    {[...showDetail.agenda_items].sort((a, b) => a.sort_order - b.sort_order).map((item) => {
-                      const done = !!item.completed_at;
-                      return (
-                        <div key={item.id} className={cn(
-                          "rounded-xl border p-3 transition-colors",
-                          done ? "border-success/30 bg-success/5 opacity-70" : "border-border/60 bg-card"
-                        )}>
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 min-w-0">
-                              {done
-                                ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
-                                : <Clock className="h-4 w-4 shrink-0 text-muted-foreground/50" />
-                              }
-                              <span className={cn("text-sm font-medium truncate", done && "line-through text-muted-foreground")}>{item.title}</span>
-                              <span className="shrink-0 text-xs text-muted-foreground">{item.duration_minutes} min</span>
-                            </div>
-                            {showDetail.status === "in_progress" && !done && (
-                              <AgendaTimer item={item} onComplete={() => completeAgendaItem(showDetail.id, item.id)} />
-                            )}
-                          </div>
-                          {item.description && <p className="mt-1.5 pl-6 text-xs text-muted-foreground">{item.description}</p>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Decisions */}
-              <div>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Beslut & åtgärder ({showDetail.decisions?.length ?? 0})
-                </h3>
-                {showDetail.decisions && showDetail.decisions.length > 0 && (
-                  <div className="mb-3 space-y-2">
-                    {showDetail.decisions.map((d) => (
-                      <div key={d.id} className="rounded-xl border border-border/60 bg-card p-3">
-                        <p className="text-sm">{d.description}</p>
-                        <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                          {d.responsible && <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" />{d.responsible.display_name}</span>}
-                          {d.due_date && <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{new Date(d.due_date).toLocaleDateString("sv-SE")}</span>}
-                          {d.created_task_id && <Badge className="bg-primary-soft text-primary text-[10px]">Uppgift skapad</Badge>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {(showDetail.status === "in_progress" || showDetail.status === "scheduled") && isManager && (
-                  <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-3">
-                    <p className="text-xs font-medium text-muted-foreground">Lägg till beslut</p>
-                    <Textarea
-                      value={newDecision.description}
-                      onChange={(e) => setNewDecision(p => ({ ...p, description: e.target.value }))}
-                      placeholder="Beskriv beslutet eller åtgärden..."
-                      rows={2}
-                      className="resize-none text-sm"
-                    />
-                    <div className="flex gap-2">
-                      <Select value={newDecision.responsible_user_id || "__none"} onValueChange={(v) => setNewDecision(p => ({ ...p, responsible_user_id: v === "__none" ? "" : v }))}>
-                        <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue placeholder="Ansvarig" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none">Ingen</SelectItem>
-                          {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <input
-                        type="date"
-                        value={newDecision.due_date}
-                        onChange={(e) => setNewDecision(p => ({ ...p, due_date: e.target.value }))}
-                        className="h-8 rounded-lg border border-border/60 bg-background px-2 text-xs"
-                      />
-                    </div>
-                    {newDecision.responsible_user_id && (
-                      <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          checked={newDecision.createTask}
-                          onChange={(e) => setNewDecision(p => ({ ...p, createTask: e.target.checked }))}
-                          className="h-3.5 w-3.5"
-                        />
-                        Skapa uppgift automatiskt och tilldela ansvarig
-                      </label>
-                    )}
-                    <div className="flex justify-end">
-                      <Button size="sm" className="rounded-full gap-1.5" disabled={addingDecision || !newDecision.description.trim()} onClick={addDecision}>
-                        {addingDecision ? "Sparar..." : <><Plus className="h-3.5 w-3.5" /> Lägg till</>}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Notes */}
-              {showDetail.notes && (
-                <div>
-                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Anteckningar</h3>
-                  <p className="text-sm text-muted-foreground">{showDetail.notes}</p>
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        )}
-      </Dialog>
-
-      {/* EDIT DIALOG */}
-      <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Redigera möte</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Titel</Label>
-              <Input value={editForm.title} onChange={(e) => setEditForm(p => ({ ...p, title: e.target.value }))} className="text-sm" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Datum & tid</Label>
+            ))}
+            <div className="flex gap-2 mt-2">
               <input
-                type="datetime-local"
-                value={editForm.scheduled_at}
-                onChange={(e) => setEditForm(p => ({ ...p, scheduled_at: e.target.value }))}
-                className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+                value={newDecision}
+                onChange={e => setNewDecision(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && newDecision.trim()) { setDecisions(d => [...d, { description: newDecision.trim(), responsible: userId }]); setNewDecision(""); } }}
+                placeholder="Ny åtgärdspunkt..."
+                className="flex-1 h-9 px-3 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Moderator</Label>
-              <Select value={editForm.moderator_id || "__none"} onValueChange={(v) => setEditForm(p => ({ ...p, moderator_id: v === "__none" ? "" : v }))}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Ingen" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none">Ingen</SelectItem>
-                  {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" size="sm" className="rounded-full" onClick={() => setEditTarget(null)}>Avbryt</Button>
-              <Button size="sm" className="rounded-full" disabled={editSaving || !editForm.title.trim()} onClick={saveEditMeeting}>
-                {editSaving ? "Sparar..." : "Spara ändringar"}
-              </Button>
+              <button
+                onClick={() => { if (newDecision.trim()) { setDecisions(d => [...d, { description: newDecision.trim(), responsible: userId }]); setNewDecision(""); } }}
+                className="px-3 h-9 rounded-xl bg-muted text-sm font-medium"
+              >+</button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* DELETE CONFIRM */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Ta bort möte</AlertDialogTitle>
-            <AlertDialogDescription>
-              Är du säker på att du vill ta bort mötet <strong>{deleteTarget?.title}</strong>? Alla agendapunkter och beslut tas bort.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteMeeting}>
-              Ta bort
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        </div>
+        {isManager && (
+          <div className="px-5 pb-5 pt-3 border-t border-border shrink-0">
+            <button onClick={saveAndEnd} disabled={saving} className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-70">
+              {saving ? "Sparar..." : meeting.status === "in_progress" ? "Avsluta möte & spara" : "Spara ändringar"}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
