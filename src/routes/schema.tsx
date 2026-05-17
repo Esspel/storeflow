@@ -661,7 +661,9 @@ function toLocalDateStr(isoStr: string): string {
 }
 
 function fmtDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
+  // Parse as local date to avoid UTC-offset shifting the day number
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
 }
 
 function isLightColor(hex: string): boolean {
@@ -1719,6 +1721,31 @@ function SchemaPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* ── Empty week banner — shown when the import has no shifts at all ── */}
+          {!loadingSchedule && activeImport && scheduleShifts.length === 0 && (
+            <div className="mb-4 flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-destructive/40 bg-destructive/5 px-6 py-10 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10">
+                <AlertCircle className="h-8 w-8 text-destructive/70" />
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-foreground">Schemat saknar pass</p>
+                <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
+                  Vecka {activeImport.week_number}, {activeImport.year} verkar vara tomt eller felaktigt importerat. Vänligen exportera denna vecka från SoftOne GO igen och importera på nytt.
+                </p>
+              </div>
+              {isAdmin && (
+                <Button
+                  variant="destructive"
+                  className="gap-2 rounded-full"
+                  onClick={() => { setImportFiles([]); setPdfPreviews({}); setCsvWeekNumber(activeImport.week_number); setCsvYear(activeImport.year); setImportDialogOpen(true); }}
+                >
+                  <Upload className="h-4 w-4" />
+                  Importera vecka {activeImport.week_number} igen
+                </Button>
+              )}
             </div>
           )}
 

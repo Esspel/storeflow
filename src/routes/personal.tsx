@@ -164,6 +164,7 @@ function AccountsPage() {
   const [resetPw, setResetPw] = useState("");
   const [editPin, setEditPin] = useState("");
   const [editBarcode, setEditBarcode] = useState("");
+  const [editStoreSearch, setEditStoreSearch] = useState("");
 
   // Store dialogs
   const [showCreateStore, setShowCreateStore] = useState(false);
@@ -1094,7 +1095,7 @@ function AccountsPage() {
       </Dialog>
 
       {/* EDIT USER */}
-      <Dialog open={!!editUser} onOpenChange={(o) => { if (!o) { setEditUser(null); setError(""); } }}>
+      <Dialog open={!!editUser} onOpenChange={(o) => { if (!o) { setEditUser(null); setError(""); setEditStoreSearch(""); } }}>
         {editUser && (
           <DialogContent className="max-w-md">
             <DialogHeader><DialogTitle>Redigera konto</DialogTitle></DialogHeader>
@@ -1126,20 +1127,41 @@ function AccountsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Butiker</Label>
+                <div className="relative mb-1.5">
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Sök butik..."
+                    value={editStoreSearch}
+                    onChange={(e) => setEditStoreSearch(e.target.value)}
+                    className="h-8 w-full rounded-md border border-border/60 bg-background pl-8 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary/30"
+                  />
+                </div>
                 <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
-                  {stores.map(s => (
-                    <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
-                      <Checkbox
-                        checked={editUser.assignedStoreIds.includes(s.id)}
-                        onCheckedChange={() => toggleStoreSelection(s.id, editUser.assignedStoreIds, (ids) => setEditUser(u => u ? { ...u, assignedStoreIds: ids } : null))}
-                      />
-                      <span className="text-sm">{s.name}</span>
-                      {s.butiks_nr && <span className="text-xs text-muted-foreground">#{s.butiks_nr}</span>}
-                      {editUser.assignedStoreIds[0] === s.id && (
-                        <span className="ml-auto text-xs text-primary">Primär</span>
-                      )}
-                    </label>
-                  ))}
+                  {stores
+                    .filter(s => {
+                      const q = editStoreSearch.toLowerCase();
+                      return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q));
+                    })
+                    .map(s => (
+                      <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
+                        <Checkbox
+                          checked={editUser.assignedStoreIds.includes(s.id)}
+                          onCheckedChange={() => toggleStoreSelection(s.id, editUser.assignedStoreIds, (ids) => setEditUser(u => u ? { ...u, assignedStoreIds: ids } : null))}
+                        />
+                        <span className="text-sm">{s.name}</span>
+                        {s.butiks_nr && <span className="text-xs text-muted-foreground">#{s.butiks_nr}</span>}
+                        {editUser.assignedStoreIds[0] === s.id && (
+                          <span className="ml-auto text-xs text-primary">Primär</span>
+                        )}
+                      </label>
+                    ))}
+                  {stores.filter(s => {
+                    const q = editStoreSearch.toLowerCase();
+                    return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q));
+                  }).length === 0 && (
+                    <p className="py-3 text-center text-xs text-muted-foreground">Inga butiker matchar sökningen</p>
+                  )}
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -1165,7 +1187,7 @@ function AccountsPage() {
               {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => { setEditUser(null); setEditPin(""); setEditBarcode(""); setError(""); }}>
+              <Button variant="outline" onClick={() => { setEditUser(null); setEditPin(""); setEditBarcode(""); setError(""); setStoreSearch(""); }}>
                 <X className="mr-1.5 h-3.5 w-3.5" /> Avbryt
               </Button>
               <Button onClick={updateUser} disabled={saving}>{saving ? "Sparar..." : "Spara"}</Button>
