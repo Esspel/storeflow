@@ -28,7 +28,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   });
   const [stores, setStores] = useState<Store[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !!getSessionToken();
+  });
 
   const loadStores = useCallback(async (userId: string) => {
     const { data } = await supabase
@@ -52,11 +55,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       return;
     }
-    const u = await validateSession(token);
-    if (u) {
-      setUser(u);
-      await loadStores(u.id);
-    } else {
+    try {
+      const u = await validateSession(token);
+      if (u) {
+        setUser(u);
+        await loadStores(u.id);
+      } else {
+        clearSessionToken();
+        setUser(null);
+      }
+    } catch {
       clearSessionToken();
       setUser(null);
     }
@@ -64,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadStores]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
     refreshUser();
   }, [refreshUser]);
 

@@ -1,8 +1,9 @@
-import { createRootRouteWithContext, Outlet, redirect } from "@tanstack/react-router";
+import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/app-shell";
+import { useState, useEffect } from "react";
 
 interface RouterContext {
   queryClient: QueryClient;
@@ -29,18 +30,42 @@ function RootContent() {
   return <AppShell><Outlet /></AppShell>;
 }
 
+function OfflineSnackbar() {
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => setIsOffline(false);
+    setIsOffline(!navigator.onLine);
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    return () => {
+      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", goOnline);
+    };
+  }, []);
+
+  if (!isOffline) return null;
+
+  return (
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
+      <span className="bg-gray-800 text-white text-sm px-4 py-2 rounded-full shadow-lg">
+        Offline – ändringar sparas lokalt
+      </span>
+    </div>
+  );
+}
+
+const rootQueryClient = new QueryClient();
+
 export const Route = createRootRouteWithContext<RouterContext>()({
   component: function Root() {
     return (
       <AuthProvider>
-        <QueryClientProvider client={new QueryClient()}>
+        <QueryClientProvider client={rootQueryClient}>
           <RootContent />
           <Toaster position="top-right" richColors />
-          <div id="offline-snackbar">
-            <span className="bg-gray-800 text-white text-sm px-4 py-2 rounded-full shadow-lg">
-              Offline – ändringar sparas lokalt
-            </span>
-          </div>
+          <OfflineSnackbar />
         </QueryClientProvider>
       </AuthProvider>
     );
