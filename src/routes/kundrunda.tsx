@@ -323,6 +323,13 @@ function KundrundaPage() {
     setEditScope(isAdmin ? "global" : "local");
   }, [activeStore]);
 
+  // Auto-initialize local version when a manager opens the edit view
+  useEffect(() => {
+    if (view === "edit" && isManager && !isAdmin && activeStore && !localVersion) {
+      ensureLocalVersionRecord();
+    }
+  }, [view]);
+
   // Zones filtered by current edit scope
   const editableZones = editScope === "global"
     ? zones.filter(z => !z.store_id)
@@ -333,32 +340,13 @@ function KundrundaPage() {
   const publishCentralVersion = async () => {
     if (!user) return;
     setPublishingVersion(true);
-    const globalZones = zones.filter(z => !z.store_id);
-    const snapshot = globalZones.map(z => ({
-      id: z.id, name: z.name, sort_order: z.sort_order,
-      checkpoints: z.checkpoints.map(c => ({ id: c.id, label: c.label, description: c.description, sort_order: c.sort_order })),
-    }));
-    const globalDefects = commonDefects.filter(d => !d.store_id);
-    const defectsSnapshot = globalDefects.map(d => ({ id: d.id, label: d.label, sort_order: d.sort_order }));
-
-    const label = new Date().toLocaleDateString("sv-SE");
-    const { data: version } = await supabase.from("kundrunda_central_versions").insert({
-      published_by: user.id, label, snapshot,
-    }).select("id").maybeSingle();
-
-    if (version) {
-      const { data: allLocalVersions } = await supabase.from("kundrunda_local_versions").select("id");
-      if (allLocalVersions && allLocalVersions.length > 0) {
-        await supabase.from("kundrunda_local_versions").update({
-          central_version_pending: true,
-          pending_central_version_id: version.id,
-          defects_pending_hk_update: true,
-          pending_defects_snapshot: defectsSnapshot,
-        }).in("id", allLocalVersions.map((v: { id: string }) => v.id));
-      }
+    try {
+      const { error } = await supabase.rpc("publish_central_kundrunda", { publisher_id: user.id });
+      if (error) throw error;
+    } finally {
+      setPublishingVersion(false);
+      await fetchData();
     }
-    setPublishingVersion(false);
-    await fetchData();
   };
 
   const resolveVersionChoice = async (choice: "central" | "local" | "parallel") => {
