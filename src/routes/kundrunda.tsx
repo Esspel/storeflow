@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Camera, ChartBar as BarChart3, CircleCheck as CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   Circle, Clock, CreditCard as Edit2, Download, FileText, GripVertical, MapPin, Plus, Trash2,
@@ -43,6 +43,22 @@ type ZoneWithCheckpoints = KundrundaZone & {
 };
 type ResponseMap = Record<string, KundrundaResponse>;
 
+type LocalVersionRecord = {
+  id: string;
+  store_id: string;
+  version_type: "local" | "central" | "parallel";
+  central_version_id: number | null;
+  central_version_pending: boolean;
+  pending_central_version_id: number | null;
+  parallel_choice: "central" | "local" | null;
+  defects_pending_hk_update: boolean;
+  pending_defects_snapshot: { id: string; label: string; sort_order: number }[] | null;
+};
+
+function scoreColorClass(pct: number): string {
+  return pct >= 0.8 ? "text-success" : pct >= 0.5 ? "text-warning-foreground" : "text-destructive";
+}
+
 type DefectForm = {
   checkpoint_id: string;
   zone_id: string;
@@ -61,7 +77,7 @@ function ScoreRing({ score, max }: { score: number; max: number }) {
   const r = 28;
   const circ = 2 * Math.PI * r;
   const dash = pct * circ;
-  const color = pct >= 0.8 ? "text-success" : pct >= 0.5 ? "text-warning-foreground" : "text-destructive";
+  const color = scoreColorClass(pct);
   return (
     <div className="relative flex h-20 w-20 items-center justify-center">
       <svg className="-rotate-90" width="80" height="80">
@@ -209,21 +225,9 @@ function KundrundaPage() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [showDefectsMergeDialog, setShowDefectsMergeDialog] = useState(false);
 
-  type LocalVersionRecord = {
-    id: string;
-    store_id: string;
-    version_type: "local" | "central" | "parallel";
-    central_version_id: number | null;
-    central_version_pending: boolean;
-    pending_central_version_id: number | null;
-    parallel_choice: "central" | "local" | null;
-    defects_pending_hk_update: boolean;
-    pending_defects_snapshot: { id: string; label: string; sort_order: number }[] | null;
-  };
   const [localVersion, setLocalVersion] = useState<LocalVersionRecord | null>(null);
   const [showVersionChoiceDialog, setShowVersionChoiceDialog] = useState(false);
   const [showParallelChoiceDialog, setShowParallelChoiceDialog] = useState(false);
-  const [pendingSessionStart, setPendingSessionStart] = useState(false);
   const [publishingVersion, setPublishingVersion] = useState(false);
 
   // Edit scope: "global" = admin editing central zones, "local" = chef editing store-local zones
@@ -271,10 +275,19 @@ function KundrundaPage() {
   };
 
   const draftKey = `kundrunda-draft-${user?.id ?? "anon"}-${activeStore?.id ?? "all"}`;
+  const [localDraftTime, setLocalDraftTime] = useState<string | null>(() => {
+    try {
+      const raw = localStorage.getItem(`kundrunda-draft-${user?.id ?? "anon"}-${activeStore?.id ?? "all"}`);
+      if (raw) return (JSON.parse(raw) as { savedAt?: string }).savedAt ?? null;
+    } catch {}
+    return null;
+  });
 
   const saveLocalDraft = (session: KundrundaSession, respMap: ResponseMap) => {
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ sessionId: session.id, responses: respMap, savedAt: new Date().toISOString() }));
+      const savedAt = new Date().toISOString();
+      localStorage.setItem(draftKey, JSON.stringify({ sessionId: session.id, responses: respMap, savedAt }));
+      setLocalDraftTime(savedAt);
     } catch {}
   };
 
@@ -299,8 +312,11 @@ function KundrundaPage() {
     }
   };
 
+  const flushPendingSyncRef = useRef(flushPendingSync);
+  useEffect(() => { flushPendingSyncRef.current = flushPendingSync; });
+
   useEffect(() => {
-    const onOnline = () => { setSyncStatus("online"); void flushPendingSync(); };
+    const onOnline = () => { setSyncStatus("online"); void flushPendingSyncRef.current(); };
     const onOffline = () => setSyncStatus("offline");
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
@@ -319,23 +335,19 @@ function KundrundaPage() {
       supabase.from("app_users").select("*").eq("is_active", true)
         .then(({ data }) => { if (data) setStoreUsers(data as AppUser[]); });
     }
-    // Default edit scope: admin uses global, manager uses local
     setEditScope(isAdmin ? "global" : "local");
   }, [activeStore]);
 
-  // Auto-initialize local version for managers who don't have one yet
+  // Auto-initialize local version for managers and auto-open version choice dialog
   useEffect(() => {
-    if (!loading && isManager && !isAdmin && activeStore && localVersion === null) {
+    if (loading) return;
+    if (isManager && !isAdmin && activeStore && localVersion === null) {
       ensureLocalVersionRecord();
     }
-  }, [loading, localVersion, view]);
-
-  // Auto-open version choice popup when a pending central version is detected
-  useEffect(() => {
-    if (!loading && localVersion?.central_version_pending && !isAdmin) {
+    if (localVersion?.central_version_pending && !isAdmin) {
       setShowVersionChoiceDialog(true);
     }
-  }, [loading, localVersion?.central_version_pending]);
+  }, [loading, localVersion, isManager, isAdmin, activeStore]);
 
   // Zones used during a session: prefer store-local, fall back to global
   const storeLocalZones = activeStore ? zones.filter(z => z.store_id === activeStore.id) : [];
@@ -382,16 +394,22 @@ function KundrundaPage() {
   const ensureLocalVersionRecord = async () => {
     if (!activeStore || !user) return;
     if (localVersion) return;
-    // Use SECURITY DEFINER RPC to bypass RLS for cross-store inserts
     await supabase.rpc("init_store_local_kundrunda", { p_store_id: activeStore.id });
-    // Refresh state after init
     await fetchData();
+  };
+
+  const handleParallelChoice = async (choice: "central" | "local") => {
+    setShowParallelChoiceDialog(false);
+    if (localVersion) {
+      await supabase.from("kundrunda_local_versions").update({ parallel_choice: choice }).eq("id", localVersion.id);
+      setLocalVersion(prev => prev ? { ...prev, parallel_choice: choice } : null);
+    }
+    await startSession();
   };
 
   const handleStartSession = async () => {
     if (localVersion?.version_type === "parallel") {
       setShowParallelChoiceDialog(true);
-      setPendingSessionStart(true);
       return;
     }
     await startSession();
@@ -455,8 +473,10 @@ function KundrundaPage() {
       responsible_user_id: null,
       sap_article_id: null,
     };
+    let updatedResponses: ResponseMap = {};
     setResponses(prev => {
       const updated = { ...prev, [checkpoint.id]: optimistic };
+      updatedResponses = updated;
       saveLocalDraft(activeSession, updated);
       const zoneIdx = activeZones.findIndex(z => z.id === checkpoint.zone_id);
       if (zoneIdx >= 0) {
@@ -483,20 +503,48 @@ function KundrundaPage() {
         const { data } = await supabase.from("kundrunda_responses").insert({
           session_id: activeSession.id, checkpoint_id: checkpoint.id, zone_id: checkpoint.zone_id, result: "ok",
         }).select().maybeSingle();
-        if (data) setResponses(p => ({ ...p, [checkpoint.id]: data as KundrundaResponse }));
+        if (data) {
+          updatedResponses = { ...updatedResponses, [checkpoint.id]: data as KundrundaResponse };
+          setResponses(p => ({ ...p, [checkpoint.id]: data as KundrundaResponse }));
+        }
       }
     } else {
       pendingSyncRef.current[checkpoint.id] = optimistic;
       setSyncStatus("offline");
     }
-    await updateScore();
+    await updateScore(updatedResponses);
   };
 
   const approveZone = async (zone: ZoneWithCheckpoints) => {
-    for (const cp of zone.checkpoints) {
-      if (responses[cp.id]?.result) continue;
-      await recordOk(cp);
+    if (!activeSession) return;
+    const unanswered = zone.checkpoints.filter(cp => !responses[cp.id]?.result);
+    if (unanswered.length === 0) return;
+
+    const optimistics: ResponseMap = {};
+    for (const cp of unanswered) {
+      optimistics[cp.id] = {
+        ...(responses[cp.id] ?? {} as KundrundaResponse),
+        checkpoint_id: cp.id, zone_id: cp.zone_id,
+        session_id: activeSession.id, result: "ok",
+        defect_description: null, action_taken: null,
+        responsible_user_id: null, sap_article_id: null,
+      };
     }
+    const updatedResponses = { ...responses, ...optimistics };
+    setResponses(updatedResponses);
+    saveLocalDraft(activeSession, updatedResponses);
+    haptic.success();
+
+    await Promise.all(unanswered.map(cp => {
+      const existing = responses[cp.id];
+      if (existing) {
+        return supabase.from("kundrunda_responses").update({ result: "ok", defect_description: null, action_taken: null, responsible_user_id: null, sap_article_id: null }).eq("id", existing.id);
+      }
+      return supabase.from("kundrunda_responses").insert({
+        session_id: activeSession.id, checkpoint_id: cp.id, zone_id: cp.zone_id, result: "ok",
+      });
+    }));
+    await updateScore(updatedResponses);
   };
 
   const openDefectDialog = (checkpoint: KundrundaCheckpoint) => {
@@ -543,17 +591,18 @@ function KundrundaPage() {
       if (data) responseId = data.id;
     }
 
-    setResponses(p => ({
-      ...p,
-      [defectDialog.checkpoint_id]: {
-        ...(p[defectDialog.checkpoint_id] ?? {} as KundrundaResponse),
-        result: "avvikelse",
-        defect_description: defectDialog.defect_description,
-        action_taken: defectDialog.action_taken,
-        responsible_user_id: defectDialog.responsible_user_id || null,
-        sap_article_id: defectDialog.sap_article_id || null,
-      },
-    }));
+    const updatedEntry: Partial<KundrundaResponse> = {
+      result: "avvikelse",
+      defect_description: defectDialog.defect_description,
+      action_taken: defectDialog.action_taken,
+      responsible_user_id: defectDialog.responsible_user_id || null,
+      sap_article_id: defectDialog.sap_article_id || null,
+    };
+    const updatedResponses = {
+      ...responses,
+      [defectDialog.checkpoint_id]: { ...(responses[defectDialog.checkpoint_id] ?? {} as KundrundaResponse), ...updatedEntry },
+    };
+    setResponses(updatedResponses);
 
     if (defectDialog.defect_description.trim() && responseId) {
       const zone = activeZones.find(z => z.id === defectDialog.zone_id);
@@ -588,7 +637,7 @@ function KundrundaPage() {
       }
     }
 
-    await updateScore();
+    await updateScore(updatedResponses);
     setSavingDefect(false);
     setDefectDialog(null);
   };
@@ -625,10 +674,10 @@ function KundrundaPage() {
     setCheckpointRefImages(p => ({ ...p, [checkpointId]: (p[checkpointId] ?? []).filter(i => i.id !== imgId) }));
   };
 
-  const updateScore = async () => {
+  const updateScore = async (currentResponses: ResponseMap) => {
     if (!activeSession) return;
-    const { data: allResp } = await supabase.from("kundrunda_responses").select("result").eq("session_id", activeSession.id);
-    const okCount = (allResp ?? []).filter((r: { result: string }) => r.result === "ok").length;
+    let okCount = 0;
+    for (const r of Object.values(currentResponses)) { if (r.result === "ok") okCount++; }
     const total = activeZones.reduce((s, z) => s + z.checkpoints.length, 0);
     await supabase.from("kundrunda_sessions").update({ total_score: okCount, max_score: total }).eq("id", activeSession.id);
     setActiveSession(p => p ? { ...p, total_score: okCount, max_score: total } : null);
@@ -662,12 +711,13 @@ function KundrundaPage() {
       setActiveSession(null); setResponses({}); setResponseImages({}); setView("home");
     }
     try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
+      const keys = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i));
+      for (const key of keys) {
         if (!key?.startsWith("kundrunda-draft-")) continue;
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        try { const p = JSON.parse(raw); if (p.sessionId === target.id) { localStorage.removeItem(key); break; } } catch {}
+        try {
+          const p = JSON.parse(localStorage.getItem(key) ?? "");
+          if (p.sessionId === target.id) { localStorage.removeItem(key); break; }
+        } catch {}
       }
     } catch {}
     await supabase.from("kundrunda_response_images").delete().eq("session_id", target.id);
@@ -687,13 +737,13 @@ function KundrundaPage() {
 
   const addZone = async () => {
     if (!newZoneName.trim()) return;
-    const scopeZones = editScope === "global" ? zones.filter(z => !z.store_id) : zones.filter(z => z.store_id === activeStore?.id);
-    const maxOrder = Math.max(0, ...scopeZones.map(z => z.sort_order));
+    const isLocalScope = editScope === "local";
+    const maxOrder = Math.max(0, ...editableZones.map(z => z.sort_order));
     await supabase.from("kundrunda_zones").insert({
       name: newZoneName.trim(),
       sort_order: maxOrder + 1,
-      store_id: editScope === "local" ? (activeStore?.id ?? null) : null,
-      is_local_override: editScope === "local",
+      store_id: isLocalScope ? (activeStore?.id ?? null) : null,
+      is_local_override: isLocalScope,
     });
     setNewZoneName("");
     await fetchData();
@@ -842,16 +892,17 @@ function KundrundaPage() {
       const rows = parseTemplateCsv(await result.file.text());
       if (rows.length === 0) return;
 
-      const importScope = isAdmin ? String(result.options.scope ?? editScope) : "local";
+      const rawScope = result.options.scope;
+      const importScope: "global" | "local" = isAdmin
+        ? (rawScope === "global" ? "global" : "local")
+        : "local";
       const shouldReplace = !!result.options.replace;
       const isLocalScope = importScope === "local";
       const storeId = isLocalScope ? (activeStore?.id ?? null) : null;
 
       if (isLocalScope) await ensureLocalVersionRecord();
 
-      const targetZones = isLocalScope
-        ? zones.filter(z => z.store_id === activeStore?.id)
-        : zones.filter(z => !z.store_id);
+      const targetZones = isLocalScope ? storeLocalZones : globalZones;
 
       // Replace mode: delete all existing zones in this scope first
       if (shouldReplace && targetZones.length > 0) {
@@ -903,9 +954,18 @@ function KundrundaPage() {
     }
   };
 
-  const totalCheckpoints = activeZones.reduce((s, z) => s + z.checkpoints.length, 0);
-  const answeredCount = Object.values(responses).filter(r => r.result).length;
-  const defectCount = Object.values(responses).filter(r => r.result === "avvikelse").length;
+  const totalCheckpoints = useMemo(
+    () => activeZones.reduce((s, z) => s + z.checkpoints.length, 0),
+    [activeZones],
+  );
+  const { answeredCount, defectCount } = useMemo(() => {
+    let answered = 0, defects = 0;
+    for (const r of Object.values(responses)) {
+      if (r.result) answered++;
+      if (r.result === "avvikelse") defects++;
+    }
+    return { answeredCount: answered, defectCount: defects };
+  }, [responses]);
 
   if (loading) {
     return (
@@ -1577,12 +1637,6 @@ function KundrundaPage() {
   const inProgressSession = sessions.find(s => s.status === "in_progress");
   const completedSessions = sessions.filter(s => s.status === "completed");
 
-  let localDraftTime: string | null = null;
-  try {
-    const raw = localStorage.getItem(draftKey);
-    if (raw) { const parsed = JSON.parse(raw); localDraftTime = parsed.savedAt ?? null; }
-  } catch {}
-
   return (
     <div className="mx-auto max-w-2xl px-5 py-8 md:px-8 md:py-10">
       <PageHeader
@@ -1665,7 +1719,7 @@ function KundrundaPage() {
               </div>
               <div>
                 <p className="font-semibold">Starta ny runda</p>
-                <p className="text-xs text-muted-foreground">{zones.length} zoner · {totalCheckpoints} kontrollpunkter</p>
+                <p className="text-xs text-muted-foreground">{activeZones.length} zoner · {totalCheckpoints} kontrollpunkter</p>
               </div>
             </div>
             <Button className="rounded-full gap-1.5 shrink-0" onClick={handleStartSession}>
@@ -1682,7 +1736,7 @@ function KundrundaPage() {
           <div className="space-y-2">
             {completedSessions.slice(0, 10).map((s) => {
               const pct = s.max_score > 0 ? s.total_score / s.max_score : 0;
-              const scoreColor = pct >= 0.8 ? "text-success" : pct >= 0.5 ? "text-warning-foreground" : "text-destructive";
+              const scoreColor = scoreColorClass(pct);
               return (
                 <div key={s.id} className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-card px-5 py-4">
                   <BarChart3 className={cn("h-5 w-5 shrink-0", scoreColor)} />
@@ -1780,38 +1834,27 @@ function KundrundaPage() {
       </AlertDialog>
 
       {/* Parallel version choice */}
-      <Dialog open={showParallelChoiceDialog} onOpenChange={(o) => { if (!o) { setShowParallelChoiceDialog(false); setPendingSessionStart(false); } }}>
+      <Dialog open={showParallelChoiceDialog} onOpenChange={(o) => { if (!o) setShowParallelChoiceDialog(false); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Välj mall för denna runda</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">Du kör parallell version. Vilken mall vill du använda för denna runda?</p>
           <div className="space-y-2 mt-2">
-            <button className="w-full flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
-              onClick={async () => {
-                setShowParallelChoiceDialog(false); setPendingSessionStart(false);
-                if (localVersion) { await supabase.from("kundrunda_local_versions").update({ parallel_choice: "central" }).eq("id", localVersion.id); setLocalVersion(prev => prev ? { ...prev, parallel_choice: "central" } : null); }
-                await startSession();
-              }}>
-              <Upload className="h-5 w-5 shrink-0 text-primary" />
-              <div>
-                <p className="text-sm font-semibold">Central version</p>
-                <p className="text-xs text-muted-foreground">Använd HK:s mall för denna runda.</p>
-              </div>
-            </button>
-            <button className="w-full flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
-              onClick={async () => {
-                setShowParallelChoiceDialog(false); setPendingSessionStart(false);
-                if (localVersion) { await supabase.from("kundrunda_local_versions").update({ parallel_choice: "local" }).eq("id", localVersion.id); setLocalVersion(prev => prev ? { ...prev, parallel_choice: "local" } : null); }
-                await startSession();
-              }}>
-              <Copy className="h-5 w-5 shrink-0 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-semibold">Lokal version</p>
-                <p className="text-xs text-muted-foreground">Använd butikens anpassade mall för denna runda.</p>
-              </div>
-            </button>
+            {([
+              { choice: "central" as const, icon: Upload, iconClass: "text-primary", title: "Central version", desc: "Använd HK:s mall för denna runda." },
+              { choice: "local" as const, icon: Copy, iconClass: "text-muted-foreground", title: "Lokal version", desc: "Använd butikens anpassade mall för denna runda." },
+            ]).map(({ choice, icon: Icon, iconClass, title, desc }) => (
+              <button key={choice} className="w-full flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
+                onClick={() => handleParallelChoice(choice)}>
+                <Icon className={cn("h-5 w-5 shrink-0", iconClass)} />
+                <div>
+                  <p className="text-sm font-semibold">{title}</p>
+                  <p className="text-xs text-muted-foreground">{desc}</p>
+                </div>
+              </button>
+            ))}
           </div>
           <div className="flex justify-end mt-2">
-            <Button variant="ghost" size="sm" className="rounded-full" onClick={() => { setShowParallelChoiceDialog(false); setPendingSessionStart(false); }}>Avbryt</Button>
+            <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setShowParallelChoiceDialog(false)}>Avbryt</Button>
           </div>
         </DialogContent>
       </Dialog>
