@@ -1088,7 +1088,7 @@ function TestPanel() {
                       {ins.recordTag && (
                         <div>
                           <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-1.5">
-                            Postelement: <span className="font-mono text-orange-700">&lt;{ins.recordTag}&gt;</span> ({ins.recordCount} poster)
+                            Postelement: <span className="font-mono text-orange-700">{ins.recordTag}</span> ({ins.recordCount} poster)
                           </p>
                           {(ins.sampleFields ?? []).length > 0 && (
                             <div className="overflow-hidden rounded-lg border border-border/50">
