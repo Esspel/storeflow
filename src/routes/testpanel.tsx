@@ -1102,7 +1102,7 @@ function TestPanel() {
                                 <tbody className="divide-y divide-border/40">
                                   {ins.sampleFields?.map((f, fi) => (
                                     <tr key={fi} className="hover:bg-muted/20">
-                                      <td className="px-2.5 py-1.5 font-mono text-orange-700">&lt;{f.tag}&gt;</td>
+                                      <td className="px-2.5 py-1.5 font-mono text-orange-700">{f.tag}</td>
                                       <td className="px-2.5 py-1.5 text-muted-foreground">{f.sample || "—"}</td>
                                     </tr>
                                   ))}
