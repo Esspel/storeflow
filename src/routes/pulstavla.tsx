@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Clock, Search, Tv as Tv2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/pulstavla")({
@@ -51,7 +52,13 @@ function PinGate({
   const [digits, setDigits] = useState<string[]>(["", "", "", ""]);
   const [error, setError] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [storeName, setStoreName] = useState("");
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    supabase.from("stores").select("name").eq("id", storeId).maybeSingle()
+      .then(({ data }) => { if (data) setStoreName(data.name); });
+  }, [storeId]);
 
   const checkPin = async (pin: string) => {
     setChecking(true);
@@ -99,6 +106,7 @@ function PinGate({
         </div>
         <div>
           <h1 className="text-2xl font-bold text-white">Pulstavla</h1>
+          {storeName && <p className="mt-0.5 text-sm text-emerald-400 font-medium">{storeName}</p>}
           <p className="mt-1 text-sm text-gray-400">Ange PIN-koden för att låsa upp TV-vyn</p>
         </div>
         <div className="flex gap-3">
@@ -531,24 +539,47 @@ function StoreSelector({ onSelect }: { onSelect: (id: string) => void }) {
 }
 
 function PulstavlaPage() {
-  const [storeId, setStoreId] = useState<string | null>(() => {
+  const { user, activeStore, loading: authLoading } = useAuth();
+
+  // For unauthenticated visitors: store picked manually and remembered in localStorage
+  const [manualStoreId, setManualStoreId] = useState<string | null>(() => {
     try { return localStorage.getItem("sf-pulstavla-store"); } catch { return null; }
   });
   const [unlocked, setUnlocked] = useState(false);
   const [hasPin, setHasPin] = useState<boolean | null>(null);
 
+  // When logged in, always use the active store; skip manual selection
+  const storeId = user ? (activeStore?.id ?? null) : manualStoreId;
+
   useEffect(() => {
-    if (!storeId) return;
+    if (!storeId) { setHasPin(null); return; }
     supabase.from("pulstavla_pins").select("id").eq("store_id", storeId).maybeSingle()
       .then(({ data }) => setHasPin(!!data));
   }, [storeId]);
 
+  // Reset unlock state when store changes
+  useEffect(() => { setUnlocked(false); }, [storeId]);
+
   const selectStore = (id: string) => {
     try { localStorage.setItem("sf-pulstavla-store", id); } catch {}
-    setStoreId(id);
+    setManualStoreId(id);
+    setHasPin(null);
+    setUnlocked(false);
   };
 
+  // Still loading auth — wait before deciding
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-950">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+      </div>
+    );
+  }
+
+  // Not logged in and no store selected → store selector
   if (!storeId) return <StoreSelector onSelect={selectStore} />;
+
+  // Checking if store has PIN
   if (hasPin === null) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-950">
@@ -556,21 +587,18 @@ function PulstavlaPage() {
       </div>
     );
   }
-  // Store has no PIN — send back to selector
+
+  // Store has no PIN — unauthenticated users must pick again; logged-in users go straight to board
   if (!hasPin) {
+    if (user) return <LiveBoard storeId={storeId} />;
     try { localStorage.removeItem("sf-pulstavla-store"); } catch {}
-    return (
-      <StoreSelector
-        onSelect={(id) => {
-          try { localStorage.setItem("sf-pulstavla-store", id); } catch {}
-          setStoreId(id);
-          setHasPin(null);
-          setUnlocked(false);
-        }}
-      />
-    );
+    return <StoreSelector onSelect={selectStore} />;
   }
+
   if (!unlocked) return <PinGate storeId={storeId} onUnlock={() => setUnlocked(true)} />;
 
   return <LiveBoard storeId={storeId} />;
 }
+
+
+export { Route }
