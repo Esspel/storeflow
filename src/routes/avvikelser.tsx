@@ -22,9 +22,10 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ManageCommonDefects } from "@/components/manage-common-defects";
 import {
   supabase, type Incident, type IncidentComment, type IncidentImage,
-  type Store as StoreType, type AppUser, type KundrundaCommonDefect, type UserGroup,
+  type Store as StoreType, type AppUser, type CommonDefect, type UserGroup,
   logAudit, createNotification, notifyUsers,
   uploadAttachment, getPublicUrl, deleteStorageFiles, mittCoopUrl,
 } from "@/lib/supabase";
@@ -180,9 +181,28 @@ function IssuesPage() {
   const [editTarget, setEditTarget] = useState<IncidentFull | null>(null);
   const [editForm, setEditForm] = useState({ title: "", description: "", category: "", priority: "", responsible_user_id: "", responsible_group_id: "", sap_article_id: "" });
   const [editSaving, setEditSaving] = useState(false);
-  const [commonDefects, setCommonDefects] = useState<KundrundaCommonDefect[]>([]);
+  const [commonDefects, setCommonDefects] = useState<CommonDefect[]>([]);
   const [showSnabbval, setShowSnabbval] = useState(false);
+  const [showManageDefects, setShowManageDefects] = useState(false);
   const [createStep, setCreateStep] = useState<1 | 2>(1);
+
+  const fetchCommonDefects = async () => {
+    const storeId = activeStore?.id ?? null;
+    let q = supabase.from("common_defects").select("*").order("sort_order");
+    if (storeId) {
+      q = q.eq("store_id", storeId);
+    } else {
+      q = q.is("store_id", null);
+    }
+    const { data: local } = await q;
+    if (local && local.length > 0) {
+      setCommonDefects(local as CommonDefect[]);
+    } else {
+      // Fall back to global HK defects
+      const { data: global } = await supabase.from("common_defects").select("*").is("store_id", null).order("sort_order");
+      if (global) setCommonDefects(global as CommonDefect[]);
+    }
+  };
 
   const fetchIncidents = async () => {
     let q = supabase.from("incidents")
@@ -241,23 +261,7 @@ function IssuesPage() {
 
     setNewIncident(p => ({ ...p, store_id: activeStore?.id ?? "" }));
 
-    // Load common defects: prefer store-local defects if they exist, fall back to global HK defects
-    supabase.from("kundrunda_common_defects")
-      .select("*, defect_checkpoints:kundrunda_defect_checkpoints(checkpoint_id)")
-      .order("sort_order")
-      .then(({ data }) => {
-        if (data) {
-          const all = (data as (KundrundaCommonDefect & { store_id?: string | null; defect_checkpoints: { checkpoint_id: string }[] })[]).map(d => ({
-            ...d,
-            checkpoint_ids: d.defect_checkpoints?.map(dc => dc.checkpoint_id) ?? [],
-          }));
-          const storeId = activeStore?.id ?? null;
-          // Use local defects if the store has any, otherwise use global HK defects
-          const localDefects = storeId ? all.filter(d => d.store_id === storeId) : [];
-          const globalDefects = all.filter(d => !d.store_id);
-          setCommonDefects(localDefects.length > 0 ? localDefects : globalDefects);
-        }
-      });
+    fetchCommonDefects();
   }, [activeStore, user]);
 
   const createIncident = async () => {
@@ -468,9 +472,14 @@ function IssuesPage() {
         actions={
           <div className="flex gap-2">
             {isManager && (
-              <Button variant="outline" className="rounded-full hidden lg:flex" onClick={exportCSV}>
-                <Download className="mr-2 h-4 w-4" /> Exportera CSV
-              </Button>
+              <>
+                <Button variant="outline" className="rounded-full hidden lg:flex" onClick={() => setShowManageDefects(true)}>
+                  Vanliga avvikelser
+                </Button>
+                <Button variant="outline" className="rounded-full hidden lg:flex" onClick={exportCSV}>
+                  <Download className="mr-2 h-4 w-4" /> Exportera CSV
+                </Button>
+              </>
             )}
             <Button className="rounded-full hidden lg:flex" onClick={() => setShowCreate(true)}>
               <Plus className="mr-2 h-4 w-4" /> Ny avvikelse
@@ -1095,6 +1104,16 @@ function IssuesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {isManager && (
+        <ManageCommonDefects
+          open={showManageDefects}
+          onOpenChange={setShowManageDefects}
+          storeId={isAdmin ? null : (activeStore?.id ?? null)}
+          isAdmin={isAdmin}
+          onDefectsChanged={fetchCommonDefects}
+        />
+      )}
     </div>
   );
 }

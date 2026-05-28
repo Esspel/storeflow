@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Calendar, CircleCheck as CheckCircle2, Clock, Pause, Pencil, Play, Plus, Trash2, Users, X, FileText } from "lucide-react";
+import {
+  Calendar, CircleCheck as CheckCircle2, Clock, GripVertical, Pause, Pencil, Play, Plus, Settings, Trash2, Users, X, FileText,
+} from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -18,7 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   supabase,
-  type Meeting, type MeetingAgendaItem, type MeetingDecision, type AppUser,
+  type Meeting, type MeetingAgendaItem, type MeetingDecision, type AppUser, type MeetingType,
   logAudit, createNotification,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
@@ -27,81 +29,6 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/moten")({
   component: MeetingsPage,
 });
-
-const MEETING_TYPES: { value: Meeting["meeting_type"]; label: string; description: string; defaultDurationMin: number }[] = [
-  { value: "daglig_styrning", label: "Daglig styrning", description: "Daglig uppföljning mån–fre kl 09:30, 15 min. Genomgång av StoreFlow-tavlan.", defaultDurationMin: 15 },
-  { value: "ledningsgrupp", label: "Ledningsgrupp", description: "Veckogenomgång för ledningsgruppen. Fredag 13:00, 60 min. Schema via SoftOne GO.", defaultDurationMin: 60 },
-  { value: "saljledare", label: "Säljledarmöte", description: "Månadsvis säljledaremöte. Första måndag 13:00, 60 min.", defaultDurationMin: 60 },
-  { value: "personalmote", label: "Personalmöte", description: "Butiksmöte med all personal. Genomgång av nyheter från Relesys (kommunikationskanal) och Coopnet, kampanjer och arbetsmiljö.", defaultDurationMin: 45 },
-  { value: "haccp", label: "HACCP / Livsmedelssäkerhet", description: "Månadsvis HACCP-uppföljning. Egenkontroll via GetCompliant, temperaturloggar.", defaultDurationMin: 30 },
-  { value: "frankly", label: "&frankly — Medarbetarenkät", description: "Genomgång av &frankly-resultat. Halvårsvis, 45 min.", defaultDurationMin: 45 },
-  { value: "cap_genomgang", label: "CAP / KPI-genomgång", description: "Genomgång av Power BI-rapporter från CAP (Coop Analytical Platform).", defaultDurationMin: 30 },
-  { value: "leverans_genomgang", label: "Leveransgenomgång", description: "Uppföljning av leveranser, CAO-avvikelser (SAP/Blue Yonder) och returer.", defaultDurationMin: 20 },
-  { value: "veckostamning", label: "Veckoavstämning", description: "Flexibel veckovis uppstämning.", defaultDurationMin: 30 },
-];
-
-const DEFAULT_AGENDAS: Record<Meeting["meeting_type"], { title: string; duration: number }[]> = {
-  daglig_styrning: [
-    { title: "Pulstavlan (StoreFlow) — öppna uppgifter & avvikelser", duration: 5 },
-    { title: "Igår — vad gick bra / vad gick dåligt?", duration: 5 },
-    { title: "Dagens prioriteringar & bemanning", duration: 5 },
-  ],
-  ledningsgrupp: [
-    { title: "Föregående protokoll — uppföljning av beslut", duration: 5 },
-    { title: "Försäljning & budget (CAP / Power BI)", duration: 15 },
-    { title: "Personal, schema & SoftOne GO", duration: 10 },
-    { title: "Avvikelser & incidenter (StoreFlow)", duration: 10 },
-    { title: "Kommande kampanjer (Open Access / Coopnet)", duration: 10 },
-    { title: "Beslut & åtgärder", duration: 10 },
-  ],
-  saljledare: [
-    { title: "Månadsresultat per avdelning (CAP)", duration: 15 },
-    { title: "Kampanjplanering & Open Access-aktiveringar", duration: 15 },
-    { title: "Sortimentsfrågor — Mitt Coop / SAP FnR / A3 (kommande)", duration: 10 },
-    { title: "Kundtrender (Scan & Pay, Coop-appen)", duration: 10 },
-    { title: "Beslut", duration: 10 },
-  ],
-  personalmote: [
-    { title: "Nyheter från Relesys (kommunikationskanal) & Coopnet (intranät)", duration: 10 },
-    { title: "Försäljning & butikens resultat", duration: 10 },
-    { title: "Kampanjer & aktiviteter kommande period", duration: 10 },
-    { title: "Attensi Skills — utbildningsstatus", duration: 5 },
-    { title: "Arbetsmiljö & IA-systemet — avvikelser", duration: 5 },
-    { title: "Frågor & svar", duration: 5 },
-  ],
-  haccp: [
-    { title: "Temperaturloggar kyl & frys (RDM / Danfoss)", duration: 5 },
-    { title: "GetCompliant — egenkontrollstatus sedan sist", duration: 10 },
-    { title: "Datumkontroll (Upshop) — avvikelser", duration: 5 },
-    { title: "Rengöring & hygien — avvikelser från kundrundan", duration: 5 },
-    { title: "Åtgärder & uppföljning", duration: 5 },
-  ],
-  frankly: [
-    { title: "Presentation av &frankly-resultat", duration: 10 },
-    { title: "Analys — vad är bra, vad behöver förbättras?", duration: 15 },
-    { title: "Jämförelse mot föregående period", duration: 5 },
-    { title: "Prioriterade förbättringsområden", duration: 10 },
-    { title: "Åtgärdsplan & ansvariga (StoreFlow-uppgifter)", duration: 5 },
-  ],
-  cap_genomgang: [
-    { title: "Försäljning vs. budget (Power BI)", duration: 10 },
-    { title: "Svinn & kassation per avdelning", duration: 5 },
-    { title: "CAO-avvikelser (SAP / Blue Yonder / JDA)", duration: 5 },
-    { title: "Åtgärder utifrån data", duration: 10 },
-  ],
-  leverans_genomgang: [
-    { title: "Leveransplan — avvikelser mot CAO (SAP FnR)", duration: 5 },
-    { title: "Kvalitetsreklamationer & returer (Tomra / leverantör)", duration: 5 },
-    { title: "Svinn & markdowns", duration: 5 },
-    { title: "Åtgärder & uppföljning", duration: 5 },
-  ],
-  veckostamning: [
-    { title: "Veckans mål", duration: 5 },
-    { title: "Uppföljning", duration: 10 },
-    { title: "Kommande vecka", duration: 10 },
-    { title: "Övrigt", duration: 5 },
-  ],
-};
 
 function statusBadge(s: Meeting["status"]) {
   if (s === "in_progress") return <Badge className="bg-warning/15 text-warning-foreground">Pågår</Badge>;
@@ -174,9 +101,12 @@ type MeetingFull = Meeting & {
   moderator?: { display_name: string };
 };
 
+type AgendaItem = { title: string; duration: number };
+
 function MeetingsPage() {
   const { user, activeStore, userStores } = useAuth();
   const isManager = user?.role === "manager" || user?.role === "admin";
+  const isAdmin = user?.role === "admin";
 
   // Wake lock: keep screen on during active meetings
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -193,25 +123,41 @@ function MeetingsPage() {
   useEffect(() => () => releaseWakeLock(), []);
 
   const [meetings, setMeetings] = useState<MeetingFull[]>([]);
+  const [meetingTypes, setMeetingTypes] = useState<MeetingType[]>([]);
   const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [showDetail, setShowDetail] = useState<MeetingFull | null>(null);
 
+  // Create dialog
+  const [showCreate, setShowCreate] = useState(false);
+  const [createStep, setCreateStep] = useState<1 | 2>(1);
   const [newMeeting, setNewMeeting] = useState<{
-    type: Meeting["meeting_type"];
+    typeValue: string;
     title: string;
     scheduled_at: string;
     moderator_id: string;
   }>({
-    type: "daglig_styrning",
-    title: "Daglig Styrning",
+    typeValue: "",
+    title: "",
     scheduled_at: (() => { const d = new Date(); d.setMinutes(0, 0, 0); return d.toISOString().slice(0, 16); })(),
     moderator_id: "",
   });
   const [creating, setCreating] = useState(false);
-  const [createStep, setCreateStep] = useState<1 | 2>(1);
 
+  // Manage types dialog
+  const [showManageTypes, setShowManageTypes] = useState(false);
+  const [typeForm, setTypeForm] = useState<{
+    label: string;
+    description: string;
+    default_duration_min: number;
+    default_agenda: AgendaItem[];
+  }>({ label: "", description: "", default_duration_min: 30, default_agenda: [] });
+  const [editTypeTarget, setEditTypeTarget] = useState<MeetingType | null>(null);
+  const [deleteTypeTarget, setDeleteTypeTarget] = useState<MeetingType | null>(null);
+  const [savingType, setSavingType] = useState(false);
+  const [dragTypeIdx, setDragTypeIdx] = useState<number | null>(null);
+
+  // Detail / edit / delete
+  const [showDetail, setShowDetail] = useState<MeetingFull | null>(null);
   const [newDecision, setNewDecision] = useState({ description: "", responsible_user_id: "", due_date: "", createTask: false });
   const [addingDecision, setAddingDecision] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<MeetingFull | null>(null);
@@ -232,8 +178,24 @@ function MeetingsPage() {
     setLoading(false);
   };
 
+  const fetchMeetingTypes = async () => {
+    const { data } = await supabase.from("meeting_types").select("*").eq("is_active", true).order("sort_order");
+    if (data) {
+      const typed = (data as (Omit<MeetingType, "default_agenda"> & { default_agenda: unknown })[]).map(t => ({
+        ...t,
+        default_agenda: Array.isArray(t.default_agenda) ? (t.default_agenda as AgendaItem[]) : [],
+      }));
+      setMeetingTypes(typed as MeetingType[]);
+      // Set first type as default if not already set
+      if (typed.length > 0) {
+        setNewMeeting(prev => prev.typeValue ? prev : { ...prev, typeValue: typed[0].value, title: typed[0].label });
+      }
+    }
+  };
+
   useEffect(() => {
     fetchMeetings();
+    fetchMeetingTypes();
     if (activeStore) {
       supabase.from("user_stores").select("user:app_users(*)").eq("store_id", activeStore.id)
         .then(({ data }) => {
@@ -249,7 +211,7 @@ function MeetingsPage() {
     if (!newMeeting.title.trim()) return;
     setCreating(true);
     const { data: meeting } = await supabase.from("meetings").insert({
-      meeting_type: newMeeting.type,
+      meeting_type: newMeeting.typeValue,
       title: newMeeting.title.trim(),
       store_id: activeStore?.id ?? null,
       scheduled_at: new Date(newMeeting.scheduled_at).toISOString(),
@@ -259,19 +221,79 @@ function MeetingsPage() {
     }).select().maybeSingle();
 
     if (meeting) {
-      const agenda = DEFAULT_AGENDAS[newMeeting.type];
+      const typeData = meetingTypes.find(t => t.value === newMeeting.typeValue);
+      const agenda = typeData?.default_agenda ?? [];
       if (agenda.length > 0) {
         await supabase.from("meeting_agenda_items").insert(
           agenda.map((a, i) => ({ meeting_id: meeting.id, title: a.title, duration_minutes: a.duration, sort_order: i }))
         );
       }
-      logAudit(user?.id ?? null, "meeting.create", "meetings", meeting.id, { type: newMeeting.type });
+      logAudit(user?.id ?? null, "meeting.create", "meetings", meeting.id, { type: newMeeting.typeValue });
     }
 
     setCreating(false);
     setShowCreate(false);
     await fetchMeetings();
   };
+
+  // ── Manage meeting types ───────────────────────────────────────────────────
+
+  const openNewType = () => {
+    setEditTypeTarget(null);
+    setTypeForm({ label: "", description: "", default_duration_min: 30, default_agenda: [{ title: "", duration: 5 }] });
+  };
+
+  const openEditType = (t: MeetingType) => {
+    setEditTypeTarget(t);
+    setTypeForm({
+      label: t.label,
+      description: t.description,
+      default_duration_min: t.default_duration_min,
+      default_agenda: t.default_agenda.length > 0 ? [...t.default_agenda] : [{ title: "", duration: 5 }],
+    });
+  };
+
+  const saveType = async () => {
+    if (!typeForm.label.trim()) return;
+    setSavingType(true);
+    const validAgenda = typeForm.default_agenda.filter(a => a.title.trim());
+    const payload = {
+      label: typeForm.label.trim(),
+      description: typeForm.description.trim(),
+      default_duration_min: typeForm.default_duration_min,
+      default_agenda: validAgenda,
+      created_by: user?.id ?? null,
+    };
+    if (editTypeTarget) {
+      await supabase.from("meeting_types").update(payload).eq("id", editTypeTarget.id);
+    } else {
+      const maxOrder = Math.max(-1, ...meetingTypes.map(t => t.sort_order));
+      const slug = typeForm.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+      await supabase.from("meeting_types").insert({ ...payload, value: `custom_${slug}_${Date.now()}`, sort_order: maxOrder + 1 });
+    }
+    setSavingType(false);
+    setEditTypeTarget(null);
+    await fetchMeetingTypes();
+  };
+
+  const deleteType = async () => {
+    if (!deleteTypeTarget) return;
+    await supabase.from("meeting_types").update({ is_active: false }).eq("id", deleteTypeTarget.id);
+    setDeleteTypeTarget(null);
+    await fetchMeetingTypes();
+  };
+
+  const reorderTypes = async (fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    const reordered = [...meetingTypes];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    const updated = reordered.map((t, i) => ({ ...t, sort_order: i }));
+    setMeetingTypes(updated);
+    await Promise.all(updated.map(t => supabase.from("meeting_types").update({ sort_order: t.sort_order }).eq("id", t.id)));
+  };
+
+  // ── Meeting actions ────────────────────────────────────────────────────────
 
   const updateMeetingStatus = async (id: string, status: Meeting["status"]) => {
     const updates: Record<string, unknown> = { status };
@@ -383,7 +405,7 @@ function MeetingsPage() {
     await fetchMeetings();
   };
 
-  const typeInfo = (type: Meeting["meeting_type"]) => MEETING_TYPES.find(t => t.value === type);
+  const typeInfo = (typeValue: string) => meetingTypes.find(t => t.value === typeValue);
 
   const upcoming = meetings.filter(m => m.status === "scheduled" || m.status === "in_progress");
   const past = meetings.filter(m => m.status === "completed" || m.status === "cancelled");
@@ -394,11 +416,18 @@ function MeetingsPage() {
         title="Möten"
         description={activeStore ? `Möteshantering för ${activeStore.name}` : "Strukturerade möten med tidsbudget och beslutslogg."}
         actions={
-          isManager ? (
-            <Button className="rounded-full hidden lg:flex" onClick={() => setShowCreate(true)}>
-              <Plus className="mr-2 h-4 w-4" /> Nytt möte
-            </Button>
-          ) : undefined
+          <div className="hidden lg:flex gap-2">
+            {isManager && (
+              <Button variant="outline" className="rounded-full" onClick={() => { setShowManageTypes(true); openNewType(); }}>
+                <Settings className="mr-2 h-4 w-4" /> Mötestyper
+              </Button>
+            )}
+            {isManager && (
+              <Button className="rounded-full" onClick={() => setShowCreate(true)}>
+                <Plus className="mr-2 h-4 w-4" /> Nytt möte
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -446,7 +475,7 @@ function MeetingsPage() {
                       <div className="mb-3 flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-sm">{m.title}</p>
-                          <p className="text-xs text-muted-foreground">{info?.label}</p>
+                          <p className="text-xs text-muted-foreground">{info?.label ?? m.meeting_type}</p>
                         </div>
                         <div className="flex items-center gap-1">
                           {statusBadge(m.status)}
@@ -465,7 +494,7 @@ function MeetingsPage() {
                       <div className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
                         <Clock className="h-3.5 w-3.5" />
                         {new Date(m.scheduled_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}
-                        <span className="ml-1">· {info?.defaultDurationMin} min</span>
+                        <span className="ml-1">· {info?.default_duration_min ?? "?"} min</span>
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{totalItems > 0 ? `${doneItems}/${totalItems} punkter` : "Ingen agenda"}</span>
@@ -502,7 +531,7 @@ function MeetingsPage() {
                     {past.slice(0, 10).map((m) => (
                       <tr key={m.id} className="cursor-pointer hover:bg-muted/30" onClick={() => setShowDetail(m)}>
                         <td className="px-5 py-3 font-medium">{m.title}</td>
-                        <td className="hidden px-5 py-3 text-xs text-muted-foreground sm:table-cell">{typeInfo(m.meeting_type)?.label}</td>
+                        <td className="hidden px-5 py-3 text-xs text-muted-foreground sm:table-cell">{typeInfo(m.meeting_type)?.label ?? m.meeting_type}</td>
                         <td className="px-5 py-3 text-xs text-muted-foreground">
                           {new Date(m.scheduled_at).toLocaleDateString("sv-SE")}
                         </td>
@@ -531,34 +560,32 @@ function MeetingsPage() {
         </button>
       )}
 
-      {/* CREATE DIALOG */}
+      {/* ── CREATE DIALOG ──────────────────────────────────────────────────── */}
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setCreateStep(1); }}>
         <DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
-          {/* Header */}
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
             <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
             <DialogTitle className="text-sm font-medium">Nytt möte</DialogTitle>
-            {/* Mobile step indicator */}
             <div className="flex items-center gap-1 sm:hidden ml-auto">
               <span className={cn("h-2 w-2 rounded-full transition-colors", createStep === 1 ? "bg-primary" : "bg-muted-foreground/30")} />
               <span className={cn("h-2 w-2 rounded-full transition-colors", createStep === 2 ? "bg-primary" : "bg-muted-foreground/30")} />
             </div>
           </div>
 
-          <div className="p-5 space-y-4">
+          <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
             {/* Step 1: Type + Title */}
             <div className={cn(createStep === 2 && "hidden sm:block")}>
               <div className="space-y-1.5 mb-4">
                 <Label className="text-xs">Mötestyp</Label>
                 <div className="grid grid-cols-2 gap-2">
-                  {MEETING_TYPES.map((t) => (
+                  {meetingTypes.map((t) => (
                     <button
                       key={t.value}
                       type="button"
-                      onClick={() => setNewMeeting(p => ({ ...p, type: t.value, title: t.label }))}
+                      onClick={() => setNewMeeting(p => ({ ...p, typeValue: t.value, title: t.label }))}
                       className={cn(
                         "rounded-xl border px-3 py-2.5 text-left text-xs transition-colors",
-                        newMeeting.type === t.value ? "border-primary bg-primary-soft text-primary" : "border-border/60 bg-card hover:bg-muted/40"
+                        newMeeting.typeValue === t.value ? "border-primary bg-primary-soft text-primary" : "border-border/60 bg-card hover:bg-muted/40"
                       )}
                     >
                       <p className="font-semibold">{t.label}</p>
@@ -600,9 +627,8 @@ function MeetingsPage() {
               </div>
             </div>
 
-            {/* Navigation buttons */}
+            {/* Navigation */}
             <div className="flex justify-between gap-2 pt-1">
-              {/* Mobile step navigation */}
               <div className="flex gap-2 sm:hidden">
                 {createStep === 1 ? (
                   <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setShowCreate(false)}>Avbryt</Button>
@@ -610,10 +636,8 @@ function MeetingsPage() {
                   <Button variant="outline" size="sm" className="rounded-full" onClick={() => setCreateStep(1)}>Tillbaka</Button>
                 )}
               </div>
-              {/* Desktop cancel always visible */}
               <Button variant="outline" size="sm" className="rounded-full hidden sm:flex" onClick={() => setShowCreate(false)}>Avbryt</Button>
               <div className="flex gap-2">
-                {/* Mobile: next on step 1, create on step 2 */}
                 {createStep === 1 && (
                   <Button size="sm" className="rounded-full sm:hidden" disabled={!newMeeting.title.trim()} onClick={() => setCreateStep(2)}>
                     Nästa
@@ -630,7 +654,141 @@ function MeetingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* DETAIL DIALOG */}
+      {/* ── MANAGE TYPES DIALOG ────────────────────────────────────────────── */}
+      <Dialog open={showManageTypes} onOpenChange={setShowManageTypes}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
+            <Settings className="h-4 w-4 text-muted-foreground shrink-0" />
+            <DialogTitle className="text-sm font-medium">Hantera mötestyper</DialogTitle>
+          </div>
+
+          <div className="flex flex-col sm:flex-row flex-1 overflow-hidden">
+            {/* Left: type list */}
+            <div className="w-full sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r border-border/60 overflow-y-auto">
+              <div className="p-3 space-y-1">
+                {meetingTypes.map((t, idx) => (
+                  <div
+                    key={t.id}
+                    className={cn(
+                      "group flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors",
+                      editTypeTarget?.id === t.id ? "bg-primary/10 text-primary" : "hover:bg-muted/40"
+                    )}
+                    draggable
+                    onDragStart={() => setDragTypeIdx(idx)}
+                    onDragEnd={() => setDragTypeIdx(null)}
+                    onDragOver={(e) => { e.preventDefault(); if (dragTypeIdx !== null && dragTypeIdx !== idx) reorderTypes(dragTypeIdx, idx).then(() => setDragTypeIdx(idx)); }}
+                    onClick={() => openEditType(t)}
+                  >
+                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                    <span className="flex-1 font-medium truncate">{t.label}</span>
+                    {isAdmin && (
+                      <button
+                        className="opacity-0 group-hover:opacity-100 flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-destructive transition-opacity"
+                        onClick={(e) => { e.stopPropagation(); setDeleteTypeTarget(t); }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
+                  onClick={openNewType}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Ny mötestyp
+                </button>
+              </div>
+            </div>
+
+            {/* Right: form */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Namn</Label>
+                <Input
+                  value={typeForm.label}
+                  onChange={(e) => setTypeForm(p => ({ ...p, label: e.target.value }))}
+                  placeholder="T.ex. Leveransmöte"
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Beskrivning</Label>
+                <Textarea
+                  value={typeForm.description}
+                  onChange={(e) => setTypeForm(p => ({ ...p, description: e.target.value }))}
+                  placeholder="Kort beskrivning av mötestypen..."
+                  rows={2}
+                  className="resize-none text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Standardlängd (minuter)</Label>
+                <Input
+                  type="number"
+                  min={5}
+                  max={480}
+                  value={typeForm.default_duration_min}
+                  onChange={(e) => setTypeForm(p => ({ ...p, default_duration_min: parseInt(e.target.value) || 30 }))}
+                  className="text-sm w-28"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Standardagenda</Label>
+                  <button
+                    type="button"
+                    className="text-xs text-primary hover:underline"
+                    onClick={() => setTypeForm(p => ({ ...p, default_agenda: [...p.default_agenda, { title: "", duration: 5 }] }))}
+                  >
+                    + Lägg till punkt
+                  </button>
+                </div>
+                {typeForm.default_agenda.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Input
+                      value={item.title}
+                      onChange={(e) => setTypeForm(p => ({
+                        ...p,
+                        default_agenda: p.default_agenda.map((a, i) => i === idx ? { ...a, title: e.target.value } : a),
+                      }))}
+                      placeholder={`Punkt ${idx + 1}`}
+                      className="text-sm flex-1 h-8"
+                    />
+                    <Input
+                      type="number"
+                      min={1}
+                      value={item.duration}
+                      onChange={(e) => setTypeForm(p => ({
+                        ...p,
+                        default_agenda: p.default_agenda.map((a, i) => i === idx ? { ...a, duration: parseInt(e.target.value) || 5 } : a),
+                      }))}
+                      className="text-sm w-16 h-8"
+                    />
+                    <span className="text-xs text-muted-foreground shrink-0">min</span>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => setTypeForm(p => ({ ...p, default_agenda: p.default_agenda.filter((_, i) => i !== idx) }))}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-border/60">
+                <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowManageTypes(false)}>Stäng</Button>
+                <Button size="sm" className="rounded-full" disabled={savingType || !typeForm.label.trim()} onClick={saveType}>
+                  {savingType ? "Sparar..." : editTypeTarget ? "Spara ändringar" : "Skapa mötestyp"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── DETAIL DIALOG ──────────────────────────────────────────────────── */}
       <Dialog open={!!showDetail} onOpenChange={(o) => { if (!o) setShowDetail(null); }}>
         {showDetail && (
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -639,7 +797,7 @@ function MeetingsPage() {
                 <div className="min-w-0">
                   <DialogTitle className="text-base">{showDetail.title}</DialogTitle>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {typeInfo(showDetail.meeting_type)?.label} · {new Date(showDetail.scheduled_at).toLocaleString("sv-SE", { dateStyle: "medium", timeStyle: "short" })}
+                    {typeInfo(showDetail.meeting_type)?.label ?? showDetail.meeting_type} · {new Date(showDetail.scheduled_at).toLocaleString("sv-SE", { dateStyle: "medium", timeStyle: "short" })}
                   </p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -659,7 +817,6 @@ function MeetingsPage() {
             </DialogHeader>
 
             <div className="space-y-6">
-              {/* Status actions */}
               {isManager && (
                 <div className="flex flex-wrap gap-2">
                   {showDetail.status === "scheduled" && (
@@ -680,7 +837,6 @@ function MeetingsPage() {
                 </div>
               )}
 
-              {/* Agenda */}
               {showDetail.agenda_items && showDetail.agenda_items.length > 0 && (
                 <div>
                   <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Agenda</h3>
@@ -713,7 +869,6 @@ function MeetingsPage() {
                 </div>
               )}
 
-              {/* Decisions */}
               <div>
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Beslut & åtgärder ({showDetail.decisions?.length ?? 0})
@@ -732,7 +887,6 @@ function MeetingsPage() {
                     ))}
                   </div>
                 )}
-
                 {(showDetail.status === "in_progress" || showDetail.status === "scheduled") && isManager && (
                   <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-3">
                     <p className="text-xs font-medium text-muted-foreground">Lägg till beslut</p>
@@ -778,7 +932,6 @@ function MeetingsPage() {
                 )}
               </div>
 
-              {/* Notes */}
               {showDetail.notes && (
                 <div>
                   <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Anteckningar</h3>
@@ -790,7 +943,7 @@ function MeetingsPage() {
         )}
       </Dialog>
 
-      {/* EDIT DIALOG */}
+      {/* ── EDIT DIALOG ────────────────────────────────────────────────────── */}
       <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -830,7 +983,7 @@ function MeetingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* DELETE CONFIRM */}
+      {/* ── DELETE MEETING ─────────────────────────────────────────────────── */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -842,6 +995,24 @@ function MeetingsPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteMeeting}>
+              Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── DELETE TYPE CONFIRM ────────────────────────────────────────────── */}
+      <AlertDialog open={!!deleteTypeTarget} onOpenChange={(o) => !o && setDeleteTypeTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort mötestyp</AlertDialogTitle>
+            <AlertDialogDescription>
+              Är du säker på att du vill ta bort mötestypen <strong>{deleteTypeTarget?.label}</strong>? Befintliga möten av denna typ påverkas inte.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteType}>
               Ta bort
             </AlertDialogAction>
           </AlertDialogFooter>

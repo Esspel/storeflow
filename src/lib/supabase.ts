@@ -527,9 +527,30 @@ export type KundrundaResponseImage = {
   created_at: string;
 };
 
+export type MeetingType = {
+  id: string;
+  value: string;
+  label: string;
+  description: string;
+  default_duration_min: number;
+  default_agenda: { title: string; duration: number }[];
+  sort_order: number;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type CommonDefect = {
+  id: string;
+  store_id: string | null;
+  label: string;
+  sort_order: number;
+  created_at: string;
+};
+
 export type Meeting = {
   id: string;
-  meeting_type: "ledningsgrupp" | "saljledare" | "daglig_styrning" | "veckostamning" | "personalmote" | "haccp" | "frankly" | "cap_genomgang" | "leverans_genomgang";
+  meeting_type: string;
   title: string;
   store_id: string | null;
   scheduled_at: string;

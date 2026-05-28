@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, Upload } from "lucide-react";
+import { ArrowDownUp, Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, Upload } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -345,6 +345,8 @@ function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("today");
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"default" | "due_date" | "priority" | "assignee" | "title">("default");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   // Undo toast: when a swipe-complete fires we show a 4-second window to cancel
   // before the DB write actually happens.
@@ -1316,12 +1318,33 @@ function TasksPage() {
     return d >= simTodayStart && d <= simTodayEnd;
   };
 
-  const filtered = visibleTasks.filter((t) => {
-    if (tab === "today" && !isDueToday(t)) return false;
-    if (tab !== "all" && tab !== "today" && effectiveStatus(t) !== tab) return false;
-    if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const PRIORITY_ORDER: Record<string, number> = { Kritisk: 0, Hög: 1, Medel: 2, Låg: 3 };
+
+  const filtered = visibleTasks
+    .filter((t) => {
+      if (tab === "today" && !isDueToday(t)) return false;
+      if (tab !== "all" && tab !== "today" && effectiveStatus(t) !== tab) return false;
+      if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "default") return 0;
+      let cmp = 0;
+      if (sortBy === "due_date") {
+        const aD = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+        const bD = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+        cmp = aD - bD;
+      } else if (sortBy === "priority") {
+        cmp = (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99);
+      } else if (sortBy === "assignee") {
+        const aName = a.assignees?.[0]?.user?.display_name ?? a.assignees?.[0]?.group?.name ?? "";
+        const bName = b.assignees?.[0]?.user?.display_name ?? b.assignees?.[0]?.group?.name ?? "";
+        cmp = aName.localeCompare(bName, "sv");
+      } else if (sortBy === "title") {
+        cmp = a.title.localeCompare(b.title, "sv");
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
 
   const openDetail = async (task: TaskFull) => {
     setDetailTask(task);
@@ -1427,10 +1450,36 @@ function TasksPage() {
             </TabsList>
           </Tabs>
         </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Sök uppgifter..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="h-9 rounded-full pl-9 text-sm w-full" />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Sök uppgifter..." value={search} onChange={(e) => setSearch(e.target.value)}
+              className="h-9 rounded-full pl-9 text-sm w-full" />
+          </div>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="h-9 w-auto min-w-[130px] rounded-full text-xs gap-1.5">
+              <ArrowDownUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Standard</SelectItem>
+              <SelectItem value="due_date">Datum</SelectItem>
+              <SelectItem value="priority">Prioritet</SelectItem>
+              <SelectItem value="assignee">Person</SelectItem>
+              <SelectItem value="title">Titel</SelectItem>
+            </SelectContent>
+          </Select>
+          {sortBy !== "default" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 w-9 rounded-full p-0 shrink-0"
+              onClick={() => setSortDir(d => d === "asc" ? "desc" : "asc")}
+              title={sortDir === "asc" ? "Stigande" : "Fallande"}
+            >
+              {sortDir === "asc" ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </Button>
+          )}
         </div>
       </div>
 
