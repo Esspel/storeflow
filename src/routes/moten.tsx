@@ -677,7 +677,7 @@ function MeetingsPage() {
 
       {/* ── MANAGE TYPES DIALOG ────────────────────────────────────────────── */}
       <Dialog open={showManageTypes} onOpenChange={(o) => { setShowManageTypes(o); if (!o) { setSelectedTypeIds(new Set()); setTypeSearch(""); } }}>
-        <DialogContent className="w-[95vw] max-w-5xl h-[90vh] max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
+        <DialogContent className="!w-[min(95vw,1100px)] !max-w-none h-[90vh] max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border/60 px-6 py-4 shrink-0">
             <div className="flex items-center gap-3">
