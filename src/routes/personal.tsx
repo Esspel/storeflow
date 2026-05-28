@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, CircleAlert as AlertCircle, ArrowUpDown, Building2, CircleCheck as CheckCircle2, ChevronDown, ChevronUp, Download, Hash, Mail, MapPin, Pencil, Phone, Plus, Search, Shield, Trash2, Upload, UserCog, Users, X } from "lucide-react";
-import { CameraScanner } from "@/components/camera-scanner";
+import { CircleAlert as AlertCircle, ArrowUpDown, Building2, CircleCheck as CheckCircle2, ChevronDown, ChevronUp, Download, Hash, Mail, MapPin, Pencil, Phone, Plus, Search, Shield, Trash2, Upload, UserCog, Users, X } from "lucide-react";
+import { BarcodeScanButton } from "@/components/barcode-scan-button";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -189,8 +189,6 @@ function AccountsPage() {
   const [resetPw, setResetPw] = useState("");
   const [editPin, setEditPin] = useState("");
   const [editBarcode, setEditBarcode] = useState("");
-  const [editBarcodeCameraOpen, setEditBarcodeCameraOpen] = useState(false);
-  const [newBarcodeCameraOpen, setNewBarcodeCameraOpen] = useState(false);
   const [editStoreSearch, setEditStoreSearch] = useState("");
   const [newStoreSearch, setNewStoreSearch] = useState("");
 
@@ -225,6 +223,35 @@ function AccountsPage() {
   }, [currentUser?.id, authLoading]);
 
   const manageableStoreIds = isAdmin ? null : currentUserStores.map((s) => s.id);
+
+  const newUserFilteredStores = useMemo(() => {
+    const selectedSet = new Set(newUser.storeIds);
+    const q = newStoreSearch.toLowerCase();
+    return stores.filter((s) => {
+      if (newUser.distrikt_id && s.distrikt_id !== newUser.distrikt_id) return false;
+      if (!newUser.distrikt_id && newUser.forening_id && s.forening_id !== newUser.forening_id) return false;
+      return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
+    }).sort((a, b) => {
+      const aChecked = selectedSet.has(a.id) ? 0 : 1;
+      const bChecked = selectedSet.has(b.id) ? 0 : 1;
+      return aChecked - bChecked || a.name.localeCompare(b.name, "sv");
+    });
+  }, [stores, newUser.storeIds, newUser.distrikt_id, newUser.forening_id, newStoreSearch]);
+
+  const editUserFilteredStores = useMemo(() => {
+    if (!editUser) return [];
+    const selectedSet = new Set(editUser.assignedStoreIds);
+    const q = editStoreSearch.toLowerCase();
+    return stores.filter((s) => {
+      if (editUser.distrikt_id && s.distrikt_id !== editUser.distrikt_id) return false;
+      if (!editUser.distrikt_id && editUser.forening_id && s.forening_id !== editUser.forening_id) return false;
+      return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
+    }).sort((a, b) => {
+      const aChecked = selectedSet.has(a.id) ? 0 : 1;
+      const bChecked = selectedSet.has(b.id) ? 0 : 1;
+      return aChecked - bChecked || a.name.localeCompare(b.name, "sv");
+    });
+  }, [stores, editUser, editStoreSearch]);
 
   async function load() {
     const managerStoreIds = currentUserStores.map(s => s.id);
@@ -1188,19 +1215,7 @@ function AccountsPage() {
                 />
               </div>
               <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
-                {(() => {
-                  const filtered = stores.filter(s => {
-                    // Cascade filter: restrict by distrikt first, then förening, then search
-                    if (newUser.distrikt_id && s.distrikt_id !== newUser.distrikt_id) return false;
-                    if (!newUser.distrikt_id && newUser.forening_id && s.forening_id !== newUser.forening_id) return false;
-                    const q = newStoreSearch.toLowerCase();
-                    return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
-                  }).sort((a, b) => {
-                    const aChecked = newUser.storeIds.includes(a.id) ? 0 : 1;
-                    const bChecked = newUser.storeIds.includes(b.id) ? 0 : 1;
-                    return aChecked - bChecked || a.name.localeCompare(b.name, "sv");
-                  });
-                  return filtered.length > 0 ? filtered.map(s => (
+                {newUserFilteredStores.length > 0 ? newUserFilteredStores.map(s => (
                     <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
                       <Checkbox
                         checked={newUser.storeIds.includes(s.id)}
@@ -1222,8 +1237,7 @@ function AccountsPage() {
                       {s.distrikt_namn && <span className="text-xs text-muted-foreground/60">{s.distrikt_namn}</span>}
                       {newUser.storeIds[0] === s.id && <span className="ml-auto text-xs text-primary">Primär</span>}
                     </label>
-                  )) : <p className="py-3 text-center text-xs text-muted-foreground">Inga butiker matchar</p>;
-                })()}
+                  )) : <p className="py-3 text-center text-xs text-muted-foreground">Inga butiker matchar</p>}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1237,21 +1251,8 @@ function AccountsPage() {
                 <div className="flex gap-2">
                   <Input placeholder="Skanna eller ange" value={newUser.barcode}
                     onChange={(e) => setNewUser(p => ({ ...p, barcode: e.target.value }))} autoComplete="off" className="flex-1" />
-                  <button
-                    type="button"
-                    onClick={() => setNewBarcodeCameraOpen(true)}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                    title="Scanna med kamera"
-                  >
-                    <Camera className="h-4 w-4" />
-                  </button>
+                  <BarcodeScanButton onScan={(code) => setNewUser(p => ({ ...p, barcode: code }))} />
                 </div>
-                {newBarcodeCameraOpen && (
-                  <CameraScanner
-                    onScan={(code) => { setNewBarcodeCameraOpen(false); setNewUser(p => ({ ...p, barcode: code })); }}
-                    onClose={() => setNewBarcodeCameraOpen(false)}
-                  />
-                )}
               </div>
             </div>
             {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
@@ -1351,18 +1352,7 @@ function AccountsPage() {
                   />
                 </div>
                 <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
-                  {(() => {
-                    const filtered = stores.filter(s => {
-                      if (editUser.distrikt_id && s.distrikt_id !== editUser.distrikt_id) return false;
-                      if (!editUser.distrikt_id && editUser.forening_id && s.forening_id !== editUser.forening_id) return false;
-                      const q = editStoreSearch.toLowerCase();
-                      return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
-                    }).sort((a, b) => {
-                      const aChecked = editUser.assignedStoreIds.includes(a.id) ? 0 : 1;
-                      const bChecked = editUser.assignedStoreIds.includes(b.id) ? 0 : 1;
-                      return aChecked - bChecked || a.name.localeCompare(b.name, "sv");
-                    });
-                    return filtered.length > 0 ? filtered.map(s => (
+                  {editUserFilteredStores.length > 0 ? editUserFilteredStores.map(s => (
                       <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
                         <Checkbox
                           checked={editUser.assignedStoreIds.includes(s.id)}
@@ -1385,8 +1375,7 @@ function AccountsPage() {
                           <span className="ml-auto text-xs text-primary">Primär</span>
                         )}
                       </label>
-                    )) : <p className="py-3 text-center text-xs text-muted-foreground">Inga butiker matchar</p>;
-                  })()}
+                    )) : <p className="py-3 text-center text-xs text-muted-foreground">Inga butiker matchar</p>}
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -1407,21 +1396,8 @@ function AccountsPage() {
                   <div className="flex gap-2">
                     <Input placeholder="Skanna eller ange" value={editBarcode}
                       onChange={(e) => setEditBarcode(e.target.value)} autoComplete="off" className="flex-1" />
-                    <button
-                      type="button"
-                      onClick={() => setEditBarcodeCameraOpen(true)}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                      title="Scanna med kamera"
-                    >
-                      <Camera className="h-4 w-4" />
-                    </button>
+                    <BarcodeScanButton onScan={(code) => setEditBarcode(code)} />
                   </div>
-                  {editBarcodeCameraOpen && (
-                    <CameraScanner
-                      onScan={(code) => { setEditBarcodeCameraOpen(false); setEditBarcode(code); }}
-                      onClose={() => setEditBarcodeCameraOpen(false)}
-                    />
-                  )}
                   <p className="text-xs text-muted-foreground">Lämna tomt för att ta bort streckkod.</p>
                 </div>
               </div>

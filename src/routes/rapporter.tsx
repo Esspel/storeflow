@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, ShoppingCart, ClipboardCheck, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2 } from "lucide-react";
 
 import { PageHeader, StatCard } from "@/components/page-header";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase, type Task, type Incident } from "@/lib/supabase";
+import { dedupRecurringSeries } from "@/lib/task-utils";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
@@ -140,24 +141,17 @@ function ReportsPage() {
     load();
   }, [activeStore, user, dateFrom, dateTo]);
 
-  // Deduplicate recurring series — count one representative per parent
-  const dedupedTasks = (() => {
-    const parentIdsUsed = new Set<string>();
-    return tasks.filter((t) => {
-      if (t.parent_task_id) {
-        if (parentIdsUsed.has(t.parent_task_id)) return false;
-        parentIdsUsed.add(t.parent_task_id);
-        return true;
-      }
-      const hasChildren = tasks.some((c) => c.parent_task_id === t.id);
-      if (t.recurrence_rule && hasChildren) return false;
-      return true;
-    });
-  })();
+  const { dedupedTasks, doneTasks, missedTasks } = useMemo(() => {
+    const deduped = dedupRecurringSeries(tasks);
+    let doneTasks = 0, missedTasks = 0;
+    for (const t of deduped) {
+      if (t.status === "done") doneTasks++;
+      else if (t.status === "late") missedTasks++;
+    }
+    return { dedupedTasks: deduped, doneTasks, missedTasks };
+  }, [tasks]);
 
   const totalTasks = dedupedTasks.length;
-  const doneTasks = dedupedTasks.filter((t) => t.status === "done").length;
-  const missedTasks = dedupedTasks.filter((t) => t.status === "late").length;
   const openIncidents = incidents.filter((i) => ["open", "in_progress", "escalated"].includes(i.status)).length;
   const compliance = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 

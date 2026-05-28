@@ -315,7 +315,6 @@ export function AppShell() {
   return (
     <div className="flex min-h-screen w-full flex-col bg-background" style={{ isolation: "isolate" }}>
       <SwUpdateBanner />
-      {/* Safe-area top spacer for notched devices */}
       <div className="pt-safe" />
 
       <header className="sticky top-0 z-40 border-b border-border/60 bg-card">
@@ -612,7 +611,6 @@ export function AppShell() {
         </ErrorBoundary>
       </main>
 
-      {/* Safe-area bottom spacer */}
       <div className="pb-safe" />
 
       {/* Global offline / reconnected snackbar */}

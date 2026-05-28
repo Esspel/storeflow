@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ExternalLink, Hash, Plus, ScanLine, Search, ShoppingCart, Trash2, X,
@@ -154,9 +154,6 @@ function CustomerRequestsPage() {
   const ordered = requests.filter((r) => r.status === "ordered").length;
   const fulfilled = requests.filter((r) => r.status === "fulfilled").length;
 
-  const storeForRequest = (r: CustomerRequest) =>
-    stores.find((s) => s.id === r.store_id) ?? null;
-
   return (
     <div className="mx-auto max-w-[1200px] px-5 py-8 md:px-8 md:py-10">
       <PageHeader
@@ -231,7 +228,7 @@ function CustomerRequestsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((r) => {
-            const store = storeForRequest(r);
+            const store = stores.find((s) => s.id === r.store_id) ?? null;
             const mcUrl = mittCoopUrl(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null);
             return (
               <div

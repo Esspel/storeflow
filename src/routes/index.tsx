@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { getSimulatedNow } from "@/lib/time-simulation";
+import { dedupRecurringSeries } from "@/lib/task-utils";
 
 export const Route = createFileRoute("/")({
   component: HubPage,
@@ -113,7 +114,6 @@ function HubPage() {
         .select("id, title, status, due_date, recurrence_rule, parent_task_id, priority, recurrence_days, steps:task_steps(id, is_done)")
         .order("created_at", { ascending: false });
       if (storeFilter) tasksQ = tasksQ.eq("store_id", storeFilter);
-      const { data: rawTasks } = await tasksQ;
 
       let incQ = supabase
         .from("incidents")
@@ -121,7 +121,8 @@ function HubPage() {
         .order("created_at", { ascending: false })
         .limit(6);
       if (storeFilter) incQ = incQ.eq("store_id", storeFilter);
-      const { data: incidents } = await incQ;
+
+      const [{ data: rawTasks }, { data: incidents }] = await Promise.all([tasksQ, incQ]);
 
       const tasks = (rawTasks ?? []) as (Omit<TaskRow, "steps_total" | "steps_done"> & { steps: { id: string; is_done: boolean }[] })[];
       const mapped: TaskRow[] = tasks.map((t) => ({
@@ -131,28 +132,20 @@ function HubPage() {
         steps_done: t.steps?.filter((s) => s.is_done).length ?? 0,
       }));
 
-      // Deduplicate recurring series: keep one representative per parent
-      const parentIdsUsed = new Set<string>();
-      const deduped = mapped.filter((t) => {
-        if (t.parent_task_id) {
-          if (parentIdsUsed.has(t.parent_task_id)) return false;
-          parentIdsUsed.add(t.parent_task_id);
-          return true;
-        }
-        // Recurring parents that have children — skip (represented by a child above)
-        const hasChildren = mapped.some((c) => c.parent_task_id === t.id);
-        if (t.recurrence_rule && hasChildren) return false;
-        return true;
-      });
-
-      const done = deduped.filter((t) => t.status === "done").length;
-      const openTasks = deduped.filter((t) => (t.status === "todo" || t.status === "progress") && !isEffectivelyLate(t, now)).length;
-      const overdueTasks = deduped.filter((t) => t.status === "late" || isEffectivelyLate(t, now)).length;
+      const deduped = dedupRecurringSeries(mapped);
+      const { done, openTasks, overdueTasks } = deduped.reduce(
+        (acc, t) => {
+          if (t.status === "done") acc.done++;
+          else if (t.status === "late" || isEffectivelyLate(t, now)) acc.overdueTasks++;
+          else if (t.status === "todo" || t.status === "progress") acc.openTasks++;
+          return acc;
+        },
+        { done: 0, openTasks: 0, overdueTasks: 0 }
+      );
       const inc = (incidents ?? []) as IncidentRow[];
       const openIncidents = inc.filter((i) => ["open", "in_progress", "escalated"].includes(i.status)).length;
 
       setStats({ todosCompleted: done, openTasks, overdueTasks, openIncidents });
-      // Hide closed and resolved incidents from dashboard overview
       setRecentIncidents(inc.filter((i) => i.status !== "closed" && i.status !== "resolved"));
 
       const parentIdsWithChildren = new Set(mapped.filter((t) => t.parent_task_id).map((t) => t.parent_task_id!));

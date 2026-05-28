@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Camera, Eye, EyeOff, KeyRound, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw } from "lucide-react";
-import { CameraScanner } from "@/components/camera-scanner";
+import { Eye, EyeOff, KeyRound, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw } from "lucide-react";
+import { BarcodeScanButton } from "@/components/barcode-scan-button";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,6 @@ function SettingsPage() {
   const [barcodeSaving, setBarcodeSaving] = useState(false);
   const [barcodeSuccess, setBarcodeSuccess] = useState(false);
   const [barcodeError, setBarcodeError] = useState("");
-  const [barcodeCameraOpen, setBarcodeCameraOpen] = useState(false);
 
   // Load current PIN and barcode status
   useEffect(() => {
@@ -338,7 +337,6 @@ function SettingsPage() {
           </div>
 
           <div className="space-y-6">
-            {/* ── Barcode section ── */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <ScanBarcode className="h-4 w-4 text-muted-foreground" />
@@ -356,14 +354,7 @@ function SettingsPage() {
                   autoComplete="off"
                   onKeyDown={(e) => { if (e.key === "Enter") saveBarcode(); }}
                 />
-                <button
-                  type="button"
-                  onClick={() => setBarcodeCameraOpen(true)}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                  title="Scanna med kamera"
-                >
-                  <Camera className="h-4 w-4" />
-                </button>
+                <BarcodeScanButton onScan={(code) => { setBarcodeId(code); setBarcodeError(""); }} />
                 {barcodeId.trim() && (
                   <Button
                     variant="outline"
@@ -375,12 +366,6 @@ function SettingsPage() {
                   </Button>
                 )}
               </div>
-              {barcodeCameraOpen && (
-                <CameraScanner
-                  onScan={(code) => { setBarcodeCameraOpen(false); setBarcodeId(code); setBarcodeError(""); }}
-                  onClose={() => setBarcodeCameraOpen(false)}
-                />
-              )}
               {barcodeError && (
                 <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{barcodeError}</p>
               )}
@@ -399,7 +384,6 @@ function SettingsPage() {
 
             <div className="border-t border-border/60" />
 
-            {/* ── PIN section ── */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
