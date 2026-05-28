@@ -1620,7 +1620,7 @@ function SchemaPage() {
   }, [loadingSchedule]);
 
   return (
-    <div className="flex flex-col bg-background sm:h-[calc(100vh-3.5rem)] sm:overflow-hidden md:h-[calc(100vh-4rem)]">
+    <div className="flex min-h-full flex-col bg-background">
       {/* Page header */}
       <div className="border-b border-border/60 bg-card px-6 py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2041,7 +2041,7 @@ function SchemaPage() {
 
           {/* ── MOBILE SCHEDULE CARD VIEW — only on mobile, desktop uses timeline ── */}
           {viewMode === "day" && (
-            <div className="block sm:hidden pb-6" style={{ touchAction: "pan-y" }} data-scroll-container ref={mobileListRef}>
+            <div className="block sm:hidden pb-6" data-scroll-container ref={mobileListRef}>
               {loadingSchedule ? (
                 <div className="space-y-3">
                   {[1,2,3,4,5].map(i => (
@@ -2120,7 +2120,6 @@ function SchemaPage() {
                         key={emp.id}
                         data-shift-start={startMins}
                         data-shift-stop={stopMins}
-                        style={{ touchAction: "pan-y" }}
                         className={cn(
                           "rounded-2xl border bg-card p-4 transition-all",
                           isSemester ? "border-red-200/60 bg-red-50/40" : isAbsent ? "border-warning/30 bg-warning/5" : "border-border/60",
@@ -2239,7 +2238,7 @@ function SchemaPage() {
 
           {/* ── DESKTOP TIMELINE VIEW (sm and above) ────────────────────────── */}
           {viewMode === "day" && (
-            <div className="hidden flex-1 overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)] sm:flex sm:flex-col">
+            <div className="hidden overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)] sm:flex sm:flex-col" style={{ maxHeight: "calc(100vh - 18rem)" }}>
               <div className="sticky top-0 z-10 flex bg-card/95 backdrop-blur-sm border-b border-border/60">
                 <div className="w-48 shrink-0 border-r border-border/40 px-4 py-2.5">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Medarbetare</span>
@@ -2419,7 +2418,7 @@ function SchemaPage() {
 
           {/* ── WEEK OVERVIEW (desktop only) ─────────────────────────────── */}
           {viewMode === "week" && (
-            <div className="overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)]">
+            <div className="overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)]" style={{ maxHeight: "calc(100vh - 18rem)" }}>
               <div className="sticky top-0 z-10 grid bg-card/95 backdrop-blur-sm border-b border-border/60" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>
                 <div className="border-r border-border/40 px-4 py-2.5">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Medarbetare</span>
