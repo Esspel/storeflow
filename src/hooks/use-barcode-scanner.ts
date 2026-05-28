@@ -7,7 +7,7 @@ import { useEffect, useRef } from "react";
 // The hook fires `onScan(code)` globally — no input field needs focus.
 
 const SCAN_MAX_GAP_MS = 80;  // max ms between chars in a scan burst
-const SCAN_MIN_CHARS = 4;    // shortest valid barcode (EAN-8 = 8 digits, but allow GS1 shorter)
+const SCAN_MIN_CHARS = 4;    // shortest valid barcode
 
 type Options = {
   onScan: (code: string) => void;
@@ -19,16 +19,14 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
   const bufRef = useRef<string>("");
   const lastKeyTime = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keep callback in a ref so the event listener never needs to be re-registered
+  const onScanRef = useRef(onScan);
+  onScanRef.current = onScan;
+  const acceptAlphaRef = useRef(acceptAlpha);
+  acceptAlphaRef.current = acceptAlpha;
 
   useEffect(() => {
-    const flush = () => {
-      const code = bufRef.current.trim();
-      bufRef.current = "";
-      if (code.length >= SCAN_MIN_CHARS) onScan(code);
-    };
-
     const onKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is actively typing in an input/textarea/contenteditable
       const target = e.target as HTMLElement;
       const isEditable =
         target.tagName === "INPUT" ||
@@ -45,7 +43,7 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
         const code = bufRef.current.trim();
         bufRef.current = "";
         if (code.length >= SCAN_MIN_CHARS && gap < SCAN_MAX_GAP_MS * 3) {
-          onScan(code);
+          onScanRef.current(code);
           // Prevent the Enter from submitting a focused form while we handle it
           if (!isEditable) e.preventDefault();
         }
@@ -55,7 +53,8 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
       // Only single printable characters
       if (e.key.length !== 1) return;
       const char = e.key;
-      if (!acceptAlpha && !/[\d\-]/.test(char)) {
+
+      if (!acceptAlphaRef.current && !/[\d\-]/.test(char)) {
         // Non-numeric char during scan burst — treat as end of buffer if we had a scan going
         if (bufRef.current.length > 0 && gap < SCAN_MAX_GAP_MS) {
           if (char !== " ") bufRef.current += char;
@@ -80,7 +79,7 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
       timerRef.current = setTimeout(() => {
         const code = bufRef.current.trim();
         bufRef.current = "";
-        if (code.length >= SCAN_MIN_CHARS) onScan(code);
+        if (code.length >= SCAN_MIN_CHARS) onScanRef.current(code);
       }, 150);
     };
 
@@ -89,5 +88,5 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
       window.removeEventListener("keydown", onKeyDown, { capture: true });
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [onScan, acceptAlpha]);
+  }, []); // Empty deps — listener registered once, uses refs for live values
 }

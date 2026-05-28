@@ -95,7 +95,6 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
   }, [activeStoreId, onUnlock]);
 
   // Barcode scanner — fires when hardware scanner sends barcode
-  // Use a ref for loading so the callback is stable and doesn't re-register the listener mid-scan
   const loadingRef = useRef(loading);
   loadingRef.current = loading;
   useBarcodeScanner({
@@ -161,25 +160,32 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
             </div>
 
             {/* Barcode scan options */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3">
-                <ScanBarcode className="h-5 w-5 shrink-0 text-primary" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">Scanna passerkort</p>
-                  <p className="text-xs text-muted-foreground">Rikta Zebra-skannern mot streckkoden</p>
-                </div>
+            {!activeStoreId ? (
+              <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-center">
+                <p className="text-sm text-warning-foreground font-medium">Ingen butik vald</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Välj en butik i toppmenyn för att kunna skanna</p>
               </div>
-              <button
-                onClick={() => setCameraOpen(true)}
-                className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 transition-colors hover:bg-accent active:scale-[0.98]"
-              >
-                <Camera className="h-5 w-5 shrink-0 text-primary" />
-                <div className="text-left">
-                  <p className="text-sm font-medium">Scanna med kamera</p>
-                  <p className="text-xs text-muted-foreground">Öppna kameran och scanna streckkod</p>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3">
+                  <ScanBarcode className="h-5 w-5 shrink-0 text-primary" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">Scanna passerkort</p>
+                    <p className="text-xs text-muted-foreground">Rikta Zebra-skannern mot streckkoden</p>
+                  </div>
                 </div>
-              </button>
-            </div>
+                <button
+                  onClick={() => setCameraOpen(true)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 transition-colors hover:bg-accent active:scale-[0.98]"
+                >
+                  <Camera className="h-5 w-5 shrink-0 text-primary" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium">Scanna med kamera</p>
+                    <p className="text-xs text-muted-foreground">Öppna kameran och scanna streckkod</p>
+                  </div>
+                </button>
+              </div>
+            )}
 
             {/* User list for PIN */}
             {loadingUsers ? (

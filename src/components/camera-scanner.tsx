@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Zap, ZapOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import jsQR from "jsqr";
 
 interface Props {
   onScan: (code: string) => void;
@@ -26,6 +27,7 @@ const FORMATS = [
 
 export function CameraScanner({ onScan, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animRef = useRef<number | null>(null);
   const lastScannedRef = useRef<string>("");
@@ -33,6 +35,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
   const [torchSupported, setTorchSupported] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [useNative, setUseNative] = useState(false);
   const detectorRef = useRef<InstanceType<NonNullable<typeof window.BarcodeDetector>> | null>(null);
 
   const stopStream = useCallback(() => {
@@ -40,6 +43,14 @@ export function CameraScanner({ onScan, onClose }: Props) {
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
   }, []);
+
+  const handleScan = useCallback((code: string) => {
+    if (!code || code === lastScannedRef.current) return;
+    lastScannedRef.current = code;
+    stopStream();
+    onScan(code);
+    onClose();
+  }, [onScan, onClose, stopStream]);
 
   useEffect(() => {
     let mounted = true;
@@ -62,11 +73,16 @@ export function CameraScanner({ onScan, onClose }: Props) {
         if (caps?.torch) setTorchSupported(true);
 
         if (window.BarcodeDetector) {
-          const supportedFormats = await window.BarcodeDetector.getSupportedFormats?.() ?? FORMATS;
-          const formats = FORMATS.filter(f => supportedFormats.includes(f));
-          detectorRef.current = new window.BarcodeDetector({
-            formats: formats.length > 0 ? formats : FORMATS,
-          });
+          try {
+            const supportedFormats = await window.BarcodeDetector.getSupportedFormats?.() ?? FORMATS;
+            const formats = FORMATS.filter(f => supportedFormats.includes(f));
+            detectorRef.current = new window.BarcodeDetector({
+              formats: formats.length > 0 ? formats : FORMATS,
+            });
+            setUseNative(true);
+          } catch {
+            // BarcodeDetector unavailable — use jsQR fallback
+          }
         }
 
         setScanning(true);
@@ -79,8 +95,9 @@ export function CameraScanner({ onScan, onClose }: Props) {
     return () => { mounted = false; stopStream(); };
   }, [stopStream]);
 
+  // Native BarcodeDetector scan loop (Chrome / Android / desktop)
   useEffect(() => {
-    if (!scanning || !detectorRef.current) return;
+    if (!scanning || !useNative || !detectorRef.current) return;
 
     const scan = async () => {
       if (!videoRef.current || videoRef.current.readyState < 2) {
@@ -90,14 +107,8 @@ export function CameraScanner({ onScan, onClose }: Props) {
       try {
         const results = await detectorRef.current!.detect(videoRef.current);
         if (results.length > 0) {
-          const code = results[0].rawValue;
-          if (code && code !== lastScannedRef.current) {
-            lastScannedRef.current = code;
-            stopStream();
-            onScan(code);
-            onClose();
-            return;
-          }
+          handleScan(results[0].rawValue);
+          return;
         }
       } catch {}
       animRef.current = requestAnimationFrame(scan);
@@ -105,7 +116,45 @@ export function CameraScanner({ onScan, onClose }: Props) {
 
     animRef.current = requestAnimationFrame(scan);
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
-  }, [scanning, onScan, onClose, stopStream]);
+  }, [scanning, useNative, handleScan]);
+
+  // jsQR canvas scan loop — fallback for iOS Safari and browsers without BarcodeDetector
+  useEffect(() => {
+    if (!scanning || useNative) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+
+    const scan = () => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2 || video.videoWidth === 0) {
+        animRef.current = requestAnimationFrame(scan);
+        return;
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      try {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const result = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: "dontInvert",
+        });
+        if (result?.data) {
+          handleScan(result.data);
+          return;
+        }
+      } catch {}
+
+      animRef.current = requestAnimationFrame(scan);
+    };
+
+    animRef.current = requestAnimationFrame(scan);
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+  }, [scanning, useNative, handleScan]);
 
   const toggleTorch = async () => {
     const track = streamRef.current?.getVideoTracks()[0];
@@ -120,6 +169,9 @@ export function CameraScanner({ onScan, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-[300] bg-black flex flex-col">
+      {/* Hidden canvas used by jsQR fallback */}
+      <canvas ref={canvasRef} className="hidden" />
+
       {/* Video feed */}
       <video
         ref={videoRef}
@@ -128,12 +180,9 @@ export function CameraScanner({ onScan, onClose }: Props) {
         className="absolute inset-0 h-full w-full object-cover"
       />
 
-      {/* Overlay: four quadrant corners + cutout */}
+      {/* Overlay */}
       <div className="absolute inset-0 pointer-events-none">
-        {/* Semi-transparent layer over entire screen */}
         <div className="absolute inset-0 bg-black/55" />
-
-        {/* Cutout: a centered rounded rectangle that is "cut out" via clip-path */}
         <div
           className="absolute"
           style={{
@@ -144,11 +193,8 @@ export function CameraScanner({ onScan, onClose }: Props) {
             borderRadius: "20px",
             boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)",
             border: "2px solid rgba(255,255,255,0.15)",
-            backdropFilter: "none",
           }}
         />
-
-        {/* Corner accents */}
         {[
           "top-0 left-0 border-t-[3px] border-l-[3px] rounded-tl-[18px]",
           "top-0 right-0 border-t-[3px] border-r-[3px] rounded-tr-[18px]",
@@ -163,18 +209,12 @@ export function CameraScanner({ onScan, onClose }: Props) {
               bottom: i >= 2 ? "36%" : undefined,
               left: i % 2 === 0 ? "8%" : undefined,
               right: i % 2 === 1 ? "8%" : undefined,
-              marginTop: i < 2 ? "0" : undefined,
             }}
           />
         ))}
-
-        {/* Animated scan line */}
         <div
           className="absolute left-[8%] right-[8%] h-0.5 bg-gradient-to-r from-transparent via-green-400 to-transparent opacity-90"
-          style={{
-            top: "22%",
-            animation: "scanline 2s ease-in-out infinite",
-          }}
+          style={{ top: "22%", animation: "scanline 2s ease-in-out infinite" }}
         />
         <style>{`
           @keyframes scanline {
@@ -217,7 +257,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
           </div>
         ) : (
           <p className="text-sm text-white/50">
-            EAN · QR · Data Matrix · Code 128 · och fler
+            {useNative ? "EAN · QR · Code 128 · och fler" : "QR-kod · Håll stilt mot streckkoden"}
           </p>
         )}
       </div>
