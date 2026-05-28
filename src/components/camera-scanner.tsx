@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Zap, ZapOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import jsQR from "jsqr";
+import { BrowserMultiFormatOneDReader } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 
 interface Props {
   onScan: (code: string) => void;
@@ -19,15 +20,13 @@ declare global {
   }
 }
 
-const FORMATS = [
+const NATIVE_FORMATS = [
   "ean_13", "ean_8", "code_128", "code_39", "code_93",
-  "qr_code", "upc_a", "upc_e", "itf", "data_matrix",
-  "aztec", "pdf417", "codabar",
+  "qr_code", "upc_a", "upc_e", "itf", "data_matrix", "aztec", "pdf417", "codabar",
 ];
 
 export function CameraScanner({ onScan, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animRef = useRef<number | null>(null);
   const lastScannedRef = useRef<string>("");
@@ -72,16 +71,17 @@ export function CameraScanner({ onScan, onClose }: Props) {
         const caps = track.getCapabilities?.() as { torch?: boolean } | undefined;
         if (caps?.torch) setTorchSupported(true);
 
+        // Try native BarcodeDetector first (Chrome/Android — fastest)
         if (window.BarcodeDetector) {
           try {
-            const supportedFormats = await window.BarcodeDetector.getSupportedFormats?.() ?? FORMATS;
-            const formats = FORMATS.filter(f => supportedFormats.includes(f));
+            const supportedFormats = await window.BarcodeDetector.getSupportedFormats?.() ?? NATIVE_FORMATS;
+            const formats = NATIVE_FORMATS.filter(f => supportedFormats.includes(f));
             detectorRef.current = new window.BarcodeDetector({
-              formats: formats.length > 0 ? formats : FORMATS,
+              formats: formats.length > 0 ? formats : NATIVE_FORMATS,
             });
             setUseNative(true);
           } catch {
-            // BarcodeDetector unavailable — use jsQR fallback
+            // Fall through to ZXing
           }
         }
 
@@ -95,7 +95,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
     return () => { mounted = false; stopStream(); };
   }, [stopStream]);
 
-  // Native BarcodeDetector scan loop (Chrome / Android / desktop)
+  // Native BarcodeDetector loop (Chrome/Android/desktop)
   useEffect(() => {
     if (!scanning || !useNative || !detectorRef.current) return;
 
@@ -106,10 +106,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
       }
       try {
         const results = await detectorRef.current!.detect(videoRef.current);
-        if (results.length > 0) {
-          handleScan(results[0].rawValue);
-          return;
-        }
+        if (results.length > 0) { handleScan(results[0].rawValue); return; }
       } catch {}
       animRef.current = requestAnimationFrame(scan);
     };
@@ -118,42 +115,65 @@ export function CameraScanner({ onScan, onClose }: Props) {
     return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
   }, [scanning, useNative, handleScan]);
 
-  // jsQR canvas scan loop — fallback for iOS Safari and browsers without BarcodeDetector
+  // ZXing loop — EAN-13/8, Code-128/39, UPC-A/E etc. Works on iOS Safari
   useEffect(() => {
     if (!scanning || useNative) return;
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return;
+    const video = videoRef.current;
+    if (!video) return;
 
-    const scan = () => {
-      const video = videoRef.current;
-      if (!video || video.readyState < 2 || video.videoWidth === 0) {
-        animRef.current = requestAnimationFrame(scan);
+    const hints = new Map<DecodeHintType, unknown>();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.CODE_93,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.ITF,
+      BarcodeFormat.CODABAR,
+      BarcodeFormat.QR_CODE,
+      BarcodeFormat.DATA_MATRIX,
+    ]);
+    hints.set(DecodeHintType.TRY_HARDER, true);
+
+    const reader = new BrowserMultiFormatOneDReader(hints);
+    let stopped = false;
+
+    // ZXing's decodeOnceFromVideoElement polls internally
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    const scan = async () => {
+      if (stopped || !video || video.readyState < 2 || video.videoWidth === 0) {
+        if (!stopped) animRef.current = requestAnimationFrame(scan);
         return;
       }
 
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       try {
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const result = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: "dontInvert",
-        });
-        if (result?.data) {
-          handleScan(result.data);
+        const result = reader.decodeFromCanvas(canvas);
+        if (result?.getText()) {
+          handleScan(result.getText());
           return;
         }
-      } catch {}
+      } catch {
+        // NotFoundException is thrown when no barcode found — expected, continue
+      }
 
-      animRef.current = requestAnimationFrame(scan);
+      if (!stopped) animRef.current = requestAnimationFrame(scan);
     };
 
     animRef.current = requestAnimationFrame(scan);
-    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+
+    return () => {
+      stopped = true;
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+    };
   }, [scanning, useNative, handleScan]);
 
   const toggleTorch = async () => {
@@ -169,10 +189,6 @@ export function CameraScanner({ onScan, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-[300] bg-black flex flex-col">
-      {/* Hidden canvas used by jsQR fallback */}
-      <canvas ref={canvasRef} className="hidden" />
-
-      {/* Video feed */}
       <video
         ref={videoRef}
         muted
@@ -186,10 +202,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
         <div
           className="absolute"
           style={{
-            top: "22%",
-            left: "8%",
-            right: "8%",
-            height: "42%",
+            top: "22%", left: "8%", right: "8%", height: "42%",
             borderRadius: "20px",
             boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)",
             border: "2px solid rgba(255,255,255,0.15)",
@@ -257,7 +270,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
           </div>
         ) : (
           <p className="text-sm text-white/50">
-            {useNative ? "EAN · QR · Code 128 · och fler" : "QR-kod · Håll stilt mot streckkoden"}
+            EAN-13 · EAN-8 · Code 128 · QR · och fler
           </p>
         )}
       </div>
