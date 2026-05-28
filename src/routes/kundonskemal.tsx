@@ -82,6 +82,8 @@ function CustomerRequestsPage() {
   const [editStatus, setEditStatus] = useState<CustomerRequest["status"]>("open");
   const [editNotes, setEditNotes] = useState("");
   const [editInternalNotes, setEditInternalNotes] = useState("");
+  const [editArticleNumber, setEditArticleNumber] = useState("");
+  const [detailTarget, setDetailTarget] = useState<CustomerRequest | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrRequest, setQrRequest] = useState<CustomerRequest | null>(null);
   const [qrTokenUrl, setQrTokenUrl] = useState("");
@@ -190,6 +192,7 @@ function CustomerRequestsPage() {
     setSaving(true);
     await supabase.from("customer_requests").update({
       status: editStatus,
+      article_number: editArticleNumber.trim() || null,
       internal_notes: editInternalNotes.trim() || null,
       staff_comment: editComment.trim() || null,
     }).eq("id", editTarget.id);
@@ -304,7 +307,8 @@ function CustomerRequestsPage() {
             return (
               <div
                 key={r.id}
-                className="rounded-2xl border border-border/60 bg-card p-4 space-y-3 hover:border-border transition-colors"
+                className="rounded-2xl border border-border/60 bg-card p-4 space-y-3 hover:border-border transition-colors cursor-pointer"
+                onClick={() => setDetailTarget(r)}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
@@ -341,7 +345,7 @@ function CustomerRequestsPage() {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between pt-1 border-t border-border/40">
+                <div className="flex items-center justify-between pt-1 border-t border-border/40" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
                     {r.requester?.display_name && (
                       <span>{r.requester.display_name}</span>
@@ -358,6 +362,7 @@ function CustomerRequestsPage() {
                         onClick={() => {
                           setEditTarget(r);
                           setEditStatus(r.status);
+                          setEditArticleNumber(r.article_number ?? "");
                           setEditInternalNotes(r.internal_notes ?? "");
                           setEditComment((r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "");
                         }}
@@ -491,15 +496,25 @@ function CustomerRequestsPage() {
             <div className="space-y-4">
               <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
                 <p className="font-medium text-sm">{editTarget.product_name}</p>
-                {editTarget.article_number && (
-                  <p className="text-xs text-muted-foreground mt-0.5 font-mono">#{editTarget.article_number}</p>
-                )}
                 {editTarget.notes && (
                   <div className="mt-2 border-t border-border/40 pt-2">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-0.5">Kundens kommentar</p>
                     <p className="text-xs text-muted-foreground">{editTarget.notes}</p>
                   </div>
                 )}
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1.5">
+                  <Hash className="h-3 w-3 text-muted-foreground" />
+                  Materialnummer (Mitt Coop-sortiment)
+                </Label>
+                <Input
+                  placeholder="T.ex. 123456"
+                  value={editArticleNumber}
+                  onChange={(e) => setEditArticleNumber(e.target.value)}
+                  className="font-mono text-sm"
+                />
+                <p className="text-[11px] text-muted-foreground">Syns bara internt — används för direktlänk till Mitt Coop-sortiment.</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Status</Label>
@@ -543,6 +558,96 @@ function CustomerRequestsPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Detail view dialog */}
+      {detailTarget && (() => {
+        const r = detailTarget;
+        const store = stores.find((s) => s.id === r.store_id) ?? null;
+        const mcUrl = mittCoopUrl(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null);
+        const staffComment = (r as CustomerRequest & { staff_comment?: string | null }).staff_comment;
+        return (
+          <Dialog open onOpenChange={(o) => { if (!o) setDetailTarget(null); }}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-base leading-tight">{r.product_name}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                {/* Status + priority row */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {statusBadge(r.status)}
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", priorityClass(r.priority))}>
+                    {PRIORITY_LABELS[r.priority]}
+                  </span>
+                  {r.source === "qr" && (
+                    <span className="rounded-full border border-border/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Via QR</span>
+                  )}
+                </div>
+
+                {/* Article number — internal */}
+                {r.article_number && (
+                  <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-1">Materialnummer</p>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm text-foreground">{r.article_number}</span>
+                      {mcUrl && (
+                        <a href={mcUrl} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
+                          <ExternalLink className="h-3 w-3" />
+                          Mitt Coop
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Customer notes */}
+                {r.notes && (
+                  <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-1">Kundens kommentar</p>
+                    <p className="text-sm text-foreground">{r.notes}</p>
+                  </div>
+                )}
+
+                {/* Staff message to customer */}
+                {staffComment && (
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70 mb-1">Meddelande till kund</p>
+                    <p className="text-sm text-foreground">{staffComment}</p>
+                  </div>
+                )}
+
+                {/* Internal notes */}
+                {r.internal_notes && (
+                  <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-1">Intern anteckning</p>
+                    <p className="text-sm text-foreground">{r.internal_notes}</p>
+                  </div>
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  {r.requester?.display_name && <>{r.requester.display_name} · </>}
+                  {new Date(r.created_at).toLocaleDateString("sv-SE", { year: "numeric", month: "long", day: "numeric" })}
+                </p>
+              </div>
+              <div className="flex justify-between gap-2 pt-2">
+                <Button variant="outline" className="rounded-full" onClick={() => setDetailTarget(null)}>Stäng</Button>
+                {isManager && (
+                  <Button className="rounded-full" onClick={() => {
+                    setDetailTarget(null);
+                    setEditTarget(r);
+                    setEditStatus(r.status);
+                    setEditArticleNumber(r.article_number ?? "");
+                    setEditInternalNotes(r.internal_notes ?? "");
+                    setEditComment((r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "");
+                  }}>
+                    Hantera
+                  </Button>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {/* Delete confirm */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
