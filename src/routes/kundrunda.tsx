@@ -1102,7 +1102,9 @@ function KundrundaPage() {
               <div className="space-y-4">
                 {/* Common defect quick-select — collapsible */}
                 {(() => {
-                  const filtered = commonDefects;
+                  const filtered = commonDefects.filter(d =>
+                    !d.checkpoint_ids?.length || d.checkpoint_ids.includes(defectDialog.checkpoint_id)
+                  );
                   return filtered.length > 0 ? (
                     <div className="space-y-1.5">
                       <button
@@ -1520,6 +1522,7 @@ function KundrundaPage() {
           onOpenChange={setShowManageDefects}
           storeId={isAdmin ? null : (activeStore?.id ?? null)}
           isAdmin={isAdmin}
+          checkpoints={allCheckpoints.map(cp => ({ id: cp.id, label: cp.label, zoneName: cp.zoneName }))}
           onDefectsChanged={fetchData}
         />
       </div>

@@ -545,7 +545,22 @@ export type CommonDefect = {
   store_id: string | null;
   label: string;
   sort_order: number;
+  checkpoint_ids: string[];
   created_at: string;
+};
+
+export type CustomerRequest = {
+  id: string;
+  store_id: string;
+  product_name: string;
+  article_number: string | null;
+  notes: string | null;
+  requested_by: string | null;
+  status: "open" | "ordered" | "declined" | "fulfilled";
+  priority: "low" | "normal" | "high";
+  created_at: string;
+  requester?: { display_name: string };
+  store?: { name: string };
 };
 
 export type Meeting = {

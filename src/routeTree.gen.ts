@@ -18,6 +18,7 @@ import { Route as MotenRouteImport } from './routes/moten'
 import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as KundrundaRouteImport } from './routes/kundrunda'
+import { Route as KundonskemalRouteImport } from './routes/kundonskemal'
 import { Route as InstallningarRouteImport } from './routes/installningar'
 import { Route as HkDashboardRouteImport } from './routes/hk-dashboard'
 import { Route as ButiksregisterRouteImport } from './routes/butiksregister'
@@ -69,6 +70,11 @@ const KundrundaRoute = KundrundaRouteImport.update({
   path: '/kundrunda',
   getParentRoute: () => rootRouteImport,
 } as any)
+const KundonskemalRoute = KundonskemalRouteImport.update({
+  id: '/kundonskemal',
+  path: '/kundonskemal',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InstallningarRoute = InstallningarRouteImport.update({
   id: '/installningar',
   path: '/installningar',
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/butiksregister': typeof ButiksregisterRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
+  '/kundonskemal': typeof KundonskemalRoute
   '/kundrunda': typeof KundrundaRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
   '/butiksregister': typeof ButiksregisterRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
+  '/kundonskemal': typeof KundonskemalRoute
   '/kundrunda': typeof KundrundaRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
@@ -134,6 +142,7 @@ export interface FileRoutesById {
   '/butiksregister': typeof ButiksregisterRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
+  '/kundonskemal': typeof KundonskemalRoute
   '/kundrunda': typeof KundrundaRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
@@ -152,6 +161,7 @@ export interface FileRouteTypes {
     | '/butiksregister'
     | '/hk-dashboard'
     | '/installningar'
+    | '/kundonskemal'
     | '/kundrunda'
     | '/login'
     | '/mallar'
@@ -168,6 +178,7 @@ export interface FileRouteTypes {
     | '/butiksregister'
     | '/hk-dashboard'
     | '/installningar'
+    | '/kundonskemal'
     | '/kundrunda'
     | '/login'
     | '/mallar'
@@ -184,6 +195,7 @@ export interface FileRouteTypes {
     | '/butiksregister'
     | '/hk-dashboard'
     | '/installningar'
+    | '/kundonskemal'
     | '/kundrunda'
     | '/login'
     | '/mallar'
@@ -201,6 +213,7 @@ export interface RootRouteChildren {
   ButiksregisterRoute: typeof ButiksregisterRoute
   HkDashboardRoute: typeof HkDashboardRoute
   InstallningarRoute: typeof InstallningarRoute
+  KundonskemalRoute: typeof KundonskemalRoute
   KundrundaRoute: typeof KundrundaRoute
   LoginRoute: typeof LoginRoute
   MallarRoute: typeof MallarRoute
@@ -277,6 +290,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KundrundaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/kundonskemal': {
+      id: '/kundonskemal'
+      path: '/kundonskemal'
+      fullPath: '/kundonskemal'
+      preLoaderRoute: typeof KundonskemalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/installningar': {
       id: '/installningar'
       path: '/installningar'
@@ -321,6 +341,7 @@ const rootRouteChildren: RootRouteChildren = {
   ButiksregisterRoute: ButiksregisterRoute,
   HkDashboardRoute: HkDashboardRoute,
   InstallningarRoute: InstallningarRoute,
+  KundonskemalRoute: KundonskemalRoute,
   KundrundaRoute: KundrundaRoute,
   LoginRoute: LoginRoute,
   MallarRoute: MallarRoute,

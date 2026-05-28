@@ -40,10 +40,13 @@ const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 // Instruction header injected into every downloadable CSV template.
 // Lines starting with '#' are treated as comments and skipped by the importer.
 const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Återkommande;Förfaller om (dagar);Steg (detaljer);Frågor
+# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Steg (detaljer);Frågor
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Återkommande: daily | every_other_day | weekly | monthly | yearly (lämna tomt för ingen)
+# Veckodagar: kommaseparerade siffror 0–6 (0=Mån, 1=Tis, ... 6=Sön), används när Återkommande=weekly
+#   Exempel: 0,1,4 (Mån, Tis, Fre)
+# Intervall: antal enheter mellan upprepningar (t.ex. 2 = varannan vecka), lämna tomt för 1
 # Förfaller om (dagar): antal dagar tills uppgiften förfaller från skapande (t.ex. 1)
 #
 # Steg: separera med " | "  — lägg till [foto] om foto krävs
@@ -381,9 +384,9 @@ function MallarPage() {
 
   // CSV: download blank import template with instructions
   const downloadBlankTemplate = () => {
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Förfaller om (dagar)", "Steg (detaljer)", "Frågor"];
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Steg (detaljer)", "Frågor"];
     const example = [
-      "Exempelmall", "Rengöring", "Beskriv mallen här", "Medel", "weekly", "1",
+      "Exempelmall", "Rengöring", "Beskriv mallen här", "Medel", "weekly", "0,1,2,3,4", "1", "1",
       "1. Torka hyllor | 2. Dammsuga [foto]",
       "1. Är allt klart? [obligatorisk] [ja_nej]",
     ];
@@ -447,15 +450,23 @@ function MallarPage() {
 
     const rows = lines.slice(1).map(parseRow);
     for (const cols of rows) {
-      const [title, category, description, priority, recurrence, dueDays, stepsRaw, questionsRaw] = cols;
+      const [title, category, description, priority, recurrence, weekdaysRaw, intervalRaw, dueDays, stepsRaw, questionsRaw] = cols;
       if (!title?.trim()) continue;
+
+      const recurrenceRule = (recurrence ?? "").trim() || null;
+      const recurrenceDays = weekdaysRaw?.trim()
+        ? weekdaysRaw.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 0 && n <= 6)
+        : null;
+      const recurrenceInterval = intervalRaw?.trim() ? parseInt(intervalRaw.trim()) : null;
 
       const { data: tmpl } = await supabase.from("checklist_templates").insert({
         title: title.trim(),
         category: (category ?? "").trim(),
         description: (description ?? "").trim(),
         priority: (priority ?? "Medel").trim() || "Medel",
-        recurrence_rule: (recurrence ?? "").trim() || null,
+        recurrence_rule: recurrenceRule,
+        recurrence_days: recurrenceDays && recurrenceDays.length > 0 ? recurrenceDays : null,
+        recurrence_interval: recurrenceInterval && recurrenceInterval > 1 ? recurrenceInterval : null,
         due_date_offset: dueDays?.trim() ? parseInt(dueDays.trim()) : null,
         created_by: user?.id ?? null,
         hierarchy_scope: importScope,

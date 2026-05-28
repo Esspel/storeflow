@@ -981,6 +981,7 @@ function TasksPage() {
       store_id: editForm.store_id || null,
       recurrence_rule: editForm.recurrence_rule || null,
       recurrence_days: editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
+      recurrence_interval: editForm.recurrence_interval > 1 ? editForm.recurrence_interval : null,
       recurrence_start: editForm.recurrence_start || null,
       recurrence_end: editForm.recurrence_end || null,
     };
@@ -1153,12 +1154,16 @@ function TasksPage() {
 
   // Comment lines starting with # are ignored by importer
   const TASK_CSV_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Kolumner: Titel;Beskrivning;Kategori;Prioritet;Återkommande;Förfaller om (dagar);Steg;Frågor
+# Kolumner: Titel;Beskrivning;Kategori;Prioritet;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Startdatum;Slutdatum;Steg;Frågor
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Kategori: Drift | Säkerhet | Kundärenden | Övrigt
 # Återkommande: daily | every_other_day | weekly | monthly | yearly (lämna tomt för ingen)
+# Veckodagar: kommaseparerade siffror 0–6 (0=Mån, 1=Tis, ... 6=Sön), används när Återkommande=weekly
+#   Exempel: 0,1,4 (Mån, Tis, Fre)
+# Intervall: antal enheter mellan upprepningar (t.ex. 2 = varannan vecka), lämna tomt för 1
 # Förfaller om (dagar): antal dagar tills uppgiften förfaller (t.ex. 1)
+# Startdatum/Slutdatum: ÅÅÅÅ-MM-DD, lämna tomt för ingen begränsning
 #
 # Steg: separera med " | " — lägg till [foto] om foto krävs
 #   Exempel: "1. Torka hyllor | 2. Kontrollera kyl [foto]"
@@ -1170,9 +1175,9 @@ function TasksPage() {
 `;
 
   const downloadTaskTemplate = () => {
-    const headers = ["Titel", "Beskrivning", "Kategori", "Prioritet", "Återkommande", "Förfaller om (dagar)", "Steg", "Frågor"];
+    const headers = ["Titel", "Beskrivning", "Kategori", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Startdatum", "Slutdatum", "Steg", "Frågor"];
     const example = [
-      "Morgonkontroll", "Kontroll av butikens öppning", "Drift", "Medel", "daily", "1",
+      "Morgonkontroll", "Kontroll av butikens öppning", "Drift", "Medel", "weekly", "0,1,2,3,4", "1", "1", "", "",
       "1. Kolla temperaturer [foto] | 2. Öppna kassor | 3. Kontrollera ingång",
       "1. Är allt klart? [obligatorisk] [ja_nej]",
     ];
@@ -1211,12 +1216,18 @@ function TasksPage() {
 
     const rows = lines.slice(1).map(parseRow);
     for (const cols of rows) {
-      const [title, description, category, priority, recurrence, dueDays, stepsRaw, questionsRaw] = cols;
+      const [title, description, category, priority, recurrence, weekdaysRaw, intervalRaw, dueDays, startDate, endDate, stepsRaw, questionsRaw] = cols;
       if (!title?.trim()) continue;
 
       const dueDate = dueDays?.trim()
         ? (() => { const d = new Date(); d.setDate(d.getDate() + parseInt(dueDays.trim())); return d.toISOString().slice(0, 10); })()
         : null;
+
+      const recurrenceRule = (recurrence ?? "").trim() || null;
+      const recurrenceDays = weekdaysRaw?.trim()
+        ? weekdaysRaw.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 0 && n <= 6)
+        : null;
+      const recurrenceInterval = intervalRaw?.trim() ? parseInt(intervalRaw.trim()) : null;
 
       const { data: task } = await supabase.from("tasks").insert({
         title: title.trim(),
@@ -1226,7 +1237,11 @@ function TasksPage() {
         status: "todo",
         store_id: assignToStore ? (activeStore?.id ?? null) : null,
         created_by: user?.id ?? null,
-        recurrence_rule: (recurrence ?? "").trim() || null,
+        recurrence_rule: recurrenceRule,
+        recurrence_days: recurrenceDays && recurrenceDays.length > 0 ? recurrenceDays : null,
+        recurrence_interval: recurrenceInterval && recurrenceInterval > 1 ? recurrenceInterval : null,
+        recurrence_start: startDate?.trim() || null,
+        recurrence_end: endDate?.trim() || null,
         due_date: dueDate,
       }).select("id").maybeSingle();
 
@@ -2485,6 +2500,18 @@ function TasksPage() {
                         {WEEKDAYS.map((day, idx) => (
                           <button key={idx} type="button" className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors", editForm.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground")} onClick={() => setEditForm(p => { if (!p) return p; const days = p.recurrence_days.includes(idx) ? p.recurrence_days.filter(d=>d!==idx) : [...p.recurrence_days,idx]; return {...p, recurrence_days: days}; })}>{day}</button>
                         ))}
+                      </div>
+                    )}
+                    {editForm.recurrence_rule && (
+                      <div className="pl-7 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-muted-foreground w-12">Start</span>
+                          <Input type="date" value={editForm.recurrence_start} onChange={(e) => setEditForm(p => p ? { ...p, recurrence_start: e.target.value } : p)} className="flex-1 h-7 text-xs" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-muted-foreground w-12">Slut</span>
+                          <Input type="date" value={editForm.recurrence_end} onChange={(e) => setEditForm(p => p ? { ...p, recurrence_end: e.target.value } : p)} className="flex-1 h-7 text-xs" />
+                        </div>
                       </div>
                     )}
                   </div>
