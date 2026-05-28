@@ -707,7 +707,7 @@ function HkDashboardPage() {
           <div className="mb-6 flex items-start justify-between gap-3">
             <div>
               <h1 className="text-xl font-bold tracking-tight text-foreground">
-                {isDistrikt ? `Distrikt: ${distrikt[0]?.distrikt ?? "–"}` : isForening ? "Föreningsdashboard" : "HK-Dashboard"}
+                {isDistrikt ? `Distrikt: ${distrikt[0]?.distrikt ?? "–"}` : isForening ? "Föreningsdashboard" : "Dashboard"}
               </h1>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {selectedDistrikt ? `Filtrerat på ${selectedDistrikt}` : scopeLabel}

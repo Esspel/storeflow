@@ -557,7 +557,7 @@ export function AppShell() {
                   <DropdownMenuItem asChild>
                     <Link to="/hk-dashboard" className="cursor-pointer">
                       <BarChart3 className="mr-2 h-4 w-4" />
-                      HK-Dashboard
+                      Dashboard
                     </Link>
                   </DropdownMenuItem>
                 )}

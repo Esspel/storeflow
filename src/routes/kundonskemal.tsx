@@ -173,31 +173,33 @@ function CustomerRequestsPage() {
       </div>
 
       {/* Filters */}
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <div className="flex rounded-full border border-border/60 bg-muted/40 p-0.5">
-          {[
-            { value: "active", label: "Aktiva" },
-            { value: "all", label: "Alla" },
-            { value: "open", label: "Inkomna" },
-            { value: "ordered", label: "Beställda" },
-            { value: "fulfilled", label: "Uppfyllda" },
-            { value: "declined", label: "Avböjda" },
-          ].map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setFilterStatus(f.value)}
-              className={cn(
-                "rounded-full px-3 py-1 text-xs font-medium transition-colors",
-                filterStatus === f.value
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
+      <div className="mb-5 space-y-2">
+        <div className="overflow-x-auto -mx-5 px-5 sm:mx-0 sm:px-0">
+          <div className="flex w-max rounded-full border border-border/60 bg-muted/40 p-0.5 sm:w-auto sm:flex-wrap">
+            {[
+              { value: "active", label: "Aktiva" },
+              { value: "all", label: "Alla" },
+              { value: "open", label: "Inkomna" },
+              { value: "ordered", label: "Beställda" },
+              { value: "fulfilled", label: "Uppfyllda" },
+              { value: "declined", label: "Avböjda" },
+            ].map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setFilterStatus(f.value)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap",
+                  filterStatus === f.value
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Sök produkt eller artikelnummer..."
@@ -233,7 +235,7 @@ function CustomerRequestsPage() {
             return (
               <div
                 key={r.id}
-                className="group rounded-2xl border border-border/60 bg-card p-4 space-y-3 hover:border-border transition-colors"
+                className="rounded-2xl border border-border/60 bg-card p-4 space-y-3 hover:border-border transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
@@ -275,7 +277,7 @@ function CustomerRequestsPage() {
                     <span>·</span>
                     <span>{new Date(r.created_at).toLocaleDateString("sv-SE")}</span>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1">
                     {isManager && (
                       <Button
                         variant="ghost"

@@ -1684,7 +1684,7 @@ function SchemaPage() {
               );
             })()}
             {deliveryPlans.length > 0 && (
-              <Button size="sm" variant={showDeliveries ? "default" : "outline"} onClick={() => setShowDeliveries((v) => !v)} className="gap-1.5">
+              <Button size="sm" variant={showDeliveries ? "default" : "outline"} onClick={() => setShowDeliveries((v) => !v)} className="hidden sm:flex gap-1.5">
                 <Truck className="h-4 w-4" />
                 {activeWeekPlan?.is_special_week ? "Specialleveranser" : "Leveranser"}
                 {(missingAnyPlan || missingSpecialPlan) && <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
@@ -1931,16 +1931,11 @@ function SchemaPage() {
             <div className="mb-3 hidden flex-wrap gap-2 sm:flex">
               {todayMeetings.map((m) => {
                 const time = new Date(m.scheduled_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
-                const label = m.meeting_type === "daglig_styrning" ? "Daglig styrning"
-                  : m.meeting_type === "veckostamning" ? "Veckostämning"
-                  : m.meeting_type === "ledningsgrupp" ? "Ledningsgrupp"
-                  : "Säljledarmöte";
                 const isDone = m.status === "completed" || m.status === "cancelled";
                 return (
                   <div key={m.id} className={["flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium", isDone ? "opacity-50" : ""].join(" ")} style={{ backgroundColor: "var(--color-info-soft, #e0f2fe)", color: "#0369a1", borderColor: "#bae6fd" }}>
                     <CalendarClock className="h-3 w-3" />
-                    <span>{time} — {label}</span>
-                    {m.title !== label && <span className="opacity-60 text-[10px]">· {m.title}</span>}
+                    <span>{time} — {m.title}</span>
                   </div>
                 );
               })}
@@ -1972,9 +1967,43 @@ function SchemaPage() {
             </div>
           )}
 
-          {/* ── MOBILE CARD VIEW (sm and below) ─────────────────────────────── */}
+          {/* ── MOBILE LEVERANSER VIEW (below sm) ───────────────────────────── */}
           {viewMode === "day" && (
-            <div className="sm:hidden" data-scroll-container ref={mobileListRef}>
+            <div className="sm:hidden mb-4">
+              {deliveryEntries.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-14 text-center">
+                  <Truck className="mb-3 h-8 w-8 text-muted-foreground/30" />
+                  <p className="text-sm font-medium text-muted-foreground">Ingen leveransplan importerad</p>
+                  <p className="mt-1 text-xs text-muted-foreground/70">Importera en CSV-fil för att se leveranserna</p>
+                </div>
+              ) : todayDeliveries.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-14 text-center">
+                  <Truck className="mb-3 h-8 w-8 text-muted-foreground/30" />
+                  <p className="text-sm font-medium text-muted-foreground">Inga leveranser idag</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {todayDeliveries.map((d) => {
+                    const c = flowColor(d.flow_name);
+                    return (
+                      <div key={d.id} className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3" style={{ borderLeftWidth: 4, borderLeftColor: c.text }}>
+                        <Truck className="h-5 w-5 shrink-0" style={{ color: c.text }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground">{d.flow_name}</p>
+                          {d.supplier && <p className="text-xs text-muted-foreground truncate">{d.supplier}</p>}
+                        </div>
+                        <span className="text-sm font-mono font-bold shrink-0" style={{ color: c.text }}>{d.delivery_time}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── MOBILE SCHEDULE CARD VIEW — hidden on mobile, use desktop view ── */}
+          {viewMode === "day" && (
+            <div className="hidden sm:block" data-scroll-container ref={mobileListRef}>
               {loadingSchedule ? (
                 <div className="space-y-3">
                   {[1,2,3,4,5].map(i => (

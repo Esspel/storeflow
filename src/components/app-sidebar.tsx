@@ -97,10 +97,10 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive("/hk-dashboard")} tooltip="HK-Dashboard">
+                  <SidebarMenuButton asChild isActive={isActive("/hk-dashboard")} tooltip="Dashboard">
                     <Link to="/hk-dashboard" className="gap-3">
                       <BarChart2 className="h-4 w-4" />
-                      <span>HK-Dashboard</span>
+                      <span>Dashboard</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Camera, ChartBar as BarChart3, CircleCheck as CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Circle, Clock, CreditCard as Edit2, Download, FileText, GripVertical, MapPin, Plus, Trash2,
+  Circle, Clock, CreditCard as Edit2, Download, FileText, GripVertical, Lock, MapPin, Plus, Trash2,
   TriangleAlert as AlertTriangle, Upload, X, ArrowRight, Hash, ZoomIn, Image as ImageIcon,
   GitMerge, Copy, RefreshCw, Info
 } from "lucide-react";
@@ -198,6 +198,7 @@ function KundrundaPage() {
   const [checkpointRefImages, setCheckpointRefImages] = useState<Record<string, { id: string; storage_path: string }[]>>({});
 
   const [view, setView] = useState<"home" | "active" | "edit">("home");
+  const [sessionReadOnly, setSessionReadOnly] = useState(false);
   const [expandedZones, setExpandedZones] = useState<Set<number>>(new Set([0]));
   const [showFinishWarning, setShowFinishWarning] = useState(false);
 
@@ -425,6 +426,7 @@ function KundrundaPage() {
       setActiveSession(data as KundrundaSession);
       setResponses({});
       setResponseImages({});
+      setSessionReadOnly(false);
       setExpandedZones(new Set([0]));
       saveLocalDraft(data as KundrundaSession, {});
       setView("active");
@@ -447,9 +449,11 @@ function KundrundaPage() {
     setActiveSession(session);
     setResponses(map);
     setResponseImages(imgMap);
-    saveLocalDraft(session, map);
+    const isCompleted = session.status === "completed";
+    setSessionReadOnly(isCompleted);
+    if (!isCompleted) saveLocalDraft(session, map);
     const firstIncomplete = activeZones.findIndex(z => !z.checkpoints.every(c => map[c.id]?.result));
-    setExpandedZones(new Set([Math.max(0, firstIncomplete)]));
+    setExpandedZones(new Set([Math.max(0, isCompleted ? 0 : firstIncomplete)]));
     setView("active");
   };
 
@@ -956,30 +960,38 @@ function KundrundaPage() {
         <div className="sticky top-0 z-20 shrink-0 border-b border-border/60 bg-card px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <button className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted hover:bg-muted/70 active:scale-95 transition-all" onClick={suspendSession} aria-label="Spara och stäng">
+              <button className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted hover:bg-muted/70 active:scale-95 transition-all" onClick={suspendSession} aria-label="Stäng">
                 <X className="h-4 w-4" />
               </button>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">Kundrunda</p>
+                <p className="truncate text-sm font-semibold">{sessionReadOnly ? "Granskning — låst" : "Kundrunda"}</p>
                 <p className="text-xs text-muted-foreground">{activeSession.store?.name ?? "Butik"}</p>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-3">
-              {syncStatus !== "online" && (
-                <div className={cn("flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium", syncStatus === "offline" ? "bg-warning/20 text-warning-foreground" : "bg-muted text-muted-foreground")}>
-                  <span className={cn("h-1.5 w-1.5 rounded-full", syncStatus === "offline" ? "bg-warning-foreground" : "bg-muted-foreground animate-pulse")} />
-                  {syncStatus === "offline" ? "Sparat lokalt" : "Synkar..."}
+              {sessionReadOnly ? (
+                <div className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+                  <Lock className="h-3 w-3" /> Slutförd — låst
                 </div>
+              ) : (
+                <>
+                  {syncStatus !== "online" && (
+                    <div className={cn("flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium", syncStatus === "offline" ? "bg-warning/20 text-warning-foreground" : "bg-muted text-muted-foreground")}>
+                      <span className={cn("h-1.5 w-1.5 rounded-full", syncStatus === "offline" ? "bg-warning-foreground" : "bg-muted-foreground animate-pulse")} />
+                      {syncStatus === "offline" ? "Sparat lokalt" : "Synkar..."}
+                    </div>
+                  )}
+                  <div className="text-right">
+                    <p className="text-xs font-medium tabular-nums">{answeredCount}<span className="text-muted-foreground">/{totalCheckpoints}</span></p>
+                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted mt-0.5">
+                      <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${sessionPct * 100}%` }} />
+                    </div>
+                  </div>
+                  <Button size="sm" className={cn("rounded-full text-xs shrink-0", isAllDone ? "bg-success text-success-foreground hover:bg-success/90" : "")} onClick={() => completeSession(false)}>
+                    {isAllDone ? <><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Slutför</> : "Avsluta"}
+                  </Button>
+                </>
               )}
-              <div className="text-right">
-                <p className="text-xs font-medium tabular-nums">{answeredCount}<span className="text-muted-foreground">/{totalCheckpoints}</span></p>
-                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted mt-0.5">
-                  <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${sessionPct * 100}%` }} />
-                </div>
-              </div>
-              <Button size="sm" className={cn("rounded-full text-xs shrink-0", isAllDone ? "bg-success text-success-foreground hover:bg-success/90" : "")} onClick={() => completeSession(false)}>
-                {isAllDone ? <><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Slutför</> : "Avsluta"}
-              </Button>
             </div>
           </div>
         </div>
@@ -1005,7 +1017,7 @@ function KundrundaPage() {
                         {zoneDefects > 0 && <span className="ml-1 text-destructive">{zoneDefects} avvik.</span>}
                       </span>
                     </div>
-                    {!zoneDone && (
+                    {!zoneDone && !sessionReadOnly && (
                       <button className="mr-2 flex h-7 items-center gap-1 rounded-full border border-success/40 px-2 text-[11px] text-success hover:bg-success/10 transition-colors" onClick={(e) => { e.stopPropagation(); approveZone(zone); }}>
                         <CheckCircle2 className="h-3 w-3" /> Alla OK
                       </button>
@@ -1037,18 +1049,20 @@ function KundrundaPage() {
                                   )}
                                 </div>
                               </div>
-                              <div className="flex shrink-0 gap-2">
-                                <button onClick={() => { haptic.light(); recordOk(cp); }}
-                                  className={cn("flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95", isOk ? "border-success bg-success/15 text-success" : "border-border/60 text-muted-foreground hover:border-success/50 hover:text-success")}
-                                  aria-label="OK">
-                                  <CheckCircle2 className="h-5 w-5" />
-                                </button>
-                                <button onClick={() => openDefectDialog(cp)}
-                                  className={cn("flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95", isDefect ? "border-destructive bg-destructive/15 text-destructive" : "border-border/60 text-muted-foreground hover:border-destructive/50 hover:text-destructive")}
-                                  aria-label="Avvikelse">
-                                  <AlertTriangle className="h-5 w-5" />
-                                </button>
-                              </div>
+                              {!sessionReadOnly && (
+                                <div className="flex shrink-0 gap-2">
+                                  <button onClick={() => { haptic.light(); recordOk(cp); }}
+                                    className={cn("flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95", isOk ? "border-success bg-success/15 text-success" : "border-border/60 text-muted-foreground hover:border-success/50 hover:text-success")}
+                                    aria-label="OK">
+                                    <CheckCircle2 className="h-5 w-5" />
+                                  </button>
+                                  <button onClick={() => openDefectDialog(cp)}
+                                    className={cn("flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95", isDefect ? "border-destructive bg-destructive/15 text-destructive" : "border-border/60 text-muted-foreground hover:border-destructive/50 hover:text-destructive")}
+                                    aria-label="Avvikelse">
+                                    <AlertTriangle className="h-5 w-5" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
 
                             {refImages.length > 0 && (
