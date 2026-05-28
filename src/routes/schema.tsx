@@ -2039,9 +2039,9 @@ function SchemaPage() {
             </div>
           )}
 
-          {/* ── MOBILE SCHEDULE CARD VIEW — hidden on mobile, use desktop view ── */}
+          {/* ── MOBILE SCHEDULE CARD VIEW — only on mobile, desktop uses timeline ── */}
           {viewMode === "day" && (
-            <div className="hidden sm:block" data-scroll-container ref={mobileListRef}>
+            <div className="block sm:hidden" data-scroll-container ref={mobileListRef}>
               {loadingSchedule ? (
                 <div className="space-y-3">
                   {[1,2,3,4,5].map(i => (
