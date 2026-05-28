@@ -121,6 +121,7 @@ function AppLayout() {
   const router = useRouter();
   const pathname = router.state.location.pathname;
   const isLoginPage = pathname === "/login";
+  const isPublicRoute = pathname === "/qr-avvikelse" || pathname === "/qr-kundonskemal" || pathname === "/pulstavla";
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -130,14 +131,14 @@ function AppLayout() {
 
   useEffect(() => {
     if (loading) return;
-    if (!user && !isLoginPage) {
+    if (!user && !isLoginPage && !isPublicRoute) {
       navigate({ to: "/login" });
     } else if (user && isLoginPage && !user.must_change_password) {
       navigate({ to: "/" });
     }
-  }, [user, loading, isLoginPage, navigate]);
+  }, [user, loading, isLoginPage, isPublicRoute, navigate]);
 
-  if (loading) {
+  if (loading && !isPublicRoute) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -146,6 +147,10 @@ function AppLayout() {
   }
 
   if (isLoginPage) {
+    return <Outlet />;
+  }
+
+  if (isPublicRoute) {
     return <Outlet />;
   }
 

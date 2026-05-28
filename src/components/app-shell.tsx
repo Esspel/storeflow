@@ -1,7 +1,7 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
-import { ChartBar as BarChart3, Bell, ClipboardList, FlaskConical, Hop as Home, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Store, X as XIcon, Tv as Tv2, ChartBar as BarChart2 } from "lucide-react";
+import { ChartBar as BarChart3, Bell, ClipboardList, FlaskConical, Hop as Home, Circle as HelpCircle, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Store, X as XIcon, Tv as Tv2, ChartBar as BarChart2 } from "lucide-react";
 import { ROLE_LABELS, HIERARCHY_LABELS } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
 import { GlobalStoreSelector } from "@/components/global-store-selector";
@@ -303,6 +303,7 @@ export function AppShell() {
     ...(isManager ? [{ to: "/belastning", label: "Belastning", Icon: BarChart2 }] : []),
     { to: "/mallar", label: "Mallar", Icon: ClipboardList },
     { to: "/pulstavla", label: "Pulstavla", Icon: Tv2 },
+    { to: "/hjalp", label: "Hjälp", Icon: HelpCircle },
   ];
   const isMoreActive = moreRoutes.some(r => isActive(r.to));
 
@@ -536,6 +537,13 @@ export function AppShell() {
                     </Link>
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/hjalp" className="cursor-pointer">
+                    <HelpCircle className="mr-2 h-4 w-4" />
+                    Hjälp & Manual
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="cursor-pointer" onClick={openLockScreen}>
                   <ArrowLeftRight className="mr-2 h-4 w-4" />

@@ -1067,6 +1067,11 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
                       <X className="h-3.5 w-3.5" /> Ställ in
                     </Button>
                   )}
+                  {showDetail.status === "completed" && (
+                    <Button size="sm" variant="outline" className="rounded-full gap-1.5" onClick={() => exportMeetingPdf(showDetail)}>
+                      <FileText className="h-3.5 w-3.5" /> Exportera protokoll
+                    </Button>
+                  )}
                 </div>
               )}
 

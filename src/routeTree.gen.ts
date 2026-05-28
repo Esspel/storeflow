@@ -24,6 +24,7 @@ import { Route as KundrundaRouteImport } from './routes/kundrunda'
 import { Route as KundonskemalRouteImport } from './routes/kundonskemal'
 import { Route as InstallningarRouteImport } from './routes/installningar'
 import { Route as HkDashboardRouteImport } from './routes/hk-dashboard'
+import { Route as HjalpRouteImport } from './routes/hjalp'
 import { Route as ButiksregisterRouteImport } from './routes/butiksregister'
 import { Route as BelastningRouteImport } from './routes/belastning'
 import { Route as AvvikelserRouteImport } from './routes/avvikelser'
@@ -104,6 +105,11 @@ const HkDashboardRoute = HkDashboardRouteImport.update({
   path: '/hk-dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HjalpRoute = HjalpRouteImport.update({
+  id: '/hjalp',
+  path: '/hjalp',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ButiksregisterRoute = ButiksregisterRouteImport.update({
   id: '/butiksregister',
   path: '/butiksregister',
@@ -130,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
+  '/hjalp': typeof HjalpRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/kundonskemal': typeof KundonskemalRoute
@@ -151,6 +158,7 @@ export interface FileRoutesByTo {
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
+  '/hjalp': typeof HjalpRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/kundonskemal': typeof KundonskemalRoute
@@ -173,6 +181,7 @@ export interface FileRoutesById {
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
+  '/hjalp': typeof HjalpRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/kundonskemal': typeof KundonskemalRoute
@@ -196,6 +205,7 @@ export interface FileRouteTypes {
     | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
+    | '/hjalp'
     | '/hk-dashboard'
     | '/installningar'
     | '/kundonskemal'
@@ -217,6 +227,7 @@ export interface FileRouteTypes {
     | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
+    | '/hjalp'
     | '/hk-dashboard'
     | '/installningar'
     | '/kundonskemal'
@@ -238,6 +249,7 @@ export interface FileRouteTypes {
     | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
+    | '/hjalp'
     | '/hk-dashboard'
     | '/installningar'
     | '/kundonskemal'
@@ -260,6 +272,7 @@ export interface RootRouteChildren {
   AvvikelserRoute: typeof AvvikelserRoute
   BelastningRoute: typeof BelastningRoute
   ButiksregisterRoute: typeof ButiksregisterRoute
+  HjalpRoute: typeof HjalpRoute
   HkDashboardRoute: typeof HkDashboardRoute
   InstallningarRoute: typeof InstallningarRoute
   KundonskemalRoute: typeof KundonskemalRoute
@@ -384,6 +397,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HkDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/hjalp': {
+      id: '/hjalp'
+      path: '/hjalp'
+      fullPath: '/hjalp'
+      preLoaderRoute: typeof HjalpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/butiksregister': {
       id: '/butiksregister'
       path: '/butiksregister'
@@ -420,6 +440,7 @@ const rootRouteChildren: RootRouteChildren = {
   AvvikelserRoute: AvvikelserRoute,
   BelastningRoute: BelastningRoute,
   ButiksregisterRoute: ButiksregisterRoute,
+  HjalpRoute: HjalpRoute,
   HkDashboardRoute: HkDashboardRoute,
   InstallningarRoute: InstallningarRoute,
   KundonskemalRoute: KundonskemalRoute,
