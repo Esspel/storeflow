@@ -2,7 +2,11 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Zap, ZapOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrowserMultiFormatOneDReader } from "@zxing/browser";
-import { BarcodeFormat, DecodeHintType } from "@zxing/library";
+
+// Numeric values from @zxing/library enums (avoids CJS/ESM interop issues)
+const ZXING_FORMATS = [1, 2, 3, 4, 6, 7, 8, 11, 14, 15]; // CODABAR, CODE_39, CODE_93, CODE_128, EAN_8, EAN_13, ITF, QR_CODE, UPC_A, UPC_E
+const HINT_POSSIBLE_FORMATS = 2;
+const HINT_TRY_HARDER = 3;
 
 interface Props {
   onScan: (code: string) => void;
@@ -25,19 +29,6 @@ const NATIVE_FORMATS = [
   "qr_code", "upc_a", "upc_e", "itf", "data_matrix", "aztec", "pdf417", "codabar",
 ];
 
-const ZXING_FORMATS = [
-  BarcodeFormat.EAN_13,
-  BarcodeFormat.EAN_8,
-  BarcodeFormat.CODE_128,
-  BarcodeFormat.CODE_39,
-  BarcodeFormat.CODE_93,
-  BarcodeFormat.UPC_A,
-  BarcodeFormat.UPC_E,
-  BarcodeFormat.ITF,
-  BarcodeFormat.CODABAR,
-  BarcodeFormat.QR_CODE,
-  BarcodeFormat.DATA_MATRIX,
-];
 
 export function CameraScanner({ onScan, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -135,9 +126,9 @@ export function CameraScanner({ onScan, onClose }: Props) {
     const video = videoRef.current;
     if (!video) return;
 
-    const hints = new Map<DecodeHintType, unknown>();
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, ZXING_FORMATS);
-    hints.set(DecodeHintType.TRY_HARDER, true);
+    const hints = new Map<number, unknown>();
+    hints.set(HINT_POSSIBLE_FORMATS, ZXING_FORMATS);
+    hints.set(HINT_TRY_HARDER, true);
 
     const reader = new BrowserMultiFormatOneDReader(hints);
     const canvas = document.createElement("canvas");
