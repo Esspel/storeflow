@@ -382,39 +382,6 @@ export function AppShell() {
             </button>
           </nav>
 
-          {/* Övrigt sheet */}
-          {moreOpen && (
-            <div className="fixed inset-0 z-[250] md:hidden" onClick={() => setMoreOpen(false)}>
-              <div className="absolute inset-0 bg-black/40" />
-              <div
-                className="absolute bottom-0 left-0 right-0 rounded-t-3xl border-t border-border/60 bg-card pb-safe shadow-xl"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center justify-between px-5 pt-4 pb-2">
-                  <span className="text-sm font-semibold text-foreground">Övrigt</span>
-                  <button onClick={() => setMoreOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                    <XIcon className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="grid grid-cols-3 gap-2 px-4 pb-6 pt-2">
-                  {moreRoutes.map(({ to, label, Icon }) => (
-                    <Link
-                      key={to}
-                      to={to}
-                      onClick={() => setMoreOpen(false)}
-                      className={cn(
-                        "flex flex-col items-center gap-2 rounded-2xl border border-border/60 px-3 py-4 transition-colors",
-                        isActive(to) ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/30 text-foreground hover:bg-muted/60",
-                      )}
-                    >
-                      <Icon className="h-6 w-6" />
-                      <span className="text-[11px] font-medium text-center leading-tight">{label}</span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
 
           <div className="ml-auto flex items-center gap-1.5 md:gap-2">
             {/* Global context store selector — HQ/Förening/Distrikt/Admin only */}
@@ -429,7 +396,7 @@ export function AppShell() {
                 className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-background px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-accent-foreground active:opacity-75"
               >
                 <ShoppingCart className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Mitt Coop</span>
+                <span className="hidden sm:inline">Mitt Coop-sortiment</span>
               </a>
             )}
 
@@ -659,6 +626,40 @@ export function AppShell() {
           onUnlock={quickSwitch}
           onCancel={closeLockScreen}
         />
+      )}
+
+      {/* Övrigt sheet — rendered outside header to avoid stacking context issues */}
+      {moreOpen && (
+        <div className="fixed inset-0 z-[250] md:hidden" onClick={() => setMoreOpen(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="absolute bottom-0 left-0 right-0 rounded-t-3xl border-t border-border/60 bg-card pb-safe shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 pt-4 pb-2">
+              <span className="text-sm font-semibold text-foreground">Övrigt</span>
+              <button onClick={() => setMoreOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <XIcon className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2 px-4 pb-6 pt-2">
+              {moreRoutes.map(({ to, label, Icon }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  onClick={() => setMoreOpen(false)}
+                  className={cn(
+                    "flex flex-col items-center gap-2 rounded-2xl border border-border/60 px-3 py-4 transition-colors",
+                    isActive(to) ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/30 text-foreground hover:bg-muted/60",
+                  )}
+                >
+                  <Icon className="h-6 w-6" />
+                  <span className="text-[11px] font-medium text-center leading-tight">{label}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

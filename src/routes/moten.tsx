@@ -671,7 +671,7 @@ function MeetingsPage() {
 
       {/* ── MANAGE TYPES DIALOG ────────────────────────────────────────────── */}
       <Dialog open={showManageTypes} onOpenChange={setShowManageTypes}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
             <Settings className="h-4 w-4 text-muted-foreground shrink-0" />
             <DialogTitle className="text-sm font-medium">Hantera mötestyper</DialogTitle>

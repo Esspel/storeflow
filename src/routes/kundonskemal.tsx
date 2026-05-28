@@ -209,9 +209,6 @@ function CustomerRequestsPage() {
             className="h-9 rounded-full pl-9 text-sm"
           />
         </div>
-        <Button className="rounded-full flex lg:hidden" size="sm" onClick={() => setShowCreate(true)}>
-          <Plus className="h-4 w-4 mr-1.5" /> Nytt
-        </Button>
       </div>
 
       {loading ? (
@@ -332,7 +329,7 @@ function CustomerRequestsPage() {
             <div className="space-y-1.5">
               <Label className="text-xs flex items-center gap-1.5">
                 <Hash className="h-3 w-3 text-muted-foreground" />
-                Artikelnummer (SAP / Mitt Coop, valfritt)
+                Artikelnummer (SAP / Mitt Coop-sortiment, valfritt)
               </Label>
               <Input
                 placeholder="T.ex. 123456"
@@ -340,7 +337,7 @@ function CustomerRequestsPage() {
                 onChange={(e) => setForm((p) => ({ ...p, article_number: e.target.value }))}
               />
               <p className="text-[11px] text-muted-foreground">
-                Artikelnumret används för direktlänk till Mitt Coop.
+                Artikelnumret används för direktlänk till Mitt Coop-sortiment.
               </p>
             </div>
             <div className="space-y-1.5">
@@ -377,7 +374,7 @@ function CustomerRequestsPage() {
                 className="resize-none text-sm"
               />
               <p className="text-[11px] text-muted-foreground">
-                Scanna EAN-kod för att klistra in i anteckningen. Sök sedan upp artikelnumret manuellt i Mitt Coop.
+                Scanna EAN-kod för att klistra in i anteckningen. Sök sedan upp artikelnumret manuellt i Mitt Coop-sortiment.
               </p>
             </div>
 
@@ -470,6 +467,15 @@ function CustomerRequestsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Mobile FAB */}
+      <button
+        className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
+        aria-label="Nytt önskemål"
+        onClick={() => setShowCreate(true)}
+      >
+        <Plus className="h-6 w-6" />
+      </button>
     </div>
   );
 }

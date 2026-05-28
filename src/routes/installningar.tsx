@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Eye, EyeOff, KeyRound, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw } from "lucide-react";
+import { Camera, Eye, EyeOff, KeyRound, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw } from "lucide-react";
+import { CameraScanner } from "@/components/camera-scanner";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ function SettingsPage() {
   const [barcodeSaving, setBarcodeSaving] = useState(false);
   const [barcodeSuccess, setBarcodeSuccess] = useState(false);
   const [barcodeError, setBarcodeError] = useState("");
+  const [barcodeCameraOpen, setBarcodeCameraOpen] = useState(false);
 
   // Load current PIN and barcode status
   useEffect(() => {
@@ -354,6 +356,14 @@ function SettingsPage() {
                   autoComplete="off"
                   onKeyDown={(e) => { if (e.key === "Enter") saveBarcode(); }}
                 />
+                <button
+                  type="button"
+                  onClick={() => setBarcodeCameraOpen(true)}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                  title="Scanna med kamera"
+                >
+                  <Camera className="h-4 w-4" />
+                </button>
                 {barcodeId.trim() && (
                   <Button
                     variant="outline"
@@ -365,6 +375,12 @@ function SettingsPage() {
                   </Button>
                 )}
               </div>
+              {barcodeCameraOpen && (
+                <CameraScanner
+                  onScan={(code) => { setBarcodeCameraOpen(false); setBarcodeId(code); setBarcodeError(""); }}
+                  onClose={() => setBarcodeCameraOpen(false)}
+                />
+              )}
               {barcodeError && (
                 <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{barcodeError}</p>
               )}

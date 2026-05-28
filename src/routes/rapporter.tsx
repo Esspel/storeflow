@@ -140,9 +140,24 @@ function ReportsPage() {
     load();
   }, [activeStore, user, dateFrom, dateTo]);
 
-  const totalTasks = tasks.length;
-  const doneTasks = tasks.filter((t) => t.status === "done").length;
-  const missedTasks = tasks.filter((t) => t.status === "late").length;
+  // Deduplicate recurring series — count one representative per parent
+  const dedupedTasks = (() => {
+    const parentIdsUsed = new Set<string>();
+    return tasks.filter((t) => {
+      if (t.parent_task_id) {
+        if (parentIdsUsed.has(t.parent_task_id)) return false;
+        parentIdsUsed.add(t.parent_task_id);
+        return true;
+      }
+      const hasChildren = tasks.some((c) => c.parent_task_id === t.id);
+      if (t.recurrence_rule && hasChildren) return false;
+      return true;
+    });
+  })();
+
+  const totalTasks = dedupedTasks.length;
+  const doneTasks = dedupedTasks.filter((t) => t.status === "done").length;
+  const missedTasks = dedupedTasks.filter((t) => t.status === "late").length;
   const openIncidents = incidents.filter((i) => ["open", "in_progress", "escalated"].includes(i.status)).length;
   const compliance = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 

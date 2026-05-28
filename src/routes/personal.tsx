@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CircleAlert as AlertCircle, ArrowUpDown, Building2, CircleCheck as CheckCircle2, ChevronDown, ChevronUp, Download, Hash, Mail, MapPin, Pencil, Phone, Plus, Search, Shield, Trash2, Upload, UserCog, Users, X } from "lucide-react";
+import { Camera, CircleAlert as AlertCircle, ArrowUpDown, Building2, CircleCheck as CheckCircle2, ChevronDown, ChevronUp, Download, Hash, Mail, MapPin, Pencil, Phone, Plus, Search, Shield, Trash2, Upload, UserCog, Users, X } from "lucide-react";
+import { CameraScanner } from "@/components/camera-scanner";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -188,6 +189,8 @@ function AccountsPage() {
   const [resetPw, setResetPw] = useState("");
   const [editPin, setEditPin] = useState("");
   const [editBarcode, setEditBarcode] = useState("");
+  const [editBarcodeCameraOpen, setEditBarcodeCameraOpen] = useState(false);
+  const [newBarcodeCameraOpen, setNewBarcodeCameraOpen] = useState(false);
   const [editStoreSearch, setEditStoreSearch] = useState("");
   const [newStoreSearch, setNewStoreSearch] = useState("");
 
@@ -1231,8 +1234,24 @@ function AccountsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Streckkods-ID</Label>
-                <Input placeholder="Skanna eller ange" value={newUser.barcode}
-                  onChange={(e) => setNewUser(p => ({ ...p, barcode: e.target.value }))} autoComplete="off" />
+                <div className="flex gap-2">
+                  <Input placeholder="Skanna eller ange" value={newUser.barcode}
+                    onChange={(e) => setNewUser(p => ({ ...p, barcode: e.target.value }))} autoComplete="off" className="flex-1" />
+                  <button
+                    type="button"
+                    onClick={() => setNewBarcodeCameraOpen(true)}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    title="Scanna med kamera"
+                  >
+                    <Camera className="h-4 w-4" />
+                  </button>
+                </div>
+                {newBarcodeCameraOpen && (
+                  <CameraScanner
+                    onScan={(code) => { setNewBarcodeCameraOpen(false); setNewUser(p => ({ ...p, barcode: code })); }}
+                    onClose={() => setNewBarcodeCameraOpen(false)}
+                  />
+                )}
               </div>
             </div>
             {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
@@ -1385,8 +1404,24 @@ function AccountsPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Streckkods-ID</Label>
-                  <Input placeholder="Skanna eller ange" value={editBarcode}
-                    onChange={(e) => setEditBarcode(e.target.value)} autoComplete="off" />
+                  <div className="flex gap-2">
+                    <Input placeholder="Skanna eller ange" value={editBarcode}
+                      onChange={(e) => setEditBarcode(e.target.value)} autoComplete="off" className="flex-1" />
+                    <button
+                      type="button"
+                      onClick={() => setEditBarcodeCameraOpen(true)}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                      title="Scanna med kamera"
+                    >
+                      <Camera className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {editBarcodeCameraOpen && (
+                    <CameraScanner
+                      onScan={(code) => { setEditBarcodeCameraOpen(false); setEditBarcode(code); }}
+                      onClose={() => setEditBarcodeCameraOpen(false)}
+                    />
+                  )}
                   <p className="text-xs text-muted-foreground">Lämna tomt för att ta bort streckkod.</p>
                 </div>
               </div>
@@ -1442,7 +1477,7 @@ function AccountsPage() {
                 onChange={(e) => setNewStore(p => ({ ...p, address: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
-              <Label>SAP Site-ID (Mitt Coop)</Label>
+              <Label>SAP Site-ID (Mitt Coop-sortiment)</Label>
               <Input placeholder="t.ex. 1452" value={newStore.sap_site_id} inputMode="numeric"
                 onChange={(e) => setNewStore(p => ({ ...p, sap_site_id: e.target.value }))} />
             </div>
@@ -1532,7 +1567,7 @@ function AccountsPage() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>SAP Site-ID (Mitt Coop)</Label>
+                <Label>SAP Site-ID (Mitt Coop-sortiment)</Label>
                 <Input value={editStore.site_id ?? ""}
                   onChange={(e) => setEditStore(s => s ? { ...s, site_id: e.target.value, sap_site_id: e.target.value } : null)} />
               </div>

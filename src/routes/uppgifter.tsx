@@ -2527,7 +2527,7 @@ function TasksPage() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
                     >
-                      <ExternalLink className="h-3 w-3" /> Öppna i Mitt Coop
+                      <ExternalLink className="h-3 w-3" /> Öppna i Mitt Coop-sortiment
                     </a>
                   )}
                 </div>
