@@ -599,6 +599,3 @@ function PulstavlaPage() {
 
   return <LiveBoard storeId={storeId} />;
 }
-
-
-export { Route }
