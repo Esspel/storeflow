@@ -15,6 +15,7 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/qr-kundonskemal-form")({
   validateSearch: searchSchema,
+  ssr: false,
   component: QrKundonskemalFormPage,
 });
 

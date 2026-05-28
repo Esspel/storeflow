@@ -16,6 +16,7 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/qr-avvikelse")({
   validateSearch: searchSchema,
+  ssr: false,
   component: QrAvvikelsePage,
 });
 

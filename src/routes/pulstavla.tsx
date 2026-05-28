@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/pulstavla")({
+  ssr: false,
   component: PulstavlaPage,
 });
 
