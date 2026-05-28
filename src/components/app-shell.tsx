@@ -251,16 +251,6 @@ export function AppShell() {
     { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
   ];
 
-  // Routes grouped under "Övrigt" in mobile bottom nav
-  const moreRoutes = [
-    { to: "/avvikelser", label: "Avvikelser", Icon: TriangleAlert },
-    { to: "/kundrunda", label: "Kundrunda", Icon: UserRound },
-    { to: "/moten", label: "Möten", Icon: MessageSquare },
-    { to: "/kundonskemal", label: "Kundönskemål", Icon: ShoppingCart },
-    ...(isManager ? [{ to: "/rapporter", label: "Rapporter", Icon: FlaskConical }] : []),
-    { to: "/mallar", label: "Mallar", Icon: ClipboardList },
-  ];
-  const isMoreActive = moreRoutes.some(r => isActive(r.to));
 
   useEffect(() => {
     if (!user) return;
@@ -301,6 +291,17 @@ export function AppShell() {
   };
 
   const isActive = (to: string) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
+
+  // Routes grouped under "Övrigt" in mobile bottom nav
+  const moreRoutes = [
+    { to: "/avvikelser", label: "Avvikelser", Icon: TriangleAlert },
+    { to: "/kundrunda", label: "Kundrunda", Icon: UserRound },
+    { to: "/moten", label: "Möten", Icon: MessageSquare },
+    { to: "/kundonskemal", label: "Kundönskemål", Icon: ShoppingCart },
+    ...(isManager ? [{ to: "/rapporter", label: "Rapporter", Icon: FlaskConical }] : []),
+    { to: "/mallar", label: "Mallar", Icon: ClipboardList },
+  ];
+  const isMoreActive = moreRoutes.some(r => isActive(r.to));
 
   const handleLogout = async () => {
     await logout();
