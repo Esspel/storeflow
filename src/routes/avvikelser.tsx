@@ -2,10 +2,11 @@ import React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  TriangleAlert as AlertTriangle, Clock, Download, MessageSquare,
+  TriangleAlert as AlertTriangle, Clock, Copy, Download, MessageSquare,
   Pencil, Plus, Search, Send, Store, Trash2, Users, X, User, Image as ImageIcon, ZoomIn,
   Hash, ExternalLink, QrCode,
 } from "lucide-react";
+import { QrDisplay } from "@/components/qr-display";
 import { PhotoViewer } from "@/components/photo-viewer";
 
 import { PageHeader, StatCard } from "@/components/page-header";
@@ -191,6 +192,8 @@ function IssuesPage() {
   const [qrTokens, setQrTokens] = useState<{ id: string; token: string; meta: { zone_name?: string; category?: string } }[]>([]);
   const [qrLoading, setQrLoading] = useState(false);
   const [generatingQr, setGeneratingQr] = useState(false);
+  const [selectedQrToken, setSelectedQrToken] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const fetchCommonDefects = async () => {
     const storeId = activeStore?.id ?? null;
@@ -1167,7 +1170,7 @@ function IssuesPage() {
       )}
 
       {/* ── QR-KODER DIALOG ──────────────────────────────────────────────────── */}
-      <Dialog open={showQrModal} onOpenChange={setShowQrModal}>
+      <Dialog open={showQrModal} onOpenChange={(o) => { setShowQrModal(o); if (!o) setSelectedQrToken(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <div className="flex items-center gap-3">
@@ -1176,7 +1179,7 @@ function IssuesPage() {
               </div>
               <div>
                 <DialogTitle className="text-base">QR-koder för avvikelser</DialogTitle>
-                <p className="text-xs text-muted-foreground">Generera QR-koder per avdelning/zon som öppnar en snabbregistreringssida.</p>
+                <p className="text-xs text-muted-foreground">Generera QR-koder per avdelning/zon för snabbregistrering utan inloggning.</p>
               </div>
             </div>
           </DialogHeader>
@@ -1188,6 +1191,7 @@ function IssuesPage() {
                 <input
                   value={qrZoneName}
                   onChange={(e) => setQrZoneName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && qrZoneName.trim()) createQrToken(); }}
                   placeholder="Avdelning/zon, t.ex. Mejeri"
                   className="flex-1 rounded-lg border border-border/60 bg-background px-3 py-2 text-sm outline-none focus:border-primary/40"
                 />
@@ -1206,56 +1210,75 @@ function IssuesPage() {
                 onClick={createQrToken}
               >
                 <QrCode className="mr-1.5 h-3.5 w-3.5" />
-                {generatingQr ? "Genererar..." : "Generera QR"}
+                {generatingQr ? "Genererar..." : "Skapa QR-kod"}
               </Button>
             </div>
 
             {/* Token list */}
             {qrLoading ? (
               <div className="space-y-2">
-                {[1,2].map(i => <div key={i} className="h-12 animate-pulse rounded-xl bg-muted" />)}
+                {[1,2].map(i => <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />)}
               </div>
             ) : qrTokens.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground py-4">Inga QR-koder skapade ännu.</p>
+              <p className="text-center text-sm text-muted-foreground py-6">Inga QR-koder skapade ännu.</p>
             ) : (
-              <div className="space-y-2 max-h-72 overflow-y-auto">
+              <div className="space-y-2 max-h-80 overflow-y-auto">
                 {qrTokens.map((t) => {
                   const qrUrl = `${window.location.origin}/qr-avvikelse?token=${t.token}`;
+                  const isExpanded = selectedQrToken === t.id;
                   return (
-                    <div key={t.id} className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-foreground">{t.meta.zone_name ?? "Okänd zon"}</p>
-                        <p className="text-xs text-muted-foreground">{t.meta.category}</p>
+                    <div key={t.id} className="rounded-xl border border-border/60 bg-card overflow-hidden">
+                      <div className="flex items-center gap-3 p-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-foreground">{t.meta.zone_name ?? "Okänd zon"}</p>
+                          <p className="text-xs text-muted-foreground">{t.meta.category}</p>
+                        </div>
+                        <button
+                          onClick={() => setSelectedQrToken(isExpanded ? null : t.id)}
+                          className={cn("shrink-0 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
+                            isExpanded ? "border-primary/30 bg-primary/10 text-primary" : "border-border/60 bg-muted text-muted-foreground hover:bg-muted/80"
+                          )}
+                        >
+                          {isExpanded ? "Dölj" : "Visa QR"}
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await navigator.clipboard?.writeText(qrUrl).catch(() => {});
+                            setCopiedId(t.id);
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-primary transition-colors"
+                          title="Kopiera länk"
+                        >
+                          {copiedId === t.id ? <span className="text-[10px] text-success font-semibold">OK</span> : <Copy className="h-3.5 w-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => deleteQrToken(t.id)}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
-                      <a
-                        href={qrUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="shrink-0 rounded-lg border border-border/60 bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/80 transition-colors"
-                      >
-                        Öppna
-                      </a>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard?.writeText(qrUrl).catch(() => {});
-                        }}
-                        className="shrink-0 rounded-lg border border-border/60 bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/80 transition-colors"
-                        title="Kopiera länk"
-                      >
-                        Kopiera
-                      </button>
-                      <button
-                        onClick={() => deleteQrToken(t.id)}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {isExpanded && (
+                        <div className="border-t border-border/60 bg-muted/20 p-4 flex flex-col items-center gap-3">
+                          <QrDisplay url={qrUrl} size={180} />
+                          <p className="text-[11px] text-muted-foreground text-center break-all max-w-[200px] font-mono">{qrUrl}</p>
+                          <a
+                            href={qrUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-primary hover:underline"
+                          >
+                            Öppna sida →
+                          </a>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             )}
-            <p className="text-xs text-muted-foreground">Dela URL:en eller skriv ut som QR-kod med valfri QR-generator.</p>
+            <p className="text-xs text-muted-foreground">Sätt upp QR-koden i butiken — personal och kunder kan rapportera utan att logga in.</p>
           </div>
         </DialogContent>
       </Dialog>

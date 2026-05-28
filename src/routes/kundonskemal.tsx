@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  ExternalLink, Hash, Plus, QrCode, ScanLine, Search, ShoppingCart, Trash2, X,
+  Copy, ExternalLink, Hash, Plus, QrCode, ScanLine, Search, ShoppingCart, Store as StoreIcon, Trash2,
 } from "lucide-react";
 import { CameraScanner } from "@/components/camera-scanner";
+import { QrDisplay } from "@/components/qr-display";
 import { PageHeader, StatCard } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -83,10 +84,17 @@ function CustomerRequestsPage() {
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrRequest, setQrRequest] = useState<CustomerRequest | null>(null);
   const [qrTokenUrl, setQrTokenUrl] = useState("");
+  const [showStoreQrModal, setShowStoreQrModal] = useState(false);
+  const [storeQrToken, setStoreQrToken] = useState("");
+  const [storeQrLoading, setStoreQrLoading] = useState(false);
+  const [copiedQr, setCopiedQr] = useState(false);
+  const [editComment, setEditComment] = useState("");
 
   const openQrForRequest = async (req: CustomerRequest) => {
     if (!activeStore || !user) return;
-    // Check if token already exists for this request
+    setQrTokenUrl("");
+    setQrRequest(req);
+    setShowQrModal(true);
     const { data: existing } = await supabase
       .from("qr_tokens")
       .select("token")
@@ -106,8 +114,31 @@ function CustomerRequestsPage() {
       }).select("token").maybeSingle();
       if (created) setQrTokenUrl(`${window.location.origin}/qr-kundonskemal?token=${created.token}`);
     }
-    setQrRequest(req);
-    setShowQrModal(true);
+  };
+
+  const openStoreQr = async () => {
+    if (!activeStore || !user) return;
+    setStoreQrToken("");
+    setStoreQrLoading(true);
+    setShowStoreQrModal(true);
+    const { data: existing } = await supabase
+      .from("qr_tokens")
+      .select("token")
+      .eq("store_id", activeStore.id)
+      .eq("token_type", "customer_request_form")
+      .maybeSingle();
+    if (existing) {
+      setStoreQrToken(existing.token);
+    } else {
+      const { data: created } = await supabase.from("qr_tokens").insert({
+        token_type: "customer_request_form",
+        store_id: activeStore.id,
+        meta: {},
+        created_by: user.id,
+      }).select("token").maybeSingle();
+      if (created) setStoreQrToken(created.token);
+    }
+    setStoreQrLoading(false);
   };
 
   const fetchRequests = async () => {
@@ -159,6 +190,7 @@ function CustomerRequestsPage() {
     await supabase.from("customer_requests").update({
       status: editStatus,
       notes: editNotes.trim() || null,
+      staff_comment: editComment.trim() || null,
     }).eq("id", editTarget.id);
     setSaving(false);
     setEditTarget(null);
@@ -189,9 +221,16 @@ function CustomerRequestsPage() {
         title="Kundönskemål"
         description={activeStore ? `Önskemål från kunder i ${activeStore.name}` : "Produktönskemål från kunder."}
         actions={
-          <Button className="rounded-full hidden lg:flex" onClick={() => setShowCreate(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Nytt önskemål
-          </Button>
+          <div className="flex gap-2">
+            {isManager && activeStore && (
+              <Button variant="outline" className="rounded-full hidden lg:flex gap-1.5" onClick={openStoreQr}>
+                <StoreIcon className="h-4 w-4" /> Butiks-QR
+              </Button>
+            )}
+            <Button className="rounded-full hidden lg:flex" onClick={() => setShowCreate(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Nytt önskemål
+            </Button>
+          </div>
         }
       />
 
@@ -316,6 +355,7 @@ function CustomerRequestsPage() {
                           setEditTarget(r);
                           setEditStatus(r.status);
                           setEditNotes(r.notes ?? "");
+                          setEditComment((r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "");
                         }}
                       >
                         Hantera
@@ -463,13 +503,24 @@ function CustomerRequestsPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Anteckning</Label>
+                <Label className="text-xs">Meddelande till kund (visas på statuslänk)</Label>
+                <Textarea
+                  value={editComment}
+                  onChange={(e) => setEditComment(e.target.value)}
+                  rows={2}
+                  className="resize-none text-sm"
+                  placeholder="T.ex. Varan är nu i hylla 3, kyl..."
+                />
+                <p className="text-[11px] text-muted-foreground">Kunden ser detta meddelande på sin statuslänk.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Intern anteckning</Label>
                 <Textarea
                   value={editNotes}
                   onChange={(e) => setEditNotes(e.target.value)}
-                  rows={3}
+                  rows={2}
                   className="resize-none text-sm"
-                  placeholder="Ev. intern kommentar..."
+                  placeholder="Intern info, syns inte för kunden..."
                 />
               </div>
             </div>
@@ -515,7 +566,7 @@ function CustomerRequestsPage() {
 
       {/* QR-status dialog */}
       {showQrModal && qrRequest && (
-        <Dialog open onOpenChange={(o) => { if (!o) { setShowQrModal(false); setQrRequest(null); setQrTokenUrl(""); } }}>
+        <Dialog open onOpenChange={(o) => { if (!o) { setShowQrModal(false); setQrRequest(null); setQrTokenUrl(""); setCopiedQr(false); } }}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <div className="flex items-center gap-3">
@@ -524,7 +575,7 @@ function CustomerRequestsPage() {
                 </div>
                 <div>
                   <DialogTitle className="text-base">Dela status med kund</DialogTitle>
-                  <p className="text-xs text-muted-foreground">Kunden kan följa önskemålets status via denna länk.</p>
+                  <p className="text-xs text-muted-foreground">Kunden kan följa önskemålets status via denna QR-kod.</p>
                 </div>
               </div>
             </DialogHeader>
@@ -535,32 +586,110 @@ function CustomerRequestsPage() {
               </div>
               {qrTokenUrl ? (
                 <div className="space-y-3">
-                  <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-                    <p className="break-all font-mono text-xs text-muted-foreground">{qrTokenUrl}</p>
+                  <div className="flex justify-center rounded-2xl border border-border/60 bg-white p-4">
+                    <QrDisplay url={qrTokenUrl} size={180} />
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-muted/20 p-2.5">
+                    <p className="break-all font-mono text-[10px] text-muted-foreground leading-relaxed">{qrTokenUrl}</p>
                   </div>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
                       size="sm"
                       className="flex-1 rounded-full"
-                      onClick={() => navigator.clipboard?.writeText(qrTokenUrl).catch(() => {})}
+                      onClick={() => {
+                        navigator.clipboard?.writeText(qrTokenUrl).catch(() => {});
+                        setCopiedQr(true);
+                        setTimeout(() => setCopiedQr(false), 2000);
+                      }}
                     >
-                      Kopiera länk
+                      <Copy className="mr-1.5 h-3.5 w-3.5" />
+                      {copiedQr ? "Kopierat!" : "Kopiera länk"}
                     </Button>
                     <a
                       href={qrTokenUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex flex-1 items-center justify-center rounded-full border border-border/60 bg-background px-3 py-2 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-border/60 bg-background px-3 py-2 text-xs font-medium text-foreground hover:bg-muted transition-colors"
                     >
+                      <ExternalLink className="h-3.5 w-3.5" />
                       Öppna
                     </a>
                   </div>
-                  <p className="text-xs text-muted-foreground">Länken är giltig i 30 dagar. Dela direkt eller generera QR med valfri QR-generator online.</p>
+                  <p className="text-xs text-center text-muted-foreground">Länken är giltig i 30 dagar.</p>
                 </div>
               ) : (
-                <div className="flex items-center justify-center py-4">
+                <div className="flex items-center justify-center py-8">
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Store QR modal */}
+      {showStoreQrModal && (
+        <Dialog open onOpenChange={(o) => { if (!o) { setShowStoreQrModal(false); setStoreQrToken(""); setCopiedQr(false); } }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+                  <StoreIcon className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <DialogTitle className="text-base">Butiks-QR för kundönskemål</DialogTitle>
+                  <p className="text-xs text-muted-foreground">Kunder kan skanna och skicka in önskemål direkt.</p>
+                </div>
+              </div>
+            </DialogHeader>
+            <div className="space-y-4">
+              {storeQrLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                </div>
+              ) : storeQrToken ? (
+                <>
+                  <div className="flex justify-center rounded-2xl border border-border/60 bg-white p-4">
+                    <QrDisplay url={`${window.location.origin}/qr-kundonskemal-form?token=${storeQrToken}`} size={200} />
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-muted/20 p-2.5">
+                    <p className="break-all font-mono text-[10px] text-muted-foreground leading-relaxed">
+                      {`${window.location.origin}/qr-kundonskemal-form?token=${storeQrToken}`}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 rounded-full"
+                      onClick={() => {
+                        const url = `${window.location.origin}/qr-kundonskemal-form?token=${storeQrToken}`;
+                        navigator.clipboard?.writeText(url).catch(() => {});
+                        setCopiedQr(true);
+                        setTimeout(() => setCopiedQr(false), 2000);
+                      }}
+                    >
+                      <Copy className="mr-1.5 h-3.5 w-3.5" />
+                      {copiedQr ? "Kopierat!" : "Kopiera länk"}
+                    </Button>
+                    <a
+                      href={`${window.location.origin}/qr-kundonskemal-form?token=${storeQrToken}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-border/60 bg-background px-3 py-2 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Testa
+                    </a>
+                  </div>
+                  <p className="text-xs text-center text-muted-foreground">
+                    Skriv ut och sätt upp i butiken. Kunder skannar och skickar önskemål direkt.
+                  </p>
+                </>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 py-8 text-center">
+                  <p className="text-sm text-muted-foreground">Kunde inte generera QR-kod</p>
                 </div>
               )}
             </div>

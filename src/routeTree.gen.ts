@@ -13,6 +13,7 @@ import { Route as UppgifterRouteImport } from './routes/uppgifter'
 import { Route as TestpanelRouteImport } from './routes/testpanel'
 import { Route as SchemaRouteImport } from './routes/schema'
 import { Route as RapporterRouteImport } from './routes/rapporter'
+import { Route as QrKundonskemalFormRouteImport } from './routes/qr-kundonskemal-form'
 import { Route as QrKundonskemalRouteImport } from './routes/qr-kundonskemal'
 import { Route as QrAvvikelseRouteImport } from './routes/qr-avvikelse'
 import { Route as PulstavlaRouteImport } from './routes/pulstavla'
@@ -48,6 +49,11 @@ const SchemaRoute = SchemaRouteImport.update({
 const RapporterRoute = RapporterRouteImport.update({
   id: '/rapporter',
   path: '/rapporter',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QrKundonskemalFormRoute = QrKundonskemalFormRouteImport.update({
+  id: '/qr-kundonskemal-form',
+  path: '/qr-kundonskemal-form',
   getParentRoute: () => rootRouteImport,
 } as any)
 const QrKundonskemalRoute = QrKundonskemalRouteImport.update({
@@ -148,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
+  '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
@@ -170,6 +177,7 @@ export interface FileRoutesByTo {
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
+  '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
@@ -193,6 +201,7 @@ export interface FileRoutesById {
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
+  '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
@@ -217,6 +226,7 @@ export interface FileRouteTypes {
     | '/pulstavla'
     | '/qr-avvikelse'
     | '/qr-kundonskemal'
+    | '/qr-kundonskemal-form'
     | '/rapporter'
     | '/schema'
     | '/testpanel'
@@ -239,6 +249,7 @@ export interface FileRouteTypes {
     | '/pulstavla'
     | '/qr-avvikelse'
     | '/qr-kundonskemal'
+    | '/qr-kundonskemal-form'
     | '/rapporter'
     | '/schema'
     | '/testpanel'
@@ -261,6 +272,7 @@ export interface FileRouteTypes {
     | '/pulstavla'
     | '/qr-avvikelse'
     | '/qr-kundonskemal'
+    | '/qr-kundonskemal-form'
     | '/rapporter'
     | '/schema'
     | '/testpanel'
@@ -284,6 +296,7 @@ export interface RootRouteChildren {
   PulstavlaRoute: typeof PulstavlaRoute
   QrAvvikelseRoute: typeof QrAvvikelseRoute
   QrKundonskemalRoute: typeof QrKundonskemalRoute
+  QrKundonskemalFormRoute: typeof QrKundonskemalFormRoute
   RapporterRoute: typeof RapporterRoute
   SchemaRoute: typeof SchemaRoute
   TestpanelRoute: typeof TestpanelRoute
@@ -318,6 +331,13 @@ declare module '@tanstack/react-router' {
       path: '/rapporter'
       fullPath: '/rapporter'
       preLoaderRoute: typeof RapporterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qr-kundonskemal-form': {
+      id: '/qr-kundonskemal-form'
+      path: '/qr-kundonskemal-form'
+      fullPath: '/qr-kundonskemal-form'
+      preLoaderRoute: typeof QrKundonskemalFormRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/qr-kundonskemal': {
@@ -452,6 +472,7 @@ const rootRouteChildren: RootRouteChildren = {
   PulstavlaRoute: PulstavlaRoute,
   QrAvvikelseRoute: QrAvvikelseRoute,
   QrKundonskemalRoute: QrKundonskemalRoute,
+  QrKundonskemalFormRoute: QrKundonskemalFormRoute,
   RapporterRoute: RapporterRoute,
   SchemaRoute: SchemaRoute,
   TestpanelRoute: TestpanelRoute,

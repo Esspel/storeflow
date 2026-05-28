@@ -244,12 +244,22 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
 </body>
 </html>`;
 
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); }, 400);
+    // Use a hidden iframe to avoid popup-blocker issues
+    const existing = document.getElementById("sf-print-frame");
+    if (existing) existing.remove();
+    const iframe = document.createElement("iframe");
+    iframe.id = "sf-print-frame";
+    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0;border:0";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
+    if (!doc) return;
+    doc.open();
+    doc.write(html);
+    doc.close();
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    }, 300);
   };
 
   const fetchMeetings = async () => {
@@ -1027,14 +1037,6 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {statusBadge(showDetail.status)}
-                  <button
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary"
-                    onClick={() => exportMeetingPdf(showDetail)}
-                    aria-label="Exportera som PDF"
-                    title="Exportera protokoll som PDF"
-                  >
-                    <FileText className="h-4 w-4" />
-                  </button>
                   {isManager && (
                     <>
                       <button className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary" onClick={() => openEditMeeting(showDetail)} aria-label="Redigera">
