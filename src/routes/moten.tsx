@@ -141,7 +141,7 @@ function MeetingsPage() {
   }>({
     typeValue: "",
     title: "",
-    scheduled_at: (() => { const d = new Date(); d.setMinutes(0, 0, 0); return d.toISOString().slice(0, 16); })(),
+    scheduled_at: (() => { const d = new Date(); d.setMinutes(0, 0, 0); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); })(),
     moderator_id: "",
   });
   const [creating, setCreating] = useState(false);
@@ -384,9 +384,11 @@ function MeetingsPage() {
 
   const openEditMeeting = (m: MeetingFull) => {
     setEditTarget(m);
+    const d = new Date(m.scheduled_at);
+    const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     setEditForm({
       title: m.title,
-      scheduled_at: new Date(m.scheduled_at).toISOString().slice(0, 16),
+      scheduled_at: localIso,
       moderator_id: m.moderator_id ?? "",
     });
   };

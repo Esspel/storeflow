@@ -984,7 +984,7 @@ function MallarPage() {
                             {canEdit(t) && (
                               <Button
                                 variant="ghost" size="icon"
-                                className="rounded-full text-muted-foreground hover:text-primary"
+                                className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-primary"
                                 onClick={(e) => { e.stopPropagation(); openEdit(t); }}
                                 aria-label="Redigera"
                               >
@@ -994,7 +994,7 @@ function MallarPage() {
                             {canDelete(t) && (
                               <Button
                                 variant="ghost" size="icon"
-                                className="rounded-full text-muted-foreground hover:text-destructive"
+                                className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-destructive"
                                 onClick={(e) => { e.stopPropagation(); setDeleteTarget(t); }}
                                 aria-label="Ta bort"
                               >

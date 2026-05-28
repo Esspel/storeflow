@@ -5,7 +5,12 @@ import { supabase, type Store } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
-export function GlobalStoreSelector() {
+interface GlobalStoreSelectorProps {
+  /** Inline variant for the mobile user-menu dropdown */
+  inline?: boolean;
+}
+
+export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps) {
   const { user, userStores, activeStore, setActiveStore } = useAuth();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -20,13 +25,14 @@ export function GlobalStoreSelector() {
     hierarchyLevel === "forening" ||
     hierarchyLevel === "distrikt";
 
+  // Only show if user has more than one store or is above-store
+  const hasMultiple = userStores.length > 1 || isAboveStore;
+  if (!hasMultiple) return null;
+
   useEffect(() => {
     if (!open || !isAboveStore) return;
     setLoading(true);
-    let query = supabase
-      .from("stores")
-      .select("*")
-      .order("name");
+    let query = supabase.from("stores").select("*").order("name");
 
     if (hierarchyLevel === "forening" && user?.forening_id) {
       query = supabase.from("stores").select("*").eq("forening_id", user.forening_id).order("name");
@@ -46,13 +52,11 @@ export function GlobalStoreSelector() {
         setOpen(false);
       }
     }
-    if (open) document.addEventListener("mousedown", handleClick);
+    if (open && !inline) document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+  }, [open, inline]);
 
-  if (!isAboveStore) return null;
-
-  const stores = allStores.length > 0 ? allStores : userStores;
+  const stores = isAboveStore && allStores.length > 0 ? allStores : userStores;
   const filtered = search.trim()
     ? stores.filter(
         (s) =>
@@ -63,6 +67,55 @@ export function GlobalStoreSelector() {
           s.distrikt_namn?.toLowerCase().includes(search.toLowerCase()),
       )
     : stores;
+
+  if (inline) {
+    return (
+      <div className="px-2 py-1">
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Butik</p>
+        <div className="mb-2 flex items-center gap-2 rounded-lg bg-muted/60 px-2.5 py-1.5">
+          <Search className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Sök butik..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+          />
+          {search && (
+            <button onClick={() => setSearch("")}>
+              <X className="h-3 w-3 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+        {loading ? (
+          <p className="py-2 text-center text-xs text-muted-foreground">Laddar...</p>
+        ) : (
+          <div className="max-h-44 overflow-y-auto space-y-0.5">
+            {filtered.map((s) => {
+              const isSelected = activeStore?.id === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => { setActiveStore(s); setSearch(""); }}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted/50",
+                    isSelected && "bg-primary/10 text-primary font-medium",
+                  )}
+                >
+                  <Building2 className={cn("h-3 w-3 shrink-0", isSelected ? "text-primary" : "text-muted-foreground")} />
+                  <span className="flex-1 truncate">{s.name}</span>
+                  {isSelected && <span className="shrink-0 text-[10px]">Aktiv</span>}
+                </button>
+              );
+            })}
+            {filtered.length === 0 && (
+              <p className="py-2 text-center text-xs text-muted-foreground">Inga butiker hittades</p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} className="relative hidden md:flex">

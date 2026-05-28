@@ -1,6 +1,6 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { ChartBar as BarChart3, Bell, ChevronDown, ClipboardList, FlaskConical, Hop as Home, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Building2, Store, X as XIcon } from "lucide-react";
+import { ChartBar as BarChart3, Bell, ClipboardList, FlaskConical, Hop as Home, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Store, X as XIcon } from "lucide-react";
 import { ROLE_LABELS, HIERARCHY_LABELS } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
 import { GlobalStoreSelector } from "@/components/global-store-selector";
@@ -383,8 +383,8 @@ export function AppShell() {
 
 
           <div className="ml-auto flex items-center gap-1.5 md:gap-2">
-            {/* Global context store selector — HQ/Förening/Distrikt/Admin only */}
-            {isAboveStore && <GlobalStoreSelector />}
+            {/* Global store selector — all users with multiple stores */}
+            <GlobalStoreSelector />
 
             {/* Mitt Coop button */}
             {activeStore?.sap_site_id && (
@@ -395,33 +395,11 @@ export function AppShell() {
                 className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-background px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-accent-foreground active:opacity-75"
               >
                 <ShoppingCart className="h-3.5 w-3.5" />
+                <span className="sm:hidden">S3</span>
                 <span className="hidden sm:inline">Mitt Coop-sortiment</span>
               </a>
             )}
 
-            {/* Store switcher — hidden for above-store users who have GlobalStoreSelector */}
-            {userStores.length > 1 && !isAboveStore && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="hidden rounded-full border-border/80 md:flex gap-1.5 max-w-[240px]">
-                    <span className="truncate text-xs">{activeStore?.name ?? "Välj butik"}</span>
-                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  {userStores.map((s) => (
-                    <DropdownMenuItem
-                      key={s.id}
-                      className={cn("cursor-pointer", activeStore?.id === s.id && "bg-primary-soft text-primary")}
-                      onClick={() => setActiveStore(s)}
-                    >
-                      <span className="flex-1">{s.name}</span>
-                      {activeStore?.id === s.id && <span className="ml-2 shrink-0 text-xs">Aktiv</span>}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
 
             {/* Notifications */}
             <Popover open={notifOpen} onOpenChange={setNotifOpen}>
@@ -497,25 +475,11 @@ export function AppShell() {
                     <p className="text-xs text-muted-foreground">{activeStore.name}</p>
                   )}
                 </div>
-                {/* Store switcher in dropdown — mobile only, hidden for above-store users */}
-                {userStores.length > 1 && !isAboveStore && (
-                  <div className="md:hidden">
-                    <DropdownMenuSeparator />
-                    <div className="px-2 py-1">
-                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Butik</p>
-                      {userStores.map((s) => (
-                        <DropdownMenuItem
-                          key={s.id}
-                          className={cn("cursor-pointer rounded-md", activeStore?.id === s.id && "bg-primary-soft text-primary")}
-                          onClick={() => setActiveStore(s)}
-                        >
-                          <span className="flex-1 text-sm">{s.name}</span>
-                          {activeStore?.id === s.id && <span className="ml-2 shrink-0 text-[10px]">Aktiv</span>}
-                        </DropdownMenuItem>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Store switcher in dropdown — mobile only */}
+                <div className="md:hidden">
+                  <DropdownMenuSeparator />
+                  <GlobalStoreSelector inline />
+                </div>
                 <DropdownMenuSeparator />
                 {/* Mobile-only links to hidden nav items */}
                 {isManager && (

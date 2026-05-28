@@ -95,11 +95,14 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
   }, [activeStoreId, onUnlock]);
 
   // Barcode scanner — fires when hardware scanner sends barcode
+  // Use a ref for loading so the callback is stable and doesn't re-register the listener mid-scan
+  const loadingRef = useRef(loading);
+  loadingRef.current = loading;
   useBarcodeScanner({
     onScan: useCallback((code: string) => {
-      if (loading) return;
+      if (loadingRef.current) return;
       submitSwitch({ mode: "barcode", barcode: code });
-    }, [loading, submitSwitch]),
+    }, [submitSwitch]),
     acceptAlpha: true,
   });
 

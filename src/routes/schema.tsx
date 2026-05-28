@@ -1894,7 +1894,7 @@ function SchemaPage() {
               <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                 <button
                   onClick={() => setHideLedig(v => !v)}
-                  className={["rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors min-h-[36px]", hideLedig ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border/60 hover:border-primary/50"].join(" ")}
+                  className={["hidden sm:block rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors min-h-[36px]", hideLedig ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border/60 hover:border-primary/50"].join(" ")}
                 >
                   Dölj lediga
                 </button>
