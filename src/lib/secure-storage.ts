@@ -61,18 +61,31 @@ async function idbDelete(key: string): Promise<void> {
   }
 }
 
-// Synchronous localStorage fallback for environments where IDB isn't available (SSR)
 function isIDBAvailable(): boolean {
   return typeof indexedDB !== "undefined";
 }
 
+function isLocalStorageAvailable(): boolean {
+  return typeof localStorage !== "undefined";
+}
+
+function isBrowser(): boolean {
+  return typeof window !== "undefined";
+}
+
 export async function secureGetToken(): Promise<string | null> {
-  if (!isIDBAvailable()) return localStorage.getItem("sf_session_token");
+  if (!isBrowser()) return null;
+  if (!isIDBAvailable()) {
+    if (!isLocalStorageAvailable()) return null;
+    return localStorage.getItem("sf_session_token");
+  }
   return idbGet<string>(TOKEN_KEY);
 }
 
 export async function secureGetUser<T>(): Promise<T | null> {
+  if (!isBrowser()) return null;
   if (!isIDBAvailable()) {
+    if (!isLocalStorageAvailable()) return null;
     const raw = localStorage.getItem("sf_user");
     if (!raw) return null;
     try { return JSON.parse(raw) as T; } catch { return null; }
@@ -81,7 +94,9 @@ export async function secureGetUser<T>(): Promise<T | null> {
 }
 
 export async function secureSetSession(token: string, user: unknown): Promise<void> {
+  if (!isBrowser()) return;
   if (!isIDBAvailable()) {
+    if (!isLocalStorageAvailable()) return;
     localStorage.setItem("sf_session_token", token);
     localStorage.setItem("sf_user", JSON.stringify(user));
     return;
@@ -90,7 +105,9 @@ export async function secureSetSession(token: string, user: unknown): Promise<vo
 }
 
 export async function secureClearSession(): Promise<void> {
+  if (!isBrowser()) return;
   if (!isIDBAvailable()) {
+    if (!isLocalStorageAvailable()) return;
     localStorage.removeItem("sf_session_token");
     localStorage.removeItem("sf_user");
     return;
