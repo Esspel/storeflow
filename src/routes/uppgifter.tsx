@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDownUp, Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, Upload } from "lucide-react";
 
-import { PageHeader } from "@/components/page-header";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -343,7 +342,7 @@ function TasksPage() {
   const [templates, setTemplates] = useState<(ChecklistTemplate & { items: ChecklistTemplateItem[]; questions: ChecklistTemplateQuestion[] })[]>([]);
   const [userGroupIds, setUserGroupIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("active");
+  const [tab, setTab] = useState("today");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"default" | "due_date" | "priority" | "assignee" | "title">("default");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -1312,6 +1311,7 @@ function TasksPage() {
   };
 
   const filters = [
+    { value: "today", label: "Idag" },
     { value: "active", label: "Aktiva" },
     { value: "recurring", label: "Återkommande" },
     { value: "all", label: "Alla" },
@@ -1331,26 +1331,36 @@ function TasksPage() {
     visibleTasks.filter(t => t.recurrence_rule && !t.parent_task_id).map(t => t.id)
   );
 
-  // For each recurring parent, find the child that is current (due today or most recent not-done child)
+  // For each recurring parent, find the best representative child:
+  // Priority 1: Today's instance (due today, any status)
+  // Priority 2: Next upcoming undone instance (nearest due_date > today, ascending)
+  // Priority 3: Most recently completed instance
   const currentChildByParent = new Map<string, TaskFull>();
-  for (const t of visibleTasks) {
-    if (!t.parent_task_id || !recurringParentIds.has(t.parent_task_id)) continue;
-    const existing = currentChildByParent.get(t.parent_task_id);
-    if (!existing) {
-      currentChildByParent.set(t.parent_task_id, t);
-      continue;
-    }
-    // Prefer: today's instance first, then most recent not-done, then most recent done
-    const tDue = t.due_date ? new Date(t.due_date).getTime() : 0;
-    const eDue = existing.due_date ? new Date(existing.due_date).getTime() : 0;
-    const tToday = t.due_date ? new Date(t.due_date) >= simTodayStart && new Date(t.due_date) <= simTodayEnd : false;
-    const eToday = existing.due_date ? new Date(existing.due_date) >= simTodayStart && new Date(existing.due_date) <= simTodayEnd : false;
-    if (tToday && !eToday) { currentChildByParent.set(t.parent_task_id, t); continue; }
-    if (!tToday && eToday) continue;
-    // Both today or both not today — prefer not-done, then latest
-    if (t.status !== "done" && existing.status === "done") { currentChildByParent.set(t.parent_task_id, t); continue; }
-    if (t.status === "done" && existing.status !== "done") continue;
-    if (tDue > eDue) { currentChildByParent.set(t.parent_task_id, t); }
+  for (const parentId of recurringParentIds) {
+    const children = visibleTasks
+      .filter(t => t.parent_task_id === parentId)
+      .sort((a, b) => {
+        const aT = a.due_date ? new Date(a.due_date).getTime() : 0;
+        const bT = b.due_date ? new Date(b.due_date).getTime() : 0;
+        return aT - bT; // ascending by due_date
+      });
+    if (children.length === 0) continue;
+    // Priority 1: today's instance
+    const todayChild = children.find(t =>
+      t.due_date && new Date(t.due_date) >= simTodayStart && new Date(t.due_date) <= simTodayEnd
+    );
+    if (todayChild) { currentChildByParent.set(parentId, todayChild); continue; }
+    // Priority 2: nearest upcoming undone (due_date strictly after today, not done/cancelled)
+    const nextUndone = children.find(t =>
+      t.due_date && new Date(t.due_date) > simTodayEnd &&
+      t.status !== "done" && t.status !== "cancelled"
+    );
+    if (nextUndone) { currentChildByParent.set(parentId, nextUndone); continue; }
+    // Priority 3: most recently completed (last in sorted order that is done)
+    const lastDone = [...children].reverse().find(t => t.status === "done");
+    if (lastDone) { currentChildByParent.set(parentId, lastDone); continue; }
+    // Fallback: first child
+    currentChildByParent.set(parentId, children[0]);
   }
 
   // IDs of all child tasks that are NOT the current representative — hide these
@@ -1385,6 +1395,16 @@ function TasksPage() {
       if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
 
       // Tab filters
+      if (tab === "today") {
+        // Today = tasks due today (or overdue), non-cancelled
+        if (t.status === "cancelled") return false;
+        const isDueToday = t.due_date
+          ? new Date(t.due_date) >= simTodayStart && new Date(t.due_date) <= simTodayEnd
+          : false;
+        const isOverdueTask = isOverdue(t.due_date, t.status);
+        const hasNoDate = !t.due_date;
+        return isDueToday || isOverdueTask || (hasNoDate && t.status !== "done");
+      }
       if (tab === "active") {
         // Active = non-done, non-cancelled, non-past (unless user chose to show past)
         if (t.status === "cancelled") return false;
@@ -1400,7 +1420,6 @@ function TasksPage() {
       if (tab === "done") return t.status === "done";
       if (tab === "late") return effectiveStatus(t) === "late";
       if (tab === "all") {
-        if (!showPastTasks && isPast(t) && tab === "active") return false;
         return true;
       }
       return true;
@@ -1450,91 +1469,305 @@ function TasksPage() {
     }
   };
 
-  return (
-    <div className="mx-auto max-w-[1400px] px-5 py-8 md:px-8 md:py-10">
-      <PageHeader
-        title="Uppgifter"
-        description={activeStore ? `Uppgifter för ${activeStore.name}` : "Standardiserade rutiner."}
-        actions={
-          <div className="flex gap-2">
-            {/* Task CSV import dialog */}
-            <ImportDialog
-              open={showTaskImportDialog}
-              onClose={() => setShowTaskImportDialog(false)}
-              onImport={importTaskCSV}
-              title="Importera uppgifter"
-              description="Ladda upp en CSV-fil med uppgifter, steg och frågor"
-              loading={false}
-              importLabel="Importera uppgifter"
-              options={[
-                {
-                  key: "category",
-                  type: "select",
-                  label: "Standardkategori",
-                  description: "Används för rader som saknar kategori",
-                  options: [
-                    { value: "Övrigt", label: "Övrigt" },
-                    { value: "Drift", label: "Drift" },
-                    { value: "Säkerhet", label: "Säkerhet" },
-                    { value: "Kundärenden", label: "Kundärenden" },
-                  ],
-                  defaultValue: "Övrigt",
-                },
-                {
-                  key: "priority",
-                  type: "select",
-                  label: "Standardprioritet",
-                  description: "Används för rader som saknar prioritet",
-                  options: [
-                    { value: "Medel", label: "Medel" },
-                    { value: "Låg", label: "Låg" },
-                    { value: "Hög", label: "Hög" },
-                    { value: "Kritisk", label: "Kritisk" },
-                  ],
-                  defaultValue: "Medel",
-                },
-                {
-                  key: "assignToStore",
-                  type: "checkbox",
-                  label: "Tilldela till aktiv butik",
-                  description: "Koppla alla importerade uppgifter till den butik du är inloggad på",
-                  defaultValue: true,
-                },
-              ]}
-            />
+  // Render a single task card (compact list style used across all views)
+  const weekdayShort = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
+
+  const renderTaskCard = (t: TaskFull) => {
+    const overdue = isOverdue(t.due_date, t.status);
+    const dueSoon = isDueSoon(t.due_date);
+    const done = effectiveStatus(t) === "done";
+    const stepsDone = t.steps?.filter((s) => s.is_done).length ?? 0;
+    const stepsTotal = t.steps?.length ?? 0;
+    const allQuestions = t.questions ?? [];
+    const answeredQuestions = allQuestions.filter(q => q.answer?.trim()).length;
+    const totalItems = stepsTotal + allQuestions.length;
+    const doneItems = stepsDone + answeredQuestions;
+    const progress = totalItems > 0 ? doneItems / totalItems : done ? 1 : 0;
+    const recLabel = t.recurrence_rule === "weekly" && t.recurrence_days && t.recurrence_days.length > 0
+      ? `${RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label} (${[...t.recurrence_days].sort((a, b) => a - b).map(d => weekdayShort[d]).join(", ")})`
+      : RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label;
+
+    return (
+      <SwipeableCard
+        key={t.id}
+        done={done}
+        onSwipeRight={() => swipeComplete(t)}
+        onSwipeLeft={() => openDetail(t)}
+        onClick={() => openDetail(t)}
+        className={cn(
+          "cursor-pointer overflow-hidden rounded-2xl border bg-card transition-all",
+          "shadow-[0_1px_3px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)]",
+          done && "opacity-55 border-border/30",
+          !done && overdue && "border-destructive/50",
+          !done && !overdue && "border-border/60"
+        )}
+      >
+        <div className="flex items-stretch">
+          <div className={cn(
+            "w-1 shrink-0 rounded-l-2xl",
+            done ? "bg-success/40" : overdue ? "bg-destructive" : dueSoon ? "bg-warning" : t.priority === "Kritisk" ? "bg-destructive/70" : t.priority === "Hög" ? "bg-warning/70" : "bg-primary/30"
+          )} />
+          <div className="flex-1 min-w-0 px-4 pt-3.5 pb-3">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <h3 className={cn(
+                  "text-sm font-semibold leading-snug",
+                  done && "line-through text-muted-foreground"
+                )}>
+                  {t.title}
+                </h3>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                  {t.due_date && (
+                    <span className={cn("inline-flex items-center gap-1", overdue && !done && "text-destructive font-semibold")}>
+                      <Clock className="h-3 w-3" />
+                      {new Date(t.due_date).toLocaleDateString("sv-SE", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
+                  {t.recurrence_rule && (
+                    <span className="inline-flex items-center gap-1 text-primary/70">
+                      <Repeat className="h-3 w-3" />
+                      {recLabel}
+                    </span>
+                  )}
+                  {t.assignees && t.assignees.length > 0 && (
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="h-3 w-3" />
+                      {t.assignees.slice(0, 2).map(a => a.user?.display_name ?? a.group?.name).filter(Boolean).join(", ")}
+                      {t.assignees.length > 2 && ` +${t.assignees.length - 2}`}
+                    </span>
+                  )}
+                  {t.category && t.category !== "Drift" && (
+                    <span className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{t.category}</span>
+                  )}
+                </div>
+                {totalItems > 0 && (
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <div className="flex-1 overflow-hidden rounded-full bg-muted/60 h-1">
+                      <div
+                        className={cn("h-full rounded-full transition-all duration-300", done ? "bg-success" : "bg-primary")}
+                        style={{ width: `${Math.round(progress * 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground tabular-nums">{doneItems}/{totalItems}</span>
+                  </div>
+                )}
+              </div>
+              <div className="shrink-0 mt-0.5">
+                {done
+                  ? <CheckCircle2 className="h-5 w-5 text-success" />
+                  : overdue
+                    ? <AlertTriangle className="h-4 w-4 text-destructive" />
+                    : dueSoon
+                      ? <Clock className="h-4 w-4 text-warning-foreground" />
+                      : <Circle className="h-5 w-5 text-muted-foreground/25" />
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      </SwipeableCard>
+    );
+  };
+
+  const renderTodayView = () => {
+    const overdueTasks = filtered.filter(t => isOverdue(t.due_date, t.status) && t.status !== "done");
+    const todayTasks = filtered.filter(t =>
+      t.due_date &&
+      new Date(t.due_date) >= simTodayStart &&
+      new Date(t.due_date) <= simTodayEnd
+    );
+    const noDateTasks = filtered.filter(t => !t.due_date && t.status !== "done");
+    const doneTodayTasks = filtered.filter(t => t.status === "done");
+    const totalToday = filtered.length;
+    const doneCount = doneTodayTasks.length;
+    const progressPct = totalToday > 0 ? Math.round((doneCount / totalToday) * 100) : 0;
+    const todayLabel = new Date(simNow).toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" });
+
+    return (
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-1">{todayLabel}</p>
+              <p className="text-2xl font-bold text-foreground">
+                {doneCount} / {totalToday}
+                <span className="text-base font-normal text-muted-foreground ml-2">slutförda</span>
+              </p>
+            </div>
+            <div className="relative h-16 w-16 shrink-0">
+              <svg className="h-full w-full -rotate-90" viewBox="0 0 36 36">
+                <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-muted/40" />
+                <circle
+                  cx="18" cy="18" r="15.9" fill="none"
+                  stroke="currentColor" strokeWidth="2.5"
+                  strokeDasharray={`${progressPct} ${100 - progressPct}`}
+                  strokeLinecap="round"
+                  className={progressPct === 100 ? "text-success" : "text-primary"}
+                  style={{ transition: "stroke-dasharray 0.5s ease" }}
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-xs font-bold tabular-nums">
+                {progressPct}%
+              </span>
+            </div>
+          </div>
+          {totalToday > 0 && (
+            <div className="mt-3 h-1.5 rounded-full bg-muted/40 overflow-hidden">
+              <div
+                className={cn("h-full rounded-full transition-all duration-500", progressPct === 100 ? "bg-success" : "bg-primary")}
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          )}
+        </div>
+
+        {totalToday === 0 && (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-14 text-center">
+            <CheckCircle2 className="mb-3 h-10 w-10 text-success/50" />
+            <p className="text-sm font-semibold">Inga uppgifter för idag</p>
+            <p className="text-xs text-muted-foreground mt-1">Njut av dagen eller lägg till nya uppgifter.</p>
             {isManager && (
-              <Button variant="outline" className="rounded-full hidden lg:flex" onClick={downloadTaskTemplate}>
-                <Download className="mr-2 h-4 w-4" /> CSV-mall
-              </Button>
-            )}
-            {isManager && (
-              <Button variant="outline" className="rounded-full hidden lg:flex" onClick={exportCSV}>
-                <Download className="mr-2 h-4 w-4" /> Exportera
-              </Button>
-            )}
-            {isManager && (
-              <Button variant="outline" className="rounded-full hidden lg:flex" onClick={() => setShowTaskImportDialog(true)}>
-                <Upload className="mr-2 h-4 w-4" /> Importera CSV
-              </Button>
-            )}
-            {isManager && (
-              <Button className="rounded-full hidden lg:flex" onClick={() => { setShowCreate(true); setSaveError(""); }}>
-                <Plus className="mr-2 h-4 w-4" /> Ny uppgift
+              <Button className="mt-4 rounded-full" size="sm" onClick={() => { setShowCreate(true); setSaveError(""); }}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Ny uppgift
               </Button>
             )}
           </div>
-        }
+        )}
+
+        {overdueTasks.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 px-0.5">
+              <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-destructive">Försenade</h2>
+              <span className="ml-auto text-[11px] text-muted-foreground">{overdueTasks.length}</span>
+            </div>
+            <div className="space-y-2">{overdueTasks.map(renderTaskCard)}</div>
+          </div>
+        )}
+
+        {todayTasks.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 px-0.5">
+              <Clock className="h-3.5 w-3.5 text-primary" />
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-primary/80">Idag</h2>
+              <span className="ml-auto text-[11px] text-muted-foreground">{todayTasks.length}</span>
+            </div>
+            <div className="space-y-2">{todayTasks.map(renderTaskCard)}</div>
+          </div>
+        )}
+
+        {noDateTasks.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 px-0.5">
+              <Circle className="h-3.5 w-3.5 text-muted-foreground/60" />
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Utan datum</h2>
+              <span className="ml-auto text-[11px] text-muted-foreground">{noDateTasks.length}</span>
+            </div>
+            <div className="space-y-2">{noDateTasks.map(renderTaskCard)}</div>
+          </div>
+        )}
+
+        {doneTodayTasks.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 px-0.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-success/80">Klara</h2>
+              <span className="ml-auto text-[11px] text-muted-foreground">{doneTodayTasks.length}</span>
+            </div>
+            <div className="space-y-2">{doneTodayTasks.map(renderTaskCard)}</div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="mx-auto max-w-[900px] px-4 py-6 md:px-6 md:py-8">
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Uppgifter</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {activeStore ? activeStore.name : "Alla butiker"}
+          </p>
+        </div>
+        {isManager && (
+          <div className="hidden lg:flex items-center gap-2 shrink-0">
+            <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={downloadTaskTemplate}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> CSV-mall
+            </Button>
+            <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={exportCSV}>
+              <Download className="mr-1.5 h-3.5 w-3.5" /> Exportera
+            </Button>
+            <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={() => setShowTaskImportDialog(true)}>
+              <Upload className="mr-1.5 h-3.5 w-3.5" /> Importera
+            </Button>
+            <Button size="sm" className="rounded-full text-xs" onClick={() => { setShowCreate(true); setSaveError(""); }}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> Ny uppgift
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Task CSV import dialog */}
+      <ImportDialog
+        open={showTaskImportDialog}
+        onClose={() => setShowTaskImportDialog(false)}
+        onImport={importTaskCSV}
+        title="Importera uppgifter"
+        description="Ladda upp en CSV-fil med uppgifter, steg och frågor"
+        loading={false}
+        importLabel="Importera uppgifter"
+        options={[
+          {
+            key: "category",
+            type: "select",
+            label: "Standardkategori",
+            description: "Används för rader som saknar kategori",
+            options: [
+              { value: "Övrigt", label: "Övrigt" },
+              { value: "Drift", label: "Drift" },
+              { value: "Säkerhet", label: "Säkerhet" },
+              { value: "Kundärenden", label: "Kundärenden" },
+            ],
+            defaultValue: "Övrigt",
+          },
+          {
+            key: "priority",
+            type: "select",
+            label: "Standardprioritet",
+            description: "Används för rader som saknar prioritet",
+            options: [
+              { value: "Medel", label: "Medel" },
+              { value: "Låg", label: "Låg" },
+              { value: "Hög", label: "Hög" },
+              { value: "Kritisk", label: "Kritisk" },
+            ],
+            defaultValue: "Medel",
+          },
+          {
+            key: "assignToStore",
+            type: "checkbox",
+            label: "Tilldela till aktiv butik",
+            description: "Koppla alla importerade uppgifter till den butik du är inloggad på",
+            defaultValue: true,
+          },
+        ]}
       />
 
-      {/* Filters */}
-      <div className="mb-5 space-y-2">
-        <div className="overflow-x-auto pb-1 -mx-1 px-1">
+      {/* Tabs + search */}
+      <div className="mb-5 space-y-3">
+        <div className="overflow-x-auto pb-0.5 -mx-1 px-1">
           <Tabs value={tab} onValueChange={(v) => { setTab(v); setShowPastTasks(false); }}>
-            <TabsList className="rounded-full bg-muted/60 p-1 w-max">
+            <TabsList className="rounded-full bg-muted/50 p-1 w-max gap-0.5">
               {filters.map((f) => {
                 let count = 0;
                 const baseList = visibleTasks.filter(t => !hiddenChildIds.has(t.id) && !(recurringParentIds.has(t.id) && currentChildByParent.has(t.id)));
-                if (f.value === "active") count = baseList.filter(t => t.status !== "cancelled" && t.status !== "done" && !isPast(t)).length;
+                if (f.value === "today") count = baseList.filter(t => t.status !== "cancelled" && (
+                  (t.due_date && new Date(t.due_date) >= simTodayStart && new Date(t.due_date) <= simTodayEnd) ||
+                  isOverdue(t.due_date, t.status) ||
+                  (!t.due_date && t.status !== "done")
+                )).length;
+                else if (f.value === "active") count = baseList.filter(t => t.status !== "cancelled" && t.status !== "done" && !isPast(t)).length;
                 else if (f.value === "recurring") count = baseList.filter(t => isRecurring(t)).length;
                 else if (f.value === "all") count = baseList.length;
                 else if (f.value === "done") count = baseList.filter(t => t.status === "done").length;
@@ -1543,185 +1776,95 @@ function TasksPage() {
                   <TabsTrigger key={f.value} value={f.value}
                     className="gap-1.5 rounded-full px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm text-xs whitespace-nowrap">
                     {f.label}
-                    <span className="rounded-full bg-background/70 px-1.5 text-[10px] font-medium text-muted-foreground">
-                      {count}
-                    </span>
+                    {count > 0 && (
+                      <span className={cn(
+                        "rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+                        f.value === "late" && count > 0 ? "bg-destructive/15 text-destructive" : "bg-muted text-muted-foreground"
+                      )}>
+                        {count}
+                      </span>
+                    )}
                   </TabsTrigger>
                 );
               })}
             </TabsList>
           </Tabs>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Sök uppgifter..." value={search} onChange={(e) => setSearch(e.target.value)}
-              className="h-9 rounded-full pl-9 text-sm w-full" />
+        {tab !== "today" && (
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Sök uppgifter..." value={search} onChange={(e) => setSearch(e.target.value)}
+                className="h-9 rounded-full pl-9 text-sm w-full" />
+            </div>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+              <SelectTrigger className="h-9 w-auto min-w-[120px] rounded-full text-xs gap-1.5">
+                <ArrowDownUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Standard</SelectItem>
+                <SelectItem value="due_date">Datum</SelectItem>
+                <SelectItem value="priority">Prioritet</SelectItem>
+                <SelectItem value="assignee">Person</SelectItem>
+                <SelectItem value="title">Titel</SelectItem>
+              </SelectContent>
+            </Select>
+            {sortBy !== "default" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 w-9 rounded-full p-0 shrink-0"
+                onClick={() => setSortDir(d => d === "asc" ? "desc" : "asc")}
+                title={sortDir === "asc" ? "Stigande" : "Fallande"}
+              >
+                {sortDir === "asc" ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </Button>
+            )}
           </div>
-          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-            <SelectTrigger className="h-9 w-auto min-w-[130px] rounded-full text-xs gap-1.5">
-              <ArrowDownUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="default">Standard</SelectItem>
-              <SelectItem value="due_date">Datum</SelectItem>
-              <SelectItem value="priority">Prioritet</SelectItem>
-              <SelectItem value="assignee">Person</SelectItem>
-              <SelectItem value="title">Titel</SelectItem>
-            </SelectContent>
-          </Select>
-          {sortBy !== "default" && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 w-9 rounded-full p-0 shrink-0"
-              onClick={() => setSortDir(d => d === "asc" ? "desc" : "asc")}
-              title={sortDir === "asc" ? "Stigande" : "Fallande"}
-            >
-              {sortDir === "asc" ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            </Button>
-          )}
-        </div>
+        )}
       </div>
 
+      {/* Content */}
       {loading ? (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div className="space-y-2">
           {[1,2,3,4].map(i => (
-            <div key={i} className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 w-3/4 animate-pulse rounded-md bg-muted" />
-                  <div className="h-3 w-1/2 animate-pulse rounded-md bg-muted/60" />
-                </div>
-                <div className="h-5 w-14 animate-pulse rounded-full bg-muted/60" />
+            <div key={i} className="rounded-2xl border border-border/50 bg-card p-4 flex items-center gap-3">
+              <div className="w-1 h-12 rounded-full animate-pulse bg-muted" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-2/3 animate-pulse rounded-md bg-muted" />
+                <div className="h-3 w-1/3 animate-pulse rounded-md bg-muted/60" />
               </div>
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-20 animate-pulse rounded-md bg-muted/50" />
-                <div className="h-3 w-16 animate-pulse rounded-md bg-muted/50" />
-              </div>
+              <div className="h-5 w-5 animate-pulse rounded-full bg-muted/60" />
             </div>
           ))}
         </div>
+      ) : tab === "today" ? (
+        renderTodayView()
       ) : filtered.length === 0 && hiddenPastCount === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
           <ListChecks className="mb-3 h-10 w-10 text-muted-foreground/40" />
           <p className="text-sm font-medium text-muted-foreground">Inga uppgifter hittades</p>
           {isManager && (
-            <Button className="mt-4 rounded-full" size="sm" onClick={() => setShowCreate(true)}>
+            <Button className="mt-4 rounded-full" size="sm" onClick={() => { setShowCreate(true); setSaveError(""); }}>
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Skapa uppgift
             </Button>
           )}
         </div>
       ) : (
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {filtered.map((t) => {
-            const overdue = isOverdue(t.due_date, t.status);
-            const dueSoon = isDueSoon(t.due_date);
-            const done = effectiveStatus(t) === "done";
-            const stepsDone = t.steps?.filter((s) => s.is_done).length ?? 0;
-            const stepsTotal = t.steps?.length ?? 0;
-            const allQuestions = t.questions ?? [];
-            const answeredQuestions = allQuestions.filter(q => q.answer?.trim()).length;
-            const totalItems = stepsTotal + allQuestions.length;
-            const doneItems = stepsDone + answeredQuestions;
-            const progress = totalItems > 0 ? doneItems / totalItems : done ? 1 : 0;
-            const isKritisk = t.priority === "Kritisk";
-            const weekdayShort = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
-            return (
-              <SwipeableCard
-                key={t.id}
-                done={done}
-                onSwipeRight={() => swipeComplete(t)}
-                onSwipeLeft={() => openDetail(t)}
-                onClick={() => openDetail(t)}
-                className={cn(
-                  "cursor-pointer overflow-hidden rounded-xl border bg-card shadow-[var(--shadow-sm)] transition-all hover:shadow-[var(--shadow-md)]",
-                  done ? "opacity-60 border-border/40" : overdue ? "border-destructive/40" : "border-border/60"
-                )}
-              >
-                <div className="flex items-start gap-3 px-4 pt-4 pb-3">
-                  {/* Priority indicator */}
-                  <div className={cn(
-                    "mt-1 h-2 w-2 shrink-0 rounded-full",
-                    isKritisk ? "bg-destructive" : overdue ? "bg-destructive/60" : "bg-muted-foreground/30"
-                  )} />
-
-                  <div className="min-w-0 flex-1">
-                    <h3 className={cn("text-sm font-semibold leading-snug", done && "line-through text-muted-foreground")}>
-                      {t.title}
-                    </h3>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-                      {t.due_date && (
-                        <span className={cn("inline-flex items-center gap-1", overdue && "text-destructive font-medium")}>
-                          <Clock className="h-3 w-3" />
-                          {new Date(t.due_date).toLocaleDateString("sv-SE", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      )}
-                      {t.recurrence_rule && (
-                        <span className="inline-flex items-center gap-1">
-                          <Repeat className="h-3 w-3" />
-                          {t.recurrence_rule === "weekly" && t.recurrence_days && t.recurrence_days.length > 0
-                            ? `${RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label} ${[...t.recurrence_days].sort((a, b) => a - b).map(d => weekdayShort[d]).join(", ")}`
-                            : RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label
-                          }
-                        </span>
-                      )}
-                      {t.assignees && t.assignees.length > 0 && (
-                        <span className="inline-flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {t.assignees.slice(0, 2).map(a => a.user?.display_name ?? a.group?.name).filter(Boolean).join(", ")}
-                          {t.assignees.length > 2 && ` +${t.assignees.length - 2}`}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Status / done indicator */}
-                  <div className="shrink-0">
-                    {done
-                      ? <CheckCircle2 className="h-5 w-5 text-success" />
-                      : dueSoon
-                        ? <Clock className="h-4 w-4 text-warning-foreground" />
-                        : overdue
-                          ? <AlertTriangle className="h-4 w-4 text-destructive" />
-                          : <Circle className="h-5 w-5 text-muted-foreground/30" />
-                    }
-                  </div>
-                </div>
-
-                {/* Progress bar — always shown, shows completion */}
-                <div className="px-4 pb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 overflow-hidden rounded-full bg-muted h-1.5">
-                      <div
-                        className={cn("h-full rounded-full transition-all", done ? "bg-success" : "bg-primary")}
-                        style={{ width: `${Math.round(progress * 100)}%` }}
-                      />
-                    </div>
-                    {totalItems > 0 && (
-                      <span className="text-[11px] text-muted-foreground tabular-nums">{doneItems}/{totalItems}</span>
-                    )}
-                  </div>
-                </div>
-              </SwipeableCard>
-            );
-          })}
-          </div>
-
-          {/* Show/hide past tasks toggle */}
+        <div className="space-y-2">
+          {filtered.map(renderTaskCard)}
           {hiddenPastCount > 0 && (
             <button
-              className="w-full rounded-xl border border-dashed border-border/60 bg-card py-3 text-center text-xs text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
+              className="w-full rounded-2xl border border-dashed border-border/60 bg-card py-3 text-center text-xs text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground mt-1"
               onClick={() => setShowPastTasks(true)}
             >
-              Visa {hiddenPastCount} äldre uppgifter från tidigare dagar
+              Visa {hiddenPastCount} äldre uppgifter
             </button>
           )}
           {showPastTasks && hiddenPastCount === 0 && tab === "active" && (
             <button
-              className="w-full rounded-xl border border-dashed border-border/60 bg-card py-3 text-center text-xs text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
+              className="w-full rounded-2xl border border-dashed border-border/60 bg-card py-3 text-center text-xs text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground mt-1"
               onClick={() => setShowPastTasks(false)}
             >
               Dölj äldre uppgifter
@@ -1730,7 +1873,7 @@ function TasksPage() {
         </div>
       )}
 
-      {/* Undo toast — shown 4s after a swipe-complete so the user can cancel */}
+      {/* Undo toast */}
       {undoToast && (
         <div className="fixed bottom-44 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
           <div className="flex items-center gap-3 rounded-full border border-border/60 bg-card px-5 py-3 shadow-[var(--shadow-lg)]">
@@ -1739,7 +1882,6 @@ function TasksPage() {
             <button
               className="ml-1 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground hover:bg-muted/70 active:scale-95 transition-transform"
               onClick={() => {
-                // Cancel the pending DB write and revert the optimistic update
                 dismissUndoToast();
                 setTasks(prev => prev.map(t => t.id === undoToast.task.id ? undoToast.task : t));
               }}
@@ -1750,7 +1892,7 @@ function TasksPage() {
         </div>
       )}
 
-      {/* Mobile FAB — thumb-zone shortcut, hidden on lg+ where header button is visible */}
+      {/* Mobile FAB */}
       {isManager && (
         <button
           className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
