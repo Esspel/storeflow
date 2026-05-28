@@ -198,11 +198,16 @@ function AccountsPage() {
   const [editStore, setEditStore] = useState<Store | null>(null);
   const [newStore, setNewStore] = useState({ name: "", city: "", address: "", email: "", sap_site_id: "", butiks_nr: "", bolag: "" });
 
-  // CSV import
+  // CSV import (stores)
   const csvInputRef = useRef<HTMLInputElement>(null);
   const [csvImporting, setCsvImporting] = useState(false);
   const [csvResult, setCsvResult] = useState<CsvImportResult | null>(null);
   const [csvPreviewError, setCsvPreviewError] = useState<string | null>(null);
+
+  // User CSV import/export
+  const userCsvInputRef = useRef<HTMLInputElement>(null);
+  const [userCsvImporting, setUserCsvImporting] = useState(false);
+  const [userCsvResult, setUserCsvResult] = useState<{ success: number; skipped: number; errors: string[] } | null>(null);
 
   // Groups
   const [groups, setGroups] = useState<(UserGroup & { members?: (UserGroupMember & { user?: AppUser })[] })[]>([]);
@@ -300,6 +305,104 @@ function AccountsPage() {
       );
     }
     setUsers(mapped);
+  }
+
+  const USER_CSV_HEADERS = ["Användarnamn", "Visningsnamn", "Lösenord", "Hierarkinivå", "Anställningsgrupp", "Streckkod", "Butiksnummer (kommaseparerat)"];
+  const USER_CSV_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
+# Kolumner: Användarnamn;Visningsnamn;Lösenord;Hierarkinivå;Anställningsgrupp;Streckkod;Butiksnummer (kommaseparerat)
+#
+# Hierarkinivå: admin | hk | forening | distrikt | chef | anvandare
+# Lösenord: minst 12 tecken (genereras automatiskt om tomt)
+# Butiksnummer: ett eller flera butiksnummer separerade med komma — t.ex. 1234,5678
+#
+# Exempel:
+# anna.svensson;Anna Svensson;Hemlig!1234567;chef;Kassa;9876543210;1234
+`;
+
+  function downloadUserCsvTemplate() {
+    const row = ["anna.svensson", "Anna Svensson", "Hemlig!1234567", "chef", "Kassa", "", "1234"];
+    const csv = USER_CSV_INSTRUCTIONS + USER_CSV_HEADERS.join(";") + "\n" + row.map(v => `"${v}"`).join(";");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "anvandare-mall.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportUsersCsv() {
+    const rows = [USER_CSV_HEADERS, ...users.map((u) => [
+      u.username,
+      u.display_name,
+      "", // password intentionally blank
+      u.hierarchy_level ?? "anvandare",
+      u.employee_group ?? "",
+      u.barcode_id ?? "",
+      stores.filter(s => u.assignedStoreIds.includes(s.id)).map(s => s.butiks_nr ?? "").filter(Boolean).join(","),
+    ])];
+    const csv = rows.map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `anvandare-export-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importUsersCsv(file: File) {
+    setUserCsvImporting(true);
+    setUserCsvResult(null);
+    const text = await file.text();
+    const cleaned = text.startsWith("\ufeff") ? text.slice(1) : text;
+    const lines = cleaned.split(/\r?\n/).filter(l => l.trim() && !l.trim().startsWith("#"));
+    if (lines.length < 2) { setUserCsvImporting(false); return; }
+
+    const sep = lines[0].includes(";") ? ";" : ",";
+    // Skip header row
+    const dataLines = lines.slice(1);
+    let success = 0, skipped = 0;
+    const errors: string[] = [];
+
+    for (const line of dataLines) {
+      const cols = line.split(sep).map(c => c.trim().replace(/^["']|["']$/g, ""));
+      const [username, displayName, password, hierarchyLevel, employeeGroup, barcode, butiksnummer] = cols;
+      if (!username?.trim() || !displayName?.trim()) { skipped++; continue; }
+
+      const pw = password?.trim() || Math.random().toString(36).slice(2) + "Aa1!";
+      if (pw.length < MIN_PW_LENGTH) { errors.push(`${username}: Lösenordet är för kort`); skipped++; continue; }
+
+      const { data: existing } = await supabase.from("app_users").select("id").eq("username", username.toLowerCase().trim()).maybeSingle();
+      if (existing) { errors.push(`${username}: Användarnamnet finns redan`); skipped++; continue; }
+
+      const { data: hash } = await supabase.rpc("hash_password", { plain_password: pw });
+      const level = hierarchyLevel?.trim() || "anvandare";
+      const role = hierarchyLevelToRole(level);
+
+      const { data: created } = await supabase.from("app_users").insert({
+        username: username.toLowerCase().trim(),
+        password_hash: hash,
+        display_name: displayName.trim(),
+        role,
+        hierarchy_level: level,
+        employee_group: employeeGroup?.trim() ?? "",
+        must_change_password: true,
+        barcode_id: barcode?.trim() || null,
+      }).select("id").maybeSingle();
+
+      if (created?.id) {
+        // Assign stores by butiks_nr
+        if (butiksnummer?.trim()) {
+          const nrs = butiksnummer.split(",").map(s => s.trim()).filter(Boolean);
+          const matchedStores = stores.filter(s => s.butiks_nr && nrs.includes(String(s.butiks_nr)));
+          if (matchedStores.length > 0) await syncUserStores(created.id, matchedStores.map(s => s.id));
+        }
+        logAudit(currentUser?.id ?? null, "user.import", "app_users", created.id, { username });
+        success++;
+      } else {
+        errors.push(`${username}: Kunde inte skapa kontot`);
+        skipped++;
+      }
+    }
+
+    setUserCsvResult({ success, skipped, errors });
+    setUserCsvImporting(false);
+    await fetchUsers();
   }
 
   function toggleStoreSelection(storeId: string, selected: string[], set: (ids: string[]) => void) {
@@ -817,11 +920,33 @@ function AccountsPage() {
               <h2 className="text-xl font-semibold">Användarkonton</h2>
               <p className="text-sm text-muted-foreground">{filteredUsers.length} konton</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="relative flex-1 sm:flex-none sm:w-56">
                 <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input placeholder="Sök konto..." className="pl-9 rounded-full h-9 text-sm" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
               </div>
+              <Button variant="outline" size="sm" className="rounded-full hidden sm:flex" onClick={downloadUserCsvTemplate}>
+                <Download className="mr-1.5 h-3.5 w-3.5" /> CSV-mall
+              </Button>
+              <Button variant="outline" size="sm" className="rounded-full hidden sm:flex" onClick={exportUsersCsv}>
+                <Download className="mr-1.5 h-3.5 w-3.5" /> Exportera
+              </Button>
+              {isManager && (
+                <Button variant="outline" size="sm" className="rounded-full hidden sm:flex" disabled={userCsvImporting} onClick={() => userCsvInputRef.current?.click()}>
+                  <Upload className="mr-1.5 h-3.5 w-3.5" /> {userCsvImporting ? "Importerar..." : "Importera CSV"}
+                </Button>
+              )}
+              <input
+                ref={userCsvInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (f) await importUsersCsv(f);
+                  e.target.value = "";
+                }}
+              />
               {/* Hide button on mobile */}
               <Button className="rounded-full hidden sm:flex" onClick={() => { setShowCreateUser(true); setError(""); }}>
                 <Plus className="mr-2 h-4 w-4" /> Nytt konto
@@ -832,6 +957,20 @@ function AccountsPage() {
                 </Button>
               )}
             </div>
+            {/* User CSV import result */}
+            {userCsvResult && (
+              <div className="mt-2 rounded-xl border border-border/60 bg-card px-4 py-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span>Import klar: <strong>{userCsvResult.success} skapade</strong>, {userCsvResult.skipped} hoppades över</span>
+                  <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setUserCsvResult(null)}>Stäng</button>
+                </div>
+                {userCsvResult.errors.length > 0 && (
+                  <ul className="mt-2 space-y-0.5 text-xs text-destructive">
+                    {userCsvResult.errors.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
 
           {loading ? (

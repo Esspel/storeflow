@@ -418,6 +418,10 @@ function TasksPage() {
   const [deleteTarget, setDeleteTarget] = useState<TaskFull | null>(null);
   const [deleteScope, setDeleteScope] = useState<"single" | "future" | null>(null);
 
+  // Bulk operations
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteTasksOpen, setBulkDeleteTasksOpen] = useState(false);
+
   // Edit state
   const [editTask, setEditTask] = useState<TaskFull | null>(null);
   const [editForm, setEditForm] = useState<ReturnType<typeof emptyForm> | null>(null);
@@ -973,6 +977,17 @@ function TasksPage() {
     await fetchTasks();
   };
 
+  const bulkDeleteTasks = async () => {
+    const ids = [...selectedTaskIds];
+    const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", ids);
+    deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+    await supabase.from("tasks").delete().in("id", ids);
+    logAudit(user?.id ?? null, "task.bulk_delete", "tasks", ids[0], { count: ids.length });
+    setSelectedTaskIds(new Set());
+    setBulkDeleteTasksOpen(false);
+    await fetchTasks();
+  };
+
   const openEdit = (task: TaskFull) => {
     setEditTask(task);
     setEditForm({
@@ -1509,14 +1524,26 @@ function TasksPage() {
       : RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label;
 
     return (
+      <div key={t.id} className="flex items-stretch gap-2">
+        {isManager && (
+          <div className="flex items-center pl-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <Checkbox
+              checked={selectedTaskIds.has(t.id)}
+              onCheckedChange={(checked) => {
+                const next = new Set(selectedTaskIds);
+                if (checked) next.add(t.id); else next.delete(t.id);
+                setSelectedTaskIds(next);
+              }}
+            />
+          </div>
+        )}
       <SwipeableCard
-        key={t.id}
         done={done}
         onSwipeRight={() => swipeComplete(t)}
         onSwipeLeft={() => openDetail(t)}
         onClick={() => openDetail(t)}
         className={cn(
-          "cursor-pointer overflow-hidden rounded-2xl border bg-card transition-all",
+          "cursor-pointer overflow-hidden rounded-2xl border bg-card transition-all flex-1",
           "shadow-[0_1px_3px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)]",
           done && "opacity-55 border-border/30",
           !done && overdue && "border-destructive/50",
@@ -1587,6 +1614,7 @@ function TasksPage() {
           </div>
         </div>
       </SwipeableCard>
+      </div>
     );
   };
 
@@ -1728,6 +1756,21 @@ function TasksPage() {
           </div>
         )}
       </div>
+
+      {/* Bulk action bar */}
+      {selectedTaskIds.size > 0 && isManager && (
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-2.5">
+          <span className="text-sm font-medium text-destructive">{selectedTaskIds.size} uppgifter markerade</span>
+          <div className="ml-auto flex gap-2">
+            <Button variant="ghost" size="sm" className="rounded-full h-8 text-xs" onClick={() => setSelectedTaskIds(new Set())}>
+              Avmarkera
+            </Button>
+            <Button variant="destructive" size="sm" className="rounded-full h-8 gap-1.5 text-xs" onClick={() => setBulkDeleteTasksOpen(true)}>
+              <Trash2 className="h-3.5 w-3.5" /> Ta bort markerade
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Task CSV import dialog */}
       <ImportDialog
@@ -2660,6 +2703,24 @@ function TasksPage() {
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      {/* BULK DELETE TASKS */}
+      <AlertDialog open={bulkDeleteTasksOpen} onOpenChange={setBulkDeleteTasksOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort {selectedTaskIds.size} uppgifter</AlertDialogTitle>
+            <AlertDialogDescription>
+              Är du säker? Alla markerade uppgifter, steg, bilder och svar raderas permanent.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={bulkDeleteTasks}>
+              Ta bort alla
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* EDIT DIALOG */}
       {editTask && editForm && (

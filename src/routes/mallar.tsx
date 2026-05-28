@@ -127,6 +127,10 @@ function MallarPage() {
   const [importing, setImporting] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
 
+  // Bulk operations
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteTemplatesOpen, setBulkDeleteTemplatesOpen] = useState(false);
+
   // View filter: "all" | "hk" | "forening" | "store"
   const [viewFilter, setViewFilter] = useState<"all" | "hk" | "forening" | "store">("all");
 
@@ -277,6 +281,15 @@ function MallarPage() {
     await supabase.from("checklist_templates").delete().eq("id", deleteTarget.id);
     logAudit(user?.id ?? null, "template.delete", "checklist_templates", deleteTarget.id, { title: deleteTarget.title });
     setDeleteTarget(null);
+    await load();
+  }
+
+  async function bulkDeleteTemplates() {
+    const ids = [...selectedTemplateIds];
+    await supabase.from("checklist_templates").delete().in("id", ids);
+    ids.forEach(id => logAudit(user?.id ?? null, "template.delete", "checklist_templates", id, { bulk: true }));
+    setSelectedTemplateIds(new Set());
+    setBulkDeleteTemplatesOpen(false);
     await load();
   }
 
@@ -888,6 +901,21 @@ function MallarPage() {
         }
       />
 
+      {/* Bulk action bar */}
+      {selectedTemplateIds.size > 0 && isManager && (
+        <div className="mt-4 flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-2.5">
+          <span className="text-sm font-medium text-destructive">{selectedTemplateIds.size} mallar markerade</span>
+          <div className="ml-auto flex gap-2">
+            <Button variant="ghost" size="sm" className="rounded-full h-8 text-xs" onClick={() => setSelectedTemplateIds(new Set())}>
+              Avmarkera alla
+            </Button>
+            <Button variant="destructive" size="sm" className="rounded-full h-8 gap-1.5 text-xs" onClick={() => setBulkDeleteTemplatesOpen(true)}>
+              <Trash2 className="h-3.5 w-3.5" /> Ta bort markerade
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* View filter tabs */}
       <div className="mt-4 flex gap-1 rounded-xl border border-border/60 bg-muted/30 p-1 w-fit">
         {[
@@ -945,6 +973,18 @@ function MallarPage() {
                         )}
                       >
                         <div className="flex w-full items-center justify-between hover:bg-muted/20">
+                          {isManager && canDelete(t) && (
+                            <div className="pl-4 shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <Checkbox
+                                checked={selectedTemplateIds.has(t.id)}
+                                onCheckedChange={(checked) => {
+                                  const next = new Set(selectedTemplateIds);
+                                  if (checked) next.add(t.id); else next.delete(t.id);
+                                  setSelectedTemplateIds(next);
+                                }}
+                              />
+                            </div>
+                          )}
                           <button
                             className="flex flex-1 items-center gap-3 px-5 py-4 text-left"
                             onClick={() => setExpanded(expanded === t.id ? null : t.id)}
@@ -1113,6 +1153,24 @@ function MallarPage() {
               setBroadcastConfirm(null);
             }}>
               Skicka till alla
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* BULK DELETE CONFIRM */}
+      <AlertDialog open={bulkDeleteTemplatesOpen} onOpenChange={setBulkDeleteTemplatesOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort {selectedTemplateIds.size} mallar</AlertDialogTitle>
+            <AlertDialogDescription>
+              Är du säker? Alla markerade mallar och deras steg och frågor raderas permanent.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={bulkDeleteTemplates}>
+              Ta bort alla
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

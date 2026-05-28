@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Calendar, CalendarClock, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight, RefreshCw, Sparkles } from "lucide-react";
+import { Calendar, CalendarClock, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Trash2, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight, RefreshCw, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,10 @@ import {
   Dialog,
   DialogContent,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -763,6 +767,8 @@ function SchemaPage() {
 
   const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [bulkCreatingAccounts, setBulkCreatingAccounts] = useState(false);
+  const [deleteImportTarget, setDeleteImportTarget] = useState<ImportRow | null>(null);
+  const [deleteDeliveryPlanConfirm, setDeleteDeliveryPlanConfirm] = useState(false);
 
   const importInputRef = useRef<HTMLInputElement>(null);
   const mobileListRef = useRef<HTMLDivElement>(null);
@@ -916,6 +922,26 @@ function SchemaPage() {
       setActiveImport(current);
       setSelectedWeek({ weekNumber: current.week_number, year: current.year });
     }
+  }
+
+  async function deleteScheduleImport(imp: ImportRow) {
+    await supabase.from("schedule_shifts").delete().eq("import_id", imp.id);
+    await supabase.from("schedule_employees").delete().eq("import_id", imp.id);
+    await supabase.from("schedule_imports").delete().eq("id", imp.id);
+    setDeleteImportTarget(null);
+    if (activeImport?.id === imp.id) setActiveImport(null);
+    await loadImports();
+  }
+
+  async function deleteAllDeliveryPlans() {
+    if (!storeId) return;
+    await supabase.from("delivery_entries").delete().in(
+      "plan_id",
+      (await supabase.from("delivery_plans").select("id").eq("store_id", storeId)).data?.map((r: { id: string }) => r.id) ?? []
+    );
+    await supabase.from("delivery_plans").delete().eq("store_id", storeId);
+    setDeleteDeliveryPlanConfirm(false);
+    await loadDeliveryPlans();
   }
 
   async function loadAppUsers() {
@@ -1694,6 +1720,18 @@ function SchemaPage() {
               <Button size="sm" variant="outline" onClick={() => setMappingOpen(true)} className="hidden sm:flex gap-1.5">
                 <Users className="h-4 w-4" />
                 Personal
+              </Button>
+            )}
+            {isAdmin && selectedWeekImport && (
+              <Button size="sm" variant="outline" className="hidden sm:flex gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/5" onClick={() => setDeleteImportTarget(selectedWeekImport)}>
+                <Trash2 className="h-4 w-4" />
+                Ta bort vecka
+              </Button>
+            )}
+            {isAdmin && deliveryPlans.length > 0 && (
+              <Button size="sm" variant="outline" className="hidden sm:flex gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/5" onClick={() => setDeleteDeliveryPlanConfirm(true)}>
+                <Trash2 className="h-4 w-4" />
+                Ta bort leveransplan
               </Button>
             )}
             {isAdmin && (
@@ -2894,6 +2932,48 @@ function SchemaPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* DELETE SCHEDULE IMPORT */}
+      <AlertDialog open={!!deleteImportTarget} onOpenChange={(o) => !o && setDeleteImportTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort schema — V{deleteImportTarget?.week_number} {deleteImportTarget?.year}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Schemaimporten och alla tillhörande skift för denna vecka raderas permanent. Åtgärden kan inte ångras.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteImportTarget && deleteScheduleImport(deleteImportTarget)}
+            >
+              Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* DELETE DELIVERY PLANS */}
+      <AlertDialog open={deleteDeliveryPlanConfirm} onOpenChange={setDeleteDeliveryPlanConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort alla leveransplaner</AlertDialogTitle>
+            <AlertDialogDescription>
+              Alla leveransplaner och leveransposter för denna butik raderas permanent. Du kan sedan importera en ny leveransplan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={deleteAllDeliveryPlans}
+            >
+              Ta bort alla
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

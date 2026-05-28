@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Calendar, CircleCheck as CheckCircle2, Clock, GripVertical, Pause, Pencil, Play, Plus, Settings, Trash2, Users, X, FileText,
+  Calendar, CircleCheck as CheckCircle2, Clock, GripVertical, Pause, Pencil, Play, Plus, Search, Settings, Trash2, Users, X, FileText,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -21,6 +21,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   supabase,
   type Meeting, type MeetingAgendaItem, type MeetingDecision, type AppUser, type MeetingType,
@@ -158,6 +159,9 @@ function MeetingsPage() {
   const [deleteTypeTarget, setDeleteTypeTarget] = useState<MeetingType | null>(null);
   const [savingType, setSavingType] = useState(false);
   const [dragTypeIdx, setDragTypeIdx] = useState<number | null>(null);
+  const [selectedTypeIds, setSelectedTypeIds] = useState<Set<string>>(new Set());
+  const [typeSearch, setTypeSearch] = useState("");
+  const [bulkDeleteTypesOpen, setBulkDeleteTypesOpen] = useState(false);
 
   // Detail / edit / delete
   const [showDetail, setShowDetail] = useState<MeetingFull | null>(null);
@@ -672,138 +676,262 @@ function MeetingsPage() {
       </Dialog>
 
       {/* ── MANAGE TYPES DIALOG ────────────────────────────────────────────── */}
-      <Dialog open={showManageTypes} onOpenChange={setShowManageTypes}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
-          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
-            <Settings className="h-4 w-4 text-muted-foreground shrink-0" />
-            <DialogTitle className="text-sm font-medium">Hantera mötestyper</DialogTitle>
+      <Dialog open={showManageTypes} onOpenChange={(o) => { setShowManageTypes(o); if (!o) { setSelectedTypeIds(new Set()); setTypeSearch(""); } }}>
+        <DialogContent className="w-[95vw] max-w-5xl h-[90vh] max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-border/60 px-6 py-4 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted">
+                <Settings className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-semibold">Hantera mötestyper</DialogTitle>
+                <p className="text-xs text-muted-foreground">{meetingTypes.length} typer totalt</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedTypeIds.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="rounded-full h-8 gap-1.5"
+                  onClick={() => setBulkDeleteTypesOpen(true)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Ta bort {selectedTypeIds.size} st
+                </Button>
+              )}
+              <Button size="sm" className="rounded-full h-8 gap-1.5" onClick={openNewType}>
+                <Plus className="h-3.5 w-3.5" /> Ny typ
+              </Button>
+            </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row flex-1 overflow-hidden">
+          <div className="flex flex-1 overflow-hidden">
             {/* Left: type list */}
-            <div className="w-full sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r border-border/60 overflow-y-auto">
-              <div className="p-3 space-y-1">
-                {meetingTypes.map((t, idx) => (
-                  <div
-                    key={t.id}
-                    className={cn(
-                      "group flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors",
-                      editTypeTarget?.id === t.id ? "bg-primary/10 text-primary" : "hover:bg-muted/40"
-                    )}
-                    draggable
-                    onDragStart={() => setDragTypeIdx(idx)}
-                    onDragEnd={() => setDragTypeIdx(null)}
-                    onDragOver={(e) => { e.preventDefault(); if (dragTypeIdx !== null && dragTypeIdx !== idx) reorderTypes(dragTypeIdx, idx).then(() => setDragTypeIdx(idx)); }}
-                    onClick={() => openEditType(t)}
-                  >
-                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
-                    <span className="flex-1 font-medium truncate">{t.label}</span>
-                    {isManager && (
-                      <button
-                        className="opacity-0 group-hover:opacity-100 flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-destructive transition-opacity"
-                        onClick={(e) => { e.stopPropagation(); setDeleteTypeTarget(t); }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    )}
+            <div className="w-72 shrink-0 border-r border-border/60 flex flex-col overflow-hidden">
+              {/* Search + select all */}
+              <div className="p-3 border-b border-border/40 space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    value={typeSearch}
+                    onChange={(e) => setTypeSearch(e.target.value)}
+                    placeholder="Sök mötestyp..."
+                    className="pl-8 h-8 text-xs"
+                  />
+                </div>
+                {isManager && meetingTypes.length > 0 && (
+                  <div className="flex items-center gap-2 px-1">
+                    <Checkbox
+                      id="select-all-types"
+                      checked={meetingTypes.filter(t => !typeSearch || t.label.toLowerCase().includes(typeSearch.toLowerCase())).every(t => selectedTypeIds.has(t.id))}
+                      onCheckedChange={(checked) => {
+                        const visible = meetingTypes.filter(t => !typeSearch || t.label.toLowerCase().includes(typeSearch.toLowerCase()));
+                        if (checked) setSelectedTypeIds(new Set([...selectedTypeIds, ...visible.map(t => t.id)]));
+                        else { const next = new Set(selectedTypeIds); visible.forEach(t => next.delete(t.id)); setSelectedTypeIds(next); }
+                      }}
+                    />
+                    <label htmlFor="select-all-types" className="text-xs text-muted-foreground cursor-pointer">Markera alla</label>
                   </div>
-                ))}
-                <button
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
-                  onClick={openNewType}
-                >
-                  <Plus className="h-3.5 w-3.5" /> Ny mötestyp
-                </button>
+                )}
+              </div>
+              {/* List */}
+              <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+                {meetingTypes
+                  .filter(t => !typeSearch || t.label.toLowerCase().includes(typeSearch.toLowerCase()))
+                  .map((t, idx) => {
+                    const realIdx = meetingTypes.indexOf(t);
+                    return (
+                      <div
+                        key={t.id}
+                        className={cn(
+                          "group flex items-center gap-2 rounded-lg px-2 py-2.5 text-sm cursor-pointer transition-colors select-none",
+                          editTypeTarget?.id === t.id ? "bg-primary/10 text-primary" : "hover:bg-muted/40",
+                          selectedTypeIds.has(t.id) && "bg-destructive/5 border border-destructive/20"
+                        )}
+                        draggable
+                        onDragStart={() => setDragTypeIdx(realIdx)}
+                        onDragEnd={() => setDragTypeIdx(null)}
+                        onDragOver={(e) => { e.preventDefault(); if (dragTypeIdx !== null && dragTypeIdx !== realIdx) reorderTypes(dragTypeIdx, realIdx).then(() => setDragTypeIdx(realIdx)); }}
+                        onClick={() => openEditType(t)}
+                      >
+                        {isManager && (
+                          <Checkbox
+                            checked={selectedTypeIds.has(t.id)}
+                            onCheckedChange={(checked) => {
+                              const next = new Set(selectedTypeIds);
+                              if (checked) next.add(t.id); else next.delete(t.id);
+                              setSelectedTypeIds(next);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        )}
+                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0 cursor-grab" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate text-sm">{t.label}</p>
+                          {t.description && <p className="text-[11px] text-muted-foreground truncate">{t.description}</p>}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[10px] text-muted-foreground tabular-nums">{t.default_duration_min}m</span>
+                          {isManager && (
+                            <button
+                              className="opacity-0 group-hover:opacity-100 flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-destructive transition-opacity"
+                              onClick={(e) => { e.stopPropagation(); setDeleteTypeTarget(t); }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                {meetingTypes.filter(t => !typeSearch || t.label.toLowerCase().includes(typeSearch.toLowerCase())).length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <p className="text-xs text-muted-foreground">Inga mötestyper{typeSearch ? " matchar sökningen" : ""}</p>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Right: form */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Namn</Label>
-                <Input
-                  value={typeForm.label}
-                  onChange={(e) => setTypeForm(p => ({ ...p, label: e.target.value }))}
-                  placeholder="T.ex. Leveransmöte"
-                  className="text-sm"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Beskrivning</Label>
-                <Textarea
-                  value={typeForm.description}
-                  onChange={(e) => setTypeForm(p => ({ ...p, description: e.target.value }))}
-                  placeholder="Kort beskrivning av mötestypen..."
-                  rows={2}
-                  className="resize-none text-sm"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Standardlängd (minuter)</Label>
-                <Input
-                  type="number"
-                  min={5}
-                  max={480}
-                  value={typeForm.default_duration_min}
-                  onChange={(e) => setTypeForm(p => ({ ...p, default_duration_min: parseInt(e.target.value) || 30 }))}
-                  className="text-sm w-28"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">Standardagenda</Label>
-                  <button
-                    type="button"
-                    className="text-xs text-primary hover:underline"
-                    onClick={() => setTypeForm(p => ({ ...p, default_agenda: [...p.default_agenda, { title: "", duration: 5 }] }))}
-                  >
-                    + Lägg till punkt
-                  </button>
-                </div>
-                {typeForm.default_agenda.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
+            <div className="flex-1 overflow-y-auto">
+              {editTypeTarget !== null || !meetingTypes.length ? (
+                <div className="p-6 space-y-5 max-w-lg">
+                  <div>
+                    <h3 className="text-sm font-semibold mb-4">{editTypeTarget ? "Redigera mötestyp" : "Ny mötestyp"}</h3>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Namn</Label>
                     <Input
-                      value={item.title}
-                      onChange={(e) => setTypeForm(p => ({
-                        ...p,
-                        default_agenda: p.default_agenda.map((a, i) => i === idx ? { ...a, title: e.target.value } : a),
-                      }))}
-                      placeholder={`Punkt ${idx + 1}`}
-                      className="text-sm flex-1 h-8"
+                      value={typeForm.label}
+                      onChange={(e) => setTypeForm(p => ({ ...p, label: e.target.value }))}
+                      placeholder="T.ex. Leveransmöte"
                     />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Beskrivning</Label>
+                    <Textarea
+                      value={typeForm.description}
+                      onChange={(e) => setTypeForm(p => ({ ...p, description: e.target.value }))}
+                      placeholder="Kort beskrivning av mötestypen..."
+                      rows={2}
+                      className="resize-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Standardlängd (minuter)</Label>
                     <Input
                       type="number"
-                      min={1}
-                      value={item.duration}
-                      onChange={(e) => setTypeForm(p => ({
-                        ...p,
-                        default_agenda: p.default_agenda.map((a, i) => i === idx ? { ...a, duration: parseInt(e.target.value) || 5 } : a),
-                      }))}
-                      className="text-sm w-16 h-8"
+                      min={5}
+                      max={480}
+                      value={typeForm.default_duration_min}
+                      onChange={(e) => setTypeForm(p => ({ ...p, default_duration_min: parseInt(e.target.value) || 30 }))}
+                      className="w-32"
                     />
-                    <span className="text-xs text-muted-foreground shrink-0">min</span>
-                    <button
-                      type="button"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => setTypeForm(p => ({ ...p, default_agenda: p.default_agenda.filter((_, i) => i !== idx) }))}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
                   </div>
-                ))}
-              </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-border/60">
-                <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowManageTypes(false)}>Stäng</Button>
-                <Button size="sm" className="rounded-full" disabled={savingType || !typeForm.label.trim()} onClick={saveType}>
-                  {savingType ? "Sparar..." : editTypeTarget ? "Spara ändringar" : "Skapa mötestyp"}
-                </Button>
-              </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-medium">Standardagenda</Label>
+                      <button
+                        type="button"
+                        className="text-xs text-primary hover:underline"
+                        onClick={() => setTypeForm(p => ({ ...p, default_agenda: [...p.default_agenda, { title: "", duration: 5 }] }))}
+                      >
+                        + Lägg till punkt
+                      </button>
+                    </div>
+                    {typeForm.default_agenda.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <Input
+                          value={item.title}
+                          onChange={(e) => setTypeForm(p => ({
+                            ...p,
+                            default_agenda: p.default_agenda.map((a, i) => i === idx ? { ...a, title: e.target.value } : a),
+                          }))}
+                          placeholder={`Punkt ${idx + 1}`}
+                          className="flex-1 h-8 text-sm"
+                        />
+                        <Input
+                          type="number"
+                          min={1}
+                          value={item.duration}
+                          onChange={(e) => setTypeForm(p => ({
+                            ...p,
+                            default_agenda: p.default_agenda.map((a, i) => i === idx ? { ...a, duration: parseInt(e.target.value) || 5 } : a),
+                          }))}
+                          className="w-16 h-8 text-sm"
+                        />
+                        <span className="text-xs text-muted-foreground shrink-0">min</span>
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => setTypeForm(p => ({ ...p, default_agenda: p.default_agenda.filter((_, i) => i !== idx) }))}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2 pt-2 border-t border-border/60">
+                    <Button variant="outline" size="sm" className="rounded-full" onClick={() => { setEditTypeTarget(null); setTypeSearch(""); }}>Avbryt</Button>
+                    <Button size="sm" className="rounded-full" disabled={savingType || !typeForm.label.trim()} onClick={saveType}>
+                      {savingType ? "Sparar..." : editTypeTarget ? "Spara ändringar" : "Skapa mötestyp"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center p-10">
+                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                    <Settings className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-medium">Välj en mötestyp att redigera</p>
+                  <p className="text-xs text-muted-foreground mt-1">Klicka på en typ i listan eller skapa en ny</p>
+                  <Button size="sm" className="mt-4 rounded-full gap-1.5" onClick={openNewType}>
+                    <Plus className="h-3.5 w-3.5" /> Ny mötestyp
+                  </Button>
+                </div>
+              )}
             </div>
+          </div>
+
+          {/* Footer */}
+          <div className="border-t border-border/60 px-6 py-3 shrink-0 flex justify-between items-center">
+            <p className="text-xs text-muted-foreground">
+              {selectedTypeIds.size > 0 ? `${selectedTypeIds.size} markerade` : "Dra för att ändra ordning"}
+            </p>
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowManageTypes(false)}>Stäng</Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── BULK DELETE TYPES CONFIRM ─────────────────────────────────────── */}
+      <AlertDialog open={bulkDeleteTypesOpen} onOpenChange={setBulkDeleteTypesOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort {selectedTypeIds.size} mötestyper</AlertDialogTitle>
+            <AlertDialogDescription>
+              Är du säker? Befintliga möten av dessa typer påverkas inte men typerna tas bort från listan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                await supabase.from("meeting_types").update({ is_active: false }).in("id", [...selectedTypeIds]);
+                setSelectedTypeIds(new Set());
+                setBulkDeleteTypesOpen(false);
+                await fetchMeetingTypes();
+              }}
+            >
+              Ta bort alla
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── DETAIL DIALOG ──────────────────────────────────────────────────── */}
       <Dialog open={!!showDetail} onOpenChange={(o) => { if (!o) setShowDetail(null); }}>
