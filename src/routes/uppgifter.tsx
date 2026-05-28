@@ -672,9 +672,11 @@ function TasksPage() {
       );
 
       const covered = coveredByParent.get(t.id) ?? new Set<string>();
+      const deletedPeriods = new Set<string>(t.deleted_periods ?? []);
       for (const ps of periodStarts) {
         const psKey = localDateStr(ps);
         if (covered.has(psKey)) continue;
+        if (deletedPeriods.has(psKey)) continue;
         const childDue = t.due_date ? new Date(ps.getTime() + durationMs) : null;
         const { data: child } = await supabase.from("tasks").insert({
           title: t.title, description: t.description, category: t.category, priority: t.priority,
@@ -921,19 +923,38 @@ function TasksPage() {
     if (!deleteTarget) return;
     const t = deleteTarget;
 
-    // Collect task IDs being deleted so we can clean up their storage files
     const idsToDelete: string[] = [];
+    const parentId = t.parent_task_id ?? t.id;
+    const isChild = !!t.parent_task_id;
+    const periodStart = t.recurrence_period_start ?? (t.due_date ? t.due_date.slice(0, 10) : null);
 
-    if (t.recurrence_rule && scope === "future") {
-      const parentId = t.parent_task_id ?? t.id;
-      const periodStart = t.recurrence_period_start ?? (t.due_date ? t.due_date.slice(0, 10) : null);
+    if ((t.recurrence_rule || isChild) && scope === "future") {
+      // Delete this and all future children
       if (periodStart) {
         const { data: toRemove } = await supabase.from("tasks").select("id").eq("parent_task_id", parentId).gte("recurrence_period_start", periodStart);
         (toRemove ?? []).forEach((r: { id: string }) => idsToDelete.push(r.id));
         await supabase.from("tasks").delete().eq("parent_task_id", parentId).gte("recurrence_period_start", periodStart);
+        // Set recurrence_end on parent to day before this period so spawn won't recreate them
+        const dayBefore = new Date(periodStart);
+        dayBefore.setDate(dayBefore.getDate() - 1);
+        await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
       }
+      if (isChild) {
+        idsToDelete.push(t.id);
+        await supabase.from("tasks").delete().eq("id", t.id);
+      }
+    } else if ((t.recurrence_rule || isChild) && scope === "single") {
+      // Delete only this instance — record the period_start in parent's deleted_periods
       idsToDelete.push(t.id);
       await supabase.from("tasks").delete().eq("id", t.id);
+      if (periodStart && parentId !== t.id) {
+        // Append to deleted_periods on the parent so spawn skips this period
+        const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
+        const existing: string[] = (parent?.deleted_periods ?? []) as string[];
+        if (!existing.includes(periodStart)) {
+          await supabase.from("tasks").update({ deleted_periods: [...existing, periodStart] }).eq("id", parentId);
+        }
+      }
     } else {
       idsToDelete.push(t.id);
       await supabase.from("tasks").delete().eq("id", t.id);

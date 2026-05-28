@@ -150,6 +150,7 @@ export type Task = {
   parent_task_id: string | null;
   last_spawned_at: string | null;
   recurrence_period_start: string | null;
+  deleted_periods: string[] | null;
   completed_at: string | null;
   sap_article_id: string | null;
   created_at: string;
