@@ -33,6 +33,8 @@ function QrKundonskemalFormPage() {
   });
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [statusUrl, setStatusUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!token) { setInvalid(true); setResolving(false); return; }
@@ -56,13 +58,24 @@ function QrKundonskemalFormPage() {
   const submit = async () => {
     if (!form.product_name.trim() || !storeId) return;
     setSaving(true);
-    await supabase.from("customer_requests").insert({
+    const { data: inserted, error } = await supabase.from("customer_requests").insert({
       store_id: storeId,
       product_name: form.product_name.trim(),
       notes: form.notes.trim() || null,
       priority: form.priority,
       source: "qr",
-    });
+    }).select("id").maybeSingle();
+    if (!error && inserted?.id) {
+      // Create a status token so the customer can follow their request
+      const { data: tokenRow } = await supabase.from("qr_tokens").insert({
+        token_type: "customer_request_status",
+        store_id: storeId,
+        meta: { request_id: inserted.id },
+      }).select("token").maybeSingle();
+      if (tokenRow?.token) {
+        setStatusUrl(`${window.location.origin}/qr-kundonskemal?token=${tokenRow.token}`);
+      }
+    }
     setSaving(false);
     setDone(true);
   };
@@ -94,7 +107,7 @@ function QrKundonskemalFormPage() {
   if (done) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-        <div className="text-center">
+        <div className="w-full max-w-sm text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-success/10">
             <CheckCircle2 className="h-8 w-8 text-success" />
           </div>
@@ -102,10 +115,39 @@ function QrKundonskemalFormPage() {
           <p className="mt-2 text-sm text-muted-foreground">
             Vi har tagit emot ditt önskemål och återkommer när vi har mer information.
           </p>
+          {statusUrl && (
+            <div className="mt-5 rounded-2xl border border-border/60 bg-card p-4 text-left space-y-3">
+              <p className="text-sm font-medium text-foreground">Följ ditt önskemål</p>
+              <p className="text-xs text-muted-foreground">
+                Spara länken nedan för att se status på ditt önskemål:
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={statusUrl}
+                  className="flex-1 rounded-xl border border-border/60 bg-muted px-3 py-2 text-xs font-mono text-foreground outline-none"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(statusUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                  className="shrink-0 rounded-xl border border-border/60 bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  {copied ? "Kopierat!" : "Kopiera"}
+                </button>
+              </div>
+              <a
+                href={statusUrl}
+                className="block rounded-xl bg-primary px-4 py-2.5 text-center text-sm font-medium text-primary-foreground"
+              >
+                Visa status
+              </a>
+            </div>
+          )}
           <button
-            className="mt-6 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground"
+            className="mt-5 rounded-full border border-border/60 bg-card px-6 py-2.5 text-sm font-medium text-foreground"
             onClick={() => {
               setDone(false);
+              setStatusUrl(null);
               setForm({ product_name: "", notes: "", priority: "normal" });
             }}
           >

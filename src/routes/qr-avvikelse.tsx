@@ -51,7 +51,6 @@ function QrAvvikelsePage() {
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
   const [submitError, setSubmitError] = useState(false);
-  const [refNumber, setRefNumber] = useState("");
 
   useEffect(() => {
     if (!token) { setInvalid(true); setResolving(false); return; }
@@ -82,7 +81,7 @@ function QrAvvikelsePage() {
   const submit = async () => {
     if (!form.title.trim() || !storeId) return;
     setSaving(true);
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("incidents")
       .insert({
         title: form.title.trim(),
@@ -92,12 +91,9 @@ function QrAvvikelsePage() {
         store_id: storeId,
         status: "open",
         source: "qr",
-      })
-      .select("ref_number")
-      .maybeSingle();
+      });
     setSaving(false);
     if (!error) {
-      setRefNumber(data?.ref_number ?? "");
       setDone(true);
     } else {
       setSubmitError(true);
@@ -139,11 +135,6 @@ function QrAvvikelsePage() {
           <p className="mt-2 text-sm text-muted-foreground">
             Tack! Din avvikelse har registrerats och personalen har blivit meddelade.
           </p>
-          {refNumber && (
-            <p className="mt-3 rounded-lg bg-muted px-4 py-2 text-sm font-mono font-semibold text-foreground">
-              Ref: {refNumber}
-            </p>
-          )}
           <button
             className="mt-6 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground"
             onClick={() => { setDone(false); setForm((f) => ({ ...f, title: meta.zone_name ? `Avvikelse i ${meta.zone_name}` : "", description: "", reporter_name: "" })); }}

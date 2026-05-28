@@ -421,7 +421,7 @@ function LiveBoard({ storeId }: { storeId: string }) {
           <iframe
             src={data.upshopUrl}
             className="w-full"
-            style={{ height: "280px", border: "none" }}
+            style={{ height: "480px", border: "none" }}
             allow="fullscreen"
             loading="lazy"
           />

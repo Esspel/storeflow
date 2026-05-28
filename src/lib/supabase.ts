@@ -557,6 +557,9 @@ export type CustomerRequest = {
   product_name: string;
   article_number: string | null;
   notes: string | null;
+  internal_notes: string | null;
+  staff_comment: string | null;
+  source: string | null;
   requested_by: string | null;
   status: "open" | "ordered" | "declined" | "fulfilled";
   priority: "low" | "normal" | "high";

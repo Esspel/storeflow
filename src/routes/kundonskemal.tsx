@@ -81,6 +81,7 @@ function CustomerRequestsPage() {
   const [editTarget, setEditTarget] = useState<CustomerRequest | null>(null);
   const [editStatus, setEditStatus] = useState<CustomerRequest["status"]>("open");
   const [editNotes, setEditNotes] = useState("");
+  const [editInternalNotes, setEditInternalNotes] = useState("");
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrRequest, setQrRequest] = useState<CustomerRequest | null>(null);
   const [qrTokenUrl, setQrTokenUrl] = useState("");
@@ -189,7 +190,7 @@ function CustomerRequestsPage() {
     setSaving(true);
     await supabase.from("customer_requests").update({
       status: editStatus,
-      notes: editNotes.trim() || null,
+      internal_notes: editInternalNotes.trim() || null,
       staff_comment: editComment.trim() || null,
     }).eq("id", editTarget.id);
     setSaving(false);
@@ -334,7 +335,10 @@ function CustomerRequestsPage() {
                 </div>
 
                 {r.notes && (
-                  <p className="text-xs text-muted-foreground line-clamp-2">{r.notes}</p>
+                  <div className="rounded-lg bg-muted/50 px-2.5 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-0.5">Kundens kommentar</p>
+                    <p className="text-xs text-muted-foreground line-clamp-2">{r.notes}</p>
+                  </div>
                 )}
 
                 <div className="flex items-center justify-between pt-1 border-t border-border/40">
@@ -354,7 +358,7 @@ function CustomerRequestsPage() {
                         onClick={() => {
                           setEditTarget(r);
                           setEditStatus(r.status);
-                          setEditNotes(r.notes ?? "");
+                          setEditInternalNotes(r.internal_notes ?? "");
                           setEditComment((r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "");
                         }}
                       >
@@ -490,6 +494,12 @@ function CustomerRequestsPage() {
                 {editTarget.article_number && (
                   <p className="text-xs text-muted-foreground mt-0.5 font-mono">#{editTarget.article_number}</p>
                 )}
+                {editTarget.notes && (
+                  <div className="mt-2 border-t border-border/40 pt-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-0.5">Kundens kommentar</p>
+                    <p className="text-xs text-muted-foreground">{editTarget.notes}</p>
+                  </div>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Status</Label>
@@ -516,8 +526,8 @@ function CustomerRequestsPage() {
               <div className="space-y-1.5">
                 <Label className="text-xs">Intern anteckning</Label>
                 <Textarea
-                  value={editNotes}
-                  onChange={(e) => setEditNotes(e.target.value)}
+                  value={editInternalNotes}
+                  onChange={(e) => setEditInternalNotes(e.target.value)}
                   rows={2}
                   className="resize-none text-sm"
                   placeholder="Intern info, syns inte för kunden..."

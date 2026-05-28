@@ -30,6 +30,7 @@ function QrKundonskemalPage() {
     id: string;
     product_name: string;
     article_number: string | null;
+    notes: string | null;
     staff_comment: string | null;
     status: string;
     priority: string;
@@ -54,7 +55,7 @@ function QrKundonskemalPage() {
 
         const { data: req } = await supabase
           .from("customer_requests")
-          .select("id,product_name,article_number,staff_comment,status,priority,created_at,store:stores(name)")
+          .select("id,product_name,article_number,notes,staff_comment,status,priority,created_at,store:stores(name)")
           .eq("id", meta.request_id)
           .maybeSingle();
 
@@ -64,6 +65,7 @@ function QrKundonskemalPage() {
           id: req.id,
           product_name: req.product_name,
           article_number: req.article_number,
+          notes: (req as { notes?: string | null }).notes ?? null,
           staff_comment: (req as { staff_comment?: string | null }).staff_comment ?? null,
           status: req.status,
           priority: req.priority,
@@ -142,6 +144,13 @@ function QrKundonskemalPage() {
               <span className={cn("text-xs font-semibold", statusCfg.color)}>{statusCfg.label}</span>
             </div>
           </div>
+
+          {request.notes && (
+            <div className="mt-3 rounded-xl border border-border/40 bg-muted/30 px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 mb-1">Din kommentar</p>
+              <p className="text-sm text-foreground">{request.notes}</p>
+            </div>
+          )}
 
           {request.staff_comment && (
             <div className="mt-3 rounded-xl border border-border/60 bg-primary/5 px-3 py-2.5">
