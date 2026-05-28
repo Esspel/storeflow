@@ -1646,7 +1646,7 @@ function TasksPage() {
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-14 text-center">
             <CheckCircle2 className="mb-3 h-10 w-10 text-success/50" />
             <p className="text-sm font-semibold">Inga uppgifter för idag</p>
-            <p className="text-xs text-muted-foreground mt-1">Njut av dagen eller lägg till nya uppgifter.</p>
+            <p className="text-xs text-muted-foreground mt-1">{isManager ? "Njut av dagen eller lägg till nya uppgifter." : "Njut av dagen!"}</p>
             {isManager && (
               <Button className="mt-4 rounded-full" size="sm" onClick={() => { setShowCreate(true); setSaveError(""); }}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" /> Ny uppgift
@@ -2119,7 +2119,6 @@ function TasksPage() {
                   ref={detailFileInputRef}
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   multiple
                   className="hidden"
                   onChange={(e) => {
@@ -2132,7 +2131,6 @@ function TasksPage() {
                   ref={stepPhotoInputRef}
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
@@ -2410,7 +2408,7 @@ function TasksPage() {
               {/* Images */}
               <div className="space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Bilder</p>
-                <input ref={fileInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden"
+                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
                   onChange={(e) => { if (e.target.files) setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]); }} />
                 {uploadFiles.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-2">

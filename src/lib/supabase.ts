@@ -223,6 +223,7 @@ export type ChecklistTemplate = {
   recurrence_days: number[] | null;
   recurrence_interval: number | null;
   due_date_offset: number | null;
+  due_date_time: string | null;
   created_by: string | null;
   is_global: boolean;
   locked_by_admin: boolean;

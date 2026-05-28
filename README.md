@@ -81,7 +81,7 @@ A Swedish-language retail operations platform for coordinating tasks, tracking i
 - **PDF & Image Viewing** — In-browser PDF rendering via PDF.js and a full-screen photo viewer with zoom.
 - **SAP Integration** — Articles can be linked by SAP article ID with a direct deep-link to Mitt Coop (including site ID).
 - **Audit Trail** — Every significant action is logged to `audit_log` with actor, entity, and timestamp.
-- **Mobile-First PWA** — Installable progressive web app with a bottom FAB for primary actions, responsive layouts, and Zebra TC52 barcode scanner support.
+- **Mobile-First PWA** — Installable progressive web app with a bottom FAB for primary actions, responsive layouts, and barcode scanning via both Zebra TC52 hardware scanner and an in-app camera scanner (using the native `BarcodeDetector` API with torch/flashlight support).
 - **Admin Test Panel** — Developer tooling for time simulation (testing recurring tasks and SLA deadlines), data integrity checks, RLS policy verification, and bulk cleanup.
 
 ---

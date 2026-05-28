@@ -1152,7 +1152,7 @@ function KundrundaPage() {
                 <div className="space-y-1.5">
                   <Label className="text-xs">Foto på avvikelsen</Label>
                   <GdprImageReminder />
-                  <input ref={defectPhotoRef} type="file" accept="image/*" capture="environment" className="hidden"
+                  <input ref={defectPhotoRef} type="file" accept="image/*" className="hidden"
                     onChange={async (e) => { const f = e.target.files?.[0]; if (f) await uploadDefectPhoto(f); e.target.value = ""; }}
                   />
                   <Button type="button" variant="outline" size="sm" className="rounded-full gap-1.5 text-xs w-full" onClick={() => defectPhotoRef.current?.click()}>

@@ -40,7 +40,7 @@ const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 // Instruction header injected into every downloadable CSV template.
 // Lines starting with '#' are treated as comments and skipped by the importer.
 const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Steg (detaljer);Frågor
+# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Steg (detaljer);Frågor
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Återkommande: daily | every_other_day | weekly | monthly | yearly (lämna tomt för ingen)
@@ -48,6 +48,7 @@ const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid im
 #   Exempel: 0,1,4 (Mån, Tis, Fre)
 # Intervall: antal enheter mellan upprepningar (t.ex. 2 = varannan vecka), lämna tomt för 1
 # Förfaller om (dagar): antal dagar tills uppgiften förfaller från skapande (t.ex. 1)
+# Förfallotid (HH:MM): klockslag för förfallodatumet, t.ex. 08:00 (lämna tomt för ingen tid)
 #
 # Steg: separera med " | "  — lägg till [foto] om foto krävs
 #   Exempel: "1. Torka hyllor | 2. Dammsuga [foto] | 3. Kontrollera temperaturer"
@@ -73,6 +74,7 @@ type FormState = {
   recurrence_rule: string;
   recurrence_days: number[];
   due_date_offset: string;
+  due_date_time: string;
   storeIds: string[];
   isGlobal: boolean;
   isLocked: boolean;
@@ -83,7 +85,7 @@ type FormState = {
 
 const emptyForm = (): FormState => ({
   title: "", description: "", category: "", priority: "Medel",
-  recurrence_rule: "", recurrence_days: [], due_date_offset: "",
+  recurrence_rule: "", recurrence_days: [], due_date_offset: "", due_date_time: "",
   storeIds: [], isGlobal: false, isLocked: false, foreningId: "",
   items: [{ label: "", requires_photo: false }],
   questions: [],
@@ -236,6 +238,7 @@ function MallarPage() {
       recurrence_rule: form.recurrence_rule || null,
       recurrence_days: form.recurrence_rule === "weekly" && form.recurrence_days.length > 0 ? form.recurrence_days : null,
       due_date_offset: form.due_date_offset !== "" ? parseInt(form.due_date_offset) : null,
+      due_date_time: form.due_date_time || null,
       created_by: user?.id ?? null,
       is_global: createScope === "hk",
       locked_by_admin: form.isLocked,
@@ -287,6 +290,7 @@ function MallarPage() {
       recurrence_rule: t.recurrence_rule ?? "",
       recurrence_days: t.recurrence_days ?? [],
       due_date_offset: t.due_date_offset != null ? String(t.due_date_offset) : "",
+      due_date_time: t.due_date_time ?? "",
       storeIds: t.storeIds,
       isGlobal: t.is_global ?? false,
       isLocked: t.locked_by_admin ?? false,
@@ -316,6 +320,7 @@ function MallarPage() {
       recurrence_rule: editForm.recurrence_rule || null,
       recurrence_days: editForm.recurrence_rule === "weekly" && editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
       due_date_offset: editForm.due_date_offset !== "" ? parseInt(editForm.due_date_offset) : null,
+      due_date_time: editForm.due_date_time || null,
       is_global: editForm.isGlobal,
       locked_by_admin: editForm.isLocked,
     }).eq("id", editTarget.id);
@@ -384,9 +389,9 @@ function MallarPage() {
 
   // CSV: download blank import template with instructions
   const downloadBlankTemplate = () => {
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Steg (detaljer)", "Frågor"];
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Steg (detaljer)", "Frågor"];
     const example = [
-      "Exempelmall", "Rengöring", "Beskriv mallen här", "Medel", "weekly", "0,1,2,3,4", "1", "1",
+      "Exempelmall", "Rengöring", "Beskriv mallen här", "Medel", "weekly", "0,1,2,3,4", "1", "1", "08:00",
       "1. Torka hyllor | 2. Dammsuga [foto]",
       "1. Är allt klart? [obligatorisk] [ja_nej]",
     ];
@@ -450,7 +455,7 @@ function MallarPage() {
 
     const rows = lines.slice(1).map(parseRow);
     for (const cols of rows) {
-      const [title, category, description, priority, recurrence, weekdaysRaw, intervalRaw, dueDays, stepsRaw, questionsRaw] = cols;
+      const [title, category, description, priority, recurrence, weekdaysRaw, intervalRaw, dueDays, dueTime, stepsRaw, questionsRaw] = cols;
       if (!title?.trim()) continue;
 
       const recurrenceRule = (recurrence ?? "").trim() || null;
@@ -468,6 +473,7 @@ function MallarPage() {
         recurrence_days: recurrenceDays && recurrenceDays.length > 0 ? recurrenceDays : null,
         recurrence_interval: recurrenceInterval && recurrenceInterval > 1 ? recurrenceInterval : null,
         due_date_offset: dueDays?.trim() ? parseInt(dueDays.trim()) : null,
+        due_date_time: dueTime?.trim() || null,
         created_by: user?.id ?? null,
         hierarchy_scope: importScope,
         is_global: importScope === "hk",
@@ -699,6 +705,15 @@ function MallarPage() {
               <div className="flex flex-col gap-1 flex-1 min-w-0">
                 <span className="text-xs text-muted-foreground">Förfaller om (dagar)</span>
                 <Input type="number" min={0} placeholder="t.ex. 1" value={f.due_date_offset} onChange={(e) => setF((p) => ({ ...p, due_date_offset: e.target.value }))} className="h-7 border border-border/60 text-xs" />
+              </div>
+            </div>
+
+            {/* Förfallotid */}
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+              <div className="flex flex-col gap-1 flex-1 min-w-0">
+                <span className="text-xs text-muted-foreground">Förfallotid (HH:MM)</span>
+                <Input type="time" value={f.due_date_time} onChange={(e) => setF((p) => ({ ...p, due_date_time: e.target.value }))} className="h-7 border border-border/60 text-xs" />
               </div>
             </div>
 

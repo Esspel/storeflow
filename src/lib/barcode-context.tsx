@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { supabase } from "@/lib/supabase";
+import { CameraScanner } from "@/components/camera-scanner";
+import { ScanLine } from "lucide-react";
 
 // Global context so any component can listen to scan events too
 type BarcodeScan = { code: string; at: number };
@@ -9,9 +11,10 @@ type BarcodeCtx = {
   lastScan: BarcodeScan | null;
   // Subscribe to scan events from any component
   onScan: (fn: (code: string) => void) => () => void;
+  openCameraScanner: () => void;
 };
 
-const Ctx = createContext<BarcodeCtx>({ lastScan: null, onScan: () => () => {} });
+const Ctx = createContext<BarcodeCtx>({ lastScan: null, onScan: () => () => {}, openCameraScanner: () => {} });
 
 export function useBarcodeContext() {
   return useContext(Ctx);
@@ -48,6 +51,7 @@ export function BarcodeProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const [toast, setToast] = useState<{ code: string; label: string } | null>(null);
   const [lastScan, setLastScan] = useState<BarcodeScan | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const listenersRef = useRef<Set<(code: string) => void>>(new Set());
 
   const handleScan = async (code: string) => {
@@ -104,8 +108,25 @@ export function BarcodeProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ lastScan, onScan }}>
+    <Ctx.Provider value={{ lastScan, onScan, openCameraScanner: () => setCameraOpen(true) }}>
       {children}
+
+      {/* Floating camera scan button — mobile only, sits above bottom nav */}
+      <button
+        onClick={() => setCameraOpen(true)}
+        className="fixed bottom-[calc(56px+env(safe-area-inset-bottom,0px)+8px)] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform md:hidden"
+        aria-label="Scanna streckkod"
+      >
+        <ScanLine className="h-5 w-5" />
+      </button>
+
+      {cameraOpen && (
+        <CameraScanner
+          onScan={(code) => { setCameraOpen(false); void handleScan(code); }}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
+
       {toast && (
         <ScanToast
           code={toast.code}
