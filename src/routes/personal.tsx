@@ -294,13 +294,13 @@ function AccountsPage() {
       setError("Fyll i alla obligatoriska fält."); return;
     }
     if (newUser.password.length < MIN_PW_LENGTH) { setError(`Lösenordet måste vara minst ${MIN_PW_LENGTH} tecken.`); return; }
-    // Privilege escalation guard: non-admins/hk cannot create users with equal or higher hierarchy
+    // Privilege escalation guard: cannot create users with HIGHER hierarchy than self
     const isUnrestricted = effectiveRank(currentUser) >= 4;
     if (!isUnrestricted) {
       const myRank = effectiveRank(currentUser);
       const targetRank = hierarchyRank(newUser.hierarchy_level);
-      if (targetRank >= myRank) {
-        setError("Du kan inte skapa användare med samma eller högre hierarkinivå än dig själv."); return;
+      if (targetRank > myRank) {
+        setError("Du kan inte skapa användare med högre hierarkinivå än dig själv."); return;
       }
     }
     setSaving(true);
@@ -348,20 +348,20 @@ function AccountsPage() {
     if (!editUser) return;
     if (resetPw && resetPw.length < MIN_PW_LENGTH) { setError(`Nytt lösenord måste vara minst ${MIN_PW_LENGTH} tecken.`); return; }
     if (editPin && editPin.length > 0 && editPin.length < 4) { setError("PIN måste vara minst 4 siffror."); return; }
-    const isUnrestricted = currentUser?.hierarchy_level === "admin" || currentUser?.hierarchy_level === "hk";
+    const isUnrestricted = effectiveRank(currentUser) >= 4;
     if (!isUnrestricted) {
       const myStoreIds = currentUserStores.map((s) => s.id);
       const sharesStore = editUser.assignedStoreIds.some((sid) => myStoreIds.includes(sid)) || editUser.id === currentUser?.id;
       if (!sharesStore) { setError("Du har inte behörighet att redigera denna användare."); return; }
-      // Cannot edit users with equal or higher hierarchy than self
-      const myRank = hierarchyRank(currentUser?.hierarchy_level);
+      // Cannot edit users ABOVE self in hierarchy
+      const myRank = effectiveRank(currentUser);
       const targetOriginal = users.find(u => u.id === editUser.id);
-      if (targetOriginal && hierarchyRank(targetOriginal.hierarchy_level) >= myRank) {
-        setError("Du kan inte redigera användare med samma eller högre hierarkinivå än dig själv."); return;
+      if (targetOriginal && hierarchyRank(targetOriginal.hierarchy_level) > myRank) {
+        setError("Du kan inte redigera användare med högre hierarkinivå än dig själv."); return;
       }
-      // Cannot escalate target to equal or higher level
-      if (hierarchyRank(editUser.hierarchy_level) >= myRank) {
-        setError("Du kan inte sätta en hierarkinivå som är lika hög eller högre än din egen."); return;
+      // Cannot escalate target ABOVE own level
+      if (hierarchyRank(editUser.hierarchy_level) > myRank) {
+        setError("Du kan inte sätta en hierarkinivå som är högre än din egen."); return;
       }
     }
     setSaving(true);
@@ -1119,9 +1119,9 @@ function AccountsPage() {
                 <SelectContent>
                   {Object.entries(HIERARCHY_LABELS).filter(([val]) => {
                     const myRank = effectiveRank(currentUser);
-                    if (myRank >= 4) return true; // admin & hk see all levels
-                    // Others see only levels strictly below their own
-                    return hierarchyRank(val) < myRank;
+                    if (myRank >= 4) return true;
+                    // Can assign own level and below (not above)
+                    return hierarchyRank(val) <= myRank;
                   }).map(([val, label]) => (
                     <SelectItem key={val} value={val}>{label}</SelectItem>
                   ))}
@@ -1192,6 +1192,10 @@ function AccountsPage() {
                     if (!newUser.distrikt_id && newUser.forening_id && s.forening_id !== newUser.forening_id) return false;
                     const q = newStoreSearch.toLowerCase();
                     return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
+                  }).sort((a, b) => {
+                    const aChecked = newUser.storeIds.includes(a.id) ? 0 : 1;
+                    const bChecked = newUser.storeIds.includes(b.id) ? 0 : 1;
+                    return aChecked - bChecked || a.name.localeCompare(b.name, "sv");
                   });
                   return filtered.length > 0 ? filtered.map(s => (
                     <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
@@ -1262,7 +1266,7 @@ function AccountsPage() {
                   <SelectContent>
                     {Object.entries(HIERARCHY_LABELS).filter(([val]) => {
                       if (effectiveRank(currentUser) >= 4) return true;
-                      return hierarchyRank(val) < effectiveRank(currentUser);
+                      return hierarchyRank(val) <= effectiveRank(currentUser);
                     }).map(([val, label]) => (
                       <SelectItem key={val} value={val}>{label}</SelectItem>
                     ))}
@@ -1334,6 +1338,10 @@ function AccountsPage() {
                       if (!editUser.distrikt_id && editUser.forening_id && s.forening_id !== editUser.forening_id) return false;
                       const q = editStoreSearch.toLowerCase();
                       return !q || s.name.toLowerCase().includes(q) || (s.butiks_nr && String(s.butiks_nr).includes(q)) || (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q));
+                    }).sort((a, b) => {
+                      const aChecked = editUser.assignedStoreIds.includes(a.id) ? 0 : 1;
+                      const bChecked = editUser.assignedStoreIds.includes(b.id) ? 0 : 1;
+                      return aChecked - bChecked || a.name.localeCompare(b.name, "sv");
                     });
                     return filtered.length > 0 ? filtered.map(s => (
                       <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">

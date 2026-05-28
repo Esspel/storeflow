@@ -131,9 +131,23 @@ function HubPage() {
         steps_done: t.steps?.filter((s) => s.is_done).length ?? 0,
       }));
 
-      const done = mapped.filter((t) => t.status === "done").length;
-      const openTasks = mapped.filter((t) => (t.status === "todo" || t.status === "progress") && !isEffectivelyLate(t, now)).length;
-      const overdueTasks = mapped.filter((t) => t.status === "late" || isEffectivelyLate(t, now)).length;
+      // Deduplicate recurring series: keep one representative per parent
+      const parentIdsUsed = new Set<string>();
+      const deduped = mapped.filter((t) => {
+        if (t.parent_task_id) {
+          if (parentIdsUsed.has(t.parent_task_id)) return false;
+          parentIdsUsed.add(t.parent_task_id);
+          return true;
+        }
+        // Recurring parents that have children — skip (represented by a child above)
+        const hasChildren = mapped.some((c) => c.parent_task_id === t.id);
+        if (t.recurrence_rule && hasChildren) return false;
+        return true;
+      });
+
+      const done = deduped.filter((t) => t.status === "done").length;
+      const openTasks = deduped.filter((t) => (t.status === "todo" || t.status === "progress") && !isEffectivelyLate(t, now)).length;
+      const overdueTasks = deduped.filter((t) => t.status === "late" || isEffectivelyLate(t, now)).length;
       const inc = (incidents ?? []) as IncidentRow[];
       const openIncidents = inc.filter((i) => ["open", "in_progress", "escalated"].includes(i.status)).length;
 
@@ -400,16 +414,16 @@ function QuickCard({ to, icon: Icon, title, desc, tone }: {
   return (
     <Link
       to={to}
-      className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-white p-4 shadow-[var(--shadow-sm)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)]"
+      className="group flex items-center gap-3 rounded-2xl border border-border/60 bg-white p-3.5 shadow-[var(--shadow-sm)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] overflow-hidden"
     >
-      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", colors[tone])}>
-        <Icon className="h-5 w-5" />
+      <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", colors[tone])}>
+        <Icon className="h-4.5 w-4.5" />
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="font-semibold text-sm text-foreground">{title}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{desc}</p>
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <p className="font-semibold text-sm text-foreground truncate leading-tight">{title}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground truncate leading-tight">{desc}</p>
       </div>
-      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5" />
+      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
     </Link>
   );
 }

@@ -384,7 +384,7 @@ export function AppShell() {
 
           {/* Övrigt sheet */}
           {moreOpen && (
-            <div className="fixed inset-0 z-[60] md:hidden" onClick={() => setMoreOpen(false)}>
+            <div className="fixed inset-0 z-[250] md:hidden" onClick={() => setMoreOpen(false)}>
               <div className="absolute inset-0 bg-black/40" />
               <div
                 className="absolute bottom-0 left-0 right-0 rounded-t-3xl border-t border-border/60 bg-card pb-safe shadow-xl"

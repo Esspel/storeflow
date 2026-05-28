@@ -334,33 +334,15 @@ function CustomerRequestsPage() {
                 <Hash className="h-3 w-3 text-muted-foreground" />
                 Artikelnummer (SAP / Mitt Coop, valfritt)
               </Label>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="T.ex. 123456"
-                  value={form.article_number}
-                  onChange={(e) => setForm((p) => ({ ...p, article_number: e.target.value }))}
-                  className="flex-1"
-                />
-                <button
-                  type="button"
-                  onClick={() => setArticleCameraOpen(true)}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                  title="Scanna streckkod"
-                >
-                  <ScanLine className="h-4 w-4" />
-                </button>
-              </div>
+              <Input
+                placeholder="T.ex. 123456"
+                value={form.article_number}
+                onChange={(e) => setForm((p) => ({ ...p, article_number: e.target.value }))}
+              />
               <p className="text-[11px] text-muted-foreground">
                 Artikelnumret används för direktlänk till Mitt Coop.
               </p>
             </div>
-
-            {articleCameraOpen && (
-              <CameraScanner
-                onScan={(code) => { setArticleCameraOpen(false); setForm(p => ({ ...p, article_number: code })); }}
-                onClose={() => setArticleCameraOpen(false)}
-              />
-            )}
             <div className="space-y-1.5">
               <Label className="text-xs">Prioritet</Label>
               <Select value={form.priority} onValueChange={(v) => setForm((p) => ({ ...p, priority: v as typeof p.priority }))}>
@@ -375,7 +357,18 @@ function CustomerRequestsPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Anteckning (valfritt)</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Anteckning (valfritt)</Label>
+                <button
+                  type="button"
+                  onClick={() => setArticleCameraOpen(true)}
+                  className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                  title="Scanna EAN-kod och klistra in i anteckningen"
+                >
+                  <ScanLine className="h-3 w-3" />
+                  Scanna EAN
+                </button>
+              </div>
               <Textarea
                 placeholder="Ev. kommentar från kunden eller övrig info..."
                 value={form.notes}
@@ -383,7 +376,20 @@ function CustomerRequestsPage() {
                 rows={3}
                 className="resize-none text-sm"
               />
+              <p className="text-[11px] text-muted-foreground">
+                Scanna EAN-kod för att klistra in i anteckningen. Sök sedan upp artikelnumret manuellt i Mitt Coop.
+              </p>
             </div>
+
+            {articleCameraOpen && (
+              <CameraScanner
+                onScan={(code) => {
+                  setArticleCameraOpen(false);
+                  setForm(p => ({ ...p, notes: p.notes ? `${p.notes}\nEAN: ${code}` : `EAN: ${code}` }));
+                }}
+                onClose={() => setArticleCameraOpen(false)}
+              />
+            )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" className="rounded-full" onClick={() => setShowCreate(false)}>Avbryt</Button>
