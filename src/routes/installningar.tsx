@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Eye, EyeOff, KeyRound, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw } from "lucide-react";
+import { Eye, EyeOff, KeyRound, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw, Tv as Tv2 } from "lucide-react";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 
 import { PageHeader } from "@/components/page-header";
@@ -19,7 +19,8 @@ export const Route = createFileRoute("/installningar")({
 });
 
 function SettingsPage() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, activeStore } = useAuth();
+  const isManager = user?.role === "manager" || user?.role === "admin";
 
   // Quick PIN state
   const [newPin, setNewPin] = useState("");
@@ -125,6 +126,36 @@ function SettingsPage() {
     await supabase.from("app_users").update({ barcode_id: null }).eq("id", user.id);
     logAudit(user.id, "user.clear_barcode", "app_users", user.id, {});
     setBarcodeId("");
+  };
+
+  // Pulstavla PIN state (manager/admin only)
+  const [pulstavlaPin, setPulstavlaPin] = useState(["", "", "", ""]);
+  const [pulstavlaPinSaving, setPulstavlaPinSaving] = useState(false);
+  const [pulstavlaPinSuccess, setPulstavlaPinSuccess] = useState(false);
+  const [pulstavlaPinError, setPulstavlaPinError] = useState("");
+  const [hasStorePinSet, setHasStorePinSet] = useState(false);
+
+  useEffect(() => {
+    if (!activeStore || !isManager) return;
+    supabase.from("pulstavla_pins").select("id").eq("store_id", activeStore.id).maybeSingle()
+      .then(({ data }) => setHasStorePinSet(!!data));
+  }, [activeStore?.id, isManager]);
+
+  const savePulstavlaPin = async () => {
+    const pin = pulstavlaPin.join("");
+    if (pin.length !== 4 || !/^\d{4}$/.test(pin)) { setPulstavlaPinError("PIN måste vara 4 siffror."); return; }
+    if (!activeStore) return;
+    setPulstavlaPinSaving(true);
+    setPulstavlaPinError("");
+    await supabase.from("pulstavla_pins").upsert(
+      { store_id: activeStore.id, pin_hash: pin, updated_at: new Date().toISOString() },
+      { onConflict: "store_id" },
+    );
+    setPulstavlaPinSaving(false);
+    setPulstavlaPinSuccess(true);
+    setHasStorePinSet(true);
+    setPulstavlaPin(["", "", "", ""]);
+    setTimeout(() => setPulstavlaPinSuccess(false), 2000);
   };
 
   const [displayName, setDisplayName] = useState(user?.display_name ?? "");
@@ -545,6 +576,69 @@ function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Pulstavla PIN — managers and admins only */}
+        {isManager && activeStore && (
+          <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                <Tv2 className="h-4 w-4" />
+              </div>
+              <div>
+                <h2 className="font-semibold">Pulstavla PIN</h2>
+                <p className="text-xs text-muted-foreground">
+                  Sätt en 4-siffrig PIN som krävs för att låsa upp TV-vyn på <code className="font-mono text-[11px]">/pulstavla</code>.
+                  {hasStorePinSet && " En PIN är redan inställd."}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div className="flex gap-3">
+                {pulstavlaPin.map((d, i) => (
+                  <input
+                    key={i}
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={d}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "").slice(-1);
+                      const next = [...pulstavlaPin];
+                      next[i] = val;
+                      setPulstavlaPin(next);
+                      setPulstavlaPinError("");
+                      if (val && i < 3) {
+                        const el = document.getElementById(`pulstavla-pin-${i + 1}`);
+                        el?.focus();
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Backspace" && !d && i > 0) {
+                        document.getElementById(`pulstavla-pin-${i - 1}`)?.focus();
+                      }
+                    }}
+                    id={`pulstavla-pin-${i}`}
+                    className={cn(
+                      "h-14 w-12 rounded-xl border-2 bg-background text-center text-xl font-bold text-foreground outline-none transition-all",
+                      d ? "border-primary" : "border-border/60 focus:border-primary/60",
+                    )}
+                  />
+                ))}
+              </div>
+              {pulstavlaPinError && <p className="text-sm text-destructive">{pulstavlaPinError}</p>}
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={savePulstavlaPin}
+                  disabled={pulstavlaPinSaving || pulstavlaPin.join("").length !== 4}
+                  className="rounded-full"
+                >
+                  {pulstavlaPinSaving ? "Sparar..." : hasStorePinSet ? "Byt PIN" : "Spara PIN"}
+                </Button>
+                {pulstavlaPinSuccess && <span className="text-sm text-success">PIN sparad!</span>}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Diagnostics panel — revealed by tapping the version number 7 times */}
         {showDiagnostics ? (

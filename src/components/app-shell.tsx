@@ -1,6 +1,7 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { ChartBar as BarChart3, Bell, ClipboardList, FlaskConical, Hop as Home, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Store, X as XIcon } from "lucide-react";
+import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import { ChartBar as BarChart3, Bell, ClipboardList, FlaskConical, Hop as Home, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Store, X as XIcon, Tv as Tv2, ChartBar as BarChart2 } from "lucide-react";
 import { ROLE_LABELS, HIERARCHY_LABELS } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
 import { GlobalStoreSelector } from "@/components/global-store-selector";
@@ -299,7 +300,9 @@ export function AppShell() {
     { to: "/moten", label: "Möten", Icon: MessageSquare },
     { to: "/kundonskemal", label: "Kundönskemål", Icon: ShoppingCart },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", Icon: FlaskConical }] : []),
+    ...(isManager ? [{ to: "/belastning", label: "Belastning", Icon: BarChart2 }] : []),
     { to: "/mallar", label: "Mallar", Icon: ClipboardList },
+    { to: "/pulstavla", label: "Pulstavla", Icon: Tv2 },
   ];
   const isMoreActive = moreRoutes.some(r => isActive(r.to));
 
@@ -579,6 +582,9 @@ export function AppShell() {
 
       {/* Global offline / reconnected snackbar */}
       <OfflineSnackbar />
+
+      {/* Global keyboard shortcuts (desktop only) */}
+      <KeyboardShortcuts />
 
       {/* Lock screen / quick user switch */}
       {lockScreenOpen && user && (

@@ -13,6 +13,9 @@ import { Route as UppgifterRouteImport } from './routes/uppgifter'
 import { Route as TestpanelRouteImport } from './routes/testpanel'
 import { Route as SchemaRouteImport } from './routes/schema'
 import { Route as RapporterRouteImport } from './routes/rapporter'
+import { Route as QrKundonskemalRouteImport } from './routes/qr-kundonskemal'
+import { Route as QrAvvikelseRouteImport } from './routes/qr-avvikelse'
+import { Route as PulstavlaRouteImport } from './routes/pulstavla'
 import { Route as PersonalRouteImport } from './routes/personal'
 import { Route as MotenRouteImport } from './routes/moten'
 import { Route as MallarRouteImport } from './routes/mallar'
@@ -22,6 +25,7 @@ import { Route as KundonskemalRouteImport } from './routes/kundonskemal'
 import { Route as InstallningarRouteImport } from './routes/installningar'
 import { Route as HkDashboardRouteImport } from './routes/hk-dashboard'
 import { Route as ButiksregisterRouteImport } from './routes/butiksregister'
+import { Route as BelastningRouteImport } from './routes/belastning'
 import { Route as AvvikelserRouteImport } from './routes/avvikelser'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -43,6 +47,21 @@ const SchemaRoute = SchemaRouteImport.update({
 const RapporterRoute = RapporterRouteImport.update({
   id: '/rapporter',
   path: '/rapporter',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QrKundonskemalRoute = QrKundonskemalRouteImport.update({
+  id: '/qr-kundonskemal',
+  path: '/qr-kundonskemal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QrAvvikelseRoute = QrAvvikelseRouteImport.update({
+  id: '/qr-avvikelse',
+  path: '/qr-avvikelse',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PulstavlaRoute = PulstavlaRouteImport.update({
+  id: '/pulstavla',
+  path: '/pulstavla',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PersonalRoute = PersonalRouteImport.update({
@@ -90,6 +109,11 @@ const ButiksregisterRoute = ButiksregisterRouteImport.update({
   path: '/butiksregister',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BelastningRoute = BelastningRouteImport.update({
+  id: '/belastning',
+  path: '/belastning',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AvvikelserRoute = AvvikelserRouteImport.update({
   id: '/avvikelser',
   path: '/avvikelser',
@@ -104,6 +128,7 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
+  '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
@@ -113,6 +138,9 @@ export interface FileRoutesByFullPath {
   '/mallar': typeof MallarRoute
   '/moten': typeof MotenRoute
   '/personal': typeof PersonalRoute
+  '/pulstavla': typeof PulstavlaRoute
+  '/qr-avvikelse': typeof QrAvvikelseRoute
+  '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
@@ -121,6 +149,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
+  '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
@@ -130,6 +159,9 @@ export interface FileRoutesByTo {
   '/mallar': typeof MallarRoute
   '/moten': typeof MotenRoute
   '/personal': typeof PersonalRoute
+  '/pulstavla': typeof PulstavlaRoute
+  '/qr-avvikelse': typeof QrAvvikelseRoute
+  '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
@@ -139,6 +171,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/avvikelser': typeof AvvikelserRoute
+  '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
@@ -148,6 +181,9 @@ export interface FileRoutesById {
   '/mallar': typeof MallarRoute
   '/moten': typeof MotenRoute
   '/personal': typeof PersonalRoute
+  '/pulstavla': typeof PulstavlaRoute
+  '/qr-avvikelse': typeof QrAvvikelseRoute
+  '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
@@ -158,6 +194,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/avvikelser'
+    | '/belastning'
     | '/butiksregister'
     | '/hk-dashboard'
     | '/installningar'
@@ -167,6 +204,9 @@ export interface FileRouteTypes {
     | '/mallar'
     | '/moten'
     | '/personal'
+    | '/pulstavla'
+    | '/qr-avvikelse'
+    | '/qr-kundonskemal'
     | '/rapporter'
     | '/schema'
     | '/testpanel'
@@ -175,6 +215,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/avvikelser'
+    | '/belastning'
     | '/butiksregister'
     | '/hk-dashboard'
     | '/installningar'
@@ -184,6 +225,9 @@ export interface FileRouteTypes {
     | '/mallar'
     | '/moten'
     | '/personal'
+    | '/pulstavla'
+    | '/qr-avvikelse'
+    | '/qr-kundonskemal'
     | '/rapporter'
     | '/schema'
     | '/testpanel'
@@ -192,6 +236,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/avvikelser'
+    | '/belastning'
     | '/butiksregister'
     | '/hk-dashboard'
     | '/installningar'
@@ -201,6 +246,9 @@ export interface FileRouteTypes {
     | '/mallar'
     | '/moten'
     | '/personal'
+    | '/pulstavla'
+    | '/qr-avvikelse'
+    | '/qr-kundonskemal'
     | '/rapporter'
     | '/schema'
     | '/testpanel'
@@ -210,6 +258,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AvvikelserRoute: typeof AvvikelserRoute
+  BelastningRoute: typeof BelastningRoute
   ButiksregisterRoute: typeof ButiksregisterRoute
   HkDashboardRoute: typeof HkDashboardRoute
   InstallningarRoute: typeof InstallningarRoute
@@ -219,6 +268,9 @@ export interface RootRouteChildren {
   MallarRoute: typeof MallarRoute
   MotenRoute: typeof MotenRoute
   PersonalRoute: typeof PersonalRoute
+  PulstavlaRoute: typeof PulstavlaRoute
+  QrAvvikelseRoute: typeof QrAvvikelseRoute
+  QrKundonskemalRoute: typeof QrKundonskemalRoute
   RapporterRoute: typeof RapporterRoute
   SchemaRoute: typeof SchemaRoute
   TestpanelRoute: typeof TestpanelRoute
@@ -253,6 +305,27 @@ declare module '@tanstack/react-router' {
       path: '/rapporter'
       fullPath: '/rapporter'
       preLoaderRoute: typeof RapporterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qr-kundonskemal': {
+      id: '/qr-kundonskemal'
+      path: '/qr-kundonskemal'
+      fullPath: '/qr-kundonskemal'
+      preLoaderRoute: typeof QrKundonskemalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qr-avvikelse': {
+      id: '/qr-avvikelse'
+      path: '/qr-avvikelse'
+      fullPath: '/qr-avvikelse'
+      preLoaderRoute: typeof QrAvvikelseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pulstavla': {
+      id: '/pulstavla'
+      path: '/pulstavla'
+      fullPath: '/pulstavla'
+      preLoaderRoute: typeof PulstavlaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/personal': {
@@ -318,6 +391,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ButiksregisterRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/belastning': {
+      id: '/belastning'
+      path: '/belastning'
+      fullPath: '/belastning'
+      preLoaderRoute: typeof BelastningRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/avvikelser': {
       id: '/avvikelser'
       path: '/avvikelser'
@@ -338,6 +418,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AvvikelserRoute: AvvikelserRoute,
+  BelastningRoute: BelastningRoute,
   ButiksregisterRoute: ButiksregisterRoute,
   HkDashboardRoute: HkDashboardRoute,
   InstallningarRoute: InstallningarRoute,
@@ -347,6 +428,9 @@ const rootRouteChildren: RootRouteChildren = {
   MallarRoute: MallarRoute,
   MotenRoute: MotenRoute,
   PersonalRoute: PersonalRoute,
+  PulstavlaRoute: PulstavlaRoute,
+  QrAvvikelseRoute: QrAvvikelseRoute,
+  QrKundonskemalRoute: QrKundonskemalRoute,
   RapporterRoute: RapporterRoute,
   SchemaRoute: SchemaRoute,
   TestpanelRoute: TestpanelRoute,

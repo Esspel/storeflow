@@ -172,6 +172,86 @@ function MeetingsPage() {
   const [editForm, setEditForm] = useState({ title: "", scheduled_at: "", moderator_id: "" });
   const [editSaving, setEditSaving] = useState(false);
 
+  const exportMeetingPdf = (m: MeetingFull) => {
+    const typeLabel = meetingTypes.find(t => t.value === m.meeting_type)?.label ?? m.meeting_type;
+    const dateStr = new Date(m.scheduled_at).toLocaleString("sv-SE", { dateStyle: "full", timeStyle: "short" });
+    const agendaItems = [...(m.agenda_items ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+    const decisions = m.decisions ?? [];
+
+    const rows = (items: { label: string; value: string }[]) =>
+      items.map(({ label, value }) => `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;color:#374151;white-space:nowrap;width:30%">${label}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#111827">${value}</td>
+        </tr>`).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8"/>
+<title>Mötesprotokoll · ${m.title}</title>
+<style>
+  @page { margin: 20mm; }
+  body { font-family: system-ui,-apple-system,sans-serif; color:#111827; margin:0; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  .sub { color:#6b7280; font-size:.85rem; margin:0 0 24px; }
+  h2 { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#6b7280; margin:24px 0 8px; border-bottom:1px solid #e5e7eb; padding-bottom:4px; }
+  table { width:100%; border-collapse:collapse; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:99px; font-size:.72rem; font-weight:600; }
+  .badge-done { background:#d1fae5; color:#065f46; }
+  .badge-pending { background:#f3f4f6; color:#374151; }
+  .decision { padding:10px 14px; border:1px solid #e5e7eb; border-radius:8px; margin-bottom:8px; }
+  .decision-meta { font-size:.75rem; color:#6b7280; margin-top:4px; }
+  .footer { margin-top:32px; font-size:.7rem; color:#9ca3af; border-top:1px solid #e5e7eb; padding-top:8px; }
+  @media print { .no-print { display:none; } }
+</style>
+</head>
+<body>
+<h1>${m.title}</h1>
+<p class="sub">${typeLabel} · ${dateStr}</p>
+<h2>Mötesinfo</h2>
+<table>${rows([
+  { label: "Status", value: { scheduled: "Planerat", in_progress: "Pågår", completed: "Slutfört", cancelled: "Inställt" }[m.status] ?? m.status },
+  ...(m.moderator ? [{ label: "Moderator", value: (m.moderator as { display_name: string }).display_name }] : []),
+  ...(m.started_at ? [{ label: "Startade", value: new Date(m.started_at).toLocaleString("sv-SE") }] : []),
+  ...(m.ended_at ? [{ label: "Avslutades", value: new Date(m.ended_at).toLocaleString("sv-SE") }] : []),
+])}</table>
+
+${agendaItems.length > 0 ? `<h2>Agenda</h2>
+<table>${agendaItems.map(item => `
+<tr>
+  <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;width:3%">${item.sort_order + 1}.</td>
+  <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#111827">${item.title}</td>
+  <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#6b7280;white-space:nowrap">${item.duration_minutes} min</td>
+  <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right">
+    <span class="badge ${item.completed_at ? "badge-done" : "badge-pending"}">${item.completed_at ? "Klar" : "Ej klar"}</span>
+  </td>
+</tr>`).join("")}</table>` : ""}
+
+${decisions.length > 0 ? `<h2>Beslut & åtgärder (${decisions.length} st)</h2>
+${decisions.map((d, i) => {
+  const resp = (d.responsible as { display_name: string } | null)?.display_name;
+  const due = d.due_date ? new Date(d.due_date).toLocaleDateString("sv-SE") : null;
+  return `<div class="decision">
+  <div>${i + 1}. ${d.description}</div>
+  <div class="decision-meta">${[resp ? `Ansvarig: ${resp}` : null, due ? `Senast: ${due}` : null, d.created_task_id ? "Uppgift skapad" : null].filter(Boolean).join(" · ")}</div>
+</div>`;
+}).join("")}` : ""}
+
+${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${m.notes}</p>` : ""}
+
+<div class="footer">Protokoll exporterat ${new Date().toLocaleString("sv-SE")} · StoreFlow</div>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 400);
+  };
+
   const fetchMeetings = async () => {
     let q = supabase
       .from("meetings")
@@ -947,6 +1027,14 @@ function MeetingsPage() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {statusBadge(showDetail.status)}
+                  <button
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary"
+                    onClick={() => exportMeetingPdf(showDetail)}
+                    aria-label="Exportera som PDF"
+                    title="Exportera protokoll som PDF"
+                  >
+                    <FileText className="h-4 w-4" />
+                  </button>
                   {isManager && (
                     <>
                       <button className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary" onClick={() => openEditMeeting(showDetail)} aria-label="Redigera">
