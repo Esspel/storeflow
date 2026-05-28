@@ -2041,7 +2041,7 @@ function SchemaPage() {
 
           {/* ── MOBILE SCHEDULE CARD VIEW — only on mobile, desktop uses timeline ── */}
           {viewMode === "day" && (
-            <div className="block sm:hidden pb-6" data-scroll-container ref={mobileListRef}>
+            <div className="block sm:hidden pb-6" style={{ touchAction: "pan-y" }} data-scroll-container ref={mobileListRef}>
               {loadingSchedule ? (
                 <div className="space-y-3">
                   {[1,2,3,4,5].map(i => (
@@ -2120,6 +2120,7 @@ function SchemaPage() {
                         key={emp.id}
                         data-shift-start={startMins}
                         data-shift-stop={stopMins}
+                        style={{ touchAction: "pan-y" }}
                         className={cn(
                           "rounded-2xl border bg-card p-4 transition-all",
                           isSemester ? "border-red-200/60 bg-red-50/40" : isAbsent ? "border-warning/30 bg-warning/5" : "border-border/60",
