@@ -239,6 +239,3 @@ function QrAvvikelsePage() {
     </div>
   );
 }
-
-
-export { Route }
