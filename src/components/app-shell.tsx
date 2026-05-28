@@ -249,7 +249,9 @@ export function AppShell() {
     { to: "/kundonskemal", label: "Kundönskemål", mobileHidden: true, Icon: ShoppingCart },
     { to: "/moten", label: "Möten", mobileHidden: true, Icon: MessageSquare },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }] : []),
+    ...(isManager ? [{ to: "/belastning", label: "Belastning", mobileHidden: true, Icon: BarChart2 }] : []),
     { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
+    { to: "/pulstavla", label: "Pulstavla", mobileHidden: true, Icon: Tv2 },
   ];
 
 

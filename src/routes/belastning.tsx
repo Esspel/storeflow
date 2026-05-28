@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ChartBar as BarChart2, CircleCheck as CheckCircle2, Clock, TriangleAlert as AlertTriangle, Users } from "lucide-react";
+import { ChartBar as BarChart2, CircleCheck as CheckCircle2, Clock, RefreshCw, TriangleAlert as AlertTriangle, Users } from "lucide-react";
 import { supabase, type AppUser } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
-import { PageHeader } from "@/components/page-header";
+import { PageHeader, StatCard } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/belastning")({
@@ -167,9 +168,9 @@ function BelastningPage() {
 
   if (!isManager) {
     return (
-      <div className="flex min-h-full flex-col bg-background">
-        <PageHeader title="Medarbetarbelastning" subtitle="Uppgifter per person denna vecka" />
-        <div className="flex flex-1 items-center justify-center px-6 py-24 text-center">
+      <div className="mx-auto max-w-[1200px] px-5 py-8 md:px-8 md:py-10">
+        <PageHeader title="Medarbetarbelastning" description="Uppgifter per person denna vecka" />
+        <div className="flex items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-24 text-center">
           <div>
             <Users className="mx-auto mb-3 h-12 w-12 text-muted-foreground/40" />
             <p className="font-medium text-foreground">Åtkomst nekad</p>
@@ -180,14 +181,34 @@ function BelastningPage() {
     );
   }
 
+  const totalTasks = loads.reduce((s, l) => s + l.total, 0) + unassigned.total;
+  const totalDone = loads.reduce((s, l) => s + l.done, 0) + unassigned.done;
+  const totalLate = loads.reduce((s, l) => s + l.late, 0) + unassigned.late;
+
   return (
-    <div className="flex min-h-full flex-col bg-background">
+    <div className="mx-auto max-w-[1200px] px-5 py-8 md:px-8 md:py-10">
       <PageHeader
         title="Medarbetarbelastning"
-        subtitle={weekLabel()}
+        description={weekLabel()}
+        actions={
+          <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={fetchData} disabled={loading}>
+            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+            Uppdatera
+          </Button>
+        }
       />
 
-      <div className="px-4 py-4 sm:px-6">
+      {/* Summary stats */}
+      {!loading && loads.length > 0 && (
+        <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <StatCard label="Totalt" value={totalTasks} tone="default" />
+          <StatCard label="Klara" value={totalDone} tone="success" />
+          <StatCard label="Sena" value={totalLate} tone="destructive" />
+          <StatCard label="Personal" value={loads.length} tone="default" />
+        </div>
+      )}
+
+      <div>
         {/* Legend */}
         <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-full bg-success" /><span>Klar</span></div>
@@ -203,7 +224,7 @@ function BelastningPage() {
             ))}
           </div>
         ) : loads.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-24 text-center">
             <BarChart2 className="mb-3 h-12 w-12 text-muted-foreground/40" />
             <p className="font-medium text-foreground">Inga uppgifter denna vecka</p>
             <p className="mt-1 text-sm text-muted-foreground">Inga uppgifter med förfallodatum i veckan hittades.</p>

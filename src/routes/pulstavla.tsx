@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Clock, Tv as Tv2, Lock } from "lucide-react";
+import { TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Clock, Search, Tv as Tv2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
@@ -390,33 +390,86 @@ function LiveBoard({ storeId }: { storeId: string }) {
 // ── Store selector (when no store in URL) ─────────────────────────────────────
 function StoreSelector({ onSelect }: { onSelect: (id: string) => void }) {
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
-    supabase.from("stores").select("id,name").eq("is_active", true).order("name")
-      .then(({ data }) => { if (data) setStores(data); });
+    // Only show stores that have a pulstavla PIN set
+    supabase
+      .from("pulstavla_pins")
+      .select("store_id, store:stores(id, name)")
+      .then(({ data }) => {
+        if (data) {
+          const storeList = data
+            .map((row) => (row.store as { id: string; name: string } | null))
+            .filter((s): s is { id: string; name: string } => s !== null)
+            .sort((a, b) => a.name.localeCompare(b.name, "sv"));
+          setStores(storeList);
+        }
+        setLoading(false);
+      });
   }, []);
+
+  const filtered = stores.filter((s) =>
+    s.name.toLowerCase().includes(search.toLowerCase()),
+  );
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-950 px-4">
-      <div className="w-full max-w-sm space-y-4">
+      <div className="w-full max-w-sm space-y-5">
         <div className="text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-800">
             <Tv2 className="h-8 w-8 text-gray-300" />
           </div>
           <h1 className="text-xl font-bold text-white">Pulstavla</h1>
-          <p className="mt-1 text-sm text-gray-400">Välj butik</p>
+          <p className="mt-1 text-sm text-gray-400">Välj en butik med aktiv PIN</p>
         </div>
-        <div className="space-y-2">
-          {stores.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => onSelect(s.id)}
-              className="w-full rounded-xl bg-gray-800 px-4 py-3 text-left text-sm font-medium text-white transition-colors hover:bg-gray-700"
-            >
-              {s.name}
-            </button>
-          ))}
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Sök butik..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-xl border border-gray-700 bg-gray-800 py-2.5 pl-9 pr-3 text-sm text-white placeholder:text-gray-500 outline-none focus:border-gray-500"
+          />
         </div>
+
+        {loading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-12 animate-pulse rounded-xl bg-gray-800" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-xl bg-gray-800/60 px-4 py-8 text-center">
+            <p className="text-sm text-gray-400">
+              {search
+                ? "Ingen butik matchar sökningen"
+                : "Inga butiker har aktiverat Pulstavla-PIN ännu"}
+            </p>
+            {!search && (
+              <p className="mt-1 text-xs text-gray-600">
+                En butikschef aktiverar PIN under Inställningar
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="max-h-96 space-y-2 overflow-y-auto">
+            {filtered.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => onSelect(s.id)}
+                className="flex w-full items-center justify-between rounded-xl bg-gray-800 px-4 py-3 text-left text-sm font-medium text-white transition-colors hover:bg-gray-700 active:bg-gray-600"
+              >
+                <span>{s.name}</span>
+                <span className="text-xs text-gray-500">PIN aktiv</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -448,7 +501,21 @@ function PulstavlaPage() {
       </div>
     );
   }
-  if (hasPin && !unlocked) return <PinGate storeId={storeId} onUnlock={() => setUnlocked(true)} />;
+  // Store has no PIN — send back to selector
+  if (!hasPin) {
+    try { localStorage.removeItem("sf-pulstavla-store"); } catch {}
+    return (
+      <StoreSelector
+        onSelect={(id) => {
+          try { localStorage.setItem("sf-pulstavla-store", id); } catch {}
+          setStoreId(id);
+          setHasPin(null);
+          setUnlocked(false);
+        }}
+      />
+    );
+  }
+  if (!unlocked) return <PinGate storeId={storeId} onUnlock={() => setUnlocked(true)} />;
 
   return <LiveBoard storeId={storeId} />;
 }
