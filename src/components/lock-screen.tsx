@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Delete, ScanBarcode, X } from "lucide-react";
+import { Camera, Delete, ScanBarcode, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { supabase, type AppUser } from "@/lib/supabase";
+import { CameraScanner } from "@/components/camera-scanner";
 
 const QUICK_SWITCH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/quick-switch`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -31,6 +32,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [storeUsers, setStoreUsers] = useState<QuickUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const pinRef = useRef(pin);
@@ -155,13 +157,25 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
               <p className="mt-0.5 text-xs text-muted-foreground">Scanna ditt kort eller välj ditt namn för PIN</p>
             </div>
 
-            {/* Barcode hint */}
-            <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3">
-              <ScanBarcode className="h-5 w-5 shrink-0 text-primary" />
-              <div>
-                <p className="text-sm font-medium">Scanna passerkort</p>
-                <p className="text-xs text-muted-foreground">Rikta Zebra-skannern mot streckkoden på ditt kort</p>
+            {/* Barcode scan options */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3">
+                <ScanBarcode className="h-5 w-5 shrink-0 text-primary" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">Scanna passerkort</p>
+                  <p className="text-xs text-muted-foreground">Rikta Zebra-skannern mot streckkoden</p>
+                </div>
               </div>
+              <button
+                onClick={() => setCameraOpen(true)}
+                className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 transition-colors hover:bg-accent active:scale-[0.98]"
+              >
+                <Camera className="h-5 w-5 shrink-0 text-primary" />
+                <div className="text-left">
+                  <p className="text-sm font-medium">Scanna med kamera</p>
+                  <p className="text-xs text-muted-foreground">Öppna kameran och scanna streckkod</p>
+                </div>
+              </button>
             </div>
 
             {/* User list for PIN */}
@@ -272,6 +286,16 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
           </div>
         )}
       </div>
+
+      {cameraOpen && (
+        <CameraScanner
+          onScan={(code) => {
+            setCameraOpen(false);
+            if (!loading) submitSwitch({ mode: "barcode", barcode: code });
+          }}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
     </div>
   );
 }

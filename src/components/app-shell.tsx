@@ -1,6 +1,6 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { ChartBar as BarChart3, Bell, ChevronDown, ClipboardList, FlaskConical, Hop as Home, LogOut, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Building2, Store } from "lucide-react";
+import { ChartBar as BarChart3, Bell, ChevronDown, ClipboardList, FlaskConical, Hop as Home, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Building2, Store, X as XIcon } from "lucide-react";
 import { ROLE_LABELS, HIERARCHY_LABELS } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
 import { GlobalStoreSelector } from "@/components/global-store-selector";
@@ -169,6 +169,7 @@ export function AppShell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [simActive, setSimActive] = useState(() => isSimulationActive());
+  const [moreOpen, setMoreOpen] = useState(false);
 
   // Push subscription maintenance: ensure registration is valid on every session
   useEffect(() => {
@@ -242,13 +243,24 @@ export function AppShell() {
     { to: "/", label: "Översikt", mobileHidden: false, Icon: Home },
     { to: "/uppgifter", label: "Uppgifter", mobileHidden: false, Icon: ClipboardList },
     { to: "/schema", label: "Schema", mobileHidden: false, Icon: CalendarDays },
-    { to: "/avvikelser", label: "Avvikelser", mobileHidden: false, Icon: TriangleAlert },
-    { to: "/kundrunda", label: "Kundrunda", mobileHidden: false, Icon: UserRound },
+    { to: "/avvikelser", label: "Avvikelser", mobileHidden: true, Icon: TriangleAlert },
+    { to: "/kundrunda", label: "Kundrunda", mobileHidden: true, Icon: UserRound },
     { to: "/kundonskemal", label: "Kundönskemål", mobileHidden: true, Icon: ShoppingCart },
-    { to: "/moten", label: "Möten", mobileHidden: false, Icon: MessageSquare },
+    { to: "/moten", label: "Möten", mobileHidden: true, Icon: MessageSquare },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }] : []),
     { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
   ];
+
+  // Routes grouped under "Övrigt" in mobile bottom nav
+  const moreRoutes = [
+    { to: "/avvikelser", label: "Avvikelser", Icon: TriangleAlert },
+    { to: "/kundrunda", label: "Kundrunda", Icon: UserRound },
+    { to: "/moten", label: "Möten", Icon: MessageSquare },
+    { to: "/kundonskemal", label: "Kundönskemål", Icon: ShoppingCart },
+    ...(isManager ? [{ to: "/rapporter", label: "Rapporter", Icon: FlaskConical }] : []),
+    { to: "/mallar", label: "Mallar", Icon: ClipboardList },
+  ];
+  const isMoreActive = moreRoutes.some(r => isActive(r.to));
 
   useEffect(() => {
     if (!user) return;
@@ -351,7 +363,57 @@ export function AppShell() {
                 <span className="leading-none">{label}</span>
               </Link>
             ))}
+            {/* Övrigt — collapses avvikelser, kundrunda, möten, kundönskemål */}
+            <button
+              onClick={() => setMoreOpen(true)}
+              className={cn(
+                "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
+                isMoreActive ? "text-primary" : "text-muted-foreground",
+              )}
+            >
+              <div className={cn(
+                "flex h-7 w-10 items-center justify-center rounded-full transition-all",
+                isMoreActive ? "bg-primary/10" : "bg-transparent",
+              )}>
+                <MoreHorizontal className="h-4 w-4" />
+              </div>
+              <span className="leading-none">Övrigt</span>
+            </button>
           </nav>
+
+          {/* Övrigt sheet */}
+          {moreOpen && (
+            <div className="fixed inset-0 z-[60] md:hidden" onClick={() => setMoreOpen(false)}>
+              <div className="absolute inset-0 bg-black/40" />
+              <div
+                className="absolute bottom-0 left-0 right-0 rounded-t-3xl border-t border-border/60 bg-card pb-safe shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-5 pt-4 pb-2">
+                  <span className="text-sm font-semibold text-foreground">Övrigt</span>
+                  <button onClick={() => setMoreOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <XIcon className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2 px-4 pb-6 pt-2">
+                  {moreRoutes.map(({ to, label, Icon }) => (
+                    <Link
+                      key={to}
+                      to={to}
+                      onClick={() => setMoreOpen(false)}
+                      className={cn(
+                        "flex flex-col items-center gap-2 rounded-2xl border border-border/60 px-3 py-4 transition-colors",
+                        isActive(to) ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/30 text-foreground hover:bg-muted/60",
+                      )}
+                    >
+                      <Icon className="h-6 w-6" />
+                      <span className="text-[11px] font-medium text-center leading-tight">{label}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="ml-auto flex items-center gap-1.5 md:gap-2">
             {/* Global context store selector — HQ/Förening/Distrikt/Admin only */}

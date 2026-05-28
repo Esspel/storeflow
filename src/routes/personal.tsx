@@ -1261,9 +1261,8 @@ function AccountsPage() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(HIERARCHY_LABELS).filter(([val]) => {
-                      const isUnrestricted = currentUser?.hierarchy_level === "admin" || currentUser?.hierarchy_level === "hk";
-                      if (isUnrestricted) return true;
-                      return hierarchyRank(val) < hierarchyRank(currentUser?.hierarchy_level);
+                      if (effectiveRank(currentUser) >= 4) return true;
+                      return hierarchyRank(val) < effectiveRank(currentUser);
                     }).map(([val, label]) => (
                       <SelectItem key={val} value={val}>{label}</SelectItem>
                     ))}

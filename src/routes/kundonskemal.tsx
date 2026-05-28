@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  ExternalLink, Hash, Plus, Search, ShoppingCart, Trash2, X,
+  ExternalLink, Hash, Plus, ScanLine, Search, ShoppingCart, Trash2, X,
 } from "lucide-react";
+import { CameraScanner } from "@/components/camera-scanner";
 import { PageHeader, StatCard } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -73,6 +74,7 @@ function CustomerRequestsPage() {
   const [filterStatus, setFilterStatus] = useState("active");
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(emptyForm());
+  const [articleCameraOpen, setArticleCameraOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CustomerRequest | null>(null);
   const [editTarget, setEditTarget] = useState<CustomerRequest | null>(null);
@@ -332,15 +334,33 @@ function CustomerRequestsPage() {
                 <Hash className="h-3 w-3 text-muted-foreground" />
                 Artikelnummer (SAP / Mitt Coop, valfritt)
               </Label>
-              <Input
-                placeholder="T.ex. 123456"
-                value={form.article_number}
-                onChange={(e) => setForm((p) => ({ ...p, article_number: e.target.value }))}
-              />
+              <div className="flex gap-2">
+                <Input
+                  placeholder="T.ex. 123456"
+                  value={form.article_number}
+                  onChange={(e) => setForm((p) => ({ ...p, article_number: e.target.value }))}
+                  className="flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => setArticleCameraOpen(true)}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                  title="Scanna streckkod"
+                >
+                  <ScanLine className="h-4 w-4" />
+                </button>
+              </div>
               <p className="text-[11px] text-muted-foreground">
                 Artikelnumret används för direktlänk till Mitt Coop.
               </p>
             </div>
+
+            {articleCameraOpen && (
+              <CameraScanner
+                onScan={(code) => { setArticleCameraOpen(false); setForm(p => ({ ...p, article_number: code })); }}
+                onClose={() => setArticleCameraOpen(false)}
+              />
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs">Prioritet</Label>
               <Select value={form.priority} onValueChange={(v) => setForm((p) => ({ ...p, priority: v as typeof p.priority }))}>

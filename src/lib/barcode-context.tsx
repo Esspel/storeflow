@@ -1,9 +1,8 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { supabase } from "@/lib/supabase";
 import { CameraScanner } from "@/components/camera-scanner";
-import { ScanLine } from "lucide-react";
 
 // Global context so any component can listen to scan events too
 type BarcodeScan = { code: string; at: number };
@@ -110,15 +109,6 @@ export function BarcodeProvider({ children }: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={{ lastScan, onScan, openCameraScanner: () => setCameraOpen(true) }}>
       {children}
-
-      {/* Floating camera scan button — mobile only, sits above bottom nav */}
-      <button
-        onClick={() => setCameraOpen(true)}
-        className="fixed bottom-[calc(56px+env(safe-area-inset-bottom,0px)+8px)] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform md:hidden"
-        aria-label="Scanna streckkod"
-      >
-        <ScanLine className="h-5 w-5" />
-      </button>
 
       {cameraOpen && (
         <CameraScanner
