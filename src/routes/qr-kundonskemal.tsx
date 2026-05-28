@@ -30,7 +30,6 @@ function QrKundonskemalPage() {
     id: string;
     product_name: string;
     article_number: string | null;
-    notes: string | null;
     staff_comment: string | null;
     status: string;
     priority: string;
@@ -55,7 +54,7 @@ function QrKundonskemalPage() {
 
         const { data: req } = await supabase
           .from("customer_requests")
-          .select("id,product_name,article_number,notes,staff_comment,status,priority,created_at,store:stores(name)")
+          .select("id,product_name,article_number,staff_comment,status,priority,created_at,store:stores(name)")
           .eq("id", meta.request_id)
           .maybeSingle();
 
@@ -65,7 +64,6 @@ function QrKundonskemalPage() {
           id: req.id,
           product_name: req.product_name,
           article_number: req.article_number,
-          notes: req.notes,
           staff_comment: (req as { staff_comment?: string | null }).staff_comment ?? null,
           status: req.status,
           priority: req.priority,
@@ -133,9 +131,6 @@ function QrKundonskemalPage() {
               <p className="font-semibold text-foreground">{request.product_name}</p>
               {request.article_number && (
                 <p className="mt-0.5 text-xs font-mono text-muted-foreground">{request.article_number}</p>
-              )}
-              {request.notes && (
-                <p className="mt-2 text-sm text-muted-foreground">{request.notes}</p>
               )}
             </div>
             <div className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1", {

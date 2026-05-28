@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Eye, EyeOff, KeyRound, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw, Tv as Tv2 } from "lucide-react";
+import { Eye, EyeOff, KeyRound, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw, Tv as Tv2, Link as LinkIcon } from "lucide-react";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 
 import { PageHeader } from "@/components/page-header";
@@ -156,6 +156,34 @@ function SettingsPage() {
     setHasStorePinSet(true);
     setPulstavlaPin(["", "", "", ""]);
     setTimeout(() => setPulstavlaPinSuccess(false), 2000);
+  };
+
+  // Upshop URL state (manager/admin only)
+  const [upshopUrl, setUpshopUrl] = useState("");
+  const [upshopSaving, setUpshopSaving] = useState(false);
+  const [upshopSuccess, setUpshopSuccess] = useState(false);
+  const [upshopError, setUpshopError] = useState("");
+
+  useEffect(() => {
+    if (!activeStore || !isManager) return;
+    supabase.from("stores").select("upshop_url").eq("id", activeStore.id).maybeSingle()
+      .then(({ data }) => setUpshopUrl((data as { upshop_url?: string | null } | null)?.upshop_url ?? ""));
+  }, [activeStore?.id, isManager]);
+
+  const saveUpshopUrl = async () => {
+    if (!activeStore) return;
+    setUpshopError("");
+    setUpshopSaving(true);
+    const trimmed = upshopUrl.trim();
+    if (trimmed && !trimmed.startsWith("https://")) {
+      setUpshopError("URL måste börja med https://");
+      setUpshopSaving(false);
+      return;
+    }
+    await supabase.from("stores").update({ upshop_url: trimmed || null }).eq("id", activeStore.id);
+    setUpshopSaving(false);
+    setUpshopSuccess(true);
+    setTimeout(() => setUpshopSuccess(false), 2000);
   };
 
   const [displayName, setDisplayName] = useState(user?.display_name ?? "");
@@ -635,6 +663,39 @@ function SettingsPage() {
                   {pulstavlaPinSaving ? "Sparar..." : hasStorePinSet ? "Byt PIN" : "Spara PIN"}
                 </Button>
                 {pulstavlaPinSuccess && <span className="text-sm text-success">PIN sparad!</span>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Upshop styrtavla URL — managers and admins only */}
+        {isManager && activeStore && (
+          <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                <LinkIcon className="h-4 w-4" />
+              </div>
+              <div>
+                <h2 className="font-semibold">Upshop styrtavla</h2>
+                <p className="text-xs text-muted-foreground">
+                  Klistra in URL till Upshop styrtavlan för att visa den i Pulstavlan.
+                  T.ex. <code className="font-mono text-[10px]">https://app.whywaste.com/c/...</code>
+                </p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <Input
+                value={upshopUrl}
+                onChange={(e) => { setUpshopUrl(e.target.value); setUpshopError(""); }}
+                placeholder="https://app.whywaste.com/c/..."
+                className="font-mono text-sm"
+              />
+              {upshopError && <p className="text-sm text-destructive">{upshopError}</p>}
+              <div className="flex items-center gap-3">
+                <Button onClick={saveUpshopUrl} disabled={upshopSaving} className="rounded-full">
+                  {upshopSaving ? "Sparar..." : "Spara URL"}
+                </Button>
+                {upshopSuccess && <span className="text-sm text-success">Sparat!</span>}
               </div>
             </div>
           </div>

@@ -1,6 +1,6 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Eye, EyeOff, KeyRound, Sparkles } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Sparkles, Tv } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -231,6 +231,16 @@ function LoginPage() {
             </Button>
           </div>
         </form>
+
+        <div className="mt-4 text-center">
+          <Link
+            to="/pulstavla"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+          >
+            <Tv className="h-3.5 w-3.5" />
+            Visa Pulstavla
+          </Link>
+        </div>
       </div>
     </div>
   );

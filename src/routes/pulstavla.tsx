@@ -28,6 +28,7 @@ type LiveIncident = {
 
 type PulstavlaData = {
   storeName: string;
+  upshopUrl: string | null;
   tasks: LiveTask[];
   incidents: LiveIncident[];
   lastUpdated: Date;
@@ -146,8 +147,38 @@ function LiveBoard({ storeId }: { storeId: string }) {
     const todayStr = today.toISOString().slice(0, 10);
     const endStr = new Date(today.getTime() + 86400000).toISOString().slice(0, 10);
 
-    const [{ data: storeRow }, { data: tasks }, { data: incidents }] = await Promise.all([
-      supabase.from("stores").select("name").eq("id", storeId).maybeSingle(),
+    // Find the "Alla medarbetare" group for this store
+    const { data: allGroup } = await supabase
+      .from("user_groups")
+      .select("id")
+      .eq("store_id", storeId)
+      .eq("name", "Alla medarbetare")
+      .maybeSingle();
+
+    const allGroupId = allGroup?.id ?? null;
+
+    // Fetch tasks assigned to "Alla medarbetare" group via task_assignees
+    const groupTasksPromise = allGroupId
+      ? supabase
+          .from("task_assignees")
+          .select("task:tasks!task_id(id,title,category,status,due_date,assignee:app_users!assigned_to(display_name))")
+          .eq("group_id", allGroupId)
+          .then(({ data: rows }) => {
+            if (!rows) return [] as LiveTask[];
+            return rows
+              .map((r) => r.task as LiveTask | null)
+              .filter((t): t is LiveTask => {
+                if (!t) return false;
+                if (!["todo", "progress", "late"].includes(t.status)) return false;
+                if (!t.due_date) return false;
+                const d = t.due_date.slice(0, 10);
+                return d >= todayStr && d < endStr;
+              });
+          })
+      : Promise.resolve([] as LiveTask[]);
+
+    const [{ data: storeRow }, { data: directTasks }, groupTasks, { data: incidents }] = await Promise.all([
+      supabase.from("stores").select("name,upshop_url").eq("id", storeId).maybeSingle(),
       supabase
         .from("tasks")
         .select("id,title,category,status,due_date,assignee:app_users!assigned_to(display_name)")
@@ -156,7 +187,8 @@ function LiveBoard({ storeId }: { storeId: string }) {
         .gte("due_date", todayStr)
         .lt("due_date", endStr)
         .order("status")
-        .limit(12),
+        .limit(20),
+      groupTasksPromise,
       supabase
         .from("incidents")
         .select("id,ref_number,title,priority,status,category")
@@ -166,9 +198,16 @@ function LiveBoard({ storeId }: { storeId: string }) {
         .limit(8),
     ]);
 
+    // Merge direct tasks + group tasks, deduplicate by id
+    const allTasksMap = new Map<string, LiveTask>();
+    for (const t of (directTasks ?? []) as LiveTask[]) allTasksMap.set(t.id, t);
+    for (const t of groupTasks) allTasksMap.set(t.id, t);
+    const mergedTasks = Array.from(allTasksMap.values()).slice(0, 12);
+
     setData({
       storeName: storeRow?.name ?? "Butik",
-      tasks: (tasks ?? []) as LiveTask[],
+      upshopUrl: (storeRow as { upshop_url?: string | null } | null)?.upshop_url ?? null,
+      tasks: mergedTasks,
       incidents: (incidents ?? []) as LiveIncident[],
       lastUpdated: new Date(),
     });
@@ -372,6 +411,22 @@ function LiveBoard({ storeId }: { storeId: string }) {
           </div>
         </div>
       </div>
+
+      {/* Upshop styrtavla iframe */}
+      {data.upshopUrl && (
+        <div className="mt-4 overflow-hidden rounded-2xl bg-gray-800/40">
+          <div className="flex items-center gap-2 border-b border-gray-700/60 px-4 py-3">
+            <span className="text-sm font-semibold text-white">Upshop styrtavla</span>
+          </div>
+          <iframe
+            src={data.upshopUrl}
+            className="w-full"
+            style={{ height: "280px", border: "none" }}
+            allow="fullscreen"
+            loading="lazy"
+          />
+        </div>
+      )}
 
       {/* Footer */}
       <div className="mt-4 flex items-center justify-between">

@@ -28,7 +28,6 @@ function QrKundonskemalFormPage() {
 
   const [form, setForm] = useState({
     product_name: "",
-    article_number: "",
     notes: "",
     priority: "normal" as "low" | "normal" | "high",
   });
@@ -60,7 +59,6 @@ function QrKundonskemalFormPage() {
     await supabase.from("customer_requests").insert({
       store_id: storeId,
       product_name: form.product_name.trim(),
-      article_number: form.article_number.trim() || null,
       notes: form.notes.trim() || null,
       priority: form.priority,
       source: "qr",
@@ -108,7 +106,7 @@ function QrKundonskemalFormPage() {
             className="mt-6 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground"
             onClick={() => {
               setDone(false);
-              setForm({ product_name: "", article_number: "", notes: "", priority: "normal" });
+              setForm({ product_name: "", notes: "", priority: "normal" });
             }}
           >
             Skicka ett till önskemål
@@ -145,17 +143,6 @@ function QrKundonskemalFormPage() {
             placeholder="T.ex. Oatly iKaffe 1L..."
             className="text-base"
             autoFocus
-          />
-        </div>
-
-        {/* Article number */}
-        <div className="space-y-1.5">
-          <Label className="text-sm font-medium">Artikelnummer (valfritt)</Label>
-          <Input
-            value={form.article_number}
-            onChange={(e) => setForm((f) => ({ ...f, article_number: e.target.value }))}
-            placeholder="T.ex. 123456"
-            className="text-base"
           />
         </div>
 
