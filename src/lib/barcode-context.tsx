@@ -1,8 +1,11 @@
-import { createContext, useContext, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { supabase } from "@/lib/supabase";
-import { CameraScanner } from "@/components/camera-scanner";
+
+const CameraScanner = React.lazy(() =>
+  import("@/components/camera-scanner").then((m) => ({ default: m.CameraScanner }))
+);
 
 // Global context so any component can listen to scan events too
 type BarcodeScan = { code: string; at: number };
@@ -111,10 +114,12 @@ export function BarcodeProvider({ children }: { children: React.ReactNode }) {
       {children}
 
       {cameraOpen && (
-        <CameraScanner
-          onScan={(code) => { setCameraOpen(false); void handleScan(code); }}
-          onClose={() => setCameraOpen(false)}
-        />
+        <React.Suspense fallback={null}>
+          <CameraScanner
+            onScan={(code) => { setCameraOpen(false); void handleScan(code); }}
+            onClose={() => setCameraOpen(false)}
+          />
+        </React.Suspense>
       )}
 
       {toast && (

@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Delete, ScanBarcode, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { supabase, type AppUser } from "@/lib/supabase";
-import { CameraScanner } from "@/components/camera-scanner";
+
+const CameraScanner = React.lazy(() =>
+  import("@/components/camera-scanner").then((m) => ({ default: m.CameraScanner }))
+);
 
 const QUICK_SWITCH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/quick-switch`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -297,13 +300,15 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
       </div>
 
       {cameraOpen && (
-        <CameraScanner
-          onScan={(code) => {
-            setCameraOpen(false);
-            if (!loading) submitSwitch({ mode: "barcode", barcode: code });
-          }}
-          onClose={() => setCameraOpen(false)}
-        />
+        <React.Suspense fallback={null}>
+          <CameraScanner
+            onScan={(code) => {
+              setCameraOpen(false);
+              if (!loading) submitSwitch({ mode: "barcode", barcode: code });
+            }}
+            onClose={() => setCameraOpen(false)}
+          />
+        </React.Suspense>
       )}
     </div>
   );

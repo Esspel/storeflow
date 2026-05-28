@@ -1,6 +1,9 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Camera } from "lucide-react";
-import { CameraScanner } from "@/components/camera-scanner";
+
+const CameraScanner = React.lazy(() =>
+  import("@/components/camera-scanner").then((m) => ({ default: m.CameraScanner }))
+);
 
 interface BarcodeScanButtonProps {
   onScan: (code: string) => void;
@@ -19,10 +22,12 @@ export function BarcodeScanButton({ onScan }: BarcodeScanButtonProps) {
         <Camera className="h-4 w-4" />
       </button>
       {open && (
-        <CameraScanner
-          onScan={(code) => { setOpen(false); onScan(code); }}
-          onClose={() => setOpen(false)}
-        />
+        <React.Suspense fallback={null}>
+          <CameraScanner
+            onScan={(code) => { setOpen(false); onScan(code); }}
+            onClose={() => setOpen(false)}
+          />
+        </React.Suspense>
       )}
     </>
   );
