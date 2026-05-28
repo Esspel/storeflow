@@ -50,6 +50,7 @@ function QrAvvikelsePage() {
   });
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
   const [refNumber, setRefNumber] = useState("");
 
   useEffect(() => {
@@ -81,7 +82,7 @@ function QrAvvikelsePage() {
   const submit = async () => {
     if (!form.title.trim() || !storeId) return;
     setSaving(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("incidents")
       .insert({
         title: form.title.trim(),
@@ -95,9 +96,11 @@ function QrAvvikelsePage() {
       .select("ref_number")
       .maybeSingle();
     setSaving(false);
-    if (data) {
-      setRefNumber(data.ref_number);
+    if (!error) {
+      setRefNumber(data?.ref_number ?? "");
       setDone(true);
+    } else {
+      setSubmitError(true);
     }
   };
 
@@ -216,10 +219,15 @@ function QrAvvikelsePage() {
         </div>
 
         {/* Submit */}
+        {submitError && (
+          <div className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive text-center">
+            Något gick fel. Försök igen.
+          </div>
+        )}
         <Button
           className="h-12 w-full rounded-2xl text-base font-semibold"
           disabled={!form.title.trim() || saving}
-          onClick={submit}
+          onClick={() => { setSubmitError(false); submit(); }}
         >
           {saving ? "Skickar..." : "Skicka in avvikelse"}
         </Button>
@@ -231,3 +239,6 @@ function QrAvvikelsePage() {
     </div>
   );
 }
+
+
+export { Route }
