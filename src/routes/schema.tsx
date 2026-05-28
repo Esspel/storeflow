@@ -1620,7 +1620,7 @@ function SchemaPage() {
   }, [loadingSchedule]);
 
   return (
-    <div className="flex min-h-full flex-col bg-background">
+    <div className="flex flex-col bg-background sm:h-[calc(100vh-3.5rem)] sm:overflow-hidden md:h-[calc(100vh-4rem)]">
       {/* Page header */}
       <div className="border-b border-border/60 bg-card px-6 py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2041,7 +2041,7 @@ function SchemaPage() {
 
           {/* ── MOBILE SCHEDULE CARD VIEW — only on mobile, desktop uses timeline ── */}
           {viewMode === "day" && (
-            <div className="block sm:hidden" data-scroll-container ref={mobileListRef}>
+            <div className="block sm:hidden pb-6" data-scroll-container ref={mobileListRef}>
               {loadingSchedule ? (
                 <div className="space-y-3">
                   {[1,2,3,4,5].map(i => (
