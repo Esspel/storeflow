@@ -343,10 +343,11 @@ function TasksPage() {
   const [templates, setTemplates] = useState<(ChecklistTemplate & { items: ChecklistTemplateItem[]; questions: ChecklistTemplateQuestion[] })[]>([]);
   const [userGroupIds, setUserGroupIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("today");
+  const [tab, setTab] = useState("active");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"default" | "due_date" | "priority" | "assignee" | "title">("default");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [showPastTasks, setShowPastTasks] = useState(false);
 
   // Undo toast: when a swipe-complete fires we show a 4-second window to cancel
   // before the DB write actually happens.
@@ -588,8 +589,8 @@ function TasksPage() {
     const durationMs = parent.due_date
       ? Math.max(0, new Date(parent.due_date).getTime() - originDate.getTime())
       : 0;
-    // Ceiling: recurrence_end if set, otherwise 30 days from today
-    const maxCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 30); d.setHours(0,0,0,0); return d; })();
+    // Ceiling: recurrence_end if set, otherwise 365 days from today (rolling window)
+    const maxCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 365); d.setHours(0,0,0,0); return d; })();
     const ceilDate = parent.recurrence_end
       ? (() => { const e = midnight(new Date(parent.recurrence_end)); return e < maxCeil ? e : maxCeil; })()
       : maxCeil;
@@ -649,6 +650,9 @@ function TasksPage() {
 
     let didSpawn = false;
 
+    // Spawn up to 365 days ahead (rolling window) when no end date is set
+    const spawnCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 365); d.setHours(0,0,0,0); return d; })();
+
     for (const t of recurringTasks) {
       const originDate: Date = t.recurrence_start
         ? midnight(new Date(t.recurrence_start))
@@ -657,11 +661,15 @@ function TasksPage() {
       const durationMs = t.due_date
         ? Math.max(0, new Date(t.due_date).getTime() - originDate.getTime()) : 0;
 
+      const effectiveCeil = t.recurrence_end
+        ? (() => { const e = midnight(new Date(t.recurrence_end)); return e < spawnCeil ? e : spawnCeil; })()
+        : spawnCeil;
+
       const periodStarts = buildPeriodStarts(
         originDate, t.recurrence_rule!, t.recurrence_days ?? null,
         t.recurrence_start ? new Date(t.recurrence_start) : null,
         t.recurrence_end ? new Date(t.recurrence_end) : null,
-        simToday,
+        effectiveCeil,
       );
 
       const covered = coveredByParent.get(t.id) ?? new Set<string>();
@@ -1304,12 +1312,11 @@ function TasksPage() {
   };
 
   const filters = [
-    { value: "today", label: "Idag" },
+    { value: "active", label: "Aktiva" },
+    { value: "recurring", label: "Återkommande" },
     { value: "all", label: "Alla" },
-    { value: "todo", label: "Ej påbörjad" },
-    { value: "progress", label: "Pågående" },
-    { value: "done", label: "Klar" },
-    { value: "late", label: "Försenad" },
+    { value: "done", label: "Klara" },
+    { value: "late", label: "Försenade" },
   ];
 
   const simNow = getSimulatedNow();
@@ -1318,32 +1325,98 @@ function TasksPage() {
   const simTodayEnd = new Date(simNow);
   simTodayEnd.setHours(23, 59, 59, 999);
 
-  // Set of parent IDs that have at least one child in the visible list
-  const parentIdsWithChildren = new Set(
-    visibleTasks.filter(t => t.parent_task_id).map(t => t.parent_task_id!)
+  // Build a map: parentId → the child task for TODAY's period
+  // This is used to show one representative row per recurring series
+  const recurringParentIds = new Set(
+    visibleTasks.filter(t => t.recurrence_rule && !t.parent_task_id).map(t => t.id)
   );
 
-  // "Today" tab: tasks due today and not already done
-  // Recurring parents are hidden once children exist (children are the actionable instances)
-  const isDueToday = (t: TaskFull) => {
-    if (t.status === "done") return false;
-    if (t.recurrence_rule && !t.parent_task_id && parentIdsWithChildren.has(t.id)) return false;
-    if (!t.due_date) return true;
-    const d = new Date(t.due_date);
-    return d >= simTodayStart && d <= simTodayEnd;
+  // For each recurring parent, find the child that is current (due today or most recent not-done child)
+  const currentChildByParent = new Map<string, TaskFull>();
+  for (const t of visibleTasks) {
+    if (!t.parent_task_id || !recurringParentIds.has(t.parent_task_id)) continue;
+    const existing = currentChildByParent.get(t.parent_task_id);
+    if (!existing) {
+      currentChildByParent.set(t.parent_task_id, t);
+      continue;
+    }
+    // Prefer: today's instance first, then most recent not-done, then most recent done
+    const tDue = t.due_date ? new Date(t.due_date).getTime() : 0;
+    const eDue = existing.due_date ? new Date(existing.due_date).getTime() : 0;
+    const tToday = t.due_date ? new Date(t.due_date) >= simTodayStart && new Date(t.due_date) <= simTodayEnd : false;
+    const eToday = existing.due_date ? new Date(existing.due_date) >= simTodayStart && new Date(existing.due_date) <= simTodayEnd : false;
+    if (tToday && !eToday) { currentChildByParent.set(t.parent_task_id, t); continue; }
+    if (!tToday && eToday) continue;
+    // Both today or both not today — prefer not-done, then latest
+    if (t.status !== "done" && existing.status === "done") { currentChildByParent.set(t.parent_task_id, t); continue; }
+    if (t.status === "done" && existing.status !== "done") continue;
+    if (tDue > eDue) { currentChildByParent.set(t.parent_task_id, t); }
+  }
+
+  // IDs of all child tasks that are NOT the current representative — hide these
+  const hiddenChildIds = new Set<string>();
+  for (const t of visibleTasks) {
+    if (!t.parent_task_id) continue;
+    const rep = currentChildByParent.get(t.parent_task_id);
+    if (rep && rep.id !== t.id) hiddenChildIds.add(t.id);
+  }
+
+  // A task is "past" if it's done or its due_date is before today's start
+  const isPast = (t: TaskFull): boolean => {
+    if (t.status === "done" || t.status === "cancelled") return true;
+    if (!t.due_date) return false;
+    return new Date(t.due_date) < simTodayStart;
   };
+
+  const isRecurring = (t: TaskFull): boolean =>
+    !!(t.recurrence_rule && !t.parent_task_id) ||
+    !!(t.parent_task_id && recurringParentIds.has(t.parent_task_id));
 
   const PRIORITY_ORDER: Record<string, number> = { Kritisk: 0, Hög: 1, Medel: 2, Låg: 3 };
 
   const filtered = visibleTasks
     .filter((t) => {
-      if (tab === "today" && !isDueToday(t)) return false;
-      if (tab !== "all" && tab !== "today" && effectiveStatus(t) !== tab) return false;
+      // Always hide child recurring tasks that aren't the current representative
+      if (hiddenChildIds.has(t.id)) return false;
+      // Always hide recurring parents that have children (they're represented by children)
+      if (recurringParentIds.has(t.id) && currentChildByParent.has(t.id)) return false;
+
+      // Search filter
       if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
+
+      // Tab filters
+      if (tab === "active") {
+        // Active = non-done, non-cancelled, non-past (unless user chose to show past)
+        if (t.status === "cancelled") return false;
+        if (t.status === "done") return false;
+        if (!showPastTasks && isPast(t)) return false;
+        return true;
+      }
+      if (tab === "recurring") {
+        // Show only recurring representative tasks (today's child or parent if no children yet)
+        if (!isRecurring(t)) return false;
+        return true;
+      }
+      if (tab === "done") return t.status === "done";
+      if (tab === "late") return effectiveStatus(t) === "late";
+      if (tab === "all") {
+        if (!showPastTasks && isPast(t) && tab === "active") return false;
+        return true;
+      }
       return true;
     })
     .sort((a, b) => {
-      if (sortBy === "default") return 0;
+      if (sortBy === "default") {
+        // Default sort: overdue first, then by due_date ascending, then no-date last
+        const aStatus = effectiveStatus(a);
+        const bStatus = effectiveStatus(b);
+        const aLate = aStatus === "late" ? 0 : 1;
+        const bLate = bStatus === "late" ? 0 : 1;
+        if (aLate !== bLate) return aLate - bLate;
+        const aD = a.due_date ? new Date(a.due_date).getTime() : Infinity;
+        const bD = b.due_date ? new Date(b.due_date).getTime() : Infinity;
+        return aD - bD;
+      }
       let cmp = 0;
       if (sortBy === "due_date") {
         const aD = a.due_date ? new Date(a.due_date).getTime() : Infinity;
@@ -1360,6 +1433,11 @@ function TasksPage() {
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
+
+  // Count past tasks hidden from "active" tab
+  const hiddenPastCount = tab === "active" && !showPastTasks
+    ? visibleTasks.filter(t => !hiddenChildIds.has(t.id) && !(recurringParentIds.has(t.id) && currentChildByParent.has(t.id)) && isPast(t) && t.status !== "cancelled").length
+    : 0;
 
   const openDetail = async (task: TaskFull) => {
     setDetailTask(task);
@@ -1451,17 +1529,26 @@ function TasksPage() {
       {/* Filters */}
       <div className="mb-5 space-y-2">
         <div className="overflow-x-auto pb-1 -mx-1 px-1">
-          <Tabs value={tab} onValueChange={setTab}>
+          <Tabs value={tab} onValueChange={(v) => { setTab(v); setShowPastTasks(false); }}>
             <TabsList className="rounded-full bg-muted/60 p-1 w-max">
-              {filters.map((f) => (
-                <TabsTrigger key={f.value} value={f.value}
-                  className="gap-1.5 rounded-full px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm text-xs whitespace-nowrap">
-                  {f.label}
-                  <span className="rounded-full bg-background/70 px-1.5 text-[10px] font-medium text-muted-foreground">
-                    {f.value === "all" ? visibleTasks.length : f.value === "today" ? visibleTasks.filter(isDueToday).length : visibleTasks.filter((t) => effectiveStatus(t) === f.value).length}
-                  </span>
-                </TabsTrigger>
-              ))}
+              {filters.map((f) => {
+                let count = 0;
+                const baseList = visibleTasks.filter(t => !hiddenChildIds.has(t.id) && !(recurringParentIds.has(t.id) && currentChildByParent.has(t.id)));
+                if (f.value === "active") count = baseList.filter(t => t.status !== "cancelled" && t.status !== "done" && !isPast(t)).length;
+                else if (f.value === "recurring") count = baseList.filter(t => isRecurring(t)).length;
+                else if (f.value === "all") count = baseList.length;
+                else if (f.value === "done") count = baseList.filter(t => t.status === "done").length;
+                else if (f.value === "late") count = baseList.filter(t => effectiveStatus(t) === "late").length;
+                return (
+                  <TabsTrigger key={f.value} value={f.value}
+                    className="gap-1.5 rounded-full px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm text-xs whitespace-nowrap">
+                    {f.label}
+                    <span className="rounded-full bg-background/70 px-1.5 text-[10px] font-medium text-muted-foreground">
+                      {count}
+                    </span>
+                  </TabsTrigger>
+                );
+              })}
             </TabsList>
           </Tabs>
         </div>
@@ -1516,7 +1603,7 @@ function TasksPage() {
             </div>
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : filtered.length === 0 && hiddenPastCount === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
           <ListChecks className="mb-3 h-10 w-10 text-muted-foreground/40" />
           <p className="text-sm font-medium text-muted-foreground">Inga uppgifter hittades</p>
@@ -1527,7 +1614,8 @@ function TasksPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {filtered.map((t) => {
             const overdue = isOverdue(t.due_date, t.status);
             const dueSoon = isDueSoon(t.due_date);
@@ -1620,6 +1708,25 @@ function TasksPage() {
               </SwipeableCard>
             );
           })}
+          </div>
+
+          {/* Show/hide past tasks toggle */}
+          {hiddenPastCount > 0 && (
+            <button
+              className="w-full rounded-xl border border-dashed border-border/60 bg-card py-3 text-center text-xs text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
+              onClick={() => setShowPastTasks(true)}
+            >
+              Visa {hiddenPastCount} äldre uppgifter från tidigare dagar
+            </button>
+          )}
+          {showPastTasks && hiddenPastCount === 0 && tab === "active" && (
+            <button
+              className="w-full rounded-xl border border-dashed border-border/60 bg-card py-3 text-center text-xs text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
+              onClick={() => setShowPastTasks(false)}
+            >
+              Dölj äldre uppgifter
+            </button>
+          )}
         </div>
       )}
 
@@ -2314,6 +2421,12 @@ function TasksPage() {
                           onChange={(e) => setNewTask(p => ({ ...p, recurrence_end: e.target.value }))}
                           className="flex-1 h-7 text-xs" />
                       </div>
+                      {!newTask.recurrence_end && (
+                        <div className="rounded-lg bg-warning/10 border border-warning/30 px-3 py-2">
+                          <p className="text-[11px] text-warning-foreground font-medium">Inget slutdatum angivet</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">Uppgifter skapas automatiskt 365 dagar framåt. När ett år har gått förnyas perioden automatiskt, om inte uppgiften tas bort.</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

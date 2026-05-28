@@ -14,6 +14,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
@@ -577,22 +580,34 @@ function MeetingsPage() {
             <div className={cn(createStep === 2 && "hidden sm:block")}>
               <div className="space-y-1.5 mb-4">
                 <Label className="text-xs">Mötestyp</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {meetingTypes.map((t) => (
-                    <button
-                      key={t.value}
-                      type="button"
-                      onClick={() => setNewMeeting(p => ({ ...p, typeValue: t.value, title: t.label }))}
-                      className={cn(
-                        "rounded-xl border px-3 py-2.5 text-left text-xs transition-colors",
-                        newMeeting.typeValue === t.value ? "border-primary bg-primary-soft text-primary" : "border-border/60 bg-card hover:bg-muted/40"
-                      )}
-                    >
-                      <p className="font-semibold">{t.label}</p>
-                      <p className="text-muted-foreground mt-0.5 leading-snug line-clamp-2">{t.description}</p>
-                    </button>
-                  ))}
-                </div>
+                <TooltipProvider delayDuration={300}>
+                  <div className="grid grid-cols-2 gap-2">
+                    {meetingTypes.map((t) => (
+                      <Tooltip key={t.value}>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => setNewMeeting(p => ({ ...p, typeValue: t.value, title: t.label }))}
+                            className={cn(
+                              "rounded-xl border px-3 py-2.5 text-left text-xs transition-colors",
+                              newMeeting.typeValue === t.value ? "border-primary bg-primary-soft text-primary" : "border-border/60 bg-card hover:bg-muted/40"
+                            )}
+                          >
+                            <p className="font-semibold">{t.label}</p>
+                            {t.description && (
+                              <p className="text-muted-foreground mt-0.5 leading-snug line-clamp-2">{t.description}</p>
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        {t.description && (
+                          <TooltipContent side="bottom" className="max-w-xs text-xs">
+                            {t.description}
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    ))}
+                  </div>
+                </TooltipProvider>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Titel</Label>
@@ -681,7 +696,7 @@ function MeetingsPage() {
                   >
                     <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
                     <span className="flex-1 font-medium truncate">{t.label}</span>
-                    {isAdmin && (
+                    {isManager && (
                       <button
                         className="opacity-0 group-hover:opacity-100 flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-destructive transition-opacity"
                         onClick={(e) => { e.stopPropagation(); setDeleteTypeTarget(t); }}

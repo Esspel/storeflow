@@ -1568,10 +1568,12 @@ function SchemaPage() {
 
   const hourMarkers = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => TIMELINE_START + i);
 
-  // Auto-scroll mobile list to first active/upcoming shift
-  // Uses container-relative scrollTop to avoid conflict with page-level scroll
+  // Auto-scroll mobile list once on initial load to first active/upcoming shift
+  const didAutoScrollRef = useRef(false);
   useEffect(() => {
-    if (!mobileListRef.current || currentDate !== todayStr) return;
+    if (didAutoScrollRef.current) return;
+    if (!mobileListRef.current || currentDate !== todayStr || loadingSchedule) return;
+    didAutoScrollRef.current = true;
     const container = mobileListRef.current;
     const now = new Date();
     const nowMins = now.getHours() * 60 + now.getMinutes();
@@ -1584,14 +1586,12 @@ function SchemaPage() {
     if (targetEl) {
       setTimeout(() => {
         if (!targetEl) return;
-        // Scroll within the page (window) rather than the container to avoid
-        // double-scrolling conflicts with the sticky day nav bar
         const rect = targetEl.getBoundingClientRect();
-        const offset = window.scrollY + rect.top - 120; // 120px clearance below sticky nav
+        const offset = window.scrollY + rect.top - 120;
         window.scrollTo({ top: Math.max(0, offset), behavior: "smooth" });
       }, 300);
     }
-  }, [currentDate, displayRows, loadingSchedule]);
+  }, [loadingSchedule]);
 
   return (
     <div className="flex min-h-full flex-col bg-background">
