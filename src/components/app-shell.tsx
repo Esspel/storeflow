@@ -249,9 +249,7 @@ export function AppShell() {
     { to: "/kundonskemal", label: "Kundönskemål", mobileHidden: true, Icon: ShoppingCart },
     { to: "/moten", label: "Möten", mobileHidden: true, Icon: MessageSquare },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }] : []),
-    ...(isManager ? [{ to: "/belastning", label: "Belastning", mobileHidden: true, Icon: BarChart2 }] : []),
     { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
-    { to: "/pulstavla", label: "Pulstavla", mobileHidden: true, Icon: Tv2 },
   ];
 
 
@@ -302,9 +300,7 @@ export function AppShell() {
     { to: "/moten", label: "Möten", Icon: MessageSquare },
     { to: "/kundonskemal", label: "Kundönskemål", Icon: ShoppingCart },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", Icon: FlaskConical }] : []),
-    ...(isManager ? [{ to: "/belastning", label: "Belastning", Icon: BarChart2 }] : []),
     { to: "/mallar", label: "Mallar", Icon: ClipboardList },
-    { to: "/pulstavla", label: "Pulstavla", Icon: Tv2 },
     { to: "/hjalp", label: "Hjälp", Icon: HelpCircle },
   ];
   const isMoreActive = moreRoutes.some(r => isActive(r.to));

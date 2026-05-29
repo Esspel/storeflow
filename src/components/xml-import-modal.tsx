@@ -115,10 +115,58 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
   }
 
   async function runImport() {
-    if (toCreate.length === 0) return;
+    if (toCreate.length === 0 && toSkip.length === 0) return;
     setImporting(true);
     let created = 0;
 
+    // Fetch "Alla medarbetare" group once, creating it if needed
+    async function ensureAllGroup(): Promise<string | null> {
+      if (!storeId) return null;
+      let { data: g } = await supabase
+        .from("user_groups")
+        .select("id")
+        .eq("store_id", storeId)
+        .eq("name", "Alla medarbetare")
+        .maybeSingle();
+      if (!g) {
+        const { data: created } = await supabase
+          .from("user_groups")
+          .insert({ name: "Alla medarbetare", store_id: storeId })
+          .select("id")
+          .maybeSingle();
+        g = created;
+      }
+      return g?.id ?? null;
+    }
+
+    const allGroupId = storeId ? await ensureAllGroup() : null;
+
+    // Link an existing user to this store if not already linked
+    async function linkToStore(userId: string) {
+      if (!storeId) return;
+      const { data: existing } = await supabase
+        .from("user_stores")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("store_id", storeId)
+        .maybeSingle();
+      if (!existing) {
+        await supabase.from("user_stores").insert({ user_id: userId, store_id: storeId, is_primary: false });
+      }
+      if (allGroupId) {
+        const { data: member } = await supabase
+          .from("user_group_members")
+          .select("id")
+          .eq("group_id", allGroupId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (!member) {
+          await supabase.from("user_group_members").insert({ group_id: allGroupId, user_id: userId });
+        }
+      }
+    }
+
+    // Create new users
     for (const emp of toCreate) {
       try {
         const { data: hash } = await supabase.rpc("hash_password", { plain_password: emp.password });
@@ -138,29 +186,27 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
 
         if (newUser?.id && storeId) {
           await supabase.from("user_stores").insert({ user_id: newUser.id, store_id: storeId, is_primary: true });
-
-          // Ensure "Alla medarbetare" group exists for this store and add the user
-          let { data: allGroup } = await supabase
-            .from("user_groups")
-            .select("id")
-            .eq("store_id", storeId)
-            .eq("name", "Alla medarbetare")
-            .maybeSingle();
-
-          if (!allGroup) {
-            const { data: created } = await supabase
-              .from("user_groups")
-              .insert({ name: "Alla medarbetare", store_id: storeId })
-              .select("id")
-              .maybeSingle();
-            allGroup = created;
-          }
-
-          if (allGroup?.id) {
-            await supabase.from("user_group_members").insert({ group_id: allGroup.id, user_id: newUser.id });
+          if (allGroupId) {
+            await supabase.from("user_group_members").insert({ group_id: allGroupId, user_id: newUser.id });
           }
         }
         created++;
+      } catch {
+        // continue on individual failures
+      }
+    }
+
+    // Link already-existing users to this store
+    for (const emp of toSkip) {
+      try {
+        const { data: existingUser } = await supabase
+          .from("app_users")
+          .select("id")
+          .eq("username", emp.username)
+          .maybeSingle();
+        if (existingUser?.id) {
+          await linkToStore(existingUser.id);
+        }
       } catch {
         // continue on individual failures
       }
@@ -199,7 +245,7 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
                 <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-success" />
                 <p className="text-lg font-semibold">{importResult.created} konton skapades</p>
                 {importResult.skipped > 0 && (
-                  <p className="mt-1 text-sm text-muted-foreground">{importResult.skipped} hoppades över (redan registrerade)</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{importResult.skipped} befintliga användare kopplades till butiken</p>
                 )}
               </div>
               <p className="text-sm text-muted-foreground text-center">

@@ -1,6 +1,6 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Download, ShoppingCart, ClipboardCheck, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2 } from "lucide-react";
+import { Download, ShoppingCart, ClipboardCheck, TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, ChartBar as BarChart2 } from "lucide-react";
 
 import { PageHeader, StatCard } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -220,6 +220,14 @@ function ReportsPage() {
       <PageHeader
         title="Rapporter"
         description={`KPI:er och insikter för ${activeStore.name}.`}
+        actions={
+          <Link to="/belastning">
+            <Button variant="outline" size="sm" className="rounded-full gap-1.5">
+              <BarChart2 className="h-4 w-4" />
+              Belastning
+            </Button>
+          </Link>
+        }
       />
 
       {/* Date filter */}
