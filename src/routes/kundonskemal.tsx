@@ -21,7 +21,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   supabase, type CustomerRequest, type Store as StoreType,
-  mittCoopUrl, compressImage, getPublicUrl,
+  mittCoopUrl, getPublicUrl, uploadAttachment,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -119,9 +119,8 @@ function CustomerRequestsPage() {
     const remaining = MAX_IMAGES - createImages.length;
     const toAdd = Array.from(files).slice(0, remaining);
     if (inputEl) inputEl.value = "";
-    const compressed = await Promise.all(toAdd.map((f) => compressImage(f)));
-    setCreateImages((prev) => [...prev, ...compressed]);
-    setCreatePreviews((prev) => [...prev, ...compressed.map((f) => URL.createObjectURL(f))]);
+    setCreateImages((prev) => [...prev, ...toAdd]);
+    setCreatePreviews((prev) => [...prev, ...toAdd.map((f) => URL.createObjectURL(f))]);
   };
 
   const removeCreateImage = (i: number) => {
@@ -135,9 +134,8 @@ function CustomerRequestsPage() {
     const remaining = MAX_IMAGES - (requestImages.length + editImages.length);
     const toAdd = Array.from(files).slice(0, remaining);
     if (inputEl) inputEl.value = "";
-    const compressed = await Promise.all(toAdd.map((f) => compressImage(f)));
-    setEditImages((prev) => [...prev, ...compressed]);
-    setEditPreviews((prev) => [...prev, ...compressed.map((f) => URL.createObjectURL(f))]);
+    setEditImages((prev) => [...prev, ...toAdd]);
+    setEditPreviews((prev) => [...prev, ...toAdd.map((f) => URL.createObjectURL(f))]);
   };
 
   const removeEditImage = (i: number) => {
@@ -153,10 +151,8 @@ function CustomerRequestsPage() {
 
   const uploadImages = async (requestId: string, files: File[]) => {
     for (const img of files) {
-      const ext = img.name.split(".").pop() ?? "jpg";
-      const path = `customer-requests/${requestId}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from("attachments").upload(path, img);
-      if (!error) {
+      const path = await uploadAttachment(img, `customer-requests/${requestId}`);
+      if (path) {
         await supabase.from("customer_request_images").insert({
           request_id: requestId,
           storage_path: path,
