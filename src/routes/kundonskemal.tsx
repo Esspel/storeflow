@@ -114,10 +114,11 @@ function CustomerRequestsPage() {
     setRequestImages(data ?? []);
   };
 
-  const addCreateImages = async (files: FileList | null) => {
-    if (!files) return;
+  const addCreateImages = async (files: FileList | null, inputEl?: HTMLInputElement | null) => {
+    if (!files || files.length === 0) return;
     const remaining = MAX_IMAGES - createImages.length;
     const toAdd = Array.from(files).slice(0, remaining);
+    if (inputEl) inputEl.value = "";
     const compressed = await Promise.all(toAdd.map((f) => compressImage(f)));
     setCreateImages((prev) => [...prev, ...compressed]);
     setCreatePreviews((prev) => [...prev, ...compressed.map((f) => URL.createObjectURL(f))]);
@@ -129,10 +130,11 @@ function CustomerRequestsPage() {
     setCreatePreviews((prev) => prev.filter((_, idx) => idx !== i));
   };
 
-  const addEditImages = async (files: FileList | null) => {
-    if (!files) return;
+  const addEditImages = async (files: FileList | null, inputEl?: HTMLInputElement | null) => {
+    if (!files || files.length === 0) return;
     const remaining = MAX_IMAGES - (requestImages.length + editImages.length);
     const toAdd = Array.from(files).slice(0, remaining);
+    if (inputEl) inputEl.value = "";
     const compressed = await Promise.all(toAdd.map((f) => compressImage(f)));
     setEditImages((prev) => [...prev, ...compressed]);
     setEditPreviews((prev) => [...prev, ...compressed.map((f) => URL.createObjectURL(f))]);
@@ -449,6 +451,7 @@ function CustomerRequestsPage() {
                           setEditArticleNumber(r.article_number ?? "");
                           setEditInternalNotes(r.internal_notes ?? "");
                           setEditComment((r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "");
+                          loadRequestImages(r.id);
                         }}
                       >
                         Hantera
@@ -581,7 +584,7 @@ function CustomerRequestsPage() {
                     Lägg till bild
                   </button>
                   <input ref={createFileRef} type="file" accept="image/*" multiple className="hidden"
-                    onChange={(e) => addCreateImages(e.target.files)} />
+                    onChange={(e) => addCreateImages(e.target.files, e.target)} />
                 </>
               )}
             </div>
@@ -649,7 +652,7 @@ function CustomerRequestsPage() {
                       Lägg till bild
                     </button>
                     <input ref={editFileRef} type="file" accept="image/*" multiple className="hidden"
-                      onChange={(e) => addEditImages(e.target.files)} />
+                      onChange={(e) => addEditImages(e.target.files, e.target)} />
                   </>
                 )}
               </div>

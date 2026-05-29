@@ -39,6 +39,7 @@ function QrKundonskemalFormPage() {
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
@@ -64,13 +65,15 @@ function QrKundonskemalFormPage() {
       });
   }, [token]);
 
-  const addImages = async (files: FileList | null) => {
-    if (!files) return;
+  const addImages = async (files: FileList | null, inputEl?: HTMLInputElement | null) => {
+    if (!files || files.length === 0) return;
     const remaining = MAX_IMAGES - images.length;
     const toAdd = Array.from(files).slice(0, remaining);
+    // Reset input so the same file can be picked again
+    if (inputEl) inputEl.value = "";
     const compressed = await Promise.all(toAdd.map((f) => compressImage(f)));
-    setImages((prev) => [...prev, ...compressed]);
     const newPreviews = compressed.map((f) => URL.createObjectURL(f));
+    setImages((prev) => [...prev, ...compressed]);
     setPreviews((prev) => [...prev, ...newPreviews]);
   };
 
@@ -277,25 +280,42 @@ function QrKundonskemalFormPage() {
             </div>
           )}
           {images.length < MAX_IMAGES && (
-            <>
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
               >
                 <ImagePlus className="h-4 w-4" />
-                Lägg till bild
+                Välj bild
               </button>
+              <button
+                type="button"
+                onClick={() => cameraRef.current?.click()}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
+              >
+                <ImagePlus className="h-4 w-4" />
+                Ta foto
+              </button>
+              {/* Gallery picker — no capture */}
               <input
                 ref={fileRef}
                 type="file"
                 accept="image/*"
                 multiple
+                className="hidden"
+                onChange={(e) => addImages(e.target.files, e.target)}
+              />
+              {/* Camera picker — capture only */}
+              <input
+                ref={cameraRef}
+                type="file"
+                accept="image/*"
                 capture="environment"
                 className="hidden"
-                onChange={(e) => addImages(e.target.files)}
+                onChange={(e) => addImages(e.target.files, e.target)}
               />
-            </>
+            </div>
           )}
         </div>
 
