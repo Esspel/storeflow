@@ -106,7 +106,7 @@ function CustomerRequestsPage() {
       .contains("meta", { request_id: req.id })
       .maybeSingle();
     if (existing) {
-      setQrTokenUrl(`${window.location.origin}/qr-kundonskemal?token=${existing.token}`);
+      setQrTokenUrl(`${window.location.origin}/qr-kundonskemal?t=${existing.token}`);
     } else {
       const { data: created } = await supabase.from("qr_tokens").insert({
         token_type: "customer_request_status",
@@ -115,7 +115,7 @@ function CustomerRequestsPage() {
         created_by: user.id,
         expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       }).select("token").maybeSingle();
-      if (created) setQrTokenUrl(`${window.location.origin}/qr-kundonskemal?token=${created.token}`);
+      if (created) setQrTokenUrl(`${window.location.origin}/qr-kundonskemal?t=${created.token}`);
     }
   };
 
@@ -766,11 +766,11 @@ function CustomerRequestsPage() {
               ) : storeQrToken ? (
                 <>
                   <div className="flex justify-center rounded-2xl border border-border/60 bg-white p-4">
-                    <QrDisplay url={`${window.location.origin}/qr-kundonskemal-form?token=${storeQrToken}`} size={200} />
+                    <QrDisplay url={`${window.location.origin}/qr-kundonskemal-form?t=${storeQrToken}`} size={200} />
                   </div>
                   <div className="rounded-xl border border-border/60 bg-muted/20 p-2.5">
                     <p className="break-all font-mono text-[10px] text-muted-foreground leading-relaxed">
-                      {`${window.location.origin}/qr-kundonskemal-form?token=${storeQrToken}`}
+                      {`${window.location.origin}/qr-kundonskemal-form?t=${storeQrToken}`}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -779,7 +779,7 @@ function CustomerRequestsPage() {
                       size="sm"
                       className="flex-1 rounded-full"
                       onClick={() => {
-                        const url = `${window.location.origin}/qr-kundonskemal-form?token=${storeQrToken}`;
+                        const url = `${window.location.origin}/qr-kundonskemal-form?t=${storeQrToken}`;
                         navigator.clipboard?.writeText(url).catch(() => {});
                         setCopiedQr(true);
                         setTimeout(() => setCopiedQr(false), 2000);
@@ -789,7 +789,7 @@ function CustomerRequestsPage() {
                       {copiedQr ? "Kopierat!" : "Kopiera länk"}
                     </Button>
                     <a
-                      href={`${window.location.origin}/qr-kundonskemal-form?token=${storeQrToken}`}
+                      href={`${window.location.origin}/qr-kundonskemal-form?t=${storeQrToken}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-border/60 bg-background px-3 py-2 text-xs font-medium text-foreground hover:bg-muted transition-colors"

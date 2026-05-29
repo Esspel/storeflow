@@ -1224,7 +1224,7 @@ function IssuesPage() {
             ) : (
               <div className="space-y-2 max-h-80 overflow-y-auto">
                 {qrTokens.map((t) => {
-                  const qrUrl = `${window.location.origin}/qr-avvikelse?token=${t.token}`;
+                  const qrUrl = `${window.location.origin}/qr-avvikelse?t=${t.token}`;
                   const isExpanded = selectedQrToken === t.id;
                   return (
                     <div key={t.id} className="rounded-xl border border-border/60 bg-card overflow-hidden">

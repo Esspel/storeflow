@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const searchSchema = z.object({
+  t: z.string().optional(),
   token: z.string().optional(),
 });
 
@@ -20,7 +21,8 @@ export const Route = createFileRoute("/qr-kundonskemal-form")({
 });
 
 function QrKundonskemalFormPage() {
-  const { token } = useSearch({ from: "/qr-kundonskemal-form" });
+  const search = useSearch({ from: "/qr-kundonskemal-form" });
+  const token = search.t ?? search.token;
 
   const [resolving, setResolving] = useState(true);
   const [invalid, setInvalid] = useState(false);
@@ -74,7 +76,7 @@ function QrKundonskemalFormPage() {
         meta: { request_id: inserted.id },
       }).select("token").maybeSingle();
       if (tokenRow?.token) {
-        setStatusUrl(`${window.location.origin}/qr-kundonskemal?token=${tokenRow.token}`);
+        setStatusUrl(`${window.location.origin}/qr-kundonskemal?t=${tokenRow.token}`);
       }
     }
     setSaving(false);

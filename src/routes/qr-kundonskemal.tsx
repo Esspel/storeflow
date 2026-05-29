@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
 const searchSchema = z.object({
+  t: z.string().optional(),
   token: z.string().optional(),
 });
 
@@ -23,7 +24,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 };
 
 function QrKundonskemalPage() {
-  const { token } = useSearch({ from: "/qr-kundonskemal" });
+  const search = useSearch({ from: "/qr-kundonskemal" });
+  const token = search.t ?? search.token;
 
   const [resolving, setResolving] = useState(true);
   const [invalid, setInvalid] = useState(false);

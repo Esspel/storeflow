@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const searchSchema = z.object({
+  t: z.string().optional(),
   token: z.string().optional(),
 });
 
@@ -34,7 +35,8 @@ const PRIORITIES = [
 ];
 
 function QrAvvikelsePage() {
-  const { token } = useSearch({ from: "/qr-avvikelse" });
+  const search = useSearch({ from: "/qr-avvikelse" });
+  const token = search.t ?? search.token;
 
   const [resolving, setResolving] = useState(true);
   const [invalid, setInvalid] = useState(false);
