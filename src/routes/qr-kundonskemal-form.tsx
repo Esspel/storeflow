@@ -1,8 +1,8 @@
 import { createFileRoute, useSearch } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, ShoppingCart } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, ImagePlus, ShoppingCart, X } from "lucide-react";
+import { supabase, compressImage } from "@/lib/supabase";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +20,8 @@ export const Route = createFileRoute("/qr-kundonskemal-form")({
   component: QrKundonskemalFormPage,
 });
 
+const MAX_IMAGES = 3;
+
 function QrKundonskemalFormPage() {
   const search = useSearch({ from: "/qr-kundonskemal-form" });
   const token = search.t ?? search.token;
@@ -34,6 +36,10 @@ function QrKundonskemalFormPage() {
     notes: "",
     priority: "normal" as "low" | "normal" | "high",
   });
+  const [images, setImages] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
   const [statusUrl, setStatusUrl] = useState<string | null>(null);
@@ -58,9 +64,26 @@ function QrKundonskemalFormPage() {
       });
   }, [token]);
 
+  const addImages = async (files: FileList | null) => {
+    if (!files) return;
+    const remaining = MAX_IMAGES - images.length;
+    const toAdd = Array.from(files).slice(0, remaining);
+    const compressed = await Promise.all(toAdd.map((f) => compressImage(f)));
+    setImages((prev) => [...prev, ...compressed]);
+    const newPreviews = compressed.map((f) => URL.createObjectURL(f));
+    setPreviews((prev) => [...prev, ...newPreviews]);
+  };
+
+  const removeImage = (i: number) => {
+    URL.revokeObjectURL(previews[i]);
+    setImages((prev) => prev.filter((_, idx) => idx !== i));
+    setPreviews((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
   const submit = async () => {
     if (!form.product_name.trim() || !storeId) return;
     setSaving(true);
+
     const { data: inserted, error } = await supabase.from("customer_requests").insert({
       store_id: storeId,
       product_name: form.product_name.trim(),
@@ -68,7 +91,22 @@ function QrKundonskemalFormPage() {
       priority: form.priority,
       source: "qr",
     }).select("id").maybeSingle();
+
     if (!error && inserted?.id) {
+      // Upload images
+      for (const img of images) {
+        const ext = img.name.split(".").pop() ?? "jpg";
+        const path = `customer-requests/${inserted.id}/${crypto.randomUUID()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage.from("attachments").upload(path, img);
+        if (!uploadErr) {
+          await supabase.from("customer_request_images").insert({
+            request_id: inserted.id,
+            storage_path: path,
+            uploaded_by: null,
+          });
+        }
+      }
+
       // Create a status token so the customer can follow their request
       const { data: tokenRow } = await supabase.from("qr_tokens").insert({
         token_type: "customer_request_status",
@@ -79,6 +117,7 @@ function QrKundonskemalFormPage() {
         setStatusUrl(`${window.location.origin}/qr-kundonskemal?t=${tokenRow.token}`);
       }
     }
+
     setSaving(false);
     setDone(true);
   };
@@ -151,6 +190,8 @@ function QrKundonskemalFormPage() {
             onClick={() => {
               setDone(false);
               setStatusUrl(null);
+              setImages([]);
+              setPreviews([]);
               setForm({ product_name: "", notes: "", priority: "normal" });
             }}
           >
@@ -214,6 +255,48 @@ function QrKundonskemalFormPage() {
             rows={3}
             className="resize-none text-base"
           />
+        </div>
+
+        {/* Images */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Bilder (valfritt, max {MAX_IMAGES})</Label>
+          {previews.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {previews.map((src, i) => (
+                <div key={i} className="relative h-20 w-20 overflow-hidden rounded-xl border border-border/60">
+                  <img src={src} alt="" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(i)}
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {images.length < MAX_IMAGES && (
+            <>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
+              >
+                <ImagePlus className="h-4 w-4" />
+                Lägg till bild
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                multiple
+                capture="environment"
+                className="hidden"
+                onChange={(e) => addImages(e.target.files)}
+              />
+            </>
+          )}
         </div>
 
         <Button

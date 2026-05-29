@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  Copy, ExternalLink, Hash, Plus, QrCode, ScanLine, Search, ShoppingCart, Store as StoreIcon, Trash2,
+  Copy, ExternalLink, Hash, ImagePlus, Plus, QrCode, ScanLine, Search, ShoppingCart, Store as StoreIcon, Trash2, X,
 } from "lucide-react";
 import { CameraScanner } from "@/components/camera-scanner";
 import { QrDisplay } from "@/components/qr-display";
@@ -21,7 +21,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   supabase, type CustomerRequest, type Store as StoreType,
-  mittCoopUrl,
+  mittCoopUrl, compressImage, getPublicUrl,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -92,6 +92,77 @@ function CustomerRequestsPage() {
   const [storeQrLoading, setStoreQrLoading] = useState(false);
   const [copiedQr, setCopiedQr] = useState(false);
   const [editComment, setEditComment] = useState("");
+
+  // Image upload for create/edit (staff)
+  const [createImages, setCreateImages] = useState<File[]>([]);
+  const [createPreviews, setCreatePreviews] = useState<string[]>([]);
+  const createFileRef = useRef<HTMLInputElement>(null);
+  const [editImages, setEditImages] = useState<File[]>([]);
+  const [editPreviews, setEditPreviews] = useState<string[]>([]);
+  const editFileRef = useRef<HTMLInputElement>(null);
+  // Images loaded for the currently open request (detail + edit dialog)
+  const [requestImages, setRequestImages] = useState<{ id: string; storage_path: string }[]>([]);
+
+  const MAX_IMAGES = 5;
+
+  const loadRequestImages = async (requestId: string) => {
+    const { data } = await supabase
+      .from("customer_request_images")
+      .select("id, storage_path")
+      .eq("request_id", requestId)
+      .order("created_at");
+    setRequestImages(data ?? []);
+  };
+
+  const addCreateImages = async (files: FileList | null) => {
+    if (!files) return;
+    const remaining = MAX_IMAGES - createImages.length;
+    const toAdd = Array.from(files).slice(0, remaining);
+    const compressed = await Promise.all(toAdd.map((f) => compressImage(f)));
+    setCreateImages((prev) => [...prev, ...compressed]);
+    setCreatePreviews((prev) => [...prev, ...compressed.map((f) => URL.createObjectURL(f))]);
+  };
+
+  const removeCreateImage = (i: number) => {
+    URL.revokeObjectURL(createPreviews[i]);
+    setCreateImages((prev) => prev.filter((_, idx) => idx !== i));
+    setCreatePreviews((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  const addEditImages = async (files: FileList | null) => {
+    if (!files) return;
+    const remaining = MAX_IMAGES - (requestImages.length + editImages.length);
+    const toAdd = Array.from(files).slice(0, remaining);
+    const compressed = await Promise.all(toAdd.map((f) => compressImage(f)));
+    setEditImages((prev) => [...prev, ...compressed]);
+    setEditPreviews((prev) => [...prev, ...compressed.map((f) => URL.createObjectURL(f))]);
+  };
+
+  const removeEditImage = (i: number) => {
+    URL.revokeObjectURL(editPreviews[i]);
+    setEditImages((prev) => prev.filter((_, idx) => idx !== i));
+    setEditPreviews((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  const deleteExistingImage = async (imgId: string) => {
+    await supabase.from("customer_request_images").delete().eq("id", imgId);
+    setRequestImages((prev) => prev.filter((img) => img.id !== imgId));
+  };
+
+  const uploadImages = async (requestId: string, files: File[]) => {
+    for (const img of files) {
+      const ext = img.name.split(".").pop() ?? "jpg";
+      const path = `customer-requests/${requestId}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from("attachments").upload(path, img);
+      if (!error) {
+        await supabase.from("customer_request_images").insert({
+          request_id: requestId,
+          storage_path: path,
+          uploaded_by: user?.id ?? null,
+        });
+      }
+    }
+  };
 
   const openQrForRequest = async (req: CustomerRequest) => {
     if (!activeStore || !user) return;
@@ -173,17 +244,23 @@ function CustomerRequestsPage() {
   const createRequest = async () => {
     if (!form.product_name.trim()) return;
     setSaving(true);
-    await supabase.from("customer_requests").insert({
+    const { data: inserted } = await supabase.from("customer_requests").insert({
       store_id: activeStore?.id,
       product_name: form.product_name.trim(),
       article_number: form.article_number.trim() || null,
       notes: form.notes.trim() || null,
       priority: form.priority,
       requested_by: user?.id,
-    });
+    }).select("id").maybeSingle();
+    if (inserted?.id && createImages.length > 0) {
+      await uploadImages(inserted.id, createImages);
+    }
     setSaving(false);
     setShowCreate(false);
     setForm(emptyForm());
+    createPreviews.forEach((p) => URL.revokeObjectURL(p));
+    setCreateImages([]);
+    setCreatePreviews([]);
     await fetchRequests();
   };
 
@@ -196,7 +273,14 @@ function CustomerRequestsPage() {
       internal_notes: editInternalNotes.trim() || null,
       staff_comment: editComment.trim() || null,
     }).eq("id", editTarget.id);
+    if (editImages.length > 0) {
+      await uploadImages(editTarget.id, editImages);
+    }
     setSaving(false);
+    editPreviews.forEach((p) => URL.revokeObjectURL(p));
+    setEditImages([]);
+    setEditPreviews([]);
+    setRequestImages([]);
     setEditTarget(null);
     await fetchRequests();
   };
@@ -308,7 +392,7 @@ function CustomerRequestsPage() {
               <div
                 key={r.id}
                 className="rounded-2xl border border-border/60 bg-card p-4 space-y-3 hover:border-border transition-colors cursor-pointer"
-                onClick={() => setDetailTarget(r)}
+                onClick={() => { setDetailTarget(r); loadRequestImages(r.id); }}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
@@ -396,7 +480,7 @@ function CustomerRequestsPage() {
       )}
 
       {/* Create dialog */}
-      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setForm(emptyForm()); }}>
+      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setForm(emptyForm()); createPreviews.forEach((p) => URL.revokeObjectURL(p)); setCreateImages([]); setCreatePreviews([]); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Registrera kundönskemål</DialogTitle>
@@ -472,6 +556,35 @@ function CustomerRequestsPage() {
                 onClose={() => setArticleCameraOpen(false)}
               />
             )}
+
+            {/* Images */}
+            <div className="space-y-2">
+              <Label className="text-xs">Bilder (valfritt, max {MAX_IMAGES})</Label>
+              {createPreviews.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {createPreviews.map((src, i) => (
+                    <div key={i} className="relative h-16 w-16 overflow-hidden rounded-lg border border-border/60">
+                      <img src={src} alt="" className="h-full w-full object-cover" />
+                      <button type="button" onClick={() => removeCreateImage(i)}
+                        className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white">
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {createImages.length < MAX_IMAGES && (
+                <>
+                  <button type="button" onClick={() => createFileRef.current?.click()}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50">
+                    <ImagePlus className="h-3.5 w-3.5" />
+                    Lägg till bild
+                  </button>
+                  <input ref={createFileRef} type="file" accept="image/*" multiple className="hidden"
+                    onChange={(e) => addCreateImages(e.target.files)} />
+                </>
+              )}
+            </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" className="rounded-full" onClick={() => setShowCreate(false)}>Avbryt</Button>
@@ -486,9 +599,8 @@ function CustomerRequestsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit/manage dialog (managers only) */}
       {editTarget && (
-        <Dialog open onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
+        <Dialog open onOpenChange={(o) => { if (!o) { setEditTarget(null); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setRequestImages([]); } }}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Hantera önskemål</DialogTitle>
@@ -503,6 +615,45 @@ function CustomerRequestsPage() {
                   </div>
                 )}
               </div>
+
+              {/* Images */}
+              <div className="space-y-2">
+                <Label className="text-xs">Bilder</Label>
+                {(requestImages.length > 0 || editPreviews.length > 0) && (
+                  <div className="flex flex-wrap gap-2">
+                    {requestImages.map((img) => (
+                      <div key={img.id} className="relative h-16 w-16 overflow-hidden rounded-lg border border-border/60">
+                        <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
+                        <button type="button" onClick={() => deleteExistingImage(img.id)}
+                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white">
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </div>
+                    ))}
+                    {editPreviews.map((src, i) => (
+                      <div key={`new-${i}`} className="relative h-16 w-16 overflow-hidden rounded-lg border border-border/60 ring-1 ring-primary/40">
+                        <img src={src} alt="" className="h-full w-full object-cover" />
+                        <button type="button" onClick={() => removeEditImage(i)}
+                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white">
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {(requestImages.length + editImages.length) < MAX_IMAGES && (
+                  <>
+                    <button type="button" onClick={() => editFileRef.current?.click()}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50">
+                      <ImagePlus className="h-3.5 w-3.5" />
+                      Lägg till bild
+                    </button>
+                    <input ref={editFileRef} type="file" accept="image/*" multiple className="hidden"
+                      onChange={(e) => addEditImages(e.target.files)} />
+                  </>
+                )}
+              </div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs flex items-center gap-1.5">
                   <Hash className="h-3 w-3 text-muted-foreground" />
@@ -550,7 +701,7 @@ function CustomerRequestsPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" className="rounded-full" onClick={() => setEditTarget(null)}>Avbryt</Button>
+              <Button variant="outline" className="rounded-full" onClick={() => { setEditTarget(null); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setRequestImages([]); }}>Avbryt</Button>
               <Button className="rounded-full" disabled={saving} onClick={updateRequest}>
                 {saving ? "Sparar..." : "Spara"}
               </Button>
@@ -559,14 +710,13 @@ function CustomerRequestsPage() {
         </Dialog>
       )}
 
-      {/* Detail view dialog */}
       {detailTarget && (() => {
         const r = detailTarget;
         const store = stores.find((s) => s.id === r.store_id) ?? null;
         const mcUrl = mittCoopUrl(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null);
         const staffComment = (r as CustomerRequest & { staff_comment?: string | null }).staff_comment;
         return (
-          <Dialog open onOpenChange={(o) => { if (!o) setDetailTarget(null); }}>
+          <Dialog open onOpenChange={(o) => { if (!o) { setDetailTarget(null); setRequestImages([]); } }}>
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle className="text-base leading-tight">{r.product_name}</DialogTitle>
@@ -608,6 +758,21 @@ function CustomerRequestsPage() {
                   </div>
                 )}
 
+                {/* Images */}
+                {requestImages.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">Bilder</p>
+                    <div className="flex flex-wrap gap-2">
+                      {requestImages.map((img) => (
+                        <a key={img.id} href={getPublicUrl(img.storage_path)} target="_blank" rel="noopener noreferrer"
+                          className="h-20 w-20 overflow-hidden rounded-xl border border-border/60 block">
+                          <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Staff message to customer */}
                 {staffComment && (
                   <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
@@ -630,7 +795,7 @@ function CustomerRequestsPage() {
                 </p>
               </div>
               <div className="flex justify-between gap-2 pt-2">
-                <Button variant="outline" className="rounded-full" onClick={() => setDetailTarget(null)}>Stäng</Button>
+                <Button variant="outline" className="rounded-full" onClick={() => { setDetailTarget(null); setRequestImages([]); }}>Stäng</Button>
                 {isManager && (
                   <Button className="rounded-full" onClick={() => {
                     setDetailTarget(null);
@@ -639,6 +804,7 @@ function CustomerRequestsPage() {
                     setEditArticleNumber(r.article_number ?? "");
                     setEditInternalNotes(r.internal_notes ?? "");
                     setEditComment((r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "");
+                    loadRequestImages(r.id);
                   }}>
                     Hantera
                   </Button>
