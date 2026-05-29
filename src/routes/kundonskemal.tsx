@@ -21,7 +21,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   supabase, type CustomerRequest, type Store as StoreType,
-  mittCoopUrl, getPublicUrl, uploadAttachment,
+  mittCoopUrl, getPublicUrl, uploadAttachment, deleteStorageFiles,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -145,8 +145,10 @@ function CustomerRequestsPage() {
   };
 
   const deleteExistingImage = async (imgId: string) => {
+    const img = requestImages.find((i) => i.id === imgId);
     await supabase.from("customer_request_images").delete().eq("id", imgId);
-    setRequestImages((prev) => prev.filter((img) => img.id !== imgId));
+    if (img) deleteStorageFiles([img.storage_path]);
+    setRequestImages((prev) => prev.filter((i) => i.id !== imgId));
   };
 
   const uploadImages = async (requestId: string, files: File[]) => {
@@ -161,6 +163,17 @@ function CustomerRequestsPage() {
       }
     }
   };
+
+  // Load images whenever a detail or edit dialog opens
+  useEffect(() => {
+    const id = detailTarget?.id ?? editTarget?.id;
+    if (id) {
+      loadRequestImages(id);
+    } else {
+      setRequestImages([]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailTarget?.id, editTarget?.id]);
 
   const openQrForRequest = async (req: CustomerRequest) => {
     if (!activeStore || !user) return;
@@ -285,7 +298,15 @@ function CustomerRequestsPage() {
 
   const deleteRequest = async () => {
     if (!deleteTarget) return;
+    // Fetch image paths before deleting so we can clean up storage
+    const { data: imgs } = await supabase
+      .from("customer_request_images")
+      .select("storage_path")
+      .eq("request_id", deleteTarget.id);
     await supabase.from("customer_requests").delete().eq("id", deleteTarget.id);
+    if (imgs && imgs.length > 0) {
+      deleteStorageFiles(imgs.map((i) => i.storage_path));
+    }
     setDeleteTarget(null);
     await fetchRequests();
   };
@@ -390,7 +411,7 @@ function CustomerRequestsPage() {
               <div
                 key={r.id}
                 className="rounded-2xl border border-border/60 bg-card p-4 space-y-3 hover:border-border transition-colors cursor-pointer"
-                onClick={() => { setDetailTarget(r); loadRequestImages(r.id); }}
+                onClick={() => setDetailTarget(r)}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
@@ -447,7 +468,6 @@ function CustomerRequestsPage() {
                           setEditArticleNumber(r.article_number ?? "");
                           setEditInternalNotes(r.internal_notes ?? "");
                           setEditComment((r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "");
-                          loadRequestImages(r.id);
                         }}
                       >
                         Hantera
@@ -803,7 +823,6 @@ function CustomerRequestsPage() {
                     setEditArticleNumber(r.article_number ?? "");
                     setEditInternalNotes(r.internal_notes ?? "");
                     setEditComment((r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "");
-                    loadRequestImages(r.id);
                   }}>
                     Hantera
                   </Button>
