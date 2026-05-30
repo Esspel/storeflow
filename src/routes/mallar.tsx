@@ -1702,6 +1702,46 @@ function MallarPage() {
         </div>
       ) : (
         <div className="mt-6 space-y-8">
+          {/* Template packages section */}
+          {packages.length > 0 && isManager && (
+            <div>
+              <div className="mb-3 flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-foreground">Mallpaket</h2>
+                <Badge variant="outline" className="text-xs border-amber-300 text-amber-600">Paket</Badge>
+                <Button variant="ghost" size="sm" className="ml-auto text-xs text-muted-foreground h-7 rounded-full" onClick={() => setShowPackagesPanel(true)}>
+                  <Layers className="h-3.5 w-3.5 mr-1" /> Hantera
+                </Button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {packages.map(pkg => {
+                  const pkgTemplates = (pkg.items ?? []).map(it => templates.find(t => t.id === it.template_id)).filter(Boolean) as TemplateWithMeta[];
+                  return (
+                    <div key={pkg.id} className="rounded-2xl border border-amber-200/60 bg-card p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm">{pkg.name}</p>
+                          {pkg.description && <p className="text-xs text-muted-foreground">{pkg.description}</p>}
+                          <p className="text-xs text-muted-foreground mt-0.5">{pkgTemplates.length} mallar</p>
+                        </div>
+                        <Button
+                          size="sm" variant="outline"
+                          className="shrink-0 rounded-full h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                          onClick={() => { setActivatePackageTarget(pkg); setBulkTaskConfigs(pkgTemplates.map(t => ({ templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], dueDate: "", priority: t.priority ?? "Medel", dueTime: t.due_date_time ?? "" }))); setBulkCreateOpen(true); }}
+                        >
+                          <ListChecks className="h-3 w-3 mr-1" /> Aktivera
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {pkgTemplates.map(t => (
+                          <Badge key={t.id} variant="secondary" className="text-xs">{t.title}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {visibleGroups.map((group) => (
             <div key={group.label}>
               <div className="mb-3 flex items-center gap-2">
@@ -1801,26 +1841,16 @@ function MallarPage() {
                                 <History className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                            {/* Copy / Variant — only for HK and Forening templates (store templates are already store-unique) */}
-                            {isManager && (t.hierarchy_scope === "hk" || t.hierarchy_scope === "forening") && (
-                              <Button
-                                variant="ghost" size="icon"
-                                className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-foreground"
-                                onClick={(e) => { e.stopPropagation(); setInheritTarget(t); setInheritMode("copy"); }}
-                                title="Kopiera eller skapa variant"
-                              >
-                                <Copy className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            {/* For HK/Forening templates: show "Skapa lokal variant" for managers instead of edit */}
+                            {/* For HK/Forening templates: managers get a pencil that auto-creates a local variant */}
                             {isManager && !isAdmin && !isForening && (t.hierarchy_scope === "hk" || t.hierarchy_scope === "forening") && (
                               <Button
                                 variant="ghost" size="icon"
                                 className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-primary"
                                 onClick={(e) => { e.stopPropagation(); void createLocalVariantAndEdit(t); }}
-                                title="Skapa lokal variant"
+                                aria-label="Redigera (skapar lokal variant)"
+                                title="Redigera — skapar lokal variant för din butik"
                               >
-                                <GitBranch className="h-3.5 w-3.5" />
+                                <Pencil className="h-3.5 w-3.5" />
                               </Button>
                             )}
                             {canEdit(t) && (
@@ -2013,16 +2043,33 @@ function MallarPage() {
             ) : (
               <div className="space-y-3">
                 {versions.map((v, vIdx) => {
-                  const snap = v.snapshot as { title?: string; description?: string; items?: { label: string }[]; questions?: { label: string }[]; priority?: string; status?: string };
+                  const snap = v.snapshot as { title?: string; description?: string; items?: { label: string }[]; questions?: { label: string; is_required?: boolean }[]; priority?: string; status?: string; recurrence_rule?: string; due_date_time?: string };
                   const prev = vIdx < versions.length - 1 ? versions[vIdx + 1].snapshot as typeof snap : null;
                   const diffs: string[] = [];
                   if (prev) {
                     if (snap.title !== prev.title) diffs.push(`Titel: "${prev.title}" → "${snap.title}"`);
-                    if ((snap.items?.length ?? 0) !== (prev.items?.length ?? 0)) diffs.push(`Steg: ${prev.items?.length ?? 0} → ${snap.items?.length ?? 0}`);
-                    if ((snap.questions?.length ?? 0) !== (prev.questions?.length ?? 0)) diffs.push(`Frågor: ${prev.questions?.length ?? 0} → ${snap.questions?.length ?? 0}`);
-                    if (snap.priority !== prev.priority) diffs.push(`Prioritet: ${prev.priority} → ${snap.priority}`);
-                    if (snap.status !== prev.status) diffs.push(`Status: ${prev.status} → ${snap.status}`);
                     if (snap.description !== prev.description) diffs.push("Beskrivning ändrad");
+                    if (snap.priority !== prev.priority) diffs.push(`Prioritet: ${prev.priority ?? "–"} → ${snap.priority ?? "–"}`);
+                    if (snap.status !== prev.status) diffs.push(`Status: ${prev.status ?? "–"} → ${snap.status ?? "–"}`);
+                    if (snap.recurrence_rule !== prev.recurrence_rule) diffs.push(`Upprepning: ${prev.recurrence_rule || "Ingen"} → ${snap.recurrence_rule || "Ingen"}`);
+                    if (snap.due_date_time !== prev.due_date_time) diffs.push(`Förfallotid: ${prev.due_date_time || "–"} → ${snap.due_date_time || "–"}`);
+                    // Detailed step diff
+                    const prevLabels = (prev.items ?? []).map(it => it.label);
+                    const snapLabels = (snap.items ?? []).map(it => it.label);
+                    const addedSteps = snapLabels.filter(l => !prevLabels.includes(l));
+                    const removedSteps = prevLabels.filter(l => !snapLabels.includes(l));
+                    addedSteps.forEach(l => diffs.push(`+ Steg: "${l}"`));
+                    removedSteps.forEach(l => diffs.push(`- Steg: "${l}"`));
+                    if (addedSteps.length === 0 && removedSteps.length === 0 && prevLabels.length !== snapLabels.length) {
+                      diffs.push(`Steg omordnade: ${prevLabels.length} → ${snapLabels.length}`);
+                    }
+                    // Detailed question diff
+                    const prevQLabels = (prev.questions ?? []).map(q => q.label);
+                    const snapQLabels = (snap.questions ?? []).map(q => q.label);
+                    const addedQs = snapQLabels.filter(l => !prevQLabels.includes(l));
+                    const removedQs = prevQLabels.filter(l => !snapQLabels.includes(l));
+                    addedQs.forEach(l => diffs.push(`+ Fråga: "${l}"`));
+                    removedQs.forEach(l => diffs.push(`- Fråga: "${l}"`));
                   }
                   return (
                     <div key={v.id} className="rounded-xl border border-border/60 bg-card p-3 space-y-2">
@@ -2375,7 +2422,8 @@ function MallarPage() {
             <Button variant="ghost" size="sm" className="ml-auto text-xs text-muted-foreground" onClick={() => setShowPackagesPanel(false)}>Stäng</Button>
           </div>
           <div className="flex-1 overflow-y-auto p-5 space-y-6">
-            {/* Create / Edit form */}
+            {/* Create / Edit form — only admins and HK users can manage packages */}
+            {(isAdmin || isHK) && (
             <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
               <h3 className="text-sm font-semibold">{editPackageTarget ? "Redigera paket" : "Skapa nytt paket"}</h3>
               <Input
@@ -2419,6 +2467,7 @@ function MallarPage() {
                 </Button>
               </div>
             </div>
+            )} {/* end isAdmin || isHK create form */}
 
             {/* Existing packages */}
             {packages.length > 0 && (
@@ -2442,12 +2491,16 @@ function MallarPage() {
                           >
                             <ListChecks className="h-3 w-3 mr-1" /> Aktivera
                           </Button>
+                          {(isAdmin || isHK) && (
+                          <>
                           <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:text-primary" onClick={() => openEditPackage(pkg)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:text-destructive" onClick={() => deletePackage(pkg)}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
+                          </>
+                          )}
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-1">

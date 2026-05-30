@@ -147,6 +147,7 @@ const emptyForm = (storeId: string) => ({
   store_id: storeId,
   due_date: "",
   due_date_time: "",
+  time_slots: [] as string[],
   recurrence_rule: "",
   recurrence_days: [] as number[],
   recurrence_interval: 1,
@@ -759,10 +760,11 @@ function TasksPage() {
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((q) => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required }));
     const dueDate = tmpl.due_date_offset != null
-      ? (() => { const d = new Date(getSimulatedNow()); d.setDate(d.getDate() + tmpl.due_date_offset!); return utcIsoToLocalInput(d.toISOString()); })()
+      ? (() => { const d = new Date(getSimulatedNow()); d.setDate(d.getDate() + tmpl.due_date_offset!); return localDateStr(d); })()
       : "";
     const todayStr = localDateStr(new Date(getSimulatedNow()));
     const tmplAny = tmpl as ChecklistTemplate & { recurrence_months?: number[]; recurrence_month_day?: number };
+    const timeSlots = (tmpl.time_slots ?? []) as string[];
     setNewTask((p) => ({
       ...p,
       title: p.title || tmpl.title,
@@ -776,7 +778,9 @@ function TasksPage() {
       recurrence_month_day: tmplAny.recurrence_month_day ?? p.recurrence_month_day,
       recurrence_start: tmpl.recurrence_rule ? todayStr : p.recurrence_start,
       due_date: dueDate || p.due_date,
-      due_date_time: tmpl.due_date_time ? (p.due_date_time || tmpl.due_date_time) : p.due_date_time,
+      // When template has time_slots, those become the due times (not due_date_time)
+      due_date_time: timeSlots.length > 0 ? "" : (tmpl.due_date_time ? (p.due_date_time || tmpl.due_date_time) : p.due_date_time),
+      time_slots: timeSlots.length > 0 ? timeSlots : p.time_slots,
       steps: steps.length > 0 ? steps : p.steps,
       questions: questions.length > 0 ? questions : p.questions,
     }));
@@ -1185,8 +1189,8 @@ function TasksPage() {
       category: newTask.category,
       priority: newTask.priority,
       store_id: newTask.store_id || null,
-      due_date: newTask.due_date ? localInputToUtcIso(newTask.due_date) : null,
-      due_date_time: newTask.due_date_time || null,
+      due_date: newTask.due_date ? new Date(newTask.due_date).toISOString() : null,
+      due_date_time: newTask.time_slots.length > 0 ? null : (newTask.due_date_time || null),
       due_date_offset: null,
       recurring: newTask.recurrence_rule || null,
       recurrence_rule: newTask.recurrence_rule || null,
@@ -1197,7 +1201,7 @@ function TasksPage() {
       recurrence_start: newTask.recurrence_start || null,
       recurrence_end: newTask.recurrence_end || null,
       sap_article_id: newTask.sap_article_id?.trim() || null,
-      completion_mode: newTask.completion_mode || "manual",
+      completion_mode: "manual",
       created_by: user?.id,
       assigned_to: newTask.assigneeUserIds[0] ?? user?.id,
       status: "todo",
@@ -2637,11 +2641,50 @@ function TasksPage() {
                   <div className="flex flex-col gap-1 min-w-0 flex-1">
                     <span className="text-xs text-muted-foreground">Förfallodatum</span>
                     <input
-                      type="datetime-local"
+                      type="date"
                       value={newTask.due_date}
                       onChange={(e) => setNewTask(p => ({ ...p, due_date: e.target.value }))}
                       className="w-full rounded border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
                     />
+                  </div>
+                </div>
+
+                {/* Förfallotid / Tidsluckor */}
+                <div className="flex items-start gap-3 px-4 py-3">
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60 opacity-0" />
+                  <div className="flex flex-col gap-1 min-w-0 flex-1">
+                    {newTask.time_slots.length > 0 ? (
+                      <>
+                        <span className="text-xs text-muted-foreground">Tidsluckor (förfallotider)</span>
+                        <div className="flex flex-wrap gap-1">
+                          {newTask.time_slots.map((slot, i) => (
+                            <span key={i} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                              {slot}
+                              <button type="button" onClick={() => setNewTask(p => ({ ...p, time_slots: p.time_slots.filter((_, idx) => idx !== i) }))}><X className="h-3 w-3" /></button>
+                            </span>
+                          ))}
+                          <button
+                            type="button"
+                            className="rounded-full border border-dashed border-border/60 px-2 py-0.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary"
+                            onClick={() => {
+                              const t = prompt("Lägg till tid (HH:MM):");
+                              if (t?.match(/^\d{2}:\d{2}$/)) setNewTask(p => ({ ...p, time_slots: [...p.time_slots, t] }));
+                            }}
+                          >+ Tid</button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">En uppgift skapas per tidslucka</p>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-xs text-muted-foreground">Förfallotid</span>
+                        <input
+                          type="time"
+                          value={newTask.due_date_time}
+                          onChange={(e) => setNewTask(p => ({ ...p, due_date_time: e.target.value }))}
+                          className="w-full rounded border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        />
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -2668,7 +2711,7 @@ function TasksPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {["Drift", "Säkerhet", "Kundärenden", "Övrigt"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      {[...new Set(["Drift", "Säkerhet", "Kundärenden", "Övrigt", ...templates.map(t => t.category).filter(Boolean)])].sort().map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -2684,22 +2727,6 @@ function TasksPage() {
                     <SelectContent>
                       <SelectItem value="__none">Ingen</SelectItem>
                       {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Avslutningsläge */}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Avslutning</span>
-                  <Select value={newTask.completion_mode} onValueChange={(v) => setNewTask(p => ({ ...p, completion_mode: v as typeof p.completion_mode }))}>
-                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="manual">Manuell</SelectItem>
-                      <SelectItem value="auto_from_children">Auto (när underuppgifter klara)</SelectItem>
-                      <SelectItem value="auto_complete_children">Auto (slutför underuppgifter)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
