@@ -40,11 +40,21 @@ const RECURRENCE_OPTIONS = [
   { value: "daily", label: "Dagligen" },
   { value: "every_other_day", label: "Varannan dag" },
   { value: "weekly", label: "Varje vecka" },
+  { value: "biweekly", label: "Varannan vecka" },
   { value: "monthly", label: "Varje månad" },
+  { value: "quarterly", label: "Kvartalsvis" },
   { value: "yearly", label: "Varje år" },
+  { value: "custom", label: "Anpassat intervall" },
 ];
 
 const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
+const MONTHS_SV = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
+const QUARTER_MONTHS = [
+  { q: "Q1", months: [0, 1, 2] },
+  { q: "Q2", months: [3, 4, 5] },
+  { q: "Q3", months: [6, 7, 8] },
+  { q: "Q4", months: [9, 10, 11] },
+];
 
 function priorityClass(p: string) {
   switch (p) {
@@ -139,6 +149,8 @@ const emptyForm = (storeId: string) => ({
   recurrence_rule: "",
   recurrence_days: [] as number[],
   recurrence_interval: 1,
+  recurrence_months: [] as number[],
+  recurrence_month_day: 1,
   recurrence_start: "",
   recurrence_end: "",
   sap_article_id: "",
@@ -1002,8 +1014,11 @@ function TasksPage() {
       recurrence_rule: task.recurrence_rule ?? "",
       recurrence_days: task.recurrence_days ?? [],
       recurrence_interval: task.recurrence_interval ?? 1,
+      recurrence_months: (task as TaskFull & { recurrence_months?: number[] }).recurrence_months ?? [],
+      recurrence_month_day: (task as TaskFull & { recurrence_month_day?: number }).recurrence_month_day ?? 1,
       recurrence_start: task.recurrence_start ?? "",
       recurrence_end: task.recurrence_end ?? "",
+      sap_article_id: (task as TaskFull & { sap_article_id?: string }).sap_article_id ?? "",
       steps: (task.steps ?? []).map(s => ({ label: s.label, requires_photo: s.requires_photo })),
       questions: (task.questions ?? []).map(q => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required })),
       assigneeUserIds: (task.assignees ?? []).filter(a => a.user_id).map(a => a.user_id!),
@@ -1917,6 +1932,22 @@ function TasksPage() {
                 {sortDir === "asc" ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               </Button>
             )}
+            {isManager && visibleTasks.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-full text-xs shrink-0"
+                onClick={() => {
+                  if (selectedTaskIds.size === visibleTasks.length) {
+                    setSelectedTaskIds(new Set());
+                  } else {
+                    setSelectedTaskIds(new Set(visibleTasks.map(t => t.id)));
+                  }
+                }}
+              >
+                {selectedTaskIds.size === visibleTasks.length && visibleTasks.length > 0 ? "Avmarkera alla" : "Markera alla"}
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -2617,6 +2648,7 @@ function TasksPage() {
                       setNewTask(p => ({
                         ...p,
                         recurrence_rule: rule,
+                        recurrence_interval: 1,
                         recurrence_start: rule && !p.recurrence_start ? localDateStr(new Date(getSimulatedNow())) : p.recurrence_start,
                       }));
                     }}>
@@ -2628,19 +2660,79 @@ function TasksPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  {newTask.recurrence_rule === "weekly" && (
-                    <div className="flex flex-wrap gap-1 pl-7">
-                      {WEEKDAYS.map((day, idx) => (
-                        <button key={idx} type="button"
-                          className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
-                            newTask.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
-                          onClick={() => {
-                            const days = newTask.recurrence_days.includes(idx) ? newTask.recurrence_days.filter(d => d !== idx) : [...newTask.recurrence_days, idx];
-                            setNewTask(p => ({ ...p, recurrence_days: days }));
-                          }}>
-                          {day}
-                        </button>
-                      ))}
+                  {newTask.recurrence_rule === "custom" && (
+                    <div className="flex items-center gap-2 pl-7">
+                      <span className="text-[11px] text-muted-foreground">Var</span>
+                      <input
+                        type="number" min={1} max={365}
+                        value={newTask.recurrence_interval}
+                        onChange={(e) => setNewTask(p => ({ ...p, recurrence_interval: Math.max(1, parseInt(e.target.value) || 1) }))}
+                        className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                      />
+                      <span className="text-[11px] text-muted-foreground">dag(ar)</span>
+                    </div>
+                  )}
+                  {(newTask.recurrence_rule === "weekly" || newTask.recurrence_rule === "biweekly") && (
+                    <div className="pl-7 space-y-1.5">
+                      <div className="flex flex-wrap gap-1">
+                        {WEEKDAYS.map((day, idx) => (
+                          <button key={idx} type="button"
+                            className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                              newTask.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                            onClick={() => {
+                              const days = newTask.recurrence_days.includes(idx) ? newTask.recurrence_days.filter(d => d !== idx) : [...newTask.recurrence_days, idx];
+                              setNewTask(p => ({ ...p, recurrence_days: days }));
+                            }}>
+                            {day}
+                          </button>
+                        ))}
+                      </div>
+                      {newTask.recurrence_rule === "biweekly" && (
+                        <p className="text-[11px] text-muted-foreground">Upprepas varannan vecka på valda dagar.</p>
+                      )}
+                    </div>
+                  )}
+                  {newTask.recurrence_rule === "monthly" && (
+                    <div className="flex items-center gap-2 pl-7">
+                      <span className="text-[11px] text-muted-foreground">Dag i månaden</span>
+                      <input
+                        type="number" min={1} max={31}
+                        value={newTask.recurrence_month_day}
+                        onChange={(e) => setNewTask(p => ({ ...p, recurrence_month_day: Math.min(31, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                        className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                      />
+                    </div>
+                  )}
+                  {newTask.recurrence_rule === "quarterly" && (
+                    <div className="pl-7 space-y-1.5">
+                      <p className="text-[11px] text-muted-foreground">Välj månader per kvartal</p>
+                      <div className="space-y-1">
+                        {QUARTER_MONTHS.map(({ q, months }) => (
+                          <div key={q} className="flex items-center gap-1">
+                            <span className="text-[11px] font-medium text-muted-foreground w-6">{q}</span>
+                            {months.map(m => (
+                              <button key={m} type="button"
+                                className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                                  newTask.recurrence_months.includes(m) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                                onClick={() => {
+                                  const ms = newTask.recurrence_months.includes(m) ? newTask.recurrence_months.filter(x => x !== m) : [...newTask.recurrence_months, m];
+                                  setNewTask(p => ({ ...p, recurrence_months: ms }));
+                                }}>
+                                {MONTHS_SV[m]}
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground">Dag i månaden</span>
+                        <input
+                          type="number" min={1} max={31}
+                          value={newTask.recurrence_month_day}
+                          onChange={(e) => setNewTask(p => ({ ...p, recurrence_month_day: Math.min(31, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                          className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                        />
+                      </div>
                     </div>
                   )}
                   {newTask.recurrence_rule && (
@@ -2857,16 +2949,73 @@ function TasksPage() {
                     <div className="flex items-center gap-3">
                       <Repeat className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                       <span className="w-24 shrink-0 text-xs text-muted-foreground">Återkommande</span>
-                      <Select value={editForm.recurrence_rule || "__none"} onValueChange={(v) => setEditForm(p => p ? { ...p, recurrence_rule: v === "__none" ? "" : v } : p)}>
+                      <Select value={editForm.recurrence_rule || "__none"} onValueChange={(v) => setEditForm(p => p ? { ...p, recurrence_rule: v === "__none" ? "" : v, recurrence_interval: 1 } : p)}>
                         <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end"><SelectValue placeholder="Ingen" /></SelectTrigger>
                         <SelectContent>{RECURRENCE_OPTIONS.map(o => <SelectItem key={o.value || "__none"} value={o.value || "__none"}>{o.label}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    {editForm.recurrence_rule === "weekly" && (
-                      <div className="flex flex-wrap gap-1 pl-7">
-                        {WEEKDAYS.map((day, idx) => (
-                          <button key={idx} type="button" className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors", editForm.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground")} onClick={() => setEditForm(p => { if (!p) return p; const days = p.recurrence_days.includes(idx) ? p.recurrence_days.filter(d=>d!==idx) : [...p.recurrence_days,idx]; return {...p, recurrence_days: days}; })}>{day}</button>
-                        ))}
+                    {editForm.recurrence_rule === "custom" && (
+                      <div className="flex items-center gap-2 pl-7">
+                        <span className="text-[11px] text-muted-foreground">Var</span>
+                        <input
+                          type="number" min={1} max={365}
+                          value={editForm.recurrence_interval}
+                          onChange={(e) => setEditForm(p => p ? { ...p, recurrence_interval: Math.max(1, parseInt(e.target.value) || 1) } : p)}
+                          className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                        />
+                        <span className="text-[11px] text-muted-foreground">dag(ar)</span>
+                      </div>
+                    )}
+                    {(editForm.recurrence_rule === "weekly" || editForm.recurrence_rule === "biweekly") && (
+                      <div className="pl-7 space-y-1.5">
+                        <div className="flex flex-wrap gap-1">
+                          {WEEKDAYS.map((day, idx) => (
+                            <button key={idx} type="button" className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors", editForm.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground")} onClick={() => setEditForm(p => { if (!p) return p; const days = p.recurrence_days.includes(idx) ? p.recurrence_days.filter(d=>d!==idx) : [...p.recurrence_days,idx]; return {...p, recurrence_days: days}; })}>{day}</button>
+                          ))}
+                        </div>
+                        {editForm.recurrence_rule === "biweekly" && (
+                          <p className="text-[11px] text-muted-foreground">Upprepas varannan vecka på valda dagar.</p>
+                        )}
+                      </div>
+                    )}
+                    {editForm.recurrence_rule === "monthly" && (
+                      <div className="flex items-center gap-2 pl-7">
+                        <span className="text-[11px] text-muted-foreground">Dag i månaden</span>
+                        <input
+                          type="number" min={1} max={31}
+                          value={editForm.recurrence_month_day}
+                          onChange={(e) => setEditForm(p => p ? { ...p, recurrence_month_day: Math.min(31, Math.max(1, parseInt(e.target.value) || 1)) } : p)}
+                          className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                        />
+                      </div>
+                    )}
+                    {editForm.recurrence_rule === "quarterly" && (
+                      <div className="pl-7 space-y-1.5">
+                        <p className="text-[11px] text-muted-foreground">Välj månader per kvartal</p>
+                        <div className="space-y-1">
+                          {QUARTER_MONTHS.map(({ q, months }) => (
+                            <div key={q} className="flex items-center gap-1">
+                              <span className="text-[11px] font-medium text-muted-foreground w-6">{q}</span>
+                              {months.map(m => (
+                                <button key={m} type="button"
+                                  className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                                    editForm.recurrence_months.includes(m) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                                  onClick={() => setEditForm(p => { if (!p) return p; const ms = p.recurrence_months.includes(m) ? p.recurrence_months.filter(x=>x!==m) : [...p.recurrence_months,m]; return {...p, recurrence_months: ms}; })}>
+                                  {MONTHS_SV[m]}
+                                </button>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-muted-foreground">Dag i månaden</span>
+                          <input
+                            type="number" min={1} max={31}
+                            value={editForm.recurrence_month_day}
+                            onChange={(e) => setEditForm(p => p ? { ...p, recurrence_month_day: Math.min(31, Math.max(1, parseInt(e.target.value) || 1)) } : p)}
+                            className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                          />
+                        </div>
                       </div>
                     )}
                     {editForm.recurrence_rule && (

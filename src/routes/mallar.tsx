@@ -32,10 +32,20 @@ const RECURRENCE_OPTIONS = [
   { value: "daily", label: "Dagligen" },
   { value: "every_other_day", label: "Varannan dag" },
   { value: "weekly", label: "Varje vecka" },
+  { value: "biweekly", label: "Varannan vecka" },
   { value: "monthly", label: "Varje månad" },
+  { value: "quarterly", label: "Kvartalsvis" },
   { value: "yearly", label: "Varje år" },
+  { value: "custom", label: "Anpassat intervall" },
 ];
 const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
+const MONTHS_SV = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
+const QUARTER_MONTHS = [
+  { q: "Q1", months: [0, 1, 2] },
+  { q: "Q2", months: [3, 4, 5] },
+  { q: "Q3", months: [6, 7, 8] },
+  { q: "Q4", months: [9, 10, 11] },
+];
 
 // Instruction header injected into every downloadable CSV template.
 // Lines starting with '#' are treated as comments and skipped by the importer.
@@ -73,6 +83,9 @@ type FormState = {
   priority: string;
   recurrence_rule: string;
   recurrence_days: number[];
+  recurrence_interval: number;
+  recurrence_months: number[];
+  recurrence_month_day: number;
   due_date_offset: string;
   due_date_time: string;
   storeIds: string[];
@@ -85,7 +98,9 @@ type FormState = {
 
 const emptyForm = (): FormState => ({
   title: "", description: "", category: "", priority: "Medel",
-  recurrence_rule: "", recurrence_days: [], due_date_offset: "", due_date_time: "",
+  recurrence_rule: "", recurrence_days: [], recurrence_interval: 1,
+  recurrence_months: [], recurrence_month_day: 1,
+  due_date_offset: "", due_date_time: "",
   storeIds: [], isGlobal: false, isLocked: false, foreningId: "",
   items: [{ label: "", requires_photo: false }],
   questions: [],
@@ -243,7 +258,8 @@ function MallarPage() {
       category: form.category.trim(),
       priority: form.priority,
       recurrence_rule: form.recurrence_rule || null,
-      recurrence_days: form.recurrence_rule === "weekly" && form.recurrence_days.length > 0 ? form.recurrence_days : null,
+      recurrence_days: (form.recurrence_rule === "weekly" || form.recurrence_rule === "biweekly") && form.recurrence_days.length > 0 ? form.recurrence_days : null,
+      recurrence_interval: form.recurrence_interval > 1 ? form.recurrence_interval : null,
       due_date_offset: form.due_date_offset !== "" ? parseInt(form.due_date_offset) : null,
       due_date_time: form.due_date_time || null,
       created_by: user?.id ?? null,
@@ -305,6 +321,9 @@ function MallarPage() {
       priority: t.priority ?? "Medel",
       recurrence_rule: t.recurrence_rule ?? "",
       recurrence_days: t.recurrence_days ?? [],
+      recurrence_interval: (t as ChecklistTemplate & { recurrence_interval?: number }).recurrence_interval ?? 1,
+      recurrence_months: (t as ChecklistTemplate & { recurrence_months?: number[] }).recurrence_months ?? [],
+      recurrence_month_day: (t as ChecklistTemplate & { recurrence_month_day?: number }).recurrence_month_day ?? 1,
       due_date_offset: t.due_date_offset != null ? String(t.due_date_offset) : "",
       due_date_time: t.due_date_time ?? "",
       storeIds: t.storeIds,
@@ -334,7 +353,8 @@ function MallarPage() {
       category: editForm.category.trim(),
       priority: editForm.priority,
       recurrence_rule: editForm.recurrence_rule || null,
-      recurrence_days: editForm.recurrence_rule === "weekly" && editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
+      recurrence_days: (editForm.recurrence_rule === "weekly" || editForm.recurrence_rule === "biweekly") && editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
+      recurrence_interval: editForm.recurrence_interval > 1 ? editForm.recurrence_interval : null,
       due_date_offset: editForm.due_date_offset !== "" ? parseInt(editForm.due_date_offset) : null,
       due_date_time: editForm.due_date_time || null,
       is_global: editForm.isGlobal,
@@ -761,24 +781,84 @@ function MallarPage() {
               <div className="flex items-center gap-3">
                 <Repeat className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 <span className="w-20 shrink-0 text-xs text-muted-foreground">Återkommande</span>
-                <Select value={f.recurrence_rule || "__none"} onValueChange={(v) => setF((p) => ({ ...p, recurrence_rule: v === "__none" ? "" : v }))}>
+                <Select value={f.recurrence_rule || "__none"} onValueChange={(v) => setF((p) => ({ ...p, recurrence_rule: v === "__none" ? "" : v, recurrence_interval: 1 }))}>
                   <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end"><SelectValue placeholder="Ingen" /></SelectTrigger>
                   <SelectContent>{RECURRENCE_OPTIONS.map((o) => <SelectItem key={o.value || "__none"} value={o.value || "__none"}>{o.label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              {f.recurrence_rule === "weekly" && (
-                <div className="flex flex-wrap gap-1 pl-7">
-                  {WEEKDAYS.map((day, idx) => (
-                    <button key={idx} type="button"
-                      className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
-                        f.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
-                      onClick={() => {
-                        const days = f.recurrence_days.includes(idx) ? f.recurrence_days.filter((d) => d !== idx) : [...f.recurrence_days, idx];
-                        setF((p) => ({ ...p, recurrence_days: days }));
-                      }}>
-                      {day}
-                    </button>
-                  ))}
+              {f.recurrence_rule === "custom" && (
+                <div className="flex items-center gap-2 pl-7">
+                  <span className="text-[11px] text-muted-foreground">Var</span>
+                  <input
+                    type="number" min={1} max={365}
+                    value={f.recurrence_interval}
+                    onChange={(e) => setF((p) => ({ ...p, recurrence_interval: Math.max(1, parseInt(e.target.value) || 1) }))}
+                    className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                  />
+                  <span className="text-[11px] text-muted-foreground">dag(ar)</span>
+                </div>
+              )}
+              {(f.recurrence_rule === "weekly" || f.recurrence_rule === "biweekly") && (
+                <div className="pl-7 space-y-1.5">
+                  <div className="flex flex-wrap gap-1">
+                    {WEEKDAYS.map((day, idx) => (
+                      <button key={idx} type="button"
+                        className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                          f.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                        onClick={() => {
+                          const days = f.recurrence_days.includes(idx) ? f.recurrence_days.filter((d) => d !== idx) : [...f.recurrence_days, idx];
+                          setF((p) => ({ ...p, recurrence_days: days }));
+                        }}>
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                  {f.recurrence_rule === "biweekly" && (
+                    <p className="text-[11px] text-muted-foreground">Upprepas varannan vecka på valda dagar.</p>
+                  )}
+                </div>
+              )}
+              {f.recurrence_rule === "monthly" && (
+                <div className="flex items-center gap-2 pl-7">
+                  <span className="text-[11px] text-muted-foreground">Dag i månaden</span>
+                  <input
+                    type="number" min={1} max={31}
+                    value={f.recurrence_month_day}
+                    onChange={(e) => setF((p) => ({ ...p, recurrence_month_day: Math.min(31, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                    className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                  />
+                </div>
+              )}
+              {f.recurrence_rule === "quarterly" && (
+                <div className="pl-7 space-y-1.5">
+                  <p className="text-[11px] text-muted-foreground">Välj månader per kvartal</p>
+                  <div className="space-y-1">
+                    {QUARTER_MONTHS.map(({ q, months }) => (
+                      <div key={q} className="flex items-center gap-1">
+                        <span className="text-[11px] font-medium text-muted-foreground w-6">{q}</span>
+                        {months.map(m => (
+                          <button key={m} type="button"
+                            className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                              f.recurrence_months.includes(m) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                            onClick={() => {
+                              const ms = f.recurrence_months.includes(m) ? f.recurrence_months.filter(x => x !== m) : [...f.recurrence_months, m];
+                              setF((p) => ({ ...p, recurrence_months: ms }));
+                            }}>
+                            {MONTHS_SV[m]}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-muted-foreground">Dag i månaden</span>
+                    <input
+                      type="number" min={1} max={31}
+                      value={f.recurrence_month_day}
+                      onChange={(e) => setF((p) => ({ ...p, recurrence_month_day: Math.min(31, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                      className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -1011,6 +1091,22 @@ function MallarPage() {
             className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="h-3 w-3" /> Rensa filter
+          </button>
+        )}
+
+        {/* Select all */}
+        {isManager && filteredTemplates.length > 0 && (
+          <button
+            onClick={() => {
+              if (selectedTemplateIds.size === filteredTemplates.length) {
+                setSelectedTemplateIds(new Set());
+              } else {
+                setSelectedTemplateIds(new Set(filteredTemplates.map(t => t.id)));
+              }
+            }}
+            className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
+          >
+            {selectedTemplateIds.size === filteredTemplates.length && filteredTemplates.length > 0 ? "Avmarkera alla" : "Markera alla"}
           </button>
         )}
       </div>

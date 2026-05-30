@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CircleAlert as AlertCircle, ArrowUpDown, Building2, CircleCheck as CheckCircle2, ChevronDown, ChevronUp, Download, Hash, Mail, MapPin, Pencil, Phone, Plus, Search, Shield, Trash2, Upload, UserCog, Users, X } from "lucide-react";
+import { CircleAlert as AlertCircle, ArrowUpDown, Building2, CircleCheck as CheckCircle2, ChevronDown, ChevronUp, Download, Hash, Mail, MapPin, Pencil, Phone, Plus, Search, Shield, Trash2, Upload, UserCog, Users, X, Tv as Tv2, Link as LinkIcon } from "lucide-react";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 
 import { PageHeader } from "@/components/page-header";
@@ -152,12 +152,25 @@ function parseStoreCsv(text: string): { rows: Record<string, string>[]; headers:
 }
 
 function AccountsPage() {
-  const { user: currentUser, userStores: currentUserStores, loading: authLoading } = useAuth();
+  const { user: currentUser, userStores: currentUserStores, loading: authLoading, activeStore } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
   const isAdmin = currentUser?.role === "admin";
   const isManager = currentUser?.role === "manager" || isAdmin;
+
+  // Pulstavla PIN state (managers and admins)
+  const [pulstavlaPin, setPulstavlaPin] = useState(["", "", "", ""]);
+  const [pulstavlaPinSaving, setPulstavlaPinSaving] = useState(false);
+  const [pulstavlaPinSuccess, setPulstavlaPinSuccess] = useState(false);
+  const [pulstavlaPinError, setPulstavlaPinError] = useState("");
+  const [hasStorePinSet, setHasStorePinSet] = useState(false);
+
+  // Upshop URL state (managers and admins)
+  const [upshopUrl, setUpshopUrl] = useState("");
+  const [upshopSaving, setUpshopSaving] = useState(false);
+  const [upshopSuccess, setUpshopSuccess] = useState(false);
+  const [upshopError, setUpshopError] = useState("");
 
   const [users, setUsers] = useState<UserWithStores[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -257,6 +270,47 @@ function AccountsPage() {
       return aChecked - bChecked || a.name.localeCompare(b.name, "sv");
     });
   }, [stores, editUser, editStoreSearch]);
+
+  useEffect(() => {
+    if (!activeStore || !isManager) return;
+    supabase.from("pulstavla_pins").select("id").eq("store_id", activeStore.id).maybeSingle()
+      .then(({ data }) => setHasStorePinSet(!!data));
+    supabase.from("stores").select("upshop_url").eq("id", activeStore.id).maybeSingle()
+      .then(({ data }) => setUpshopUrl((data as { upshop_url?: string | null } | null)?.upshop_url ?? ""));
+  }, [activeStore?.id, isManager]);
+
+  const savePulstavlaPin = async () => {
+    const pin = pulstavlaPin.join("");
+    if (pin.length !== 4 || !/^\d{4}$/.test(pin)) { setPulstavlaPinError("PIN måste vara 4 siffror."); return; }
+    if (!activeStore) return;
+    setPulstavlaPinSaving(true);
+    setPulstavlaPinError("");
+    await supabase.from("pulstavla_pins").upsert(
+      { store_id: activeStore.id, pin_hash: pin, updated_at: new Date().toISOString() },
+      { onConflict: "store_id" },
+    );
+    setPulstavlaPinSaving(false);
+    setPulstavlaPinSuccess(true);
+    setHasStorePinSet(true);
+    setPulstavlaPin(["", "", "", ""]);
+    setTimeout(() => setPulstavlaPinSuccess(false), 2000);
+  };
+
+  const saveUpshopUrl = async () => {
+    if (!activeStore) return;
+    setUpshopError("");
+    setUpshopSaving(true);
+    const trimmed = upshopUrl.trim();
+    if (trimmed && !trimmed.startsWith("https://")) {
+      setUpshopError("URL måste börja med https://");
+      setUpshopSaving(false);
+      return;
+    }
+    await supabase.from("stores").update({ upshop_url: trimmed || null }).eq("id", activeStore.id);
+    setUpshopSaving(false);
+    setUpshopSuccess(true);
+    setTimeout(() => setUpshopSuccess(false), 2000);
+  };
 
   async function load() {
     const managerStoreIds = currentUserStores.map(s => s.id);
@@ -911,6 +965,11 @@ function AccountsPage() {
               <Shield className="mr-1.5 h-3.5 w-3.5" /> GDPR
             </TabsTrigger>
           )}
+          {isManager && (
+            <TabsTrigger value="admin" className="rounded-full px-4 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm">
+              Administration
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* ──────────────────── USERS TAB ──────────────────── */}
@@ -1121,11 +1180,164 @@ function AccountsPage() {
         {isAdmin && (
           <TabsContent value="gdpr" className="mt-6">
             <div className="mb-6">
-              <h2 className="text-xl font-semibold">GDPR &amp; Dataportalitet</h2>
+              <h2 className="text-xl font-semibold">GDPR &amp; Dataportabilitet</h2>
               <p className="text-sm text-muted-foreground">Artikel 20 — Exportera en anställds persondata på begäran.</p>
             </div>
             <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
               <GdprExport />
+            </div>
+          </TabsContent>
+        )}
+
+        {/* ──────────────────── ADMINISTRATION TAB ──────────────────── */}
+        {isManager && (
+          <TabsContent value="admin" className="mt-6 space-y-6">
+            <div className="mb-2">
+              <h2 className="text-xl font-semibold">Administration</h2>
+              <p className="text-sm text-muted-foreground">Butiksinställningar och övergripande konfiguration.</p>
+            </div>
+
+            {/* Pulstavla PIN */}
+            {activeStore && (
+              <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)]">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                    <Tv2 className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Pulstavla PIN</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Sätt en 4-siffrig PIN som krävs för att låsa upp TV-vyn på <code className="font-mono text-[11px]">/pulstavla</code>.
+                      {hasStorePinSet && " En PIN är redan inställd."}
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex gap-3">
+                    {pulstavlaPin.map((d, i) => (
+                      <input
+                        key={i}
+                        type="tel"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={d}
+                        id={`admin-pulstavla-pin-${i}`}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "").slice(-1);
+                          const next = [...pulstavlaPin]; next[i] = val;
+                          setPulstavlaPin(next); setPulstavlaPinError("");
+                          if (val && i < 3) document.getElementById(`admin-pulstavla-pin-${i + 1}`)?.focus();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Backspace" && !d && i > 0)
+                            document.getElementById(`admin-pulstavla-pin-${i - 1}`)?.focus();
+                        }}
+                        className="h-14 w-12 rounded-xl border-2 bg-background text-center text-xl font-bold text-foreground outline-none transition-all border-border/60 focus:border-primary/60"
+                      />
+                    ))}
+                  </div>
+                  {pulstavlaPinError && <p className="text-sm text-destructive">{pulstavlaPinError}</p>}
+                  <div className="flex items-center gap-3">
+                    <Button onClick={savePulstavlaPin} disabled={pulstavlaPinSaving || pulstavlaPin.join("").length !== 4} className="rounded-full">
+                      {pulstavlaPinSaving ? "Sparar..." : hasStorePinSet ? "Byt PIN" : "Spara PIN"}
+                    </Button>
+                    {pulstavlaPinSuccess && <span className="text-sm text-success">PIN sparad!</span>}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Upshop styrtavla URL */}
+            {activeStore && (
+              <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)]">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                    <LinkIcon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Upshop styrtavla</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Klistra in URL till Upshop styrtavlan för att visa den i Pulstavlan.
+                      T.ex. <code className="font-mono text-[10px]">https://app.whywaste.com/c/...</code>
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <input
+                    value={upshopUrl}
+                    onChange={(e) => { setUpshopUrl(e.target.value); setUpshopError(""); }}
+                    placeholder="https://app.whywaste.com/c/..."
+                    className="h-9 w-full rounded-lg border border-border/60 bg-background px-3 font-mono text-sm outline-none focus:border-primary/60"
+                  />
+                  {upshopError && <p className="text-sm text-destructive">{upshopError}</p>}
+                  <div className="flex items-center gap-3">
+                    <Button onClick={saveUpshopUrl} disabled={upshopSaving} className="rounded-full">
+                      {upshopSaving ? "Sparar..." : "Spara URL"}
+                    </Button>
+                    {upshopSuccess && <span className="text-sm text-success">Sparat!</span>}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* GDPR för chefer — exportera butiksdata */}
+            <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)]">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                  <Shield className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">GDPR &amp; Dataexport</h3>
+                  <p className="text-xs text-muted-foreground">Exportera butikens data för portabilitet och arkivering.</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">Som butikschef kan du exportera en sammanfattning av butikens uppgifter, avvikelser och kundönskemål som CSV-filer.</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" className="rounded-full gap-2" onClick={async () => {
+                    if (!activeStore) return;
+                    const { data } = await supabase.from("tasks")
+                      .select("id, title, category, priority, status, due_date, created_at, completed_at")
+                      .eq("store_id", activeStore.id).order("created_at", { ascending: false }).limit(2000);
+                    if (!data) return;
+                    const headers = ["ID", "Titel", "Kategori", "Prioritet", "Status", "Förfallodatum", "Skapad", "Slutförd"];
+                    const rows = data.map(t => [t.id, t.title, t.category ?? "", t.priority ?? "", t.status, t.due_date ?? "", t.created_at, t.completed_at ?? ""].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";"));
+                    const csv = "\ufeff" + [headers.join(";"), ...rows].join("\n");
+                    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = `uppgifter-${activeStore.name}-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+                  }}>
+                    <Download className="h-4 w-4" /> Uppgifter CSV
+                  </Button>
+                  <Button variant="outline" className="rounded-full gap-2" onClick={async () => {
+                    if (!activeStore) return;
+                    const { data } = await supabase.from("incidents")
+                      .select("id, title, category, priority, status, description, created_at")
+                      .eq("store_id", activeStore.id).order("created_at", { ascending: false }).limit(2000);
+                    if (!data) return;
+                    const headers = ["ID", "Titel", "Kategori", "Prioritet", "Status", "Beskrivning", "Skapad"];
+                    const rows = (data as Record<string, unknown>[]).map(t => [t.id, t.title, t.category ?? "", t.priority ?? "", t.status, (t.description ?? ""), t.created_at].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";"));
+                    const csv = "\ufeff" + [headers.join(";"), ...rows].join("\n");
+                    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = `avvikelser-${activeStore.name}-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+                  }}>
+                    <Download className="h-4 w-4" /> Avvikelser CSV
+                  </Button>
+                  <Button variant="outline" className="rounded-full gap-2" onClick={async () => {
+                    if (!activeStore) return;
+                    const { data } = await supabase.from("customer_requests")
+                      .select("id, product_name, article_number, priority, status, staff_comment, created_at")
+                      .eq("store_id", activeStore.id).order("created_at", { ascending: false }).limit(2000);
+                    if (!data) return;
+                    const headers = ["ID", "Produkt", "Artikelnummer", "Prioritet", "Status", "Kommentar", "Skapad"];
+                    const rows = (data as Record<string, unknown>[]).map(t => [t.id, t.product_name, t.article_number ?? "", t.priority ?? "", t.status, t.staff_comment ?? "", t.created_at].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";"));
+                    const csv = "\ufeff" + [headers.join(";"), ...rows].join("\n");
+                    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = `kundonskemal-${activeStore.name}-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+                  }}>
+                    <Download className="h-4 w-4" /> Kundönskemål CSV
+                  </Button>
+                </div>
+              </div>
             </div>
           </TabsContent>
         )}
