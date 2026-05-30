@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDownUp, Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, Upload, Workflow } from "lucide-react";
+import { ArrowDownUp, Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, Upload } from "lucide-react";
 
 import { PhotoViewer } from "@/components/photo-viewer";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import {
   type Task, type TaskStep, type TaskQuestion, type TaskImage,
   type Store as StoreType, type AppUser,
   type ChecklistTemplate, type ChecklistTemplateItem, type ChecklistTemplateQuestion,
-  type TaskAssignee, type UserGroup, type Process,
+  type TaskAssignee, type UserGroup,
   logAudit, createNotification, notifyUsers, uploadAttachment, getPublicUrl, deleteStorageFiles, mittCoopUrl,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
@@ -155,7 +155,6 @@ const emptyForm = (storeId: string) => ({
   recurrence_start: "",
   recurrence_end: "",
   sap_article_id: "",
-  process_id: "",
   completion_mode: "manual" as "manual" | "auto_from_children" | "auto_complete_children",
   steps: [{ label: "", requires_photo: false }] as { label: string; requires_photo: boolean }[],
   questions: [] as FormQuestion[],
@@ -355,7 +354,6 @@ function TasksPage() {
   const [groups, setGroups] = useState<UserGroup[]>([]);
   const [stores, setStores] = useState<StoreType[]>([]);
   const [templates, setTemplates] = useState<(ChecklistTemplate & { items: ChecklistTemplateItem[]; questions: ChecklistTemplateQuestion[] })[]>([]);
-  const [processes, setProcesses] = useState<Process[]>([]);
   const [userGroupIds, setUserGroupIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("today");
@@ -488,9 +486,6 @@ function TasksPage() {
       .then(({ data }) => {
         if (data) setTemplates(data as typeof templates);
       });
-
-    supabase.from("processes").select("*").order("name")
-      .then(({ data }) => { if (data) setProcesses(data as Process[]); });
 
     if (activeStore) {
       supabase.from("user_stores").select("user:app_users(*)").eq("store_id", activeStore.id)
@@ -1031,7 +1026,6 @@ function TasksPage() {
       recurrence_start: task.recurrence_start ?? "",
       recurrence_end: task.recurrence_end ?? "",
       sap_article_id: (task as TaskFull & { sap_article_id?: string }).sap_article_id ?? "",
-      process_id: task.process_id ?? "",
       completion_mode: task.completion_mode ?? "manual",
       steps: (task.steps ?? []).map(s => ({ label: s.label, requires_photo: s.requires_photo })),
       questions: (task.questions ?? []).map(q => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required })),
@@ -1042,10 +1036,6 @@ function TasksPage() {
 
   const saveEdit = async () => {
     if (!editTask || !editForm || !isManager) return;
-    if (editForm.recurrence_rule && !editForm.recurrence_end) {
-      setSaveError("Slutdatum för repetition är obligatoriskt.");
-      return;
-    }
     setEditSaving(true);
     const isRecurring = !!editTask.recurrence_rule;
     const isChild = !!editTask.parent_task_id;
@@ -1062,7 +1052,6 @@ function TasksPage() {
       recurrence_interval: editForm.recurrence_interval > 1 ? editForm.recurrence_interval : null,
       recurrence_start: editForm.recurrence_start || null,
       recurrence_end: editForm.recurrence_end || null,
-      process_id: editForm.process_id || null,
       completion_mode: editForm.completion_mode || "manual",
     };
 
@@ -1134,8 +1123,8 @@ function TasksPage() {
       setSaveError("Startdatum för repetition är obligatoriskt.");
       return;
     }
-    if (newTask.recurrence_rule && !newTask.recurrence_end) {
-      setSaveError("Slutdatum för repetition är obligatoriskt — återkommande uppgifter måste ha ett slutdatum.");
+    if (newTask.assigneeUserIds.length === 0 && newTask.assigneeGroupIds.length === 0) {
+      setSaveError("Minst en tilldelad användare eller grupp är obligatorisk.");
       return;
     }
     if (!isManager) return;
@@ -1159,7 +1148,6 @@ function TasksPage() {
       recurrence_start: newTask.recurrence_start || null,
       recurrence_end: newTask.recurrence_end || null,
       sap_article_id: newTask.sap_article_id?.trim() || null,
-      process_id: newTask.process_id || null,
       completion_mode: newTask.completion_mode || "manual",
       created_by: user?.id,
       assigned_to: newTask.assigneeUserIds[0] ?? user?.id,
@@ -1244,7 +1232,7 @@ function TasksPage() {
 
   // Comment lines starting with # are ignored by importer
   const TASK_CSV_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Process-ID;Avslutningsläge;Steg;Frågor
+# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Avslutningsläge;Steg;Frågor
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Kategori: Drift | Säkerhet | Kundärenden | Övrigt
@@ -1255,7 +1243,6 @@ function TasksPage() {
 # Förfaller om (dagar): antal dagar tills uppgiften förfaller (t.ex. 1)
 # Förfallotid (HH:MM): klockslag för förfallodatumet, t.ex. 08:00 (lämna tomt för ingen tid)
 # Startdatum/Slutdatum: ÅÅÅÅ-MM-DD — Slutdatum är obligatoriskt för återkommande uppgifter
-# Process-ID: UUID för den process uppgiften tillhör (lämna tomt för ingen process)
 # Avslutningsläge: manual | auto_from_children | auto_complete_children (standard: manual)
 #
 # Steg: separera med " | " — lägg till [foto] om foto krävs
@@ -1268,10 +1255,10 @@ function TasksPage() {
 `;
 
   const downloadTaskTemplate = () => {
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Process-ID", "Avslutningsläge", "Steg", "Frågor"];
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Avslutningsläge", "Steg", "Frågor"];
     const example = [
       "Morgonkontroll", "Drift", "Kontroll av butikens öppning", "Medel", "weekly", "0,1,2,3,4", "1", "1", "08:00", new Date().toISOString().slice(0, 10), "2026-12-31",
-      "", "manual",
+      "manual",
       "1. Kolla temperaturer [foto] | 2. Öppna kassor | 3. Kontrollera ingång",
       "1. Är allt klart? [obligatorisk] [ja_nej]",
     ];
@@ -1310,7 +1297,7 @@ function TasksPage() {
 
     const rows = lines.slice(1).map(parseRow);
     for (const cols of rows) {
-      const [title, category, description, priority, recurrence, weekdaysRaw, intervalRaw, dueDays, dueTime, startDate, endDate, processIdRaw, completionModeRaw, stepsRaw, questionsRaw] = cols;
+      const [title, category, description, priority, recurrence, weekdaysRaw, intervalRaw, dueDays, dueTime, startDate, endDate, , completionModeRaw, stepsRaw, questionsRaw] = cols;
       if (!title?.trim()) continue;
 
       const dueDate = dueDays?.trim()
@@ -1343,7 +1330,6 @@ function TasksPage() {
         recurrence_end: endDate?.trim() || null,
         due_date: dueDate,
         due_date_time: dueTime?.trim() || null,
-        process_id: processIdRaw?.trim() || null,
         completion_mode: completionMode,
       }).select("id").maybeSingle();
 
@@ -1377,7 +1363,7 @@ function TasksPage() {
   };
 
   const exportCSV = () => {
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Process-ID", "Avslutningsläge", "Steg", "Frågor"];
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Avslutningsläge", "Steg", "Frågor"];
     const rows = [
       headers,
       ...visibleTasks.map((t) => {
@@ -1397,7 +1383,6 @@ function TasksPage() {
           tAny.due_date_time ?? "",
           t.recurrence_start ?? "",
           t.recurrence_end ?? "",
-          t.process_id ?? "",
           t.completion_mode ?? "manual",
           (t.steps ?? []).sort((a, b) => a.sort_order - b.sort_order).map((s, i) => `${i + 1}. ${s.label}${s.requires_photo ? " [foto]" : ""}`).join(" | "),
           (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q, i) => `${i + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}`).join(" | "),
@@ -2654,23 +2639,6 @@ function TasksPage() {
                   </Select>
                 </div>
 
-                {/* Process */}
-                {processes.length > 0 && (
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <Workflow className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                    <span className="w-24 shrink-0 text-xs text-muted-foreground">Process</span>
-                    <Select value={newTask.process_id || "__none"} onValueChange={(v) => setNewTask(p => ({ ...p, process_id: v === "__none" ? "" : v }))}>
-                      <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
-                        <SelectValue placeholder="Ingen" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none">Ingen</SelectItem>
-                        {processes.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
                 {/* Avslutningsläge */}
                 <div className="flex items-center gap-3 px-4 py-3">
                   <CheckCircle2 className="h-4 w-4 shrink-0 text-muted-foreground/60" />
@@ -2832,11 +2800,8 @@ function TasksPage() {
                         <span className="text-[11px] text-muted-foreground w-12">Slut</span>
                         <Input type="date" value={newTask.recurrence_end}
                           onChange={(e) => setNewTask(p => ({ ...p, recurrence_end: e.target.value }))}
-                          className={cn("flex-1 h-7 text-xs", !newTask.recurrence_end && "border-destructive/60")} />
+                          className="flex-1 h-7 text-xs" />
                       </div>
-                      {!newTask.recurrence_end && (
-                        <p className="text-[11px] text-destructive font-medium">Slutdatum är obligatoriskt för återkommande uppgifter.</p>
-                      )}
                     </div>
                   )}
                 </div>
@@ -3113,19 +3078,6 @@ function TasksPage() {
                       </div>
                     )}
                   </div>
-                  {processes.length > 0 && (
-                    <div className="flex items-center gap-3 px-4 py-3">
-                      <Workflow className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                      <span className="w-24 shrink-0 text-xs text-muted-foreground">Process</span>
-                      <Select value={editForm.process_id || "__none"} onValueChange={(v) => setEditForm(p => p ? { ...p, process_id: v === "__none" ? "" : v } : p)}>
-                        <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end"><SelectValue placeholder="Ingen" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none">Ingen</SelectItem>
-                          {processes.map(pr => <SelectItem key={pr.id} value={pr.id}>{pr.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
                   <div className="flex items-center gap-3 px-4 py-3">
                     <CheckCircle2 className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                     <span className="w-24 shrink-0 text-xs text-muted-foreground">Avslutning</span>

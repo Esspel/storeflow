@@ -17,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   supabase, type ChecklistTemplate, type ChecklistTemplateItem,
   type ChecklistTemplateQuestion, type Store, type Forening,
-  type TemplateVersion, type Process, type AppUser, type UserGroup, logAudit,
+  type TemplateVersion, type AppUser, type UserGroup, logAudit,
 } from "@/lib/supabase";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
@@ -142,7 +142,6 @@ function MallarPage() {
   const [templates, setTemplates] = useState<TemplateWithMeta[]>([]);
   const [allStores, setAllStores] = useState<Store[]>([]);
   const [allForeningar, setAllForeningar] = useState<Forening[]>([]);
-  const [allProcesses, setAllProcesses] = useState<Process[]>([]);
   const [hiddenEntries, setHiddenEntries] = useState<HiddenEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -203,7 +202,7 @@ function MallarPage() {
 
   async function load() {
     setLoading(true);
-    const [templatesRes, storesRes, tsRes, foreningarRes, hiddenRes, processesRes, usersRes, groupsRes] = await Promise.all([
+    const [templatesRes, storesRes, tsRes, foreningarRes, hiddenRes, usersRes, groupsRes] = await Promise.all([
       supabase.from("checklist_templates")
         .select("*, items:checklist_template_items(*), questions:checklist_template_questions(*)")
         .order("created_at", { ascending: false }),
@@ -211,7 +210,6 @@ function MallarPage() {
       supabase.from("template_stores").select("template_id, store_id"),
       supabase.from("foreningar").select("*").order("name"),
       supabase.from("forening_hidden_templates").select("forening_id, template_id"),
-      supabase.from("processes").select("*").order("name"),
       supabase.from("app_users").select("id, display_name, role, store_id").order("display_name"),
       supabase.from("user_groups").select("id, name, store_id").order("name"),
     ]);
@@ -269,7 +267,6 @@ function MallarPage() {
     setTemplates(filtered);
     setAllStores((storesRes.data ?? []) as Store[]);
     setAllForeningar((foreningarRes.data ?? []) as Forening[]);
-    setAllProcesses((processesRes.data ?? []) as Process[]);
     setHiddenEntries(hidden);
     setAllUsers((usersRes.data ?? []) as AppUser[]);
     setAllGroups((groupsRes.data ?? []) as UserGroup[]);
@@ -402,10 +399,6 @@ function MallarPage() {
   async function createTemplate() {
     setError("");
     if (!form.title.trim()) { setError("Titel är obligatorisk."); return; }
-    if (form.recurrence_rule && !form.recurrence_end) {
-      setError("Slutdatum för repetition är obligatoriskt — mallar med återkommande måste ha ett slutdatum.");
-      return;
-    }
     if (createScope === "store" && user?.role === "manager" && form.storeIds.length === 0) {
       setError("Du måste välja minst en butik.");
       return;
@@ -586,10 +579,6 @@ function MallarPage() {
     if (!editTarget) return;
     setError("");
     if (!editForm.title.trim()) { setError("Titel är obligatorisk."); return; }
-    if (editForm.recurrence_rule && !editForm.recurrence_end) {
-      setError("Slutdatum för repetition är obligatoriskt.");
-      return;
-    }
     const scope = editTarget.hierarchy_scope ?? "store";
     if (scope === "store" && user?.role === "manager" && editForm.storeIds.length === 0) {
       setError("Du måste välja minst en butik.");
@@ -675,16 +664,74 @@ function MallarPage() {
   function canEdit(t: TemplateWithMeta): boolean {
     if (isAdmin) return !t.is_system_locked;
     const scope = t.hierarchy_scope ?? "store";
-    if (scope === "hk") return false; // only admin can edit HK templates
-    if (scope === "forening") {
-      return isForening && t.created_by === user?.id;
-    }
-    // store scope
-    return isManager && !t.locked_by_admin && !t.is_global;
+    // HK and forening templates cannot be edited by managers/store users — they must create a local variant
+    if (scope === "hk" || scope === "forening") return false;
+    // Forening admins can edit their own forening templates
+    if (scope === "forening") return isForening && t.created_by === user?.id;
+    // Store scope: managers can edit non-locked templates (includes local variants of HK/forening)
+    return isManager && !t.locked_by_admin;
   }
 
   function canDelete(t: TemplateWithMeta): boolean {
-    return canEdit(t);
+    if (isAdmin) return !t.is_system_locked;
+    const scope = t.hierarchy_scope ?? "store";
+    // Managers can only delete store-scope templates they have edit rights on
+    if (scope === "hk" || scope === "forening") return false;
+    return isManager && !t.locked_by_admin;
+  }
+
+  // When a manager tries to "edit" a HK/Forening template, we auto-create a local variant and open that
+  async function createLocalVariantAndEdit(source: TemplateWithMeta) {
+    const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
+    const { data: tmpl } = await supabase.from("checklist_templates").insert({
+      title: source.title,
+      description: source.description ?? "",
+      category: source.category ?? "",
+      priority: source.priority ?? "Medel",
+      status: "active",
+      recurrence_rule: source.recurrence_rule ?? null,
+      recurrence_days: source.recurrence_days ?? null,
+      recurrence_interval: source.recurrence_interval ?? null,
+      due_date_offset: source.due_date_offset ?? null,
+      due_date_time: source.due_date_time ?? null,
+      time_slots: (source as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? null,
+      created_by: user?.id ?? null,
+      hierarchy_scope: "store",
+      is_global: false,
+      parent_template_id: source.id,
+      inherit_mode: "variant",
+      version: 1,
+    }).select("id").maybeSingle();
+    if (!tmpl?.id) return;
+
+    const validItems = (source.items ?? []).filter(it => it.label.trim());
+    if (validItems.length > 0) {
+      await supabase.from("checklist_template_items").insert(
+        validItems.map((it, idx) => ({ template_id: tmpl.id, label: it.label, requires_photo: it.requires_photo, sort_order: idx }))
+      );
+    }
+    const validQuestions = (source.questions ?? []).filter(q => q.label.trim());
+    if (validQuestions.length > 0) {
+      await supabase.from("checklist_template_questions").insert(
+        validQuestions.map((q, idx) => ({ template_id: tmpl.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: idx }))
+      );
+    }
+    if (storeId) {
+      await supabase.from("template_stores").insert({ template_id: tmpl.id, store_id: storeId });
+    }
+
+    logAudit(user?.id ?? null, "template.variant.auto", "checklist_templates", tmpl.id, { source_id: source.id });
+    await load();
+    // Find newly created template and open it for editing
+    // Reload just fetched it — find in templates state after load
+    // Use a small delay to let state settle
+    setTimeout(() => {
+      setTemplates(prev => {
+        const newT = prev.find(x => x.id === tmpl.id);
+        if (newT) openEdit(newT);
+        return prev;
+      });
+    }, 100);
   }
 
   const displayStores = isAdmin ? allStores : userStores;
@@ -804,7 +851,9 @@ function MallarPage() {
         created_by: user?.id ?? null,
         hierarchy_scope: importScope,
         is_global: importScope === "hk",
-        forening_id: importScope === "forening" ? (user?.forening_id ?? result.options.foreningId as string ?? null) : null,
+      forening_id: importScope === "forening"
+        ? (user?.forening_id ?? (result.options.foreningId ? String(result.options.foreningId) : null) ?? null)
+        : null,
       }).select("id").maybeSingle();
 
       if (!tmpl?.id) continue;
@@ -1228,10 +1277,10 @@ function MallarPage() {
                   <span className="text-[11px] text-muted-foreground w-10">Slut</span>
                   <Input type="date" value={f.recurrence_end}
                     onChange={(e) => setF((p) => ({ ...p, recurrence_end: e.target.value }))}
-                    className={cn("flex-1 h-7 border text-xs", !f.recurrence_end ? "border-destructive/60" : "border-border/60")} />
+                    className="flex-1 h-7 border border-border/60 text-xs" />
                 </div>
                 {!f.recurrence_end && (
-                  <p className="text-[11px] text-destructive font-medium">Slutdatum är obligatoriskt.</p>
+                  <p className="text-[11px] text-muted-foreground/60">Inget slutdatum = 365 dagar framåt.</p>
                 )}
               </div>
             )}
@@ -1604,8 +1653,8 @@ function MallarPage() {
                                 <History className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                            {/* Copy / Variant */}
-                            {isManager && (
+                            {/* Copy / Variant — only for HK and Forening templates (store templates are already store-unique) */}
+                            {isManager && (t.hierarchy_scope === "hk" || t.hierarchy_scope === "forening") && (
                               <Button
                                 variant="ghost" size="icon"
                                 className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-foreground"
@@ -1613,6 +1662,17 @@ function MallarPage() {
                                 title="Kopiera eller skapa variant"
                               >
                                 <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {/* For HK/Forening templates: show "Skapa lokal variant" for managers instead of edit */}
+                            {isManager && !isAdmin && !isForening && (t.hierarchy_scope === "hk" || t.hierarchy_scope === "forening") && (
+                              <Button
+                                variant="ghost" size="icon"
+                                className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-primary"
+                                onClick={(e) => { e.stopPropagation(); void createLocalVariantAndEdit(t); }}
+                                title="Skapa lokal variant"
+                              >
+                                <GitBranch className="h-3.5 w-3.5" />
                               </Button>
                             )}
                             {canEdit(t) && (
@@ -1803,29 +1863,49 @@ function MallarPage() {
             ) : versions.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">Ingen versionshistorik tillgänglig än.</p>
             ) : (
-              <div className="space-y-2">
-                {versions.map((v) => (
-                  <div key={v.id} className="flex items-start gap-3 rounded-xl border border-border/60 bg-card p-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                      v{v.version}
+              <div className="space-y-3">
+                {versions.map((v, vIdx) => {
+                  const snap = v.snapshot as { title?: string; description?: string; items?: { label: string }[]; questions?: { label: string }[]; priority?: string; status?: string };
+                  const prev = vIdx < versions.length - 1 ? versions[vIdx + 1].snapshot as typeof snap : null;
+                  const diffs: string[] = [];
+                  if (prev) {
+                    if (snap.title !== prev.title) diffs.push(`Titel: "${prev.title}" → "${snap.title}"`);
+                    if ((snap.items?.length ?? 0) !== (prev.items?.length ?? 0)) diffs.push(`Steg: ${prev.items?.length ?? 0} → ${snap.items?.length ?? 0}`);
+                    if ((snap.questions?.length ?? 0) !== (prev.questions?.length ?? 0)) diffs.push(`Frågor: ${prev.questions?.length ?? 0} → ${snap.questions?.length ?? 0}`);
+                    if (snap.priority !== prev.priority) diffs.push(`Prioritet: ${prev.priority} → ${snap.priority}`);
+                    if (snap.status !== prev.status) diffs.push(`Status: ${prev.status} → ${snap.status}`);
+                    if (snap.description !== prev.description) diffs.push("Beskrivning ändrad");
+                  }
+                  return (
+                    <div key={v.id} className="rounded-xl border border-border/60 bg-card p-3 space-y-2">
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                          v.version === (versionHistoryTarget?.version ?? 1) ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
+                        )}>
+                          v{v.version}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-foreground">{v.change_summary || "Sparad"}</p>
+                          <p className="text-[11px] text-muted-foreground">{new Date(v.saved_at).toLocaleString("sv-SE")}</p>
+                          {snap.title && <p className="text-[11px] text-muted-foreground mt-0.5">"{snap.title}" — {snap.items?.length ?? 0} steg, {snap.questions?.length ?? 0} frågor</p>}
+                        </div>
+                        {isManager && v.version !== (versionHistoryTarget?.version ?? 1) && (
+                          <Button variant="outline" size="sm" className="rounded-full h-7 text-xs shrink-0" onClick={() => setRestoreConfirm(v)}>
+                            Återställ
+                          </Button>
+                        )}
+                      </div>
+                      {diffs.length > 0 && (
+                        <div className="ml-10 space-y-0.5">
+                          {diffs.map((d, i) => (
+                            <p key={i} className="text-[11px] text-muted-foreground bg-muted/40 rounded px-2 py-0.5">{d}</p>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-foreground">{v.change_summary || "Sparad"}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {new Date(v.saved_at).toLocaleString("sv-SE")}
-                      </p>
-                    </div>
-                    {isManager && v.version !== (versionHistoryTarget?.version ?? 1) && (
-                      <Button
-                        variant="outline" size="sm"
-                        className="rounded-full h-7 text-xs"
-                        onClick={() => setRestoreConfirm(v)}
-                      >
-                        Återställ
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
