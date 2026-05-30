@@ -1,11 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
-import {
-  Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical,
-  Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil,
-  Store as StoreIcon, Building2, Eye, EyeOff, Search, History,
-  GitBranch, Copy, Layers, CheckCircle2 as CheckCircle,
-} from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil, Store as StoreIcon, Building2, Eye, EyeOff, Search, History, GitBranch, Copy, Layers, CircleCheck as CheckCircle, ListChecks, CalendarClock, Users } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -22,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   supabase, type ChecklistTemplate, type ChecklistTemplateItem,
   type ChecklistTemplateQuestion, type Store, type Forening,
-  type TemplateVersion, type Process, logAudit,
+  type TemplateVersion, type Process, type AppUser, type UserGroup, logAudit,
 } from "@/lib/supabase";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
@@ -106,6 +101,7 @@ type FormState = {
   recurrence_end: string;
   due_date_offset: string;
   due_date_time: string;
+  time_slots: string[];
   storeIds: string[];
   isGlobal: boolean;
   isLocked: boolean;
@@ -121,7 +117,7 @@ const emptyForm = (): FormState => ({
   recurrence_rule: "", recurrence_days: [], recurrence_interval: 1,
   recurrence_months: [], recurrence_month_day: 1,
   recurrence_start: "", recurrence_end: "",
-  due_date_offset: "", due_date_time: "",
+  due_date_offset: "", due_date_time: "", time_slots: [],
   storeIds: [], isGlobal: false, isLocked: false, foreningId: "",
   changeSummary: "",
   items: [{ label: "", requires_photo: false }],
@@ -179,6 +175,24 @@ function MallarPage() {
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set());
   const [bulkDeleteTemplatesOpen, setBulkDeleteTemplatesOpen] = useState(false);
 
+  // Bulk task creation wizard
+  type BulkTaskConfig = {
+    templateId: string;
+    assigneeUserIds: string[];
+    assigneeGroupIds: string[];
+    dueDate: string;
+    priority: string;
+    dueTime: string;
+  };
+  const [bulkCreateOpen, setBulkCreateOpen] = useState(false);
+  const [bulkTaskConfigs, setBulkTaskConfigs] = useState<BulkTaskConfig[]>([]);
+  const [bulkCreating, setBulkCreating] = useState(false);
+  const [allUsers, setAllUsers] = useState<AppUser[]>([]);
+  const [allGroups, setAllGroups] = useState<UserGroup[]>([]);
+
+  // Template preview
+  const [previewTarget, setPreviewTarget] = useState<TemplateWithMeta | null>(null);
+
   // View filter: "all" | "hk" | "forening" | "store"
   const [viewFilter, setViewFilter] = useState<"all" | "hk" | "forening" | "store">("all");
   const [search, setSearch] = useState("");
@@ -189,7 +203,7 @@ function MallarPage() {
 
   async function load() {
     setLoading(true);
-    const [templatesRes, storesRes, tsRes, foreningarRes, hiddenRes, processesRes] = await Promise.all([
+    const [templatesRes, storesRes, tsRes, foreningarRes, hiddenRes, processesRes, usersRes, groupsRes] = await Promise.all([
       supabase.from("checklist_templates")
         .select("*, items:checklist_template_items(*), questions:checklist_template_questions(*)")
         .order("created_at", { ascending: false }),
@@ -198,6 +212,8 @@ function MallarPage() {
       supabase.from("foreningar").select("*").order("name"),
       supabase.from("forening_hidden_templates").select("forening_id, template_id"),
       supabase.from("processes").select("*").order("name"),
+      supabase.from("app_users").select("id, display_name, role, store_id").order("display_name"),
+      supabase.from("user_groups").select("id, name, store_id").order("name"),
     ]);
 
     const storeAssignments = (tsRes.data ?? []) as { template_id: string; store_id: string }[];
@@ -255,6 +271,8 @@ function MallarPage() {
     setAllForeningar((foreningarRes.data ?? []) as Forening[]);
     setAllProcesses((processesRes.data ?? []) as Process[]);
     setHiddenEntries(hidden);
+    setAllUsers((usersRes.data ?? []) as AppUser[]);
+    setAllGroups((groupsRes.data ?? []) as UserGroup[]);
     setLoading(false);
   }
 
@@ -413,6 +431,7 @@ function MallarPage() {
       recurrence_end: form.recurrence_end || null,
       due_date_offset: form.due_date_offset !== "" ? parseInt(form.due_date_offset) : null,
       due_date_time: form.due_date_time || null,
+      time_slots: form.time_slots.length > 0 ? form.time_slots : null,
       created_by: user?.id ?? null,
       is_global: createScope === "hk",
       locked_by_admin: form.isLocked,
@@ -470,6 +489,70 @@ function MallarPage() {
     await load();
   }
 
+  function openBulkCreate() {
+    const configs = [...selectedTemplateIds].map((id) => ({
+      templateId: id,
+      assigneeUserIds: [] as string[],
+      assigneeGroupIds: [] as string[],
+      dueDate: "",
+      priority: templates.find(t => t.id === id)?.priority ?? "Medel",
+      dueTime: templates.find(t => t.id === id)?.due_date_time ?? "",
+    }));
+    setBulkTaskConfigs(configs);
+    setBulkCreateOpen(true);
+  }
+
+  async function bulkCreateTasks() {
+    setBulkCreating(true);
+    for (const cfg of bulkTaskConfigs) {
+      const tmpl = templates.find(t => t.id === cfg.templateId);
+      if (!tmpl) continue;
+
+      const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
+      const { data: task } = await supabase.from("tasks").insert({
+        title: tmpl.title,
+        description: tmpl.description ?? "",
+        category: tmpl.category ?? "",
+        priority: cfg.priority,
+        store_id: storeId,
+        due_date: cfg.dueDate ? new Date(cfg.dueDate).toISOString() : null,
+        due_date_time: cfg.dueTime || null,
+        recurrence_rule: tmpl.recurrence_rule ?? null,
+        recurrence_days: tmpl.recurrence_days ?? null,
+        recurrence_interval: tmpl.recurrence_interval ?? null,
+        created_by: user?.id ?? null,
+        assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
+        status: "todo",
+      }).select("id").maybeSingle();
+
+      if (!task?.id) continue;
+
+      const validItems = (tmpl.items ?? []).filter(it => it.label.trim());
+      if (validItems.length > 0) {
+        await supabase.from("task_steps").insert(
+          validItems.map((it, idx) => ({ task_id: task.id, label: it.label, sort_order: idx, requires_photo: it.requires_photo }))
+        );
+      }
+
+      const validQuestions = (tmpl.questions ?? []).filter(q => q.label.trim());
+      if (validQuestions.length > 0) {
+        await supabase.from("task_questions").insert(
+          validQuestions.map((q, idx) => ({ task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: idx }))
+        );
+      }
+
+      const assigneeRows: { task_id: string; user_id?: string; group_id?: string }[] = [];
+      cfg.assigneeUserIds.forEach(uid => assigneeRows.push({ task_id: task.id, user_id: uid }));
+      cfg.assigneeGroupIds.forEach(gid => assigneeRows.push({ task_id: task.id, group_id: gid }));
+      if (assigneeRows.length > 0) await supabase.from("task_assignees").insert(assigneeRows);
+
+      logAudit(user?.id ?? null, "task.create", "tasks", task.id, { title: tmpl.title, from_template: tmpl.id });
+    }
+    setBulkCreating(false);
+    setBulkCreateOpen(false);
+    setSelectedTemplateIds(new Set());
+  }
+
   function openEdit(t: TemplateWithMeta) {
     setEditTarget(t);
     setEditForm({
@@ -487,6 +570,7 @@ function MallarPage() {
       recurrence_end: (t as ChecklistTemplate & { recurrence_end?: string }).recurrence_end ?? "",
       due_date_offset: t.due_date_offset != null ? String(t.due_date_offset) : "",
       due_date_time: t.due_date_time ?? "",
+      time_slots: (t as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? [],
       storeIds: t.storeIds,
       isGlobal: t.is_global ?? false,
       isLocked: t.locked_by_admin ?? false,
@@ -528,6 +612,7 @@ function MallarPage() {
       recurrence_end: editForm.recurrence_end || null,
       due_date_offset: editForm.due_date_offset !== "" ? parseInt(editForm.due_date_offset) : null,
       due_date_time: editForm.due_date_time || null,
+      time_slots: editForm.time_slots.length > 0 ? editForm.time_slots : null,
       is_global: editForm.isGlobal,
       locked_by_admin: editForm.isLocked,
     }).eq("id", editTarget.id);
@@ -1007,6 +1092,41 @@ function MallarPage() {
               </div>
             </div>
 
+            {/* Tidsluckor — genererar en uppgift per tid */}
+            <div className="px-4 py-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                <span className="text-xs text-muted-foreground flex-1">Tidsluckor (fleruppgifter)</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground/70 pl-6">Genererar en separat uppgift för varje tid per period.</p>
+              <div className="space-y-1.5 pl-6">
+                {(f.time_slots ?? []).map((slot, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <Input
+                      type="time"
+                      value={slot}
+                      onChange={(e) => {
+                        const slots = [...(f.time_slots ?? [])];
+                        slots[idx] = e.target.value;
+                        setF((p) => ({ ...p, time_slots: slots }));
+                      }}
+                      className="h-7 flex-1 border border-border/60 text-xs"
+                    />
+                    <button type="button" onClick={() => setF((p) => ({ ...p, time_slots: (p.time_slots ?? []).filter((_, i) => i !== idx) }))}>
+                      <X className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-destructive" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+                  onClick={() => setF((p) => ({ ...p, time_slots: [...(p.time_slots ?? []), "08:00"] }))}
+                >
+                  <Plus className="h-3 w-3" /> Lägg till tid
+                </button>
+              </div>
+            </div>
+
             {/* Återkommande */}
             <div className="px-4 py-3 space-y-2">
               <div className="flex items-center gap-3">
@@ -1262,11 +1382,14 @@ function MallarPage() {
 
       {/* Bulk action bar */}
       {selectedTemplateIds.size > 0 && isManager && (
-        <div className="mt-4 flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-2.5">
-          <span className="text-sm font-medium text-destructive">{selectedTemplateIds.size} mallar markerade</span>
+        <div className="mt-4 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5">
+          <span className="text-sm font-medium text-foreground">{selectedTemplateIds.size} mallar markerade</span>
           <div className="ml-auto flex gap-2">
             <Button variant="ghost" size="sm" className="rounded-full h-8 text-xs" onClick={() => setSelectedTemplateIds(new Set())}>
               Avmarkera alla
+            </Button>
+            <Button size="sm" className="rounded-full h-8 gap-1.5 text-xs bg-primary text-primary-foreground" onClick={openBulkCreate}>
+              <ListChecks className="h-3.5 w-3.5" /> Skapa uppgifter
             </Button>
             <Button variant="destructive" size="sm" className="rounded-full h-8 gap-1.5 text-xs" onClick={() => setBulkDeleteTemplatesOpen(true)}>
               <Trash2 className="h-3.5 w-3.5" /> Ta bort markerade
@@ -1450,6 +1573,15 @@ function MallarPage() {
                           </button>
 
                           <div className="mr-3 flex items-center gap-1">
+                            {/* Preview */}
+                            <Button
+                              variant="ghost" size="icon"
+                              className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-foreground"
+                              onClick={(e) => { e.stopPropagation(); setPreviewTarget(t); }}
+                              title="Förhandsgranska"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
                             {/* Förening can toggle hide/show HK templates */}
                             {isForening && (t.hierarchy_scope === "hk" || t.is_global) && (
                               <Button
@@ -1762,6 +1894,245 @@ function MallarPage() {
                 {inheritMode === "copy" ? "Skapa kopia" : "Skapa variant"}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* TEMPLATE PREVIEW DIALOG */}
+      <Dialog open={!!previewTarget} onOpenChange={(o) => !o && setPreviewTarget(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+            <Eye className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Förhandsgranska mall</span>
+            <span className="text-sm text-foreground font-semibold truncate flex-1">{previewTarget?.title}</span>
+            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setPreviewTarget(null)}>Stäng</Button>
+          </div>
+          {previewTarget && (
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Meta badges */}
+              <div className="flex flex-wrap gap-2">
+                {previewTarget.category && <Badge variant="secondary">{previewTarget.category}</Badge>}
+                <Badge variant="outline" className={cn("text-xs", (TEMPLATE_STATUS_OPTIONS.find(o => o.value === (previewTarget.status ?? "active")) ?? TEMPLATE_STATUS_OPTIONS[0]).cls)}>
+                  {(TEMPLATE_STATUS_OPTIONS.find(o => o.value === (previewTarget.status ?? "active")) ?? TEMPLATE_STATUS_OPTIONS[0]).label}
+                </Badge>
+                {previewTarget.priority && <Badge variant="outline">{previewTarget.priority}</Badge>}
+                {previewTarget.recurrence_rule && (
+                  <Badge variant="outline" className="gap-1">
+                    <Repeat className="h-3 w-3" />
+                    {RECURRENCE_OPTIONS.find(o => o.value === previewTarget.recurrence_rule)?.label ?? previewTarget.recurrence_rule}
+                  </Badge>
+                )}
+                {previewTarget.due_date_time && (
+                  <Badge variant="outline" className="gap-1">
+                    <Clock className="h-3 w-3" /> Förfaller {previewTarget.due_date_time}
+                  </Badge>
+                )}
+                {(() => {
+                  const ts = (previewTarget as ChecklistTemplate & { time_slots?: string[] }).time_slots;
+                  return ts && ts.length > 0 ? (
+                    <Badge variant="outline" className="gap-1">
+                      <CalendarClock className="h-3 w-3" /> {ts.length} tidsluckor
+                    </Badge>
+                  ) : null;
+                })()}
+              </div>
+
+              {previewTarget.description && (
+                <p className="text-sm text-muted-foreground leading-relaxed">{previewTarget.description}</p>
+              )}
+
+              {/* Steps */}
+              {(previewTarget.items?.length ?? 0) > 0 && (
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Steg ({previewTarget.items?.length})</p>
+                  <ol className="space-y-2">
+                    {(previewTarget.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((item: ChecklistTemplateItem, idx: number) => (
+                      <li key={item.id} className="flex items-center gap-3 rounded-xl border border-border/50 bg-muted/20 px-3 py-2.5">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">{idx + 1}</span>
+                        <span className="flex-1 text-sm">{item.label}</span>
+                        {item.requires_photo && <Badge variant="secondary" className="text-xs">Foto krävs</Badge>}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              {/* Questions */}
+              {(previewTarget.questions?.length ?? 0) > 0 && (
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Frågor ({previewTarget.questions?.length})</p>
+                  <ol className="space-y-2">
+                    {(previewTarget.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q: ChecklistTemplateQuestion, idx: number) => (
+                      <li key={q.id} className="flex items-center gap-3 rounded-xl border border-border/50 bg-muted/20 px-3 py-2.5">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">{idx + 1}</span>
+                        <span className="flex-1 text-sm">{q.label}</span>
+                        {q.question_type === "yes_no" && <Badge variant="secondary" className="text-xs">Ja/Nej</Badge>}
+                        {q.is_required && <Badge variant="outline" className="text-xs text-destructive border-destructive/30">Obligatorisk</Badge>}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              {/* Time slots */}
+              {(() => {
+                const ts = (previewTarget as ChecklistTemplate & { time_slots?: string[] }).time_slots;
+                return ts && ts.length > 0 ? (
+                  <div>
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tidsluckor</p>
+                    <div className="flex flex-wrap gap-2">
+                      {ts.map((slot, i) => (
+                        <div key={i} className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-3 py-1.5 text-sm">
+                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                          {slot}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">En uppgift skapas per tidslucka och period.</p>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* Inheritance info */}
+              {previewTarget.parent_template_id && (
+                <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <GitBranch className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">{previewTarget.inherit_mode === "variant" ? "Lokal variant" : "Kopia"}</span>
+                    <span className="text-muted-foreground">av en överordnad mall</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* BULK TASK CREATION WIZARD */}
+      <Dialog open={bulkCreateOpen} onOpenChange={(o) => !o && setBulkCreateOpen(false)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+            <ListChecks className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Skapa uppgifter från {bulkTaskConfigs.length} mallar</span>
+            <div className="ml-auto flex items-center gap-2">
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setBulkCreateOpen(false)}>Avbryt</Button>
+              <Button size="sm" className="rounded-full" onClick={bulkCreateTasks} disabled={bulkCreating}>
+                {bulkCreating ? "Skapar..." : `Skapa ${bulkTaskConfigs.length} uppgifter`}
+              </Button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <p className="text-sm text-muted-foreground">Konfigurera tilldelning, förfallodatum och prioritet per uppgift innan du skapar dem.</p>
+            {bulkTaskConfigs.map((cfg, idx) => {
+              const tmpl = templates.find(t => t.id === cfg.templateId);
+              if (!tmpl) return null;
+              const storeUsers = allUsers.filter(u => !activeStore || u.store_id === activeStore.id);
+              const storeGroups = allGroups.filter(g => !activeStore || g.store_id === activeStore.id);
+              return (
+                <div key={cfg.templateId} className="rounded-2xl border border-border/60 bg-card p-4 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{idx + 1}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm">{tmpl.title}</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {tmpl.category && <Badge variant="secondary" className="text-xs">{tmpl.category}</Badge>}
+                        <span className="text-xs text-muted-foreground">{tmpl.items?.length ?? 0} steg</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Priority */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">Prioritet</label>
+                      <Select
+                        value={cfg.priority}
+                        onValueChange={(v) => setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, priority: v } : c))}
+                      >
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {["Låg", "Medel", "Hög", "Kritisk"].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {/* Due date */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">Förfallodatum</label>
+                      <Input
+                        type="date"
+                        value={cfg.dueDate}
+                        onChange={(e) => setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, dueDate: e.target.value } : c))}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    {/* Due time */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">Förfallotid</label>
+                      <Input
+                        type="time"
+                        value={cfg.dueTime}
+                        onChange={(e) => setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, dueTime: e.target.value } : c))}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Assignees */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                      <label className="text-xs font-medium text-muted-foreground">Tilldelad</label>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-[11px] text-muted-foreground/70 mb-1.5">Användare</p>
+                        <div className="space-y-0.5 max-h-28 overflow-y-auto rounded-lg border border-border/50 p-2">
+                          {storeUsers.length === 0 ? (
+                            <p className="text-xs text-muted-foreground py-1">Inga användare</p>
+                          ) : storeUsers.map(u => (
+                            <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
+                              <Checkbox
+                                checked={cfg.assigneeUserIds.includes(u.id)}
+                                onCheckedChange={(checked) => {
+                                  const ids = checked
+                                    ? [...cfg.assigneeUserIds, u.id]
+                                    : cfg.assigneeUserIds.filter(id => id !== u.id);
+                                  setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, assigneeUserIds: ids } : c));
+                                }}
+                                className="h-3.5 w-3.5"
+                              />
+                              <span className="text-xs">{u.display_name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-muted-foreground/70 mb-1.5">Grupper</p>
+                        <div className="space-y-0.5 max-h-28 overflow-y-auto rounded-lg border border-border/50 p-2">
+                          {storeGroups.length === 0 ? (
+                            <p className="text-xs text-muted-foreground py-1">Inga grupper</p>
+                          ) : storeGroups.map(g => (
+                            <label key={g.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
+                              <Checkbox
+                                checked={cfg.assigneeGroupIds.includes(g.id)}
+                                onCheckedChange={(checked) => {
+                                  const ids = checked
+                                    ? [...cfg.assigneeGroupIds, g.id]
+                                    : cfg.assigneeGroupIds.filter(id => id !== g.id);
+                                  setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, assigneeGroupIds: ids } : c));
+                                }}
+                                className="h-3.5 w-3.5"
+                              />
+                              <span className="text-xs">{g.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </DialogContent>
       </Dialog>

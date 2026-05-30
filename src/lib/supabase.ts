@@ -173,6 +173,8 @@ export type TaskStep = {
   is_done: boolean;
   requires_photo: boolean;
   sort_order: number;
+  condition_question_id?: string | null;
+  condition_answer?: string | null;
 };
 
 export type Incident = {
@@ -234,6 +236,7 @@ export type ChecklistTemplate = {
   recurrence_end?: string | null;
   due_date_offset: number | null;
   due_date_time: string | null;
+  time_slots?: string[] | null;
   // Ownership & status
   status: "active" | "review" | "deprecated" | "archived";
   version: number;
@@ -302,6 +305,8 @@ export type ChecklistTemplateItem = {
   label: string;
   requires_photo: boolean;
   sort_order: number;
+  condition_question_id?: string | null;
+  condition_answer?: string | null;
 };
 
 export type ChecklistTemplateQuestion = {
