@@ -575,6 +575,45 @@ function TestPanel() {
     setRunning(false);
   }
 
+  async function clearTaskTables() {
+    setRunning(true);
+    const errors: string[] = [];
+    const steps = await supabase.from("task_steps").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (steps.error) errors.push(`task_steps: ${steps.error.message}`);
+    const qa = await supabase.from("task_question_answers").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (qa.error) errors.push(`task_question_answers: ${qa.error.message}`);
+    const questions = await supabase.from("task_questions").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (questions.error) errors.push(`task_questions: ${questions.error.message}`);
+    const assignees = await supabase.from("task_assignees").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (assignees.error) errors.push(`task_assignees: ${assignees.error.message}`);
+    const images = await supabase.from("task_images").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (images.error) errors.push(`task_images: ${images.error.message}`);
+    const tasks = await supabase.from("tasks").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (tasks.error) errors.push(`tasks: ${tasks.error.message}`);
+    if (errors.length > 0) addResult(false, `Rensning delvis misslyckad: ${errors.join("; ")}`);
+    else addResult(true, "tasks, task_steps, task_questions, task_assignees, task_images rensade.");
+    await loadStats();
+    setRunning(false);
+  }
+
+  async function clearAuditLog() {
+    setRunning(true);
+    const { error } = await supabase.from("audit_log").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (error) addResult(false, `Misslyckades: ${error.message}`);
+    else addResult(true, "audit_log rensad.");
+    await loadStats();
+    setRunning(false);
+  }
+
+  async function clearSystemErrors() {
+    setRunning(true);
+    const { error } = await supabase.from("system_errors").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (error) addResult(false, `Misslyckades: ${error.message}`);
+    else addResult(true, "system_errors rensad.");
+    setRunning(false);
+  }
+
+
   async function purgeOldAuditLog() {
     setRunning(true);
     const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
@@ -1001,6 +1040,16 @@ function TestPanel() {
             <ActionBtn label="Kör integritetscheck" onClick={checkDataIntegrity} disabled={running} variant="default" />
             <ActionBtn label="Rensa utgångna sessioner" onClick={purgeExpiredSessions} disabled={running} danger />
             <ActionBtn label="Rensa audit-logg äldre än 30 dagar" onClick={purgeOldAuditLog} disabled={running} danger />
+          </div>
+        </Section>
+
+        {/* Clear tables */}
+        <Section icon={Trash2} title="Rensa tabeller">
+          <p className="mb-3 text-xs text-muted-foreground">Permanent radering av alla rader i angivna tabeller. Kan inte ångras.</p>
+          <div className="space-y-2">
+            <ActionBtn label="Rensa tasks + steps + questions (alla)" onClick={clearTaskTables} disabled={running} danger />
+            <ActionBtn label="Rensa audit_log (alla poster)" onClick={clearAuditLog} disabled={running} danger />
+            <ActionBtn label="Rensa system_errors (alla poster)" onClick={clearSystemErrors} disabled={running} danger />
           </div>
         </Section>
 

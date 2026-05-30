@@ -1535,7 +1535,7 @@ function MallarPage() {
                 <span className="w-20 shrink-0 text-xs text-muted-foreground">Återkommande</span>
                 <Select value={f.recurrence_rule || "__none"} onValueChange={(v) => setF((p) => ({ ...p, recurrence_rule: v === "__none" ? "" : v, recurrence_interval: 1 }))}>
                   <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end"><SelectValue placeholder="Ingen" /></SelectTrigger>
-                  <SelectContent>{RECURRENCE_OPTIONS.map((o) => <SelectItem key={o.value || "__none"} value={o.value || "__none"}>{o.label}</SelectItem>)}</SelectContent>
+                  <SelectContent>{RECURRENCE_OPTIONS.map((o) => <SelectItem key={o.value === "" ? "__none" : o.value} value={o.value === "" ? "__none" : o.value}>{o.label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               {f.recurrence_rule === "custom" && (

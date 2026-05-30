@@ -398,8 +398,19 @@ function TasksPage() {
       const saved = localStorage.getItem(`sf-task-draft-${user?.id ?? ""}`);
       if (saved) {
         const parsed = JSON.parse(saved) as ReturnType<typeof emptyForm>;
-        // Ensure fields added in newer versions always exist
-        return { ...emptyForm(parsed.store_id ?? ""), ...parsed, time_slots: parsed.time_slots ?? [] };
+        // Merge with emptyForm defaults so null/missing fields from old drafts
+        // never override the array defaults (e.g. recurrence_days, recurrence_months).
+        const base = emptyForm(parsed.store_id ?? "");
+        return {
+          ...base, ...parsed,
+          recurrence_days: parsed.recurrence_days ?? base.recurrence_days,
+          recurrence_months: parsed.recurrence_months ?? base.recurrence_months,
+          time_slots: parsed.time_slots ?? base.time_slots,
+          steps: parsed.steps ?? base.steps,
+          questions: parsed.questions ?? base.questions,
+          assigneeUserIds: parsed.assigneeUserIds ?? base.assigneeUserIds,
+          assigneeGroupIds: parsed.assigneeGroupIds ?? base.assigneeGroupIds,
+        };
       }
     } catch {}
     return emptyForm(activeStore?.id ?? "");

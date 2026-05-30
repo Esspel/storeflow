@@ -47,10 +47,6 @@ function ReportsPage() {
   const { user, activeStore } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (user && user.role === "employee") navigate({ to: "/" });
-  }, [user]);
-
   const [tasks, setTasks] = useState<Task[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [kundrunSessions, setKundrunSessions] = useState<KundrunSummary[]>([]);
@@ -58,15 +54,10 @@ function ReportsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  if (user && user.role === "employee") {
-    return (
-      <div className="flex h-full flex-col items-center justify-center px-5 py-20 text-center">
-        <p className="text-sm font-medium text-muted-foreground">Du har inte behörighet att se rapporter.</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (user && user.role === "employee") navigate({ to: "/" });
+  }, [user]);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -205,6 +196,14 @@ function ReportsPage() {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  if (user && user.role === "employee") {
+    return (
+      <div className="flex h-full flex-col items-center justify-center px-5 py-20 text-center">
+        <p className="text-sm font-medium text-muted-foreground">Du har inte behörighet att se rapporter.</p>
+      </div>
+    );
   }
 
   if (!activeStore) {
