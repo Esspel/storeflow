@@ -476,6 +476,28 @@ function AccountsPage() {
     await supabase.from("app_users").update({ store_id: allowedIds[0] ?? null }).eq("id", userId);
   }
 
+  // Derives forening/distrikt memberships from the user's assigned stores and upserts them.
+  // Existing memberships for OTHER foreningar/distrikt are preserved (additive, not destructive).
+  async function syncUserHierarchyFromStores(userId: string, storeIds: string[]) {
+    const linkedStores = stores.filter((s) => storeIds.includes(s.id));
+    const foreningIds = [...new Set(linkedStores.map((s) => s.forening_id).filter(Boolean) as string[])];
+    const distriktIds = [...new Set(linkedStores.map((s) => s.distrikt_id).filter(Boolean) as string[])];
+    if (foreningIds.length > 0) {
+      await supabase.from("user_foreningar").upsert(
+        foreningIds.map((fid, i) => ({ user_id: userId, forening_id: fid, is_primary: i === 0 })),
+        { onConflict: "user_id,forening_id" }
+      );
+      await supabase.from("app_users").update({ forening_id: foreningIds[0] }).eq("id", userId);
+    }
+    if (distriktIds.length > 0) {
+      await supabase.from("user_distrikt").upsert(
+        distriktIds.map((did, i) => ({ user_id: userId, distrikt_id: did, is_primary: i === 0 })),
+        { onConflict: "user_id,distrikt_id" }
+      );
+      await supabase.from("app_users").update({ distrikt_id: distriktIds[0] }).eq("id", userId);
+    }
+  }
+
   const createUser = async () => {
     setError("");
     if (!newUser.username.trim() || !newUser.password || !newUser.display_name.trim()) {
@@ -523,6 +545,7 @@ function AccountsPage() {
     }).select("id").maybeSingle();
     if (created?.id) {
       await syncUserStores(created.id, safeStoreIds);
+      await syncUserHierarchyFromStores(created.id, safeStoreIds);
       logAudit(currentUser?.id ?? null, "user.create", "app_users", created.id, { username: newUser.username });
     }
     await fetchUsers();
@@ -571,6 +594,7 @@ function AccountsPage() {
     else if (editBarcode === "") updates.barcode_id = null;
     await supabase.from("app_users").update(updates).eq("id", editUser.id);
     await syncUserStores(editUser.id, editUser.assignedStoreIds);
+    await syncUserHierarchyFromStores(editUser.id, editUser.assignedStoreIds);
     if (resetPw.length >= MIN_PW_LENGTH) {
       const { data: hash } = await supabase.rpc("hash_password", { plain_password: resetPw });
       await supabase.from("app_users").update({ password_hash: hash, must_change_password: true }).eq("id", editUser.id);

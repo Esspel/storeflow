@@ -807,6 +807,27 @@ function SchemaPage() {
     setCsvFileLabels((p) => { const n = { ...p }; delete n[name]; return n; });
   }
 
+  // Upserts forening/distrikt memberships for a user based on the active store's hierarchy.
+  // Additive only — never removes existing memberships for other foreningar/distrikt.
+  async function linkUserToStoreHierarchy(userId: string) {
+    const foreningId = activeStore?.forening_id;
+    const distriktId = activeStore?.distrikt_id;
+    if (foreningId) {
+      await supabase.from("user_foreningar").upsert(
+        { user_id: userId, forening_id: foreningId, is_primary: true },
+        { onConflict: "user_id,forening_id" }
+      );
+      await supabase.from("app_users").update({ forening_id: foreningId }).eq("id", userId);
+    }
+    if (distriktId) {
+      await supabase.from("user_distrikt").upsert(
+        { user_id: userId, distrikt_id: distriktId, is_primary: true },
+        { onConflict: "user_id,distrikt_id" }
+      );
+      await supabase.from("app_users").update({ distrikt_id: distriktId }).eq("id", userId);
+    }
+  }
+
   useEffect(() => {
     if (!storeId) return;
     loadImports();
@@ -1269,6 +1290,7 @@ function SchemaPage() {
       if (!created) continue;
       const newUser = created as AppUser;
       await supabase.from("user_stores").upsert({ user_id: newUser.id, store_id: storeId, is_primary: true }, { onConflict: "user_id,store_id" });
+      await linkUserToStoreHierarchy(newUser.id);
       await supabase.from("employee_mappings").upsert(
         { store_id: storeId, employee_nr: emp.employee_nr, app_user_id: newUser.id, created_by: user.id, updated_at: new Date().toISOString() },
         { onConflict: "store_id,employee_nr" }
@@ -1296,6 +1318,7 @@ function SchemaPage() {
           finalMappings.push({ employee_nr: me.employeeNr, app_user_id: me.appUserId });
           if (!me.isBorrowed) {
             await supabase.from("user_stores").upsert({ user_id: me.appUserId, store_id: storeId, is_primary: false }, { onConflict: "user_id,store_id" });
+            await linkUserToStoreHierarchy(me.appUserId);
             const existingUser = allUsers.find((u) => u.id === me.appUserId);
             if (me.employeeGroup && !existingUser?.role_manually_set) {
               const role = groupToRole(me.employeeGroup);
@@ -1325,6 +1348,7 @@ function SchemaPage() {
           const newUser = created as AppUser;
           newlyCreated.push(newUser);
           await supabase.from("user_stores").insert({ user_id: newUser.id, store_id: storeId, is_primary: true });
+          await linkUserToStoreHierarchy(newUser.id);
           finalMappings.push({ employee_nr: me.employeeNr, app_user_id: newUser.id });
         }
       }
@@ -2927,7 +2951,7 @@ function SchemaPage() {
                 <p className="mb-4 text-sm text-muted-foreground">Koppla SoftOne-anställda till användare i systemet.</p>
                 <div className="divide-y divide-border/40 rounded-xl border border-border/60 overflow-hidden">
                   {Array.from(new Map(scheduleEmployees.map((e) => [e.employee_nr, e])).values()).map((emp) => (
-                    <MappingRow key={emp.employee_nr} employeeNr={emp.employee_nr} employeeName={emp.employee_name} employeeGroup={emp.employee_group} appUsers={allUsers} mappedUserId={getMappedUserId(emp.employee_nr)} storeId={storeId} onMap={(uid) => setMapping(emp.employee_nr, uid)} onUserCreated={(u) => { setAppUsers((p) => [...p, u]); setAllUsers((p) => [...p, u]); setMapping(emp.employee_nr, u.id); }} />
+                    <MappingRow key={emp.employee_nr} employeeNr={emp.employee_nr} employeeName={emp.employee_name} employeeGroup={emp.employee_group} appUsers={allUsers} mappedUserId={getMappedUserId(emp.employee_nr)} storeId={storeId} foreningId={activeStore?.forening_id} distriktId={activeStore?.distrikt_id} onMap={(uid) => setMapping(emp.employee_nr, uid)} onUserCreated={(u) => { setAppUsers((p) => [...p, u]); setAllUsers((p) => [...p, u]); setMapping(emp.employee_nr, u.id); }} />
                   ))}
                 </div>
               </div>
@@ -3097,9 +3121,10 @@ function StatPill({ icon, label, value, tone }: { icon: React.ReactNode; label: 
 
 // ─── MappingRow ───────────────────────────────────────────────────────────────
 
-function MappingRow({ employeeNr, employeeName, employeeGroup, appUsers, mappedUserId, storeId, onMap, onUserCreated }: {
+function MappingRow({ employeeNr, employeeName, employeeGroup, appUsers, mappedUserId, storeId, foreningId, distriktId, onMap, onUserCreated }: {
   employeeNr: string; employeeName: string; employeeGroup: string;
   appUsers: AppUser[]; mappedUserId: string | null; storeId: string | null;
+  foreningId?: string | null; distriktId?: string | null;
   onMap: (uid: string | null) => void; onUserCreated: (user: AppUser) => void;
 }) {
   const [creating, setCreating] = useState(false);
@@ -3125,6 +3150,14 @@ function MappingRow({ employeeNr, employeeName, employeeGroup, appUsers, mappedU
         .select("id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at").single();
       if (error || !created) { setCreateError(error?.message ?? "Något gick fel."); return; }
       await supabase.from("user_stores").upsert({ user_id: (created as AppUser).id, store_id: storeId, is_primary: true }, { onConflict: "user_id,store_id" });
+      if (foreningId) {
+        await supabase.from("user_foreningar").upsert({ user_id: (created as AppUser).id, forening_id: foreningId, is_primary: true }, { onConflict: "user_id,forening_id" });
+        await supabase.from("app_users").update({ forening_id: foreningId }).eq("id", (created as AppUser).id);
+      }
+      if (distriktId) {
+        await supabase.from("user_distrikt").upsert({ user_id: (created as AppUser).id, distrikt_id: distriktId, is_primary: true }, { onConflict: "user_id,distrikt_id" });
+        await supabase.from("app_users").update({ distrikt_id: distriktId }).eq("id", (created as AppUser).id);
+      }
       onUserCreated(created as AppUser);
       setShowCreate(false);
       toast.success(`Konto för ${employeeName} skapat. Lösenord byts vid första inloggning.`);
