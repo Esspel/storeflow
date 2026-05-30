@@ -283,7 +283,13 @@ function MallarPage() {
       }
 
       // Store-scope templates
-      if (t.storeIds.length === 0 && isAdmin) return true;
+      // Admins see unassigned templates
+      if (t.storeIds.length === 0) {
+        if (isAdmin) return true;
+        // Also show to the creator so they can see their own orphaned template
+        if (t.created_by && t.created_by === user?.id) return true;
+        return false;
+      }
       if (activeStore && t.storeIds.includes(activeStore.id)) return true;
       if (!activeStore && userStores.some((us) => t.storeIds.includes(us.id))) return true;
       return false;
@@ -760,10 +766,10 @@ function MallarPage() {
   function canEdit(t: TemplateWithMeta): boolean {
     if (isAdmin) return !t.is_system_locked;
     const scope = t.hierarchy_scope ?? "store";
-    // HK and forening templates cannot be edited by managers/store users — they must create a local variant
-    if (scope === "hk" || scope === "forening") return false;
     // Forening admins can edit their own forening templates
     if (scope === "forening") return isForening && t.created_by === user?.id;
+    // HK templates can never be edited by non-admins — they get a local variant via the pencil button
+    if (scope === "hk") return false;
     // Store scope: managers can edit non-locked templates (includes local variants of HK/forening)
     return isManager && !t.locked_by_admin;
   }
@@ -1951,8 +1957,8 @@ function MallarPage() {
                                 <History className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                            {/* For HK/Forening templates: managers get a pencil that auto-creates a local variant */}
-                            {isManager && !isAdmin && !isForening && (t.hierarchy_scope === "hk" || t.hierarchy_scope === "forening") && (
+                            {/* For HK/Forening templates: non-admin managers get a pencil that auto-creates a local store variant */}
+                            {isManager && !isAdmin && !canEdit(t) && (t.hierarchy_scope === "hk" || t.hierarchy_scope === "forening") && (
                               <Button
                                 variant="ghost" size="icon"
                                 className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-primary"
