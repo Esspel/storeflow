@@ -388,7 +388,7 @@ export function AppShell() {
             {/* Global store selector — all users with multiple stores */}
             <GlobalStoreSelector />
 
-            {/* Mitt Coop button */}
+            {/* SAP product catalog button */}
             {activeStore?.sap_site_id && (
               <a
                 href={`https://mittcoop.coop.se/sortiment/articles?siteId=${activeStore.sap_site_id}`}
@@ -398,7 +398,7 @@ export function AppShell() {
               >
                 <ShoppingCart className="h-3.5 w-3.5" />
                 <span className="sm:hidden">S3</span>
-                <span className="hidden sm:inline">Mitt Coop-sortiment</span>
+                <span className="hidden sm:inline">SAP-sortiment</span>
               </a>
             )}
 

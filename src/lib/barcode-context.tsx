@@ -96,9 +96,9 @@ export function BarcodeProvider({ children }: { children: React.ReactNode }) {
       }
     } catch {}
 
-    // Unknown code — show toast and open Mitt Coop search in a new tab
+    // Unknown code — show toast and open product catalog search in a new tab
     setToast({ code, label });
-    // Dispatch a custom event so the MittCoop panel can open with this code pre-filled
+    // Dispatch a custom event so the product search panel can open with this code pre-filled
     window.dispatchEvent(new CustomEvent("sf-barcode-scan", { detail: { code } }));
   };
 

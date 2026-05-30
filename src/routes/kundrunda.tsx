@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Camera, ChartBar as BarChart3, CircleCheck as CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Circle, Clock, CreditCard as Edit2, Download, FileText, GripVertical, Lock, MapPin, Plus, Trash2,
+  Circle, Clock, CreditCard as Edit2, Download, FileText, GripVertical, Lock, MapPin, Plus, Search, Trash2,
   TriangleAlert as AlertTriangle, Upload, X, ArrowRight, Hash, ZoomIn, Image as ImageIcon,
   GitMerge, Copy, RefreshCw, Info
 } from "lucide-react";
@@ -187,6 +187,8 @@ function KundrundaPage() {
   const [responses, setResponses] = useState<ResponseMap>({});
   const [responseImages, setResponseImages] = useState<Record<string, KundrundaResponseImage[]>>({});
   const [defectDialog, setDefectDialog] = useState<DefectForm | null>(null);
+  const [defectUserSearch, setDefectUserSearch] = useState("");
+  const [defectUserOpen, setDefectUserOpen] = useState(false);
   const [savingDefect, setSavingDefect] = useState(false);
   const [viewerImages, setViewerImages] = useState<string[]>([]);
   const [viewerIdx, setViewerIdx] = useState<number | null>(null);
@@ -1205,19 +1207,67 @@ function KundrundaPage() {
                   </div>
                   {defectDialog.sap_article_id && (
                     <a href={mittCoopUrl(defectDialog.sap_article_id, activeSession.store?.sap_site_id ?? null) ?? `https://mittcoop.coop.se/sortiment/articles/${defectDialog.sap_article_id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                      <ArrowRight className="h-3 w-3" /> Öppna i Mitt Coop-sortiment
+                      <ArrowRight className="h-3 w-3" /> Öppna i SAP-sortiment
                     </a>
                   )}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Ansvarig</Label>
-                  <Select value={defectDialog.responsible_user_id || "__none"} onValueChange={(v) => setDefectDialog(p => p ? { ...p, responsible_user_id: v === "__none" ? "" : v } : null)}>
-                    <SelectTrigger className="h-11 text-sm"><SelectValue placeholder="Välj person" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none">Ingen</SelectItem>
-                      {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setDefectUserOpen(o => !o)}
+                      className="flex h-11 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
+                    >
+                      <span className={defectDialog.responsible_user_id ? "text-foreground" : "text-muted-foreground"}>
+                        {defectDialog.responsible_user_id
+                          ? storeUsers.find(u => u.id === defectDialog.responsible_user_id)?.display_name ?? "Välj person"
+                          : "Välj person"}
+                      </span>
+                      {defectDialog.responsible_user_id && (
+                        <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive"
+                          onClick={(e) => { e.stopPropagation(); setDefectDialog(p => p ? { ...p, responsible_user_id: "" } : null); setDefectUserOpen(false); }} />
+                      )}
+                    </button>
+                    {defectUserOpen && (
+                      <div className="absolute top-full left-0 z-50 mt-1 w-full rounded-lg border border-border/60 bg-card shadow-lg">
+                        <div className="p-2 border-b border-border/40">
+                          <div className="relative">
+                            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <input
+                              autoFocus
+                              type="text"
+                              value={defectUserSearch}
+                              onChange={(e) => setDefectUserSearch(e.target.value)}
+                              placeholder="Sök person..."
+                              className="w-full h-8 rounded-md border border-border/60 bg-background pl-8 pr-2 text-sm outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-44 overflow-y-auto p-1">
+                          <button
+                            type="button"
+                            onClick={() => { setDefectDialog(p => p ? { ...p, responsible_user_id: "" } : null); setDefectUserOpen(false); setDefectUserSearch(""); }}
+                            className="w-full rounded px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted/50"
+                          >
+                            Ingen
+                          </button>
+                          {storeUsers
+                            .filter(u => !defectUserSearch || u.display_name.toLowerCase().includes(defectUserSearch.toLowerCase()))
+                            .map(u => (
+                              <button
+                                key={u.id}
+                                type="button"
+                                onClick={() => { setDefectDialog(p => p ? { ...p, responsible_user_id: u.id } : null); setDefectUserOpen(false); setDefectUserSearch(""); }}
+                                className={cn("w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted/50", defectDialog.responsible_user_id === u.id && "bg-primary/10 font-medium")}
+                              >
+                                {u.display_name}
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   {defectDialog.responsible_user_id && (
                     <p className="text-[11px] text-muted-foreground">En uppgift och en avvikelse skapas automatiskt.</p>
                   )}

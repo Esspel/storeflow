@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Calendar, CalendarClock, ChevronLeft, ChevronRight, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Trash2, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight, RefreshCw, Sparkles } from "lucide-react";
+import { Calendar, CalendarClock, ChevronLeft, ChevronRight, Download, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Trash2, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight, RefreshCw, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -924,6 +924,37 @@ function SchemaPage() {
     }
   }
 
+  function exportScheduleCSV() {
+    if (!activeImport || scheduleEmployees.length === 0) return;
+    const header = "Anställningsnummer;Namn;Datum;Start;Slut;Rast (min);Avdelning;Frånvaro;Lånad";
+    const rows: string[] = [];
+    scheduleEmployees.forEach(emp => {
+      const empShifts = scheduleShifts.filter(s => s.schedule_employee_id === emp.id);
+      empShifts.forEach(s => {
+        const cells = [
+          emp.employee_nr,
+          emp.name,
+          s.day_date,
+          s.start_time ?? "",
+          s.stop_time ?? "",
+          s.break_minutes != null ? String(s.break_minutes) : "",
+          emp.department ?? "",
+          s.is_absence_day ? "Ja" : "Nej",
+          s.is_lended ? "Ja" : "Nej",
+        ];
+        rows.push(cells.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"));
+      });
+    });
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `schema-v${activeImport.week_number}-${activeImport.year}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function deleteScheduleImport(imp: ImportRow) {
     await supabase.from("schedule_shifts").delete().eq("import_id", imp.id);
     await supabase.from("schedule_employees").delete().eq("import_id", imp.id);
@@ -1732,6 +1763,12 @@ function SchemaPage() {
               <Button size="sm" variant="outline" className="hidden sm:flex gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/5" onClick={() => setDeleteDeliveryPlanConfirm(true)}>
                 <Trash2 className="h-4 w-4" />
                 Ta bort leveransplan
+              </Button>
+            )}
+            {activeImport && scheduleEmployees.length > 0 && (
+              <Button size="sm" variant="outline" className="hidden sm:flex gap-1.5" onClick={exportScheduleCSV}>
+                <Download className="h-4 w-4" />
+                Exportera CSV
               </Button>
             )}
             {isAdmin && (
@@ -2580,7 +2617,7 @@ function SchemaPage() {
                 <FileText className="mt-0.5 h-4 w-4 shrink-0 text-info" />
                 <div>
                   <p className="text-xs font-semibold text-foreground">Leveransplan (CSV)</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Export från Coop-portalen — välj veckonummer nedan</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Export från leveransportalen — välj veckonummer nedan</p>
                 </div>
               </div>
             </div>

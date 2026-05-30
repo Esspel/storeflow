@@ -228,6 +228,7 @@ function AccountsPage() {
   const [newGroup, setNewGroup] = useState({ name: "", store_id: "", memberIds: [] as string[] });
   const [editGroup, setEditGroup] = useState<(UserGroup & { memberIds: string[] }) | null>(null);
   const [deleteGroup, setDeleteGroup] = useState<UserGroup | null>(null);
+  const [groupMemberSearch, setGroupMemberSearch] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -1782,7 +1783,7 @@ function AccountsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Bolag (Förening)</Label>
-                <Input placeholder="t.ex. Coop Mitt" value={newStore.bolag}
+                <Input placeholder="t.ex. Butik 123" value={newStore.bolag}
                   onChange={(e) => setNewStore(p => ({ ...p, bolag: e.target.value }))} />
               </div>
             </div>
@@ -1804,7 +1805,7 @@ function AccountsPage() {
                 onChange={(e) => setNewStore(p => ({ ...p, address: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
-              <Label>SAP Site-ID (Mitt Coop-sortiment)</Label>
+              <Label>SAP Site-ID (produktkatalog)</Label>
               <Input placeholder="t.ex. 1452" value={newStore.sap_site_id} inputMode="numeric"
                 onChange={(e) => setNewStore(p => ({ ...p, sap_site_id: e.target.value }))} />
             </div>
@@ -1894,7 +1895,7 @@ function AccountsPage() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>SAP Site-ID (Mitt Coop-sortiment)</Label>
+                <Label>SAP Site-ID (produktkatalog)</Label>
                 <Input value={editStore.site_id ?? ""}
                   onChange={(e) => setEditStore(s => s ? { ...s, site_id: e.target.value, sap_site_id: e.target.value } : null)} />
               </div>
@@ -2026,7 +2027,7 @@ function AccountsPage() {
       </AlertDialog>
 
       {/* CREATE GROUP */}
-      <Dialog open={showCreateGroup} onOpenChange={(o) => { setShowCreateGroup(o); if (!o) setError(""); }}>
+      <Dialog open={showCreateGroup} onOpenChange={(o) => { setShowCreateGroup(o); if (!o) { setError(""); setGroupMemberSearch(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Ny grupp</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
@@ -2047,31 +2048,51 @@ function AccountsPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Medlemmar</Label>
-              <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
-                {users.filter(u => u.is_active && u.display_name !== "Gallrad användare").map(u => (
-                  <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
-                    <Checkbox
-                      checked={newGroup.memberIds.includes(u.id)}
-                      onCheckedChange={() => setNewGroup(p => ({
-                        ...p, memberIds: p.memberIds.includes(u.id) ? p.memberIds.filter(id => id !== u.id) : [...p.memberIds, u.id]
-                      }))}
-                    />
-                    <span className="text-sm">{u.display_name}</span>
-                  </label>
-                ))}
+              <div className="relative mb-1">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Sök person..."
+                  value={groupMemberSearch}
+                  onChange={(e) => setGroupMemberSearch(e.target.value)}
+                  className="h-8 pl-8 text-xs"
+                />
+                {groupMemberSearch && (
+                  <button onClick={() => setGroupMemberSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <X className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                )}
               </div>
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
+                {users
+                  .filter(u => u.is_active && u.display_name !== "Gallrad användare")
+                  .filter(u => !groupMemberSearch || u.display_name.toLowerCase().includes(groupMemberSearch.toLowerCase()))
+                  .map(u => (
+                    <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
+                      <Checkbox
+                        checked={newGroup.memberIds.includes(u.id)}
+                        onCheckedChange={() => setNewGroup(p => ({
+                          ...p, memberIds: p.memberIds.includes(u.id) ? p.memberIds.filter(id => id !== u.id) : [...p.memberIds, u.id]
+                        }))}
+                      />
+                      <span className="text-sm">{u.display_name}</span>
+                    </label>
+                  ))}
+              </div>
+              {newGroup.memberIds.length > 0 && (
+                <p className="text-[11px] text-muted-foreground">{newGroup.memberIds.length} valda</p>
+              )}
             </div>
             {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCreateGroup(false); setError(""); }}>Avbryt</Button>
+            <Button variant="outline" onClick={() => { setShowCreateGroup(false); setError(""); setGroupMemberSearch(""); }}>Avbryt</Button>
             <Button onClick={createGroup} disabled={saving}>{saving ? "Skapar..." : "Skapa grupp"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* EDIT GROUP */}
-      <Dialog open={!!editGroup} onOpenChange={(o) => { if (!o) { setEditGroup(null); setError(""); } }}>
+      <Dialog open={!!editGroup} onOpenChange={(o) => { if (!o) { setEditGroup(null); setError(""); setGroupMemberSearch(""); } }}>
         {editGroup && (
           <DialogContent className="max-w-md">
             <DialogHeader><DialogTitle>Redigera grupp</DialogTitle></DialogHeader>
@@ -2083,24 +2104,44 @@ function AccountsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Medlemmar</Label>
-                <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
-                  {users.filter(u => u.is_active && u.display_name !== "Gallrad användare").map(u => (
-                    <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
-                      <Checkbox
-                        checked={editGroup.memberIds.includes(u.id)}
-                        onCheckedChange={() => setEditGroup(g => g ? {
-                          ...g, memberIds: g.memberIds.includes(u.id) ? g.memberIds.filter(id => id !== u.id) : [...g.memberIds, u.id]
-                        } : null)}
-                      />
-                      <span className="text-sm">{u.display_name}</span>
-                    </label>
-                  ))}
+                <div className="relative mb-1">
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Sök person..."
+                    value={groupMemberSearch}
+                    onChange={(e) => setGroupMemberSearch(e.target.value)}
+                    className="h-8 pl-8 text-xs"
+                  />
+                  {groupMemberSearch && (
+                    <button onClick={() => setGroupMemberSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <X className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  )}
                 </div>
+                <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
+                  {users
+                    .filter(u => u.is_active && u.display_name !== "Gallrad användare")
+                    .filter(u => !groupMemberSearch || u.display_name.toLowerCase().includes(groupMemberSearch.toLowerCase()))
+                    .map(u => (
+                      <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
+                        <Checkbox
+                          checked={editGroup.memberIds.includes(u.id)}
+                          onCheckedChange={() => setEditGroup(g => g ? {
+                            ...g, memberIds: g.memberIds.includes(u.id) ? g.memberIds.filter(id => id !== u.id) : [...g.memberIds, u.id]
+                          } : null)}
+                        />
+                        <span className="text-sm">{u.display_name}</span>
+                      </label>
+                    ))}
+                </div>
+                {editGroup.memberIds.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">{editGroup.memberIds.length} valda</p>
+                )}
               </div>
               {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => { setEditGroup(null); setError(""); }}>Avbryt</Button>
+              <Button variant="outline" onClick={() => { setEditGroup(null); setError(""); setGroupMemberSearch(""); }}>Avbryt</Button>
               <Button onClick={saveEditGroup} disabled={saving}>{saving ? "Sparar..." : "Spara"}</Button>
             </DialogFooter>
           </DialogContent>

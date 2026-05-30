@@ -16,7 +16,7 @@ export const Route = createFileRoute("/rapporter")({
   component: ReportsPage,
 });
 
-// Coop-specific category labels and colors
+// Category labels and colors
 const CATEGORY_CONFIG: Record<string, { color: string }> = {
   "HACCP":             { color: "text-destructive" },
   "Livsmedelssäkerhet":{ color: "text-destructive" },

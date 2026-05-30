@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Delete, ScanBarcode, X } from "lucide-react";
+import { Camera, Check, Delete, ScanBarcode, Search, X, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { supabase, type AppUser } from "@/lib/supabase";
@@ -20,7 +20,6 @@ type Props = {
 
 type SwitchMode = "choose" | "pin" | "barcode_waiting";
 
-// Compact list of store users shown for PIN selection
 type QuickUser = {
   id: string;
   display_name: string;
@@ -38,10 +37,16 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
   const [cameraOpen, setCameraOpen] = useState(false);
   const [storeUsers, setStoreUsers] = useState<QuickUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+  const [userSearch, setUserSearch] = useState("");
+  // Scanner test state
+  const [scannerTestActive, setScannerTestActive] = useState(false);
+  const [lastScanned, setLastScanned] = useState<string | null>(null);
+  const scannerTestRef = useRef(scannerTestActive);
+  scannerTestRef.current = scannerTestActive;
+
   const pinRef = useRef(pin);
   pinRef.current = pin;
 
-  // Load users in this store who have PIN or barcode configured
   useEffect(() => {
     if (!activeStoreId) return;
     setLoadingUsers(true);
@@ -97,11 +102,15 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
     }
   }, [activeStoreId, onUnlock]);
 
-  // Barcode scanner — fires when hardware scanner sends barcode
   const loadingRef = useRef(loading);
   loadingRef.current = loading;
+
   useBarcodeScanner({
     onScan: useCallback((code: string) => {
+      if (scannerTestRef.current) {
+        setLastScanned(code);
+        return;
+      }
       if (loadingRef.current) return;
       submitSwitch({ mode: "barcode", barcode: code });
     }, [submitSwitch]),
@@ -128,6 +137,11 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
 
   const roleLabel: Record<string, string> = { admin: "Admin", manager: "Chef", employee: "Anställd" };
 
+  const pinUsers = storeUsers.filter((u) => u.has_pin);
+  const filteredPinUsers = userSearch.trim()
+    ? pinUsers.filter((u) => u.display_name.toLowerCase().includes(userSearch.toLowerCase()))
+    : pinUsers;
+
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/95 backdrop-blur-sm">
       {/* Header */}
@@ -149,7 +163,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
       <div className="w-full max-w-sm px-6">
 
         {mode === "choose" && (
-          <div className="space-y-6">
+          <div className="space-y-5">
             <div className="text-center">
               <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-soft text-primary">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[13px] font-bold text-primary-foreground">
@@ -170,13 +184,54 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3">
-                  <ScanBarcode className="h-5 w-5 shrink-0 text-primary" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">Scanna passerkort</p>
-                    <p className="text-xs text-muted-foreground">Rikta Zebra-skannern mot streckkoden</p>
+                {/* Scanner test mode toggle */}
+                {scannerTestActive ? (
+                  <div className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-primary" />
+                        <p className="text-sm font-medium text-primary">Skannertestläge aktivt</p>
+                      </div>
+                      <button
+                        onClick={() => { setScannerTestActive(false); setLastScanned(null); }}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Avsluta test
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Scanna en streckkod med Zebra-skannern för att testa att den fungerar.
+                    </p>
+                    {lastScanned ? (
+                      <div className="flex items-center gap-2 rounded-lg bg-success/10 border border-success/30 px-3 py-2">
+                        <Check className="h-4 w-4 text-success shrink-0" />
+                        <div>
+                          <p className="text-xs font-medium text-success">Skanning lyckades!</p>
+                          <p className="text-[11px] text-muted-foreground font-mono break-all">{lastScanned}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 rounded-lg bg-muted/50 border border-border/60 px-3 py-2">
+                        <ScanBarcode className="h-4 w-4 text-muted-foreground shrink-0 animate-pulse" />
+                        <p className="text-xs text-muted-foreground">Väntar på skanning...</p>
+                      </div>
+                    )}
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-card px-4 py-3">
+                    <ScanBarcode className="h-5 w-5 shrink-0 text-primary" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">Scanna passerkort</p>
+                      <p className="text-xs text-muted-foreground">Rikta Zebra-skannern mot streckkoden</p>
+                    </div>
+                    <button
+                      onClick={() => { setScannerTestActive(true); setLastScanned(null); }}
+                      className="text-[11px] text-muted-foreground hover:text-primary border border-border/60 rounded-full px-2 py-0.5 transition-colors shrink-0"
+                    >
+                      Testa
+                    </button>
+                  </div>
+                )}
                 <button
                   onClick={() => setCameraOpen(true)}
                   className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 transition-colors hover:bg-accent active:scale-[0.98]"
@@ -197,25 +252,47 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                   <div key={i} className="h-14 animate-pulse rounded-xl bg-muted" />
                 ))}
               </div>
-            ) : storeUsers.filter((u) => u.has_pin).length > 0 ? (
-              <div className="space-y-1">
+            ) : pinUsers.length > 0 ? (
+              <div className="space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Logga in med PIN</p>
-                <div className="space-y-1.5 max-h-56 overflow-y-auto">
-                  {storeUsers.filter((u) => u.has_pin).map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => { setSelectedUser(u); setMode("pin"); setPin(""); setError(""); }}
-                      className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 text-left transition-colors hover:bg-accent active:scale-[0.98]"
-                    >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
-                        {initials(u.display_name)}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">{u.display_name}</p>
-                        <p className="text-xs text-muted-foreground">{roleLabel[u.role] ?? u.role}</p>
-                      </div>
-                    </button>
-                  ))}
+                {/* Search for users */}
+                {pinUsers.length >= 5 && (
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      placeholder="Sök person..."
+                      className="w-full h-9 rounded-xl border border-border/60 bg-card pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground/50 focus:border-primary/50"
+                    />
+                    {userSearch && (
+                      <button onClick={() => setUserSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                        <X className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                  {filteredPinUsers.length === 0 ? (
+                    <p className="py-3 text-center text-xs text-muted-foreground">Ingen person matchar sökningen.</p>
+                  ) : (
+                    filteredPinUsers.map((u) => (
+                      <button
+                        key={u.id}
+                        onClick={() => { setSelectedUser(u); setMode("pin"); setPin(""); setError(""); setUserSearch(""); }}
+                        className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 text-left transition-colors hover:bg-accent active:scale-[0.98]"
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
+                          {initials(u.display_name)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{u.display_name}</p>
+                          <p className="text-xs text-muted-foreground">{roleLabel[u.role] ?? u.role}</p>
+                        </div>
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             ) : (

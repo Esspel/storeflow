@@ -517,7 +517,7 @@ function CustomerRequestsPage() {
             <div className="space-y-1.5">
               <Label className="text-xs flex items-center gap-1.5">
                 <Hash className="h-3 w-3 text-muted-foreground" />
-                Artikelnummer (SAP / Mitt Coop-sortiment, valfritt)
+                Artikelnummer (SAP-sortiment, valfritt)
               </Label>
               <Input
                 placeholder="T.ex. 123456"
@@ -525,7 +525,7 @@ function CustomerRequestsPage() {
                 onChange={(e) => setForm((p) => ({ ...p, article_number: e.target.value }))}
               />
               <p className="text-[11px] text-muted-foreground">
-                Artikelnumret används för direktlänk till Mitt Coop-sortiment.
+                Artikelnumret används för direktlänk till SAP-sortiment.
               </p>
             </div>
             <div className="space-y-1.5">
@@ -562,7 +562,7 @@ function CustomerRequestsPage() {
                 className="resize-none text-sm"
               />
               <p className="text-[11px] text-muted-foreground">
-                Scanna EAN-kod för att klistra in i anteckningen. Sök sedan upp artikelnumret manuellt i Mitt Coop-sortiment.
+                Scanna EAN-kod för att klistra in i anteckningen. Sök sedan upp artikelnumret manuellt i SAP-sortiment.
               </p>
             </div>
 
@@ -676,7 +676,7 @@ function CustomerRequestsPage() {
               <div className="space-y-1.5">
                 <Label className="text-xs flex items-center gap-1.5">
                   <Hash className="h-3 w-3 text-muted-foreground" />
-                  Materialnummer (Mitt Coop-sortiment)
+                  Materialnummer (SAP-sortiment)
                 </Label>
                 <Input
                   placeholder="T.ex. 123456"
@@ -684,7 +684,7 @@ function CustomerRequestsPage() {
                   onChange={(e) => setEditArticleNumber(e.target.value)}
                   className="font-mono text-sm"
                 />
-                <p className="text-[11px] text-muted-foreground">Syns bara internt — används för direktlänk till Mitt Coop-sortiment.</p>
+                <p className="text-[11px] text-muted-foreground">Syns bara internt — används för direktlänk till SAP-sortiment.</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Status</Label>
@@ -762,7 +762,7 @@ function CustomerRequestsPage() {
                         <a href={mcUrl} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
                           <ExternalLink className="h-3 w-3" />
-                          Mitt Coop
+                          SAP-sortiment
                         </a>
                       )}
                     </div>

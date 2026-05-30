@@ -2053,7 +2053,7 @@ function TasksPage() {
                 <p className="text-sm text-muted-foreground">{detailTask.description}</p>
               )}
 
-              {/* Mitt Coop deep link */}
+              {/* SAP product catalog deep link */}
               {(() => {
                 const url = mittCoopUrl(detailTask.sap_article_id, detailTask.store?.sap_site_id);
                 if (!url) return null;
@@ -2633,7 +2633,7 @@ function TasksPage() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
                     >
-                      <ExternalLink className="h-3 w-3" /> Öppna i Mitt Coop-sortiment
+                      <ExternalLink className="h-3 w-3" /> Öppna i SAP-sortiment
                     </a>
                   )}
                 </div>

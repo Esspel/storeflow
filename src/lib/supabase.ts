@@ -630,7 +630,7 @@ export async function withRetry<T>(
   throw lastError;
 }
 
-// Helper: build a Mitt Coop deep-link for an SAP article
+// Helper: build a SAP product catalog deep-link for an article
 // Returns null if either ID is missing
 export function mittCoopUrl(sapArticleId: string | null | undefined, sapSiteId: string | null | undefined): string | null {
   if (!sapArticleId?.trim() || !sapSiteId?.trim()) return null;

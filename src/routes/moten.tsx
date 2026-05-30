@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Calendar, CircleCheck as CheckCircle2, Clock, GripVertical, Pause, Pencil, Play, Plus, Search, Settings, Trash2, Users, X, FileText,
+  Calendar, CircleCheck as CheckCircle2, Clock, Download, GripVertical, Pause, Pencil, Play, Plus, Search, Settings, Trash2, Users, X, FileText,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -166,6 +166,8 @@ function MeetingsPage() {
   // Detail / edit / delete
   const [showDetail, setShowDetail] = useState<MeetingFull | null>(null);
   const [newDecision, setNewDecision] = useState({ description: "", responsible_user_id: "", due_date: "", createTask: false });
+  const [decisionUserSearch, setDecisionUserSearch] = useState("");
+  const [decisionUserOpen, setDecisionUserOpen] = useState(false);
   const [addingDecision, setAddingDecision] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<MeetingFull | null>(null);
   const [editTarget, setEditTarget] = useState<MeetingFull | null>(null);
@@ -260,6 +262,35 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
       iframe.contentWindow?.focus();
       iframe.contentWindow?.print();
     }, 300);
+  };
+
+  const exportMeetingsCSV = () => {
+    if (meetings.length === 0) return;
+    const header = "ID;Titel;Typ;Datum;Status;Moderator;Agenda-punkter;Beslut";
+    const rows = meetings.map(m => {
+      const typeLabel = meetingTypes.find(t => t.value === m.meeting_type)?.label ?? m.meeting_type;
+      const agendaStr = [...(m.agenda_items ?? [])].sort((a, b) => a.sort_order - b.sort_order).map(ai => ai.title).join(" | ");
+      const decisionsStr = (m.decisions ?? []).map(d => d.description).join(" | ");
+      const cells = [
+        m.id,
+        m.title,
+        typeLabel,
+        new Date(m.scheduled_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" }),
+        m.status,
+        m.moderator?.display_name ?? "",
+        agendaStr,
+        decisionsStr,
+      ];
+      return cells.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";");
+    });
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `moten-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const fetchMeetings = async () => {
@@ -516,6 +547,11 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
         description={activeStore ? `Möteshantering för ${activeStore.name}` : "Strukturerade möten med tidsbudget och beslutslogg."}
         actions={
           <div className="hidden lg:flex gap-2">
+            {isManager && meetings.length > 0 && (
+              <Button variant="outline" className="rounded-full" onClick={exportMeetingsCSV}>
+                <Download className="mr-2 h-4 w-4" /> Exportera CSV
+              </Button>
+            )}
             {isManager && (
               <Button variant="outline" className="rounded-full" onClick={() => { setShowManageTypes(true); openNewType(); }}>
                 <Settings className="mr-2 h-4 w-4" /> Mötestyper
@@ -1138,13 +1174,59 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
                       className="resize-none text-sm"
                     />
                     <div className="flex gap-2">
-                      <Select value={newDecision.responsible_user_id || "__none"} onValueChange={(v) => setNewDecision(p => ({ ...p, responsible_user_id: v === "__none" ? "" : v }))}>
-                        <SelectTrigger className="h-8 flex-1 text-xs"><SelectValue placeholder="Ansvarig" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none">Ingen</SelectItem>
-                          {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <div className="relative flex-1">
+                        <button
+                          type="button"
+                          onClick={() => setDecisionUserOpen(o => !o)}
+                          className="flex h-8 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-xs"
+                        >
+                          <span className={newDecision.responsible_user_id ? "text-foreground" : "text-muted-foreground"}>
+                            {newDecision.responsible_user_id
+                              ? storeUsers.find(u => u.id === newDecision.responsible_user_id)?.display_name ?? "Ansvarig"
+                              : "Ansvarig"}
+                          </span>
+                          <X className={cn("h-3 w-3 text-muted-foreground transition-opacity", newDecision.responsible_user_id ? "opacity-100 hover:text-destructive" : "opacity-0 pointer-events-none")}
+                            onClick={(e) => { e.stopPropagation(); setNewDecision(p => ({ ...p, responsible_user_id: "" })); setDecisionUserOpen(false); }} />
+                        </button>
+                        {decisionUserOpen && (
+                          <div className="absolute top-full left-0 z-50 mt-1 w-full rounded-lg border border-border/60 bg-card shadow-lg">
+                            <div className="p-2 border-b border-border/40">
+                              <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  value={decisionUserSearch}
+                                  onChange={(e) => setDecisionUserSearch(e.target.value)}
+                                  placeholder="Sök person..."
+                                  className="w-full h-7 rounded-md border border-border/60 bg-background pl-7 pr-2 text-xs outline-none"
+                                />
+                              </div>
+                            </div>
+                            <div className="max-h-36 overflow-y-auto p-1">
+                              <button
+                                type="button"
+                                onClick={() => { setNewDecision(p => ({ ...p, responsible_user_id: "" })); setDecisionUserOpen(false); setDecisionUserSearch(""); }}
+                                className="w-full rounded px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/50"
+                              >
+                                Ingen
+                              </button>
+                              {storeUsers
+                                .filter(u => !decisionUserSearch || u.display_name.toLowerCase().includes(decisionUserSearch.toLowerCase()))
+                                .map(u => (
+                                  <button
+                                    key={u.id}
+                                    type="button"
+                                    onClick={() => { setNewDecision(p => ({ ...p, responsible_user_id: u.id })); setDecisionUserOpen(false); setDecisionUserSearch(""); }}
+                                    className={cn("w-full rounded px-2 py-1.5 text-left text-xs hover:bg-muted/50", newDecision.responsible_user_id === u.id && "bg-primary/10 font-medium")}
+                                  >
+                                    {u.display_name}
+                                  </button>
+                                ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       <input
                         type="date"
                         value={newDecision.due_date}
