@@ -588,10 +588,29 @@ function TasksPage() {
   }
 
   async function copyChildData(childId: string, t: TaskFull) {
-    const steps = (t.steps ?? []).map(s => ({ task_id: childId, label: s.label, sort_order: s.sort_order, requires_photo: s.requires_photo, is_done: false }));
+    // Insert questions first so we can remap condition_question_id from parent IDs → child IDs
+    const parentQuestions = t.questions ?? [];
+    let qIdMap = new Map<string, string>(); // parent question id → child question id
+    if (parentQuestions.length > 0) {
+      const rows = parentQuestions.map(q => ({ task_id: childId, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: q.sort_order }));
+      const { data: insertedQs } = await supabase.from("task_questions").insert(rows).select("id, sort_order");
+      if (insertedQs) {
+        insertedQs.forEach((iq: { id: string; sort_order: number }) => {
+          const pq = parentQuestions.find(q => q.sort_order === iq.sort_order);
+          if (pq?.id) qIdMap.set(pq.id, iq.id);
+        });
+      }
+    }
+    const steps = (t.steps ?? []).map(s => ({
+      task_id: childId,
+      label: s.label,
+      sort_order: s.sort_order,
+      requires_photo: s.requires_photo,
+      is_done: false,
+      condition_question_id: s.condition_question_id ? (qIdMap.get(s.condition_question_id) ?? null) : null,
+      condition_answer: s.condition_answer ?? null,
+    }));
     if (steps.length > 0) await supabase.from("task_steps").insert(steps);
-    const questions = (t.questions ?? []).map(q => ({ task_id: childId, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: q.sort_order }));
-    if (questions.length > 0) await supabase.from("task_questions").insert(questions);
     if ((t.images ?? []).length > 0) {
       await supabase.from("task_images").insert(t.images!.map(img => ({ task_id: childId, storage_path: img.storage_path, uploaded_by: img.uploaded_by })));
     }
@@ -800,7 +819,14 @@ function TasksPage() {
 
   // Check if a task should auto-complete (all steps done + all questions answered with no blank text fields)
   const shouldAutoComplete = (steps: TaskFull["steps"], questions: TaskFull["questions"]): boolean => {
-    const allStepsDone = (steps ?? []).every(s => s.is_done);
+    const visibleSteps = (steps ?? []).filter(s => {
+      const sa = s as typeof s & { condition_question_id?: string | null; condition_answer?: string | null };
+      if (!sa.condition_question_id) return true;
+      const condQ = (questions ?? []).find(q => q.id === sa.condition_question_id);
+      if (!condQ?.answer) return false;
+      return condQ.answer.toLowerCase() === (sa.condition_answer ?? "ja").toLowerCase();
+    });
+    const allStepsDone = visibleSteps.every(s => s.is_done);
     const allAnswered = (questions ?? []).every(q => q.answer?.trim());
     return allStepsDone && allAnswered;
   };
@@ -1415,26 +1441,47 @@ function TasksPage() {
 
       if (!task?.id) continue;
 
-      if (stepsRaw?.trim()) {
-        const steps = stepsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => ({
-          task_id: task.id,
-          label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[foto\]/i, "").trim(),
-          requires_photo: /\[foto\]/i.test(part),
-          is_done: false,
-          sort_order: idx,
-        }));
-        if (steps.length > 0) await supabase.from("task_steps").insert(steps);
+      // Parse steps (with possible [om:...] conditions) and questions, then resolve condition links
+      const parsedSteps = stepsRaw?.trim()
+        ? stepsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => {
+            const condMatch = part.match(/\[om:([^\]=]+)=([^\]]+)\]/i);
+            return {
+              task_id: task.id,
+              label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[foto\]/i, "").replace(/\s*\[om:[^\]]+\]/i, "").trim(),
+              requires_photo: /\[foto\]/i.test(part),
+              condition_question_label: condMatch ? condMatch[1].trim() : null,
+              condition_answer: condMatch ? condMatch[2].trim() : null,
+              is_done: false,
+              sort_order: idx,
+            };
+          })
+        : [];
+
+      const parsedQuestions = questionsRaw?.trim()
+        ? questionsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => ({
+            task_id: task.id,
+            label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[obligatorisk\]/i, "").replace(/\s*\[ja_nej\]/i, "").trim(),
+            question_type: /\[ja_nej\]/i.test(part) ? "yes_no" : "text",
+            is_required: /\[obligatorisk\]/i.test(part),
+            sort_order: idx,
+          }))
+        : [];
+
+      // Insert questions first so we can resolve condition_question_id by label
+      let insertedQs: { id: string; label: string }[] = [];
+      if (parsedQuestions.length > 0) {
+        const { data } = await supabase.from("task_questions").insert(parsedQuestions).select("id, label");
+        insertedQs = data ?? [];
       }
 
-      if (questionsRaw?.trim()) {
-        const questions = questionsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => ({
-          task_id: task.id,
-          label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[obligatorisk\]/i, "").replace(/\s*\[ja_nej\]/i, "").trim(),
-          question_type: /\[ja_nej\]/i.test(part) ? "yes_no" : "text",
-          is_required: /\[obligatorisk\]/i.test(part),
-          sort_order: idx,
-        }));
-        if (questions.length > 0) await supabase.from("task_questions").insert(questions);
+      if (parsedSteps.length > 0) {
+        const stepsToInsert = parsedSteps.map(({ condition_question_label, ...rest }) => {
+          const matchedQ = condition_question_label
+            ? insertedQs.find(q => q.label.toLowerCase() === condition_question_label.toLowerCase())
+            : null;
+          return { ...rest, condition_question_id: matchedQ?.id ?? null };
+        });
+        await supabase.from("task_steps").insert(stepsToInsert);
       }
 
       logAudit(user?.id ?? null, "task.import", "tasks", task.id, { title: title.trim() });
@@ -2212,6 +2259,17 @@ function TasksPage() {
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Checkpoints</p>
                   {detailTask.steps.map((step) => {
+                    // Conditional visibility: hide step if condition question has been answered but answer doesn't match
+                    const stepAny = step as typeof step & { condition_question_id?: string | null; condition_answer?: string | null };
+                    if (stepAny.condition_question_id) {
+                      const condQ = detailTask.questions?.find(q => q.id === stepAny.condition_question_id);
+                      if (condQ) {
+                        // If not yet answered, hide the step
+                        if (!condQ.answer) return null;
+                        // If answered, check if it matches the required condition_answer
+                        if (condQ.answer.toLowerCase() !== (stepAny.condition_answer ?? "ja").toLowerCase()) return null;
+                      }
+                    }
                     const stepImages = (detailTask.images ?? []).filter(img => img.step_id === step.id);
                     return (
                       <div key={step.id} className="space-y-1.5">

@@ -622,14 +622,29 @@ function MallarPage() {
 
         if (!task?.id) return;
 
+        // Insert questions first, then resolve condition_question_id by matching template question id → new task question id
+        let questionIdMap = new Map<string, string>(); // template question id → task question id
+        if (validQuestions.length > 0) {
+          const { data: insertedQs } = await supabase.from("task_questions").insert(
+            validQuestions.map((q, idx) => ({ task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: idx }))
+          ).select("id, sort_order");
+          if (insertedQs) {
+            insertedQs.forEach((iq: { id: string; sort_order: number }) => {
+              const tmplQ = validQuestions[iq.sort_order];
+              if (tmplQ?.id) questionIdMap.set(tmplQ.id, iq.id);
+            });
+          }
+        }
         if (validItems.length > 0) {
           await supabase.from("task_steps").insert(
-            validItems.map((it, idx) => ({ task_id: task.id, label: it.label, sort_order: idx, requires_photo: it.requires_photo }))
-          );
-        }
-        if (validQuestions.length > 0) {
-          await supabase.from("task_questions").insert(
-            validQuestions.map((q, idx) => ({ task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: idx }))
+            validItems.map((it, idx) => ({
+              task_id: task.id,
+              label: it.label,
+              sort_order: idx,
+              requires_photo: it.requires_photo,
+              condition_question_id: it.condition_question_id ? (questionIdMap.get(it.condition_question_id) ?? null) : null,
+              condition_answer: it.condition_answer ?? null,
+            }))
           );
         }
         const aRows = assigneeRows(task.id);
