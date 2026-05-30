@@ -1,32 +1,56 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Keyboard, X } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 
-const SHORTCUTS: { key: string; label: string; to: string }[] = [
-  { key: "1", label: "Dashboard", to: "/" },
-  { key: "2", label: "Uppgifter", to: "/uppgifter" },
-  { key: "3", label: "Schema", to: "/schema" },
-  { key: "4", label: "Avvikelser", to: "/avvikelser" },
-  { key: "5", label: "Kundönskemål", to: "/kundonskemal" },
-  { key: "6", label: "Möten", to: "/moten" },
-  { key: "7", label: "Kundrunda", to: "/kundrunda" },
-  { key: "8", label: "Rapporter", to: "/rapporter" },
-  { key: "9", label: "Personal", to: "/personal" },
-  { key: "0", label: "Inställningar", to: "/installningar" },
-  { key: "b", label: "Belastning", to: "/belastning" },
-  { key: "p", label: "Pulstavla", to: "/pulstavla" },
+type Shortcut = {
+  key: string;
+  label: string;
+  to: string;
+  /** Minimum role required: "all" = everyone, "manager" = chef+admin, "hk" = hk/admin */
+  access?: "all" | "manager" | "hk";
+};
+
+// Order matches sidebar exactly:
+// Drift: Dashboard, Uppgifter, Schema, Avvikelser, Kundönskemål
+// then Möten, Kundrunda (accessible to all store users)
+// Operations: Rapporter, Mallar
+// Admin: Personal, Inställningar
+// Special: Belastning (manager), Pulstavla
+const ALL_SHORTCUTS: Shortcut[] = [
+  { key: "1", label: "Dashboard",          to: "/",             access: "all" },
+  { key: "2", label: "Uppgifter",           to: "/uppgifter",    access: "all" },
+  { key: "3", label: "Schema",              to: "/schema",       access: "all" },
+  { key: "4", label: "Avvikelser",          to: "/avvikelser",   access: "all" },
+  { key: "5", label: "Kundönskemål",        to: "/kundonskemal", access: "all" },
+  { key: "6", label: "Möten",              to: "/moten",        access: "all" },
+  { key: "7", label: "Kundrunda",           to: "/kundrunda",    access: "all" },
+  { key: "8", label: "Rapporter",           to: "/rapporter",    access: "all" },
+  { key: "9", label: "Personal",            to: "/personal",     access: "manager" },
+  { key: "0", label: "Inställningar",       to: "/installningar", access: "all" },
+  { key: "m", label: "Mallar",              to: "/mallar",       access: "manager" },
+  { key: "b", label: "Medarbetarbelastning", to: "/belastning",  access: "manager" },
+  { key: "p", label: "Pulstavla",           to: "/pulstavla",    access: "all" },
 ];
 
 export function KeyboardShortcuts() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [showHelp, setShowHelp] = useState(false);
+
+  const isManager = user?.role === "manager" || user?.role === "admin";
+  const isHK = user?.hierarchy_level === "hk" || user?.role === "admin";
+
+  const visibleShortcuts = ALL_SHORTCUTS.filter((s) => {
+    if (s.access === "manager") return isManager;
+    if (s.access === "hk") return isHK;
+    return true;
+  });
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
-      // Don't trigger while typing in inputs
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (e.target as HTMLElement).isContentEditable) return;
-      // Modifier keys used for browser shortcuts — skip
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       if (e.key === "?" || (e.key === "/" && e.shiftKey)) {
@@ -39,7 +63,7 @@ export function KeyboardShortcuts() {
         return;
       }
 
-      const shortcut = SHORTCUTS.find((s) => s.key === e.key);
+      const shortcut = visibleShortcuts.find((s) => s.key === e.key);
       if (shortcut) {
         e.preventDefault();
         navigate({ to: shortcut.to });
@@ -49,7 +73,7 @@ export function KeyboardShortcuts() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [navigate]);
+  }, [navigate, visibleShortcuts]);
 
   if (!showHelp) return null;
 
@@ -74,8 +98,8 @@ export function KeyboardShortcuts() {
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="divide-y divide-border/40">
-          {SHORTCUTS.map((s) => (
+        <div className="divide-y divide-border/40 max-h-[70vh] overflow-y-auto">
+          {visibleShortcuts.map((s) => (
             <button
               key={s.key}
               className="flex w-full items-center justify-between px-4 py-2.5 text-sm hover:bg-muted/40 transition-colors"
@@ -88,7 +112,7 @@ export function KeyboardShortcuts() {
             </button>
           ))}
           <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-            <span className="text-muted-foreground">Stäng hjälp</span>
+            <span className="text-muted-foreground">Stäng</span>
             <kbd className="rounded-md border border-border/60 bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">Esc</kbd>
           </div>
         </div>

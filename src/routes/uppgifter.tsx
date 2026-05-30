@@ -344,6 +344,8 @@ function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("today");
   const [search, setSearch] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
   const [sortBy, setSortBy] = useState<"default" | "due_date" | "priority" | "assignee" | "title">("default");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showPastTasks, setShowPastTasks] = useState(false);
@@ -1428,7 +1430,11 @@ function TasksPage() {
       if (recurringParentIds.has(t.id) && currentChildByParent.has(t.id)) return false;
 
       // Search filter
-      if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search && !t.title.toLowerCase().includes(search.toLowerCase()) && !(t.category ?? "").toLowerCase().includes(search.toLowerCase())) return false;
+      // Category filter
+      if (filterCategory && t.category !== filterCategory) return false;
+      // Priority filter
+      if (filterPriority && t.priority !== filterPriority) return false;
 
       // Tab filters
       if (tab === "today") {
@@ -1855,12 +1861,38 @@ function TasksPage() {
           </Tabs>
         </div>
         {tab !== "today" && (
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-32">
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input placeholder="Sök uppgifter..." value={search} onChange={(e) => setSearch(e.target.value)}
                 className="h-9 rounded-full pl-9 text-sm w-full" />
             </div>
+            {/* Category filter */}
+            {[...new Set(tasks.map(t => t.category).filter(Boolean))].length > 0 && (
+              <Select value={filterCategory || "__all"} onValueChange={(v) => setFilterCategory(v === "__all" ? "" : v)}>
+                <SelectTrigger className="h-9 w-auto min-w-[110px] rounded-full text-xs gap-1.5">
+                  <SelectValue placeholder="Kategori" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all">Alla kategorier</SelectItem>
+                  {[...new Set(tasks.map(t => t.category).filter(Boolean) as string[])].sort().map(c => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {/* Priority filter */}
+            <Select value={filterPriority || "__all"} onValueChange={(v) => setFilterPriority(v === "__all" ? "" : v)}>
+              <SelectTrigger className="h-9 w-auto min-w-[110px] rounded-full text-xs gap-1.5">
+                <SelectValue placeholder="Prioritet" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all">Alla prioriteter</SelectItem>
+                {["Kritisk", "Hög", "Medel", "Låg"].map(p => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
               <SelectTrigger className="h-9 w-auto min-w-[120px] rounded-full text-xs gap-1.5">
                 <ArrowDownUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />

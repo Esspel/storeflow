@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical,
   Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil,
-  Store as StoreIcon, Building2, Eye, EyeOff,
+  Store as StoreIcon, Building2, Eye, EyeOff, Search,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -133,6 +133,9 @@ function MallarPage() {
 
   // View filter: "all" | "hk" | "forening" | "store"
   const [viewFilter, setViewFilter] = useState<"all" | "hk" | "forening" | "store">("all");
+  const [search, setSearch] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
 
   useEffect(() => { load(); }, [user, activeStore]);
 
@@ -414,20 +417,26 @@ function MallarPage() {
   };
 
   const exportCSV = () => {
-    const headers = ["Titel", "Kategori", "Beskrivning", "Scope", "Antal steg", "Steg (detaljer)", "Frågor", "Butiker", "Skapad"];
+    // Export in identical format to import template so exported files can be re-imported directly
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Steg (detaljer)", "Frågor"];
     const rows = [
       headers,
       ...templates.map((t) => [
-        t.title, t.category, t.description,
-        t.hierarchy_scope ?? "store",
-        t.items?.length ?? 0,
+        t.title,
+        t.category ?? "",
+        t.description ?? "",
+        t.priority ?? "Medel",
+        t.recurrence_rule ?? "",
+        (t.recurrence_days ?? []).join(","),
+        t.recurrence_interval != null ? String(t.recurrence_interval) : "",
+        t.due_date_offset != null ? String(t.due_date_offset) : "",
+        t.due_date_time ?? "",
         (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it, idx) => `${idx + 1}. ${it.label}${it.requires_photo ? " [foto]" : ""}`).join(" | "),
         (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q, idx) => `${idx + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}`).join(" | "),
-        t.storeIds.map((sid) => allStores.find((s) => s.id === sid)?.name ?? sid).join(", "),
-        t.created_at ? new Date(t.created_at).toLocaleDateString("sv-SE") : "",
       ]),
     ];
-    const csv = rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
+    const instructions = `# Exporterat från StoreFlow ${new Date().toLocaleDateString("sv-SE")} — kan importeras direkt\n` + CSV_TEMPLATE_INSTRUCTIONS;
+    const csv = instructions + rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
     triggerDownload("\ufeff" + csv, `mallar-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
   };
 
@@ -528,10 +537,27 @@ function MallarPage() {
     setImporting(false);
   };
 
+  // Unique categories from loaded templates
+  const allCategories = useMemo(() =>
+    [...new Set(templates.map((t) => t.category).filter(Boolean) as string[])].sort(),
+    [templates]
+  );
+
+  // Apply search + category + priority filters
+  const filteredTemplates = useMemo(() => {
+    const q = search.toLowerCase();
+    return templates.filter((t) => {
+      if (filterCategory && t.category !== filterCategory) return false;
+      if (filterPriority && t.priority !== filterPriority) return false;
+      if (q && !t.title.toLowerCase().includes(q) && !(t.category ?? "").toLowerCase().includes(q) && !(t.description ?? "").toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [templates, search, filterCategory, filterPriority]);
+
   // Templates grouped for display
-  const hkTemplates = templates.filter((t) => t.hierarchy_scope === "hk" || (t.is_global && !t.hierarchy_scope));
-  const foreningTemplates = templates.filter((t) => t.hierarchy_scope === "forening");
-  const storeTemplates = templates.filter((t) => !t.hierarchy_scope || t.hierarchy_scope === "store");
+  const hkTemplates = filteredTemplates.filter((t) => t.hierarchy_scope === "hk" || (t.is_global && !t.hierarchy_scope));
+  const foreningTemplates = filteredTemplates.filter((t) => t.hierarchy_scope === "forening");
+  const storeTemplates = filteredTemplates.filter((t) => !t.hierarchy_scope || t.hierarchy_scope === "store");
 
   const visibleGroups: { label: string; badge: string; badgeClass: string; items: TemplateWithMeta[] }[] = [];
   if (viewFilter === "all" || viewFilter === "hk") {
@@ -917,29 +943,81 @@ function MallarPage() {
       )}
 
       {/* View filter tabs */}
-      <div className="mt-4 flex gap-1 rounded-xl border border-border/60 bg-muted/30 p-1 w-fit">
-        {[
-          { key: "all", label: "Alla" },
-          { key: "hk", label: "HK" },
-          { key: "forening", label: "Förening" },
-          { key: "store", label: "Butik" },
-        ].map(({ key, label }) => (
+      <div className="mt-4 flex flex-wrap gap-3 items-center">
+        <div className="flex gap-1 rounded-xl border border-border/60 bg-muted/30 p-1">
+          {[
+            { key: "all", label: "Alla" },
+            { key: "hk", label: "HK" },
+            { key: "forening", label: "Förening" },
+            { key: "store", label: "Butik" },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setViewFilter(key as typeof viewFilter)}
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                viewFilter === key ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div className="relative flex-1 min-w-40 max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Sök mallar..."
+            className="h-8 w-full rounded-lg border border-border/60 bg-background pl-8 pr-3 text-xs outline-none placeholder:text-muted-foreground/50 focus:border-primary/40"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2">
+              <X className="h-3 w-3 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+
+        {/* Category filter */}
+        {allCategories.length > 0 && (
+          <Select value={filterCategory || "__all"} onValueChange={(v) => setFilterCategory(v === "__all" ? "" : v)}>
+            <SelectTrigger className="h-8 w-36 text-xs rounded-lg">
+              <SelectValue placeholder="Kategori" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all">Alla kategorier</SelectItem>
+              {allCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* Priority filter */}
+        <Select value={filterPriority || "__all"} onValueChange={(v) => setFilterPriority(v === "__all" ? "" : v)}>
+          <SelectTrigger className="h-8 w-32 text-xs rounded-lg">
+            <SelectValue placeholder="Prioritet" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all">Alla prioriteter</SelectItem>
+            {["Låg", "Medel", "Hög", "Kritisk"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        {/* Clear filters */}
+        {(search || filterCategory || filterPriority) && (
           <button
-            key={key}
-            onClick={() => setViewFilter(key as typeof viewFilter)}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-              viewFilter === key ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
+            onClick={() => { setSearch(""); setFilterCategory(""); setFilterPriority(""); }}
+            className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            {label}
+            <X className="h-3 w-3" /> Rensa filter
           </button>
-        ))}
+        )}
       </div>
 
       {loading ? (
         <div className="mt-6 space-y-3">{[1, 2, 3].map((i) => <div key={i} className="h-20 animate-pulse rounded-2xl bg-card" />)}</div>
-      ) : templates.length === 0 ? (
+      ) : filteredTemplates.length === 0 && templates.length === 0 ? (
         <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
           <p className="text-sm font-medium text-muted-foreground">Inga mallar ännu</p>
           {isManager && (
@@ -947,6 +1025,11 @@ function MallarPage() {
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Skapa mall
             </Button>
           )}
+        </div>
+      ) : filteredTemplates.length === 0 ? (
+        <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-12 text-center">
+          <p className="text-sm font-medium text-muted-foreground">Inga mallar matchar sökningen</p>
+          <button onClick={() => { setSearch(""); setFilterCategory(""); setFilterPriority(""); }} className="mt-3 text-xs text-primary hover:underline">Rensa filter</button>
         </div>
       ) : (
         <div className="mt-6 space-y-8">
