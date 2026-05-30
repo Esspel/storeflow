@@ -146,6 +146,7 @@ const emptyForm = (storeId: string) => ({
   priority: "Medel",
   store_id: storeId,
   due_date: "",
+  due_date_time: "",
   recurrence_rule: "",
   recurrence_days: [] as number[],
   recurrence_interval: 1,
@@ -760,17 +761,21 @@ function TasksPage() {
       ? (() => { const d = new Date(getSimulatedNow()); d.setDate(d.getDate() + tmpl.due_date_offset!); return utcIsoToLocalInput(d.toISOString()); })()
       : "";
     const todayStr = localDateStr(new Date(getSimulatedNow()));
+    const tmplAny = tmpl as ChecklistTemplate & { recurrence_months?: number[]; recurrence_month_day?: number };
     setNewTask((p) => ({
       ...p,
       title: p.title || tmpl.title,
+      description: tmpl.description ? (p.description || tmpl.description) : p.description,
       category: tmpl.category || p.category,
       priority: tmpl.priority || p.priority,
       recurrence_rule: tmpl.recurrence_rule ?? p.recurrence_rule,
       recurrence_days: tmpl.recurrence_days ?? p.recurrence_days,
       recurrence_interval: tmpl.recurrence_interval ?? p.recurrence_interval,
-      // Always set recurrence_start to today when applying a template with recurrence
+      recurrence_months: tmplAny.recurrence_months ?? p.recurrence_months,
+      recurrence_month_day: tmplAny.recurrence_month_day ?? p.recurrence_month_day,
       recurrence_start: tmpl.recurrence_rule ? todayStr : p.recurrence_start,
       due_date: dueDate || p.due_date,
+      due_date_time: tmpl.due_date_time ? (p.due_date_time || tmpl.due_date_time) : p.due_date_time,
       steps: steps.length > 0 ? steps : p.steps,
       questions: questions.length > 0 ? questions : p.questions,
     }));
@@ -1011,6 +1016,7 @@ function TasksPage() {
       priority: task.priority,
       store_id: task.store_id ?? "",
       due_date: task.due_date ? utcIsoToLocalInput(task.due_date) : "",
+      due_date_time: (task as TaskFull & { due_date_time?: string }).due_date_time ?? "",
       recurrence_rule: task.recurrence_rule ?? "",
       recurrence_days: task.recurrence_days ?? [],
       recurrence_interval: task.recurrence_interval ?? 1,
@@ -1028,6 +1034,10 @@ function TasksPage() {
 
   const saveEdit = async () => {
     if (!editTask || !editForm || !isManager) return;
+    if (editForm.recurrence_rule && !editForm.recurrence_end) {
+      setSaveError("Slutdatum för repetition är obligatoriskt.");
+      return;
+    }
     setEditSaving(true);
     const isRecurring = !!editTask.recurrence_rule;
     const isChild = !!editTask.parent_task_id;
@@ -1114,6 +1124,10 @@ function TasksPage() {
       setSaveError("Startdatum för repetition är obligatoriskt.");
       return;
     }
+    if (newTask.recurrence_rule && !newTask.recurrence_end) {
+      setSaveError("Slutdatum för repetition är obligatoriskt — återkommande uppgifter måste ha ett slutdatum.");
+      return;
+    }
     if (!isManager) return;
     setSaving(true);
 
@@ -1124,10 +1138,14 @@ function TasksPage() {
       priority: newTask.priority,
       store_id: newTask.store_id || null,
       due_date: newTask.due_date ? localInputToUtcIso(newTask.due_date) : null,
+      due_date_time: newTask.due_date_time || null,
+      due_date_offset: null,
       recurring: newTask.recurrence_rule || null,
       recurrence_rule: newTask.recurrence_rule || null,
       recurrence_days: newTask.recurrence_days.length > 0 ? newTask.recurrence_days : null,
       recurrence_interval: newTask.recurrence_interval,
+      recurrence_months: newTask.recurrence_months.length ? newTask.recurrence_months : null,
+      recurrence_month_day: newTask.recurrence_month_day ?? null,
       recurrence_start: newTask.recurrence_start || null,
       recurrence_end: newTask.recurrence_end || null,
       sap_article_id: newTask.sap_article_id?.trim() || null,
@@ -1214,7 +1232,7 @@ function TasksPage() {
 
   // Comment lines starting with # are ignored by importer
   const TASK_CSV_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Kolumner: Titel;Beskrivning;Kategori;Prioritet;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Startdatum;Slutdatum;Steg;Frågor
+# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Steg;Frågor
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Kategori: Drift | Säkerhet | Kundärenden | Övrigt
@@ -1223,7 +1241,8 @@ function TasksPage() {
 #   Exempel: 0,1,4 (Mån, Tis, Fre)
 # Intervall: antal enheter mellan upprepningar (t.ex. 2 = varannan vecka), lämna tomt för 1
 # Förfaller om (dagar): antal dagar tills uppgiften förfaller (t.ex. 1)
-# Startdatum/Slutdatum: ÅÅÅÅ-MM-DD, lämna tomt för ingen begränsning
+# Förfallotid (HH:MM): klockslag för förfallodatumet, t.ex. 08:00 (lämna tomt för ingen tid)
+# Startdatum/Slutdatum: ÅÅÅÅ-MM-DD — Slutdatum är obligatoriskt för återkommande uppgifter
 #
 # Steg: separera med " | " — lägg till [foto] om foto krävs
 #   Exempel: "1. Torka hyllor | 2. Kontrollera kyl [foto]"
@@ -1235,9 +1254,9 @@ function TasksPage() {
 `;
 
   const downloadTaskTemplate = () => {
-    const headers = ["Titel", "Beskrivning", "Kategori", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Startdatum", "Slutdatum", "Steg", "Frågor"];
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Steg", "Frågor"];
     const example = [
-      "Morgonkontroll", "Kontroll av butikens öppning", "Drift", "Medel", "weekly", "0,1,2,3,4", "1", "1", "", "",
+      "Morgonkontroll", "Drift", "Kontroll av butikens öppning", "Medel", "weekly", "0,1,2,3,4", "1", "1", "08:00", new Date().toISOString().slice(0, 10), "2026-12-31",
       "1. Kolla temperaturer [foto] | 2. Öppna kassor | 3. Kontrollera ingång",
       "1. Är allt klart? [obligatorisk] [ja_nej]",
     ];
@@ -1276,7 +1295,7 @@ function TasksPage() {
 
     const rows = lines.slice(1).map(parseRow);
     for (const cols of rows) {
-      const [title, description, category, priority, recurrence, weekdaysRaw, intervalRaw, dueDays, startDate, endDate, stepsRaw, questionsRaw] = cols;
+      const [title, category, description, priority, recurrence, weekdaysRaw, intervalRaw, dueDays, dueTime, startDate, endDate, stepsRaw, questionsRaw] = cols;
       if (!title?.trim()) continue;
 
       const dueDate = dueDays?.trim()
@@ -1303,6 +1322,7 @@ function TasksPage() {
         recurrence_start: startDate?.trim() || null,
         recurrence_end: endDate?.trim() || null,
         due_date: dueDate,
+        due_date_time: dueTime?.trim() || null,
       }).select("id").maybeSingle();
 
       if (!task?.id) continue;
@@ -1335,25 +1355,33 @@ function TasksPage() {
   };
 
   const exportCSV = () => {
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Steg", "Frågor"];
     const rows = [
-      ["Titel", "Beskrivning", "Kategori", "Prioritet", "Status", "Butik", "Tilldelade", "Förfallodatum", "Återkommande", "Checkpoints", "Frågor & svar", "Slutförd", "Skapad"],
-      ...visibleTasks.map((t) => [
-        t.title,
-        t.description ?? "",
-        t.category,
-        t.priority,
-        t.status,
-        t.store?.name ?? "",
-        t.assignees?.map(a => a.user?.display_name ?? a.group?.name ?? "").filter(Boolean).join(", ") || "",
-        t.due_date ? new Date(t.due_date).toLocaleDateString("sv-SE") : "",
-        RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label ?? "",
-        t.steps?.map(s => `${s.is_done ? "[x]" : "[ ]"} ${s.label}`).join(" | ") || "",
-        t.questions?.map(q => `${q.label}: ${q.answer || "-"}`).join(" | ") || "",
-        t.completed_at ? new Date(t.completed_at).toLocaleDateString("sv-SE") : "",
-        new Date(t.created_at).toLocaleDateString("sv-SE"),
-      ]),
+      headers,
+      ...visibleTasks.map((t) => {
+        const tAny = t as TaskFull & { due_date_time?: string; recurrence_interval?: number };
+        const dueDays = t.due_date
+          ? String(Math.round((new Date(t.due_date).getTime() - Date.now()) / 86400000))
+          : "";
+        return [
+          t.title,
+          t.category ?? "",
+          t.description ?? "",
+          t.priority ?? "Medel",
+          t.recurrence_rule ?? "",
+          (t.recurrence_days ?? []).join(","),
+          tAny.recurrence_interval != null ? String(tAny.recurrence_interval) : "",
+          dueDays,
+          tAny.due_date_time ?? "",
+          t.recurrence_start ?? "",
+          t.recurrence_end ?? "",
+          (t.steps ?? []).sort((a, b) => a.sort_order - b.sort_order).map((s, i) => `${i + 1}. ${s.label}${s.requires_photo ? " [foto]" : ""}`).join(" | "),
+          (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q, i) => `${i + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}`).join(" | "),
+        ];
+      }),
     ];
-    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
+    const instructions = `# Exporterat ${new Date().toLocaleDateString("sv-SE")} — kan importeras direkt\n` + TASK_CSV_INSTRUCTIONS;
+    const csv = instructions + rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -2747,13 +2775,10 @@ function TasksPage() {
                         <span className="text-[11px] text-muted-foreground w-12">Slut</span>
                         <Input type="date" value={newTask.recurrence_end}
                           onChange={(e) => setNewTask(p => ({ ...p, recurrence_end: e.target.value }))}
-                          className="flex-1 h-7 text-xs" />
+                          className={cn("flex-1 h-7 text-xs", !newTask.recurrence_end && "border-destructive/60")} />
                       </div>
                       {!newTask.recurrence_end && (
-                        <div className="rounded-lg bg-warning/10 border border-warning/30 px-3 py-2">
-                          <p className="text-[11px] text-warning-foreground font-medium">Inget slutdatum angivet</p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">Uppgifter skapas automatiskt 365 dagar framåt. När ett år har gått förnyas perioden automatiskt, om inte uppgiften tas bort.</p>
-                        </div>
+                        <p className="text-[11px] text-destructive font-medium">Slutdatum är obligatoriskt för återkommande uppgifter.</p>
                       )}
                     </div>
                   )}

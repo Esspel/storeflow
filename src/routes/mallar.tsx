@@ -50,7 +50,7 @@ const QUARTER_MONTHS = [
 // Instruction header injected into every downloadable CSV template.
 // Lines starting with '#' are treated as comments and skipped by the importer.
 const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Steg (detaljer);Frågor
+# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Steg (detaljer);Frågor
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Återkommande: daily | every_other_day | weekly | monthly | yearly (lämna tomt för ingen)
@@ -59,6 +59,7 @@ const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid im
 # Intervall: antal enheter mellan upprepningar (t.ex. 2 = varannan vecka), lämna tomt för 1
 # Förfaller om (dagar): antal dagar tills uppgiften förfaller från skapande (t.ex. 1)
 # Förfallotid (HH:MM): klockslag för förfallodatumet, t.ex. 08:00 (lämna tomt för ingen tid)
+# Startdatum/Slutdatum: ÅÅÅÅ-MM-DD — Slutdatum är obligatoriskt för återkommande mallar
 #
 # Steg: separera med " | "  — lägg till [foto] om foto krävs
 #   Exempel: "1. Torka hyllor | 2. Dammsuga [foto] | 3. Kontrollera temperaturer"
@@ -86,6 +87,8 @@ type FormState = {
   recurrence_interval: number;
   recurrence_months: number[];
   recurrence_month_day: number;
+  recurrence_start: string;
+  recurrence_end: string;
   due_date_offset: string;
   due_date_time: string;
   storeIds: string[];
@@ -100,6 +103,7 @@ const emptyForm = (): FormState => ({
   title: "", description: "", category: "", priority: "Medel",
   recurrence_rule: "", recurrence_days: [], recurrence_interval: 1,
   recurrence_months: [], recurrence_month_day: 1,
+  recurrence_start: "", recurrence_end: "",
   due_date_offset: "", due_date_time: "",
   storeIds: [], isGlobal: false, isLocked: false, foreningId: "",
   items: [{ label: "", requires_photo: false }],
@@ -242,6 +246,10 @@ function MallarPage() {
   async function createTemplate() {
     setError("");
     if (!form.title.trim()) { setError("Titel är obligatorisk."); return; }
+    if (form.recurrence_rule && !form.recurrence_end) {
+      setError("Slutdatum för repetition är obligatoriskt — mallar med återkommande måste ha ett slutdatum.");
+      return;
+    }
     if (createScope === "store" && user?.role === "manager" && form.storeIds.length === 0) {
       setError("Du måste välja minst en butik.");
       return;
@@ -260,6 +268,8 @@ function MallarPage() {
       recurrence_rule: form.recurrence_rule || null,
       recurrence_days: (form.recurrence_rule === "weekly" || form.recurrence_rule === "biweekly") && form.recurrence_days.length > 0 ? form.recurrence_days : null,
       recurrence_interval: form.recurrence_interval > 1 ? form.recurrence_interval : null,
+      recurrence_start: form.recurrence_start || null,
+      recurrence_end: form.recurrence_end || null,
       due_date_offset: form.due_date_offset !== "" ? parseInt(form.due_date_offset) : null,
       due_date_time: form.due_date_time || null,
       created_by: user?.id ?? null,
@@ -324,6 +334,8 @@ function MallarPage() {
       recurrence_interval: (t as ChecklistTemplate & { recurrence_interval?: number }).recurrence_interval ?? 1,
       recurrence_months: (t as ChecklistTemplate & { recurrence_months?: number[] }).recurrence_months ?? [],
       recurrence_month_day: (t as ChecklistTemplate & { recurrence_month_day?: number }).recurrence_month_day ?? 1,
+      recurrence_start: (t as ChecklistTemplate & { recurrence_start?: string }).recurrence_start ?? "",
+      recurrence_end: (t as ChecklistTemplate & { recurrence_end?: string }).recurrence_end ?? "",
       due_date_offset: t.due_date_offset != null ? String(t.due_date_offset) : "",
       due_date_time: t.due_date_time ?? "",
       storeIds: t.storeIds,
@@ -340,6 +352,10 @@ function MallarPage() {
     if (!editTarget) return;
     setError("");
     if (!editForm.title.trim()) { setError("Titel är obligatorisk."); return; }
+    if (editForm.recurrence_rule && !editForm.recurrence_end) {
+      setError("Slutdatum för repetition är obligatoriskt.");
+      return;
+    }
     const scope = editTarget.hierarchy_scope ?? "store";
     if (scope === "store" && user?.role === "manager" && editForm.storeIds.length === 0) {
       setError("Du måste välja minst en butik.");
@@ -355,6 +371,8 @@ function MallarPage() {
       recurrence_rule: editForm.recurrence_rule || null,
       recurrence_days: (editForm.recurrence_rule === "weekly" || editForm.recurrence_rule === "biweekly") && editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
       recurrence_interval: editForm.recurrence_interval > 1 ? editForm.recurrence_interval : null,
+      recurrence_start: editForm.recurrence_start || null,
+      recurrence_end: editForm.recurrence_end || null,
       due_date_offset: editForm.due_date_offset !== "" ? parseInt(editForm.due_date_offset) : null,
       due_date_time: editForm.due_date_time || null,
       is_global: editForm.isGlobal,
@@ -425,9 +443,10 @@ function MallarPage() {
 
   // CSV: download blank import template with instructions
   const downloadBlankTemplate = () => {
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Steg (detaljer)", "Frågor"];
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Steg (detaljer)", "Frågor"];
     const example = [
       "Exempelmall", "Rengöring", "Beskriv mallen här", "Medel", "weekly", "0,1,2,3,4", "1", "1", "08:00",
+      new Date().toISOString().slice(0, 10), "2026-12-31",
       "1. Torka hyllor | 2. Dammsuga [foto]",
       "1. Är allt klart? [obligatorisk] [ja_nej]",
     ];
@@ -438,7 +457,7 @@ function MallarPage() {
 
   const exportCSV = () => {
     // Export in identical format to import template so exported files can be re-imported directly
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Steg (detaljer)", "Frågor"];
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Steg (detaljer)", "Frågor"];
     const rows = [
       headers,
       ...templates.map((t) => [
@@ -451,6 +470,8 @@ function MallarPage() {
         t.recurrence_interval != null ? String(t.recurrence_interval) : "",
         t.due_date_offset != null ? String(t.due_date_offset) : "",
         t.due_date_time ?? "",
+        (t as ChecklistTemplate & { recurrence_start?: string }).recurrence_start ?? "",
+        (t as ChecklistTemplate & { recurrence_end?: string }).recurrence_end ?? "",
         (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it, idx) => `${idx + 1}. ${it.label}${it.requires_photo ? " [foto]" : ""}`).join(" | "),
         (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q, idx) => `${idx + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}`).join(" | "),
       ]),
@@ -497,7 +518,7 @@ function MallarPage() {
 
     const rows = lines.slice(1).map(parseRow);
     for (const cols of rows) {
-      const [title, category, description, priority, recurrence, weekdaysRaw, intervalRaw, dueDays, dueTime, stepsRaw, questionsRaw] = cols;
+      const [title, category, description, priority, recurrence, weekdaysRaw, intervalRaw, dueDays, dueTime, startDate, endDate, stepsRaw, questionsRaw] = cols;
       if (!title?.trim()) continue;
 
       const recurrenceRule = (recurrence ?? "").trim() || null;
@@ -514,6 +535,8 @@ function MallarPage() {
         recurrence_rule: recurrenceRule,
         recurrence_days: recurrenceDays && recurrenceDays.length > 0 ? recurrenceDays : null,
         recurrence_interval: recurrenceInterval && recurrenceInterval > 1 ? recurrenceInterval : null,
+        recurrence_start: startDate?.trim() || null,
+        recurrence_end: endDate?.trim() || null,
         due_date_offset: dueDays?.trim() ? parseInt(dueDays.trim()) : null,
         due_date_time: dueTime?.trim() || null,
         created_by: user?.id ?? null,
@@ -862,6 +885,28 @@ function MallarPage() {
                 </div>
               )}
             </div>
+
+            {/* Recurrence start/end dates — shown only when recurrence is set */}
+            {f.recurrence_rule && (
+              <div className="px-4 py-3 space-y-2">
+                <span className="text-xs text-muted-foreground">Upprepningsperiod</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground w-10">Start</span>
+                  <Input type="date" value={f.recurrence_start}
+                    onChange={(e) => setF((p) => ({ ...p, recurrence_start: e.target.value }))}
+                    className="flex-1 h-7 border border-border/60 text-xs" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground w-10">Slut</span>
+                  <Input type="date" value={f.recurrence_end}
+                    onChange={(e) => setF((p) => ({ ...p, recurrence_end: e.target.value }))}
+                    className={cn("flex-1 h-7 border text-xs", !f.recurrence_end ? "border-destructive/60" : "border-border/60")} />
+                </div>
+                {!f.recurrence_end && (
+                  <p className="text-[11px] text-destructive font-medium">Slutdatum är obligatoriskt.</p>
+                )}
+              </div>
+            )}
 
             {/* Förening selector — shown when scope is forening and user is admin */}
             {scope === "forening" && isAdmin && (
