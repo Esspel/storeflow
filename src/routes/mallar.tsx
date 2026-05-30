@@ -17,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   supabase, type ChecklistTemplate, type ChecklistTemplateItem,
   type ChecklistTemplateQuestion, type Store, type Forening,
-  type TemplateVersion, type AppUser, type UserGroup, logAudit,
+  type TemplateVersion, type TemplatePackage, type AppUser, type UserGroup, logAudit,
 } from "@/lib/supabase";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
@@ -107,7 +107,7 @@ type FormState = {
   isLocked: boolean;
   foreningId: string;
   changeSummary: string;
-  items: { id?: string; label: string; requires_photo: boolean }[];
+  items: { id?: string; label: string; requires_photo: boolean; condition_question_id?: string; condition_answer?: string }[];
   questions: { id?: string; label: string; question_type: "text" | "yes_no"; is_required: boolean }[];
 };
 
@@ -192,6 +192,14 @@ function MallarPage() {
   // Template preview
   const [previewTarget, setPreviewTarget] = useState<TemplateWithMeta | null>(null);
 
+  // Template packages
+  const [packages, setPackages] = useState<TemplatePackage[]>([]);
+  const [showPackagesPanel, setShowPackagesPanel] = useState(false);
+  const [packageForm, setPackageForm] = useState({ name: "", description: "" });
+  const [packageTemplateIds, setPackageTemplateIds] = useState<string[]>([]);
+  const [editPackageTarget, setEditPackageTarget] = useState<TemplatePackage | null>(null);
+  const [activatePackageTarget, setActivatePackageTarget] = useState<TemplatePackage | null>(null);
+
   // View filter: "all" | "hk" | "forening" | "store"
   const [viewFilter, setViewFilter] = useState<"all" | "hk" | "forening" | "store">("all");
   const [search, setSearch] = useState("");
@@ -202,7 +210,7 @@ function MallarPage() {
 
   async function load() {
     setLoading(true);
-    const [templatesRes, storesRes, tsRes, foreningarRes, hiddenRes, usersRes, groupsRes] = await Promise.all([
+    const [templatesRes, storesRes, tsRes, foreningarRes, hiddenRes, usersRes, groupsRes, packagesRes] = await Promise.all([
       supabase.from("checklist_templates")
         .select("*, items:checklist_template_items(*), questions:checklist_template_questions(*)")
         .order("created_at", { ascending: false }),
@@ -212,6 +220,7 @@ function MallarPage() {
       supabase.from("forening_hidden_templates").select("forening_id, template_id"),
       supabase.from("app_users").select("id, display_name, role, store_id").order("display_name"),
       supabase.from("user_groups").select("id, name, store_id").order("name"),
+      supabase.from("template_packages").select("*, items:template_package_items(*)").order("name"),
     ]);
 
     const storeAssignments = (tsRes.data ?? []) as { template_id: string; store_id: string }[];
@@ -270,6 +279,7 @@ function MallarPage() {
     setHiddenEntries(hidden);
     setAllUsers((usersRes.data ?? []) as AppUser[]);
     setAllGroups((groupsRes.data ?? []) as UserGroup[]);
+    setPackages((packagesRes.data ?? []) as TemplatePackage[]);
     setLoading(false);
   }
 
@@ -384,6 +394,39 @@ function MallarPage() {
     set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
   }
 
+  async function savePackage() {
+    if (!packageForm.name.trim()) return;
+    const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
+    if (editPackageTarget) {
+      await supabase.from("template_packages").update({ name: packageForm.name.trim(), description: packageForm.description.trim() }).eq("id", editPackageTarget.id);
+      await supabase.from("template_package_items").delete().eq("package_id", editPackageTarget.id);
+      if (packageTemplateIds.length > 0) {
+        await supabase.from("template_package_items").insert(packageTemplateIds.map((tid, idx) => ({ package_id: editPackageTarget.id, template_id: tid, sort_order: idx })));
+      }
+      setEditPackageTarget(null);
+    } else {
+      const { data: pkg } = await supabase.from("template_packages").insert({ name: packageForm.name.trim(), description: packageForm.description.trim(), store_id: storeId, created_by: user?.id ?? null }).select("id").maybeSingle();
+      if (pkg?.id && packageTemplateIds.length > 0) {
+        await supabase.from("template_package_items").insert(packageTemplateIds.map((tid, idx) => ({ package_id: pkg.id, template_id: tid, sort_order: idx })));
+      }
+    }
+    setPackageForm({ name: "", description: "" });
+    setPackageTemplateIds([]);
+    await load();
+  }
+
+  async function deletePackage(pkg: TemplatePackage) {
+    await supabase.from("template_packages").delete().eq("id", pkg.id);
+    await load();
+  }
+
+  function openEditPackage(pkg: TemplatePackage) {
+    setEditPackageTarget(pkg);
+    setPackageForm({ name: pkg.name, description: pkg.description ?? "" });
+    setPackageTemplateIds((pkg.items ?? []).map(it => it.template_id));
+    setShowPackagesPanel(true);
+  }
+
   function openCreate(scope: "store" | "hk" | "forening") {
     setCreateScope(scope);
     const f = emptyForm();
@@ -437,7 +480,7 @@ function MallarPage() {
     const validItems = form.items.filter((it) => it.label.trim());
     if (validItems.length > 0) {
       await supabase.from("checklist_template_items").insert(
-        validItems.map((it, idx) => ({ template_id: tmpl.id, label: it.label.trim(), requires_photo: it.requires_photo, sort_order: idx }))
+        validItems.map((it, idx) => ({ template_id: tmpl.id, label: it.label.trim(), requires_photo: it.requires_photo, sort_order: idx, condition_question_id: it.condition_question_id ?? null, condition_answer: it.condition_answer ?? null }))
       );
     }
 
@@ -569,7 +612,7 @@ function MallarPage() {
       isLocked: t.locked_by_admin ?? false,
       foreningId: t.forening_id ?? "",
       changeSummary: "",
-      items: (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ id: it.id, label: it.label, requires_photo: it.requires_photo })),
+      items: (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ id: it.id, label: it.label, requires_photo: it.requires_photo, condition_question_id: (it as ChecklistTemplateItem & { condition_question_id?: string }).condition_question_id ?? undefined, condition_answer: (it as ChecklistTemplateItem & { condition_answer?: string }).condition_answer ?? undefined })),
       questions: (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q) => ({ id: q.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required })),
     });
     setError("");
@@ -610,7 +653,7 @@ function MallarPage() {
     const validItems = editForm.items.filter((it) => it.label.trim());
     if (validItems.length > 0) {
       await supabase.from("checklist_template_items").insert(
-        validItems.map((it, idx) => ({ template_id: editTarget.id, label: it.label.trim(), requires_photo: it.requires_photo, sort_order: idx }))
+        validItems.map((it, idx) => ({ template_id: editTarget.id, label: it.label.trim(), requires_photo: it.requires_photo, sort_order: idx, condition_question_id: it.condition_question_id ?? null, condition_answer: it.condition_answer ?? null }))
       );
     }
 
@@ -738,12 +781,13 @@ function MallarPage() {
 
   // CSV: download blank import template with instructions
   const downloadBlankTemplate = () => {
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor"];
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)"];
     const example = [
       "Exempelmall", "Rengöring", "Beskriv mallen här", "Medel", "active", "", "weekly", "0,1,2,3,4", "1", "1", "08:00",
       new Date().toISOString().slice(0, 10), "2026-12-31", "", "",
-      "1. Torka hyllor | 2. Dammsuga [foto]",
+      "1. Torka hyllor | 2. Dammsuga [foto] | 3. Städa entré [om:Är allt klart?=ja]",
       "1. Är allt klart? [obligatorisk] [ja_nej]",
+      "08:00 | 12:00 | 16:00",
     ];
     const csv = CSV_TEMPLATE_INSTRUCTIONS
       + [headers, example].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
@@ -752,28 +796,41 @@ function MallarPage() {
 
   const exportCSV = () => {
     // Export in identical format to import template so exported files can be re-imported directly
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor"];
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)"];
     const rows = [
       headers,
-      ...templates.map((t) => [
-        t.title,
-        t.category ?? "",
-        t.description ?? "",
-        t.priority ?? "Medel",
-        t.status ?? "active",
-        String(t.version ?? 1),
-        t.recurrence_rule ?? "",
-        (t.recurrence_days ?? []).join(","),
-        t.recurrence_interval != null ? String(t.recurrence_interval) : "",
-        t.due_date_offset != null ? String(t.due_date_offset) : "",
-        t.due_date_time ?? "",
-        (t as ChecklistTemplate & { recurrence_start?: string }).recurrence_start ?? "",
-        (t as ChecklistTemplate & { recurrence_end?: string }).recurrence_end ?? "",
-        t.parent_template_id ?? "",
-        t.inherit_mode ?? "",
-        (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it, idx) => `${idx + 1}. ${it.label}${it.requires_photo ? " [foto]" : ""}`).join(" | "),
-        (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q, idx) => `${idx + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}`).join(" | "),
-      ]),
+      ...templates.map((t) => {
+        const sortedQuestions = (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order);
+        const stepsStr = (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it, idx) => {
+          let s = `${idx + 1}. ${it.label}`;
+          if (it.requires_photo) s += " [foto]";
+          if (it.condition_question_id) {
+            const condQ = sortedQuestions.find(q => q.id === it.condition_question_id);
+            if (condQ) s += ` [om:${condQ.label}=${it.condition_answer ?? "ja"}]`;
+          }
+          return s;
+        }).join(" | ");
+        return [
+          t.title,
+          t.category ?? "",
+          t.description ?? "",
+          t.priority ?? "Medel",
+          t.status ?? "active",
+          String(t.version ?? 1),
+          t.recurrence_rule ?? "",
+          (t.recurrence_days ?? []).join(","),
+          t.recurrence_interval != null ? String(t.recurrence_interval) : "",
+          t.due_date_offset != null ? String(t.due_date_offset) : "",
+          t.due_date_time ?? "",
+          (t as ChecklistTemplate & { recurrence_start?: string }).recurrence_start ?? "",
+          (t as ChecklistTemplate & { recurrence_end?: string }).recurrence_end ?? "",
+          t.parent_template_id ?? "",
+          t.inherit_mode ?? "",
+          stepsStr,
+          sortedQuestions.map((q, idx) => `${idx + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}`).join(" | "),
+          (t as ChecklistTemplate & { time_slots?: string[] }).time_slots?.join(" | ") ?? "",
+        ];
+      }),
     ];
     const instructions = `# Exporterat från StoreFlow ${new Date().toLocaleDateString("sv-SE")} — kan importeras direkt\n` + CSV_TEMPLATE_INSTRUCTIONS;
     const csv = instructions + rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
@@ -817,7 +874,7 @@ function MallarPage() {
 
     const rows = lines.slice(1).map(parseRow);
     for (const cols of rows) {
-      const [title, category, description, priority, statusRaw, , recurrence, weekdaysRaw, intervalRaw, dueDays, dueTime, startDate, endDate, parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw] = cols;
+      const [title, category, description, priority, statusRaw, , recurrence, weekdaysRaw, intervalRaw, dueDays, dueTime, startDate, endDate, parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw, timeSlotsRaw] = cols;
       if (!title?.trim()) continue;
 
       const recurrenceRule = (recurrence ?? "").trim() || null;
@@ -851,6 +908,9 @@ function MallarPage() {
         created_by: user?.id ?? null,
         hierarchy_scope: importScope,
         is_global: importScope === "hk",
+        time_slots: timeSlotsRaw?.trim()
+          ? timeSlotsRaw.split("|").map(s => s.trim()).filter(Boolean)
+          : null,
       forening_id: importScope === "forening"
         ? (user?.forening_id ?? (result.options.foreningId ? String(result.options.foreningId) : null) ?? null)
         : null,
@@ -859,13 +919,35 @@ function MallarPage() {
       if (!tmpl?.id) continue;
 
       if (stepsRaw?.trim()) {
-        const items = stepsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => ({
-          template_id: tmpl.id,
-          label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[foto\]/i, "").trim(),
-          requires_photo: /\[foto\]/i.test(part),
-          sort_order: idx,
-        }));
-        if (items.length > 0) await supabase.from("checklist_template_items").insert(items);
+        const items = stepsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => {
+          const condMatch = part.match(/\[om:([^\]=]+)=([^\]]+)\]/i);
+          const cleanLabel = part
+            .replace(/^\d+\.\s*/, "")
+            .replace(/\s*\[foto\]/i, "")
+            .replace(/\s*\[om:[^\]]+\]/i, "")
+            .trim();
+          return {
+            template_id: tmpl.id,
+            label: cleanLabel,
+            requires_photo: /\[foto\]/i.test(part),
+            condition_question_label: condMatch ? condMatch[1].trim() : null,
+            condition_answer: condMatch ? condMatch[2].trim() : null,
+            sort_order: idx,
+          };
+        });
+        if (items.length > 0) {
+          // Insert items first without condition_question_id (resolve after questions are inserted)
+          const insertedItems = await supabase.from("checklist_template_items").insert(
+            items.map(({ condition_question_label: _cql, ...rest }) => rest)
+          ).select("id, sort_order");
+          // condition_question_id resolution done after questions insert below
+          if (insertedItems.data) {
+            (tmpl as typeof tmpl & { _pendingConditions?: { itemSortOrder: number; questionLabel: string; answer: string }[] })._pendingConditions =
+              items
+                .filter(it => it.condition_question_label)
+                .map(it => ({ itemSortOrder: it.sort_order, questionLabel: it.condition_question_label!, answer: it.condition_answer! }));
+          }
+        }
       }
 
       if (questionsRaw?.trim()) {
@@ -876,7 +958,21 @@ function MallarPage() {
           is_required: /\[obligatorisk\]/i.test(part),
           sort_order: idx,
         }));
-        if (questions.length > 0) await supabase.from("checklist_template_questions").insert(questions);
+        if (questions.length > 0) {
+          const { data: insertedQs } = await supabase.from("checklist_template_questions").insert(questions).select("id, label, sort_order");
+          // Resolve condition_question_id for items that have pending conditions
+          const pending = (tmpl as typeof tmpl & { _pendingConditions?: { itemSortOrder: number; questionLabel: string; answer: string }[] })._pendingConditions;
+          if (pending?.length && insertedQs?.length) {
+            for (const cond of pending) {
+              const matchedQ = insertedQs.find(q => q.label.toLowerCase() === cond.questionLabel.toLowerCase());
+              if (!matchedQ) continue;
+              await supabase.from("checklist_template_items")
+                .update({ condition_question_id: matchedQ.id, condition_answer: cond.answer })
+                .eq("template_id", tmpl.id)
+                .eq("sort_order", cond.itemSortOrder);
+            }
+          }
+        }
       }
 
       // Assign to active store for store-scope templates
@@ -976,39 +1072,86 @@ function MallarPage() {
           <div className="space-y-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Steg</p>
             <div className="space-y-1.5">
-              {f.items.map((item, idx) => (
-                <div key={idx} className="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-colors hover:bg-muted/40">
-                  <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/30" />
-                  <Input
-                    placeholder={`Steg ${idx + 1}`}
-                    value={item.label}
-                    onChange={(e) => {
-                      const items = [...f.items]; items[idx] = { ...items[idx], label: e.target.value };
-                      setF((p) => ({ ...p, items }));
-                    }}
-                    className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0"
-                  />
-                  <label className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground/70 cursor-pointer">
-                    <Checkbox
-                      checked={item.requires_photo}
-                      onCheckedChange={(v) => {
-                        const items = [...f.items]; items[idx] = { ...items[idx], requires_photo: !!v };
-                        setF((p) => ({ ...p, items }));
-                      }}
-                      className="h-3 w-3"
-                    />
-                    Foto
-                  </label>
-                  <button
-                    type="button"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => setF((p) => ({ ...p, items: p.items.filter((_, i) => i !== idx) }))}
-                    disabled={f.items.length === 1}
-                  >
-                    <X className="h-3.5 w-3.5 text-muted-foreground/60" />
-                  </button>
-                </div>
-              ))}
+              {f.items.map((item, idx) => {
+                const yesNoQuestions = f.questions.filter(q => q.question_type === "yes_no" && q.label.trim());
+                return (
+                  <div key={idx} className="rounded-lg border border-border/50 bg-muted/20 transition-colors hover:bg-muted/40">
+                    <div className="group flex items-center gap-2 px-3 py-2">
+                      <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/30" />
+                      <Input
+                        placeholder={`Steg ${idx + 1}`}
+                        value={item.label}
+                        onChange={(e) => {
+                          const items = [...f.items]; items[idx] = { ...items[idx], label: e.target.value };
+                          setF((p) => ({ ...p, items }));
+                        }}
+                        className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0"
+                      />
+                      <label className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground/70 cursor-pointer">
+                        <Checkbox
+                          checked={item.requires_photo}
+                          onCheckedChange={(v) => {
+                            const items = [...f.items]; items[idx] = { ...items[idx], requires_photo: !!v };
+                            setF((p) => ({ ...p, items }));
+                          }}
+                          className="h-3 w-3"
+                        />
+                        Foto
+                      </label>
+                      <button
+                        type="button"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => setF((p) => ({ ...p, items: p.items.filter((_, i) => i !== idx) }))}
+                        disabled={f.items.length === 1}
+                      >
+                        <X className="h-3.5 w-3.5 text-muted-foreground/60" />
+                      </button>
+                    </div>
+                    {/* Conditional logic — only shown if there are yes/no questions */}
+                    {yesNoQuestions.length > 0 && (
+                      <div className="flex items-center gap-2 border-t border-border/30 px-3 pb-2 pt-1.5">
+                        <span className="text-[11px] text-muted-foreground/60">Visa om</span>
+                        <Select
+                          value={item.condition_question_id ?? "__none"}
+                          onValueChange={(v) => {
+                            const items = [...f.items];
+                            items[idx] = { ...items[idx], condition_question_id: v === "__none" ? undefined : v, condition_answer: v === "__none" ? undefined : (items[idx].condition_answer ?? "ja") };
+                            setF((p) => ({ ...p, items }));
+                          }}
+                        >
+                          <SelectTrigger className="h-6 flex-1 border-0 bg-transparent p-0 text-[11px] shadow-none focus:ring-0 text-muted-foreground">
+                            <SelectValue placeholder="Alltid (ingen villkor)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">Alltid (ingen villkor)</SelectItem>
+                            {yesNoQuestions.map((q, qi) => (
+                              <SelectItem key={qi} value={q.id ?? `q-${qi}`}>{q.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {item.condition_question_id && item.condition_question_id !== "__none" && (
+                          <Select
+                            value={item.condition_answer ?? "ja"}
+                            onValueChange={(v) => {
+                              const items = [...f.items];
+                              items[idx] = { ...items[idx], condition_answer: v };
+                              setF((p) => ({ ...p, items }));
+                            }}
+                          >
+                            <SelectTrigger className="h-6 w-16 border-0 bg-transparent p-0 text-[11px] shadow-none focus:ring-0 text-muted-foreground">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="ja">Ja</SelectItem>
+                              <SelectItem value="nej">Nej</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             <button
               type="button"
@@ -1408,6 +1551,11 @@ function MallarPage() {
             {isManager && (
               <Button variant="outline" className="hidden sm:flex rounded-full" disabled={importing} onClick={() => setShowImportDialog(true)}>
                 <Upload className="mr-2 h-4 w-4" /> {importing ? "Importerar..." : "Importera CSV"}
+              </Button>
+            )}
+            {isManager && (
+              <Button variant="outline" className="hidden sm:flex rounded-full" onClick={() => setShowPackagesPanel(true)}>
+                <Layers className="mr-2 h-4 w-4" /> Mallpaket
               </Button>
             )}
             {canCreateHK && (
@@ -2213,6 +2361,105 @@ function MallarPage() {
                 </div>
               );
             })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* TEMPLATE PACKAGES PANEL */}
+      <Dialog open={showPackagesPanel} onOpenChange={(o) => { if (!o) { setShowPackagesPanel(false); setEditPackageTarget(null); setPackageForm({ name: "", description: "" }); setPackageTemplateIds([]); } }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+            <Layers className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Mallpaket</span>
+            <span className="text-xs text-muted-foreground ml-1">— gruppera mallar och skapa alla uppgifter på en gång</span>
+            <Button variant="ghost" size="sm" className="ml-auto text-xs text-muted-foreground" onClick={() => setShowPackagesPanel(false)}>Stäng</Button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-5 space-y-6">
+            {/* Create / Edit form */}
+            <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
+              <h3 className="text-sm font-semibold">{editPackageTarget ? "Redigera paket" : "Skapa nytt paket"}</h3>
+              <Input
+                placeholder="Paketnamn"
+                value={packageForm.name}
+                onChange={(e) => setPackageForm(p => ({ ...p, name: e.target.value }))}
+                className="h-8 text-sm"
+              />
+              <Input
+                placeholder="Beskrivning (valfritt)"
+                value={packageForm.description}
+                onChange={(e) => setPackageForm(p => ({ ...p, description: e.target.value }))}
+                className="h-8 text-sm"
+              />
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Välj mallar att inkludera:</p>
+                <div className="space-y-1 max-h-48 overflow-y-auto rounded-lg border border-border/50 p-2">
+                  {templates.map(t => (
+                    <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 hover:bg-muted/50">
+                      <Checkbox
+                        checked={packageTemplateIds.includes(t.id)}
+                        onCheckedChange={(checked) => {
+                          setPackageTemplateIds(prev => checked ? [...prev, t.id] : prev.filter(id => id !== t.id));
+                        }}
+                        className="h-3.5 w-3.5"
+                      />
+                      <span className="text-xs flex-1">{t.title}</span>
+                      {t.category && <Badge variant="secondary" className="text-[10px]">{t.category}</Badge>}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                {editPackageTarget && (
+                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setEditPackageTarget(null); setPackageForm({ name: "", description: "" }); setPackageTemplateIds([]); }}>
+                    Avbryt
+                  </Button>
+                )}
+                <Button size="sm" className="rounded-full text-xs" onClick={savePackage} disabled={!packageForm.name.trim() || packageTemplateIds.length === 0}>
+                  {editPackageTarget ? "Spara ändringar" : `Skapa paket (${packageTemplateIds.length} mallar)`}
+                </Button>
+              </div>
+            </div>
+
+            {/* Existing packages */}
+            {packages.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-muted-foreground">Sparade paket</h3>
+                {packages.map(pkg => {
+                  const pkgTemplates = (pkg.items ?? []).map(it => templates.find(t => t.id === it.template_id)).filter(Boolean) as TemplateWithMeta[];
+                  return (
+                    <div key={pkg.id} className="rounded-2xl border border-border/60 bg-card p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm">{pkg.name}</p>
+                          {pkg.description && <p className="text-xs text-muted-foreground">{pkg.description}</p>}
+                          <p className="text-xs text-muted-foreground mt-0.5">{pkgTemplates.length} mallar</p>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <Button
+                            variant="outline" size="sm"
+                            className="rounded-full h-7 text-xs"
+                            onClick={() => { setActivatePackageTarget(pkg); setBulkTaskConfigs(pkgTemplates.map(t => ({ templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], dueDate: "", priority: t.priority ?? "Medel", dueTime: t.due_date_time ?? "" }))); setShowPackagesPanel(false); setBulkCreateOpen(true); }}
+                          >
+                            <ListChecks className="h-3 w-3 mr-1" /> Aktivera
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:text-primary" onClick={() => openEditPackage(pkg)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:text-destructive" onClick={() => deletePackage(pkg)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {pkgTemplates.map(t => (
+                          <Badge key={t.id} variant="secondary" className="text-xs">{t.title}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

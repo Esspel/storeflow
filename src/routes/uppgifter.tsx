@@ -950,10 +950,11 @@ function TasksPage() {
     const idsToDelete: string[] = [];
     const parentId = t.parent_task_id ?? t.id;
     const isChild = !!t.parent_task_id;
+    // For parent tasks, use recurrence_period_start or due_date as the cutoff
     const periodStart = t.recurrence_period_start ?? (t.due_date ? t.due_date.slice(0, 10) : null);
 
     if ((t.recurrence_rule || isChild) && scope === "future") {
-      // Delete this and all future children
+      // Delete all children at or after this period
       if (periodStart) {
         const { data: toRemove } = await supabase.from("tasks").select("id").eq("parent_task_id", parentId).gte("recurrence_period_start", periodStart);
         (toRemove ?? []).forEach((r: { id: string }) => idsToDelete.push(r.id));
@@ -963,7 +964,13 @@ function TasksPage() {
         dayBefore.setDate(dayBefore.getDate() - 1);
         await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
       }
-      if (isChild) {
+      // Also delete the current task itself
+      if (!idsToDelete.includes(t.id)) {
+        idsToDelete.push(t.id);
+        await supabase.from("tasks").delete().eq("id", t.id);
+      }
+      // If this is the parent (not a child), delete it too after updating recurrence_end
+      if (!isChild) {
         idsToDelete.push(t.id);
         await supabase.from("tasks").delete().eq("id", t.id);
       }
@@ -985,8 +992,9 @@ function TasksPage() {
     }
 
     // Clean up storage files for all deleted tasks
-    if (idsToDelete.length > 0) {
-      const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", idsToDelete);
+    const cleanIds = [...new Set(idsToDelete)].filter(Boolean);
+    if (cleanIds.length > 0) {
+      const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", cleanIds);
       deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
     }
 
@@ -997,12 +1005,53 @@ function TasksPage() {
     await fetchTasks();
   };
 
-  const bulkDeleteTasks = async () => {
+  const bulkDeleteTasks = async (recurringScope: "single" | "future") => {
     const ids = [...selectedTaskIds];
-    const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", ids);
-    deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
-    await supabase.from("tasks").delete().in("id", ids);
-    logAudit(user?.id ?? null, "task.bulk_delete", "tasks", ids[0], { count: ids.length });
+    const allIdsToDelete: string[] = [];
+
+    for (const taskId of ids) {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) continue;
+
+      const parentId = task.parent_task_id ?? task.id;
+      const isChild = !!task.parent_task_id;
+      const periodStart = task.recurrence_period_start ?? (task.due_date ? task.due_date.slice(0, 10) : null);
+
+      if ((task.recurrence_rule || isChild) && recurringScope === "future") {
+        if (periodStart) {
+          const { data: toRemove } = await supabase.from("tasks").select("id").eq("parent_task_id", parentId).gte("recurrence_period_start", periodStart);
+          (toRemove ?? []).forEach((r: { id: string }) => allIdsToDelete.push(r.id));
+          await supabase.from("tasks").delete().eq("parent_task_id", parentId).gte("recurrence_period_start", periodStart);
+          const dayBefore = new Date(periodStart);
+          dayBefore.setDate(dayBefore.getDate() - 1);
+          await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
+        }
+        if (!allIdsToDelete.includes(task.id)) {
+          allIdsToDelete.push(task.id);
+          await supabase.from("tasks").delete().eq("id", task.id);
+        }
+      } else if ((task.recurrence_rule || isChild) && recurringScope === "single") {
+        allIdsToDelete.push(task.id);
+        await supabase.from("tasks").delete().eq("id", task.id);
+        if (periodStart && parentId !== task.id) {
+          const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
+          const existing: string[] = (parent?.deleted_periods ?? []) as string[];
+          if (!existing.includes(periodStart)) {
+            await supabase.from("tasks").update({ deleted_periods: [...existing, periodStart] }).eq("id", parentId);
+          }
+        }
+      } else {
+        allIdsToDelete.push(task.id);
+        await supabase.from("tasks").delete().eq("id", task.id);
+      }
+    }
+
+    const cleanIds = [...new Set(allIdsToDelete)].filter(Boolean);
+    if (cleanIds.length > 0) {
+      const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", cleanIds);
+      deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+    }
+    logAudit(user?.id ?? null, "task.bulk_delete", "tasks", ids[0] ?? "", { count: ids.length, scope: recurringScope });
     setSelectedTaskIds(new Set());
     setBulkDeleteTasksOpen(false);
     await fetchTasks();
@@ -2881,15 +2930,37 @@ function TasksPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort {selectedTaskIds.size} uppgifter</AlertDialogTitle>
             <AlertDialogDescription>
-              Är du säker? Alla markerade uppgifter, steg, bilder och svar raderas permanent.
+              {tasks.some(t => selectedTaskIds.has(t.id) && (t.recurrence_rule || t.parent_task_id))
+                ? "Urvalet innehåller återkommande uppgifter. Hur ska de raderas?"
+                : "Är du säker? Alla markerade uppgifter, steg, bilder och svar raderas permanent."}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={bulkDeleteTasks}>
-              Ta bort alla
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          {tasks.some(t => selectedTaskIds.has(t.id) && (t.recurrence_rule || t.parent_task_id)) ? (
+            <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+              <button
+                className="w-full rounded-lg border-2 border-destructive/60 bg-destructive/10 px-4 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors text-left"
+                onClick={() => bulkDeleteTasks("single")}
+              >
+                <span className="font-semibold">Bara dessa förekomster</span>
+                <p className="text-xs text-destructive/70 mt-0.5">Tar bara bort de markerade förekomsterna</p>
+              </button>
+              <button
+                className="w-full rounded-lg border-2 border-destructive bg-destructive/15 px-4 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/25 transition-colors text-left"
+                onClick={() => bulkDeleteTasks("future")}
+              >
+                <span className="font-semibold">Dessa och alla framtida</span>
+                <p className="text-xs text-destructive/70 mt-0.5">Tar bort markerade och alla kommande upprepningar</p>
+              </button>
+              <AlertDialogCancel className="w-full">Avbryt</AlertDialogCancel>
+            </AlertDialogFooter>
+          ) : (
+            <AlertDialogFooter>
+              <AlertDialogCancel>Avbryt</AlertDialogCancel>
+              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => bulkDeleteTasks("single")}>
+                Ta bort alla
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          )}
         </AlertDialogContent>
       </AlertDialog>
 

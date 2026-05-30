@@ -274,6 +274,23 @@ export type TemplateVersion = {
   saver?: AppUser;
 };
 
+export type TemplatePackage = {
+  id: string;
+  name: string;
+  description: string;
+  store_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  items?: TemplatePackageItem[];
+};
+
+export type TemplatePackageItem = {
+  id: string;
+  package_id: string;
+  template_id: string;
+  sort_order: number;
+};
+
 export type Process = {
   id: string;
   name: string;
