@@ -3,7 +3,8 @@ import { useEffect, useState, useMemo } from "react";
 import {
   Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical,
   Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil,
-  Store as StoreIcon, Building2, Eye, EyeOff, Search,
+  Store as StoreIcon, Building2, Eye, EyeOff, Search, History,
+  GitBranch, Copy, Layers, CheckCircle2 as CheckCircle,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -20,7 +21,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import {
   supabase, type ChecklistTemplate, type ChecklistTemplateItem,
-  type ChecklistTemplateQuestion, type Store, type Forening, logAudit,
+  type ChecklistTemplateQuestion, type Store, type Forening,
+  type TemplateVersion, type Process, logAudit,
 } from "@/lib/supabase";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
@@ -50,18 +52,23 @@ const QUARTER_MONTHS = [
 // Instruction header injected into every downloadable CSV template.
 // Lines starting with '#' are treated as comments and skipped by the importer.
 const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Steg (detaljer);Frågor
+# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
-# Återkommande: daily | every_other_day | weekly | monthly | yearly (lämna tomt för ingen)
-# Veckodagar: kommaseparerade siffror 0–6 (0=Mån, 1=Tis, ... 6=Sön), används när Återkommande=weekly
+# Status: active | review | deprecated | archived  (lämna tomt för active)
+# Version: heltal — lämna tomt, sätts automatiskt
+# Återkommande: daily | every_other_day | weekly | biweekly | monthly | quarterly | yearly (lämna tomt för ingen)
+# Veckodagar: kommaseparerade siffror 0–6 (0=Mån … 6=Sön), används när Återkommande=weekly/biweekly
 #   Exempel: 0,1,4 (Mån, Tis, Fre)
 # Intervall: antal enheter mellan upprepningar (t.ex. 2 = varannan vecka), lämna tomt för 1
-# Förfaller om (dagar): antal dagar tills uppgiften förfaller från skapande (t.ex. 1)
-# Förfallotid (HH:MM): klockslag för förfallodatumet, t.ex. 08:00 (lämna tomt för ingen tid)
-# Startdatum/Slutdatum: ÅÅÅÅ-MM-DD — Slutdatum är obligatoriskt för återkommande mallar
+# Förfaller om (dagar): antal dagar tills uppgiften förfaller (t.ex. 1)
+# Förfallotid (HH:MM): klockslag, t.ex. 08:00 (lämna tomt)
+# Startdatum/Slutdatum: ÅÅÅÅ-MM-DD — Slutdatum obligatoriskt för återkommande
+# Ursprungsmall: ID för föräldramall vid arv (lämna tomt)
+# Arvläge: copy | variant (lämna tomt för ingen arv)
 #
 # Steg: separera med " | "  — lägg till [foto] om foto krävs
+#   Lägg till [dold] för att dölja ett steg ärvt från föräldramall
 #   Exempel: "1. Torka hyllor | 2. Dammsuga [foto] | 3. Kontrollera temperaturer"
 #
 # Frågor: separera med " | " — lägg till [obligatorisk] och/eller [ja_nej]
@@ -69,6 +76,13 @@ const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid im
 #
 # Tips: Spara filen i UTF-8-format och använd semikolon (;) som separator
 `;
+
+const TEMPLATE_STATUS_OPTIONS = [
+  { value: "active", label: "Aktiv", cls: "bg-success/15 text-success border-success/30" },
+  { value: "review", label: "Under granskning", cls: "bg-warning/15 text-warning-foreground border-warning/30" },
+  { value: "deprecated", label: "Utfasad", cls: "bg-muted text-muted-foreground border-border" },
+  { value: "archived", label: "Arkiverad", cls: "bg-muted/50 text-muted-foreground/60 border-border/50" },
+];
 
 type TemplateWithMeta = ChecklistTemplate & {
   storeIds: string[];
@@ -82,6 +96,7 @@ type FormState = {
   description: string;
   category: string;
   priority: string;
+  status: "active" | "review" | "deprecated" | "archived";
   recurrence_rule: string;
   recurrence_days: number[];
   recurrence_interval: number;
@@ -95,17 +110,20 @@ type FormState = {
   isGlobal: boolean;
   isLocked: boolean;
   foreningId: string;
+  changeSummary: string;
   items: { id?: string; label: string; requires_photo: boolean }[];
   questions: { id?: string; label: string; question_type: "text" | "yes_no"; is_required: boolean }[];
 };
 
 const emptyForm = (): FormState => ({
   title: "", description: "", category: "", priority: "Medel",
+  status: "active",
   recurrence_rule: "", recurrence_days: [], recurrence_interval: 1,
   recurrence_months: [], recurrence_month_day: 1,
   recurrence_start: "", recurrence_end: "",
   due_date_offset: "", due_date_time: "",
   storeIds: [], isGlobal: false, isLocked: false, foreningId: "",
+  changeSummary: "",
   items: [{ label: "", requires_photo: false }],
   questions: [],
 });
@@ -128,6 +146,7 @@ function MallarPage() {
   const [templates, setTemplates] = useState<TemplateWithMeta[]>([]);
   const [allStores, setAllStores] = useState<Store[]>([]);
   const [allForeningar, setAllForeningar] = useState<Forening[]>([]);
+  const [allProcesses, setAllProcesses] = useState<Process[]>([]);
   const [hiddenEntries, setHiddenEntries] = useState<HiddenEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -146,6 +165,16 @@ function MallarPage() {
   const [importing, setImporting] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
 
+  // Version history
+  const [versionHistoryTarget, setVersionHistoryTarget] = useState<TemplateWithMeta | null>(null);
+  const [versions, setVersions] = useState<TemplateVersion[]>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [restoreConfirm, setRestoreConfirm] = useState<TemplateVersion | null>(null);
+
+  // Inherit / copy dialog
+  const [inheritTarget, setInheritTarget] = useState<TemplateWithMeta | null>(null);
+  const [inheritMode, setInheritMode] = useState<"copy" | "variant">("copy");
+
   // Bulk operations
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<Set<string>>(new Set());
   const [bulkDeleteTemplatesOpen, setBulkDeleteTemplatesOpen] = useState(false);
@@ -160,7 +189,7 @@ function MallarPage() {
 
   async function load() {
     setLoading(true);
-    const [templatesRes, storesRes, tsRes, foreningarRes, hiddenRes] = await Promise.all([
+    const [templatesRes, storesRes, tsRes, foreningarRes, hiddenRes, processesRes] = await Promise.all([
       supabase.from("checklist_templates")
         .select("*, items:checklist_template_items(*), questions:checklist_template_questions(*)")
         .order("created_at", { ascending: false }),
@@ -168,6 +197,7 @@ function MallarPage() {
       supabase.from("template_stores").select("template_id, store_id"),
       supabase.from("foreningar").select("*").order("name"),
       supabase.from("forening_hidden_templates").select("forening_id, template_id"),
+      supabase.from("processes").select("*").order("name"),
     ]);
 
     const storeAssignments = (tsRes.data ?? []) as { template_id: string; store_id: string }[];
@@ -223,8 +253,116 @@ function MallarPage() {
     setTemplates(filtered);
     setAllStores((storesRes.data ?? []) as Store[]);
     setAllForeningar((foreningarRes.data ?? []) as Forening[]);
+    setAllProcesses((processesRes.data ?? []) as Process[]);
     setHiddenEntries(hidden);
     setLoading(false);
+  }
+
+  async function saveVersionSnapshot(
+    templateId: string,
+    version: number,
+    snapshot: unknown,
+    summary: string,
+  ) {
+    await supabase.from("template_versions").insert({
+      template_id: templateId,
+      version,
+      snapshot,
+      change_summary: summary || "",
+      saved_by: user?.id ?? null,
+    });
+  }
+
+  async function loadVersionHistory(t: TemplateWithMeta) {
+    setVersionHistoryTarget(t);
+    setLoadingVersions(true);
+    const { data } = await supabase
+      .from("template_versions")
+      .select("*")
+      .eq("template_id", t.id)
+      .order("version", { ascending: false });
+    setVersions((data ?? []) as TemplateVersion[]);
+    setLoadingVersions(false);
+  }
+
+  async function restoreVersion(ver: TemplateVersion) {
+    if (!versionHistoryTarget) return;
+    const snap = ver.snapshot as TemplateWithMeta;
+    const newVersion = (versionHistoryTarget.version ?? 1) + 1;
+    await supabase.from("checklist_templates").update({
+      title: snap.title,
+      description: snap.description ?? "",
+      category: snap.category ?? "",
+      priority: snap.priority ?? "Medel",
+      status: snap.status ?? "active",
+      recurrence_rule: snap.recurrence_rule ?? null,
+      recurrence_days: snap.recurrence_days ?? null,
+      recurrence_interval: snap.recurrence_interval ?? null,
+      due_date_offset: snap.due_date_offset ?? null,
+      due_date_time: snap.due_date_time ?? null,
+      version: newVersion,
+      updated_by: user?.id ?? null,
+    }).eq("id", versionHistoryTarget.id);
+
+    // Restore steps
+    await supabase.from("checklist_template_items").delete().eq("template_id", versionHistoryTarget.id);
+    const items = (snap.items ?? []).filter((it: ChecklistTemplateItem) => it.label.trim());
+    if (items.length > 0) {
+      await supabase.from("checklist_template_items").insert(
+        items.map((it: ChecklistTemplateItem, idx: number) => ({ template_id: versionHistoryTarget.id, label: it.label, requires_photo: it.requires_photo, sort_order: idx }))
+      );
+    }
+
+    await saveVersionSnapshot(
+      versionHistoryTarget.id,
+      newVersion,
+      snap,
+      `Återställd till version ${ver.version}`,
+    );
+    logAudit(user?.id ?? null, "template.restore", "checklist_templates", versionHistoryTarget.id, { restored_version: ver.version });
+    setRestoreConfirm(null);
+    setVersionHistoryTarget(null);
+    await load();
+  }
+
+  async function createInheritedTemplate(source: TemplateWithMeta, mode: "copy" | "variant") {
+    const isVariant = mode === "variant";
+    const { data: tmpl } = await supabase.from("checklist_templates").insert({
+      title: `${source.title} (${isVariant ? "variant" : "kopia"})`,
+      description: source.description ?? "",
+      category: source.category ?? "",
+      priority: source.priority ?? "Medel",
+      status: "active",
+      recurrence_rule: source.recurrence_rule ?? null,
+      recurrence_days: source.recurrence_days ?? null,
+      recurrence_interval: source.recurrence_interval ?? null,
+      due_date_offset: source.due_date_offset ?? null,
+      due_date_time: source.due_date_time ?? null,
+      created_by: user?.id ?? null,
+      hierarchy_scope: source.hierarchy_scope ?? "store",
+      is_global: source.is_global,
+      parent_template_id: isVariant ? source.id : null,
+      inherit_mode: isVariant ? "variant" : "copy",
+      version: 1,
+    }).select("id").maybeSingle();
+
+    if (!tmpl?.id) return;
+
+    const validItems = (source.items ?? []).filter(it => it.label.trim());
+    if (validItems.length > 0) {
+      await supabase.from("checklist_template_items").insert(
+        validItems.map((it, idx) => ({ template_id: tmpl.id, label: it.label, requires_photo: it.requires_photo, sort_order: idx }))
+      );
+    }
+
+    if (source.storeIds.length > 0) {
+      const storeRows = source.storeIds.map(sid => ({ template_id: tmpl.id, store_id: sid }));
+      await supabase.from("template_stores").insert(storeRows);
+    }
+
+    logAudit(user?.id ?? null, `template.${mode}`, "checklist_templates", tmpl.id, { source_id: source.id, mode });
+    setInheritTarget(null);
+    await load();
   }
 
   function toggleStore(id: string, list: string[], set: (ids: string[]) => void) {
@@ -265,6 +403,9 @@ function MallarPage() {
       description: form.description.trim(),
       category: form.category.trim(),
       priority: form.priority,
+      status: form.status,
+      version: 1,
+      owner_id: user?.id ?? null,
       recurrence_rule: form.recurrence_rule || null,
       recurrence_days: (form.recurrence_rule === "weekly" || form.recurrence_rule === "biweekly") && form.recurrence_days.length > 0 ? form.recurrence_days : null,
       recurrence_interval: form.recurrence_interval > 1 ? form.recurrence_interval : null,
@@ -300,6 +441,13 @@ function MallarPage() {
     }
 
     logAudit(user?.id ?? null, "template.create", "checklist_templates", tmpl.id, { title: form.title, scope: createScope });
+    // Save initial version snapshot
+    await saveVersionSnapshot(
+      tmpl.id,
+      1,
+      { title: form.title, description: form.description, category: form.category, priority: form.priority, status: form.status, items: validItems, questions: validQuestions },
+      form.changeSummary || "Initial version",
+    );
     await load();
     setSaving(false);
     setShowCreate(false);
@@ -329,6 +477,7 @@ function MallarPage() {
       description: t.description ?? "",
       category: t.category ?? "",
       priority: t.priority ?? "Medel",
+      status: (t.status as FormState["status"]) ?? "active",
       recurrence_rule: t.recurrence_rule ?? "",
       recurrence_days: t.recurrence_days ?? [],
       recurrence_interval: (t as ChecklistTemplate & { recurrence_interval?: number }).recurrence_interval ?? 1,
@@ -342,6 +491,7 @@ function MallarPage() {
       isGlobal: t.is_global ?? false,
       isLocked: t.locked_by_admin ?? false,
       foreningId: t.forening_id ?? "",
+      changeSummary: "",
       items: (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ id: it.id, label: it.label, requires_photo: it.requires_photo })),
       questions: (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q) => ({ id: q.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required })),
     });
@@ -368,6 +518,9 @@ function MallarPage() {
       description: editForm.description.trim(),
       category: editForm.category.trim(),
       priority: editForm.priority,
+      status: editForm.status,
+      version: (editTarget.version ?? 1) + 1,
+      updated_by: user?.id ?? null,
       recurrence_rule: editForm.recurrence_rule || null,
       recurrence_days: (editForm.recurrence_rule === "weekly" || editForm.recurrence_rule === "biweekly") && editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
       recurrence_interval: editForm.recurrence_interval > 1 ? editForm.recurrence_interval : null,
@@ -401,6 +554,16 @@ function MallarPage() {
     }
 
     logAudit(user?.id ?? null, "template.edit", "checklist_templates", editTarget.id, { title: editForm.title });
+    // Save version snapshot after edit
+    const newVersion = (editTarget.version ?? 1) + 1;
+    const validItemsEdit = editForm.items.filter(it => it.label.trim());
+    const validQuestionsEdit = editForm.questions.filter(q => q.label.trim());
+    await saveVersionSnapshot(
+      editTarget.id,
+      newVersion,
+      { title: editForm.title, description: editForm.description, category: editForm.category, priority: editForm.priority, status: editForm.status, items: validItemsEdit, questions: validQuestionsEdit },
+      editForm.changeSummary || "Redigerat",
+    );
     await load();
     setSaving(false);
     setEditTarget(null);
@@ -443,10 +606,10 @@ function MallarPage() {
 
   // CSV: download blank import template with instructions
   const downloadBlankTemplate = () => {
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Steg (detaljer)", "Frågor"];
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor"];
     const example = [
-      "Exempelmall", "Rengöring", "Beskriv mallen här", "Medel", "weekly", "0,1,2,3,4", "1", "1", "08:00",
-      new Date().toISOString().slice(0, 10), "2026-12-31",
+      "Exempelmall", "Rengöring", "Beskriv mallen här", "Medel", "active", "", "weekly", "0,1,2,3,4", "1", "1", "08:00",
+      new Date().toISOString().slice(0, 10), "2026-12-31", "", "",
       "1. Torka hyllor | 2. Dammsuga [foto]",
       "1. Är allt klart? [obligatorisk] [ja_nej]",
     ];
@@ -457,7 +620,7 @@ function MallarPage() {
 
   const exportCSV = () => {
     // Export in identical format to import template so exported files can be re-imported directly
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Steg (detaljer)", "Frågor"];
+    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor"];
     const rows = [
       headers,
       ...templates.map((t) => [
@@ -465,6 +628,8 @@ function MallarPage() {
         t.category ?? "",
         t.description ?? "",
         t.priority ?? "Medel",
+        t.status ?? "active",
+        String(t.version ?? 1),
         t.recurrence_rule ?? "",
         (t.recurrence_days ?? []).join(","),
         t.recurrence_interval != null ? String(t.recurrence_interval) : "",
@@ -472,6 +637,8 @@ function MallarPage() {
         t.due_date_time ?? "",
         (t as ChecklistTemplate & { recurrence_start?: string }).recurrence_start ?? "",
         (t as ChecklistTemplate & { recurrence_end?: string }).recurrence_end ?? "",
+        t.parent_template_id ?? "",
+        t.inherit_mode ?? "",
         (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it, idx) => `${idx + 1}. ${it.label}${it.requires_photo ? " [foto]" : ""}`).join(" | "),
         (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q, idx) => `${idx + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}`).join(" | "),
       ]),
@@ -518,7 +685,7 @@ function MallarPage() {
 
     const rows = lines.slice(1).map(parseRow);
     for (const cols of rows) {
-      const [title, category, description, priority, recurrence, weekdaysRaw, intervalRaw, dueDays, dueTime, startDate, endDate, stepsRaw, questionsRaw] = cols;
+      const [title, category, description, priority, statusRaw, , recurrence, weekdaysRaw, intervalRaw, dueDays, dueTime, startDate, endDate, parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw] = cols;
       if (!title?.trim()) continue;
 
       const recurrenceRule = (recurrence ?? "").trim() || null;
@@ -526,12 +693,20 @@ function MallarPage() {
         ? weekdaysRaw.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 0 && n <= 6)
         : null;
       const recurrenceInterval = intervalRaw?.trim() ? parseInt(intervalRaw.trim()) : null;
+      const templateStatus = (["active", "review", "deprecated", "archived"].includes((statusRaw ?? "").trim()))
+        ? (statusRaw!.trim() as "active" | "review" | "deprecated" | "archived")
+        : "active";
+      const inferredInheritMode = (inheritModeRaw?.trim() === "variant" || inheritModeRaw?.trim() === "copy")
+        ? inheritModeRaw.trim() as "copy" | "variant"
+        : null;
 
       const { data: tmpl } = await supabase.from("checklist_templates").insert({
         title: title.trim(),
         category: (category ?? "").trim(),
         description: (description ?? "").trim(),
         priority: (priority ?? "Medel").trim() || "Medel",
+        status: templateStatus,
+        version: 1,
         recurrence_rule: recurrenceRule,
         recurrence_days: recurrenceDays && recurrenceDays.length > 0 ? recurrenceDays : null,
         recurrence_interval: recurrenceInterval && recurrenceInterval > 1 ? recurrenceInterval : null,
@@ -539,6 +714,8 @@ function MallarPage() {
         recurrence_end: endDate?.trim() || null,
         due_date_offset: dueDays?.trim() ? parseInt(dueDays.trim()) : null,
         due_date_time: dueTime?.trim() || null,
+        parent_template_id: parentTemplateId?.trim() || null,
+        inherit_mode: inferredInheritMode,
         created_by: user?.id ?? null,
         hierarchy_scope: importScope,
         is_global: importScope === "hk",
@@ -627,6 +804,11 @@ function MallarPage() {
       return { label: `${f?.name ?? "Förening"}-mall`, cls: "border-teal-300 text-teal-600" };
     }
     return null;
+  };
+
+  const getStatusBadge = (t: TemplateWithMeta) => {
+    const opt = TEMPLATE_STATUS_OPTIONS.find(o => o.value === (t.status ?? "active"));
+    return opt ?? TEMPLATE_STATUS_OPTIONS[0];
   };
 
   const isHiddenForMyForening = (t: TemplateWithMeta) =>
@@ -779,6 +961,32 @@ function MallarPage() {
                 <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs font-medium shadow-none focus:ring-0 justify-end"><SelectValue /></SelectTrigger>
                 <SelectContent>{["Låg", "Medel", "Hög", "Kritisk"].map((pr) => <SelectItem key={pr} value={pr}>{pr}</SelectItem>)}</SelectContent>
               </Select>
+            </div>
+
+            {/* Status */}
+            <div className="flex items-center gap-3 px-4 py-3">
+              <CheckCircle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+              <span className="w-20 shrink-0 text-xs text-muted-foreground">Status</span>
+              <Select value={f.status} onValueChange={(v) => setF((p) => ({ ...p, status: v as FormState["status"] }))}>
+                <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs font-medium shadow-none focus:ring-0 justify-end"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TEMPLATE_STATUS_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Change summary */}
+            <div className="flex items-start gap-3 px-4 py-3">
+              <History className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
+              <div className="flex flex-col gap-1 flex-1 min-w-0">
+                <span className="text-xs text-muted-foreground">Ändringsnotering</span>
+                <Input
+                  placeholder="Vad ändrades? (valfritt)"
+                  value={f.changeSummary}
+                  onChange={(e) => setF((p) => ({ ...p, changeSummary: e.target.value }))}
+                  className="h-7 border border-border/60 text-xs"
+                />
+              </div>
             </div>
 
             {/* Förfallodagar */}
@@ -1218,17 +1426,25 @@ function MallarPage() {
                               <p className="font-medium">
                                 {t.title}
                                 {isHidden && <span className="ml-2 text-xs text-muted-foreground">(dold för din förening)</span>}
+                                {t.parent_template_id && (
+                                  <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-muted-foreground/70">
+                                    <GitBranch className="h-3 w-3" />
+                                    {t.inherit_mode === "variant" ? "Variant" : "Kopia"}
+                                  </span>
+                                )}
                               </p>
-                              <div className="mt-0.5 flex items-center gap-2">
+                              <div className="mt-0.5 flex items-center gap-2 flex-wrap">
                                 {t.category && <Badge variant="secondary" className="text-xs">{t.category}</Badge>}
                                 {scopeBadge && (
                                   <Badge variant="outline" className={cn("text-xs", scopeBadge.cls)}>{scopeBadge.label}</Badge>
                                 )}
+                                {(() => { const sb = getStatusBadge(t); return sb.value !== "active" ? <Badge variant="outline" className={cn("text-xs border", sb.cls)}>{sb.label}</Badge> : null; })()}
                                 {t.locked_by_admin && !t.is_global && (
                                   <Badge variant="outline" className="text-xs border-amber-300 text-amber-600">Skrivskyddad</Badge>
                                 )}
                                 <span className="text-xs text-muted-foreground">{t.items?.length ?? 0} steg</span>
                                 {(t.questions?.length ?? 0) > 0 && <span className="text-xs text-muted-foreground">{t.questions?.length} frågor</span>}
+                                {(t.version ?? 1) > 1 && <span className="text-xs text-muted-foreground/60">v{t.version}</span>}
                               </div>
                             </div>
                           </button>
@@ -1243,6 +1459,28 @@ function MallarPage() {
                                 title={isHidden ? "Visa HK-mall för din förening" : "Dölj HK-mall för din förening"}
                               >
                                 {isHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                              </Button>
+                            )}
+                            {/* Version history */}
+                            {isManager && (
+                              <Button
+                                variant="ghost" size="icon"
+                                className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-foreground"
+                                onClick={(e) => { e.stopPropagation(); void loadVersionHistory(t); }}
+                                title="Versionshistorik"
+                              >
+                                <History className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {/* Copy / Variant */}
+                            {isManager && (
+                              <Button
+                                variant="ghost" size="icon"
+                                className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-foreground"
+                                onClick={(e) => { e.stopPropagation(); setInheritTarget(t); setInheritMode("copy"); }}
+                                title="Kopiera eller skapa variant"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
                               </Button>
                             )}
                             {canEdit(t) && (
@@ -1417,6 +1655,116 @@ function MallarPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* VERSION HISTORY DIALOG */}
+      <Dialog open={!!versionHistoryTarget} onOpenChange={(o) => !o && setVersionHistoryTarget(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col p-0 gap-0">
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+            <History className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Versionshistorik</span>
+            <span className="text-sm text-muted-foreground truncate">{versionHistoryTarget?.title}</span>
+            <span className="ml-auto text-xs text-muted-foreground">Aktuell: v{versionHistoryTarget?.version ?? 1}</span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            {loadingVersions ? (
+              <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />)}</div>
+            ) : versions.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Ingen versionshistorik tillgänglig än.</p>
+            ) : (
+              <div className="space-y-2">
+                {versions.map((v) => (
+                  <div key={v.id} className="flex items-start gap-3 rounded-xl border border-border/60 bg-card p-3">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                      v{v.version}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground">{v.change_summary || "Sparad"}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {new Date(v.saved_at).toLocaleString("sv-SE")}
+                      </p>
+                    </div>
+                    {isManager && v.version !== (versionHistoryTarget?.version ?? 1) && (
+                      <Button
+                        variant="outline" size="sm"
+                        className="rounded-full h-7 text-xs"
+                        onClick={() => setRestoreConfirm(v)}
+                      >
+                        Återställ
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* RESTORE VERSION CONFIRM */}
+      <AlertDialog open={!!restoreConfirm} onOpenChange={(o) => !o && setRestoreConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Återställ version {restoreConfirm?.version}</AlertDialogTitle>
+            <AlertDialogDescription>
+              En ny version skapas med innehållet från version {restoreConfirm?.version}. Nuvarande version bevaras i historiken.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction onClick={() => restoreConfirm && void restoreVersion(restoreConfirm)}>
+              Återställ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* COPY / VARIANT DIALOG */}
+      <Dialog open={!!inheritTarget} onOpenChange={(o) => !o && setInheritTarget(null)}>
+        <DialogContent className="max-w-md">
+          <div className="space-y-4 p-4">
+            <h2 className="text-base font-semibold">Kopiera mall: {inheritTarget?.title}</h2>
+            <p className="text-sm text-muted-foreground">Välj hur du vill använda den här mallen som utgångspunkt:</p>
+
+            <div className="space-y-2">
+              <button
+                className={cn(
+                  "w-full rounded-xl border p-3 text-left transition-colors",
+                  inheritMode === "copy" ? "border-primary bg-primary/5" : "border-border/60 hover:border-primary/40"
+                )}
+                onClick={() => setInheritMode("copy")}
+              >
+                <div className="flex items-center gap-2">
+                  <Copy className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium">Kopiera mall</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">Fristående kopia — ändringar i originalet påverkar inte kopian.</p>
+              </button>
+
+              <button
+                className={cn(
+                  "w-full rounded-xl border p-3 text-left transition-colors",
+                  inheritMode === "variant" ? "border-primary bg-primary/5" : "border-border/60 hover:border-primary/40"
+                )}
+                onClick={() => setInheritMode("variant")}
+              >
+                <div className="flex items-center gap-2">
+                  <GitBranch className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium">Skapa lokal variant</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">Behåller koppling — du kan lägga till steg, dölja steg och skriva över beskrivningar.</p>
+              </button>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="ghost" onClick={() => setInheritTarget(null)}>Avbryt</Button>
+              <Button onClick={() => inheritTarget && void createInheritedTemplate(inheritTarget, inheritMode)}>
+                <Layers className="mr-2 h-4 w-4" />
+                {inheritMode === "copy" ? "Skapa kopia" : "Skapa variant"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

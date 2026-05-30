@@ -141,6 +141,7 @@ export type Task = {
   priority: "Låg" | "Medel" | "Hög" | "Kritisk";
   status: "todo" | "progress" | "done" | "late" | "cancelled";
   due_date: string | null;
+  due_date_time: string | null;
   recurring: string | null;
   recurrence_rule: string | null;
   recurrence_days: number[] | null;
@@ -153,6 +154,11 @@ export type Task = {
   deleted_periods: string[] | null;
   completed_at: string | null;
   sap_article_id: string | null;
+  // Sub-task / process fields
+  completion_mode: "manual" | "auto_from_children" | "auto_complete_children";
+  sub_task_order: number | null;
+  process_id: string | null;
+  process_instance_id: string | null;
   created_at: string;
   store?: Store;
   assignee?: AppUser;
@@ -222,19 +228,72 @@ export type ChecklistTemplate = {
   recurrence_rule: string | null;
   recurrence_days: number[] | null;
   recurrence_interval: number | null;
+  recurrence_months?: number[] | null;
+  recurrence_month_day?: number | null;
+  recurrence_start?: string | null;
+  recurrence_end?: string | null;
   due_date_offset: number | null;
   due_date_time: string | null;
+  // Ownership & status
+  status: "active" | "review" | "deprecated" | "archived";
+  version: number;
+  owner_id: string | null;
+  updated_by: string | null;
   created_by: string | null;
+  // Hierarchy
   is_global: boolean;
   locked_by_admin: boolean;
   is_system_locked?: boolean;
   hierarchy_scope?: "store" | "hk" | "forening" | null;
   forening_id?: string | null;
   distrikt_id?: string | null;
+  // Inheritance
+  parent_template_id?: string | null;
+  inherit_mode?: "copy" | "variant" | null;
+  hidden_step_ids?: string[] | null;
+  overridden_steps?: Array<{ parent_step_id: string; label: string; requires_photo: boolean }> | null;
+  // Process
+  process_id?: string | null;
   created_at: string;
   updated_at: string;
   items?: ChecklistTemplateItem[];
   stores?: Store[];
+};
+
+export type TemplateVersion = {
+  id: string;
+  template_id: string;
+  version: number;
+  snapshot: ChecklistTemplate & { items?: ChecklistTemplateItem[]; questions?: ChecklistTemplateQuestion[] };
+  change_summary: string;
+  saved_by: string | null;
+  saved_at: string;
+  saver?: AppUser;
+};
+
+export type Process = {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  store_id: string | null;
+  hierarchy_scope: string;
+  forening_id: string | null;
+  is_global: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  store?: Store;
+  templates?: ProcessTemplate[];
+};
+
+export type ProcessTemplate = {
+  id: string;
+  process_id: string;
+  template_id: string;
+  sort_order: number;
+  label: string;
+  template?: ChecklistTemplate;
 };
 
 export type ChecklistTemplateItem = {
