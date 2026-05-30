@@ -47,33 +47,44 @@ const QUARTER_MONTHS = [
 // Instruction header injected into every downloadable CSV template.
 // Lines starting with '#' are treated as comments and skipped by the importer.
 const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor;Tidsluckor (HH:MM)
+# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Månader;Månadsdag;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor;Tidsluckor (HH:MM)
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Status: active | review | deprecated | archived  (lämna tomt för active)
 # Version: heltal — lämna tomt, sätts automatiskt
-# Återkommande: daily | every_other_day | weekly | biweekly | monthly | quarterly | yearly (lämna tomt för ingen)
-# Veckodagar: kommaseparerade siffror 0–6 (0=Mån … 6=Sön), används när Återkommande=weekly/biweekly
-#   Exempel: 0,1,4 (Mån, Tis, Fre)
-# Intervall: antal enheter mellan upprepningar (t.ex. 2 = varannan vecka), lämna tomt för 1
-# Förfaller om (dagar): antal dagar tills uppgiften förfaller (t.ex. 1)
-# Förfallotid (HH:MM): klockslag, t.ex. 08:00 (lämna tomt) — ANVÄNDS INTE om Tidsluckor anges
+#
+# Återkommande: daily | every_other_day | weekly | biweekly | monthly | quarterly | yearly
+# Veckodagar: kommaseparerade 0–6 (0=Mån … 6=Sön) — används när Återkommande=weekly/biweekly
+#   Exempel: 0,1,4  (Mån, Tis, Fre)
+# Månader: kommaseparerade månadsnummer 1–12 — används när Återkommande=yearly (specifika månader)
+#   Exempel: 1,4,7,10  (jan, apr, jul, okt)
+# Månadsdag: dag i månaden 1–31 — används när Återkommande=monthly/yearly
+# Intervall: enheter mellan upprepningar (t.ex. 2 = varannan), lämna tomt för 1
 # Startdatum/Slutdatum: ÅÅÅÅ-MM-DD
 # Ursprungsmall: ID för föräldramall vid arv (lämna tomt)
-# Arvläge: copy | variant (lämna tomt för ingen arv)
+# Arvläge: copy | variant (lämna tomt)
+# Förfaller om (dagar): antal dagar från skapandet tills uppgiften förfaller
+# Förfallotid (HH:MM): klockslag — ANVÄNDS INTE om Tidsluckor är ifylld
 #
-# Steg: separera med " | "  — lägg till [foto] om foto krävs
-#   Villkorliga steg: lägg till [om:FrågeLabel=ja] eller [om:FrågeLabel=nej] för att koppla steget till en ja/nej-fråga
-#   Exempel: "1. Torka hyllor | 2. Dammsuga [foto] | 3. Åtgärda [om:Är allt klart?=nej]"
+# Steg: pipe-separerade (|) checkpunkter
+#   [foto]               — kräver fotobevis
+#   [om:FrågeLabel=ja]   — steget visas bara om frågan besvarats med "ja"
+#   [om:FrågeLabel=nej]  — steget visas bara om frågan besvarats med "nej"
+#   Frågelabeln måste matcha exakt en fråga i Frågor-kolumnen
+#   Exempel:
+#     "1. Torka hyllor | 2. Dammsuga [foto] | 3. Åtgärda fel [om:Finns avvikelser?=ja]"
 #
-# Frågor: separera med " | " — lägg till [obligatorisk] och/eller [ja_nej]
-#   Exempel: "1. Är allt klart? [obligatorisk] [ja_nej] | 2. Kommentar"
+# Frågor: pipe-separerade frågor
+#   [obligatorisk]  — måste besvaras innan uppgiften kan slutföras
+#   [ja_nej]        — ger Ja/Nej-knappar istället för fritextfält (krävs för villkorliga steg)
+#   Exempel:
+#     "1. Finns avvikelser? [obligatorisk] [ja_nej] | 2. Kommentar"
 #
-# Tidsluckor (HH:MM): pipe-separerade klockslag — när detta anges skapas EN UPPGIFT PER TIDSLUCKA
-#   Förfallotid-kolumnen ignoreras om Tidsluckor är ifylld
+# Tidsluckor (HH:MM): pipe-separerade klockslag — EN UPPGIFT skapas per tidslucka
+#   Förfallotid ignoreras om Tidsluckor är ifylld
 #   Exempel: "08:00 | 12:00 | 16:00"
 #
-# Tips: Spara filen i UTF-8-format och använd semikolon (;) som separator
+# Tips: Spara i UTF-8 och använd semikolon (;) som separator
 `;
 
 const TEMPLATE_STATUS_OPTIONS = [
@@ -832,22 +843,44 @@ function MallarPage() {
 
   // CSV: download blank import template with instructions
   const downloadBlankTemplate = () => {
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)"];
-    const example = [
-      "Exempelmall", "Rengöring", "Beskriv mallen här", "Medel", "active", "", "weekly", "0,1,2,3,4", "1", "1", "08:00",
-      new Date().toISOString().slice(0, 10), "2026-12-31", "", "",
-      "1. Torka hyllor | 2. Dammsuga [foto] | 3. Städa entré [om:Är allt klart?=ja]",
-      "1. Är allt klart? [obligatorisk] [ja_nej]",
-      "08:00 | 12:00 | 16:00",
+    const headers = [
+      "Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version",
+      "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
+      "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
+      "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
+    ];
+    const today = new Date().toISOString().slice(0, 10);
+    const exampleA = [
+      "Daglig öppningskontroll", "Drift", "Genomförs varje morgon vid öppning", "Hög", "active", "",
+      "weekly", "0,1,2,3,4", "", "", "1",
+      "0", "07:00", today, "2026-12-31",
+      "", "",
+      "1. Lås upp entré | 2. Kontrollera temperatur kyl [foto] | 3. Rapportera avvikelse [om:Temperaturavvikelse?=ja]",
+      "1. Temperaturavvikelse? [obligatorisk] [ja_nej] | 2. Notering",
+      "",
+    ];
+    const exampleB = [
+      "Städning med tidsluckor", "Städ", "Tre rengöringsrundor per dag", "Medel", "active", "",
+      "daily", "", "", "", "1",
+      "0", "", today, "2026-12-31",
+      "", "",
+      "1. Torka bord och bänkar | 2. Dammsuga [foto] | 3. Töm sopkorgar",
+      "",
+      "08:00 | 13:00 | 17:00",
     ];
     const csv = CSV_TEMPLATE_INSTRUCTIONS
-      + [headers, example].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
+      + [headers, exampleA, exampleB].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
     triggerDownload(csv, "mall-import-template.csv");
   };
 
   const exportCSV = () => {
     // Export in identical format to import template so exported files can be re-imported directly
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)"];
+    const headers = [
+      "Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version",
+      "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
+      "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
+      "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
+    ];
     const rows = [
       headers,
       ...templates.map((t) => {
@@ -861,6 +894,14 @@ function MallarPage() {
           }
           return s;
         }).join(" | ");
+        const questionsStr = sortedQuestions.map((q, idx) =>
+          `${idx + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}`
+        ).join(" | ");
+        const tAny = t as ChecklistTemplate & {
+          recurrence_start?: string; recurrence_end?: string;
+          recurrence_months?: number[]; recurrence_month_day?: number;
+          time_slots?: string[];
+        };
         return [
           t.title,
           t.category ?? "",
@@ -870,16 +911,18 @@ function MallarPage() {
           String(t.version ?? 1),
           t.recurrence_rule ?? "",
           (t.recurrence_days ?? []).join(","),
+          (tAny.recurrence_months ?? []).join(","),
+          tAny.recurrence_month_day != null ? String(tAny.recurrence_month_day) : "",
           t.recurrence_interval != null ? String(t.recurrence_interval) : "",
           t.due_date_offset != null ? String(t.due_date_offset) : "",
           t.due_date_time ?? "",
-          (t as ChecklistTemplate & { recurrence_start?: string }).recurrence_start ?? "",
-          (t as ChecklistTemplate & { recurrence_end?: string }).recurrence_end ?? "",
+          tAny.recurrence_start ?? "",
+          tAny.recurrence_end ?? "",
           t.parent_template_id ?? "",
           t.inherit_mode ?? "",
           stepsStr,
-          sortedQuestions.map((q, idx) => `${idx + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}`).join(" | "),
-          (t as ChecklistTemplate & { time_slots?: string[] }).time_slots?.join(" | ") ?? "",
+          questionsStr,
+          tAny.time_slots?.join(" | ") ?? "",
         ];
       }),
     ];
@@ -925,13 +968,27 @@ function MallarPage() {
 
     const rows = lines.slice(1).map(parseRow);
     for (const cols of rows) {
-      const [title, category, description, priority, statusRaw, , recurrence, weekdaysRaw, intervalRaw, dueDays, dueTime, startDate, endDate, parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw, timeSlotsRaw] = cols;
+      // Column order (0-indexed):
+      // 0:Titel 1:Kategori 2:Beskrivning 3:Prioritet 4:Status 5:Version
+      // 6:Återkommande 7:Veckodagar 8:Månader 9:Månadsdag 10:Intervall
+      // 11:Förfaller om 12:Förfallotid 13:Startdatum 14:Slutdatum
+      // 15:Ursprungsmall 16:Arvläge 17:Steg 18:Frågor 19:Tidsluckor
+      const [
+        title, category, description, priority, statusRaw, ,
+        recurrence, weekdaysRaw, monthsRaw, monthDayRaw, intervalRaw,
+        dueDays, dueTime, startDate, endDate,
+        parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw, timeSlotsRaw,
+      ] = cols;
       if (!title?.trim()) continue;
 
       const recurrenceRule = (recurrence ?? "").trim() || null;
       const recurrenceDays = weekdaysRaw?.trim()
         ? weekdaysRaw.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 0 && n <= 6)
         : null;
+      const recurrenceMonths = monthsRaw?.trim()
+        ? monthsRaw.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 12)
+        : null;
+      const recurrenceMonthDay = monthDayRaw?.trim() ? parseInt(monthDayRaw.trim()) : null;
       const recurrenceInterval = intervalRaw?.trim() ? parseInt(intervalRaw.trim()) : null;
       const templateStatus = (["active", "review", "deprecated", "archived"].includes((statusRaw ?? "").trim()))
         ? (statusRaw!.trim() as "active" | "review" | "deprecated" | "archived")
@@ -949,6 +1006,8 @@ function MallarPage() {
         version: 1,
         recurrence_rule: recurrenceRule,
         recurrence_days: recurrenceDays && recurrenceDays.length > 0 ? recurrenceDays : null,
+        recurrence_months: recurrenceMonths && recurrenceMonths.length > 0 ? recurrenceMonths : null,
+        recurrence_month_day: recurrenceMonthDay && !isNaN(recurrenceMonthDay) ? recurrenceMonthDay : null,
         recurrence_interval: recurrenceInterval && recurrenceInterval > 1 ? recurrenceInterval : null,
         recurrence_start: startDate?.trim() || null,
         recurrence_end: endDate?.trim() || null,
@@ -962,9 +1021,9 @@ function MallarPage() {
         time_slots: timeSlotsRaw?.trim()
           ? timeSlotsRaw.split("|").map(s => s.trim()).filter(Boolean)
           : null,
-      forening_id: importScope === "forening"
-        ? (user?.forening_id ?? (result.options.foreningId ? String(result.options.foreningId) : null) ?? null)
-        : null,
+        forening_id: importScope === "forening"
+          ? (user?.forening_id ?? (result.options.foreningId ? String(result.options.foreningId) : null) ?? null)
+          : null,
       }).select("id").maybeSingle();
 
       if (!tmpl?.id) continue;
