@@ -1782,9 +1782,11 @@ function MallarPage() {
             <Button size="sm" className="rounded-full h-8 gap-1.5 text-xs bg-primary text-primary-foreground" onClick={openBulkCreate}>
               <ListChecks className="h-3.5 w-3.5" /> Skapa uppgifter
             </Button>
-            <Button variant="destructive" size="sm" className="rounded-full h-8 gap-1.5 text-xs" onClick={() => setBulkDeleteTemplatesOpen(true)}>
-              <Trash2 className="h-3.5 w-3.5" /> Ta bort markerade
-            </Button>
+            {[...selectedTemplateIds].every((id) => { const t = templates.find((x) => x.id === id); return t ? canDelete(t) : false; }) && (
+              <Button variant="destructive" size="sm" className="rounded-full h-8 gap-1.5 text-xs" onClick={() => setBulkDeleteTemplatesOpen(true)}>
+                <Trash2 className="h-3.5 w-3.5" /> Ta bort markerade
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -1960,7 +1962,7 @@ function MallarPage() {
                         )}
                       >
                         <div className="flex w-full items-center justify-between hover:bg-muted/20">
-                          {isManager && canDelete(t) && (
+                          {isManager && (
                             <div className="pl-4 shrink-0" onClick={(e) => e.stopPropagation()}>
                               <Checkbox
                                 checked={selectedTemplateIds.has(t.id)}
@@ -2138,6 +2140,18 @@ function MallarPage() {
                             )}
                             <div className="overflow-hidden rounded-2xl border border-border/40 bg-card/80 shadow-[var(--shadow-sm)]">
                               <div className="flex w-full items-center justify-between hover:bg-muted/20">
+                                {isManager && (
+                                  <div className="pl-4 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                    <Checkbox
+                                      checked={selectedTemplateIds.has(v.id)}
+                                      onCheckedChange={(checked) => {
+                                        const next = new Set(selectedTemplateIds);
+                                        if (checked) next.add(v.id); else next.delete(v.id);
+                                        setSelectedTemplateIds(next);
+                                      }}
+                                    />
+                                  </div>
+                                )}
                                 <button
                                   className="flex flex-1 items-center gap-3 px-5 py-3.5 text-left"
                                   onClick={() => setExpanded(expanded === v.id ? null : v.id)}
