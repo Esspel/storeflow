@@ -806,17 +806,26 @@ function MallarPage() {
     }
 
     logAudit(user?.id ?? null, "template.variant.auto", "checklist_templates", tmpl.id, { source_id: source.id });
+
+    // Fetch the newly created variant with all its relations and open it for editing
+    const { data: fresh } = await supabase
+      .from("checklist_templates")
+      .select("*, items:checklist_template_items(*), questions:checklist_template_questions(*)")
+      .eq("id", tmpl.id)
+      .maybeSingle();
     await load();
-    // Find newly created template and open it for editing
-    // Reload just fetched it — find in templates state after load
-    // Use a small delay to let state settle
-    setTimeout(() => {
-      setTemplates(prev => {
-        const newT = prev.find(x => x.id === tmpl.id);
-        if (newT) openEdit(newT);
-        return prev;
-      });
-    }, 100);
+    if (fresh) {
+      const storeAssignments: { template_id: string; store_id: string }[] = storeId
+        ? [{ template_id: tmpl.id, store_id: storeId }]
+        : [];
+      const withMeta = {
+        ...(fresh as ChecklistTemplate),
+        storeIds: storeAssignments.map(a => a.store_id),
+        questions: (fresh as ChecklistTemplate & { questions?: ChecklistTemplateQuestion[] }).questions ?? [],
+        items: (fresh as ChecklistTemplate & { items?: ChecklistTemplateItem[] }).items ?? [],
+      } as TemplateWithMeta;
+      openEdit(withMeta);
+    }
   }
 
   const displayStores = isAdmin ? allStores : userStores;

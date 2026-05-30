@@ -396,7 +396,11 @@ function TasksPage() {
   const [newTask, _setNewTask] = useState<ReturnType<typeof emptyForm>>(() => {
     try {
       const saved = localStorage.getItem(`sf-task-draft-${user?.id ?? ""}`);
-      if (saved) return JSON.parse(saved) as ReturnType<typeof emptyForm>;
+      if (saved) {
+        const parsed = JSON.parse(saved) as ReturnType<typeof emptyForm>;
+        // Ensure fields added in newer versions always exist
+        return { ...emptyForm(parsed.store_id ?? ""), ...parsed, time_slots: parsed.time_slots ?? [] };
+      }
     } catch {}
     return emptyForm(activeStore?.id ?? "");
   });
@@ -1071,6 +1075,7 @@ function TasksPage() {
       store_id: task.store_id ?? "",
       due_date: task.due_date ? utcIsoToLocalInput(task.due_date) : "",
       due_date_time: (task as TaskFull & { due_date_time?: string }).due_date_time ?? "",
+      time_slots: [],
       recurrence_rule: task.recurrence_rule ?? "",
       recurrence_days: task.recurrence_days ?? [],
       recurrence_interval: task.recurrence_interval ?? 1,
