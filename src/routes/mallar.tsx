@@ -216,6 +216,10 @@ function MallarPage() {
   const [editPackageTarget, setEditPackageTarget] = useState<TemplatePackage | null>(null);
   const [activatePackageTarget, setActivatePackageTarget] = useState<TemplatePackage | null>(null);
 
+  // Merge: when a parent HK/forening template has been updated after a local variant was created
+  const [mergeTarget, setMergeTarget] = useState<{ variant: TemplateWithMeta; parent: TemplateWithMeta } | null>(null);
+  const [merging, setMerging] = useState(false);
+
   // View filter: "all" | "hk" | "forening" | "store"
   const [viewFilter, setViewFilter] = useState<"all" | "hk" | "forening" | "store">("all");
   const [search, setSearch] = useState("");
@@ -848,6 +852,46 @@ function MallarPage() {
     }
   }
 
+  // Merge changes from a parent HK/forening template into a local variant
+  async function mergeFromParent(variant: TemplateWithMeta, parent: TemplateWithMeta) {
+    setMerging(true);
+    // Update variant metadata to match parent (title, description, category, priority, recurrence)
+    await supabase.from("checklist_templates").update({
+      title: parent.title,
+      description: parent.description ?? "",
+      category: parent.category ?? "",
+      priority: parent.priority ?? "Medel",
+      recurrence_rule: parent.recurrence_rule ?? null,
+      recurrence_days: parent.recurrence_days ?? null,
+      recurrence_interval: parent.recurrence_interval ?? null,
+      due_date_offset: parent.due_date_offset ?? null,
+      due_date_time: parent.due_date_time ?? null,
+    }).eq("id", variant.id);
+
+    // Replace checklist items with parent's items
+    await supabase.from("checklist_template_items").delete().eq("template_id", variant.id);
+    const validItems = (parent.items ?? []).filter((it) => it.label.trim());
+    if (validItems.length > 0) {
+      await supabase.from("checklist_template_items").insert(
+        validItems.map((it, idx) => ({ template_id: variant.id, label: it.label, requires_photo: it.requires_photo, sort_order: idx }))
+      );
+    }
+
+    // Replace questions with parent's questions
+    await supabase.from("checklist_template_questions").delete().eq("template_id", variant.id);
+    const validQuestions = (parent.questions ?? []).filter((q) => q.label.trim());
+    if (validQuestions.length > 0) {
+      await supabase.from("checklist_template_questions").insert(
+        validQuestions.map((q, idx) => ({ template_id: variant.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: idx }))
+      );
+    }
+
+    logAudit(user?.id ?? null, "template.variant.merge", "checklist_templates", variant.id, { parent_id: parent.id });
+    setMerging(false);
+    setMergeTarget(null);
+    await load();
+  }
+
   const displayStores = isAdmin ? allStores : userStores;
 
   // CSV: download blank import template with instructions
@@ -1124,9 +1168,40 @@ function MallarPage() {
   }, [templates, search, filterCategory, filterPriority]);
 
   // Templates grouped for display
+  // Local variants (inherit_mode='variant', parent_template_id set) are nested under their parent — exclude from store group
+  const variantTemplateIds = useMemo(
+    () => new Set(filteredTemplates.filter((t) => t.inherit_mode === "variant" && t.parent_template_id).map((t) => t.id)),
+    [filteredTemplates]
+  );
+  // Map from parent id → local variants owned by the current store
+  const variantsByParent = useMemo(() => {
+    const map = new Map<string, TemplateWithMeta[]>();
+    for (const t of filteredTemplates) {
+      if (t.inherit_mode === "variant" && t.parent_template_id) {
+        const arr = map.get(t.parent_template_id) ?? [];
+        arr.push(t);
+        map.set(t.parent_template_id, arr);
+      }
+    }
+    return map;
+  }, [filteredTemplates]);
+
   const hkTemplates = filteredTemplates.filter((t) => t.hierarchy_scope === "hk" || (t.is_global && !t.hierarchy_scope));
   const foreningTemplates = filteredTemplates.filter((t) => t.hierarchy_scope === "forening");
-  const storeTemplates = filteredTemplates.filter((t) => !t.hierarchy_scope || t.hierarchy_scope === "store");
+  // Exclude variants that have a visible parent — they'll be nested under the parent
+  const parentIdsInView = useMemo(() => {
+    const ids = new Set<string>();
+    for (const t of filteredTemplates) {
+      if (t.hierarchy_scope === "hk" || t.is_global || t.hierarchy_scope === "forening") ids.add(t.id);
+    }
+    return ids;
+  }, [filteredTemplates]);
+  const storeTemplates = filteredTemplates.filter((t) => {
+    if (t.hierarchy_scope && t.hierarchy_scope !== "store") return false;
+    // Hide variants whose parent is visible in hk/forening groups (they render inline)
+    if (t.inherit_mode === "variant" && t.parent_template_id && parentIdsInView.has(t.parent_template_id)) return false;
+    return true;
+  });
 
   const visibleGroups: { label: string; badge: string; badgeClass: string; items: TemplateWithMeta[] }[] = [];
   if (viewFilter === "all" || viewFilter === "hk") {
@@ -1875,9 +1950,10 @@ function MallarPage() {
                   {group.items.map((t) => {
                     const scopeBadge = getTemplateBadge(t);
                     const isHidden = isHiddenForMyForening(t);
+                    const nestedVariants = variantsByParent.get(t.id) ?? [];
                     return (
+                      <div key={t.id}>
                       <div
-                        key={t.id}
                         className={cn(
                           "overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]",
                           isHidden && "opacity-60"
@@ -2039,6 +2115,96 @@ function MallarPage() {
                           </div>
                         )}
                       </div>
+
+                      {/* Nested local variants for this parent */}
+                      {nestedVariants.map((v) => {
+                        const isStale = v.created_at < t.updated_at;
+                        return (
+                          <div key={v.id} className="ml-6 mt-1.5">
+                            {/* Stale variant banner */}
+                            {isStale && (
+                              <div className="mb-1.5 flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+                                <span className="flex items-center gap-1.5">
+                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                  Den centrala mallen har uppdaterats sedan din lokala variant skapades.
+                                </span>
+                                <button
+                                  className="ml-3 shrink-0 font-medium underline underline-offset-2 hover:no-underline"
+                                  onClick={() => setMergeTarget({ variant: v, parent: t })}
+                                >
+                                  Granska &amp; synka
+                                </button>
+                              </div>
+                            )}
+                            <div className="overflow-hidden rounded-2xl border border-border/40 bg-card/80 shadow-[var(--shadow-sm)]">
+                              <div className="flex w-full items-center justify-between hover:bg-muted/20">
+                                <button
+                                  className="flex flex-1 items-center gap-3 px-5 py-3.5 text-left"
+                                  onClick={() => setExpanded(expanded === v.id ? null : v.id)}
+                                >
+                                  {expanded === v.id ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                                  <div>
+                                    <p className="font-medium text-sm">
+                                      {v.title}
+                                      <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-primary/70">
+                                        <GitBranch className="h-3 w-3" />
+                                        Lokal variant
+                                      </span>
+                                    </p>
+                                    <div className="mt-0.5 flex items-center gap-2 flex-wrap">
+                                      {v.category && <Badge variant="secondary" className="text-xs">{v.category}</Badge>}
+                                      <span className="text-xs text-muted-foreground">{v.items?.length ?? 0} steg</span>
+                                    </div>
+                                  </div>
+                                </button>
+                                <div className="mr-3 flex items-center gap-1">
+                                  {canEdit(v) && (
+                                    <Button
+                                      variant="ghost" size="icon"
+                                      className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-primary"
+                                      onClick={(e) => { e.stopPropagation(); openEdit(v); }}
+                                      aria-label="Redigera lokal variant"
+                                      title="Redigera lokal variant"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                  {canDelete(v) && (
+                                    <Button
+                                      variant="ghost" size="icon"
+                                      className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-destructive"
+                                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(v); }}
+                                      aria-label="Ta bort lokal variant"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                              {expanded === v.id && (
+                                <div className="border-t border-border/60 px-5 py-4 space-y-3">
+                                  {v.description && <p className="text-sm text-muted-foreground">{v.description}</p>}
+                                  {(v.items?.length ?? 0) > 0 && (
+                                    <div>
+                                      <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">Checkpoints</p>
+                                      <ol className="space-y-2">
+                                        {(v.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((item: ChecklistTemplateItem, idx: number) => (
+                                          <li key={item.id} className="flex items-center gap-2.5 text-sm">
+                                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">{idx + 1}</span>
+                                            <span>{item.label}</span>
+                                            {item.requires_photo && <Badge variant="secondary" className="text-xs">Foto krävs</Badge>}
+                                          </li>
+                                        ))}
+                                      </ol>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      </div>
                     );
                   })}
                 </div>
@@ -2140,6 +2306,29 @@ function MallarPage() {
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteTemplate}>
               Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* MERGE DIALOG */}
+      <AlertDialog open={!!mergeTarget} onOpenChange={(o) => !o && setMergeTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Synka med central mall</AlertDialogTitle>
+            <AlertDialogDescription>
+              Den centrala mallen <strong>{mergeTarget?.parent.title}</strong> har uppdaterats sedan din lokala variant skapades. Vill du ersätta din variants innehåll (titel, beskrivning, checkpoints och frågor) med den senaste versionen från den centrala mallen?
+              <br /><br />
+              <span className="text-amber-600 dark:text-amber-400 font-medium">Dina egna ändringar i varianten skrivs över.</span> Butikstilldelning och historik bevaras.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={merging}>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={merging}
+              onClick={() => mergeTarget && void mergeFromParent(mergeTarget.variant, mergeTarget.parent)}
+            >
+              {merging ? "Synkar..." : "Synka nu"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
