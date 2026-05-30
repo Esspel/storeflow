@@ -47,7 +47,7 @@ const QUARTER_MONTHS = [
 // Instruction header injected into every downloadable CSV template.
 // Lines starting with '#' are treated as comments and skipped by the importer.
 const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor
+# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor;Tidsluckor (HH:MM)
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Status: active | review | deprecated | archived  (lämna tomt för active)
@@ -57,17 +57,21 @@ const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid im
 #   Exempel: 0,1,4 (Mån, Tis, Fre)
 # Intervall: antal enheter mellan upprepningar (t.ex. 2 = varannan vecka), lämna tomt för 1
 # Förfaller om (dagar): antal dagar tills uppgiften förfaller (t.ex. 1)
-# Förfallotid (HH:MM): klockslag, t.ex. 08:00 (lämna tomt)
-# Startdatum/Slutdatum: ÅÅÅÅ-MM-DD — Slutdatum obligatoriskt för återkommande
+# Förfallotid (HH:MM): klockslag, t.ex. 08:00 (lämna tomt) — ANVÄNDS INTE om Tidsluckor anges
+# Startdatum/Slutdatum: ÅÅÅÅ-MM-DD
 # Ursprungsmall: ID för föräldramall vid arv (lämna tomt)
 # Arvläge: copy | variant (lämna tomt för ingen arv)
 #
 # Steg: separera med " | "  — lägg till [foto] om foto krävs
-#   Lägg till [dold] för att dölja ett steg ärvt från föräldramall
-#   Exempel: "1. Torka hyllor | 2. Dammsuga [foto] | 3. Kontrollera temperaturer"
+#   Villkorliga steg: lägg till [om:FrågeLabel=ja] eller [om:FrågeLabel=nej] för att koppla steget till en ja/nej-fråga
+#   Exempel: "1. Torka hyllor | 2. Dammsuga [foto] | 3. Åtgärda [om:Är allt klart?=nej]"
 #
 # Frågor: separera med " | " — lägg till [obligatorisk] och/eller [ja_nej]
 #   Exempel: "1. Är allt klart? [obligatorisk] [ja_nej] | 2. Kommentar"
+#
+# Tidsluckor (HH:MM): pipe-separerade klockslag — när detta anges skapas EN UPPGIFT PER TIDSLUCKA
+#   Förfallotid-kolumnen ignoreras om Tidsluckor är ifylld
+#   Exempel: "08:00 | 12:00 | 16:00"
 #
 # Tips: Spara filen i UTF-8-format och använd semikolon (;) som separator
 `;
@@ -182,6 +186,7 @@ function MallarPage() {
     dueDate: string;
     priority: string;
     dueTime: string;
+    timeSlots: string[];
   };
   const [bulkCreateOpen, setBulkCreateOpen] = useState(false);
   const [bulkTaskConfigs, setBulkTaskConfigs] = useState<BulkTaskConfig[]>([]);
@@ -526,64 +531,101 @@ function MallarPage() {
   }
 
   function openBulkCreate() {
-    const configs = [...selectedTemplateIds].map((id) => ({
-      templateId: id,
-      assigneeUserIds: [] as string[],
-      assigneeGroupIds: [] as string[],
-      dueDate: "",
-      priority: templates.find(t => t.id === id)?.priority ?? "Medel",
-      dueTime: templates.find(t => t.id === id)?.due_date_time ?? "",
-    }));
+    const now = new Date();
+    const configs = [...selectedTemplateIds].map((id) => {
+      const tmpl = templates.find(t => t.id === id);
+      const timeSlots = (tmpl as ChecklistTemplate & { time_slots?: string[] })?.time_slots ?? [];
+      const dueDate = tmpl?.due_date_offset != null
+        ? (() => { const d = new Date(now); d.setDate(d.getDate() + tmpl.due_date_offset!); return d.toISOString().slice(0, 10); })()
+        : "";
+      return {
+        templateId: id,
+        assigneeUserIds: [] as string[],
+        assigneeGroupIds: [] as string[],
+        dueDate,
+        priority: tmpl?.priority ?? "Medel",
+        dueTime: timeSlots.length > 0 ? "" : (tmpl?.due_date_time ?? ""),
+        timeSlots,
+      };
+    });
     setBulkTaskConfigs(configs);
     setBulkCreateOpen(true);
   }
 
   async function bulkCreateTasks() {
     setBulkCreating(true);
+    const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
+
     for (const cfg of bulkTaskConfigs) {
       const tmpl = templates.find(t => t.id === cfg.templateId);
       if (!tmpl) continue;
 
-      const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
-      const { data: task } = await supabase.from("tasks").insert({
-        title: tmpl.title,
-        description: tmpl.description ?? "",
-        category: tmpl.category ?? "",
-        priority: cfg.priority,
-        store_id: storeId,
-        due_date: cfg.dueDate ? new Date(cfg.dueDate).toISOString() : null,
-        due_date_time: cfg.dueTime || null,
-        recurrence_rule: tmpl.recurrence_rule ?? null,
-        recurrence_days: tmpl.recurrence_days ?? null,
-        recurrence_interval: tmpl.recurrence_interval ?? null,
-        created_by: user?.id ?? null,
-        assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
-        status: "todo",
-      }).select("id").maybeSingle();
-
-      if (!task?.id) continue;
-
       const validItems = (tmpl.items ?? []).filter(it => it.label.trim());
-      if (validItems.length > 0) {
-        await supabase.from("task_steps").insert(
-          validItems.map((it, idx) => ({ task_id: task.id, label: it.label, sort_order: idx, requires_photo: it.requires_photo }))
-        );
-      }
-
       const validQuestions = (tmpl.questions ?? []).filter(q => q.label.trim());
-      if (validQuestions.length > 0) {
-        await supabase.from("task_questions").insert(
-          validQuestions.map((q, idx) => ({ task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: idx }))
-        );
+      const assigneeRows = (taskId: string) => {
+        const rows: { task_id: string; user_id?: string; group_id?: string }[] = [];
+        cfg.assigneeUserIds.forEach(uid => rows.push({ task_id: taskId, user_id: uid }));
+        cfg.assigneeGroupIds.forEach(gid => rows.push({ task_id: taskId, group_id: gid }));
+        return rows;
+      };
+
+      const insertTask = async (dueTime: string) => {
+        const baseDue = cfg.dueDate ? new Date(cfg.dueDate) : null;
+        // Combine date + time into a proper ISO datetime when both are set
+        let dueIso: string | null = null;
+        if (baseDue) {
+          if (dueTime) {
+            const [h, m] = dueTime.split(":").map(Number);
+            baseDue.setHours(h, m, 0, 0);
+          }
+          dueIso = baseDue.toISOString();
+        }
+
+        const { data: task } = await supabase.from("tasks").insert({
+          title: tmpl.title,
+          description: tmpl.description ?? "",
+          category: tmpl.category ?? "",
+          priority: cfg.priority,
+          store_id: storeId,
+          due_date: dueIso,
+          due_date_time: dueTime || null,
+          recurrence_rule: tmpl.recurrence_rule ?? null,
+          recurrence_days: tmpl.recurrence_days ?? null,
+          recurrence_interval: tmpl.recurrence_interval ?? null,
+          recurrence_start: (tmpl as ChecklistTemplate & { recurrence_start?: string }).recurrence_start ?? null,
+          recurrence_end: (tmpl as ChecklistTemplate & { recurrence_end?: string }).recurrence_end ?? null,
+          created_by: user?.id ?? null,
+          assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
+          status: "todo",
+        }).select("id").maybeSingle();
+
+        if (!task?.id) return;
+
+        if (validItems.length > 0) {
+          await supabase.from("task_steps").insert(
+            validItems.map((it, idx) => ({ task_id: task.id, label: it.label, sort_order: idx, requires_photo: it.requires_photo }))
+          );
+        }
+        if (validQuestions.length > 0) {
+          await supabase.from("task_questions").insert(
+            validQuestions.map((q, idx) => ({ task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: idx }))
+          );
+        }
+        const aRows = assigneeRows(task.id);
+        if (aRows.length > 0) await supabase.from("task_assignees").insert(aRows);
+        logAudit(user?.id ?? null, "task.create", "tasks", task.id, { title: tmpl.title, from_template: tmpl.id });
+      };
+
+      // Time slots → one task per slot; otherwise one task with dueTime (or no time)
+      if (cfg.timeSlots.length > 0) {
+        for (const slot of cfg.timeSlots) {
+          await insertTask(slot);
+        }
+      } else {
+        await insertTask(cfg.dueTime);
       }
-
-      const assigneeRows: { task_id: string; user_id?: string; group_id?: string }[] = [];
-      cfg.assigneeUserIds.forEach(uid => assigneeRows.push({ task_id: task.id, user_id: uid }));
-      cfg.assigneeGroupIds.forEach(gid => assigneeRows.push({ task_id: task.id, group_id: gid }));
-      if (assigneeRows.length > 0) await supabase.from("task_assignees").insert(assigneeRows);
-
-      logAudit(user?.id ?? null, "task.create", "tasks", task.id, { title: tmpl.title, from_template: tmpl.id });
     }
+
     setBulkCreating(false);
     setBulkCreateOpen(false);
     setSelectedTemplateIds(new Set());
@@ -1726,7 +1768,7 @@ function MallarPage() {
                         <Button
                           size="sm" variant="outline"
                           className="shrink-0 rounded-full h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
-                          onClick={() => { setActivatePackageTarget(pkg); setBulkTaskConfigs(pkgTemplates.map(t => ({ templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], dueDate: "", priority: t.priority ?? "Medel", dueTime: t.due_date_time ?? "" }))); setBulkCreateOpen(true); }}
+                          onClick={() => { setActivatePackageTarget(pkg); const _now = new Date(); setBulkTaskConfigs(pkgTemplates.map(t => { const slots = (t as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? []; const dd = t.due_date_offset != null ? (() => { const d = new Date(_now); d.setDate(d.getDate() + t.due_date_offset!); return d.toISOString().slice(0, 10); })() : ""; return { templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], dueDate: dd, priority: t.priority ?? "Medel", dueTime: slots.length > 0 ? "" : (t.due_date_time ?? ""), timeSlots: slots }; })); setBulkCreateOpen(true); }}
                         >
                           <ListChecks className="h-3 w-3 mr-1" /> Aktivera
                         </Button>
@@ -2289,10 +2331,13 @@ function MallarPage() {
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <ListChecks className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Skapa uppgifter från {bulkTaskConfigs.length} mallar</span>
+            <span className="text-xs text-muted-foreground">
+              ({bulkTaskConfigs.reduce((sum, c) => sum + Math.max(1, c.timeSlots.length), 0)} uppgifter totalt)
+            </span>
             <div className="ml-auto flex items-center gap-2">
               <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setBulkCreateOpen(false)}>Avbryt</Button>
               <Button size="sm" className="rounded-full" onClick={bulkCreateTasks} disabled={bulkCreating}>
-                {bulkCreating ? "Skapar..." : `Skapa ${bulkTaskConfigs.length} uppgifter`}
+                {bulkCreating ? "Skapar..." : `Skapa ${bulkTaskConfigs.reduce((sum, c) => sum + Math.max(1, c.timeSlots.length), 0)} uppgifter`}
               </Button>
             </div>
           </div>
@@ -2303,6 +2348,7 @@ function MallarPage() {
               if (!tmpl) return null;
               const storeUsers = allUsers.filter(u => !activeStore || u.store_id === activeStore.id);
               const storeGroups = allGroups.filter(g => !activeStore || g.store_id === activeStore.id);
+              const taskCount = Math.max(1, cfg.timeSlots.length);
               return (
                 <div key={cfg.templateId} className="rounded-2xl border border-border/60 bg-card p-4 space-y-4">
                   <div className="flex items-start gap-3">
@@ -2312,6 +2358,7 @@ function MallarPage() {
                       <div className="flex flex-wrap gap-1 mt-1">
                         {tmpl.category && <Badge variant="secondary" className="text-xs">{tmpl.category}</Badge>}
                         <span className="text-xs text-muted-foreground">{tmpl.items?.length ?? 0} steg</span>
+                        {taskCount > 1 && <Badge className="text-xs bg-primary/10 text-primary border-0">{taskCount} uppgifter (tidsluckor)</Badge>}
                       </div>
                     </div>
                   </div>
@@ -2340,15 +2387,34 @@ function MallarPage() {
                         className="h-8 text-xs"
                       />
                     </div>
-                    {/* Due time */}
+                    {/* Due time / time slots */}
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">Förfallotid</label>
-                      <Input
-                        type="time"
-                        value={cfg.dueTime}
-                        onChange={(e) => setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, dueTime: e.target.value } : c))}
-                        className="h-8 text-xs"
-                      />
+                      {cfg.timeSlots.length > 0 ? (
+                        <>
+                          <label className="text-xs font-medium text-muted-foreground">Tidsluckor</label>
+                          <div className="flex flex-wrap gap-1 min-h-[2rem] items-center">
+                            {cfg.timeSlots.map((slot, si) => (
+                              <span key={si} className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                {slot}
+                                <button type="button" onClick={() => setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, timeSlots: c.timeSlots.filter((_, j) => j !== si) } : c))}>
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">En uppgift per tidslucka</p>
+                        </>
+                      ) : (
+                        <>
+                          <label className="text-xs font-medium text-muted-foreground">Förfallotid</label>
+                          <Input
+                            type="time"
+                            value={cfg.dueTime}
+                            onChange={(e) => setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, dueTime: e.target.value } : c))}
+                            className="h-8 text-xs"
+                          />
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -2487,7 +2553,7 @@ function MallarPage() {
                           <Button
                             variant="outline" size="sm"
                             className="rounded-full h-7 text-xs"
-                            onClick={() => { setActivatePackageTarget(pkg); setBulkTaskConfigs(pkgTemplates.map(t => ({ templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], dueDate: "", priority: t.priority ?? "Medel", dueTime: t.due_date_time ?? "" }))); setShowPackagesPanel(false); setBulkCreateOpen(true); }}
+                            onClick={() => { setActivatePackageTarget(pkg); const _now2 = new Date(); setBulkTaskConfigs(pkgTemplates.map(t => { const slots = (t as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? []; const dd = t.due_date_offset != null ? (() => { const d = new Date(_now2); d.setDate(d.getDate() + t.due_date_offset!); return d.toISOString().slice(0, 10); })() : ""; return { templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], dueDate: dd, priority: t.priority ?? "Medel", dueTime: slots.length > 0 ? "" : (t.due_date_time ?? ""), timeSlots: slots }; })); setShowPackagesPanel(false); setBulkCreateOpen(true); }}
                           >
                             <ListChecks className="h-3 w-3 mr-1" /> Aktivera
                           </Button>
