@@ -785,7 +785,7 @@ function MallarPage() {
   // When a manager tries to "edit" a HK/Forening template, we auto-create a local variant and open that
   async function createLocalVariantAndEdit(source: TemplateWithMeta) {
     const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
-    const { data: tmpl } = await supabase.from("checklist_templates").insert({
+    const { data: tmpl, error: insertErr } = await supabase.from("checklist_templates").insert({
       title: source.title,
       description: source.description ?? "",
       category: source.category ?? "",
@@ -804,7 +804,10 @@ function MallarPage() {
       inherit_mode: "variant",
       version: 1,
     }).select("id").maybeSingle();
-    if (!tmpl?.id) return;
+    if (insertErr || !tmpl?.id) {
+      setError(insertErr?.message ?? "Kunde inte skapa lokal variant. Kontrollera behörigheter.");
+      return;
+    }
 
     const validItems = (source.items ?? []).filter(it => it.label.trim());
     if (validItems.length > 0) {
