@@ -1188,52 +1188,59 @@ function TasksPage() {
     if (!isManager) return;
     setSaving(true);
 
-    const { data: task, error } = await supabase.from("tasks").insert({
-      title: newTask.title.trim(),
-      description: newTask.description.trim(),
-      category: newTask.category,
-      priority: newTask.priority,
-      store_id: newTask.store_id || null,
-      due_date: newTask.due_date ? new Date(newTask.due_date).toISOString() : null,
-      due_date_time: newTask.time_slots.length > 0 ? null : (newTask.due_date_time || null),
-      due_date_offset: null,
-      recurring: newTask.recurrence_rule || null,
-      recurrence_rule: newTask.recurrence_rule || null,
-      recurrence_days: newTask.recurrence_days.length > 0 ? newTask.recurrence_days : null,
-      recurrence_interval: newTask.recurrence_interval,
-      recurrence_months: newTask.recurrence_months.length ? newTask.recurrence_months : null,
-      recurrence_month_day: newTask.recurrence_month_day ?? null,
-      recurrence_start: newTask.recurrence_start || null,
-      recurrence_end: newTask.recurrence_end || null,
-      sap_article_id: newTask.sap_article_id?.trim() || null,
-      completion_mode: "manual",
-      created_by: user?.id,
-      assigned_to: newTask.assigneeUserIds[0] ?? user?.id,
-      status: "todo",
-    }).select().maybeSingle();
+    const validSteps = newTask.steps.filter(s => s.label.trim());
+    const validQuestions = newTask.questions.filter(q => q.label.trim());
 
-    if (error) {
-      setSaveError("Kunde inte spara uppgiften. Försök igen.");
-      setSaving(false);
-      return;
-    }
+    // Build a local-midnight ISO string so due_date displays on the correct date
+    // regardless of timezone. new Date("YYYY-MM-DD") parses as UTC midnight which
+    // shows as 02:00 in UTC+2 — instead we set time explicitly in local time.
+    const buildDueDate = (dueTime?: string): string | null => {
+      if (!newTask.due_date) return null;
+      const [y, mo, d] = newTask.due_date.split("-").map(Number);
+      const dt = new Date(y, mo - 1, d, 0, 0, 0, 0);
+      if (dueTime) {
+        const [h, m] = dueTime.split(":").map(Number);
+        dt.setHours(h, m, 0, 0);
+      }
+      return dt.toISOString();
+    };
 
-    if (task) {
-      const validSteps = newTask.steps.filter(s => s.label.trim());
+    const insertSingleTask = async (dueTime: string) => {
+      const dueIso = buildDueDate(dueTime);
+      const { data: task, error } = await supabase.from("tasks").insert({
+        title: newTask.title.trim(),
+        description: newTask.description.trim(),
+        category: newTask.category,
+        priority: newTask.priority,
+        store_id: newTask.store_id || null,
+        due_date: dueIso,
+        due_date_time: dueTime || null,
+        due_date_offset: null,
+        recurring: newTask.recurrence_rule || null,
+        recurrence_rule: newTask.recurrence_rule || null,
+        recurrence_days: newTask.recurrence_days.length > 0 ? newTask.recurrence_days : null,
+        recurrence_interval: newTask.recurrence_interval,
+        recurrence_months: newTask.recurrence_months.length ? newTask.recurrence_months : null,
+        recurrence_month_day: newTask.recurrence_month_day ?? null,
+        recurrence_start: newTask.recurrence_start || null,
+        recurrence_end: newTask.recurrence_end || null,
+        sap_article_id: newTask.sap_article_id?.trim() || null,
+        completion_mode: "manual",
+        created_by: user?.id,
+        assigned_to: newTask.assigneeUserIds[0] ?? user?.id,
+        status: "todo",
+      }).select().maybeSingle();
+
+      if (error || !task) return null;
+
       if (validSteps.length > 0) {
         await supabase.from("task_steps").insert(
-          validSteps.map((s, i) => ({
-            task_id: task.id, label: s.label, sort_order: i, requires_photo: s.requires_photo,
-          }))
+          validSteps.map((s, i) => ({ task_id: task.id, label: s.label, sort_order: i, requires_photo: s.requires_photo }))
         );
       }
-
-      const validQuestions = newTask.questions.filter(q => q.label.trim());
       if (validQuestions.length > 0) {
         await supabase.from("task_questions").insert(
-          validQuestions.map((q, i) => ({
-            task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: i,
-          }))
+          validQuestions.map((q, i) => ({ task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: i }))
         );
       }
 
@@ -1242,14 +1249,28 @@ function TasksPage() {
       newTask.assigneeGroupIds.forEach(gid => assigneeRows.push({ task_id: task.id, group_id: gid }));
       if (assigneeRows.length > 0) await supabase.from("task_assignees").insert(assigneeRows);
 
+      return task;
+    };
+
+    // When time_slots are set, create one task per slot; otherwise create one task
+    const slots = newTask.time_slots.length > 0 ? newTask.time_slots : [newTask.due_date_time || ""];
+    const createdTasks = [];
+    for (const slot of slots) {
+      const t = await insertSingleTask(slot);
+      if (t) createdTasks.push(t);
+    }
+
+    // Attachments, notifications, audit and recurring spawn on first created task
+    const firstTask = createdTasks[0];
+    if (firstTask) {
       if (uploadFiles.length > 0) {
         for (const file of uploadFiles) {
-          const path = await uploadAttachment(file, `tasks/${task.id}`);
-          if (path) await supabase.from("task_images").insert({ task_id: task.id, storage_path: path, uploaded_by: user?.id });
+          const path = await uploadAttachment(file, `tasks/${firstTask.id}`);
+          if (path) await supabase.from("task_images").insert({ task_id: firstTask.id, storage_path: path, uploaded_by: user?.id });
         }
       }
 
-      logAudit(user?.id ?? null, "task.create", "tasks", task.id, { title: task.title });
+      logAudit(user?.id ?? null, "task.create", "tasks", firstTask.id, { title: firstTask.title, slot_count: createdTasks.length });
 
       const notifyIds = new Set<string>();
       newTask.assigneeUserIds.forEach(uid => { if (uid !== user?.id) notifyIds.add(uid); });
@@ -1259,25 +1280,26 @@ function TasksPage() {
         members?.forEach((m: { user_id: string }) => { if (m.user_id !== user?.id) notifyIds.add(m.user_id); });
       }
       if (notifyIds.size > 0) {
-        notifyUsers([...notifyIds], "task_assigned", `Ny uppgift tilldelad: ${task.title}`, `Tilldelad av ${user?.display_name}`, "/uppgifter");
+        notifyUsers([...notifyIds], "task_assigned", `Ny uppgift tilldelad: ${firstTask.title}`, `Tilldelad av ${user?.display_name}`, "/uppgifter");
       }
 
-      // Spawn all recurring instances immediately so they're visible without reload
-      if (task.recurrence_rule) {
-        const validSteps = newTask.steps.filter(s => s.label.trim());
-        const validQuestions = newTask.questions.filter(q => q.label.trim());
-        const assigneesFull = newTask.assigneeUserIds.map(uid => ({ task_id: task.id, user_id: uid, group_id: null }));
-        newTask.assigneeGroupIds.forEach(gid => assigneesFull.push({ task_id: task.id, user_id: null as unknown as string, group_id: gid }));
+      if (firstTask.recurrence_rule) {
+        const assigneesFull = newTask.assigneeUserIds.map(uid => ({ task_id: firstTask.id, user_id: uid, group_id: null }));
+        newTask.assigneeGroupIds.forEach(gid => assigneesFull.push({ task_id: firstTask.id, user_id: null as unknown as string, group_id: gid }));
         const parentFull: TaskFull = {
-          ...task,
-          steps: validSteps.map((s, i) => ({ id: "", task_id: task.id, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false })),
-          questions: validQuestions.map((q, i) => ({ id: "", task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: i, answer: null })),
-          assignees: assigneesFull.map(a => ({ task_id: task.id, user_id: a.user_id, group_id: a.group_id })),
+          ...firstTask,
+          steps: validSteps.map((s, i) => ({ id: "", task_id: firstTask.id, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false })),
+          questions: validQuestions.map((q, i) => ({ id: "", task_id: firstTask.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: i, answer: null })),
+          assignees: assigneesFull.map(a => ({ task_id: firstTask.id, user_id: a.user_id, group_id: a.group_id })),
           images: [],
         };
         spawnRef.current = false;
         await spawnChildrenForNewParent(parentFull);
       }
+    } else {
+      setSaveError("Kunde inte spara uppgiften. Försök igen.");
+      setSaving(false);
+      return;
     }
 
     await fetchTasks();
@@ -1684,7 +1706,10 @@ function TasksPage() {
                   {t.due_date && (
                     <span className={cn("inline-flex items-center gap-1", overdue && !done && "text-destructive font-semibold")}>
                       <Clock className="h-3 w-3" />
-                      {new Date(t.due_date).toLocaleDateString("sv-SE", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      {new Date(t.due_date).toLocaleDateString("sv-SE", { weekday: "short", month: "short", day: "numeric" })}
+                      {(t as TaskFull & { due_date_time?: string }).due_date_time && (
+                        <span className="ml-0.5">{(t as TaskFull & { due_date_time?: string }).due_date_time}</span>
+                      )}
                     </span>
                   )}
                   {t.recurrence_rule && (
@@ -2681,7 +2706,17 @@ function TasksPage() {
                       </>
                     ) : (
                       <>
-                        <span className="text-xs text-muted-foreground">Förfallotid</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Förfallotid</span>
+                          <button
+                            type="button"
+                            className="rounded-full border border-dashed border-border/60 px-2 py-0.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary"
+                            onClick={() => {
+                              const t = prompt("Lägg till tidslucka (HH:MM):");
+                              if (t?.match(/^\d{2}:\d{2}$/)) setNewTask(p => ({ ...p, time_slots: [t], due_date_time: "" }));
+                            }}
+                          >+ Tidsluckor</button>
+                        </div>
                         <input
                           type="time"
                           value={newTask.due_date_time}
