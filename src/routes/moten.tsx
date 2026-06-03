@@ -156,6 +156,7 @@ function MeetingsPage() {
     default_agenda: AgendaItem[];
   }>({ label: "", description: "", default_duration_min: 30, default_agenda: [] });
   const [editTypeTarget, setEditTypeTarget] = useState<MeetingType | null>(null);
+  const [isCreatingType, setIsCreatingType] = useState(false);
   const [deleteTypeTarget, setDeleteTypeTarget] = useState<MeetingType | null>(null);
   const [savingType, setSavingType] = useState(false);
   const [dragTypeIdx, setDragTypeIdx] = useState<number | null>(null);
@@ -452,11 +453,13 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
 
   const openNewType = () => {
     setEditTypeTarget(null);
+    setIsCreatingType(true);
     setTypeForm({ label: "", description: "", default_duration_min: 30, default_agenda: [{ title: "", duration: 5 }] });
   };
 
   const openEditType = (t: MeetingType) => {
     setEditTypeTarget(t);
+    setIsCreatingType(false);
     setTypeForm({
       label: t.label,
       description: t.description,
@@ -487,6 +490,7 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
     }
     setSavingType(false);
     setEditTypeTarget(null);
+    setIsCreatingType(false);
     await fetchMeetingTypes();
   };
 
@@ -984,7 +988,7 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
       </Dialog>
 
       {/* ── MANAGE TYPES DIALOG ────────────────────────────────────────────── */}
-      <Dialog open={showManageTypes} onOpenChange={(o) => { setShowManageTypes(o); if (!o) { setSelectedTypeIds(new Set()); setTypeSearch(""); } }}>
+      <Dialog open={showManageTypes} onOpenChange={(o) => { setShowManageTypes(o); if (!o) { setSelectedTypeIds(new Set()); setTypeSearch(""); setIsCreatingType(false); setEditTypeTarget(null); } }}>
         <DialogContent className="!w-[min(95vw,1100px)] !max-w-none h-[90vh] max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border/60 px-6 py-4 shrink-0">
@@ -1114,7 +1118,7 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
 
             {/* Right: form */}
             <div className="flex-1 overflow-y-auto">
-              {editTypeTarget !== null || !meetingTypes.length ? (
+              {editTypeTarget !== null || isCreatingType ? (
                 <div className="p-6 space-y-5 max-w-lg">
                   <div>
                     <h3 className="text-sm font-semibold mb-4">{editTypeTarget ? "Redigera mötestyp" : "Ny mötestyp"}</h3>
@@ -1194,7 +1198,7 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
                   </div>
 
                   <div className="flex gap-2 pt-2 border-t border-border/60">
-                    <Button variant="outline" size="sm" className="rounded-full" onClick={() => { setEditTypeTarget(null); setTypeSearch(""); }}>Avbryt</Button>
+                    <Button variant="outline" size="sm" className="rounded-full" onClick={() => { setEditTypeTarget(null); setIsCreatingType(false); setTypeSearch(""); }}>Avbryt</Button>
                     <Button size="sm" className="rounded-full" disabled={savingType || !typeForm.label.trim()} onClick={saveType}>
                       {savingType ? "Sparar..." : editTypeTarget ? "Spara ändringar" : "Skapa mötestyp"}
                     </Button>
