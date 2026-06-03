@@ -27,6 +27,7 @@ import {
   type CommonDefect, type AppUser,
   logAudit, createNotification, mittCoopUrl, uploadAttachment, getPublicUrl,
 } from "@/lib/supabase";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { GdprImageReminder } from "@/components/gdpr-image-reminder";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
@@ -376,6 +377,9 @@ function KundrundaPage() {
     try {
       const { error } = await supabase.rpc("publish_central_kundrunda", { publisher_id: user.id });
       if (error) throw error;
+      toast.success("Central kundrunda publicerad");
+    } catch (err) {
+      toast.error("Kunde inte publicera: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setPublishingVersion(false);
       await fetchData();

@@ -1,7 +1,7 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
-import { ChartBar as BarChart3, Bell, ClipboardList, FlaskConical, Hop as Home, Circle as HelpCircle, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Store, X as XIcon, Tv as Tv2, ChartBar as BarChart2, Link as LinkIcon } from "lucide-react";
+import { ChartBar as BarChart3, Bell, ClipboardList, FileText, FlaskConical, Hop as Home, Circle as HelpCircle, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Store, X as XIcon, Tv as Tv2, ChartBar as BarChart2, Link as LinkIcon } from "lucide-react";
 import { ROLE_LABELS, HIERARCHY_LABELS } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
 import { GlobalStoreSelector } from "@/components/global-store-selector";
@@ -484,7 +484,24 @@ export function AppShell() {
                   <GlobalStoreSelector inline />
                 </div>
                 <DropdownMenuSeparator />
-                {/* Mobile-only links now in Övrigt sheet — removed from here to avoid duplication */}
+                <DropdownMenuItem asChild className="md:hidden">
+                  <Link to="/mallar" className="cursor-pointer">
+                    <FileText className="mr-2 h-4 w-4" />
+                    Mallar
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="md:hidden">
+                  <Link to="/rapporter" className="cursor-pointer">
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    Rapporter
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="md:hidden">
+                  <Link to="/lankregister" className="cursor-pointer">
+                    <LinkIcon className="mr-2 h-4 w-4" />
+                    Länkregister
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator className="md:hidden" />
                 <DropdownMenuItem asChild>
                   <Link to="/butiksregister" className="cursor-pointer">

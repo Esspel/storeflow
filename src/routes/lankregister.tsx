@@ -332,6 +332,17 @@ function LankregisterPage() {
       }
 
       for (const [name, { desc, scope, scopeName, items }] of listMap) {
+        // Enforce hierarchy-based scope permissions
+        // isAdmin: all scopes; isHK (non-admin): store + hk; isForening: forening + store; manager: store only
+        const allowedScopes: string[] = isAdmin
+          ? ["store", "forening", "hk"]
+          : isHK
+          ? ["store", "hk"]
+          : isForening
+          ? ["store", "forening"]
+          : ["store"];
+        if (!allowedScopes.includes(scope)) continue;
+
         // Resolve store_id / forening_id from name
         const storeId = scope === "store" ? (allStores.find(s => s.name.toLowerCase() === scopeName.toLowerCase())?.id ?? activeStore?.id ?? null) : null;
         const foreningId = scope === "forening" ? (allForeningar.find(f => f.name.toLowerCase() === scopeName.toLowerCase())?.id ?? null) : null;

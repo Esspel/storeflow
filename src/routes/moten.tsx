@@ -477,11 +477,13 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
       created_by: user?.id ?? null,
     };
     if (editTypeTarget) {
-      await supabase.from("meeting_types").update(payload).eq("id", editTypeTarget.id);
+      const { error } = await supabase.from("meeting_types").update(payload).eq("id", editTypeTarget.id);
+      if (error) { setSavingType(false); return; }
     } else {
       const maxOrder = Math.max(-1, ...meetingTypes.map(t => t.sort_order));
       const slug = typeForm.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-      await supabase.from("meeting_types").insert({ ...payload, value: `custom_${slug}_${Date.now()}`, sort_order: maxOrder + 1 });
+      const { error } = await supabase.from("meeting_types").insert({ ...payload, value: `custom_${slug}_${Date.now()}`, sort_order: maxOrder + 1 });
+      if (error) { setSavingType(false); return; }
     }
     setSavingType(false);
     setEditTypeTarget(null);
@@ -503,6 +505,91 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
     const updated = reordered.map((t, i) => ({ ...t, sort_order: i }));
     setMeetingTypes(updated);
     await Promise.all(updated.map(t => supabase.from("meeting_types").update({ sort_order: t.sort_order }).eq("id", t.id)));
+  };
+
+  const csvTypeImportRef = useRef<HTMLInputElement>(null);
+  const [importingTypesCsv, setImportingTypesCsv] = useState(false);
+
+  const MEETING_TYPES_CSV_HEADER = "Namn;Beskrivning;Standardlängd (min);Agenda (punkt 1 (min)|punkt 2 (min))";
+
+  const exportMeetingTypesCsv = () => {
+    if (meetingTypes.length === 0) return;
+    const rows = meetingTypes.map(t => {
+      const agendaStr = t.default_agenda.map(a => `${a.title} (${a.duration})`).join("|");
+      return [t.label, t.description, String(t.default_duration_min), agendaStr]
+        .map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";");
+    });
+    const csv = [MEETING_TYPES_CSV_HEADER, ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `mötestyper-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadMeetingTypesTemplate = () => {
+    const example = [
+      MEETING_TYPES_CSV_HEADER,
+      '"Leveransmöte";"Genomgång av leveranser";"20";"Leveranskontroll (5)|Avvikelser (10)|Nästa leverans (5)"',
+      '"Månadsmöte";"Strategiskt månadsgenomgång";"60";"Budget (15)|Personal (15)|KPI (15)|Övrigt (15)"',
+    ].join("\n");
+    const blob = new Blob(["\uFEFF" + example], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "mötestyper-mall.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importMeetingTypesCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !user) return;
+    setImportingTypesCsv(true);
+    try {
+      const text = await file.text();
+      const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean).slice(1);
+
+      function parseRow(line: string): string[] {
+        const cols: string[] = []; let cur = ""; let inQ = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') { if (inQ && line[i + 1] === '"') { cur += '"'; i++; } else { inQ = !inQ; } }
+          else if (ch === ";" && !inQ) { cols.push(cur); cur = ""; }
+          else { cur += ch; }
+        }
+        cols.push(cur);
+        return cols;
+      }
+
+      const maxOrder = Math.max(-1, ...meetingTypes.map(t => t.sort_order));
+      let orderOffset = maxOrder + 1;
+
+      for (const line of lines) {
+        const [label, description, durationStr, agendaStr] = parseRow(line);
+        if (!label?.trim()) continue;
+        const duration = parseInt(durationStr?.trim() ?? "30") || 30;
+        const agendaItems: AgendaItem[] = (agendaStr ?? "").split("|").map(s => {
+          const m = s.trim().match(/^(.+?)\s*\((\d+)\)$/);
+          if (m) return { title: m[1].trim(), duration: parseInt(m[2]) || 5 };
+          const t = s.trim();
+          return t ? { title: t, duration: 5 } : null;
+        }).filter(Boolean) as AgendaItem[];
+
+        const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+        await supabase.from("meeting_types").insert({
+          label: label.trim(),
+          description: description?.trim() ?? "",
+          default_duration_min: duration,
+          default_agenda: agendaItems,
+          value: `custom_${slug}_${Date.now()}`,
+          sort_order: orderOffset++,
+          created_by: user.id,
+        });
+      }
+      await fetchMeetingTypes();
+    } finally {
+      setImportingTypesCsv(false);
+    }
   };
 
   // ── Meeting actions ────────────────────────────────────────────────────────
@@ -922,6 +1009,16 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
                   Ta bort {selectedTypeIds.size} st
                 </Button>
               )}
+              <input ref={csvTypeImportRef} type="file" accept=".csv" className="hidden" onChange={importMeetingTypesCsv} />
+              <Button size="sm" variant="outline" className="rounded-full h-8 gap-1.5 hidden sm:flex" onClick={downloadMeetingTypesTemplate}>
+                <Download className="h-3.5 w-3.5" /> Mall
+              </Button>
+              <Button size="sm" variant="outline" className="rounded-full h-8 gap-1.5 hidden sm:flex" onClick={exportMeetingTypesCsv} disabled={meetingTypes.length === 0}>
+                <Download className="h-3.5 w-3.5" /> Exportera
+              </Button>
+              <Button size="sm" variant="outline" className="rounded-full h-8 gap-1.5 hidden sm:flex" onClick={() => csvTypeImportRef.current?.click()} disabled={importingTypesCsv}>
+                <Upload className="h-3.5 w-3.5" /> {importingTypesCsv ? "Importerar..." : "Importera"}
+              </Button>
               <Button size="sm" className="rounded-full h-8 gap-1.5" onClick={openNewType}>
                 <Plus className="h-3.5 w-3.5" /> Ny typ
               </Button>
