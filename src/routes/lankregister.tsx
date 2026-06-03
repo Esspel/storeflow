@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, ExternalLink, X, Globe, Store as StoreIcon, Building2, Search, Link as LinkIcon, ChevronLeft } from "lucide-react";
 
-import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -111,10 +110,11 @@ function LankregisterPage() {
     const storeData = (storesRes.data ?? []) as Store[];
 
     const filtered = raw.filter((l) => {
-      if (isAdmin) return true;
       if (l.scope === "hk") return true;
       if (l.scope === "forening") {
         if (!l.forening_id) return false;
+        // Admins/HK see all forening lists; forening users see their own
+        if (isAdmin || isHK) return true;
         if (isForening && userForeningId === l.forening_id) return true;
         const storeForeningIds = storeData
           .filter((s) => userStoreIds.includes(s.id))
@@ -123,7 +123,7 @@ function LankregisterPage() {
       }
       if (l.scope === "store") {
         if (!l.store_id) return false;
-        // Only show store-scoped lists for the currently active store
+        // Everyone (including admins) only sees the currently active store's lists
         return activeStore ? l.store_id === activeStore.id : userStoreIds.includes(l.store_id);
       }
       return false;
@@ -257,17 +257,20 @@ function LankregisterPage() {
 
   return (
     <div className="flex flex-col" style={{ minHeight: "calc(100dvh - 3.5rem)" }}>
-      <PageHeader
-        title="Länkregister"
-        subtitle="Länksamlingar för butiker och föreningar"
-        actions={
-          canManage ? (
-            <Button size="sm" onClick={openCreateList} className="gap-2">
-              <Plus className="h-4 w-4" /> Ny lista
+      {/* Page header — own padding, consistent with app shell max-width */}
+      <div className="border-b border-border/60 bg-background px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Länkregister</h1>
+            <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">Länksamlingar för butiker och föreningar</p>
+          </div>
+          {canManage && (
+            <Button size="sm" onClick={openCreateList} className="shrink-0 gap-1.5">
+              <Plus className="h-3.5 w-3.5" /> Ny lista
             </Button>
-          ) : undefined
-        }
-      />
+          )}
+        </div>
+      </div>
 
       <div className="flex flex-1" style={{ minHeight: 0 }}>
         {/* SIDEBAR — list of link lists; hidden on mobile when a list is selected */}

@@ -814,17 +814,25 @@ function SchemaPage() {
     const distriktId = activeStore?.distrikt_id;
     if (foreningId) {
       await supabase.from("user_foreningar").upsert(
-        { user_id: userId, forening_id: foreningId, is_primary: true },
+        { user_id: userId, forening_id: foreningId, is_primary: false },
         { onConflict: "user_id,forening_id" }
       );
-      await supabase.from("app_users").update({ forening_id: foreningId }).eq("id", userId);
+      // Only set app_users.forening_id if not already set (primary indicator)
+      const { data: existing } = await supabase.from("app_users").select("forening_id").eq("id", userId).maybeSingle();
+      if (!existing?.forening_id) {
+        await supabase.from("app_users").update({ forening_id: foreningId }).eq("id", userId);
+      }
     }
     if (distriktId) {
       await supabase.from("user_distrikt").upsert(
-        { user_id: userId, distrikt_id: distriktId, is_primary: true },
+        { user_id: userId, distrikt_id: distriktId, is_primary: false },
         { onConflict: "user_id,distrikt_id" }
       );
-      await supabase.from("app_users").update({ distrikt_id: distriktId }).eq("id", userId);
+      // Only set app_users.distrikt_id if not already set (primary indicator)
+      const { data: existing } = await supabase.from("app_users").select("distrikt_id").eq("id", userId).maybeSingle();
+      if (!existing?.distrikt_id) {
+        await supabase.from("app_users").update({ distrikt_id: distriktId }).eq("id", userId);
+      }
     }
   }
 
@@ -1769,12 +1777,6 @@ function SchemaPage() {
                 <Truck className="h-4 w-4" />
                 {activeWeekPlan?.is_special_week ? "Specialleveranser" : "Leveranser"}
                 {(missingAnyPlan || missingSpecialPlan) && <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
-              </Button>
-            )}
-            {isAdmin && imports.length > 0 && (
-              <Button size="sm" variant="outline" onClick={() => setMappingOpen(true)} className="hidden sm:flex gap-1.5">
-                <Users className="h-4 w-4" />
-                Personal
               </Button>
             )}
             {isAdmin && selectedWeekImport && (
@@ -2946,20 +2948,10 @@ function SchemaPage() {
             )}
 
             {/* View existing mappings (no pending import) */}
-            {!parsed && imports.length > 0 && (
-              <div className="p-5">
-                <p className="mb-4 text-sm text-muted-foreground">Koppla SoftOne-anställda till användare i systemet.</p>
-                <div className="divide-y divide-border/40 rounded-xl border border-border/60 overflow-hidden">
-                  {Array.from(new Map(scheduleEmployees.map((e) => [e.employee_nr, e])).values()).map((emp) => (
-                    <MappingRow key={emp.employee_nr} employeeNr={emp.employee_nr} employeeName={emp.employee_name} employeeGroup={emp.employee_group} appUsers={allUsers} mappedUserId={getMappedUserId(emp.employee_nr)} storeId={storeId} foreningId={activeStore?.forening_id} distriktId={activeStore?.distrikt_id} onMap={async (uid) => { setMapping(emp.employee_nr, uid); if (storeId && user) { await supabase.from("employee_mappings").upsert({ store_id: storeId, employee_nr: emp.employee_nr, app_user_id: uid || null, created_by: user.id, updated_at: new Date().toISOString() }, { onConflict: "store_id,employee_nr" }); toast.success("Matchning sparad"); } }} onUserCreated={(u) => { setAppUsers((p) => [...p, u]); setAllUsers((p) => [...p, u]); setMapping(emp.employee_nr, u.id); }} />
-                  ))}
-                </div>
-              </div>
-            )}
-            {!parsed && imports.length === 0 && (
+            {!parsed && (
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-16">
                 <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
-                <p className="text-center text-sm text-muted-foreground">Importera ett schema först.</p>
+                <p className="text-center text-sm text-muted-foreground">Matchningar hanteras vid import. Importera ett nytt schema för att uppdatera matchningar.</p>
               </div>
             )}
           </div>
@@ -2969,9 +2961,8 @@ function SchemaPage() {
             <Button variant="outline" size="sm" onClick={() => { if (!savingImport) { setMappingOpen(false); setParsed(null); setMatchedEmployees([]); } }} disabled={savingImport}>
               {parsed ? "Avbryt" : "Stäng"}
             </Button>
-            {!parsed && imports.length > 0 && (() => {
-              const unmappedCount = Array.from(new Map(scheduleEmployees.map((e) => [e.employee_nr, e])).values())
-                .filter((emp) => !getMappedUserId(emp.employee_nr)).length;
+            {parsed && (() => {
+              const unmappedCount = matchedEmployees.filter((m) => m.matchType === "new").length;
               return unmappedCount > 0 ? (
                 <Button size="sm" variant="outline" onClick={bulkCreateUnmatchedAccounts} disabled={bulkCreatingAccounts} className="gap-1.5">
                   <Sparkles className="h-3.5 w-3.5" />
@@ -2979,11 +2970,6 @@ function SchemaPage() {
                 </Button>
               ) : null;
             })()}
-            {!parsed && imports.length > 0 && (
-              <Button size="sm" onClick={async () => { await saveMappings(); await loadMappings(); setMappingOpen(false); toast.success("Matchningar sparade!"); }}>
-                Spara matchningar
-              </Button>
-            )}
             {parsed && (
               <Button size="sm" onClick={confirmImport} disabled={savingImport} className="gap-1.5">
                 <Upload className="h-3.5 w-3.5" />

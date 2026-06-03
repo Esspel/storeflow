@@ -342,10 +342,10 @@ function KundrundaPage() {
   // Auto-initialize local version for managers and auto-open version choice dialog
   useEffect(() => {
     if (loading) return;
-    if (isManager && !isAdmin && activeStore && localVersion === null) {
+    if (isManager && activeStore && localVersion === null) {
       ensureLocalVersionRecord();
     }
-    if (localVersion?.central_version_pending && !isAdmin) {
+    if (localVersion?.central_version_pending) {
       setShowVersionChoiceDialog(true);
     }
   }, [loading, localVersion, isManager, isAdmin, activeStore]);
@@ -375,7 +375,11 @@ function KundrundaPage() {
   };
 
   const resolveVersionChoice = async (choice: "central" | "local" | "parallel") => {
-    if (!localVersion || !activeStore) return;
+    if (!activeStore) return;
+    // Ensure local version record exists before acting
+    if (!localVersion) await ensureLocalVersionRecord();
+    const lv = localVersion ?? (await supabase.from("kundrunda_local_versions").select("*").eq("store_id", activeStore.id).maybeSingle()).data;
+    if (!lv) return;
     if (choice === "central") {
       // Replace store-local zones with current HK zones server-side
       await supabase.rpc("apply_central_kundrunda_to_store", { p_store_id: activeStore.id });
@@ -384,9 +388,9 @@ function KundrundaPage() {
         central_version_pending: false,
         pending_central_version_id: null,
         version_type: choice,
-        central_version_id: localVersion.pending_central_version_id,
+        central_version_id: lv.pending_central_version_id,
       };
-      await supabase.from("kundrunda_local_versions").update(updates).eq("id", localVersion.id);
+      await supabase.from("kundrunda_local_versions").update(updates).eq("id", lv.id);
     }
     setShowVersionChoiceDialog(false);
     await fetchData();
@@ -1619,7 +1623,7 @@ function KundrundaPage() {
       />
 
       {/* Pending central version notification */}
-      {localVersion?.central_version_pending && user?.role !== "admin" && (
+      {localVersion?.central_version_pending && (
         <div className="mb-4 rounded-2xl border border-warning/40 bg-warning/10 p-4">
           <div className="flex items-start gap-3">
             <RefreshCw className="mt-0.5 h-5 w-5 shrink-0 text-warning-foreground" />
