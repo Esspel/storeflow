@@ -350,7 +350,11 @@ function KundrundaPage() {
   // Zones used during a session: prefer store-local, fall back to global
   const storeLocalZones = activeStore ? zones.filter(z => z.store_id === activeStore.id) : [];
   const globalZones = zones.filter(z => !z.store_id);
-  const activeZones = storeLocalZones.length > 0 ? storeLocalZones : globalZones;
+  // For parallel mode, use the user's last pick; default to local if not yet chosen
+  const parallelUsesCentral = localVersion?.version_type === "parallel" && localVersion?.parallel_choice === "central";
+  const activeZones = parallelUsesCentral
+    ? (globalZones.length > 0 ? globalZones : storeLocalZones)
+    : (storeLocalZones.length > 0 ? storeLocalZones : globalZones);
 
   // Zones filtered by current edit scope
   const editableZones = editScope === "global"
@@ -406,7 +410,11 @@ function KundrundaPage() {
       await supabase.from("kundrunda_local_versions").update({ parallel_choice: choice }).eq("id", localVersion.id);
       setLocalVersion(prev => prev ? { ...prev, parallel_choice: choice } : null);
     }
-    await startSession();
+    // Determine which zones to use based on the just-made choice (activeZones is stale at this point)
+    const zonesToUse = choice === "central"
+      ? (globalZones.length > 0 ? globalZones : storeLocalZones)
+      : (storeLocalZones.length > 0 ? storeLocalZones : globalZones);
+    await startSession(zonesToUse);
   };
 
   const handleStartSession = async () => {
@@ -414,16 +422,16 @@ function KundrundaPage() {
       setShowParallelChoiceDialog(true);
       return;
     }
-    await startSession();
+    await startSession(activeZones);
   };
 
-  const startSession = async () => {
+  const startSession = async (zonesToUse = activeZones) => {
     const { data } = await supabase.from("kundrunda_sessions").insert({
       store_id: activeStore?.id ?? null,
       conducted_by: user?.id,
       status: "in_progress",
       total_score: 0,
-      max_score: activeZones.reduce((sum, z) => sum + z.checkpoints.length, 0),
+      max_score: zonesToUse.reduce((sum, z) => sum + z.checkpoints.length, 0),
     }).select("*, store:stores(id,name,sap_site_id)").maybeSingle();
     if (data) {
       setActiveSession(data as KundrundaSession);
