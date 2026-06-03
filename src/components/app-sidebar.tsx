@@ -127,6 +127,15 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
+        <div className="group-data-[collapsible=icon]:hidden">
+          <Link
+            to="/lankregister"
+            className="flex items-center gap-2 rounded-lg px-2 py-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <LinkIcon className="h-4 w-4 shrink-0" />
+            <span className="text-xs font-medium">Länkregister</span>
+          </Link>
+        </div>
         <div className="flex items-center gap-3 rounded-lg p-2 group-data-[collapsible=icon]:hidden">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-accent-foreground">
             {initials}
@@ -135,6 +144,11 @@ export function AppSidebar() {
             <span className="text-sm font-medium truncate">{displayName}</span>
             <span className="text-[11px] text-muted-foreground">{roleLabel}</span>
           </div>
+        </div>
+        <div className="hidden group-data-[collapsible=icon]:flex justify-center py-1">
+          <Link to="/lankregister" className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title="Länkregister">
+            <LinkIcon className="h-4 w-4" />
+          </Link>
         </div>
       </SidebarFooter>
     </Sidebar>

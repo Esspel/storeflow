@@ -2300,6 +2300,18 @@ function TasksPage() {
                             className="h-5 w-5 shrink-0"
                           />
                           <span className={cn("flex-1 text-sm leading-snug", step.is_done && "line-through text-muted-foreground")}>{step.label}</span>
+                          {(step as typeof step & { link_url?: string }).link_url && (
+                            <a
+                              href={(step as typeof step & { link_url?: string }).link_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Länk
+                            </a>
+                          )}
                           {step.requires_photo && (
                             <button
                               type="button"
@@ -2327,10 +2339,23 @@ function TasksPage() {
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Frågor</p>
                   {detailTask.questions.map((q) => (
                     <div key={q.id} className="space-y-1.5">
-                      <Label className="text-sm">
-                        {q.label}
-                        {q.is_required && <span className="ml-1 text-destructive">*</span>}
-                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Label className="flex-1 text-sm">
+                          {q.label}
+                          {q.is_required && <span className="ml-1 text-destructive">*</span>}
+                        </Label>
+                        {(q as typeof q & { link_url?: string }).link_url && (
+                          <a
+                            href={(q as typeof q & { link_url?: string }).link_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Länk
+                          </a>
+                        )}
+                      </div>
                       {q.question_type === "yes_no" ? (
                         <div className="flex items-center gap-4">
                           {(["Ja", "Nej"] as const).map((opt) => {
@@ -2631,8 +2656,13 @@ function TasksPage() {
                         placeholder="URL (valfri)"
                         value={step.link_url ?? ""}
                         onChange={(e) => setNewTask(p => ({ ...p, steps: p.steps.map((s, idx) => idx === i ? { ...s, link_url: e.target.value } : s) }))}
-                        className="w-32 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40"
+                        className="w-28 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40"
                       />
+                      {step.link_url && (
+                        <a href={step.link_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="shrink-0 text-primary hover:text-primary/70">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      )}
                       {newTask.steps.length > 1 && (
                         <button type="button" className="opacity-0 group-hover:opacity-100 transition-opacity"
                           onClick={() => setNewTask(p => ({ ...p, steps: p.steps.filter((_, idx) => idx !== i) }))}>
@@ -2703,12 +2733,20 @@ function TasksPage() {
                           Obligatorisk
                         </label>
                       </div>
-                      <Input
-                        placeholder="URL (valfri länk)"
-                        value={q.link_url ?? ""}
-                        onChange={(e) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, link_url: e.target.value } : qr) }))}
-                        className="border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40 w-full"
-                      />
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground/40" />
+                        <Input
+                          placeholder="URL (valfri länk)"
+                          value={q.link_url ?? ""}
+                          onChange={(e) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, link_url: e.target.value } : qr) }))}
+                          className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40"
+                        />
+                        {q.link_url && (
+                          <a href={q.link_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary hover:text-primary/70">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -3159,7 +3197,12 @@ function TasksPage() {
                       <label className="flex items-center gap-1 text-[11px] text-muted-foreground/70 whitespace-nowrap cursor-pointer">
                         <Checkbox checked={step.requires_photo} onCheckedChange={(v) => setEditForm(p => p ? { ...p, steps: p.steps.map((s,idx) => idx===i ? {...s,requires_photo:!!v} : s) } : p)} className="h-3 w-3" />Foto
                       </label>
-                      <Input placeholder="URL" value={step.link_url ?? ""} onChange={(e) => setEditForm(p => p ? { ...p, steps: p.steps.map((s,idx) => idx===i ? {...s,link_url:e.target.value} : s) } : p)} className="w-28 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40" />
+                      <Input placeholder="URL" value={step.link_url ?? ""} onChange={(e) => setEditForm(p => p ? { ...p, steps: p.steps.map((s,idx) => idx===i ? {...s,link_url:e.target.value} : s) } : p)} className="w-24 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40" />
+                      {step.link_url && (
+                        <a href={step.link_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="shrink-0 text-primary hover:text-primary/70">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      )}
                       <button type="button" className="opacity-0 group-hover:opacity-100" onClick={() => setEditForm(p => p ? { ...p, steps: p.steps.filter((_,idx) => idx!==i) } : p)}>
                         <X className="h-3.5 w-3.5 text-muted-foreground/60" />
                       </button>
@@ -3189,7 +3232,15 @@ function TasksPage() {
                           <Checkbox checked={q.is_required} onCheckedChange={(v) => setEditForm(p => p ? { ...p, questions: p.questions.map((qr,idx) => idx===i ? {...qr,is_required:!!v} : qr) } : p)} className="h-3 w-3" />Obligatorisk
                         </label>
                       </div>
-                      <Input placeholder="URL (valfri länk)" value={q.link_url ?? ""} onChange={(e) => setEditForm(p => p ? { ...p, questions: p.questions.map((qr,idx) => idx===i ? {...qr,link_url:e.target.value} : qr) } : p)} className="border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40 w-full" />
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground/40" />
+                        <Input placeholder="URL (valfri länk)" value={q.link_url ?? ""} onChange={(e) => setEditForm(p => p ? { ...p, questions: p.questions.map((qr,idx) => idx===i ? {...qr,link_url:e.target.value} : qr) } : p)} className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40" />
+                        {q.link_url && (
+                          <a href={q.link_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary hover:text-primary/70">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                      </div>
                     </div>
                   ))}
                   <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary" onClick={() => setEditForm(p => p ? { ...p, questions: [...p.questions, { label:"", question_type:"text", is_required:false, link_url:"" }] } : p)}>

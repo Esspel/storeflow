@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
-import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil, Store as StoreIcon, Building2, Eye, EyeOff, Search, History, GitBranch, Copy, Layers, CircleCheck as CheckCircle, ListChecks, CalendarClock, Users } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil, Store as StoreIcon, Building2, Eye, EyeOff, Search, History, GitBranch, Copy, Layers, CircleCheck as CheckCircle, ListChecks, CalendarClock, Users, ExternalLink } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -1325,8 +1325,13 @@ function MallarPage() {
                           const items = [...f.items]; items[idx] = { ...items[idx], link_url: e.target.value };
                           setF((p) => ({ ...p, items }));
                         }}
-                        className="w-28 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40"
+                        className="w-24 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40"
                       />
+                      {item.link_url && (
+                        <a href={item.link_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="shrink-0 text-primary hover:text-primary/70">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      )}
                       <button
                         type="button"
                         className="opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1411,12 +1416,20 @@ function MallarPage() {
                       <X className="h-3.5 w-3.5 text-muted-foreground/50" />
                     </button>
                   </div>
-                  <Input
-                    placeholder="URL (valfri länk)"
-                    value={q.link_url ?? ""}
-                    onChange={(e) => { const qs = [...f.questions]; qs[idx] = { ...qs[idx], link_url: e.target.value }; setF((p) => ({ ...p, questions: qs })); }}
-                    className="border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40 w-full"
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground/40" />
+                    <Input
+                      placeholder="URL (valfri länk)"
+                      value={q.link_url ?? ""}
+                      onChange={(e) => { const qs = [...f.questions]; qs[idx] = { ...qs[idx], link_url: e.target.value }; setF((p) => ({ ...p, questions: qs })); }}
+                      className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40"
+                    />
+                    {q.link_url && (
+                      <a href={q.link_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary hover:text-primary/70">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                  </div>
                   <div className="flex items-center justify-between">
                     <div className="flex gap-1">
                       {(["text", "yes_no"] as const).map((type) => (
@@ -2124,8 +2137,13 @@ function MallarPage() {
                                   {(t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((item: ChecklistTemplateItem, idx: number) => (
                                     <li key={item.id} className="flex items-center gap-2.5 text-sm">
                                       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">{idx + 1}</span>
-                                      <span>{item.label}</span>
+                                      <span className="flex-1">{item.label}</span>
                                       {item.requires_photo && <Badge variant="secondary" className="text-xs">Foto krävs</Badge>}
+                                      {(item as ChecklistTemplateItem & { link_url?: string }).link_url && (
+                                        <a href={(item as ChecklistTemplateItem & { link_url?: string }).link_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors">
+                                          <ExternalLink className="h-3 w-3" />Länk
+                                        </a>
+                                      )}
                                     </li>
                                   ))}
                                 </ol>
@@ -2589,6 +2607,11 @@ function MallarPage() {
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">{idx + 1}</span>
                         <span className="flex-1 text-sm">{item.label}</span>
                         {item.requires_photo && <Badge variant="secondary" className="text-xs">Foto krävs</Badge>}
+                        {(item as ChecklistTemplateItem & { link_url?: string }).link_url && (
+                          <a href={(item as ChecklistTemplateItem & { link_url?: string }).link_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors">
+                            <ExternalLink className="h-3 w-3" />Länk
+                          </a>
+                        )}
                       </li>
                     ))}
                   </ol>
