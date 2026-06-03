@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ensureHttps } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -1291,6 +1292,7 @@ function AccountsPage() {
                   <input
                     value={upshopUrl}
                     onChange={(e) => { setUpshopUrl(e.target.value); setUpshopError(""); }}
+                    onBlur={(e) => { const v = ensureHttps(e.target.value); if (v !== upshopUrl) setUpshopUrl(v); }}
                     placeholder="https://app.whywaste.com/c/..."
                     className="h-9 w-full rounded-lg border border-border/60 bg-background px-3 font-mono text-sm outline-none focus:border-primary/60"
                   />

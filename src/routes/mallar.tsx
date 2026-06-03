@@ -22,7 +22,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
-import { cn } from "@/lib/utils";
+import { cn, ensureHttps } from "@/lib/utils";
 
 const RECURRENCE_OPTIONS = [
   { value: "", label: "Ingen" },
@@ -1325,6 +1325,10 @@ function MallarPage() {
                           const items = [...f.items]; items[idx] = { ...items[idx], link_url: e.target.value };
                           setF((p) => ({ ...p, items }));
                         }}
+                        onBlur={(e) => {
+                          const v = ensureHttps(e.target.value);
+                          if (v !== (item.link_url ?? "")) { const items = [...f.items]; items[idx] = { ...items[idx], link_url: v }; setF((p) => ({ ...p, items })); }
+                        }}
                         className="w-24 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40"
                       />
                       {item.link_url && (
@@ -1422,6 +1426,7 @@ function MallarPage() {
                       placeholder="URL (valfri länk)"
                       value={q.link_url ?? ""}
                       onChange={(e) => { const qs = [...f.questions]; qs[idx] = { ...qs[idx], link_url: e.target.value }; setF((p) => ({ ...p, questions: qs })); }}
+                      onBlur={(e) => { const v = ensureHttps(e.target.value); if (v !== (q.link_url ?? "")) { const qs = [...f.questions]; qs[idx] = { ...qs[idx], link_url: v }; setF((p) => ({ ...p, questions: qs })); } }}
                       className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40"
                     />
                     {q.link_url && (

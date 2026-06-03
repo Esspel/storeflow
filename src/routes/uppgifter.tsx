@@ -28,7 +28,7 @@ import {
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
-import { cn } from "@/lib/utils";
+import { cn, ensureHttps } from "@/lib/utils";
 import { getSimulatedNow } from "@/lib/time-simulation";
 
 export const Route = createFileRoute("/uppgifter")({
@@ -2686,6 +2686,7 @@ function TasksPage() {
                         placeholder="URL (valfri)"
                         value={step.link_url ?? ""}
                         onChange={(e) => setNewTask(p => ({ ...p, steps: p.steps.map((s, idx) => idx === i ? { ...s, link_url: e.target.value } : s) }))}
+                        onBlur={(e) => { const v = ensureHttps(e.target.value); if (v !== (step.link_url ?? "")) setNewTask(p => ({ ...p, steps: p.steps.map((s, idx) => idx === i ? { ...s, link_url: v } : s) })); }}
                         className="w-28 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40"
                       />
                       {step.link_url && (
@@ -2769,6 +2770,7 @@ function TasksPage() {
                           placeholder="URL (valfri länk)"
                           value={q.link_url ?? ""}
                           onChange={(e) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, link_url: e.target.value } : qr) }))}
+                          onBlur={(e) => { const v = ensureHttps(e.target.value); if (v !== (q.link_url ?? "")) setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, link_url: v } : qr) })); }}
                           className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40"
                         />
                         {q.link_url && (
@@ -3227,7 +3229,7 @@ function TasksPage() {
                       <label className="flex items-center gap-1 text-[11px] text-muted-foreground/70 whitespace-nowrap cursor-pointer">
                         <Checkbox checked={step.requires_photo} onCheckedChange={(v) => setEditForm(p => p ? { ...p, steps: p.steps.map((s,idx) => idx===i ? {...s,requires_photo:!!v} : s) } : p)} className="h-3 w-3" />Foto
                       </label>
-                      <Input placeholder="URL" value={step.link_url ?? ""} onChange={(e) => setEditForm(p => p ? { ...p, steps: p.steps.map((s,idx) => idx===i ? {...s,link_url:e.target.value} : s) } : p)} className="w-24 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40" />
+                      <Input placeholder="URL" value={step.link_url ?? ""} onChange={(e) => setEditForm(p => p ? { ...p, steps: p.steps.map((s,idx) => idx===i ? {...s,link_url:e.target.value} : s) } : p)} onBlur={(e) => { const v = ensureHttps(e.target.value); if (v !== (step.link_url ?? "")) setEditForm(p => p ? { ...p, steps: p.steps.map((s,idx) => idx===i ? {...s,link_url:v} : s) } : p); }} className="w-24 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40" />
                       {step.link_url && (
                         <a href={step.link_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="shrink-0 text-primary hover:text-primary/70">
                           <ExternalLink className="h-3.5 w-3.5" />
@@ -3264,7 +3266,7 @@ function TasksPage() {
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground/40" />
-                        <Input placeholder="URL (valfri länk)" value={q.link_url ?? ""} onChange={(e) => setEditForm(p => p ? { ...p, questions: p.questions.map((qr,idx) => idx===i ? {...qr,link_url:e.target.value} : qr) } : p)} className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40" />
+                        <Input placeholder="URL (valfri länk)" value={q.link_url ?? ""} onChange={(e) => setEditForm(p => p ? { ...p, questions: p.questions.map((qr,idx) => idx===i ? {...qr,link_url:e.target.value} : qr) } : p)} onBlur={(e) => { const v = ensureHttps(e.target.value); if (v !== (q.link_url ?? "")) setEditForm(p => p ? { ...p, questions: p.questions.map((qr,idx) => idx===i ? {...qr,link_url:v} : qr) } : p); }} className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40" />
                         {q.link_url && (
                           <a href={q.link_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary hover:text-primary/70">
                             <ExternalLink className="h-3.5 w-3.5" />

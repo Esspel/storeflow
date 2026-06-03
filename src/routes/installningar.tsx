@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Eye, EyeOff, KeyRound, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw, Shield } from "lucide-react";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
@@ -697,6 +697,33 @@ function SettingsPage() {
             </button>
           </div>
         )}
+
+        {/* Legal links */}
+        <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
+          <h2 className="mb-3 font-semibold">Juridisk information</h2>
+          <nav className="space-y-1">
+            {([
+              ["/integritetspolicy", "Integritetspolicy"],
+              ["/gdpr", "GDPR-information"],
+              ["/anvandningsvillkor", "Användarvillkor"],
+              ["/licens", "Licens (GNU GPL v3.0)"],
+            ] as const).map(([to, label]) => (
+              <Link
+                key={to}
+                to={to}
+                className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                {label}
+                <svg className="h-4 w-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+              </Link>
+            ))}
+          </nav>
+        </div>
+
+        {/* Copyright */}
+        <p className="pb-4 text-center text-xs text-muted-foreground/50">
+          &copy; 2024–2026 StoreFlow Contributors. Licensierat under GNU GPL v3.0.
+        </p>
       </div>
     </div>
   );

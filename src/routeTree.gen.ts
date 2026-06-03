@@ -22,15 +22,19 @@ import { Route as PersonalRouteImport } from './routes/personal'
 import { Route as MotenRouteImport } from './routes/moten'
 import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as LicensRouteImport } from './routes/licens'
 import { Route as LankregisterRouteImport } from './routes/lankregister'
 import { Route as KundrundaRouteImport } from './routes/kundrunda'
 import { Route as KundonskemalRouteImport } from './routes/kundonskemal'
+import { Route as IntegritetspolicyRouteImport } from './routes/integritetspolicy'
 import { Route as InstallningarRouteImport } from './routes/installningar'
 import { Route as HkDashboardRouteImport } from './routes/hk-dashboard'
 import { Route as HjalpRouteImport } from './routes/hjalp'
+import { Route as GdprRouteImport } from './routes/gdpr'
 import { Route as ButiksregisterRouteImport } from './routes/butiksregister'
 import { Route as BelastningRouteImport } from './routes/belastning'
 import { Route as AvvikelserRouteImport } from './routes/avvikelser'
+import { Route as AnvandningsvillkorRouteImport } from './routes/anvandningsvillkor'
 import { Route as IndexRouteImport } from './routes/index'
 
 const UppgifterRoute = UppgifterRouteImport.update({
@@ -98,6 +102,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LicensRoute = LicensRouteImport.update({
+  id: '/licens',
+  path: '/licens',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LankregisterRoute = LankregisterRouteImport.update({
   id: '/lankregister',
   path: '/lankregister',
@@ -111,6 +120,11 @@ const KundrundaRoute = KundrundaRouteImport.update({
 const KundonskemalRoute = KundonskemalRouteImport.update({
   id: '/kundonskemal',
   path: '/kundonskemal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntegritetspolicyRoute = IntegritetspolicyRouteImport.update({
+  id: '/integritetspolicy',
+  path: '/integritetspolicy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InstallningarRoute = InstallningarRouteImport.update({
@@ -128,6 +142,11 @@ const HjalpRoute = HjalpRouteImport.update({
   path: '/hjalp',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GdprRoute = GdprRouteImport.update({
+  id: '/gdpr',
+  path: '/gdpr',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ButiksregisterRoute = ButiksregisterRouteImport.update({
   id: '/butiksregister',
   path: '/butiksregister',
@@ -143,6 +162,11 @@ const AvvikelserRoute = AvvikelserRouteImport.update({
   path: '/avvikelser',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AnvandningsvillkorRoute = AnvandningsvillkorRouteImport.update({
+  id: '/anvandningsvillkor',
+  path: '/anvandningsvillkor',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -151,15 +175,19 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/anvandningsvillkor': typeof AnvandningsvillkorRoute
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
+  '/gdpr': typeof GdprRoute
   '/hjalp': typeof HjalpRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
+  '/integritetspolicy': typeof IntegritetspolicyRoute
   '/kundonskemal': typeof KundonskemalRoute
   '/kundrunda': typeof KundrundaRoute
   '/lankregister': typeof LankregisterRoute
+  '/licens': typeof LicensRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/moten': typeof MotenRoute
@@ -176,15 +204,19 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/anvandningsvillkor': typeof AnvandningsvillkorRoute
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
+  '/gdpr': typeof GdprRoute
   '/hjalp': typeof HjalpRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
+  '/integritetspolicy': typeof IntegritetspolicyRoute
   '/kundonskemal': typeof KundonskemalRoute
   '/kundrunda': typeof KundrundaRoute
   '/lankregister': typeof LankregisterRoute
+  '/licens': typeof LicensRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/moten': typeof MotenRoute
@@ -202,15 +234,19 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/anvandningsvillkor': typeof AnvandningsvillkorRoute
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
+  '/gdpr': typeof GdprRoute
   '/hjalp': typeof HjalpRoute
   '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
+  '/integritetspolicy': typeof IntegritetspolicyRoute
   '/kundonskemal': typeof KundonskemalRoute
   '/kundrunda': typeof KundrundaRoute
   '/lankregister': typeof LankregisterRoute
+  '/licens': typeof LicensRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/moten': typeof MotenRoute
@@ -229,15 +265,19 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/anvandningsvillkor'
     | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
+    | '/gdpr'
     | '/hjalp'
     | '/hk-dashboard'
     | '/installningar'
+    | '/integritetspolicy'
     | '/kundonskemal'
     | '/kundrunda'
     | '/lankregister'
+    | '/licens'
     | '/login'
     | '/mallar'
     | '/moten'
@@ -254,15 +294,19 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/anvandningsvillkor'
     | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
+    | '/gdpr'
     | '/hjalp'
     | '/hk-dashboard'
     | '/installningar'
+    | '/integritetspolicy'
     | '/kundonskemal'
     | '/kundrunda'
     | '/lankregister'
+    | '/licens'
     | '/login'
     | '/mallar'
     | '/moten'
@@ -279,15 +323,19 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/anvandningsvillkor'
     | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
+    | '/gdpr'
     | '/hjalp'
     | '/hk-dashboard'
     | '/installningar'
+    | '/integritetspolicy'
     | '/kundonskemal'
     | '/kundrunda'
     | '/lankregister'
+    | '/licens'
     | '/login'
     | '/mallar'
     | '/moten'
@@ -305,15 +353,19 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AnvandningsvillkorRoute: typeof AnvandningsvillkorRoute
   AvvikelserRoute: typeof AvvikelserRoute
   BelastningRoute: typeof BelastningRoute
   ButiksregisterRoute: typeof ButiksregisterRoute
+  GdprRoute: typeof GdprRoute
   HjalpRoute: typeof HjalpRoute
   HkDashboardRoute: typeof HkDashboardRoute
   InstallningarRoute: typeof InstallningarRoute
+  IntegritetspolicyRoute: typeof IntegritetspolicyRoute
   KundonskemalRoute: typeof KundonskemalRoute
   KundrundaRoute: typeof KundrundaRoute
   LankregisterRoute: typeof LankregisterRoute
+  LicensRoute: typeof LicensRoute
   LoginRoute: typeof LoginRoute
   MallarRoute: typeof MallarRoute
   MotenRoute: typeof MotenRoute
@@ -422,6 +474,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/licens': {
+      id: '/licens'
+      path: '/licens'
+      fullPath: '/licens'
+      preLoaderRoute: typeof LicensRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lankregister': {
       id: '/lankregister'
       path: '/lankregister'
@@ -441,6 +500,13 @@ declare module '@tanstack/react-router' {
       path: '/kundonskemal'
       fullPath: '/kundonskemal'
       preLoaderRoute: typeof KundonskemalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/integritetspolicy': {
+      id: '/integritetspolicy'
+      path: '/integritetspolicy'
+      fullPath: '/integritetspolicy'
+      preLoaderRoute: typeof IntegritetspolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/installningar': {
@@ -464,6 +530,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HjalpRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/gdpr': {
+      id: '/gdpr'
+      path: '/gdpr'
+      fullPath: '/gdpr'
+      preLoaderRoute: typeof GdprRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/butiksregister': {
       id: '/butiksregister'
       path: '/butiksregister'
@@ -485,6 +558,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AvvikelserRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/anvandningsvillkor': {
+      id: '/anvandningsvillkor'
+      path: '/anvandningsvillkor'
+      fullPath: '/anvandningsvillkor'
+      preLoaderRoute: typeof AnvandningsvillkorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -497,15 +577,19 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AnvandningsvillkorRoute: AnvandningsvillkorRoute,
   AvvikelserRoute: AvvikelserRoute,
   BelastningRoute: BelastningRoute,
   ButiksregisterRoute: ButiksregisterRoute,
+  GdprRoute: GdprRoute,
   HjalpRoute: HjalpRoute,
   HkDashboardRoute: HkDashboardRoute,
   InstallningarRoute: InstallningarRoute,
+  IntegritetspolicyRoute: IntegritetspolicyRoute,
   KundonskemalRoute: KundonskemalRoute,
   KundrundaRoute: KundrundaRoute,
   LankregisterRoute: LankregisterRoute,
+  LicensRoute: LicensRoute,
   LoginRoute: LoginRoute,
   MallarRoute: MallarRoute,
   MotenRoute: MotenRoute,

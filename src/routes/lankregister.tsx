@@ -14,7 +14,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase, type LinkList, type LinkListItem, type Forening, type Store, logAudit } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
-import { cn } from "@/lib/utils";
+import { cn, ensureHttps } from "@/lib/utils";
 
 export const Route = createFileRoute("/lankregister")({
   component: LankregisterPage,
@@ -641,6 +641,7 @@ function LankregisterPage() {
                   placeholder="https://..."
                   value={itemForm.url}
                   onChange={(e) => setItemForm((p) => ({ ...p, url: e.target.value }))}
+                  onBlur={(e) => { const v = ensureHttps(e.target.value); if (v !== itemForm.url) setItemForm((p) => ({ ...p, url: v })); }}
                   className="pl-9"
                 />
               </div>

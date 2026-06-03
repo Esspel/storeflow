@@ -345,9 +345,6 @@ function KundrundaPage() {
     if (isManager && activeStore && localVersion === null) {
       ensureLocalVersionRecord();
     }
-    if (localVersion?.central_version_pending) {
-      setShowVersionChoiceDialog(true);
-    }
   }, [loading, localVersion, isManager, isAdmin, activeStore]);
 
   // Zones used during a session: prefer store-local, fall back to global
@@ -1385,7 +1382,7 @@ function KundrundaPage() {
         )}
 
         {/* Defects merge pending banner */}
-        {isManager && localVersion?.defects_pending_hk_update && (
+        {isManager && localVersion?.defects_pending_hk_update && localVersion?.pending_defects_snapshot && (
           <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/20">
             <Info className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
             <div className="flex-1 min-w-0">
@@ -1593,6 +1590,22 @@ function KundrundaPage() {
           checkpoints={allCheckpoints.map(cp => ({ id: cp.id, label: cp.label, zoneName: cp.zoneName }))}
           onDefectsChanged={fetchData}
         />
+
+        {/* Defects merge confirmation — must be in edit view since banner is here */}
+        <AlertDialog open={showDefectsMergeDialog} onOpenChange={(o) => !o && setShowDefectsMergeDialog(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Slå ihop avvikelser med HK</AlertDialogTitle>
+              <AlertDialogDescription>
+                HKs nya avvikelser läggs till i din butiks lista. Befintliga lokala avvikelser påverkas inte. Länkade avvikelser vars text ändrats hos HK uppdateras.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Avbryt</AlertDialogCancel>
+              <AlertDialogAction onClick={mergeHKDefects}>Slå ihop</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }
