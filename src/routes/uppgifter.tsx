@@ -963,7 +963,15 @@ function TasksPage() {
         await supabase.from("task_steps").update({ is_done: false }).eq("task_id", task.id);
       }
       fetchTasks();
-      if (detailTask?.id === task.id) setDetailTask(p => p ? { ...p, status: newStatus as Task["status"] } : null);
+      if (detailTask?.id === task.id) {
+        setDetailTask(p => p ? {
+          ...p,
+          status: newStatus as Task["status"],
+          steps: newStatus === "done"
+            ? (p.steps ?? []).map(s => ({ ...s, is_done: true }))
+            : (p.steps ?? []).map(s => ({ ...s, is_done: false })),
+        } : null);
+      }
     } finally {
       completingRef.current.delete(task.id);
     }
@@ -2252,7 +2260,7 @@ function TasksPage() {
                     className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary-soft px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
                   >
                     <Hash className="h-3 w-3" />
-                    SAP {detailTask.sap_article_id}
+                    Mitt Coop {detailTask.sap_article_id}
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 );
@@ -2930,7 +2938,7 @@ function TasksPage() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
                     >
-                      <ExternalLink className="h-3 w-3" /> Öppna i SAP-sortiment
+                      <ExternalLink className="h-3 w-3" /> Öppna i Mitt Coop-sortiment
                     </a>
                   )}
                 </div>

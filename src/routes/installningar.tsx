@@ -678,7 +678,7 @@ function SettingsPage() {
                 Exportera lokal debug-logg
               </Button>
               <p className="mt-2 text-center text-xs text-muted-foreground">
-                Ladda ned och skicka denna fil till Coops IT-Helpdesk.
+                Exportera lokal debug-information för felsökning.
               </p>
             </div>
           </div>

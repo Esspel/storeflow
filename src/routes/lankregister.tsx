@@ -123,7 +123,8 @@ function LankregisterPage() {
       }
       if (l.scope === "store") {
         if (!l.store_id) return false;
-        return userStoreIds.includes(l.store_id) || activeStore?.id === l.store_id;
+        // Only show store-scoped lists for the currently active store
+        return activeStore ? l.store_id === activeStore.id : userStoreIds.includes(l.store_id);
       }
       return false;
     });

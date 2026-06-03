@@ -1,7 +1,7 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
-import { ChartBar as BarChart3, Bell, ClipboardList, FlaskConical, Hop as Home, Circle as HelpCircle, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Store, X as XIcon, Tv as Tv2, ChartBar as BarChart2 } from "lucide-react";
+import { ChartBar as BarChart3, Bell, ClipboardList, FlaskConical, Hop as Home, Circle as HelpCircle, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Store, X as XIcon, Tv as Tv2, ChartBar as BarChart2, Link as LinkIcon } from "lucide-react";
 import { ROLE_LABELS, HIERARCHY_LABELS } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
 import { GlobalStoreSelector } from "@/components/global-store-selector";
@@ -397,8 +397,8 @@ export function AppShell() {
                 className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-background px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-accent-foreground active:opacity-75"
               >
                 <ShoppingCart className="h-3.5 w-3.5" />
-                <span className="sm:hidden">S3</span>
-                <span className="hidden sm:inline">SAP-sortiment</span>
+                <span className="sm:hidden">Sortiment</span>
+                <span className="hidden sm:inline">Mitt Coop-sortiment</span>
               </a>
             )}
 
@@ -509,6 +509,12 @@ export function AppShell() {
                   <Link to="/installningar" className="cursor-pointer">
                     <Settings className="mr-2 h-4 w-4" />
                     Inställningar
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/lankregister" className="cursor-pointer">
+                    <LinkIcon className="mr-2 h-4 w-4" />
+                    Länkregister
                   </Link>
                 </DropdownMenuItem>
                 {isManager && (
