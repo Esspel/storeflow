@@ -22,6 +22,7 @@ import { Route as PersonalRouteImport } from './routes/personal'
 import { Route as MotenRouteImport } from './routes/moten'
 import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as LankregisterRouteImport } from './routes/lankregister'
 import { Route as KundrundaRouteImport } from './routes/kundrunda'
 import { Route as KundonskemalRouteImport } from './routes/kundonskemal'
 import { Route as InstallningarRouteImport } from './routes/installningar'
@@ -97,6 +98,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LankregisterRoute = LankregisterRouteImport.update({
+  id: '/lankregister',
+  path: '/lankregister',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const KundrundaRoute = KundrundaRouteImport.update({
   id: '/kundrunda',
   path: '/kundrunda',
@@ -153,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/installningar': typeof InstallningarRoute
   '/kundonskemal': typeof KundonskemalRoute
   '/kundrunda': typeof KundrundaRoute
+  '/lankregister': typeof LankregisterRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/moten': typeof MotenRoute
@@ -177,6 +184,7 @@ export interface FileRoutesByTo {
   '/installningar': typeof InstallningarRoute
   '/kundonskemal': typeof KundonskemalRoute
   '/kundrunda': typeof KundrundaRoute
+  '/lankregister': typeof LankregisterRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/moten': typeof MotenRoute
@@ -202,6 +210,7 @@ export interface FileRoutesById {
   '/installningar': typeof InstallningarRoute
   '/kundonskemal': typeof KundonskemalRoute
   '/kundrunda': typeof KundrundaRoute
+  '/lankregister': typeof LankregisterRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/moten': typeof MotenRoute
@@ -228,6 +237,7 @@ export interface FileRouteTypes {
     | '/installningar'
     | '/kundonskemal'
     | '/kundrunda'
+    | '/lankregister'
     | '/login'
     | '/mallar'
     | '/moten'
@@ -252,6 +262,7 @@ export interface FileRouteTypes {
     | '/installningar'
     | '/kundonskemal'
     | '/kundrunda'
+    | '/lankregister'
     | '/login'
     | '/mallar'
     | '/moten'
@@ -276,6 +287,7 @@ export interface FileRouteTypes {
     | '/installningar'
     | '/kundonskemal'
     | '/kundrunda'
+    | '/lankregister'
     | '/login'
     | '/mallar'
     | '/moten'
@@ -301,6 +313,7 @@ export interface RootRouteChildren {
   InstallningarRoute: typeof InstallningarRoute
   KundonskemalRoute: typeof KundonskemalRoute
   KundrundaRoute: typeof KundrundaRoute
+  LankregisterRoute: typeof LankregisterRoute
   LoginRoute: typeof LoginRoute
   MallarRoute: typeof MallarRoute
   MotenRoute: typeof MotenRoute
@@ -409,6 +422,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lankregister': {
+      id: '/lankregister'
+      path: '/lankregister'
+      fullPath: '/lankregister'
+      preLoaderRoute: typeof LankregisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/kundrunda': {
       id: '/kundrunda'
       path: '/kundrunda'
@@ -485,6 +505,7 @@ const rootRouteChildren: RootRouteChildren = {
   InstallningarRoute: InstallningarRoute,
   KundonskemalRoute: KundonskemalRoute,
   KundrundaRoute: KundrundaRoute,
+  LankregisterRoute: LankregisterRoute,
   LoginRoute: LoginRoute,
   MallarRoute: MallarRoute,
   MotenRoute: MotenRoute,

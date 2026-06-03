@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, ListChecks, TriangleAlert as AlertTriangle, MessageSquare, ClipboardCheck, ChartBar as BarChart3, Monitor, Users, Store, Settings, Sparkles, CalendarDays, ChartBar as BarChart2, ShoppingCart, FileText } from "lucide-react";
+import { LayoutDashboard, ListChecks, TriangleAlert as AlertTriangle, MessageSquare, ClipboardCheck, ChartBar as BarChart3, Monitor, Users, Store, Settings, Sparkles, CalendarDays, ChartBar as BarChart2, ShoppingCart, FileText, Link as LinkIcon } from "lucide-react";
 
 import {
   Sidebar,
@@ -29,6 +29,7 @@ const operations = [
   { title: "Revisioner", url: "/revisioner", icon: ClipboardCheck },
   { title: "Styrtavlor", url: "/styrtavlor", icon: Monitor },
   { title: "Mallar", url: "/mallar", icon: FileText },
+  { title: "Länkregister", url: "/lankregister", icon: LinkIcon },
   { title: "Rapporter", url: "/rapporter", icon: BarChart3 },
 ];
 

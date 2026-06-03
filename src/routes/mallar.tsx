@@ -68,6 +68,7 @@ const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid im
 #
 # Steg: pipe-separerade (|) checkpunkter
 #   [foto]               — kräver fotobevis
+#   [url:https://...]    — länk till extern sida
 #   [om:FrågeLabel=ja]   — steget visas bara om frågan besvarats med "ja"
 #   [om:FrågeLabel=nej]  — steget visas bara om frågan besvarats med "nej"
 #   Frågelabeln måste matcha exakt en fråga i Frågor-kolumnen
@@ -77,6 +78,7 @@ const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid im
 # Frågor: pipe-separerade frågor
 #   [obligatorisk]  — måste besvaras innan uppgiften kan slutföras
 #   [ja_nej]        — ger Ja/Nej-knappar istället för fritextfält (krävs för villkorliga steg)
+#   [url:https://...] — länk till extern sida
 #   Exempel:
 #     "1. Finns avvikelser? [obligatorisk] [ja_nej] | 2. Kommentar"
 #
@@ -122,8 +124,8 @@ type FormState = {
   isLocked: boolean;
   foreningId: string;
   changeSummary: string;
-  items: { id?: string; label: string; requires_photo: boolean; condition_question_id?: string; condition_answer?: string }[];
-  questions: { id?: string; label: string; question_type: "text" | "yes_no"; is_required: boolean }[];
+  items: { id?: string; label: string; requires_photo: boolean; link_url?: string; condition_question_id?: string; condition_answer?: string }[];
+  questions: { id?: string; label: string; question_type: "text" | "yes_no"; is_required: boolean; link_url?: string }[];
 };
 
 const emptyForm = (): FormState => ({
@@ -135,7 +137,7 @@ const emptyForm = (): FormState => ({
   due_date_offset: "", due_date_time: "", time_slots: [],
   storeIds: [], isGlobal: false, isLocked: false, foreningId: "",
   changeSummary: "",
-  items: [{ label: "", requires_photo: false }],
+  items: [{ label: "", requires_photo: false, link_url: "" }],
   questions: [],
 });
 
@@ -506,7 +508,7 @@ function MallarPage() {
     const validItems = form.items.filter((it) => it.label.trim());
     if (validItems.length > 0) {
       await supabase.from("checklist_template_items").insert(
-        validItems.map((it, idx) => ({ template_id: tmpl.id, label: it.label.trim(), requires_photo: it.requires_photo, sort_order: idx, condition_question_id: it.condition_question_id ?? null, condition_answer: it.condition_answer ?? null }))
+        validItems.map((it, idx) => ({ template_id: tmpl.id, label: it.label.trim(), requires_photo: it.requires_photo, link_url: it.link_url || null, sort_order: idx, condition_question_id: it.condition_question_id ?? null, condition_answer: it.condition_answer ?? null }))
       );
     }
 
@@ -517,7 +519,7 @@ function MallarPage() {
     const validQuestions = form.questions.filter((q) => q.label.trim());
     if (validQuestions.length > 0) {
       await supabase.from("checklist_template_questions").insert(
-        validQuestions.map((q, idx) => ({ template_id: tmpl.id, label: q.label.trim(), question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: idx }))
+        validQuestions.map((q, idx) => ({ template_id: tmpl.id, label: q.label.trim(), question_type: q.question_type ?? "text", is_required: q.is_required, link_url: q.link_url || null, sort_order: idx }))
       );
     }
 
@@ -642,6 +644,7 @@ function MallarPage() {
               label: it.label,
               sort_order: idx,
               requires_photo: it.requires_photo,
+              link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url || null,
               condition_question_id: it.condition_question_id ? (questionIdMap.get(it.condition_question_id) ?? null) : null,
               condition_answer: it.condition_answer ?? null,
             }))
@@ -690,8 +693,8 @@ function MallarPage() {
       isLocked: t.locked_by_admin ?? false,
       foreningId: t.forening_id ?? "",
       changeSummary: "",
-      items: (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ id: it.id, label: it.label, requires_photo: it.requires_photo, condition_question_id: (it as ChecklistTemplateItem & { condition_question_id?: string }).condition_question_id ?? undefined, condition_answer: (it as ChecklistTemplateItem & { condition_answer?: string }).condition_answer ?? undefined })),
-      questions: (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q) => ({ id: q.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required })),
+      items: (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ id: it.id, label: it.label, requires_photo: it.requires_photo, link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url ?? "", condition_question_id: (it as ChecklistTemplateItem & { condition_question_id?: string }).condition_question_id ?? undefined, condition_answer: (it as ChecklistTemplateItem & { condition_answer?: string }).condition_answer ?? undefined })),
+      questions: (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q) => ({ id: q.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, link_url: (q as ChecklistTemplateQuestion & { link_url?: string }).link_url ?? "" })),
     });
     setError("");
   }
@@ -731,7 +734,7 @@ function MallarPage() {
     const validItems = editForm.items.filter((it) => it.label.trim());
     if (validItems.length > 0) {
       await supabase.from("checklist_template_items").insert(
-        validItems.map((it, idx) => ({ template_id: editTarget.id, label: it.label.trim(), requires_photo: it.requires_photo, sort_order: idx, condition_question_id: it.condition_question_id ?? null, condition_answer: it.condition_answer ?? null }))
+        validItems.map((it, idx) => ({ template_id: editTarget.id, label: it.label.trim(), requires_photo: it.requires_photo, link_url: it.link_url || null, sort_order: idx, condition_question_id: it.condition_question_id ?? null, condition_answer: it.condition_answer ?? null }))
       );
     }
 
@@ -739,7 +742,7 @@ function MallarPage() {
     const validQuestions = editForm.questions.filter((q) => q.label.trim());
     if (validQuestions.length > 0) {
       await supabase.from("checklist_template_questions").insert(
-        validQuestions.map((q, idx) => ({ template_id: editTarget.id, label: q.label.trim(), question_type: q.question_type, is_required: q.is_required, sort_order: idx }))
+        validQuestions.map((q, idx) => ({ template_id: editTarget.id, label: q.label.trim(), question_type: q.question_type, is_required: q.is_required, link_url: q.link_url || null, sort_order: idx }))
       );
     }
 
@@ -956,6 +959,7 @@ function MallarPage() {
         const stepsStr = (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it, idx) => {
           let s = `${idx + 1}. ${it.label}`;
           if (it.requires_photo) s += " [foto]";
+          if ((it as ChecklistTemplateItem & { link_url?: string }).link_url) s += ` [url:${(it as ChecklistTemplateItem & { link_url?: string }).link_url}]`;
           if (it.condition_question_id) {
             const condQ = sortedQuestions.find(q => q.id === it.condition_question_id);
             if (condQ) s += ` [om:${condQ.label}=${it.condition_answer ?? "ja"}]`;
@@ -963,7 +967,7 @@ function MallarPage() {
           return s;
         }).join(" | ");
         const questionsStr = sortedQuestions.map((q, idx) =>
-          `${idx + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}`
+          `${idx + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}${(q as ChecklistTemplateQuestion & { link_url?: string }).link_url ? ` [url:${(q as ChecklistTemplateQuestion & { link_url?: string }).link_url}]` : ""}`
         ).join(" | ");
         const tAny = t as ChecklistTemplate & {
           recurrence_start?: string; recurrence_end?: string;
@@ -1099,15 +1103,18 @@ function MallarPage() {
       if (stepsRaw?.trim()) {
         const items = stepsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => {
           const condMatch = part.match(/\[om:([^\]=]+)=([^\]]+)\]/i);
+          const urlMatch = part.match(/\[url:([^\]]+)\]/i);
           const cleanLabel = part
             .replace(/^\d+\.\s*/, "")
             .replace(/\s*\[foto\]/i, "")
+            .replace(/\s*\[url:[^\]]+\]/i, "")
             .replace(/\s*\[om:[^\]]+\]/i, "")
             .trim();
           return {
             template_id: tmpl.id,
             label: cleanLabel,
             requires_photo: /\[foto\]/i.test(part),
+            link_url: urlMatch ? urlMatch[1].trim() : null,
             condition_question_label: condMatch ? condMatch[1].trim() : null,
             condition_answer: condMatch ? condMatch[2].trim() : null,
             sort_order: idx,
@@ -1129,13 +1136,17 @@ function MallarPage() {
       }
 
       if (questionsRaw?.trim()) {
-        const questions = questionsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => ({
-          template_id: tmpl.id,
-          label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[obligatorisk\]/i, "").replace(/\s*\[ja_nej\]/i, "").trim(),
-          question_type: /\[ja_nej\]/i.test(part) ? "yes_no" : "text",
-          is_required: /\[obligatorisk\]/i.test(part),
-          sort_order: idx,
-        }));
+        const questions = questionsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => {
+          const urlMatch = part.match(/\[url:([^\]]+)\]/i);
+          return {
+            template_id: tmpl.id,
+            label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[obligatorisk\]/i, "").replace(/\s*\[ja_nej\]/i, "").replace(/\s*\[url:[^\]]+\]/i, "").trim(),
+            question_type: /\[ja_nej\]/i.test(part) ? "yes_no" : "text",
+            is_required: /\[obligatorisk\]/i.test(part),
+            link_url: urlMatch ? urlMatch[1].trim() : null,
+            sort_order: idx,
+          };
+        });
         if (questions.length > 0) {
           const { data: insertedQs } = await supabase.from("checklist_template_questions").insert(questions).select("id, label, sort_order");
           // Resolve condition_question_id for items that have pending conditions
@@ -1307,6 +1318,15 @@ function MallarPage() {
                         />
                         Foto
                       </label>
+                      <Input
+                        placeholder="URL"
+                        value={item.link_url ?? ""}
+                        onChange={(e) => {
+                          const items = [...f.items]; items[idx] = { ...items[idx], link_url: e.target.value };
+                          setF((p) => ({ ...p, items }));
+                        }}
+                        className="w-28 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40"
+                      />
                       <button
                         type="button"
                         className="opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1365,7 +1385,7 @@ function MallarPage() {
             <button
               type="button"
               className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-              onClick={() => setF((p) => ({ ...p, items: [...p.items, { label: "", requires_photo: false }] }))}
+              onClick={() => setF((p) => ({ ...p, items: [...p.items, { label: "", requires_photo: false, link_url: "" }] }))}
             >
               <Plus className="h-3.5 w-3.5" /> Lägg till steg
             </button>
@@ -1391,6 +1411,12 @@ function MallarPage() {
                       <X className="h-3.5 w-3.5 text-muted-foreground/50" />
                     </button>
                   </div>
+                  <Input
+                    placeholder="URL (valfri länk)"
+                    value={q.link_url ?? ""}
+                    onChange={(e) => { const qs = [...f.questions]; qs[idx] = { ...qs[idx], link_url: e.target.value }; setF((p) => ({ ...p, questions: qs })); }}
+                    className="border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40 w-full"
+                  />
                   <div className="flex items-center justify-between">
                     <div className="flex gap-1">
                       {(["text", "yes_no"] as const).map((type) => (
@@ -1417,7 +1443,7 @@ function MallarPage() {
             <button
               type="button"
               className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-              onClick={() => setF((p) => ({ ...p, questions: [...p.questions, { label: "", question_type: "text", is_required: false }] }))}
+              onClick={() => setF((p) => ({ ...p, questions: [...p.questions, { label: "", question_type: "text", is_required: false, link_url: "" }] }))}
             >
               <Plus className="h-3.5 w-3.5" /> Lägg till fråga
             </button>

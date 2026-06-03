@@ -175,6 +175,7 @@ export type TaskStep = {
   sort_order: number;
   condition_question_id?: string | null;
   condition_answer?: string | null;
+  link_url?: string | null;
 };
 
 export type Incident = {
@@ -324,6 +325,7 @@ export type ChecklistTemplateItem = {
   sort_order: number;
   condition_question_id?: string | null;
   condition_answer?: string | null;
+  link_url?: string | null;
 };
 
 export type ChecklistTemplateQuestion = {
@@ -333,6 +335,7 @@ export type ChecklistTemplateQuestion = {
   question_type: "text" | "yes_no";
   is_required: boolean;
   sort_order: number;
+  link_url?: string | null;
 };
 
 export type TaskQuestion = {
@@ -346,6 +349,7 @@ export type TaskQuestion = {
   answered_by: string | null;
   answered_at: string | null;
   created_at: string;
+  link_url?: string | null;
 };
 
 export type TaskQuestionAnswer = {
@@ -717,3 +721,26 @@ export function mittCoopUrl(sapArticleId: string | null | undefined, sapSiteId: 
   if (!sapArticleId?.trim() || !sapSiteId?.trim()) return null;
   return `https://mittcoop.coop.se/sortiment/articles/${sapArticleId.trim()}?siteId=${sapSiteId.trim()}`;
 }
+
+export type LinkList = {
+  id: string;
+  name: string;
+  description: string | null;
+  scope: "store" | "forening" | "hk";
+  store_id: string | null;
+  forening_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  items?: LinkListItem[];
+};
+
+export type LinkListItem = {
+  id: string;
+  list_id: string;
+  title: string;
+  url: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+};

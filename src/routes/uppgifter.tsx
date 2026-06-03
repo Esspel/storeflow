@@ -118,7 +118,7 @@ type TaskFull = Task & {
   images?: TaskImage[];
 };
 
-type FormQuestion = { label: string; question_type: "text" | "yes_no"; is_required: boolean };
+type FormQuestion = { label: string; question_type: "text" | "yes_no"; is_required: boolean; link_url: string };
 
 // datetime-local input gives "YYYY-MM-DDTHH:mm" in local time.
 // Supabase timestamptz needs a proper UTC ISO string.
@@ -157,7 +157,7 @@ const emptyForm = (storeId: string) => ({
   recurrence_end: "",
   sap_article_id: "",
   completion_mode: "manual" as "manual" | "auto_from_children" | "auto_complete_children",
-  steps: [{ label: "", requires_photo: false }] as { label: string; requires_photo: boolean }[],
+  steps: [{ label: "", requires_photo: false, link_url: "" }] as { label: string; requires_photo: boolean; link_url: string }[],
   questions: [] as FormQuestion[],
   assigneeUserIds: [] as string[],
   assigneeGroupIds: [] as string[],
@@ -789,7 +789,7 @@ function TasksPage() {
     if (!tmpl) return;
     const steps = (tmpl.items ?? [])
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((it) => ({ label: it.label, requires_photo: it.requires_photo }));
+      .map((it) => ({ label: it.label, requires_photo: it.requires_photo, link_url: it.link_url ?? "" }));
     const questions = (tmpl.questions ?? [])
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((q) => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required }));
@@ -1122,7 +1122,7 @@ function TasksPage() {
       recurrence_end: task.recurrence_end ?? "",
       sap_article_id: (task as TaskFull & { sap_article_id?: string }).sap_article_id ?? "",
       completion_mode: task.completion_mode ?? "manual",
-      steps: (task.steps ?? []).map(s => ({ label: s.label, requires_photo: s.requires_photo })),
+      steps: (task.steps ?? []).map(s => ({ label: s.label, requires_photo: s.requires_photo, link_url: s.link_url ?? "" })),
       questions: (task.questions ?? []).map(q => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required })),
       assigneeUserIds: (task.assignees ?? []).filter(a => a.user_id).map(a => a.user_id!),
       assigneeGroupIds: (task.assignees ?? []).filter(a => a.group_id).map(a => a.group_id!),
@@ -1186,11 +1186,11 @@ function TasksPage() {
     for (const tid of affectedIds) {
       await supabase.from("task_steps").delete().eq("task_id", tid);
       if (validSteps.length > 0) {
-        await supabase.from("task_steps").insert(validSteps.map((s, i) => ({ task_id: tid, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false })));
+        await supabase.from("task_steps").insert(validSteps.map((s, i) => ({ task_id: tid, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false, link_url: s.link_url || null })));
       }
       await supabase.from("task_questions").delete().eq("task_id", tid);
       if (validQuestions.length > 0) {
-        await supabase.from("task_questions").insert(validQuestions.map((q, i) => ({ task_id: tid, label: q.label, question_type: q.question_type, is_required: q.is_required, sort_order: i })));
+        await supabase.from("task_questions").insert(validQuestions.map((q, i) => ({ task_id: tid, label: q.label, question_type: q.question_type, is_required: q.is_required, sort_order: i, link_url: q.link_url || null })));
       }
       await supabase.from("task_assignees").delete().eq("task_id", tid);
       const rows = assigneeRows.map(r => ({ ...r, task_id: tid }));
@@ -1272,12 +1272,12 @@ function TasksPage() {
 
       if (validSteps.length > 0) {
         await supabase.from("task_steps").insert(
-          validSteps.map((s, i) => ({ task_id: task.id, label: s.label, sort_order: i, requires_photo: s.requires_photo }))
+          validSteps.map((s, i) => ({ task_id: task.id, label: s.label, sort_order: i, requires_photo: s.requires_photo, link_url: s.link_url || null }))
         );
       }
       if (validQuestions.length > 0) {
         await supabase.from("task_questions").insert(
-          validQuestions.map((q, i) => ({ task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: i }))
+          validQuestions.map((q, i) => ({ task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: i, link_url: q.link_url || null }))
         );
       }
 
@@ -1325,7 +1325,7 @@ function TasksPage() {
         newTask.assigneeGroupIds.forEach(gid => assigneesFull.push({ task_id: firstTask.id, user_id: null as unknown as string, group_id: gid }));
         const parentFull: TaskFull = {
           ...firstTask,
-          steps: validSteps.map((s, i) => ({ id: "", task_id: firstTask.id, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false })),
+          steps: validSteps.map((s, i) => ({ id: "", task_id: firstTask.id, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false, link_url: s.link_url || null })),
           questions: validQuestions.map((q, i) => ({ id: "", task_id: firstTask.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: i, answer: null })),
           assignees: assigneesFull.map(a => ({ task_id: firstTask.id, user_id: a.user_id, group_id: a.group_id })),
           images: [],
@@ -1362,11 +1362,14 @@ function TasksPage() {
 # Startdatum/Slutdatum: ÅÅÅÅ-MM-DD — Slutdatum är obligatoriskt för återkommande uppgifter
 # Avslutningsläge: manual | auto_from_children | auto_complete_children (standard: manual)
 #
-# Steg: separera med " | " — lägg till [foto] om foto krävs
-#   Exempel: "1. Torka hyllor | 2. Kontrollera kyl [foto]"
+# Steg: separera med " | " — lägg till flaggor efter etiketten
+#   [foto]            — kräver fotobevis
+#   [url:https://...]  — länk som visas vid checkpointen
+#   [om:FrågeLabel=ja] — villkorligt steg
+#   Exempel: "1. Torka hyllor | 2. Kontrollera kyl [foto] [url:https://manual.se]"
 #
-# Frågor: separera med " | " — lägg till [obligatorisk] och/eller [ja_nej]
-#   Exempel: "1. Är allt klart? [obligatorisk] [ja_nej] | 2. Kommentar"
+# Frågor: separera med " | " — lägg till [obligatorisk] och/eller [ja_nej] och/eller [url:...]
+#   Exempel: "1. Är allt klart? [obligatorisk] [ja_nej] [url:https://rutin.se] | 2. Kommentar"
 #
 # Tips: Spara filen i UTF-8-format och använd semikolon (;) som separator
 `;
@@ -1456,10 +1459,12 @@ function TasksPage() {
       const parsedSteps = stepsRaw?.trim()
         ? stepsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => {
             const condMatch = part.match(/\[om:([^\]=]+)=([^\]]+)\]/i);
+            const urlMatch = part.match(/\[url:([^\]]+)\]/i);
             return {
               task_id: task.id,
-              label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[foto\]/i, "").replace(/\s*\[om:[^\]]+\]/i, "").trim(),
+              label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[foto\]/i, "").replace(/\s*\[om:[^\]]+\]/i, "").replace(/\s*\[url:[^\]]+\]/i, "").trim(),
               requires_photo: /\[foto\]/i.test(part),
+              link_url: urlMatch ? urlMatch[1].trim() : null,
               condition_question_label: condMatch ? condMatch[1].trim() : null,
               condition_answer: condMatch ? condMatch[2].trim() : null,
               is_done: false,
@@ -1469,13 +1474,17 @@ function TasksPage() {
         : [];
 
       const parsedQuestions = questionsRaw?.trim()
-        ? questionsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => ({
-            task_id: task.id,
-            label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[obligatorisk\]/i, "").replace(/\s*\[ja_nej\]/i, "").trim(),
-            question_type: /\[ja_nej\]/i.test(part) ? "yes_no" : "text",
-            is_required: /\[obligatorisk\]/i.test(part),
-            sort_order: idx,
-          }))
+        ? questionsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => {
+            const urlMatch = part.match(/\[url:([^\]]+)\]/i);
+            return {
+              task_id: task.id,
+              label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[obligatorisk\]/i, "").replace(/\s*\[ja_nej\]/i, "").replace(/\s*\[url:[^\]]+\]/i, "").trim(),
+              question_type: (/\[ja_nej\]/i.test(part) ? "yes_no" : "text") as "text" | "yes_no",
+              is_required: /\[obligatorisk\]/i.test(part),
+              link_url: urlMatch ? urlMatch[1].trim() : null,
+              sort_order: idx,
+            };
+          })
         : [];
 
       // Insert questions first so we can resolve condition_question_id by label
@@ -1522,8 +1531,8 @@ function TasksPage() {
           t.recurrence_start ?? "",
           t.recurrence_end ?? "",
           t.completion_mode ?? "manual",
-          (t.steps ?? []).sort((a, b) => a.sort_order - b.sort_order).map((s, i) => `${i + 1}. ${s.label}${s.requires_photo ? " [foto]" : ""}`).join(" | "),
-          (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q, i) => `${i + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}`).join(" | "),
+          (t.steps ?? []).sort((a, b) => a.sort_order - b.sort_order).map((s, i) => `${i + 1}. ${s.label}${s.requires_photo ? " [foto]" : ""}${s.link_url ? ` [url:${s.link_url}]` : ""}`).join(" | "),
+          (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q, i) => `${i + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}${q.link_url ? ` [url:${q.link_url}]` : ""}`).join(" | "),
         ];
       }),
     ];
@@ -2618,6 +2627,12 @@ function TasksPage() {
                         />
                         Foto
                       </label>
+                      <Input
+                        placeholder="URL (valfri)"
+                        value={step.link_url ?? ""}
+                        onChange={(e) => setNewTask(p => ({ ...p, steps: p.steps.map((s, idx) => idx === i ? { ...s, link_url: e.target.value } : s) }))}
+                        className="w-32 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40"
+                      />
                       {newTask.steps.length > 1 && (
                         <button type="button" className="opacity-0 group-hover:opacity-100 transition-opacity"
                           onClick={() => setNewTask(p => ({ ...p, steps: p.steps.filter((_, idx) => idx !== i) }))}>
@@ -2630,7 +2645,7 @@ function TasksPage() {
                 <button
                   type="button"
                   className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-                  onClick={() => setNewTask(p => ({ ...p, steps: [...p.steps, { label: "", requires_photo: false }] }))}
+                  onClick={() => setNewTask(p => ({ ...p, steps: [...p.steps, { label: "", requires_photo: false, link_url: "" }] }))}
                 >
                   <Plus className="h-3.5 w-3.5" /> Lägg till checkpoint
                 </button>
@@ -2688,13 +2703,19 @@ function TasksPage() {
                           Obligatorisk
                         </label>
                       </div>
+                      <Input
+                        placeholder="URL (valfri länk)"
+                        value={q.link_url ?? ""}
+                        onChange={(e) => setNewTask(p => ({ ...p, questions: p.questions.map((qr, idx) => idx === i ? { ...qr, link_url: e.target.value } : qr) }))}
+                        className="border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40 w-full"
+                      />
                     </div>
                   ))}
                 </div>
                 <button
                   type="button"
                   className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-                  onClick={() => setNewTask(p => ({ ...p, questions: [...p.questions, { label: "", question_type: "text", is_required: false }] }))}
+                  onClick={() => setNewTask(p => ({ ...p, questions: [...p.questions, { label: "", question_type: "text", is_required: false, link_url: "" }] }))}
                 >
                   <Plus className="h-3.5 w-3.5" /> Lägg till fråga
                 </button>
@@ -3138,12 +3159,13 @@ function TasksPage() {
                       <label className="flex items-center gap-1 text-[11px] text-muted-foreground/70 whitespace-nowrap cursor-pointer">
                         <Checkbox checked={step.requires_photo} onCheckedChange={(v) => setEditForm(p => p ? { ...p, steps: p.steps.map((s,idx) => idx===i ? {...s,requires_photo:!!v} : s) } : p)} className="h-3 w-3" />Foto
                       </label>
+                      <Input placeholder="URL" value={step.link_url ?? ""} onChange={(e) => setEditForm(p => p ? { ...p, steps: p.steps.map((s,idx) => idx===i ? {...s,link_url:e.target.value} : s) } : p)} className="w-28 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40" />
                       <button type="button" className="opacity-0 group-hover:opacity-100" onClick={() => setEditForm(p => p ? { ...p, steps: p.steps.filter((_,idx) => idx!==i) } : p)}>
                         <X className="h-3.5 w-3.5 text-muted-foreground/60" />
                       </button>
                     </div>
                   ))}
-                  <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary" onClick={() => setEditForm(p => p ? { ...p, steps: [...p.steps, { label:"", requires_photo:false }] } : p)}>
+                  <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary" onClick={() => setEditForm(p => p ? { ...p, steps: [...p.steps, { label:"", requires_photo:false, link_url:"" }] } : p)}>
                     <Plus className="h-3.5 w-3.5" /> Lägg till checkpoint
                   </button>
                 </div>
@@ -3167,9 +3189,10 @@ function TasksPage() {
                           <Checkbox checked={q.is_required} onCheckedChange={(v) => setEditForm(p => p ? { ...p, questions: p.questions.map((qr,idx) => idx===i ? {...qr,is_required:!!v} : qr) } : p)} className="h-3 w-3" />Obligatorisk
                         </label>
                       </div>
+                      <Input placeholder="URL (valfri länk)" value={q.link_url ?? ""} onChange={(e) => setEditForm(p => p ? { ...p, questions: p.questions.map((qr,idx) => idx===i ? {...qr,link_url:e.target.value} : qr) } : p)} className="border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-muted-foreground placeholder:text-muted-foreground/40 w-full" />
                     </div>
                   ))}
-                  <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary" onClick={() => setEditForm(p => p ? { ...p, questions: [...p.questions, { label:"", question_type:"text", is_required:false }] } : p)}>
+                  <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary" onClick={() => setEditForm(p => p ? { ...p, questions: [...p.questions, { label:"", question_type:"text", is_required:false, link_url:"" }] } : p)}>
                     <Plus className="h-3.5 w-3.5" /> Lägg till fråga
                   </button>
                 </div>
