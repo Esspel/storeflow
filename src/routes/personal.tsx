@@ -387,13 +387,13 @@ function AccountsPage() {
     const rows = [USER_CSV_HEADERS, ...users.map((u) => [
       u.username,
       u.display_name,
-      "", // password intentionally blank
+      "", // password intentionally blank — system generates one on import if empty
       u.hierarchy_level ?? "anvandare",
       u.employee_group ?? "",
       u.barcode_id ?? "",
       stores.filter(s => u.assignedStoreIds.includes(s.id)).map(s => s.butiks_nr ?? "").filter(Boolean).join(","),
     ])];
-    const csv = rows.map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
+    const csv = USER_CSV_INSTRUCTIONS + rows.map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = `anvandare-export-${new Date().toISOString().slice(0,10)}.csv`; a.click();

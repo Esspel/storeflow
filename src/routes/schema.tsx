@@ -2951,7 +2951,7 @@ function SchemaPage() {
                 <p className="mb-4 text-sm text-muted-foreground">Koppla SoftOne-anställda till användare i systemet.</p>
                 <div className="divide-y divide-border/40 rounded-xl border border-border/60 overflow-hidden">
                   {Array.from(new Map(scheduleEmployees.map((e) => [e.employee_nr, e])).values()).map((emp) => (
-                    <MappingRow key={emp.employee_nr} employeeNr={emp.employee_nr} employeeName={emp.employee_name} employeeGroup={emp.employee_group} appUsers={allUsers} mappedUserId={getMappedUserId(emp.employee_nr)} storeId={storeId} foreningId={activeStore?.forening_id} distriktId={activeStore?.distrikt_id} onMap={(uid) => setMapping(emp.employee_nr, uid)} onUserCreated={(u) => { setAppUsers((p) => [...p, u]); setAllUsers((p) => [...p, u]); setMapping(emp.employee_nr, u.id); }} />
+                    <MappingRow key={emp.employee_nr} employeeNr={emp.employee_nr} employeeName={emp.employee_name} employeeGroup={emp.employee_group} appUsers={allUsers} mappedUserId={getMappedUserId(emp.employee_nr)} storeId={storeId} foreningId={activeStore?.forening_id} distriktId={activeStore?.distrikt_id} onMap={async (uid) => { setMapping(emp.employee_nr, uid); if (storeId && user) { await supabase.from("employee_mappings").upsert({ store_id: storeId, employee_nr: emp.employee_nr, app_user_id: uid || null, created_by: user.id, updated_at: new Date().toISOString() }, { onConflict: "store_id,employee_nr" }); toast.success("Matchning sparad"); } }} onUserCreated={(u) => { setAppUsers((p) => [...p, u]); setAllUsers((p) => [...p, u]); setMapping(emp.employee_nr, u.id); }} />
                   ))}
                 </div>
               </div>

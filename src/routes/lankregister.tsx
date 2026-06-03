@@ -256,7 +256,7 @@ function LankregisterPage() {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col" style={{ minHeight: "calc(100dvh - 3.5rem)" }}>
       <PageHeader
         title="Länkregister"
         subtitle="Länksamlingar för butiker och föreningar"
@@ -269,11 +269,12 @@ function LankregisterPage() {
         }
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1" style={{ minHeight: 0 }}>
         {/* SIDEBAR — list of link lists; hidden on mobile when a list is selected */}
         <div className={cn(
-          "flex flex-col border-r border-border/60 bg-muted/5 transition-all",
+          "flex flex-col border-r border-border/60 bg-muted/5",
           "w-full sm:w-80 sm:shrink-0",
+          "overflow-hidden",
           selectedList ? "hidden sm:flex" : "flex"
         )}>
           {/* Search */}
@@ -290,7 +291,7 @@ function LankregisterPage() {
           </div>
 
           {/* List items */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto min-h-0">
             {loading ? (
               <div className="flex items-center justify-center py-16">
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />

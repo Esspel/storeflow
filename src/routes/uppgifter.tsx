@@ -1357,18 +1357,21 @@ function TasksPage() {
 
   // Comment lines starting with # are ignored by importer
   const TASK_CSV_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Återkommande;Veckodagar;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Avslutningsläge;Steg;Frågor
+# Samma format som Mallar — exporterade mallar kan importeras direkt som uppgifter och vice versa
+# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Månader;Månadsdag;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor;Tidsluckor (HH:MM)
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Kategori: Drift | Säkerhet | Kundärenden | Övrigt
 # Återkommande: daily | every_other_day | weekly | monthly | yearly (lämna tomt för ingen)
 # Veckodagar: kommaseparerade siffror 0–6 (0=Mån, 1=Tis, ... 6=Sön), används när Återkommande=weekly
 #   Exempel: 0,1,4 (Mån, Tis, Fre)
+# Månader: kommaseparerade månader 1–12 för yearly-recurrence
+# Månadsdag: dag i månaden 1–31, används med monthly/yearly
 # Intervall: antal enheter mellan upprepningar (t.ex. 2 = varannan vecka), lämna tomt för 1
 # Förfaller om (dagar): antal dagar tills uppgiften förfaller (t.ex. 1)
 # Förfallotid (HH:MM): klockslag för förfallodatumet, t.ex. 08:00 (lämna tomt för ingen tid)
 # Startdatum/Slutdatum: ÅÅÅÅ-MM-DD — Slutdatum är obligatoriskt för återkommande uppgifter
-# Avslutningsläge: manual | auto_from_children | auto_complete_children (standard: manual)
+# Status, Version, Ursprungsmall, Arvläge, Tidsluckor: används av Mallar — ignoreras vid uppgiftsimport
 #
 # Steg: separera med " | " — lägg till flaggor efter etiketten
 #   [foto]            — kräver fotobevis
@@ -1383,12 +1386,21 @@ function TasksPage() {
 `;
 
   const downloadTaskTemplate = () => {
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Avslutningsläge", "Steg", "Frågor"];
+    const headers = [
+      "Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version",
+      "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
+      "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
+      "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
+    ];
+    const today = new Date().toISOString().slice(0, 10);
     const example = [
-      "Morgonkontroll", "Drift", "Kontroll av butikens öppning", "Medel", "weekly", "0,1,2,3,4", "1", "1", "08:00", new Date().toISOString().slice(0, 10), "2026-12-31",
-      "manual",
+      "Morgonkontroll", "Drift", "Kontroll av butikens öppning", "Medel", "", "",
+      "weekly", "0,1,2,3,4", "", "", "1",
+      "1", "08:00", today, "2026-12-31",
+      "", "",
       "1. Kolla temperaturer [foto] | 2. Öppna kassor | 3. Kontrollera ingång",
       "1. Är allt klart? [obligatorisk] [ja_nej]",
+      "",
     ];
     const csv = TASK_CSV_INSTRUCTIONS
       + [headers, example].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
@@ -1425,7 +1437,10 @@ function TasksPage() {
 
     const rows = lines.slice(1).map(parseRow);
     for (const cols of rows) {
-      const [title, category, description, priority, recurrence, weekdaysRaw, intervalRaw, dueDays, dueTime, startDate, endDate, , completionModeRaw, stepsRaw, questionsRaw] = cols;
+      const [title, category, description, priority, , ,
+        recurrence, weekdaysRaw, monthsRaw, monthDayRaw, intervalRaw,
+        dueDays, dueTime, startDate, endDate,
+        , , stepsRaw, questionsRaw] = cols;
       if (!title?.trim()) continue;
 
       const dueDate = dueDays?.trim()
@@ -1437,11 +1452,7 @@ function TasksPage() {
         ? weekdaysRaw.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 0 && n <= 6)
         : null;
       const recurrenceInterval = intervalRaw?.trim() ? parseInt(intervalRaw.trim()) : null;
-
-      const validCompletionModes = ["manual", "auto_from_children", "auto_complete_children"];
-      const completionMode = validCompletionModes.includes(completionModeRaw?.trim() ?? "")
-        ? completionModeRaw!.trim()
-        : "manual";
+      void monthsRaw; void monthDayRaw; // template-only fields, ignored for tasks
 
       const { data: task } = await supabase.from("tasks").insert({
         title: title.trim(),
@@ -1458,7 +1469,7 @@ function TasksPage() {
         recurrence_end: endDate?.trim() || null,
         due_date: dueDate,
         due_date_time: dueTime?.trim() || null,
-        completion_mode: completionMode,
+        completion_mode: "manual",
       }).select("id").maybeSingle();
 
       if (!task?.id) continue;
@@ -1518,7 +1529,12 @@ function TasksPage() {
   };
 
   const exportCSV = () => {
-    const headers = ["Titel", "Kategori", "Beskrivning", "Prioritet", "Återkommande", "Veckodagar", "Intervall", "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum", "Avslutningsläge", "Steg", "Frågor"];
+    const headers = [
+      "Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version",
+      "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
+      "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
+      "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
+    ];
     const rows = [
       headers,
       ...visibleTasks.map((t) => {
@@ -1531,16 +1547,22 @@ function TasksPage() {
           t.category ?? "",
           t.description ?? "",
           t.priority ?? "Medel",
+          "", // Status — task-only concept, omitted
+          "", // Version
           t.recurrence_rule ?? "",
           (t.recurrence_days ?? []).join(","),
+          "", // Månader — not applicable to tasks
+          "", // Månadsdag — not applicable to tasks
           tAny.recurrence_interval != null ? String(tAny.recurrence_interval) : "",
           dueDays,
           tAny.due_date_time ?? "",
           t.recurrence_start ?? "",
           t.recurrence_end ?? "",
-          t.completion_mode ?? "manual",
+          "", // Ursprungsmall
+          "", // Arvläge
           (t.steps ?? []).sort((a, b) => a.sort_order - b.sort_order).map((s, i) => `${i + 1}. ${s.label}${s.requires_photo ? " [foto]" : ""}${s.link_url ? ` [url:${s.link_url}]` : ""}`).join(" | "),
           (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q, i) => `${i + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}${q.link_url ? ` [url:${q.link_url}]` : ""}`).join(" | "),
+          "", // Tidsluckor — not applicable to tasks
         ];
       }),
     ];
