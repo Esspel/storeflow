@@ -220,10 +220,9 @@ function KundrundaPage() {
   const [deleteSessionTarget, setDeleteSessionTarget] = useState<KundrundaSession | null>(null);
 
   const [dragZoneIdx, setDragZoneIdx] = useState<number | null>(null);
+  const [dropZoneIdx, setDropZoneIdx] = useState<number | null>(null);
   const [dragCpKey, setDragCpKey] = useState<{ zoneId: string; idx: number } | null>(null);
-  // Tracks the in-flight zone/cp drag so we can persist only on dragEnd
-  const pendingZoneReorderRef = useRef<{ from: number; to: number } | null>(null);
-  const pendingCpReorderRef = useRef<{ zoneId: string; from: number; to: number } | null>(null);
+  const [dropCpIdx, setDropCpIdx] = useState<number | null>(null);
   // Auto-scroll raf handle
   const autoScrollRafRef = useRef<number | null>(null);
 
@@ -818,48 +817,49 @@ function KundrundaPage() {
     await fetchData();
   };
 
-  const reorderZones = (fromIdx: number, toIdx: number) => {
+  const applyZoneReorder = async (fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx) return;
+    const reordered = [...editableZones];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    const withOrder = reordered.map((z, i) => ({ ...z, sort_order: i }));
     setZones(prev => {
-      const reordered = [...prev];
-      const [moved] = reordered.splice(fromIdx, 1);
-      reordered.splice(toIdx, 0, moved);
-      return reordered.map((z, i) => ({ ...z, sort_order: i }));
+      const ids = withOrder.map(z => z.id);
+      const orderMap = Object.fromEntries(withOrder.map(z => [z.id, z.sort_order]));
+      const sorted = [...prev].sort((a, b) => {
+        const ai = ids.indexOf(a.id);
+        const bi = ids.indexOf(b.id);
+        if (ai !== -1 && bi !== -1) return ai - bi;
+        return (orderMap[a.id] ?? a.sort_order) - (orderMap[b.id] ?? b.sort_order);
+      });
+      return sorted.map((z, i) => ({ ...z, sort_order: i }));
     });
+    await Promise.all(withOrder.map((z, i) => supabase.from("kundrunda_zones").update({ sort_order: i }).eq("id", z.id)));
   };
 
-  const persistZoneOrder = async (zones: ZoneWithCheckpoints[]) => {
-    await Promise.all(zones.map((z, i) => supabase.from("kundrunda_zones").update({ sort_order: i }).eq("id", z.id)));
-  };
-
-  const reorderCheckpoints = (zoneId: string, fromIdx: number, toIdx: number) => {
+  const applyCheckpointReorder = async (zoneId: string, fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx) return;
-    setZones(prev => prev.map(z => {
-      if (z.id !== zoneId) return z;
-      const cps = [...z.checkpoints];
-      const [moved] = cps.splice(fromIdx, 1);
-      cps.splice(toIdx, 0, moved);
-      return { ...z, checkpoints: cps.map((c, i) => ({ ...c, sort_order: i })) };
-    }));
+    const zone = zones.find(z => z.id === zoneId);
+    if (!zone) return;
+    const cps = [...zone.checkpoints];
+    const [moved] = cps.splice(fromIdx, 1);
+    cps.splice(toIdx, 0, moved);
+    const withOrder = cps.map((c, i) => ({ ...c, sort_order: i }));
+    setZones(prev => prev.map(z => z.id !== zoneId ? z : { ...z, checkpoints: withOrder }));
+    await Promise.all(withOrder.map((c, i) => supabase.from("kundrunda_checkpoints").update({ sort_order: i }).eq("id", c.id)));
   };
 
-  const persistCheckpointOrder = async (zoneId: string, checkpoints: KundrundaCheckpoint[]) => {
-    await Promise.all(checkpoints.map((c, i) => supabase.from("kundrunda_checkpoints").update({ sort_order: i }).eq("id", c.id)));
-  };
-
-  // Auto-scroll while dragging near edges of the page
+  // Auto-scroll while dragging near viewport edges
   const startAutoScroll = (clientY: number) => {
     if (autoScrollRafRef.current) cancelAnimationFrame(autoScrollRafRef.current);
     const EDGE = 80;
-    const MAX_SPEED = 12;
+    const MAX_SPEED = 14;
     const tick = () => {
       const vh = window.innerHeight;
       if (clientY < EDGE) {
-        const speed = ((EDGE - clientY) / EDGE) * MAX_SPEED;
-        window.scrollBy(0, -speed);
+        window.scrollBy(0, -((EDGE - clientY) / EDGE) * MAX_SPEED);
       } else if (clientY > vh - EDGE) {
-        const speed = ((clientY - (vh - EDGE)) / EDGE) * MAX_SPEED;
-        window.scrollBy(0, speed);
+        window.scrollBy(0, ((clientY - (vh - EDGE)) / EDGE) * MAX_SPEED);
       }
       autoScrollRafRef.current = requestAnimationFrame(tick);
     };
@@ -1500,27 +1500,27 @@ function KundrundaPage() {
 
         <div className="space-y-4">
           {displayZones.map((zone, zoneIdx) => (
-            <div key={zone.id} className={cn("rounded-2xl border border-border/60 bg-card overflow-hidden transition-opacity", dragZoneIdx === zoneIdx && "opacity-40")}
-              draggable
-              onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setDragZoneIdx(zoneIdx); pendingZoneReorderRef.current = { from: zoneIdx, to: zoneIdx }; }}
-              onDragEnd={() => {
-                stopAutoScroll();
-                if (pendingZoneReorderRef.current && pendingZoneReorderRef.current.from !== pendingZoneReorderRef.current.to) {
-                  persistZoneOrder(editableZones);
-                }
-                pendingZoneReorderRef.current = null;
-                setDragZoneIdx(null);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                startAutoScroll(e.clientY);
-                if (dragZoneIdx !== null && dragZoneIdx !== zoneIdx) {
-                  reorderZones(dragZoneIdx, zoneIdx);
-                  setDragZoneIdx(zoneIdx);
-                  if (pendingZoneReorderRef.current) pendingZoneReorderRef.current.to = zoneIdx;
-                }
-              }}>
+            <div key={zone.id}>
+              {dragZoneIdx !== null && dragZoneIdx !== zoneIdx && dropZoneIdx === zoneIdx && zoneIdx < dragZoneIdx && (
+                <div className="h-1 rounded-full bg-primary/50 mx-1 mb-2" />
+              )}
+              <div className={cn("rounded-2xl border border-border/60 bg-card overflow-hidden transition-opacity", dragZoneIdx === zoneIdx && "opacity-40", dropZoneIdx === zoneIdx && dragZoneIdx !== zoneIdx && "ring-2 ring-primary/40")}
+                draggable
+                onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setDragZoneIdx(zoneIdx); setDropZoneIdx(zoneIdx); }}
+                onDragEnd={() => {
+                  stopAutoScroll();
+                  const from = dragZoneIdx;
+                  const to = dropZoneIdx;
+                  setDragZoneIdx(null);
+                  setDropZoneIdx(null);
+                  if (from !== null && to !== null) applyZoneReorder(from, to);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  startAutoScroll(e.clientY);
+                  if (dragZoneIdx !== null) setDropZoneIdx(zoneIdx);
+                }}>
               <div className="flex items-center justify-between gap-2 border-b border-border/40 bg-muted/20 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <GripVertical className="h-4 w-4 text-muted-foreground/40 cursor-grab active:cursor-grabbing shrink-0" />
@@ -1538,30 +1538,28 @@ function KundrundaPage() {
                   const refs = checkpointRefImages[cp.id] ?? [];
                   const isDraggingCp = dragCpKey?.zoneId === zone.id && dragCpKey?.idx === cpIdx;
                   return (
-                    <div key={cp.id} className={cn("px-4 py-3 space-y-2 transition-opacity", isDraggingCp && "opacity-40")}
-                      draggable
-                      onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.effectAllowed = "move"; setDragCpKey({ zoneId: zone.id, idx: cpIdx }); pendingCpReorderRef.current = { zoneId: zone.id, from: cpIdx, to: cpIdx }; }}
-                      onDragEnd={() => {
-                        stopAutoScroll();
-                        const p = pendingCpReorderRef.current;
-                        if (p && p.from !== p.to) {
-                          const z = zones.find(z => z.id === p.zoneId);
-                          if (z) persistCheckpointOrder(p.zoneId, z.checkpoints);
-                        }
-                        pendingCpReorderRef.current = null;
-                        setDragCpKey(null);
-                      }}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        e.dataTransfer.dropEffect = "move";
-                        startAutoScroll(e.clientY);
-                        if (dragCpKey?.zoneId === zone.id && dragCpKey.idx !== cpIdx) {
-                          reorderCheckpoints(zone.id, dragCpKey.idx, cpIdx);
-                          setDragCpKey({ zoneId: zone.id, idx: cpIdx });
-                          if (pendingCpReorderRef.current) pendingCpReorderRef.current.to = cpIdx;
-                        }
-                      }}>
+                    <div key={cp.id}>
+                      {dragCpKey?.zoneId === zone.id && dropCpIdx === cpIdx && dragCpKey.idx !== cpIdx && cpIdx < dragCpKey.idx && (
+                        <div className="h-0.5 rounded-full bg-primary/50 mx-2 mb-1" />
+                      )}
+                      <div className={cn("px-4 py-3 space-y-2 transition-opacity", isDraggingCp && "opacity-40", dragCpKey?.zoneId === zone.id && dropCpIdx === cpIdx && dragCpKey.idx !== cpIdx && "ring-1 ring-primary/40 rounded-lg")}
+                        draggable
+                        onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.effectAllowed = "move"; setDragCpKey({ zoneId: zone.id, idx: cpIdx }); setDropCpIdx(cpIdx); }}
+                        onDragEnd={() => {
+                          stopAutoScroll();
+                          const src = dragCpKey;
+                          const to = dropCpIdx;
+                          setDragCpKey(null);
+                          setDropCpIdx(null);
+                          if (src && to !== null) applyCheckpointReorder(src.zoneId, src.idx, to);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          e.dataTransfer.dropEffect = "move";
+                          startAutoScroll(e.clientY);
+                          if (dragCpKey?.zoneId === zone.id) setDropCpIdx(cpIdx);
+                        }}>
                       <div className="flex items-start gap-2">
                         <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/40 cursor-grab active:cursor-grabbing" />
                         <div className="flex-1 min-w-0">
@@ -1589,6 +1587,10 @@ function KundrundaPage() {
                         </button>
                       </div>
                     </div>
+                    {dragCpKey?.zoneId === zone.id && dropCpIdx === cpIdx && dragCpKey.idx !== cpIdx && cpIdx > dragCpKey.idx && (
+                      <div className="h-0.5 rounded-full bg-primary/50 mx-4 mt-1" />
+                    )}
+                  </div>
                   );
                 })}
 
@@ -1601,6 +1603,10 @@ function KundrundaPage() {
                 </div>
               </div>
             </div>
+            {dragZoneIdx !== null && dragZoneIdx !== zoneIdx && dropZoneIdx === zoneIdx && zoneIdx > dragZoneIdx && (
+              <div className="h-1 rounded-full bg-primary/50 mx-1 mt-2" />
+            )}
+          </div>
           ))}
         </div>
 
