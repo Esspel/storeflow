@@ -221,6 +221,11 @@ function KundrundaPage() {
 
   const [dragZoneIdx, setDragZoneIdx] = useState<number | null>(null);
   const [dragCpKey, setDragCpKey] = useState<{ zoneId: string; idx: number } | null>(null);
+  // Tracks the in-flight zone/cp drag so we can persist only on dragEnd
+  const pendingZoneReorderRef = useRef<{ from: number; to: number } | null>(null);
+  const pendingCpReorderRef = useRef<{ zoneId: string; from: number; to: number } | null>(null);
+  // Auto-scroll raf handle
+  const autoScrollRafRef = useRef<number | null>(null);
 
   const [importingCsv, setImportingCsv] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -813,17 +818,21 @@ function KundrundaPage() {
     await fetchData();
   };
 
-  const reorderZones = async (fromIdx: number, toIdx: number) => {
+  const reorderZones = (fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx) return;
-    const reordered = [...editableZones];
-    const [moved] = reordered.splice(fromIdx, 1);
-    reordered.splice(toIdx, 0, moved);
-    const updated = reordered.map((z, i) => ({ ...z, sort_order: i }));
-    setZones(prev => prev.map(z => { const u = updated.find(u => u.id === z.id); return u ? { ...z, sort_order: u.sort_order } : z; }));
-    await Promise.all(updated.map(z => supabase.from("kundrunda_zones").update({ sort_order: z.sort_order }).eq("id", z.id)));
+    setZones(prev => {
+      const reordered = [...prev];
+      const [moved] = reordered.splice(fromIdx, 1);
+      reordered.splice(toIdx, 0, moved);
+      return reordered.map((z, i) => ({ ...z, sort_order: i }));
+    });
   };
 
-  const reorderCheckpoints = async (zoneId: string, fromIdx: number, toIdx: number) => {
+  const persistZoneOrder = async (zones: ZoneWithCheckpoints[]) => {
+    await Promise.all(zones.map((z, i) => supabase.from("kundrunda_zones").update({ sort_order: i }).eq("id", z.id)));
+  };
+
+  const reorderCheckpoints = (zoneId: string, fromIdx: number, toIdx: number) => {
     if (fromIdx === toIdx) return;
     setZones(prev => prev.map(z => {
       if (z.id !== zoneId) return z;
@@ -832,12 +841,33 @@ function KundrundaPage() {
       cps.splice(toIdx, 0, moved);
       return { ...z, checkpoints: cps.map((c, i) => ({ ...c, sort_order: i })) };
     }));
-    const zone = zones.find(z => z.id === zoneId);
-    if (!zone) return;
-    const cps = [...zone.checkpoints];
-    const [moved] = cps.splice(fromIdx, 1);
-    cps.splice(toIdx, 0, moved);
-    await Promise.all(cps.map((c, i) => supabase.from("kundrunda_checkpoints").update({ sort_order: i }).eq("id", c.id)));
+  };
+
+  const persistCheckpointOrder = async (zoneId: string, checkpoints: KundrundaCheckpoint[]) => {
+    await Promise.all(checkpoints.map((c, i) => supabase.from("kundrunda_checkpoints").update({ sort_order: i }).eq("id", c.id)));
+  };
+
+  // Auto-scroll while dragging near edges of the page
+  const startAutoScroll = (clientY: number) => {
+    if (autoScrollRafRef.current) cancelAnimationFrame(autoScrollRafRef.current);
+    const EDGE = 80;
+    const MAX_SPEED = 12;
+    const tick = () => {
+      const vh = window.innerHeight;
+      if (clientY < EDGE) {
+        const speed = ((EDGE - clientY) / EDGE) * MAX_SPEED;
+        window.scrollBy(0, -speed);
+      } else if (clientY > vh - EDGE) {
+        const speed = ((clientY - (vh - EDGE)) / EDGE) * MAX_SPEED;
+        window.scrollBy(0, speed);
+      }
+      autoScrollRafRef.current = requestAnimationFrame(tick);
+    };
+    autoScrollRafRef.current = requestAnimationFrame(tick);
+  };
+
+  const stopAutoScroll = () => {
+    if (autoScrollRafRef.current) { cancelAnimationFrame(autoScrollRafRef.current); autoScrollRafRef.current = null; }
   };
 
   const allCheckpoints = editableZones.flatMap(z => z.checkpoints.map(cp => ({ ...cp, zoneName: z.name })));
@@ -1470,9 +1500,27 @@ function KundrundaPage() {
 
         <div className="space-y-4">
           {displayZones.map((zone, zoneIdx) => (
-            <div key={zone.id} className={cn("rounded-2xl border border-border/60 bg-card overflow-hidden transition-opacity", dragZoneIdx === zoneIdx && "opacity-50")}
-              draggable onDragStart={() => setDragZoneIdx(zoneIdx)} onDragEnd={() => setDragZoneIdx(null)}
-              onDragOver={(e) => { e.preventDefault(); if (dragZoneIdx !== null && dragZoneIdx !== zoneIdx) reorderZones(dragZoneIdx, zoneIdx).then(() => setDragZoneIdx(zoneIdx)); }}>
+            <div key={zone.id} className={cn("rounded-2xl border border-border/60 bg-card overflow-hidden transition-opacity", dragZoneIdx === zoneIdx && "opacity-40")}
+              draggable
+              onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setDragZoneIdx(zoneIdx); pendingZoneReorderRef.current = { from: zoneIdx, to: zoneIdx }; }}
+              onDragEnd={() => {
+                stopAutoScroll();
+                if (pendingZoneReorderRef.current && pendingZoneReorderRef.current.from !== pendingZoneReorderRef.current.to) {
+                  persistZoneOrder(editableZones);
+                }
+                pendingZoneReorderRef.current = null;
+                setDragZoneIdx(null);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                startAutoScroll(e.clientY);
+                if (dragZoneIdx !== null && dragZoneIdx !== zoneIdx) {
+                  reorderZones(dragZoneIdx, zoneIdx);
+                  setDragZoneIdx(zoneIdx);
+                  if (pendingZoneReorderRef.current) pendingZoneReorderRef.current.to = zoneIdx;
+                }
+              }}>
               <div className="flex items-center justify-between gap-2 border-b border-border/40 bg-muted/20 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <GripVertical className="h-4 w-4 text-muted-foreground/40 cursor-grab active:cursor-grabbing shrink-0" />
@@ -1490,9 +1538,30 @@ function KundrundaPage() {
                   const refs = checkpointRefImages[cp.id] ?? [];
                   const isDraggingCp = dragCpKey?.zoneId === zone.id && dragCpKey?.idx === cpIdx;
                   return (
-                    <div key={cp.id} className={cn("px-4 py-3 space-y-2 transition-opacity", isDraggingCp && "opacity-50")}
-                      draggable onDragStart={(e) => { e.stopPropagation(); setDragCpKey({ zoneId: zone.id, idx: cpIdx }); }} onDragEnd={() => setDragCpKey(null)}
-                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dragCpKey?.zoneId === zone.id && dragCpKey.idx !== cpIdx) reorderCheckpoints(zone.id, dragCpKey.idx, cpIdx).then(() => setDragCpKey({ zoneId: zone.id, idx: cpIdx })); }}>
+                    <div key={cp.id} className={cn("px-4 py-3 space-y-2 transition-opacity", isDraggingCp && "opacity-40")}
+                      draggable
+                      onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.effectAllowed = "move"; setDragCpKey({ zoneId: zone.id, idx: cpIdx }); pendingCpReorderRef.current = { zoneId: zone.id, from: cpIdx, to: cpIdx }; }}
+                      onDragEnd={() => {
+                        stopAutoScroll();
+                        const p = pendingCpReorderRef.current;
+                        if (p && p.from !== p.to) {
+                          const z = zones.find(z => z.id === p.zoneId);
+                          if (z) persistCheckpointOrder(p.zoneId, z.checkpoints);
+                        }
+                        pendingCpReorderRef.current = null;
+                        setDragCpKey(null);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.dataTransfer.dropEffect = "move";
+                        startAutoScroll(e.clientY);
+                        if (dragCpKey?.zoneId === zone.id && dragCpKey.idx !== cpIdx) {
+                          reorderCheckpoints(zone.id, dragCpKey.idx, cpIdx);
+                          setDragCpKey({ zoneId: zone.id, idx: cpIdx });
+                          if (pendingCpReorderRef.current) pendingCpReorderRef.current.to = cpIdx;
+                        }
+                      }}>
                       <div className="flex items-start gap-2">
                         <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/40 cursor-grab active:cursor-grabbing" />
                         <div className="flex-1 min-w-0">
