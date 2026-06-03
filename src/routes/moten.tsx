@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Calendar, CircleCheck as CheckCircle2, Clock, Download, GripVertical, Pause, Pencil, Play, Plus, Search, Settings, Trash2, Users, X, FileText,
+  Calendar, CircleCheck as CheckCircle2, Clock, Download, GripVertical, Pause, Pencil, Play, Plus, Search, Settings, Trash2, Users, X, FileText, Upload,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -163,6 +163,9 @@ function MeetingsPage() {
   const [typeSearch, setTypeSearch] = useState("");
   const [bulkDeleteTypesOpen, setBulkDeleteTypesOpen] = useState(false);
 
+  const csvImportRef = useRef<HTMLInputElement>(null);
+  const [importingCsv, setImportingCsv] = useState(false);
+
   // Detail / edit / delete
   const [showDetail, setShowDetail] = useState<MeetingFull | null>(null);
   const [newDecision, setNewDecision] = useState({ description: "", responsible_user_id: "", due_date: "", createTask: false });
@@ -291,6 +294,87 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
     a.download = `moten-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const MEETING_CSV_HEADER = "Titel;Typ (typvärde);Datum (YYYY-MM-DD HH:MM);Moderator (visningsnamn);Agenda (punkt1|punkt2);Beslut (beslut1|beslut2)";
+
+  const downloadMeetingTemplate = () => {
+    const example = [
+      MEETING_CSV_HEADER,
+      '"Veckomöte";"weekly";"2026-06-10 09:00";"Anna Svensson";"Genomgång vecka|Avvikelser";"Minska svinn|Förbättra mottagning"',
+      '"Månadsmöte";"monthly";"2026-07-01 13:00";"Erik Johansson";"Budget|Personal";""',
+    ].join("\n");
+    const blob = new Blob(["\uFEFF" + example], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "moten-mall.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importMeetingsCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !user) return;
+    setImportingCsv(true);
+    try {
+      const text = await file.text();
+      const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean).slice(1);
+
+      function parseRow(line: string): string[] {
+        const cols: string[] = []; let cur = ""; let inQ = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') { if (inQ && line[i + 1] === '"') { cur += '"'; i++; } else { inQ = !inQ; } }
+          else if (ch === ";" && !inQ) { cols.push(cur); cur = ""; }
+          else { cur += ch; }
+        }
+        cols.push(cur);
+        return cols;
+      }
+
+      for (const line of lines) {
+        const [title, typeValue, dateStr, moderatorName, agendaStr, decisionsStr] = parseRow(line);
+        if (!title?.trim()) continue;
+
+        // Resolve date
+        let scheduledAt: string;
+        try { scheduledAt = new Date(dateStr?.trim() ?? "").toISOString(); }
+        catch { scheduledAt = new Date().toISOString(); }
+
+        // Resolve moderator
+        const mod = storeUsers.find(u => u.display_name?.toLowerCase() === (moderatorName ?? "").trim().toLowerCase());
+
+        const { data: meeting } = await supabase.from("meetings").insert({
+          title: title.trim(),
+          meeting_type: typeValue?.trim() || "other",
+          store_id: activeStore?.id ?? null,
+          scheduled_at: scheduledAt,
+          moderator_id: mod?.id ?? user.id,
+          status: "scheduled",
+          created_by: user.id,
+        }).select("id").maybeSingle();
+
+        if (meeting?.id) {
+          // Insert agenda items
+          const agendaItems = (agendaStr ?? "").split("|").map(s => s.trim()).filter(Boolean);
+          if (agendaItems.length > 0) {
+            await supabase.from("meeting_agenda_items").insert(
+              agendaItems.map((title, i) => ({ meeting_id: meeting.id, title, sort_order: i + 1, duration_minutes: 5 }))
+            );
+          }
+          // Insert decisions
+          const decisions = (decisionsStr ?? "").split("|").map(s => s.trim()).filter(Boolean);
+          if (decisions.length > 0) {
+            await supabase.from("meeting_decisions").insert(
+              decisions.map(description => ({ meeting_id: meeting.id, description, created_by: user.id }))
+            );
+          }
+        }
+      }
+      await fetchMeetings();
+    } finally {
+      setImportingCsv(false);
+    }
   };
 
   const fetchMeetings = async () => {
@@ -547,6 +631,17 @@ ${m.notes ? `<h2>Anteckningar</h2><p style="color:#374151;font-size:.875rem;">${
         description={activeStore ? `Möteshantering för ${activeStore.name}` : "Strukturerade möten med tidsbudget och beslutslogg."}
         actions={
           <div className="hidden lg:flex gap-2">
+            {isManager && (
+              <>
+                <input ref={csvImportRef} type="file" accept=".csv" className="hidden" onChange={importMeetingsCsv} />
+                <Button variant="outline" className="rounded-full" onClick={downloadMeetingTemplate}>
+                  <Download className="mr-2 h-4 w-4" /> Mall
+                </Button>
+                <Button variant="outline" className="rounded-full" onClick={() => csvImportRef.current?.click()} disabled={importingCsv}>
+                  <Upload className="mr-2 h-4 w-4" /> {importingCsv ? "Importerar..." : "Importera CSV"}
+                </Button>
+              </>
+            )}
             {isManager && meetings.length > 0 && (
               <Button variant="outline" className="rounded-full" onClick={exportMeetingsCSV}>
                 <Download className="mr-2 h-4 w-4" /> Exportera CSV

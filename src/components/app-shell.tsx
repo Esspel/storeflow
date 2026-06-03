@@ -299,6 +299,7 @@ export function AppShell() {
     { to: "/kundrunda", label: "Kundrunda", Icon: UserRound },
     { to: "/moten", label: "Möten", Icon: MessageSquare },
     { to: "/kundonskemal", label: "Kundönskemål", Icon: ShoppingCart },
+    { to: "/lankregister", label: "Länkregister", Icon: LinkIcon },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", Icon: FlaskConical }] : []),
     { to: "/mallar", label: "Mallar", Icon: ClipboardList },
     { to: "/hjalp", label: "Hjälp", Icon: HelpCircle },
@@ -483,21 +484,7 @@ export function AppShell() {
                   <GlobalStoreSelector inline />
                 </div>
                 <DropdownMenuSeparator />
-                {/* Mobile-only links to hidden nav items */}
-                {isManager && (
-                  <DropdownMenuItem asChild className="md:hidden">
-                    <Link to="/rapporter" className="cursor-pointer">
-                      <FlaskConical className="mr-2 h-4 w-4" />
-                      Rapporter
-                    </Link>
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem asChild className="md:hidden">
-                  <Link to="/mallar" className="cursor-pointer">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Mallar
-                  </Link>
-                </DropdownMenuItem>
+                {/* Mobile-only links now in Övrigt sheet — removed from here to avoid duplication */}
                 <DropdownMenuSeparator className="md:hidden" />
                 <DropdownMenuItem asChild>
                   <Link to="/butiksregister" className="cursor-pointer">
@@ -509,12 +496,6 @@ export function AppShell() {
                   <Link to="/installningar" className="cursor-pointer">
                     <Settings className="mr-2 h-4 w-4" />
                     Inställningar
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/lankregister" className="cursor-pointer">
-                    <LinkIcon className="mr-2 h-4 w-4" />
-                    Länkregister
                   </Link>
                 </DropdownMenuItem>
                 {isManager && (

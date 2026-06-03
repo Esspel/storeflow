@@ -229,6 +229,8 @@ function KundrundaPage() {
   const [showVersionChoiceDialog, setShowVersionChoiceDialog] = useState(false);
   const [showParallelChoiceDialog, setShowParallelChoiceDialog] = useState(false);
   const [publishingVersion, setPublishingVersion] = useState(false);
+  // Track previous central_version_pending to detect transitions from false→true
+  const prevCentralPendingRef = useRef<boolean | null>(null);
 
   // Edit scope: "global" = admin editing central zones, "local" = chef editing store-local zones
   const [editScope, setEditScope] = useState<"global" | "local">("local");
@@ -339,12 +341,17 @@ function KundrundaPage() {
     setEditScope(isAdmin ? "global" : "local");
   }, [activeStore]);
 
-  // Auto-initialize local version for managers and auto-open version choice dialog
+  // Auto-initialize local version for managers; show version dialog when pending flag transitions false→true
   useEffect(() => {
     if (loading) return;
     if (isManager && activeStore && localVersion === null) {
       ensureLocalVersionRecord();
     }
+    const pending = localVersion?.central_version_pending ?? false;
+    if (pending && prevCentralPendingRef.current === false) {
+      setShowVersionChoiceDialog(true);
+    }
+    prevCentralPendingRef.current = pending;
   }, [loading, localVersion, isManager, isAdmin, activeStore]);
 
   // Zones used during a session: prefer store-local, fall back to global

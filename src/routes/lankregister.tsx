@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, ExternalLink, X, Globe, Store as StoreIcon, Building2, Search, Link as LinkIcon, ChevronLeft } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Pencil, Trash2, ExternalLink, X, Globe, Store as StoreIcon, Building2, Search, Link as LinkIcon, ChevronLeft, Download, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,6 +93,9 @@ function LankregisterPage() {
   const [itemForm, setItemForm] = useState<ItemFormState>(emptyItemForm());
   const [savingItem, setSavingItem] = useState(false);
   const [itemError, setItemError] = useState("");
+
+  const csvImportRef = useRef<HTMLInputElement>(null);
+  const [importingCsv, setImportingCsv] = useState(false);
 
   useEffect(() => { load(); }, [user, activeStore]);
 
@@ -255,6 +258,113 @@ function LankregisterPage() {
     return "Alla butiker";
   };
 
+  const CSV_HEADER = "Lista;Listabeskrivning;Scope (store/forening/hk);Butik/Förening;Länktitel;URL;Länkbeskrivning";
+
+  function downloadTemplate() {
+    const example = [
+      CSV_HEADER,
+      '"Min lista";"En exempellista";"store";"Butik A";"Google";"https://google.com";"Sökmotor"',
+      '"Föreningens resurser";"Resurser för föreningen";"forening";"Förening X";"Manual";"https://example.com/manual";"Personalmanual"',
+      '"Globala länkar";"";"hk";"";"";"https://intranet.example.com";"Intranät"',
+    ].join("\n");
+    const blob = new Blob(["\uFEFF" + example], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "lankregister-mall.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportCsv() {
+    if (lists.length === 0) return;
+    const rows: string[] = [CSV_HEADER];
+    for (const l of lists) {
+      const scopeName = listScopeName(l);
+      if (l.items.length === 0) {
+        rows.push([l.name, l.description ?? "", l.scope, scopeName, "", "", ""].map(c => `"${String(c).replace(/"/g, '""')}"`).join(";"));
+      } else {
+        for (const item of l.items) {
+          rows.push([l.name, l.description ?? "", l.scope, scopeName, item.title, item.url, item.description ?? ""].map(c => `"${String(c).replace(/"/g, '""')}"`).join(";"));
+        }
+      }
+    }
+    const blob = new Blob(["\uFEFF" + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `lankregister-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importCsv(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !user) return;
+    setImportingCsv(true);
+    try {
+      const text = await file.text();
+      const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean);
+      if (lines.length < 2) return;
+
+      // Parse CSV respecting quoted fields
+      function parseRow(line: string): string[] {
+        const cols: string[] = [];
+        let cur = ""; let inQ = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+            else { inQ = !inQ; }
+          } else if (ch === ";" && !inQ) { cols.push(cur); cur = ""; }
+          else { cur += ch; }
+        }
+        cols.push(cur);
+        return cols;
+      }
+
+      // Group rows by list name
+      const listMap = new Map<string, { desc: string; scope: string; scopeName: string; items: { title: string; url: string; desc: string }[] }>();
+      for (const line of lines.slice(1)) {
+        const [listName, listDesc, scope, scopeName, title, url, itemDesc] = parseRow(line);
+        if (!listName?.trim()) continue;
+        if (!listMap.has(listName)) listMap.set(listName, { desc: listDesc ?? "", scope: scope ?? "store", scopeName: scopeName ?? "", items: [] });
+        if (title?.trim() || url?.trim()) {
+          listMap.get(listName)!.items.push({ title: title?.trim() ?? "", url: ensureHttps(url?.trim() ?? ""), desc: itemDesc?.trim() ?? "" });
+        }
+      }
+
+      for (const [name, { desc, scope, scopeName, items }] of listMap) {
+        // Resolve store_id / forening_id from name
+        const storeId = scope === "store" ? (allStores.find(s => s.name.toLowerCase() === scopeName.toLowerCase())?.id ?? activeStore?.id ?? null) : null;
+        const foreningId = scope === "forening" ? (allForeningar.find(f => f.name.toLowerCase() === scopeName.toLowerCase())?.id ?? null) : null;
+
+        // Upsert list (match by name + scope + store_id/forening_id)
+        let listId: string | null = null;
+        const existing = lists.find(l => l.name.toLowerCase() === name.toLowerCase() && l.scope === scope && l.store_id === storeId && l.forening_id === foreningId);
+        if (existing) {
+          await supabase.from("link_lists").update({ description: desc || null }).eq("id", existing.id);
+          listId = existing.id;
+        } else {
+          const { data } = await supabase.from("link_lists").insert({
+            name: name.trim(), description: desc || null,
+            scope: (["store", "forening", "hk"].includes(scope) ? scope : "store") as "store" | "forening" | "hk",
+            store_id: storeId, forening_id: foreningId, created_by: user.id,
+          }).select("id").maybeSingle();
+          listId = data?.id ?? null;
+        }
+
+        if (listId && items.length > 0) {
+          // Delete existing items and re-insert
+          await supabase.from("link_list_items").delete().eq("list_id", listId);
+          await supabase.from("link_list_items").insert(
+            items.map((it, i) => ({ list_id: listId!, title: it.title, url: it.url, description: it.desc || null, sort_order: i + 1 }))
+          );
+        }
+      }
+      await load();
+    } finally {
+      setImportingCsv(false);
+    }
+  }
+
   return (
     <div className="flex flex-col" style={{ minHeight: "calc(100dvh - 3.5rem)" }}>
       {/* Page header — own padding, consistent with app shell max-width */}
@@ -264,11 +374,27 @@ function LankregisterPage() {
             <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Länkregister</h1>
             <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">Länksamlingar för butiker och föreningar</p>
           </div>
-          {canManage && (
-            <Button size="sm" onClick={openCreateList} className="shrink-0 gap-1.5">
-              <Plus className="h-3.5 w-3.5" /> Ny lista
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {canManage && (
+              <>
+                <input ref={csvImportRef} type="file" accept=".csv" className="hidden" onChange={importCsv} />
+                <Button size="sm" variant="outline" onClick={downloadTemplate} className="hidden sm:flex gap-1.5 rounded-full">
+                  <Download className="h-3.5 w-3.5" /> Mall
+                </Button>
+                <Button size="sm" variant="outline" onClick={exportCsv} disabled={lists.length === 0} className="hidden sm:flex gap-1.5 rounded-full">
+                  <Download className="h-3.5 w-3.5" /> Exportera
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => csvImportRef.current?.click()} disabled={importingCsv} className="hidden sm:flex gap-1.5 rounded-full">
+                  <Upload className="h-3.5 w-3.5" /> {importingCsv ? "Importerar..." : "Importera"}
+                </Button>
+              </>
+            )}
+            {canManage && (
+              <Button size="sm" onClick={openCreateList} className="shrink-0 gap-1.5">
+                <Plus className="h-3.5 w-3.5" /> Ny lista
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
