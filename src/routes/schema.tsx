@@ -2102,9 +2102,9 @@ function SchemaPage() {
             </div>
           )}
 
-          {/* ── MOBILE SCHEDULE CARD VIEW — only on mobile, desktop uses timeline ── */}
+          {/* ── MOBILE SCHEDULE CARD VIEW — hidden on mobile, desktop uses timeline ── */}
           {viewMode === "day" && (
-            <div className="block sm:hidden pb-6" data-scroll-container ref={mobileListRef}>
+            <div className="hidden sm:block pb-6" data-scroll-container ref={mobileListRef}>
               {loadingSchedule ? (
                 <div className="space-y-3">
                   {[1,2,3,4,5].map(i => (
@@ -2337,6 +2337,65 @@ function SchemaPage() {
                         <div key={d.id} className="absolute top-0.5 bottom-0.5 flex items-center rounded px-1.5 text-[10px] font-semibold cursor-default select-none" style={{ left: `${Math.max(0, left)}%`, width: "auto", minWidth: "48px", maxWidth: "10%", backgroundColor: c.bg, color: c.text, borderLeft: `2px solid ${c.text}` }}
                           title={`${d.flow_name} ${d.delivery_time} — ${d.supplier}`}>
                           {d.delivery_time}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Meetings row in day timeline */}
+              {todayMeetings.length > 0 && (
+                <div className="flex border-b border-border/20 bg-sky-50/40 dark:bg-sky-950/10">
+                  <div className="flex w-48 shrink-0 items-center border-r border-border/30 px-4 py-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                      <CalendarClock className="h-3 w-3" /> Möten
+                    </span>
+                  </div>
+                  <div className="relative flex-1 py-1" style={{ minWidth: `${TOTAL_HOURS * 60}px` }}>
+                    <div className="absolute inset-0 flex pointer-events-none">
+                      {hourMarkers.map((h) => <div key={h} className="flex-1 border-r border-border/15 last:border-r-0" />)}
+                    </div>
+                    {todayMeetings.map((m) => {
+                      const time = new Date(m.scheduled_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+                      const left = timeToPercent(time);
+                      if (left < 0 || left > 100) return null;
+                      const isDone = m.status === "completed" || m.status === "cancelled";
+                      return (
+                        <div key={m.id} className={["absolute top-0.5 bottom-0.5 flex items-center rounded px-1.5 text-[10px] font-semibold cursor-default select-none whitespace-nowrap overflow-hidden", isDone ? "opacity-50" : ""].join(" ")}
+                          style={{ left: `${Math.max(0, left)}%`, minWidth: "52px", maxWidth: "14%", backgroundColor: "#e0f2fe", color: "#0369a1", borderLeft: "2px solid #7dd3fc" }}
+                          title={`${m.title} — ${time}`}>
+                          {time} {m.title}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Tasks row in day timeline */}
+              {scheduleTasks.filter((t) => t.due_date && toLocalDateStr(t.due_date) === currentDate).length > 0 && (
+                <div className="flex border-b border-border/20 bg-amber-50/40 dark:bg-amber-950/10">
+                  <div className="flex w-48 shrink-0 items-center border-r border-border/30 px-4 py-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                      <Timer className="h-3 w-3" /> Uppgifter
+                    </span>
+                  </div>
+                  <div className="relative flex-1 py-1" style={{ minWidth: `${TOTAL_HOURS * 60}px` }}>
+                    <div className="absolute inset-0 flex pointer-events-none">
+                      {hourMarkers.map((h) => <div key={h} className="flex-1 border-r border-border/15 last:border-r-0" />)}
+                    </div>
+                    {scheduleTasks.filter((t) => t.due_date && toLocalDateStr(t.due_date) === currentDate).map((task) => {
+                      const dueTime = new Date(task.due_date!).toTimeString().slice(0, 5);
+                      const dueH = parseInt(dueTime.split(":")[0]);
+                      if (dueH < TIMELINE_START || dueH > TIMELINE_END) return null;
+                      const left = timeToPercent(dueTime);
+                      const isLate = task.status === "late" || new Date(task.due_date!) < new Date();
+                      return (
+                        <div key={task.id} className="absolute top-0.5 bottom-0.5 flex items-center rounded px-1.5 text-[10px] font-semibold cursor-default select-none whitespace-nowrap overflow-hidden"
+                          style={{ left: `${Math.max(0, left)}%`, minWidth: "60px", maxWidth: "14%", backgroundColor: isLate ? "#fee2e2" : "#fef3c7", color: isLate ? "#dc2626" : "#92400e", borderLeft: `2px solid ${isLate ? "#dc2626" : "#d97706"}` }}
+                          title={`${task.title} — ${dueTime}`}>
+                          {dueTime} {task.title}
                         </div>
                       );
                     })}
@@ -2585,6 +2644,65 @@ function SchemaPage() {
                           );
                         })}
                         {dayDeliveries.length === 0 && <span className="text-center text-[10px] text-muted-foreground/20">–</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Meetings row in week view */}
+              {weekMeetings.length > 0 && (
+                <div className="grid border-t border-border/20 bg-sky-50/30 dark:bg-sky-950/10" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>
+                  <div className="border-r border-border/40 px-4 py-2 flex items-center gap-1.5">
+                    <CalendarClock className="h-3.5 w-3.5 text-sky-600" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Möten</span>
+                  </div>
+                  {weekDates.map((date, idx) => {
+                    const dayMeetings = weekMeetings.filter((m) => toLocalDateStr(m.scheduled_at) === date);
+                    const isToday = date === todayStr;
+                    return (
+                      <div key={idx} className={["border-r border-border/20 last:border-r-0 px-1.5 py-1.5 flex flex-col gap-0.5", isToday ? "bg-primary-soft/10" : ""].join(" ")}>
+                        {dayMeetings.map((m) => {
+                          const time = new Date(m.scheduled_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+                          const isDone = m.status === "completed" || m.status === "cancelled";
+                          return (
+                            <div key={m.id} className={["rounded px-1 py-0.5 text-[9px] font-semibold truncate", isDone ? "opacity-50" : ""].join(" ")}
+                              style={{ backgroundColor: "#e0f2fe", color: "#0369a1", borderLeft: "2px solid #7dd3fc" }}
+                              title={`${m.title} — ${time}`}>
+                              {time} {m.title}
+                            </div>
+                          );
+                        })}
+                        {dayMeetings.length === 0 && <span className="text-center text-[10px] text-muted-foreground/20">–</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Tasks row in week view */}
+              {scheduleTasks.length > 0 && (
+                <div className="grid border-t border-border/20 bg-amber-50/20 dark:bg-amber-950/10" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>
+                  <div className="border-r border-border/40 px-4 py-2 flex items-center gap-1.5">
+                    <Timer className="h-3.5 w-3.5 text-amber-600" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Uppgifter</span>
+                  </div>
+                  {weekDates.map((date, idx) => {
+                    const dayTasksForDate = scheduleTasks.filter((t) => t.due_date && toLocalDateStr(t.due_date) === date);
+                    const isToday = date === todayStr;
+                    return (
+                      <div key={idx} className={["border-r border-border/20 last:border-r-0 px-1.5 py-1.5 flex flex-col gap-0.5", isToday ? "bg-primary-soft/10" : ""].join(" ")}>
+                        {dayTasksForDate.map((task) => {
+                          const isLate = task.status === "late" || (task.due_date && new Date(task.due_date) < new Date());
+                          return (
+                            <div key={task.id} className="rounded px-1 py-0.5 text-[9px] font-semibold truncate"
+                              style={{ backgroundColor: isLate ? "#fee2e2" : "#fef3c7", color: isLate ? "#dc2626" : "#92400e", borderLeft: `2px solid ${isLate ? "#dc2626" : "#d97706"}` }}
+                              title={task.title}>
+                              {task.title}
+                            </div>
+                          );
+                        })}
+                        {dayTasksForDate.length === 0 && <span className="text-center text-[10px] text-muted-foreground/20">–</span>}
                       </div>
                     );
                   })}
