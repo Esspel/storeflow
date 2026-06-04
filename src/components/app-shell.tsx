@@ -496,7 +496,7 @@ export function AppShell() {
                     Rapporter
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild className="md:hidden">
+                <DropdownMenuItem asChild>
                   <Link to="/lankregister" className="cursor-pointer">
                     <LinkIcon className="mr-2 h-4 w-4" />
                     Länkregister
