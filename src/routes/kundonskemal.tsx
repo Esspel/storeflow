@@ -738,6 +738,13 @@ function CustomerRequestsPage() {
           <Dialog open onOpenChange={(o) => { if (!o) { setDetailTarget(null); setRequestImages([]); } }}>
             <DialogContent className="max-w-md">
               <DialogHeader>
+                <button
+                  onClick={() => { setDetailTarget(null); setRequestImages([]); }}
+                  className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 transition-colors"
+                  aria-label="Stäng"
+                >
+                  <X className="h-4 w-4" />
+                </button>
                 <DialogTitle className="text-base leading-tight">{r.product_name}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
@@ -813,8 +820,7 @@ function CustomerRequestsPage() {
                   {new Date(r.created_at).toLocaleDateString("sv-SE", { year: "numeric", month: "long", day: "numeric" })}
                 </p>
               </div>
-              <div className="flex justify-between gap-2 pt-2">
-                <Button variant="outline" className="rounded-full" onClick={() => { setDetailTarget(null); setRequestImages([]); }}>Stäng</Button>
+              <div className="flex justify-end gap-2 pt-2">
                 {isManager && (
                   <Button className="rounded-full" onClick={() => {
                     setDetailTarget(null);

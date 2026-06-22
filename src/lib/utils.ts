@@ -11,3 +11,31 @@ export function ensureHttps(value: string): string {
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
 }
+
+/**
+ * Parse a free-form time string into HH:MM format.
+ * Accepts: "1152" → "11:52", "8:5" → "08:05", "930" → "09:30", "14:00" → "14:00".
+ * Returns null for invalid input (>4 raw digits or out-of-range hours/minutes).
+ */
+export function parseTimeInput(raw: string): { value: string; error: string | null } {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length > 4) return { value: raw, error: "Tid får max vara 4 siffror (HHMM)" };
+  if (!digits) return { value: "", error: null };
+
+  let hours: number;
+  let minutes: number;
+
+  if (digits.length <= 2) {
+    hours = parseInt(digits, 10);
+    minutes = 0;
+  } else {
+    hours = parseInt(digits.slice(0, digits.length - 2), 10);
+    minutes = parseInt(digits.slice(-2), 10);
+  }
+
+  if (hours > 23) return { value: raw, error: "Timmar måste vara 0–23" };
+  if (minutes > 59) return { value: raw, error: "Minuter måste vara 0–59" };
+
+  const formatted = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  return { value: formatted, error: null };
+}

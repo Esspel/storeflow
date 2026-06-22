@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDownUp, Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, Upload, MoreHorizontal, CalendarDays } from "lucide-react";
+import { ArrowDownUp, Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, Upload, MoveHorizontal as MoreHorizontal, CalendarDays } from "lucide-react";
 
 import { PhotoViewer } from "@/components/photo-viewer";
 import { Button } from "@/components/ui/button";
@@ -2732,7 +2732,9 @@ function TasksPage() {
               <span className={cn("h-2 w-2 rounded-full transition-colors", createStep === 2 ? "bg-primary" : "bg-muted-foreground/30")} />
             </div>
             <div className="ml-auto sm:ml-0 flex items-center gap-2">
-              {saveError && <span className="text-xs text-destructive hidden sm:block">{saveError}</span>}
+              {saveError && (
+                <span className="text-xs text-destructive max-w-[120px] sm:max-w-none truncate sm:truncate-none">{saveError}</span>
+              )}
               <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hidden sm:flex" onClick={() => setShowCreate(false)}>Avbryt</Button>
               {/* Mobile: Next/Create button */}
               <div className="flex gap-1.5 sm:hidden">
@@ -3632,7 +3634,13 @@ function TasksPage() {
                 <DialogTitle className="text-sm font-semibold">Framtida förekomster</DialogTitle>
                 <p className="text-[11px] text-muted-foreground truncate">{futureManagerTask.title}</p>
               </div>
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground shrink-0" onClick={() => { setShowFutureManager(false); setSelectedFutureIds(new Set()); }}>Stäng</Button>
+              <button
+                onClick={() => { setShowFutureManager(false); setSelectedFutureIds(new Set()); }}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 transition-colors"
+                aria-label="Stäng"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
             {/* Bulk action bar when items selected */}

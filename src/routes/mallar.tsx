@@ -47,7 +47,7 @@ const QUARTER_MONTHS = [
 // Instruction header injected into every downloadable CSV template.
 // Lines starting with '#' are treated as comments and skipped by the importer.
 const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Månader;Månadsdag;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor;Tidsluckor (HH:MM)
+# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Månader;Månadsdag;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor;Tidsluckor (HH:MM);Mallpaket
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Status: active | review | deprecated | archived  (lämna tomt för active)
@@ -85,6 +85,9 @@ const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid im
 # Tidsluckor (HH:MM): pipe-separerade klockslag — EN UPPGIFT skapas per tidslucka
 #   Förfallotid ignoreras om Tidsluckor är ifylld
 #   Exempel: "08:00 | 12:00 | 16:00"
+#
+# Mallpaket: namn på det mallpaket mallen ska ingå i — skapas automatiskt om det inte finns
+#   Exempel: "Öppningspaket"
 #
 # Tips: Spara i UTF-8 och använd semikolon (;) som separator
 `;
@@ -919,6 +922,7 @@ function MallarPage() {
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
+      "Mallpaket",
     ];
     const today = new Date().toISOString().slice(0, 10);
     const exampleA = [
@@ -929,6 +933,7 @@ function MallarPage() {
       "1. Lås upp entré | 2. Kontrollera temperatur kyl [foto] | 3. Rapportera avvikelse [om:Temperaturavvikelse?=ja]",
       "1. Temperaturavvikelse? [obligatorisk] [ja_nej] | 2. Notering",
       "",
+      "",
     ];
     const exampleB = [
       "Städning med tidsluckor", "Städ", "Tre rengöringsrundor per dag", "Medel", "active", "",
@@ -938,6 +943,7 @@ function MallarPage() {
       "1. Torka bord och bänkar | 2. Dammsuga [foto] | 3. Töm sopkorgar",
       "",
       "08:00 | 13:00 | 17:00",
+      "Städpaket",
     ];
     const csv = CSV_TEMPLATE_INSTRUCTIONS
       + [headers, exampleA, exampleB].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
@@ -951,6 +957,7 @@ function MallarPage() {
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
+      "Mallpaket",
     ];
     const rows = [
       headers,
@@ -995,6 +1002,7 @@ function MallarPage() {
           stepsStr,
           questionsStr,
           tAny.time_slots?.join(" | ") ?? "",
+          packages.filter(pkg => (pkg.items ?? []).some(item => item.template_id === t.id)).map(pkg => pkg.name).join(" | "),
         ];
       }),
     ];
@@ -1044,12 +1052,13 @@ function MallarPage() {
       // 0:Titel 1:Kategori 2:Beskrivning 3:Prioritet 4:Status 5:Version
       // 6:Återkommande 7:Veckodagar 8:Månader 9:Månadsdag 10:Intervall
       // 11:Förfaller om 12:Förfallotid 13:Startdatum 14:Slutdatum
-      // 15:Ursprungsmall 16:Arvläge 17:Steg 18:Frågor 19:Tidsluckor
+      // 15:Ursprungsmall 16:Arvläge 17:Steg 18:Frågor 19:Tidsluckor 20:Mallpaket
       const [
         title, category, description, priority, statusRaw, ,
         recurrence, weekdaysRaw, monthsRaw, monthDayRaw, intervalRaw,
         dueDays, dueTime, startDate, endDate,
         parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw, timeSlotsRaw,
+        packageNameRaw,
       ] = cols;
       if (!title?.trim()) continue;
 
@@ -1167,6 +1176,31 @@ function MallarPage() {
       // Assign to active store for store-scope templates
       if (importScope === "store" && activeStore) {
         await supabase.from("template_stores").insert({ template_id: tmpl.id, store_id: activeStore.id });
+      }
+
+      // Assign to package if specified
+      if (packageNameRaw?.trim() && tmpl?.id) {
+        const pkgName = packageNameRaw.trim();
+        const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
+        let pkg = packages.find(p => p.name.toLowerCase() === pkgName.toLowerCase());
+        if (!pkg) {
+          const { data: newPkg } = await supabase.from("template_packages")
+            .insert({ name: pkgName, description: "", store_id: storeId, created_by: user?.id ?? null })
+            .select("id, name, description, store_id, created_by, created_at")
+            .maybeSingle();
+          if (newPkg) {
+            pkg = { ...newPkg, items: [] } as TemplatePackage;
+          }
+        }
+        if (pkg?.id) {
+          const existingItems = (pkg.items ?? []);
+          const nextOrder = existingItems.length;
+          await supabase.from("template_package_items").insert({
+            package_id: pkg.id,
+            template_id: tmpl.id,
+            sort_order: nextOrder,
+          });
+        }
       }
 
       logAudit(user?.id ?? null, "template.import", "checklist_templates", tmpl.id, { title: title.trim(), scope: importScope });
@@ -2418,8 +2452,15 @@ function MallarPage() {
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <History className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Versionshistorik</span>
-            <span className="text-sm text-muted-foreground truncate">{versionHistoryTarget?.title}</span>
-            <span className="ml-auto text-xs text-muted-foreground">Aktuell: v{versionHistoryTarget?.version ?? 1}</span>
+            <span className="text-sm text-muted-foreground truncate flex-1">{versionHistoryTarget?.title}</span>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">v{versionHistoryTarget?.version ?? 1}</span>
+            <button
+              onClick={() => setVersionHistoryTarget(null)}
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 transition-colors"
+              aria-label="Stäng"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
           <div className="flex-1 overflow-y-auto p-4">
             {loadingVersions ? (
@@ -2477,12 +2518,36 @@ function MallarPage() {
                           </Button>
                         )}
                       </div>
-                      {diffs.length > 0 && (
-                        <div className="ml-10 space-y-0.5">
-                          {diffs.map((d, i) => (
-                            <p key={i} className="text-[11px] text-muted-foreground bg-muted/40 rounded px-2 py-0.5">{d}</p>
-                          ))}
+                      {diffs.length > 0 ? (
+                        <div className="rounded-lg bg-muted/40 border border-border/40 overflow-hidden">
+                          {diffs.map((d, i) => {
+                            const isAdded = d.startsWith("+ ");
+                            const isRemoved = d.startsWith("- ");
+                            return (
+                              <div
+                                key={i}
+                                className={cn(
+                                  "flex items-start gap-2 px-3 py-1.5 text-xs font-mono border-b border-border/20 last:border-0",
+                                  isAdded && "bg-success/8 text-success-foreground",
+                                  isRemoved && "bg-destructive/8 text-destructive",
+                                  !isAdded && !isRemoved && "text-foreground/70"
+                                )}
+                              >
+                                <span className={cn(
+                                  "shrink-0 w-3 font-bold",
+                                  isAdded && "text-success",
+                                  isRemoved && "text-destructive",
+                                  !isAdded && !isRemoved && "text-muted-foreground"
+                                )}>
+                                  {isAdded ? "+" : isRemoved ? "−" : "·"}
+                                </span>
+                                <span className="break-words min-w-0">{isAdded ? d.slice(2) : isRemoved ? d.slice(2) : d}</span>
+                              </div>
+                            );
+                          })}
                         </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic">Inga spårade ändringar</p>
                       )}
                     </div>
                   );
@@ -2566,7 +2631,13 @@ function MallarPage() {
             <Eye className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Förhandsgranska mall</span>
             <span className="text-sm text-foreground font-semibold truncate flex-1">{previewTarget?.title}</span>
-            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setPreviewTarget(null)}>Stäng</Button>
+            <button
+              onClick={() => setPreviewTarget(null)}
+              className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 transition-colors"
+              aria-label="Stäng"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
           {previewTarget && (
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -2834,7 +2905,13 @@ function MallarPage() {
             <Layers className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Mallpaket</span>
             <span className="text-xs text-muted-foreground ml-1">— gruppera mallar och skapa alla uppgifter på en gång</span>
-            <Button variant="ghost" size="sm" className="ml-auto text-xs text-muted-foreground" onClick={() => setShowPackagesPanel(false)}>Stäng</Button>
+            <button
+              onClick={() => setShowPackagesPanel(false)}
+              className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 transition-colors"
+              aria-label="Stäng"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
           <div className="flex-1 overflow-y-auto p-5 space-y-6">
             {/* Create / Edit form — only admins and HK users can manage packages */}
