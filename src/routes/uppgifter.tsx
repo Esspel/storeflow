@@ -1810,9 +1810,10 @@ function TasksPage() {
   );
 
   // For each recurring parent, find the best representative child:
-  // Priority 1: Today's instance (due today, any status)
-  // Priority 2: Next upcoming undone instance (nearest due_date > today, ascending)
-  // Priority 3: Most recently completed instance
+  // Priority 1: Today's undone instance (due today, not done/cancelled)
+  // Priority 2: Next upcoming undone instance (nearest due_date > today)
+  // Priority 3: Today's done instance (completed today — show in "klara" tab)
+  // Priority 4: Most recently completed instance
   const currentChildByParent = new Map<string, TaskFull>();
   for (const parentId of recurringParentIds) {
     const children = visibleTasks
@@ -1823,18 +1824,25 @@ function TasksPage() {
         return aT - bT; // ascending by due_date
       });
     if (children.length === 0) continue;
-    // Priority 1: today's instance
-    const todayChild = children.find(t =>
-      t.due_date && new Date(t.due_date) >= simTodayStart && new Date(t.due_date) <= simTodayEnd
+    // Priority 1: today's undone instance
+    const todayUndone = children.find(t =>
+      t.due_date && new Date(t.due_date) >= simTodayStart && new Date(t.due_date) <= simTodayEnd &&
+      t.status !== "done" && t.status !== "cancelled"
     );
-    if (todayChild) { currentChildByParent.set(parentId, todayChild); continue; }
-    // Priority 2: nearest upcoming undone (due_date strictly after today, not done/cancelled)
+    if (todayUndone) { currentChildByParent.set(parentId, todayUndone); continue; }
+    // Priority 2: nearest upcoming undone (due_date strictly after today)
     const nextUndone = children.find(t =>
       t.due_date && new Date(t.due_date) > simTodayEnd &&
       t.status !== "done" && t.status !== "cancelled"
     );
     if (nextUndone) { currentChildByParent.set(parentId, nextUndone); continue; }
-    // Priority 3: most recently completed (last in sorted order that is done)
+    // Priority 3: today's done instance (so it appears in "klara" tab)
+    const todayDone = children.find(t =>
+      t.due_date && new Date(t.due_date) >= simTodayStart && new Date(t.due_date) <= simTodayEnd &&
+      t.status === "done"
+    );
+    if (todayDone) { currentChildByParent.set(parentId, todayDone); continue; }
+    // Priority 4: most recently completed (last in sorted order that is done)
     const lastDone = [...children].reverse().find(t => t.status === "done");
     if (lastDone) { currentChildByParent.set(parentId, lastDone); continue; }
     // Fallback: first child
