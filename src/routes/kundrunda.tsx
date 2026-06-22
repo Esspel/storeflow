@@ -242,7 +242,7 @@ function KundrundaPage() {
 
   const fetchData = async () => {
     const [zonesRes, sessionsRes, defectsRes, localVersionRes] = await Promise.all([
-      supabase.from("kundrunda_zones").select("*, checkpoints:kundrunda_checkpoints(*, images:kundrunda_checkpoint_images(*))").order("sort_order"),
+      supabase.from("kundrunda_zones").select("*, checkpoints:kundrunda_checkpoints(*, images:kundrunda_checkpoint_images(*))").order("sort_order").order("sort_order", { referencedTable: "checkpoints" }),
       (() => {
         let q = supabase
           .from("kundrunda_sessions")
@@ -1705,7 +1705,8 @@ function KundrundaPage() {
   }
 
   // ── HOME VIEW ─────────────────────────────────────────────────────────────
-  const inProgressSession = sessions.find(s => s.status === "in_progress");
+  const inProgressSessions = sessions.filter(s => s.status === "in_progress");
+  const inProgressSession = inProgressSessions[0] ?? null;
   const completedSessions = sessions.filter(s => s.status === "completed");
 
   return (
@@ -1751,6 +1752,33 @@ function KundrundaPage() {
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           <GitMerge className="h-3.5 w-3.5 shrink-0" />
           Parallell version aktiv — du kan välja Central eller Lokal version vid varje runda.
+        </div>
+      )}
+
+      {/* Multiple unfinished rounds warning */}
+      {inProgressSessions.length > 1 && (
+        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/5 px-5 py-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+          <div>
+            <p className="font-semibold text-destructive leading-snug">
+              {inProgressSessions.length} oavslutade rundor
+            </p>
+            <p className="mt-0.5 text-sm text-destructive/80">
+              Det finns {inProgressSessions.length} påbörjade rundor som inte har avslutats. Avsluta eller ta bort tidigare rundor innan du startar en ny för att undvika felaktiga resultat i historiken.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {inProgressSessions.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => resumeSession(s)}
+                  className="flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive hover:bg-destructive/20 transition-colors"
+                >
+                  <Clock className="h-3 w-3" />
+                  Startad {new Date(s.started_at).toLocaleString("sv-SE", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

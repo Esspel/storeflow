@@ -98,9 +98,9 @@ function QrKundonskemalFormPage() {
     if (!error && inserted?.id) {
       // Upload images
       for (const img of images) {
-        const ext = img.name.split(".").pop() ?? "jpg";
-        const path = `customer-requests/${inserted.id}/${crypto.randomUUID()}.${ext}`;
-        const { error: uploadErr } = await supabase.storage.from("attachments").upload(path, img);
+        const compressed = await compressImage(img);
+        const path = `customer-requests/${inserted.id}/${crypto.randomUUID()}.jpg`;
+        const { error: uploadErr } = await supabase.storage.from("attachments").upload(path, compressed);
         if (!uploadErr) {
           await supabase.from("customer_request_images").insert({
             request_id: inserted.id,
