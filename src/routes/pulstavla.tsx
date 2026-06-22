@@ -70,7 +70,9 @@ function PinGate({
       .eq("store_id", storeId)
       .maybeSingle();
     setChecking(false);
-    if (data && data.pin_hash === pin) {
+    if (!data?.pin_hash) { setError(true); setDigits(["", "", "", ""]); return; }
+    const { data: verified } = await supabase.rpc("verify_password", { plain_password: pin, hashed_password: data.pin_hash });
+    if (verified) {
       onUnlock();
     } else {
       setError(true);
@@ -250,7 +252,7 @@ function LiveBoard({ storeId }: { storeId: string }) {
   }
 
   const doneTasks = data.tasks.filter((t) => t.status === "done").length;
-  const totalTasks = data.tasks.length + doneTasks;
+  const totalTasks = data.tasks.length;
   const pct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
   return (

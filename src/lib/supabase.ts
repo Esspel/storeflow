@@ -552,7 +552,12 @@ export async function uploadAttachment(file: File, folder: string): Promise<stri
     const detectedMime = await detectImageMimeFromBytes(file);
     if (!detectedMime) return null; // Reject files whose bytes don't match an allowed image type
   }
-  const toUpload = await compressImage(file);
+  let toUpload: File;
+  try {
+    toUpload = await compressImage(file);
+  } catch {
+    toUpload = file;
+  }
   const ext = toUpload.name.split(".").pop() ?? "bin";
   const path = `${folder}/${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage.from("attachments").upload(path, toUpload);

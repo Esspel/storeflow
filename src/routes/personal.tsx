@@ -287,8 +287,9 @@ function AccountsPage() {
     if (!activeStore) return;
     setPulstavlaPinSaving(true);
     setPulstavlaPinError("");
+    const { data: pinHash } = await supabase.rpc("hash_password", { plain_password: pin });
     await supabase.from("pulstavla_pins").upsert(
-      { store_id: activeStore.id, pin_hash: pin, updated_at: new Date().toISOString() },
+      { store_id: activeStore.id, pin_hash: pinHash, updated_at: new Date().toISOString() },
       { onConflict: "store_id" },
     );
     setPulstavlaPinSaving(false);

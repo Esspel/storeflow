@@ -628,7 +628,7 @@ function TasksPage() {
     const parentQuestions = t.questions ?? [];
     let qIdMap = new Map<string, string>(); // parent question id → child question id
     if (parentQuestions.length > 0) {
-      const rows = parentQuestions.map(q => ({ task_id: childId, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: q.sort_order }));
+      const rows = parentQuestions.map(q => ({ task_id: childId, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: q.sort_order, link_url: (q as { link_url?: string | null }).link_url ?? null }));
       const { data: insertedQs } = await supabase.from("task_questions").insert(rows).select("id, sort_order");
       if (insertedQs) {
         insertedQs.forEach((iq: { id: string; sort_order: number }) => {
@@ -643,6 +643,7 @@ function TasksPage() {
       sort_order: s.sort_order,
       requires_photo: s.requires_photo,
       is_done: false,
+      link_url: (s as { link_url?: string | null }).link_url ?? null,
       condition_question_id: s.condition_question_id ? (qIdMap.get(s.condition_question_id) ?? null) : null,
       condition_answer: s.condition_answer ?? null,
     }));
@@ -669,17 +670,18 @@ function TasksPage() {
       ? Math.max(0, new Date(parent.due_date).getTime() - originDate.getTime())
       : 0;
     // Ceiling: recurrence_end if set, otherwise 365 days from today (rolling window)
-    const maxCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 365); d.setHours(0,0,0,0); return d; })();
+    const maxCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 365); return midnight(d); })();
     const ceilDate = parent.recurrence_end
       ? (() => { const e = midnight(new Date(parent.recurrence_end)); return e < maxCeil ? e : maxCeil; })()
       : maxCeil;
 
     const allPsKeys = new Set<string>();
     const allPeriods: Date[] = [];
+    const deletedPeriods = new Set<string>(parent.deleted_periods ?? []);
 
     // Always include the origin date as the first period so today's instance is created
     const originKey = localDateStr(originDate);
-    if (originDate <= ceilDate) {
+    if (originDate <= ceilDate && !deletedPeriods.has(originKey)) {
       allPsKeys.add(originKey);
       allPeriods.push(originDate);
     }
@@ -694,7 +696,7 @@ function TasksPage() {
     );
     for (const ps of periodStarts) {
       const k = localDateStr(ps);
-      if (!allPsKeys.has(k)) { allPsKeys.add(k); allPeriods.push(ps); }
+      if (!allPsKeys.has(k) && !deletedPeriods.has(k)) { allPsKeys.add(k); allPeriods.push(ps); }
     }
 
     for (const ps of allPeriods) {
@@ -746,7 +748,7 @@ function TasksPage() {
     let didSpawn = false;
 
     // Spawn up to 365 days ahead (rolling window) when no end date is set
-    const spawnCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 365); d.setHours(0,0,0,0); return d; })();
+    const spawnCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 365); return midnight(d); })();
 
     for (const t of recurringTasks) {
       const originDate: Date = t.recurrence_start
@@ -1227,6 +1229,7 @@ function TasksPage() {
       .eq("parent_task_id", parentId)
       .gte("recurrence_period_start", today)
       .neq("status", "done")
+      .is("deleted_at", null)
       .order("recurrence_period_start", { ascending: true });
     setFutureOccurrences((data ?? []) as TaskFull[]);
     setFutureOccLoading(false);
@@ -1296,7 +1299,8 @@ function TasksPage() {
   };
 
   const deleteFutureOcc = async (occ: TaskFull) => {
-    await supabase.from("tasks").delete().eq("id", occ.id);
+    const now = new Date().toISOString();
+    await supabase.from("tasks").update({ deleted_at: now }).eq("id", occ.id);
     // Record in parent's deleted_periods
     const parentId = occ.parent_task_id ?? occ.id;
     const periodStart = occ.recurrence_period_start ?? occ.due_date?.slice(0, 10);
@@ -1657,7 +1661,7 @@ function TasksPage() {
       if (!title?.trim()) continue;
 
       const dueDate = dueDays?.trim()
-        ? (() => { const d = new Date(); d.setDate(d.getDate() + parseInt(dueDays.trim())); return d.toISOString().slice(0, 10); })()
+        ? (() => { const d = midnightStockholm(new Date(getSimulatedNow())); d.setDate(d.getDate() + parseInt(dueDays.trim(), 10)); return localDateStr(d); })()
         : null;
 
       const recurrenceRule = (recurrence ?? "").trim() || null;
