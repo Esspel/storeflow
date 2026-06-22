@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDownUp, Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, Upload } from "lucide-react";
+import { ArrowDownUp, Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, Upload, MoreHorizontal, CalendarDays } from "lucide-react";
 
 import { PhotoViewer } from "@/components/photo-viewer";
 import { Button } from "@/components/ui/button";
@@ -458,6 +458,19 @@ function TasksPage() {
   const [editTask, setEditTask] = useState<TaskFull | null>(null);
   const [editForm, setEditForm] = useState<ReturnType<typeof emptyForm> | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+  // 'all_future' = change this + all future instances (default for recurring)
+  // 'single' = change only this specific occurrence (due date change isolated)
+  const [editScope, setEditScope] = useState<"all_future" | "single">("all_future");
+
+  // Future occurrences manager state
+  const [showFutureManager, setShowFutureManager] = useState(false);
+  const [futureManagerTask, setFutureManagerTask] = useState<TaskFull | null>(null);
+  const [futureOccurrences, setFutureOccurrences] = useState<TaskFull[]>([]);
+  const [futureOccLoading, setFutureOccLoading] = useState(false);
+  const [selectedFutureIds, setSelectedFutureIds] = useState<Set<string>>(new Set());
+  const [futureBulkContent, setFutureBulkContent] = useState("");
+  const [futureBulkAssigneeUserIds, setFutureBulkAssigneeUserIds] = useState<string[]>([]);
+  const [futureBulkAssigneeGroupIds, setFutureBulkAssigneeGroupIds] = useState<string[]>([]);
 
   // In-flight guard refs — prevent double-submit without triggering re-renders
   const completingRef = useRef<Set<string>>(new Set());
@@ -1112,6 +1125,7 @@ function TasksPage() {
 
   const openEdit = (task: TaskFull) => {
     setEditTask(task);
+    setEditScope(task.recurrence_rule || task.parent_task_id ? "all_future" : "single");
     setEditForm({
       title: task.title,
       description: task.description ?? "",
@@ -1131,19 +1145,127 @@ function TasksPage() {
       sap_article_id: (task as TaskFull & { sap_article_id?: string }).sap_article_id ?? "",
       completion_mode: task.completion_mode ?? "manual",
       steps: (task.steps ?? []).map(s => ({ label: s.label, requires_photo: s.requires_photo, link_url: s.link_url ?? "" })),
-      questions: (task.questions ?? []).map(q => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required })),
+      questions: (task.questions ?? []).map(q => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required, link_url: "" })),
       assigneeUserIds: (task.assignees ?? []).filter(a => a.user_id).map(a => a.user_id!),
       assigneeGroupIds: (task.assignees ?? []).filter(a => a.group_id).map(a => a.group_id!),
     });
   };
 
+  // Fetch all future (not done) occurrences for a recurring parent task
+  const fetchFutureOccurrences = async (parentTask: TaskFull) => {
+    setFutureOccLoading(true);
+    const parentId = parentTask.parent_task_id ?? parentTask.id;
+    const today = localDateStr(new Date(getSimulatedNow()));
+    const { data } = await supabase
+      .from("tasks")
+      .select("*, steps:task_steps(*), questions:task_questions(*), assignees:task_assignees(*, user:app_users(id,display_name,username), group:user_groups(id,name))")
+      .eq("parent_task_id", parentId)
+      .gte("recurrence_period_start", today)
+      .neq("status", "done")
+      .order("recurrence_period_start", { ascending: true });
+    setFutureOccurrences((data ?? []) as TaskFull[]);
+    setFutureOccLoading(false);
+  };
+
+  const openFutureManager = async (task: TaskFull) => {
+    setFutureManagerTask(task);
+    setShowFutureManager(true);
+    setSelectedFutureIds(new Set());
+    setFutureBulkContent("");
+    setFutureBulkAssigneeUserIds((task.assignees ?? []).filter(a => a.user_id).map(a => a.user_id!));
+    setFutureBulkAssigneeGroupIds((task.assignees ?? []).filter(a => a.group_id).map(a => a.group_id!));
+    await fetchFutureOccurrences(task);
+  };
+
+  const applyBulkFutureEdit = async () => {
+    if (selectedFutureIds.size === 0) return;
+    const ids = [...selectedFutureIds];
+    const updates: Record<string, unknown> = {};
+    if (futureBulkContent.trim()) updates.description = futureBulkContent.trim();
+    await supabase.from("tasks").update(updates).in("id", ids);
+    // Update assignees
+    for (const tid of ids) {
+      await supabase.from("task_assignees").delete().eq("task_id", tid);
+      const rows: { task_id: string; user_id?: string; group_id?: string }[] = [];
+      futureBulkAssigneeUserIds.forEach(uid => rows.push({ task_id: tid, user_id: uid }));
+      futureBulkAssigneeGroupIds.forEach(gid => rows.push({ task_id: tid, group_id: gid }));
+      if (rows.length > 0) await supabase.from("task_assignees").insert(rows);
+    }
+    logAudit(user?.id ?? null, "task.bulk_future_edit", "tasks", ids[0] ?? "", { count: ids.length });
+    setSelectedFutureIds(new Set());
+    setFutureBulkContent("");
+    if (futureManagerTask) await fetchFutureOccurrences(futureManagerTask);
+    await fetchTasks();
+  };
+
+  const markFutureOccDone = async (occ: TaskFull) => {
+    await supabase.from("tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("id", occ.id);
+    logAudit(user?.id ?? null, "task.complete", "tasks", occ.id, { title: occ.title });
+    if (futureManagerTask) await fetchFutureOccurrences(futureManagerTask);
+    await fetchTasks();
+  };
+
+  const deleteFutureOcc = async (occ: TaskFull) => {
+    await supabase.from("tasks").delete().eq("id", occ.id);
+    // Record in parent's deleted_periods
+    const parentId = occ.parent_task_id ?? occ.id;
+    const periodStart = occ.recurrence_period_start ?? occ.due_date?.slice(0, 10);
+    if (periodStart && parentId !== occ.id) {
+      const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
+      const existing: string[] = (parent?.deleted_periods ?? []) as string[];
+      if (!existing.includes(periodStart)) {
+        await supabase.from("tasks").update({ deleted_periods: [...existing, periodStart] }).eq("id", parentId);
+      }
+    }
+    logAudit(user?.id ?? null, "task.delete", "tasks", occ.id, { title: occ.title, scope: "single" });
+    if (futureManagerTask) await fetchFutureOccurrences(futureManagerTask);
+    await fetchTasks();
+  };
+
   const saveEdit = async () => {
     if (!editTask || !editForm || !isManager) return;
     setEditSaving(true);
-    const isRecurring = !!editTask.recurrence_rule;
+    const isRecurring = !!(editTask.recurrence_rule || editTask.parent_task_id);
     const isChild = !!editTask.parent_task_id;
 
-    // Fields that apply to the task record itself (no due_date — each child keeps its own)
+    // For "single" scope on recurring tasks: only update this instance's due_date + content
+    if (isRecurring && editScope === "single") {
+      await supabase.from("tasks").update({
+        title: editForm.title.trim(),
+        description: editForm.description.trim(),
+        category: editForm.category,
+        priority: editForm.priority,
+        due_date: editForm.due_date ? localInputToUtcIso(editForm.due_date) : null,
+        completion_mode: editForm.completion_mode || "manual",
+      }).eq("id", editTask.id);
+
+      const validSteps = editForm.steps.filter(s => s.label.trim());
+      const validQuestions = editForm.questions.filter(q => q.label.trim());
+      await supabase.from("task_steps").delete().eq("task_id", editTask.id);
+      if (validSteps.length > 0) {
+        await supabase.from("task_steps").insert(validSteps.map((s, i) => ({ task_id: editTask.id, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false, link_url: s.link_url || null })));
+      }
+      await supabase.from("task_questions").delete().eq("task_id", editTask.id);
+      if (validQuestions.length > 0) {
+        await supabase.from("task_questions").insert(validQuestions.map((q, i) => ({ task_id: editTask.id, label: q.label, question_type: q.question_type, is_required: q.is_required, sort_order: i, link_url: q.link_url || null })));
+      }
+      await supabase.from("task_assignees").delete().eq("task_id", editTask.id);
+      const singleAssigneeRows: { task_id: string; user_id?: string; group_id?: string }[] = [];
+      editForm.assigneeUserIds.forEach(uid => singleAssigneeRows.push({ task_id: editTask.id, user_id: uid }));
+      editForm.assigneeGroupIds.forEach(gid => singleAssigneeRows.push({ task_id: editTask.id, group_id: gid }));
+      if (singleAssigneeRows.length > 0) await supabase.from("task_assignees").insert(singleAssigneeRows);
+
+      logAudit(user?.id ?? null, "task.edit.single", "tasks", editTask.id, { title: editForm.title.trim() });
+      setEditTask(null);
+      setEditForm(null);
+      setDetailTask(null);
+      setEditSaving(false);
+      await fetchTasks();
+      return;
+    }
+
+    // "all_future" scope (or non-recurring): update this + all future instances
+    // Lock recurrence_start — never allow changing it
     const coreUpdates = {
       title: editForm.title.trim(),
       description: editForm.description.trim(),
@@ -1153,10 +1275,11 @@ function TasksPage() {
       recurrence_rule: editForm.recurrence_rule || null,
       recurrence_days: editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
       recurrence_interval: editForm.recurrence_interval > 1 ? editForm.recurrence_interval : null,
-      recurrence_start: editForm.recurrence_start || null,
+      // recurrence_start intentionally NOT updated — start date is locked
       recurrence_end: editForm.recurrence_end || null,
       completion_mode: editForm.completion_mode || "manual",
     };
+
 
     // IDs of all tasks to update steps/questions/assignees for
     let affectedIds: string[] = [editTask.id];
@@ -1859,12 +1982,20 @@ function TasksPage() {
   const renderTodayView = () => {
     const overdueTasks = filtered.filter(t => isOverdue(t.due_date, t.status) && t.status !== "done");
     const todayTasks = filtered.filter(t =>
+      t.status !== "done" &&
       t.due_date &&
       new Date(t.due_date) >= simTodayStart &&
       new Date(t.due_date) <= simTodayEnd
     );
     const noDateTasks = filtered.filter(t => !t.due_date && t.status !== "done");
+    // Completed tasks: those with status done. For recurring tasks completed before their due_date, flag them.
     const doneTodayTasks = filtered.filter(t => t.status === "done");
+
+    // Detect early completion: done before due_date (due_date is in the future)
+    const isEarlyCompletion = (t: TaskFull): boolean => {
+      if (t.status !== "done" || !t.due_date || !t.completed_at) return false;
+      return new Date(t.completed_at) < new Date(t.due_date);
+    };
     const totalToday = filtered.length;
     const doneCount = doneTodayTasks.length;
     const progressPct = totalToday > 0 ? Math.round((doneCount / totalToday) * 100) : 0;
@@ -1961,7 +2092,19 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-success/80">Klara</h2>
               <span className="ml-auto text-[11px] text-muted-foreground">{doneTodayTasks.length}</span>
             </div>
-            <div className="space-y-2">{doneTodayTasks.map(renderTaskCard)}</div>
+            <div className="space-y-2">
+              {doneTodayTasks.map(t => (
+                <div key={t.id} className="relative">
+                  {renderTaskCard(t)}
+                  {isEarlyCompletion(t) && (
+                    <div className="absolute top-2 right-10 flex items-center gap-1 rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-medium text-warning-foreground pointer-events-none">
+                      <AlertTriangle className="h-3 w-3 text-warning-foreground" />
+                      Klar i förtid
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -2294,6 +2437,9 @@ function TasksPage() {
                   <span className={cn("inline-flex items-center gap-1", isOverdue(detailTask.due_date, detailTask.status) && "text-destructive font-medium")}>
                     <Clock className="h-3.5 w-3.5" />
                     {new Date(detailTask.due_date).toLocaleDateString("sv-SE", { dateStyle: "medium" })}
+                    {(detailTask as TaskFull & { due_date_time?: string }).due_date_time && (
+                      <span className="ml-0.5 font-semibold">{(detailTask as TaskFull & { due_date_time?: string }).due_date_time}</span>
+                    )}
                   </span>
                 )}
                 {detailTask.assignees && detailTask.assignees.length > 0 && (
@@ -2545,6 +2691,16 @@ function TasksPage() {
                     <Pencil className="h-3.5 w-3.5" /> Redigera
                   </Button>
                 )}
+                {isManager && (detailTask.recurrence_rule || detailTask.parent_task_id) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full gap-1.5 border-primary/40 text-primary hover:bg-primary/5"
+                    onClick={() => { void openFutureManager(detailTask); setDetailTask(null); }}
+                  >
+                    <CalendarDays className="h-3.5 w-3.5" /> Förekomster
+                  </Button>
+                )}
                 {isManager && (
                   <Button
                     size="sm"
@@ -2652,8 +2808,6 @@ function TasksPage() {
                     <div
                       key={i}
                       className="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-colors hover:bg-muted/40"
-                      draggable
-                      onDragStart={(e) => e.dataTransfer.setData("stepIdx", String(i))}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => {
                         const from = Number(e.dataTransfer.getData("stepIdx"));
@@ -2666,7 +2820,13 @@ function TasksPage() {
                         });
                       }}
                     >
-                      <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/30 cursor-grab active:cursor-grabbing" />
+                      <div
+                        className="drag-handle shrink-0 cursor-grab active:cursor-grabbing"
+                        draggable
+                        onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData("stepIdx", String(i)); }}
+                      >
+                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30" />
+                      </div>
                       <CheckCircle2 className="h-4 w-4 shrink-0 text-muted-foreground/30" />
                       <Input
                         placeholder={`Checkpoint ${i + 1}`}
@@ -2720,8 +2880,6 @@ function TasksPage() {
                     <div
                       key={i}
                       className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2"
-                      draggable
-                      onDragStart={(e) => e.dataTransfer.setData("qIdx", String(i))}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => {
                         const from = Number(e.dataTransfer.getData("qIdx"));
@@ -2735,7 +2893,13 @@ function TasksPage() {
                       }}
                     >
                       <div className="flex items-center gap-2">
-                        <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/30 cursor-grab active:cursor-grabbing" />
+                        <div
+                          className="drag-handle shrink-0 cursor-grab active:cursor-grabbing"
+                          draggable
+                          onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData("qIdx", String(i)); }}
+                        >
+                          <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30" />
+                        </div>
                         <Input
                           placeholder={`Fråga ${i + 1}`}
                           value={q.label}
@@ -3201,11 +3365,32 @@ function TasksPage() {
               <span className="text-sm font-semibold text-foreground truncate max-w-[140px] sm:max-w-xs">{editTask.title}</span>
               <div className="ml-auto flex items-center gap-2">
                 <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hidden sm:flex" onClick={() => { setEditTask(null); setEditForm(null); }}>Avbryt</Button>
-                <Button size="sm" className="rounded-full gap-1.5 bg-green-600 text-white hover:bg-green-700 text-xs" onClick={saveEdit} disabled={editSaving || !editForm.title.trim()}>
-                  {editSaving ? "Sparar..." : "Spara"}
-                </Button>
+                {(editTask.recurrence_rule || editTask.parent_task_id) ? (
+                  <>
+                    <Button size="sm" variant="outline" className="rounded-full gap-1.5 text-xs border-green-500/60 text-green-700 hover:bg-green-50" onClick={() => { setEditScope("single"); void saveEdit(); }} disabled={editSaving || !editForm.title.trim()}>
+                      {editSaving && editScope === "single" ? "Sparar..." : "Redigera endast denna"}
+                    </Button>
+                    <Button size="sm" className="rounded-full gap-1.5 bg-green-600 text-white hover:bg-green-700 text-xs" onClick={() => { setEditScope("all_future"); void saveEdit(); }} disabled={editSaving || !editForm.title.trim()}>
+                      {editSaving && editScope === "all_future" ? "Sparar..." : "Ändra alla framtida"}
+                    </Button>
+                  </>
+                ) : (
+                  <Button size="sm" className="rounded-full gap-1.5 bg-green-600 text-white hover:bg-green-700 text-xs" onClick={saveEdit} disabled={editSaving || !editForm.title.trim()}>
+                    {editSaving ? "Sparar..." : "Spara"}
+                  </Button>
+                )}
               </div>
             </div>
+            {/* Recurring edit warning banner */}
+            {(editTask.recurrence_rule || editTask.parent_task_id) && (
+              <div className="mx-4 mt-2 mb-0 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-warning-foreground mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-warning-foreground">Återkommande uppgift</p>
+                  <p className="text-[11px] text-warning-foreground/80 mt-0.5">Forandringar av en upprepande uppgift forändrar alla framtida också. Välj "Redigera endast denna" för att bara påverka denna förekomst.</p>
+                </div>
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
               <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 sm:space-y-6 min-w-0">
                 <input
@@ -3382,7 +3567,10 @@ function TasksPage() {
                       <div className="pl-7 space-y-1.5">
                         <div className="flex items-center gap-2">
                           <span className="text-[11px] text-muted-foreground w-12">Start</span>
-                          <Input type="date" value={editForm.recurrence_start} onChange={(e) => setEditForm(p => p ? { ...p, recurrence_start: e.target.value } : p)} className="flex-1 h-7 text-xs" />
+                          <div className="flex flex-1 items-center gap-1.5">
+                            <span className="text-xs text-foreground">{editForm.recurrence_start || "—"}</span>
+                            <span className="text-[10px] text-muted-foreground/60 rounded-full bg-muted px-1.5 py-0.5">Låst</span>
+                          </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-[11px] text-muted-foreground w-12">Slut</span>
@@ -3403,6 +3591,20 @@ function TasksPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {/* Future occurrences manager button — only for recurring tasks */}
+                  {(editTask.recurrence_rule || editTask.parent_task_id) && isManager && (
+                    <div className="px-4 py-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full rounded-lg text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/5"
+                        onClick={() => void openFutureManager(editTask)}
+                      >
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        Hantera framtida förekomster
+                      </Button>
+                    </div>
+                  )}
                   {(storeUsers.length > 0 || groups.length > 0) && (
                     <AssigneePicker
                       users={storeUsers}
@@ -3415,6 +3617,132 @@ function TasksPage() {
                   )}
                 </div>
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* FUTURE OCCURRENCES MANAGER DIALOG */}
+      {showFutureManager && futureManagerTask && (
+        <Dialog open onOpenChange={(o) => { if (!o) { setShowFutureManager(false); setSelectedFutureIds(new Set()); } }}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
+            <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
+              <CalendarDays className="h-4 w-4 text-primary shrink-0" />
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-sm font-semibold">Framtida förekomster</DialogTitle>
+                <p className="text-[11px] text-muted-foreground truncate">{futureManagerTask.title}</p>
+              </div>
+              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground shrink-0" onClick={() => { setShowFutureManager(false); setSelectedFutureIds(new Set()); }}>Stäng</Button>
+            </div>
+
+            {/* Bulk action bar when items selected */}
+            {selectedFutureIds.size > 0 && (
+              <div className="border-b border-border/60 bg-primary/5 px-4 py-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-primary">{selectedFutureIds.size} förekomster markerade</span>
+                  <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs rounded-full" onClick={() => setSelectedFutureIds(new Set())}>Avmarkera</Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">Flera valda: kan bara redigera innehåll och ansvariga (inte datum/tid)</p>
+                <Textarea
+                  placeholder="Ny beskrivning (valfri)..."
+                  value={futureBulkContent}
+                  onChange={(e) => setFutureBulkContent(e.target.value)}
+                  rows={2}
+                  className="resize-none text-xs"
+                />
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground font-medium">Ansvariga</p>
+                  <AssigneePicker
+                    users={storeUsers}
+                    groups={groups}
+                    selectedUserIds={futureBulkAssigneeUserIds}
+                    selectedGroupIds={futureBulkAssigneeGroupIds}
+                    onToggleUser={(uid) => setFutureBulkAssigneeUserIds(prev => prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid])}
+                    onToggleGroup={(gid) => setFutureBulkAssigneeGroupIds(prev => prev.includes(gid) ? prev.filter(id => id !== gid) : [...prev, gid])}
+                  />
+                </div>
+                <Button size="sm" className="rounded-full text-xs w-full" onClick={() => void applyBulkFutureEdit()}>
+                  Spara ändringar för {selectedFutureIds.size} förekomster
+                </Button>
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {futureOccLoading ? (
+                <div className="space-y-2">
+                  {[1,2,3].map(i => <div key={i} className="h-14 rounded-xl animate-pulse bg-muted" />)}
+                </div>
+              ) : futureOccurrences.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <CalendarDays className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                  <p className="text-sm text-muted-foreground">Inga framtida förekomster hittades</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs text-muted-foreground">{futureOccurrences.length} kommande förekomster</p>
+                    <button
+                      className="text-[11px] text-primary hover:underline"
+                      onClick={() => {
+                        if (selectedFutureIds.size === futureOccurrences.length) setSelectedFutureIds(new Set());
+                        else setSelectedFutureIds(new Set(futureOccurrences.map(o => o.id)));
+                      }}
+                    >
+                      {selectedFutureIds.size === futureOccurrences.length ? "Avmarkera alla" : "Markera alla"}
+                    </button>
+                  </div>
+                  {futureOccurrences.map(occ => (
+                    <div key={occ.id} className={cn(
+                      "flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors",
+                      selectedFutureIds.has(occ.id) ? "border-primary/40 bg-primary/5" : "border-border/60 bg-card"
+                    )}>
+                      <Checkbox
+                        checked={selectedFutureIds.has(occ.id)}
+                        onCheckedChange={(checked) => {
+                          const next = new Set(selectedFutureIds);
+                          if (checked) next.add(occ.id); else next.delete(occ.id);
+                          setSelectedFutureIds(next);
+                        }}
+                        className="h-4 w-4 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{occ.title}</p>
+                        {occ.due_date && (
+                          <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {new Date(occ.due_date).toLocaleDateString("sv-SE", { weekday: "short", day: "numeric", month: "short" })}
+                            {occ.recurrence_period_start && (
+                              <span className="text-muted-foreground/60">({occ.recurrence_period_start.slice(0, 10)})</span>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                      {selectedFutureIds.size === 0 && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                            onClick={() => { openEdit(occ); setShowFutureManager(false); }}
+                          >
+                            <Pencil className="h-3 w-3" /> Redigera
+                          </button>
+                          <button
+                            className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-1 text-[10px] font-medium text-success hover:bg-success/20 transition-colors"
+                            onClick={() => void markFutureOccDone(occ)}
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Klar
+                          </button>
+                          <button
+                            className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-1 text-[10px] font-medium text-destructive hover:bg-destructive/20 transition-colors"
+                            onClick={() => void deleteFutureOcc(occ)}
+                          >
+                            <Trash2 className="h-3 w-3" /> Ta bort
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
