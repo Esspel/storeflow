@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { GdprImageReminder } from "@/components/gdpr-image-reminder";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
-import { cn } from "@/lib/utils";
+import { cn, sanitizeCsvCell } from "@/lib/utils";
 import { haptic } from "@/lib/haptic";
 
 export const Route = createFileRoute("/kundrunda")({
@@ -118,7 +118,7 @@ const KUNDRUNDA_CSV_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid i
 `;
 
 function exportTemplateCsv(zones: ZoneWithCheckpoints[]): void {
-  const escape = (s: string) => `"${(s ?? "").replace(/"/g, '""')}"`;
+  const escape = (s: string) => `"${sanitizeCsvCell((s ?? "").replace(/"/g, '""'))}"`;
   const dataRows = ["Zon,Kontrollpunkt,Beskrivning"];
   for (const z of zones) {
     for (const cp of z.checkpoints) {
@@ -136,7 +136,7 @@ function exportTemplateCsv(zones: ZoneWithCheckpoints[]): void {
 }
 
 function exportSessionsCsv(sessions: KundrundaSession[]): void {
-  const escape = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
+  const escape = (v: string) => `"${sanitizeCsvCell((v ?? "").replace(/"/g, '""'))}"`;
   const rows: string[] = ["Datum,Utförd av,Poäng,Max poäng,Procent,Status"];
   for (const s of sessions) {
     const date = s.completed_at ? new Date(s.completed_at).toLocaleDateString("sv-SE") : new Date(s.started_at).toLocaleDateString("sv-SE");
@@ -460,8 +460,31 @@ function KundrundaPage() {
     }
   };
 
-  const resumeSession = async (session: KundrundaSession) => {
-    const [respRes, imgRes] = await Promise.all([
+  // Optimistic locking: verify session version before writing.
+  // Returns false (and shows a toast) if another client has modified the session.
+  const checkVersionMatch = async (): Promise<boolean> => {
+    if (!activeSession) return false;
+    const { data } = await supabase
+      .from("kundrunda_sessions")
+      .select("version")
+      .eq("id", activeSession.id)
+      .maybeSingle();
+    if (data && data.version !== activeSession.version) {
+      toast.error("Ändringarna kunde inte sparas eftersom rundan har uppdaterats av en annan användare. Läs in sidan på nytt.", { duration: 8000 });
+      return false;
+    }
+    return true;
+  };
+
+  // Increment the session version in DB and sync local state.
+  const bumpVersion = async () => {
+    if (!activeSession) return;
+    const next = (activeSession.version ?? 1) + 1;
+    await supabase.from("kundrunda_sessions").update({ version: next }).eq("id", activeSession.id);
+    setActiveSession(p => p ? { ...p, version: next } : null);
+  };
+
+  const resumeSession = async (session: KundrundaSession) => {    const [respRes, imgRes] = await Promise.all([
       supabase.from("kundrunda_responses").select("*").eq("session_id", session.id),
       supabase.from("kundrunda_response_images").select("*").eq("session_id", session.id),
     ]);
@@ -485,6 +508,7 @@ function KundrundaPage() {
 
   const recordOk = async (checkpoint: KundrundaCheckpoint) => {
     if (!activeSession) return;
+    if (navigator.onLine && !(await checkVersionMatch())) return;
     const existing = responses[checkpoint.id];
     if (existing?.result === "avvikelse") {
       if (existing.incident_id) await supabase.from("incidents").delete().eq("id", existing.incident_id);
@@ -541,10 +565,12 @@ function KundrundaPage() {
       setSyncStatus("offline");
     }
     await updateScore(updatedResponses);
+    if (navigator.onLine) await bumpVersion();
   };
 
   const approveZone = async (zone: ZoneWithCheckpoints) => {
     if (!activeSession) return;
+    if (navigator.onLine && !(await checkVersionMatch())) return;
     const unanswered = zone.checkpoints.filter(cp => !responses[cp.id]?.result);
     if (unanswered.length === 0) return;
 
@@ -573,6 +599,7 @@ function KundrundaPage() {
       });
     }));
     await updateScore(updatedResponses);
+    await bumpVersion();
   };
 
   const openDefectDialog = (checkpoint: KundrundaCheckpoint) => {
@@ -592,6 +619,7 @@ function KundrundaPage() {
     if (!activeSession || !defectDialog) return;
     if (!defectDialog.defect_description.trim()) { haptic.error(); return; }
     if (!defectDialog.action_taken.trim()) { haptic.error(); return; }
+    if (navigator.onLine && !(await checkVersionMatch())) return;
     setSavingDefect(true);
     const existing = responses[defectDialog.checkpoint_id];
     let responseId: string | undefined;
@@ -666,6 +694,7 @@ function KundrundaPage() {
     }
 
     await updateScore(updatedResponses);
+    await bumpVersion();
     setSavingDefect(false);
     setDefectDialog(null);
   };

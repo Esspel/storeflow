@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { type AppUser, type Store, supabase, setSessionToken } from "./supabase";
 import { getStoredSession, storeSession, clearSession, login as doLogin, logout as doLogout, validateSession } from "./auth";
+import { secureGetSessionExpiresAt, SESSION_LIFETIME_MS } from "./secure-storage";
 
 type AuthContextType = {
   user: AppUser | null;
@@ -35,6 +36,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [lockScreenOpen, setLockScreenOpen] = useState(false);
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const [showFirstTimeSetup, setShowFirstTimeSetup] = useState(false);
+
+  // Keep a ref so the timeout interval can access the latest token without stale closures
+  const tokenRef = useRef<string | null>(null);
+  useEffect(() => { tokenRef.current = token; }, [token]);
 
   // effectiveStore is always activeStore — kept for API compat
   const effectiveStore = activeStore;
@@ -104,6 +109,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     })();
   }, []);
+
+  // Absolute session timeout: check every 60 s whether the 12-hour wall-clock limit has passed.
+  // If it has, wipe local session and force a full page reload to the login screen.
+  useEffect(() => {
+    const CHECK_INTERVAL_MS = 60_000;
+    const id = setInterval(async () => {
+      if (!tokenRef.current) return;
+      const expiresAt = await secureGetSessionExpiresAt();
+      if (expiresAt !== null && Date.now() >= expiresAt) {
+        if (tokenRef.current) {
+          await supabase.from("app_sessions").delete().eq("token", tokenRef.current);
+        }
+        setSessionToken(null);
+        setUser(null);
+        setToken(null);
+        setUserStores([]);
+        setActiveStoreState(null);
+        await clearSession();
+        // Hard redirect so any in-memory state is also wiped
+        window.location.href = "/login";
+      }
+    }, CHECK_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  // Warn 5 minutes before absolute expiry so users can save work
+  useEffect(() => {
+    let warnId: ReturnType<typeof setTimeout> | null = null;
+    (async () => {
+      if (!token) return;
+      const expiresAt = await secureGetSessionExpiresAt();
+      if (!expiresAt) return;
+      const warnAt = expiresAt - 5 * 60 * 1000;
+      const delay = warnAt - Date.now();
+      if (delay > 0) {
+        warnId = setTimeout(() => {
+          // Dispatch a custom event that any component can listen to
+          window.dispatchEvent(new CustomEvent("session-expiring-soon"));
+        }, delay);
+      }
+    })();
+    return () => { if (warnId) clearTimeout(warnId); };
+  }, [token]);
 
   const login = async (username: string, password: string) => {
     const result = await doLogin(username, password);

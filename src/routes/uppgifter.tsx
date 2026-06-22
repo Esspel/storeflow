@@ -28,7 +28,7 @@ import {
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
-import { cn, ensureHttps } from "@/lib/utils";
+import { cn, ensureHttps, sanitizeCsvCell } from "@/lib/utils";
 import { getSimulatedNow } from "@/lib/time-simulation";
 
 export const Route = createFileRoute("/uppgifter")({
@@ -73,19 +73,32 @@ function statusBadge(s: string) {
   return <Badge variant="secondary">Ej påbörjad</Badge>;
 }
 
-// Returns the start-of-day timestamp for a simulated "today"
+// Returns the start-of-day timestamp for a simulated "today" (Stockholm timezone)
 function getSimTodayStartMs(): number {
-  const d = new Date(getSimulatedNow());
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+  return midnightStockholm(new Date(getSimulatedNow())).getTime();
 }
 
-// Local-timezone YYYY-MM-DD string for a Date
+// All date arithmetic for recurring tasks uses Europe/Stockholm to prevent DST drift.
+// Using Intl.DateTimeFormat ensures the correct local calendar date regardless of the
+// device's system timezone.
+const TZ = "Europe/Stockholm";
+const dtfParts = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: TZ,
+  year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", second: "2-digit",
+});
+
+// Returns a Date object representing midnight (00:00:00) in Stockholm time for the given date.
+function midnightStockholm(d: Date): Date {
+  const parts = Object.fromEntries(dtfParts.formatToParts(d).filter(p => p.type !== "literal").map(p => [p.type, p.value]));
+  // Construct an ISO string at midnight Stockholm and parse it back via the local TZ offset
+  return new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00`);
+}
+
+// YYYY-MM-DD string using Stockholm calendar date
 function localDateStr(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  const parts = Object.fromEntries(dtfParts.formatToParts(d).filter(p => p.type !== "literal").map(p => [p.type, p.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 // A task is due soon if its due_date is within today (but not yet past end of today)
@@ -480,6 +493,7 @@ function TasksPage() {
     let q = supabase
       .from("tasks")
       .select("*, store:stores(*), steps:task_steps(*), questions:task_questions(*), assignees:task_assignees(*, user:app_users(id,display_name,username), group:user_groups(id,name)), images:task_images(*)")
+      .is("deleted_at", null)
       .order("created_at", { ascending: false });
 
     if (activeStore) {
@@ -563,7 +577,7 @@ function TasksPage() {
   const spawnRef = useRef(false);
 
   // Shared helpers used both at creation time and in the load-time spawn pass.
-  const midnight = (d: Date): Date => { const n = new Date(d); n.setHours(0,0,0,0); return n; };
+  const midnight = midnightStockholm;
 
   const MAX_SPAWN_INSTANCES = 90;
 
@@ -1012,40 +1026,53 @@ function TasksPage() {
   const confirmDelete = async (scope: "single" | "future") => {
     if (!deleteTarget) return;
     const t = deleteTarget;
+    const now = new Date().toISOString();
 
-    const idsToDelete: string[] = [];
+    const hardDeleteIds: string[] = [];
     const parentId = t.parent_task_id ?? t.id;
     const isChild = !!t.parent_task_id;
-    // For parent tasks, use recurrence_period_start or due_date as the cutoff
     const periodStart = t.recurrence_period_start ?? (t.due_date ? t.due_date.slice(0, 10) : null);
 
     if ((t.recurrence_rule || isChild) && scope === "future") {
-      // Delete all children at or after this period
+      // Fetch all future incomplete children — completed tasks stay untouched (audit preservation).
       if (periodStart) {
-        const { data: toRemove } = await supabase.from("tasks").select("id").eq("parent_task_id", parentId).gte("recurrence_period_start", periodStart);
-        (toRemove ?? []).forEach((r: { id: string }) => idsToDelete.push(r.id));
-        await supabase.from("tasks").delete().eq("parent_task_id", parentId).gte("recurrence_period_start", periodStart);
-        // Set recurrence_end on parent to day before this period so spawn won't recreate them
+        const { data: futureRows } = await supabase
+          .from("tasks")
+          .select("id, status, completed_at")
+          .eq("parent_task_id", parentId)
+          .gte("recurrence_period_start", periodStart)
+          .is("deleted_at", null);
+
+        const incomplete = (futureRows ?? []).filter((r: { status: string; completed_at: string | null }) => r.status !== "done" && !r.completed_at);
+        const incompleteIds = incomplete.map((r: { id: string }) => r.id);
+
+        if (incompleteIds.length > 0) {
+          await supabase.from("tasks").update({ deleted_at: now }).in("id", incompleteIds);
+          hardDeleteIds.push(...incompleteIds);
+        }
+
+        // Cap recurrence_end so spawn won't recreate purged periods
         const dayBefore = new Date(periodStart);
         dayBefore.setDate(dayBefore.getDate() - 1);
         await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
       }
-      // Also delete the current task itself
-      if (!idsToDelete.includes(t.id)) {
-        idsToDelete.push(t.id);
-        await supabase.from("tasks").delete().eq("id", t.id);
+      // Soft-delete the triggering task only if it's incomplete
+      if (!t.completed_at && t.status !== "done" && !hardDeleteIds.includes(t.id)) {
+        await supabase.from("tasks").update({ deleted_at: now }).eq("id", t.id);
+        hardDeleteIds.push(t.id);
       }
-      // If this is the parent (not a child), delete it too after updating recurrence_end
-      if (!isChild) {
-        idsToDelete.push(t.id);
-        await supabase.from("tasks").delete().eq("id", t.id);
+      // If this is the parent (non-child), soft-delete it too
+      if (!isChild && !hardDeleteIds.includes(t.id) && t.status !== "done" && !t.completed_at) {
+        await supabase.from("tasks").update({ deleted_at: now }).eq("id", t.id);
+        hardDeleteIds.push(t.id);
       }
     } else if ((t.recurrence_rule || isChild) && scope === "single") {
-      // Delete only this instance — record the period_start in parent's deleted_periods
-      idsToDelete.push(t.id);
-      await supabase.from("tasks").delete().eq("id", t.id);
+      // Single-instance delete: only soft-delete if the task is not completed
+      if (t.status !== "done" && !t.completed_at) {
+        await supabase.from("tasks").update({ deleted_at: now }).eq("id", t.id);
+        hardDeleteIds.push(t.id);
+      }
       if (periodStart && parentId !== t.id) {
-        // Append to deleted_periods on the parent so spawn skips this period
         const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
         const existing: string[] = (parent?.deleted_periods ?? []) as string[];
         if (!existing.includes(periodStart)) {
@@ -1053,12 +1080,15 @@ function TasksPage() {
         }
       }
     } else {
-      idsToDelete.push(t.id);
-      await supabase.from("tasks").delete().eq("id", t.id);
+      // Non-recurring: soft-delete only if incomplete; completed tasks are preserved
+      if (t.status !== "done" && !t.completed_at) {
+        await supabase.from("tasks").update({ deleted_at: now }).eq("id", t.id);
+        hardDeleteIds.push(t.id);
+      }
     }
 
-    // Clean up storage files for all deleted tasks
-    const cleanIds = [...new Set(idsToDelete)].filter(Boolean);
+    // Clean up storage files for all soft-deleted tasks (images are no longer needed)
+    const cleanIds = [...new Set(hardDeleteIds)].filter(Boolean);
     if (cleanIds.length > 0) {
       const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", cleanIds);
       deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
@@ -1073,7 +1103,8 @@ function TasksPage() {
 
   const bulkDeleteTasks = async (recurringScope: "single" | "future") => {
     const ids = [...selectedTaskIds];
-    const allIdsToDelete: string[] = [];
+    const allSoftDeleteIds: string[] = [];
+    const now = new Date().toISOString();
 
     for (const taskId of ids) {
       const task = tasks.find(t => t.id === taskId);
@@ -1085,20 +1116,31 @@ function TasksPage() {
 
       if ((task.recurrence_rule || isChild) && recurringScope === "future") {
         if (periodStart) {
-          const { data: toRemove } = await supabase.from("tasks").select("id").eq("parent_task_id", parentId).gte("recurrence_period_start", periodStart);
-          (toRemove ?? []).forEach((r: { id: string }) => allIdsToDelete.push(r.id));
-          await supabase.from("tasks").delete().eq("parent_task_id", parentId).gte("recurrence_period_start", periodStart);
+          const { data: futureRows } = await supabase
+            .from("tasks")
+            .select("id, status, completed_at")
+            .eq("parent_task_id", parentId)
+            .gte("recurrence_period_start", periodStart)
+            .is("deleted_at", null);
+          const incomplete = (futureRows ?? []).filter((r: { status: string; completed_at: string | null }) => r.status !== "done" && !r.completed_at);
+          const incompleteIds = incomplete.map((r: { id: string }) => r.id);
+          if (incompleteIds.length > 0) {
+            await supabase.from("tasks").update({ deleted_at: now }).in("id", incompleteIds);
+            allSoftDeleteIds.push(...incompleteIds);
+          }
           const dayBefore = new Date(periodStart);
           dayBefore.setDate(dayBefore.getDate() - 1);
           await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
         }
-        if (!allIdsToDelete.includes(task.id)) {
-          allIdsToDelete.push(task.id);
-          await supabase.from("tasks").delete().eq("id", task.id);
+        if (!allSoftDeleteIds.includes(task.id) && task.status !== "done" && !task.completed_at) {
+          await supabase.from("tasks").update({ deleted_at: now }).eq("id", task.id);
+          allSoftDeleteIds.push(task.id);
         }
       } else if ((task.recurrence_rule || isChild) && recurringScope === "single") {
-        allIdsToDelete.push(task.id);
-        await supabase.from("tasks").delete().eq("id", task.id);
+        if (task.status !== "done" && !task.completed_at) {
+          await supabase.from("tasks").update({ deleted_at: now }).eq("id", task.id);
+          allSoftDeleteIds.push(task.id);
+        }
         if (periodStart && parentId !== task.id) {
           const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
           const existing: string[] = (parent?.deleted_periods ?? []) as string[];
@@ -1107,12 +1149,14 @@ function TasksPage() {
           }
         }
       } else {
-        allIdsToDelete.push(task.id);
-        await supabase.from("tasks").delete().eq("id", task.id);
+        if (task.status !== "done" && !task.completed_at) {
+          await supabase.from("tasks").update({ deleted_at: now }).eq("id", task.id);
+          allSoftDeleteIds.push(task.id);
+        }
       }
     }
 
-    const cleanIds = [...new Set(allIdsToDelete)].filter(Boolean);
+    const cleanIds = [...new Set(allSoftDeleteIds)].filter(Boolean);
     if (cleanIds.length > 0) {
       const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", cleanIds);
       deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
@@ -1690,7 +1734,7 @@ function TasksPage() {
       }),
     ];
     const instructions = `# Exporterat ${new Date().toLocaleDateString("sv-SE")} — kan importeras direkt\n` + TASK_CSV_INSTRUCTIONS;
-    const csv = instructions + rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
+    const csv = instructions + rows.map((r) => r.map((v) => `"${sanitizeCsvCell(String(v ?? "").replace(/"/g, '""'))}"`).join(";")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

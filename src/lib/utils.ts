@@ -19,7 +19,7 @@ export function ensureHttps(value: string): string {
  */
 export function parseTimeInput(raw: string): { value: string; error: string | null } {
   const digits = raw.replace(/\D/g, "");
-  if (digits.length > 4) return { value: raw, error: "Tid får max vara 4 siffror (HHMM)" };
+  if (digits.length > 4) return { value: raw, error: "Ogiltigt klockslag angivet." };
   if (!digits) return { value: "", error: null };
 
   let hours: number;
@@ -33,9 +33,19 @@ export function parseTimeInput(raw: string): { value: string; error: string | nu
     minutes = parseInt(digits.slice(-2), 10);
   }
 
-  if (hours > 23) return { value: raw, error: "Timmar måste vara 0–23" };
-  if (minutes > 59) return { value: raw, error: "Minuter måste vara 0–59" };
+  if (hours > 23 || hours < 0) return { value: raw, error: "Ogiltigt klockslag angivet." };
+  if (minutes > 59 || minutes < 0) return { value: raw, error: "Ogiltigt klockslag angivet." };
 
   const formatted = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
   return { value: formatted, error: null };
+}
+
+/**
+ * Sanitize a CSV cell value to prevent formula/macro injection.
+ * Prepends a single quote if the value starts with =, +, -, or @ so
+ * spreadsheet applications treat it as literal text.
+ */
+export function sanitizeCsvCell(value: string): string {
+  if (/^[=+\-@]/.test(value)) return `'${value}`;
+  return value;
 }

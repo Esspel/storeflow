@@ -126,7 +126,7 @@ Deno.serve(async (req: Request) => {
     await supabase.rpc("record_successful_login", { p_username: username });
 
     const token = crypto.randomUUID() + "-" + Date.now();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
 
     await supabase.from("app_sessions").insert({
       user_id: user.id,

@@ -22,7 +22,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
-import { cn, ensureHttps } from "@/lib/utils";
+import { cn, ensureHttps, sanitizeCsvCell } from "@/lib/utils";
 
 const RECURRENCE_OPTIONS = [
   { value: "", label: "Ingen" },
@@ -946,7 +946,7 @@ function MallarPage() {
       "Städpaket",
     ];
     const csv = CSV_TEMPLATE_INSTRUCTIONS
-      + [headers, exampleA, exampleB].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
+      + [headers, exampleA, exampleB].map((r) => r.map((v) => `"${sanitizeCsvCell(String(v).replace(/"/g, '""'))}"`).join(";")).join("\n");
     triggerDownload(csv, "mall-import-template.csv");
   };
 
@@ -1007,7 +1007,7 @@ function MallarPage() {
       }),
     ];
     const instructions = `# Exporterat från StoreFlow ${new Date().toLocaleDateString("sv-SE")} — kan importeras direkt\n` + CSV_TEMPLATE_INSTRUCTIONS;
-    const csv = instructions + rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
+    const csv = instructions + rows.map((r) => r.map((v) => `"${sanitizeCsvCell(String(v ?? "").replace(/"/g, '""'))}"`).join(";")).join("\n");
     triggerDownload("\ufeff" + csv, `mallar-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
   };
 

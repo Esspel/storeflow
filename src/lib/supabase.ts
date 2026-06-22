@@ -153,6 +153,7 @@ export type Task = {
   recurrence_period_start: string | null;
   deleted_periods: string[] | null;
   completed_at: string | null;
+  deleted_at: string | null;
   sap_article_id: string | null;
   // Sub-task / process fields
   completion_mode: "manual" | "auto_from_children" | "auto_complete_children";
@@ -490,6 +491,27 @@ export async function cleanOldNotifications(userId: string) {
   await supabase.from("notifications").delete().eq("user_id", userId).lt("created_at", cutoff);
 }
 
+// Validate a file's true MIME type by inspecting its magic bytes.
+// Returns the detected MIME or null if the signature is not one of the allowed types.
+// Allowed: image/jpeg, image/png, image/webp
+export async function detectImageMimeFromBytes(file: File): Promise<"image/jpeg" | "image/png" | "image/webp" | null> {
+  const header = await file.slice(0, 12).arrayBuffer();
+  const bytes = new Uint8Array(header);
+
+  // JPEG: FF D8 FF
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
+      bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) return "image/png";
+
+  // WebP: 52 49 46 46 ?? ?? ?? ?? 57 45 42 50
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "image/webp";
+
+  return null;
+}
+
 // Compress an image and strip all EXIF metadata before uploading.
 // Drawing through canvas discards GPS, camera model, and timestamp metadata —
 // only raw pixel data is written to the output JPEG. Resizes to max 1920px.
@@ -521,8 +543,15 @@ export async function compressImage(file: File, maxPx = 1920, quality = 0.82): P
   });
 }
 
-// Helper: upload file to attachments bucket (compresses images automatically)
+// Helper: upload file to attachments bucket.
+// For image uploads, validates the true MIME type via magic bytes (JPEG/PNG/WebP only),
+// compresses, and strips all EXIF metadata before sending to storage.
+// Returns null if the file is rejected or the upload fails.
 export async function uploadAttachment(file: File, folder: string): Promise<string | null> {
+  if (file.type.startsWith("image/")) {
+    const detectedMime = await detectImageMimeFromBytes(file);
+    if (!detectedMime) return null; // Reject files whose bytes don't match an allowed image type
+  }
   const toUpload = await compressImage(file);
   const ext = toUpload.name.split(".").pop() ?? "bin";
   const path = `${folder}/${crypto.randomUUID()}.${ext}`;
@@ -583,6 +612,7 @@ export type KundrundaSession = {
   status: "in_progress" | "completed";
   total_score: number;
   max_score: number;
+  version: number;
   created_at: string;
   store?: Store;
   conductor?: AppUser;
