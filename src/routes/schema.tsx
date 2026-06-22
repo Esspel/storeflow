@@ -236,11 +236,25 @@ const FLOW_COLORS: Record<string, { bg: string; text: string; label: string }> =
   "torrt":    { bg: "#fff3cd", text: "#856404", label: "Torrt" },
   "fryst":    { bg: "#cce5ff", text: "#004085", label: "Fryst" },
   "standard": { bg: "#f0f0f0", text: "#555555", label: "Standard" },
+  "mejeri":   { bg: "#fde8f5", text: "#8b1a5c", label: "Mejeri" },
+  "non-food": { bg: "#e8eaf6", text: "#283593", label: "Non-Food" },
 };
 
-function flowColor(name: string): { bg: string; text: string } {
-  const key = name.toLowerCase().trim();
+function normalizeFlowName(name: string, supplier?: string): string {
+  const s = (supplier ?? "").toUpperCase();
+  if (s.includes("ARLA") || s.includes("FALKÖPINGS MEJERI")) return "mejeri";
+  if (s.includes("DC HELSINGBORG")) return "non-food";
+  return name.toLowerCase().trim();
+}
+
+function flowColor(name: string, supplier?: string): { bg: string; text: string } {
+  const key = normalizeFlowName(name, supplier);
   return FLOW_COLORS[key] ?? { bg: "#e8e8e8", text: "#444444" };
+}
+
+function flowDisplayName(name: string, supplier?: string): string {
+  const key = normalizeFlowName(name, supplier);
+  return FLOW_COLORS[key]?.label ?? name;
 }
 
 // ─── EmployeeGroup → role mapping ────────────────────────────────────────────
@@ -1823,6 +1837,28 @@ function SchemaPage() {
         </div>
       )}
 
+      {/* Softone Go import disclaimer */}
+      {selectedWeekImport && (
+        <div className="flex items-start gap-3 border-b border-sky-200/70 bg-sky-50/60 px-6 py-2.5 dark:border-sky-800/30 dark:bg-sky-950/15">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
+          <p className="text-xs text-sky-800 dark:text-sky-300">
+            Schemat i Storeflow är baserat på en import från Softone Go och ska inte ses som en definitiv källa till sanning.
+            {" "}<span className="font-medium">Importerat: {new Date(selectedWeekImport.imported_at).toLocaleString("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+          </p>
+        </div>
+      )}
+
+      {/* Delivery plan disclaimer */}
+      {activeWeekPlan && (
+        <div className="flex items-start gap-3 border-b border-amber-200/70 bg-amber-50/50 px-6 py-2.5 dark:border-amber-800/30 dark:bg-amber-950/15">
+          <Truck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="text-xs text-amber-800 dark:text-amber-300">
+            Leveransplanen är baserad på en importerad mall och ska inte ses som definitiv information.
+            {" "}<span className="font-medium">Importerad: {new Date(activeWeekPlan.imported_at).toLocaleString("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+          </p>
+        </div>
+      )}
+
       {/* Delivery plan warning banners */}
       {showDeliveries && missingAnyPlan && (
         <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 dark:border-amber-800/40 dark:bg-amber-950/20">
@@ -2015,12 +2051,13 @@ function SchemaPage() {
           {viewMode === "day" && showDeliveries && todayDeliveries.length > 0 && (
             <div className="mb-2 hidden flex-wrap gap-2 sm:flex">
               {todayDeliveries.map((d) => {
-                const c = flowColor(d.flow_name);
+                const c = flowColor(d.flow_name, d.supplier);
+                const label = flowDisplayName(d.flow_name, d.supplier);
                 return (
                   <div key={d.id} className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium" style={{ backgroundColor: c.bg, color: c.text, borderColor: c.text + "30" }}>
                     <Truck className="h-3 w-3" />
-                    <span>{d.delivery_time} — {d.flow_name}</span>
-                    {d.supplier && <span className="opacity-60 text-[10px]">· {d.supplier.split(" ").slice(0, 3).join(" ")}</span>}
+                    <span>{d.delivery_time} — {label}</span>
+                    {d.supplier && <span className="opacity-60 text-[10px]">· {d.supplier}</span>}
                   </div>
                 );
               })}
@@ -2085,13 +2122,14 @@ function SchemaPage() {
               ) : (
                 <div className="space-y-2">
                   {todayDeliveries.map((d) => {
-                    const c = flowColor(d.flow_name);
+                    const c = flowColor(d.flow_name, d.supplier);
+                    const label = flowDisplayName(d.flow_name, d.supplier);
                     return (
                       <div key={d.id} className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3" style={{ borderLeftWidth: 4, borderLeftColor: c.text }}>
                         <Truck className="h-5 w-5 shrink-0" style={{ color: c.text }} />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground">{d.flow_name}</p>
-                          {d.supplier && <p className="text-xs text-muted-foreground truncate">{d.supplier}</p>}
+                          <p className="text-sm font-semibold text-foreground">{label}</p>
+                          {d.supplier && <p className="text-xs text-muted-foreground">{d.supplier}</p>}
                         </div>
                         <span className="text-sm font-mono font-bold shrink-0" style={{ color: c.text }}>{d.delivery_time}</span>
                       </div>
@@ -2102,9 +2140,9 @@ function SchemaPage() {
             </div>
           )}
 
-          {/* ── MOBILE SCHEDULE CARD VIEW — hidden on mobile, desktop uses timeline ── */}
+          {/* ── MOBILE SCHEDULE CARD VIEW — mobile only, desktop uses timeline ── */}
           {viewMode === "day" && (
-            <div className="hidden sm:block pb-6" data-scroll-container ref={mobileListRef}>
+            <div className="block sm:hidden pb-6" data-scroll-container ref={mobileListRef}>
               {loadingSchedule ? (
                 <div className="space-y-3">
                   {[1,2,3,4,5].map(i => (
@@ -2136,28 +2174,6 @@ function SchemaPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {/* Deliveries & meetings strip */}
-                  {(todayDeliveries.length > 0 || todayMeetings.length > 0) && (
-                    <div className="flex flex-wrap gap-1.5 pb-1">
-                      {todayDeliveries.map((d) => {
-                        const c = flowColor(d.flow_name);
-                        return (
-                          <div key={d.id} className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: c.bg, color: c.text, borderColor: c.text + "30" }}>
-                            <Truck className="h-3 w-3" />{d.delivery_time} {d.flow_name}
-                          </div>
-                        );
-                      })}
-                      {todayMeetings.map((m) => {
-                        const time = new Date(m.scheduled_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
-                        return (
-                          <div key={m.id} className="flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700">
-                            <CalendarClock className="h-3 w-3" />{time}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
                   {displayRows.map(({ emp, workShifts, absenceShift, appUser, initials, dayTasks, weekMinutes }) => {
                     const isAbsent = workShifts.length === 0 && !!absenceShift;
                     const isSemester = absenceShift?.deviation_cause?.toLowerCase().includes("semester") || absenceShift?.shift_name?.toLowerCase() === "semester";
@@ -2208,9 +2224,12 @@ function SchemaPage() {
                               {emp.employment_percent != null && (
                                 <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 rounded-full px-1.5 py-0.5 leading-none" title={`Sysselsättningsgrad: ${emp.employment_percent}%`}>{emp.employment_percent}%</span>
                               )}
-                              {primaryShift?.is_borrowed && (
-                                <span className="flex items-center gap-0.5 text-[10px] font-medium text-sky-600 bg-sky-50 rounded-full px-1.5 py-0.5 leading-none"><ArrowLeftRight className="h-2.5 w-2.5" />Inlånad</span>
-                              )}
+                              {primaryShift?.is_borrowed && (() => {
+                                const isButikBorrowed = primaryShift.shift_name.toLowerCase().includes("butik");
+                                return isButikBorrowed
+                                  ? <span className="flex items-center gap-0.5 text-[10px] font-medium text-violet-700 bg-violet-50 rounded-full px-1.5 py-0.5 leading-none"><ArrowLeftRight className="h-2.5 w-2.5" />Utlånad</span>
+                                  : <span className="flex items-center gap-0.5 text-[10px] font-medium text-sky-600 bg-sky-50 rounded-full px-1.5 py-0.5 leading-none"><ArrowLeftRight className="h-2.5 w-2.5" />Inlånad</span>;
+                              })()}
                               {primaryShift?.is_preliminary && (
                                 <span className="text-[10px] font-medium text-amber-600 bg-amber-50 rounded-full px-1.5 py-0.5 leading-none">Preliminär</span>
                               )}
@@ -2332,10 +2351,11 @@ function SchemaPage() {
                     {todayDeliveries.map((d) => {
                       const left = timeToPercent(d.delivery_time);
                       if (left < 0 || left > 100) return null;
-                      const c = flowColor(d.flow_name);
+                      const c = flowColor(d.flow_name, d.supplier);
+                      const label = flowDisplayName(d.flow_name, d.supplier);
                       return (
                         <div key={d.id} className="absolute top-0.5 bottom-0.5 flex items-center rounded px-1.5 text-[10px] font-semibold cursor-default select-none" style={{ left: `${Math.max(0, left)}%`, width: "auto", minWidth: "48px", maxWidth: "10%", backgroundColor: c.bg, color: c.text, borderLeft: `2px solid ${c.text}` }}
-                          title={`${d.flow_name} ${d.delivery_time} — ${d.supplier}`}>
+                          title={`${label} ${d.delivery_time} — ${d.supplier}`}>
                           {d.delivery_time}
                         </div>
                       );
@@ -2483,7 +2503,7 @@ function SchemaPage() {
                                     `Netto: ${minsToHours(shift.net_minutes > 0 ? shift.net_minutes : Math.max(0, shift.gross_minutes - shift.break_minutes))}`,
                                     shift.deviation_cause && !shift.is_absence_day ? `Avvikelse: ${shift.deviation_cause}` : null,
                                     shift.is_lended ? "↔ Utlånad till annan enhet" : null,
-                                    shift.is_borrowed ? "↔ Inlånad från annan enhet" : null,
+                                    shift.is_borrowed ? (shift.shift_name.toLowerCase().includes("butik") ? "↔ Utlånad från Skogstorp" : "↔ Inlånad från annan enhet") : null,
                                     shift.is_preliminary ? "⚠ Preliminärt pass" : null,
                                   ].filter(Boolean).join("\n")}>
                                   {shift.is_lended && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
@@ -2636,10 +2656,11 @@ function SchemaPage() {
                     return (
                       <div key={idx} className={["border-r border-border/20 last:border-r-0 px-1.5 py-1.5 flex flex-col gap-0.5", isToday ? "bg-primary-soft/10" : ""].join(" ")}>
                         {dayDeliveries.map((d) => {
-                          const c = flowColor(d.flow_name);
+                          const c = flowColor(d.flow_name, d.supplier);
+                          const label = flowDisplayName(d.flow_name, d.supplier);
                           return (
                             <div key={d.id} className="rounded px-1 py-0.5 text-[9px] font-semibold truncate" style={{ backgroundColor: c.bg, color: c.text, borderLeft: `2px solid ${c.text}` }}>
-                              {d.delivery_time} {d.flow_name}
+                              {d.delivery_time} {label}
                             </div>
                           );
                         })}
@@ -2890,7 +2911,8 @@ function SchemaPage() {
                               <span>Flöde / Leverantör</span>
                             </div>
                             {preview.map((d, i) => {
-                              const c = flowColor(d.flowName);
+                              const c = flowColor(d.flowName, d.supplier);
+                              const label = flowDisplayName(d.flowName, d.supplier);
                               return (
                                 <div key={i} className="col-span-5 grid grid-cols-[1fr_auto_auto_auto_1fr] items-center border-t border-border/20 px-3 py-1.5 hover:bg-muted/20 transition-colors">
                                   <span className="font-medium text-foreground capitalize">{d.deliveryDay}</span>
@@ -2898,7 +2920,7 @@ function SchemaPage() {
                                   <span className="px-3 text-muted-foreground capitalize">{d.orderDay}</span>
                                   <span className="px-3 font-mono text-muted-foreground">{d.stopTime}</span>
                                   <span className="flex items-center gap-1.5 min-w-0">
-                                    <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: c.bg, color: c.text }}>{d.flowName || "–"}</span>
+                                    <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: c.bg, color: c.text }}>{label || "–"}</span>
                                     <span className="truncate text-muted-foreground">{d.supplier}</span>
                                   </span>
                                 </div>
