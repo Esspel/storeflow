@@ -28,7 +28,7 @@ import {
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
-import { cn, ensureHttps, sanitizeCsvCell } from "@/lib/utils";
+import { cn, ensureHttps, sanitizeCsvCell, parseTimeInput } from "@/lib/utils";
 import { getSimulatedNow } from "@/lib/time-simulation";
 
 export const Route = createFileRoute("/uppgifter")({
@@ -112,9 +112,7 @@ function isDueSoon(due_date: string | null): boolean {
 // A task is overdue only if its due date is BEFORE the start of today (i.e. due yesterday or earlier)
 function isOverdue(due_date: string | null, status: string): boolean {
   if (!due_date || status === "done" || status === "cancelled") return false;
-  const dueDay = new Date(due_date);
-  dueDay.setHours(0, 0, 0, 0);
-  return dueDay.getTime() < getSimTodayStartMs();
+  return new Date(due_date).getTime() < getSimTodayStartMs();
 }
 
 // Returns effective status considering simulated time
@@ -675,6 +673,17 @@ function TasksPage() {
     const ceilDate = parent.recurrence_end
       ? (() => { const e = midnight(new Date(parent.recurrence_end)); return e < maxCeil ? e : maxCeil; })()
       : maxCeil;
+
+    const allPsKeys = new Set<string>();
+    const allPeriods: Date[] = [];
+
+    // Always include the origin date as the first period so today's instance is created
+    const originKey = localDateStr(originDate);
+    if (originDate <= ceilDate) {
+      allPsKeys.add(originKey);
+      allPeriods.push(originDate);
+    }
+
     const periodStarts = buildPeriodStarts(
       originDate,
       parent.recurrence_rule,
@@ -684,6 +693,11 @@ function TasksPage() {
       ceilDate,
     );
     for (const ps of periodStarts) {
+      const k = localDateStr(ps);
+      if (!allPsKeys.has(k)) { allPsKeys.add(k); allPeriods.push(ps); }
+    }
+
+    for (const ps of allPeriods) {
       const psKey = localDateStr(ps);
       const childDue = parent.due_date ? new Date(ps.getTime() + durationMs) : null;
       const { data: child } = await supabase.from("tasks").insert({
@@ -703,7 +717,7 @@ function TasksPage() {
       }).select().maybeSingle();
       if (child) await copyChildData(child.id, parent);
     }
-    if (periodStarts.length > 0) {
+    if (allPeriods.length > 0) {
       await supabase.from("tasks").update({ last_spawned_at: new Date(nowMs).toISOString() }).eq("id", parent.id);
     }
   }
@@ -746,12 +760,19 @@ function TasksPage() {
         ? (() => { const e = midnight(new Date(t.recurrence_end)); return e < spawnCeil ? e : spawnCeil; })()
         : spawnCeil;
 
-      const periodStarts = buildPeriodStarts(
+      const futurePeriodStarts = buildPeriodStarts(
         originDate, t.recurrence_rule!, t.recurrence_days ?? null,
         t.recurrence_start ? new Date(t.recurrence_start) : null,
         t.recurrence_end ? new Date(t.recurrence_end) : null,
         effectiveCeil,
       );
+
+      // Also include the origin date itself so today's instance is never missing
+      const originKey = localDateStr(originDate);
+      const allPsMap = new Map<string, Date>();
+      if (originDate <= effectiveCeil) allPsMap.set(originKey, originDate);
+      for (const ps of futurePeriodStarts) { const k = localDateStr(ps); if (!allPsMap.has(k)) allPsMap.set(k, ps); }
+      const periodStarts = Array.from(allPsMap.values());
 
       const covered = coveredByParent.get(t.id) ?? new Set<string>();
       const deletedPeriods = new Set<string>(t.deleted_periods ?? []);
@@ -1238,6 +1259,31 @@ function TasksPage() {
     logAudit(user?.id ?? null, "task.bulk_future_edit", "tasks", ids[0] ?? "", { count: ids.length });
     setSelectedFutureIds(new Set());
     setFutureBulkContent("");
+    if (futureManagerTask) await fetchFutureOccurrences(futureManagerTask);
+    await fetchTasks();
+  };
+
+  const bulkDeleteFutureOccs = async () => {
+    if (selectedFutureIds.size === 0) return;
+    const ids = [...selectedFutureIds];
+    const now = new Date().toISOString();
+    // Soft-delete selected occurrences and record their periods in the parent
+    for (const id of ids) {
+      const occ = futureOccurrences.find(o => o.id === id);
+      if (!occ) continue;
+      await supabase.from("tasks").update({ deleted_at: now }).eq("id", id);
+      const parentId = occ.parent_task_id ?? occ.id;
+      const periodStart = occ.recurrence_period_start ?? occ.due_date?.slice(0, 10);
+      if (periodStart && parentId !== id) {
+        const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
+        const existing: string[] = (parent?.deleted_periods ?? []) as string[];
+        if (!existing.includes(periodStart)) {
+          await supabase.from("tasks").update({ deleted_periods: [...existing, periodStart] }).eq("id", parentId);
+        }
+      }
+    }
+    logAudit(user?.id ?? null, "task.bulk_delete", "tasks", ids[0] ?? "", { count: ids.length, scope: "future_manager" });
+    setSelectedFutureIds(new Set());
     if (futureManagerTask) await fetchFutureOccurrences(futureManagerTask);
     await fetchTasks();
   };
@@ -1754,10 +1800,8 @@ function TasksPage() {
   ];
 
   const simNow = getSimulatedNow();
-  const simTodayStart = new Date(simNow);
-  simTodayStart.setHours(0, 0, 0, 0);
-  const simTodayEnd = new Date(simNow);
-  simTodayEnd.setHours(23, 59, 59, 999);
+  const simTodayStart = midnightStockholm(new Date(simNow));
+  const simTodayEnd = new Date(simTodayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
 
   // Build a map: parentId → the child task for TODAY's period
   // This is used to show one representative row per recurring series
@@ -3067,8 +3111,8 @@ function TasksPage() {
                             type="button"
                             className="rounded-full border border-dashed border-border/60 px-2 py-0.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary"
                             onClick={() => {
-                              const t = prompt("Lägg till tid (HH:MM):");
-                              if (t?.match(/^\d{2}:\d{2}$/)) setNewTask(p => ({ ...p, time_slots: [...p.time_slots, t] }));
+                              const t = prompt("Lägg till tid (t.ex. 1052 eller 10:52):");
+                              if (t) { const { value, error } = parseTimeInput(t); if (!error) setNewTask(p => ({ ...p, time_slots: [...p.time_slots, value] })); }
                             }}
                           >+ Tid</button>
                         </div>
@@ -3082,8 +3126,8 @@ function TasksPage() {
                             type="button"
                             className="rounded-full border border-dashed border-border/60 px-2 py-0.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary"
                             onClick={() => {
-                              const t = prompt("Lägg till tidslucka (HH:MM):");
-                              if (t?.match(/^\d{2}:\d{2}$/)) setNewTask(p => ({ ...p, time_slots: [t], due_date_time: "" }));
+                              const t = prompt("Lägg till tidslucka (t.ex. 1052 eller 10:52):");
+                              if (t) { const { value, error } = parseTimeInput(t); if (!error) setNewTask(p => ({ ...p, time_slots: [value], due_date_time: "" })); }
                             }}
                           >+ Tidsluckor</button>
                         </div>
@@ -3694,7 +3738,9 @@ function TasksPage() {
                   <span className="text-xs font-medium text-primary">{selectedFutureIds.size} förekomster markerade</span>
                   <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs rounded-full" onClick={() => setSelectedFutureIds(new Set())}>Avmarkera</Button>
                 </div>
-                <p className="text-[11px] text-muted-foreground">Flera valda: kan bara redigera innehåll och ansvariga (inte datum/tid)</p>
+                {selectedFutureIds.size > 1 && (
+                  <p className="text-[11px] text-muted-foreground">Flera valda: kan bara redigera innehåll och ansvariga (inte datum/tid)</p>
+                )}
                 <Textarea
                   placeholder="Ny beskrivning (valfri)..."
                   value={futureBulkContent}
@@ -3713,9 +3759,14 @@ function TasksPage() {
                     onToggleGroup={(gid) => setFutureBulkAssigneeGroupIds(prev => prev.includes(gid) ? prev.filter(id => id !== gid) : [...prev, gid])}
                   />
                 </div>
-                <Button size="sm" className="rounded-full text-xs w-full" onClick={() => void applyBulkFutureEdit()}>
-                  Spara ändringar för {selectedFutureIds.size} förekomster
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" className="rounded-full text-xs flex-1" onClick={() => void applyBulkFutureEdit()}>
+                    Spara ändringar för {selectedFutureIds.size} förekomster
+                  </Button>
+                  <Button size="sm" variant="destructive" className="rounded-full text-xs" onClick={() => void bulkDeleteFutureOccs()}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             )}
 

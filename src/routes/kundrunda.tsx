@@ -218,6 +218,7 @@ function KundrundaPage() {
   const [deleteZoneTarget, setDeleteZoneTarget] = useState<ZoneWithCheckpoints | null>(null);
   const [deleteCheckpointTarget, setDeleteCheckpointTarget] = useState<{ checkpoint: KundrundaCheckpoint; zoneId: string } | null>(null);
   const [deleteSessionTarget, setDeleteSessionTarget] = useState<KundrundaSession | null>(null);
+  const [priorSessionAction, setPriorSessionAction] = useState<KundrundaSession | null>(null);
 
   const [dragZoneIdx, setDragZoneIdx] = useState<number | null>(null);
   const [dropZoneIdx, setDropZoneIdx] = useState<number | null>(null);
@@ -441,6 +442,11 @@ function KundrundaPage() {
   };
 
   const startSession = async (zonesToUse = activeZones) => {
+    const totalCheckpoints = zonesToUse.reduce((sum, z) => sum + z.checkpoints.length, 0);
+    if (totalCheckpoints === 0) {
+      toast.error("Lägg till minst en kontrollpunkt innan du startar en runda.");
+      return;
+    }
     const { data } = await supabase.from("kundrunda_sessions").insert({
       store_id: activeStore?.id ?? null,
       conducted_by: user?.id,
@@ -1784,29 +1790,38 @@ function KundrundaPage() {
         </div>
       )}
 
-      {/* Multiple unfinished rounds warning */}
+      {/* Multiple unfinished rounds */}
       {inProgressSessions.length > 1 && (
-        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/5 px-5 py-4">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
-          <div>
-            <p className="font-semibold text-destructive leading-snug">
-              {inProgressSessions.length} oavslutade rundor
-            </p>
-            <p className="mt-0.5 text-sm text-destructive/80">
-              Det finns {inProgressSessions.length} påbörjade rundor som inte har avslutats. Avsluta eller ta bort tidigare rundor innan du startar en ny för att undvika felaktiga resultat i historiken.
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {inProgressSessions.map((s) => (
+        <div className="mb-6 rounded-2xl border border-border bg-card">
+          <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-semibold">{inProgressSessions.length} oavslutade rundor</span>
+          </div>
+          <div className="divide-y divide-border">
+            {inProgressSessions.map((s) => (
+              <div key={s.id}>
                 <button
-                  key={s.id}
-                  onClick={() => resumeSession(s)}
-                  className="flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive hover:bg-destructive/20 transition-colors"
+                  onClick={() => setPriorSessionAction(priorSessionAction?.id === s.id ? null : s)}
+                  className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left hover:bg-muted/50 transition-colors"
                 >
-                  <Clock className="h-3 w-3" />
-                  Startad {new Date(s.started_at).toLocaleString("sv-SE", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  <span className="text-sm text-foreground">
+                    Startad {new Date(s.started_at).toLocaleString("sv-SE", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                  <ChevronDown className={cn("h-4 w-4 text-muted-foreground shrink-0 transition-transform", priorSessionAction?.id === s.id && "rotate-180")} />
                 </button>
-              ))}
-            </div>
+                {priorSessionAction?.id === s.id && (
+                  <div className="flex gap-2 px-5 pb-3">
+                    <Button size="sm" variant="outline" onClick={() => { setPriorSessionAction(null); resumeSession(s); }}>
+                      Fortsatt runda
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => { setPriorSessionAction(null); setDeleteSessionTarget(s); }}>
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                      Ta bort
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -500,7 +500,7 @@ function CustomerRequestsPage() {
 
       {/* Create dialog */}
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setForm(emptyForm()); createPreviews.forEach((p) => URL.revokeObjectURL(p)); setCreateImages([]); setCreatePreviews([]); } }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full max-w-md sm:max-w-md mx-0 sm:mx-auto">
           <DialogHeader>
             <DialogTitle>Registrera kundönskemål</DialogTitle>
           </DialogHeader>
@@ -620,7 +620,7 @@ function CustomerRequestsPage() {
 
       {editTarget && (
         <Dialog open onOpenChange={(o) => { if (!o) { setEditTarget(null); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setRequestImages([]); } }}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="w-full max-w-md sm:max-w-md mx-0 sm:mx-auto">
             <DialogHeader>
               <DialogTitle>Hantera önskemål</DialogTitle>
             </DialogHeader>
@@ -736,7 +736,7 @@ function CustomerRequestsPage() {
         const staffComment = (r as CustomerRequest & { staff_comment?: string | null }).staff_comment;
         return (
           <Dialog open onOpenChange={(o) => { if (!o) { setDetailTarget(null); setRequestImages([]); } }}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="w-full max-w-md sm:max-w-md mx-0 sm:mx-auto">
               <DialogHeader>
                 <button
                   onClick={() => { setDetailTarget(null); setRequestImages([]); }}
