@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   TriangleAlert as AlertTriangle, ChartBar as BarChart2, CalendarDays,
-  CircleCheck as CheckCircle2, ChevronRight, ClipboardList, FileText,
-  Keyboard, LayoutDashboard, ListChecks, MessageSquare, Package,
+  CircleCheck as CheckCircle2, ChevronRight, ClipboardList,
+  Keyboard, LayoutDashboard, ListChecks,
+  Package,
   QrCode, Settings, ShoppingCart, Tv as Tv2, UserRound, Users,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
@@ -87,19 +88,6 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
         ],
       },
       {
-        title: "Möten",
-        description: "Planera och genomför möten med tidsbudgeterad agenda och beslutslogg.",
-        icon: MessageSquare,
-        path: "/moten",
-        access: "all",
-        steps: [
-          "Starta ett möte för att aktivera agenda-timers",
-          "Lägg till beslut under mötet — de kan automatiskt skapa uppgifter",
-          "När mötet är slutfört: tryck 'Exportera protokoll' för ett utskriftsklart PDF-protokoll",
-        ],
-        tip: "PDF-protokollet öppnas i webbläsarens skriv-ut-dialog. Välj 'Spara som PDF' som skrivare.",
-      },
-      {
         title: "Kundrunda",
         description: "Genomför strukturerade butiksronder med checkpoints, zonpoäng och avvikelseregistrering.",
         icon: UserRound,
@@ -155,17 +143,7 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
           "Staplar är relativa — den med flest uppgifter fyller hela bredden",
         ],
       },
-      {
-        title: "Mötestyper",
-        description: "Skapa mötestyper med standardagendor som återanvänds.",
-        icon: MessageSquare,
-        path: "/moten",
-        access: "manager",
-        steps: [
-          "Öppna Möten och tryck 'Mötestyper' för att hantera mallar",
-          "Varje mötestyp kan ha en förkonfigurerad agenda med tidsgränser",
-        ],
-      },
+
     ],
   },
   {
@@ -211,18 +189,6 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
         ],
       },
       {
-        title: "PDF-mötesprotokoll",
-        description: "Exportera ett slutfört mötes agenda, beslut och åtgärdspunkter som PDF.",
-        icon: FileText,
-        access: "all",
-        steps: [
-          "Öppna ett möte med status 'Slutfört'",
-          "Tryck 'Exportera protokoll' i knappfältet",
-          "Webbläsarens skriv-ut-dialog öppnas — välj 'Spara som PDF'",
-        ],
-        tip: "Protokollet innehåller agenda med tidsstatus, alla beslut med ansvariga och förfallodatum.",
-      },
-      {
         title: "Snabbt användarbyte",
         description: "Byt användare på en delad enhet utan att logga ut och in.",
         icon: Users,
@@ -266,11 +232,10 @@ const KEYBOARD_SHORTCUTS_ALL = [
   { key: "3",   description: "Gå till Schema",                    access: "all" as const },
   { key: "4",   description: "Gå till Avvikelser",                access: "all" as const },
   { key: "5",   description: "Gå till Kundönskemål",              access: "all" as const },
-  { key: "6",   description: "Gå till Möten",                    access: "all" as const },
-  { key: "7",   description: "Gå till Kundrunda",                 access: "all" as const },
-  { key: "8",   description: "Gå till Rapporter",                 access: "all" as const },
-  { key: "9",   description: "Gå till Personal",                  access: "manager" as const },
-  { key: "0",   description: "Gå till Inställningar",             access: "all" as const },
+  { key: "6",   description: "Gå till Kundrunda",                 access: "all" as const },
+  { key: "7",   description: "Gå till Rapporter",                 access: "all" as const },
+  { key: "8",   description: "Gå till Personal",                  access: "manager" as const },
+  { key: "9",   description: "Gå till Inställningar",             access: "all" as const },
   { key: "m",   description: "Gå till Mallar",                    access: "manager" as const },
   { key: "b",   description: "Gå till Medarbetarbelastning",      access: "manager" as const },
   { key: "p",   description: "Gå till Pulstavla",                 access: "all" as const },

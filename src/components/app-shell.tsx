@@ -1,7 +1,7 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
-import { ChartBar as BarChart3, Bell, ClipboardList, FileText, FlaskConical, Hop as Home, Circle as HelpCircle, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, MessageSquare, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Store, X as XIcon, Tv as Tv2, ChartBar as BarChart2, Link as LinkIcon } from "lucide-react";
+import { ChartBar as BarChart3, Bell, ClipboardList, FileText, FlaskConical, Hop as Home, Circle as HelpCircle, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Store, X as XIcon, Tv as Tv2, ChartBar as BarChart2 } from "lucide-react";
 import { ROLE_LABELS, HIERARCHY_LABELS } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
 import { GlobalStoreSelector } from "@/components/global-store-selector";
@@ -247,7 +247,6 @@ export function AppShell() {
     { to: "/avvikelser", label: "Avvikelser", mobileHidden: true, Icon: TriangleAlert },
     { to: "/kundrunda", label: "Kundrunda", mobileHidden: true, Icon: UserRound },
     { to: "/kundonskemal", label: "Kundönskemål", mobileHidden: true, Icon: ShoppingCart },
-    { to: "/moten", label: "Möten", mobileHidden: true, Icon: MessageSquare },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }] : []),
     { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
   ];
@@ -297,9 +296,7 @@ export function AppShell() {
   const moreRoutes = [
     { to: "/avvikelser", label: "Avvikelser", Icon: TriangleAlert },
     { to: "/kundrunda", label: "Kundrunda", Icon: UserRound },
-    { to: "/moten", label: "Möten", Icon: MessageSquare },
     { to: "/kundonskemal", label: "Kundönskemål", Icon: ShoppingCart },
-    { to: "/lankregister", label: "Länkregister", Icon: LinkIcon },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", Icon: FlaskConical }] : []),
     { to: "/mallar", label: "Mallar", Icon: ClipboardList },
     { to: "/hjalp", label: "Hjälp", Icon: HelpCircle },
@@ -494,12 +491,6 @@ export function AppShell() {
                   <Link to="/rapporter" className="cursor-pointer">
                     <BarChart3 className="mr-2 h-4 w-4" />
                     Rapporter
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/lankregister" className="cursor-pointer">
-                    <LinkIcon className="mr-2 h-4 w-4" />
-                    Länkregister
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="md:hidden" />

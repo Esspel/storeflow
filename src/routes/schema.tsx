@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase, type AppUser, type Task, type Meeting } from "@/lib/supabase";
+import { supabase, type AppUser, type Task } from "@/lib/supabase";
 import { generatePassword, usernameFromName } from "@/lib/text-utils";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -777,7 +777,6 @@ function SchemaPage() {
   const [csvFileLabels, setCsvFileLabels] = useState<Record<string, CsvFileLabel>>({});
   const [scheduleTasks, setScheduleTasks] = useState<Task[]>([]);
   const [scheduleTaskAssignees, setScheduleTaskAssignees] = useState<{ task_id: string; user_id: string | null }[]>([]);
-  const [weekMeetings, setWeekMeetings] = useState<Meeting[]>([]);
 
   const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [bulkCreatingAccounts, setBulkCreatingAccounts] = useState(false);
@@ -861,12 +860,9 @@ function SchemaPage() {
   useEffect(() => {
     if (activeImport) {
       loadScheduleData(activeImport.id);
-      loadMeetingsForWeek(activeImport.week_start_date);
     } else {
       setScheduleEmployees([]);
       setScheduleShifts([]);
-      const weekStart = getWeekStartDate(selectedWeek.weekNumber, selectedWeek.year);
-      loadMeetingsForWeek(weekStart);
     }
   }, [activeImport, selectedWeek.weekNumber, selectedWeek.year]);
 
@@ -1042,19 +1038,6 @@ function SchemaPage() {
     setScheduleEmployees((empRes.data ?? []) as ScheduleEmployee[]);
     setScheduleShifts((shiftRes.data ?? []) as ScheduleShift[]);
     setLoadingSchedule(false);
-  }
-
-  async function loadMeetingsForWeek(weekStart: string) {
-    if (!storeId) return;
-    const weekEnd = addDays(weekStart, 7);
-    const { data } = await supabase
-      .from("meetings")
-      .select("id, meeting_type, title, store_id, scheduled_at, status")
-      .eq("store_id", storeId)
-      .gte("scheduled_at", weekStart)
-      .lt("scheduled_at", weekEnd)
-      .order("scheduled_at");
-    setWeekMeetings((data ?? []) as Meeting[]);
   }
 
   async function loadDeliveryPlans() {
@@ -1516,11 +1499,9 @@ function SchemaPage() {
       setActiveImport(imp);
       if (imp) {
         loadScheduleData(imp.id);
-        loadMeetingsForWeek(imp.week_start_date);
       } else {
         setScheduleEmployees([]);
         setScheduleShifts([]);
-        setWeekMeetings([]);
       }
     }
   }
@@ -1665,9 +1646,6 @@ function SchemaPage() {
 
   // Deliveries for current day
   const todayDeliveries = activeWeekEntries.filter((d) => d.delivery_date === currentDate);
-
-  // Meetings for current day
-  const todayMeetings = weekMeetings.filter((m) => toLocalDateStr(m.scheduled_at) === currentDate);
 
   const hourMarkers = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => TIMELINE_START + i);
 
@@ -1961,7 +1939,6 @@ function SchemaPage() {
                 const isToday = date === todayStr;
                 const count = scheduleEmployees.filter((emp) => scheduleShifts.some((s) => s.schedule_employee_id === emp.id && s.day_date === date && !s.is_absence_day && s.start_time)).length;
                 const delivCount = activeWeekEntries.filter((d) => d.delivery_date === date).length;
-                const meetCount = weekMeetings.filter((m) => toLocalDateStr(m.scheduled_at) === date).length;
                 const isSelected = selectedDayIndex === idx;
                 return (
                   <button key={date} onClick={() => setSelectedDayIndex(idx)}
@@ -1987,11 +1964,6 @@ function SchemaPage() {
                     {delivCount > 0 && (
                       <span className={["text-[8px] font-medium leading-none", isSelected ? "text-primary-foreground/60" : "text-info"].join(" ")}>
                         {delivCount}l
-                      </span>
-                    )}
-                    {meetCount > 0 && (
-                      <span className={["text-[8px] font-medium leading-none", isSelected ? "text-primary-foreground/60" : "text-sky-600"].join(" ")}>
-                        m
                       </span>
                     )}
                     {isToday && !isSelected && <span className="absolute bottom-1 h-1 w-1 rounded-full bg-primary" />}
@@ -2058,22 +2030,6 @@ function SchemaPage() {
                     <Truck className="h-3 w-3" />
                     <span>{d.delivery_time} — {label}</span>
                     {d.supplier && <span className="opacity-60 text-[10px]">· {d.supplier}</span>}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Meetings row for day view — desktop only */}
-          {viewMode === "day" && todayMeetings.length > 0 && (
-            <div className="mb-3 hidden flex-wrap gap-2 sm:flex">
-              {todayMeetings.map((m) => {
-                const time = new Date(m.scheduled_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
-                const isDone = m.status === "completed" || m.status === "cancelled";
-                return (
-                  <div key={m.id} className={["flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium", isDone ? "opacity-50" : ""].join(" ")} style={{ backgroundColor: "var(--color-info-soft, #e0f2fe)", color: "#0369a1", borderColor: "#bae6fd" }}>
-                    <CalendarClock className="h-3 w-3" />
-                    <span>{time} — {m.title}</span>
                   </div>
                 );
               })}
@@ -2364,35 +2320,6 @@ function SchemaPage() {
                 </div>
               )}
 
-              {/* Meetings row in day timeline */}
-              {todayMeetings.length > 0 && (
-                <div className="flex border-b border-border/20 bg-sky-50/40 dark:bg-sky-950/10">
-                  <div className="flex w-48 shrink-0 items-center border-r border-border/30 px-4 py-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                      <CalendarClock className="h-3 w-3" /> Möten
-                    </span>
-                  </div>
-                  <div className="relative flex-1 py-1" style={{ minWidth: `${TOTAL_HOURS * 60}px` }}>
-                    <div className="absolute inset-0 flex pointer-events-none">
-                      {hourMarkers.map((h) => <div key={h} className="flex-1 border-r border-border/15 last:border-r-0" />)}
-                    </div>
-                    {todayMeetings.map((m) => {
-                      const time = new Date(m.scheduled_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
-                      const left = timeToPercent(time);
-                      if (left < 0 || left > 100) return null;
-                      const isDone = m.status === "completed" || m.status === "cancelled";
-                      return (
-                        <div key={m.id} className={["absolute top-0.5 bottom-0.5 flex items-center rounded px-1.5 text-[10px] font-semibold cursor-default select-none whitespace-nowrap overflow-hidden", isDone ? "opacity-50" : ""].join(" ")}
-                          style={{ left: `${Math.max(0, left)}%`, minWidth: "52px", maxWidth: "14%", backgroundColor: "#e0f2fe", color: "#0369a1", borderLeft: "2px solid #7dd3fc" }}
-                          title={`${m.title} — ${time}`}>
-                          {time} {m.title}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               {/* Tasks row in day timeline */}
               {scheduleTasks.filter((t) => t.due_date && toLocalDateStr(t.due_date) === currentDate).length > 0 && (
                 <div className="flex border-b border-border/20 bg-amber-50/40 dark:bg-amber-950/10">
@@ -2665,36 +2592,6 @@ function SchemaPage() {
                           );
                         })}
                         {dayDeliveries.length === 0 && <span className="text-center text-[10px] text-muted-foreground/20">–</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Meetings row in week view */}
-              {weekMeetings.length > 0 && (
-                <div className="grid border-t border-border/20 bg-sky-50/30 dark:bg-sky-950/10" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>
-                  <div className="border-r border-border/40 px-4 py-2 flex items-center gap-1.5">
-                    <CalendarClock className="h-3.5 w-3.5 text-sky-600" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Möten</span>
-                  </div>
-                  {weekDates.map((date, idx) => {
-                    const dayMeetings = weekMeetings.filter((m) => toLocalDateStr(m.scheduled_at) === date);
-                    const isToday = date === todayStr;
-                    return (
-                      <div key={idx} className={["border-r border-border/20 last:border-r-0 px-1.5 py-1.5 flex flex-col gap-0.5", isToday ? "bg-primary-soft/10" : ""].join(" ")}>
-                        {dayMeetings.map((m) => {
-                          const time = new Date(m.scheduled_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
-                          const isDone = m.status === "completed" || m.status === "cancelled";
-                          return (
-                            <div key={m.id} className={["rounded px-1 py-0.5 text-[9px] font-semibold truncate", isDone ? "opacity-50" : ""].join(" ")}
-                              style={{ backgroundColor: "#e0f2fe", color: "#0369a1", borderLeft: "2px solid #7dd3fc" }}
-                              title={`${m.title} — ${time}`}>
-                              {time} {m.title}
-                            </div>
-                          );
-                        })}
-                        {dayMeetings.length === 0 && <span className="text-center text-[10px] text-muted-foreground/20">–</span>}
                       </div>
                     );
                   })}

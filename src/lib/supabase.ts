@@ -614,18 +614,7 @@ export type KundrundaResponseImage = {
   created_at: string;
 };
 
-export type MeetingType = {
-  id: string;
-  value: string;
-  label: string;
-  description: string;
-  default_duration_min: number;
-  default_agenda: { title: string; duration: number }[];
-  sort_order: number;
-  is_active: boolean;
-  created_by: string | null;
-  created_at: string;
-};
+// Retry wrapper for transient network errors — waits 2^attempt * 200ms between retries
 
 export type CommonDefect = {
   id: string;
@@ -651,49 +640,6 @@ export type CustomerRequest = {
   created_at: string;
   requester?: { display_name: string };
   store?: { name: string };
-};
-
-export type Meeting = {
-  id: string;
-  meeting_type: string;
-  title: string;
-  store_id: string | null;
-  scheduled_at: string;
-  started_at: string | null;
-  ended_at: string | null;
-  status: "scheduled" | "in_progress" | "completed" | "cancelled";
-  moderator_id: string | null;
-  notes: string | null;
-  created_by: string | null;
-  created_at: string;
-  store?: Store;
-  moderator?: AppUser;
-  agenda_items?: MeetingAgendaItem[];
-  decisions?: MeetingDecision[];
-};
-
-export type MeetingAgendaItem = {
-  id: string;
-  meeting_id: string;
-  title: string;
-  description: string | null;
-  duration_minutes: number;
-  sort_order: number;
-  started_at: string | null;
-  completed_at: string | null;
-  created_at: string;
-};
-
-export type MeetingDecision = {
-  id: string;
-  meeting_id: string;
-  description: string;
-  responsible_user_id: string | null;
-  due_date: string | null;
-  created_task_id: string | null;
-  created_by: string | null;
-  created_at: string;
-  responsible?: AppUser;
 };
 
 // Retry wrapper for transient network errors — waits 2^attempt * 200ms between retries
@@ -722,25 +668,4 @@ export function mittCoopUrl(sapArticleId: string | null | undefined, sapSiteId: 
   return `https://mittcoop.coop.se/sortiment/articles/${sapArticleId.trim()}?siteId=${sapSiteId.trim()}`;
 }
 
-export type LinkList = {
-  id: string;
-  name: string;
-  description: string | null;
-  scope: "store" | "forening" | "hk";
-  store_id: string | null;
-  forening_id: string | null;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-  items?: LinkListItem[];
-};
 
-export type LinkListItem = {
-  id: string;
-  list_id: string;
-  title: string;
-  url: string;
-  description: string | null;
-  sort_order: number;
-  created_at: string;
-};

@@ -19,11 +19,9 @@ import { Route as QrAvvikelseRouteImport } from './routes/qr-avvikelse'
 import { Route as PulstavlaRouteImport } from './routes/pulstavla'
 import { Route as ProcesserRouteImport } from './routes/processer'
 import { Route as PersonalRouteImport } from './routes/personal'
-import { Route as MotenRouteImport } from './routes/moten'
 import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LicensRouteImport } from './routes/licens'
-import { Route as LankregisterRouteImport } from './routes/lankregister'
 import { Route as KundrundaRouteImport } from './routes/kundrunda'
 import { Route as KundonskemalRouteImport } from './routes/kundonskemal'
 import { Route as IntegritetspolicyRouteImport } from './routes/integritetspolicy'
@@ -87,11 +85,6 @@ const PersonalRoute = PersonalRouteImport.update({
   path: '/personal',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MotenRoute = MotenRouteImport.update({
-  id: '/moten',
-  path: '/moten',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const MallarRoute = MallarRouteImport.update({
   id: '/mallar',
   path: '/mallar',
@@ -105,11 +98,6 @@ const LoginRoute = LoginRouteImport.update({
 const LicensRoute = LicensRouteImport.update({
   id: '/licens',
   path: '/licens',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LankregisterRoute = LankregisterRouteImport.update({
-  id: '/lankregister',
-  path: '/lankregister',
   getParentRoute: () => rootRouteImport,
 } as any)
 const KundrundaRoute = KundrundaRouteImport.update({
@@ -186,11 +174,9 @@ export interface FileRoutesByFullPath {
   '/integritetspolicy': typeof IntegritetspolicyRoute
   '/kundonskemal': typeof KundonskemalRoute
   '/kundrunda': typeof KundrundaRoute
-  '/lankregister': typeof LankregisterRoute
   '/licens': typeof LicensRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
-  '/moten': typeof MotenRoute
   '/personal': typeof PersonalRoute
   '/processer': typeof ProcesserRoute
   '/pulstavla': typeof PulstavlaRoute
@@ -215,11 +201,9 @@ export interface FileRoutesByTo {
   '/integritetspolicy': typeof IntegritetspolicyRoute
   '/kundonskemal': typeof KundonskemalRoute
   '/kundrunda': typeof KundrundaRoute
-  '/lankregister': typeof LankregisterRoute
   '/licens': typeof LicensRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
-  '/moten': typeof MotenRoute
   '/personal': typeof PersonalRoute
   '/processer': typeof ProcesserRoute
   '/pulstavla': typeof PulstavlaRoute
@@ -245,11 +229,9 @@ export interface FileRoutesById {
   '/integritetspolicy': typeof IntegritetspolicyRoute
   '/kundonskemal': typeof KundonskemalRoute
   '/kundrunda': typeof KundrundaRoute
-  '/lankregister': typeof LankregisterRoute
   '/licens': typeof LicensRoute
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
-  '/moten': typeof MotenRoute
   '/personal': typeof PersonalRoute
   '/processer': typeof ProcesserRoute
   '/pulstavla': typeof PulstavlaRoute
@@ -276,11 +258,9 @@ export interface FileRouteTypes {
     | '/integritetspolicy'
     | '/kundonskemal'
     | '/kundrunda'
-    | '/lankregister'
     | '/licens'
     | '/login'
     | '/mallar'
-    | '/moten'
     | '/personal'
     | '/processer'
     | '/pulstavla'
@@ -305,11 +285,9 @@ export interface FileRouteTypes {
     | '/integritetspolicy'
     | '/kundonskemal'
     | '/kundrunda'
-    | '/lankregister'
     | '/licens'
     | '/login'
     | '/mallar'
-    | '/moten'
     | '/personal'
     | '/processer'
     | '/pulstavla'
@@ -334,11 +312,9 @@ export interface FileRouteTypes {
     | '/integritetspolicy'
     | '/kundonskemal'
     | '/kundrunda'
-    | '/lankregister'
     | '/licens'
     | '/login'
     | '/mallar'
-    | '/moten'
     | '/personal'
     | '/processer'
     | '/pulstavla'
@@ -364,11 +340,9 @@ export interface RootRouteChildren {
   IntegritetspolicyRoute: typeof IntegritetspolicyRoute
   KundonskemalRoute: typeof KundonskemalRoute
   KundrundaRoute: typeof KundrundaRoute
-  LankregisterRoute: typeof LankregisterRoute
   LicensRoute: typeof LicensRoute
   LoginRoute: typeof LoginRoute
   MallarRoute: typeof MallarRoute
-  MotenRoute: typeof MotenRoute
   PersonalRoute: typeof PersonalRoute
   ProcesserRoute: typeof ProcesserRoute
   PulstavlaRoute: typeof PulstavlaRoute
@@ -453,13 +427,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PersonalRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/moten': {
-      id: '/moten'
-      path: '/moten'
-      fullPath: '/moten'
-      preLoaderRoute: typeof MotenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/mallar': {
       id: '/mallar'
       path: '/mallar'
@@ -479,13 +446,6 @@ declare module '@tanstack/react-router' {
       path: '/licens'
       fullPath: '/licens'
       preLoaderRoute: typeof LicensRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/lankregister': {
-      id: '/lankregister'
-      path: '/lankregister'
-      fullPath: '/lankregister'
-      preLoaderRoute: typeof LankregisterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/kundrunda': {
@@ -588,11 +548,9 @@ const rootRouteChildren: RootRouteChildren = {
   IntegritetspolicyRoute: IntegritetspolicyRoute,
   KundonskemalRoute: KundonskemalRoute,
   KundrundaRoute: KundrundaRoute,
-  LankregisterRoute: LankregisterRoute,
   LicensRoute: LicensRoute,
   LoginRoute: LoginRoute,
   MallarRoute: MallarRoute,
-  MotenRoute: MotenRoute,
   PersonalRoute: PersonalRoute,
   ProcesserRoute: ProcesserRoute,
   PulstavlaRoute: PulstavlaRoute,

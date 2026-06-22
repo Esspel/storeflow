@@ -29,7 +29,6 @@ const operations = [
   { title: "Revisioner", url: "/revisioner", icon: ClipboardCheck },
   { title: "Styrtavlor", url: "/styrtavlor", icon: Monitor },
   { title: "Mallar", url: "/mallar", icon: FileText },
-  { title: "Länkregister", url: "/lankregister", icon: LinkIcon },
   { title: "Rapporter", url: "/rapporter", icon: BarChart3 },
 ];
 

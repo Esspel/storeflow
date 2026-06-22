@@ -11,7 +11,6 @@ import {
   CircleCheck as CheckCircle2,
   Circle,
   UserRound,
-  MessageSquare,
   ShoppingCart,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -313,14 +312,13 @@ function HubPage() {
         {/* Quick nav cards */}
         <div className={cn(
           "grid grid-cols-2 gap-3 sm:grid-cols-3",
-          isManager ? "lg:grid-cols-7" : "lg:grid-cols-6"
+          isManager ? "lg:grid-cols-6" : "lg:grid-cols-5"
         )}>
           <QuickCard to="/uppgifter" icon={ListChecks} title="Uppgifter" desc="Rutiner och checklistor" tone="blue" />
           <QuickCard to="/avvikelser" icon={AlertTriangle} title="Avvikelser" desc="Rapportera ärenden" tone="amber" />
           <QuickCard to="/schema" icon={CalendarDays} title="Schema" desc="Skiftöversikt" tone="green" />
           <QuickCard to="/kundrunda" icon={UserRound} title="Kundrunda" desc="Butikskontroll" tone="teal" />
           <QuickCard to="/kundonskemal" icon={ShoppingCart} title="Kundönskemål" desc="Produktförfrågningar" tone="rose" />
-          <QuickCard to="/moten" icon={MessageSquare} title="Möten" desc="Agenda och protokoll" tone="slate" />
           {isManager && <QuickCard to="/rapporter" icon={BarChart3} title="Rapporter" desc="KPI:er och insikter" tone="green" />}
         </div>
       </div>

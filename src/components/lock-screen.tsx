@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Check, Delete, ScanBarcode, Search, X, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
+import { useBarcodeContext } from "@/lib/barcode-context";
 import { supabase, type AppUser } from "@/lib/supabase";
 
 const CameraScanner = React.lazy(() =>
@@ -29,6 +30,7 @@ type QuickUser = {
 };
 
 export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: Props) {
+  const { setScanSuppressed } = useBarcodeContext();
   const [mode, setMode] = useState<SwitchMode>("choose");
   const [selectedUser, setSelectedUser] = useState<QuickUser | null>(null);
   const [pin, setPin] = useState("");
@@ -43,6 +45,12 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const scannerTestRef = useRef(scannerTestActive);
   scannerTestRef.current = scannerTestActive;
+
+  // Take exclusive ownership of barcode events while the lock screen is mounted
+  useEffect(() => {
+    setScanSuppressed(true);
+    return () => setScanSuppressed(false);
+  }, [setScanSuppressed]);
 
   const pinRef = useRef(pin);
   pinRef.current = pin;

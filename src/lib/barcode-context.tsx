@@ -14,9 +14,11 @@ type BarcodeCtx = {
   // Subscribe to scan events from any component
   onScan: (fn: (code: string) => void) => () => void;
   openCameraScanner: () => void;
+  // Set to true while LockScreen is active so the global handler yields
+  setScanSuppressed: (suppressed: boolean) => void;
 };
 
-const Ctx = createContext<BarcodeCtx>({ lastScan: null, onScan: () => () => {}, openCameraScanner: () => {} });
+const Ctx = createContext<BarcodeCtx>({ lastScan: null, onScan: () => () => {}, openCameraScanner: () => {}, setScanSuppressed: () => {} });
 
 export function useBarcodeContext() {
   return useContext(Ctx);
@@ -55,8 +57,17 @@ export function BarcodeProvider({ children }: { children: React.ReactNode }) {
   const [lastScan, setLastScan] = useState<BarcodeScan | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const listenersRef = useRef<Set<(code: string) => void>>(new Set());
+  // When LockScreen is active it takes exclusive ownership of barcode events
+  const suppressedRef = useRef(false);
+
+  const setScanSuppressed = (suppressed: boolean) => {
+    suppressedRef.current = suppressed;
+  };
 
   const handleScan = async (code: string) => {
+    // Yield to LockScreen when it is active — it has its own useBarcodeScanner
+    if (suppressedRef.current) return;
+
     const scan = { code, at: Date.now() };
     setLastScan(scan);
 
@@ -110,7 +121,7 @@ export function BarcodeProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ lastScan, onScan, openCameraScanner: () => setCameraOpen(true) }}>
+    <Ctx.Provider value={{ lastScan, onScan, openCameraScanner: () => setCameraOpen(true), setScanSuppressed }}>
       {children}
 
       {cameraOpen && (
