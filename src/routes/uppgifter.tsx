@@ -1192,9 +1192,15 @@ function TasksPage() {
     await fetchTasks();
   };
 
-  const openEdit = (task: TaskFull) => {
+  const openEdit = async (task: TaskFull) => {
     setEditTask(task);
     setEditScope(task.recurrence_rule || task.parent_task_id ? "all_future" : "single");
+    // For child tasks, fetch parent's recurrence_end so it shows correctly
+    let recurrenceEnd = task.recurrence_end ?? "";
+    if (task.parent_task_id && !recurrenceEnd) {
+      const { data: parent } = await supabase.from("tasks").select("recurrence_end").eq("id", task.parent_task_id).maybeSingle();
+      recurrenceEnd = parent?.recurrence_end ?? "";
+    }
     setEditForm({
       title: task.title,
       description: task.description ?? "",
@@ -1210,7 +1216,7 @@ function TasksPage() {
       recurrence_months: (task as TaskFull & { recurrence_months?: number[] }).recurrence_months ?? [],
       recurrence_month_day: (task as TaskFull & { recurrence_month_day?: number }).recurrence_month_day ?? 1,
       recurrence_start: task.recurrence_start ?? "",
-      recurrence_end: task.recurrence_end ?? "",
+      recurrence_end: recurrenceEnd,
       sap_article_id: (task as TaskFull & { sap_article_id?: string }).sap_article_id ?? "",
       completion_mode: task.completion_mode ?? "manual",
       steps: (task.steps ?? []).map(s => ({ label: s.label, requires_photo: s.requires_photo, link_url: s.link_url ?? "" })),
@@ -1836,7 +1842,13 @@ function TasksPage() {
       t.status !== "done" && t.status !== "cancelled"
     );
     if (todayUndone) { currentChildByParent.set(parentId, todayUndone); continue; }
-    // Priority 2: nearest upcoming undone (due_date strictly after today)
+    // Priority 2: most recent overdue undone (due_date strictly before today)
+    const overdueUndone = [...children].reverse().find(t =>
+      t.due_date && new Date(t.due_date) < simTodayStart &&
+      t.status !== "done" && t.status !== "cancelled"
+    );
+    if (overdueUndone) { currentChildByParent.set(parentId, overdueUndone); continue; }
+    // Priority 3: nearest upcoming undone (due_date strictly after today)
     const nextUndone = children.find(t =>
       t.due_date && new Date(t.due_date) > simTodayEnd &&
       t.status !== "done" && t.status !== "cancelled"
@@ -2017,7 +2029,7 @@ function TasksPage() {
           "cursor-pointer overflow-hidden rounded-2xl border bg-card transition-all flex-1",
           "shadow-[0_1px_3px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)]",
           done && "opacity-55 border-border/30",
-          !done && overdue && "border-destructive/50",
+          !done && overdue && "border-destructive animate-[overdue-pulse_1.5s_ease-in-out_infinite]",
           !done && !overdue && "border-border/60"
         )}
       >
@@ -2785,7 +2797,7 @@ function TasksPage() {
                     size="sm"
                     variant="outline"
                     className="rounded-full gap-1.5 border-green-500/60 text-green-700 hover:bg-green-50 hover:border-green-500"
-                    onClick={() => { openEdit(detailTask); setDetailTask(null); }}
+                    onClick={() => { void openEdit(detailTask); setDetailTask(null); }}
                   >
                     <Pencil className="h-3.5 w-3.5" /> Redigera
                   </Button>
@@ -3090,7 +3102,8 @@ function TasksPage() {
               {/* Property rows */}
               <div className="divide-y divide-border/50">
 
-                {/* Förfallodatum */}
+                {/* Förfallodatum — hidden when recurrence is set (start date drives the first occurrence) */}
+                {!newTask.recurrence_rule && (
                 <div className="flex items-start gap-3 px-4 py-3">
                   <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
                   <div className="flex flex-col gap-1 min-w-0 flex-1">
@@ -3103,8 +3116,10 @@ function TasksPage() {
                     />
                   </div>
                 </div>
+                )}
 
-                {/* Förfallotid / Tidsluckor */}
+                {/* Förfallotid / Tidsluckor — hidden when recurrence is set */}
+                {!newTask.recurrence_rule && (
                 <div className="flex items-start gap-3 px-4 py-3">
                   <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60 opacity-0" />
                   <div className="flex flex-col gap-1 min-w-0 flex-1">
@@ -3152,6 +3167,7 @@ function TasksPage() {
                     )}
                   </div>
                 </div>
+                )}
 
                 {/* Prioritet */}
                 <div className="flex items-center gap-3 px-4 py-3">
@@ -3680,20 +3696,8 @@ function TasksPage() {
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                    <span className="w-24 shrink-0 text-xs text-muted-foreground">Avslutning</span>
-                    <Select value={editForm.completion_mode} onValueChange={(v) => setEditForm(p => p ? { ...p, completion_mode: v as typeof p.completion_mode } : p)}>
-                      <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="manual">Manuell</SelectItem>
-                        <SelectItem value="auto_from_children">Auto (underuppgifter klara)</SelectItem>
-                        <SelectItem value="auto_complete_children">Auto (slutför underuppgifter)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {/* Future occurrences manager button — only for recurring tasks */}
-                  {(editTask.recurrence_rule || editTask.parent_task_id) && isManager && (
+                  {/* Future occurrences manager button — only for recurring parent tasks (not child occurrences) */}
+                  {editTask.recurrence_rule && !editTask.parent_task_id && isManager && (
                     <div className="px-4 py-3">
                       <Button
                         variant="outline"
@@ -3835,7 +3839,7 @@ function TasksPage() {
                         <div className="flex items-center gap-1 shrink-0">
                           <button
                             className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
-                            onClick={() => { openEdit(occ); setShowFutureManager(false); }}
+                            onClick={() => { void openEdit(occ); setShowFutureManager(false); }}
                           >
                             <Pencil className="h-3 w-3" /> Redigera
                           </button>

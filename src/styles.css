@@ -297,3 +297,8 @@
   }
 }
 
+@keyframes overdue-pulse {
+  0%, 100% { border-color: oklch(0.577 0.245 27.325); box-shadow: 0 0 0 0 oklch(0.577 0.245 27.325 / 0.3); }
+  50% { border-color: oklch(0.577 0.245 27.325 / 0.55); box-shadow: 0 0 0 4px oklch(0.577 0.245 27.325 / 0); }
+}
+
