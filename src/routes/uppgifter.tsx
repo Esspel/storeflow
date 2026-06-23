@@ -709,6 +709,7 @@ function TasksPage() {
         priority: parent.priority,
         store_id: parent.store_id,
         due_date: childDue ? childDue.toISOString() : null,
+        due_date_time: (parent as TaskFull & { due_date_time?: string }).due_date_time ?? null,
         recurrence_rule: parent.recurrence_rule,
         recurrence_days: parent.recurrence_days,
         recurrence_period_start: psKey,
@@ -786,6 +787,7 @@ function TasksPage() {
         const { data: child } = await supabase.from("tasks").insert({
           title: t.title, description: t.description, category: t.category, priority: t.priority,
           store_id: t.store_id, due_date: childDue ? childDue.toISOString() : null,
+          due_date_time: (t as TaskFull & { due_date_time?: string }).due_date_time ?? null,
           recurrence_rule: t.recurrence_rule, recurrence_days: t.recurrence_days,
           recurrence_period_start: psKey, parent_task_id: t.id,
           created_by: t.created_by, assigned_to: t.assigned_to, status: "todo",
@@ -1876,8 +1878,14 @@ function TasksPage() {
 
   const filtered = visibleTasks
     .filter((t) => {
-      // Always hide child recurring tasks that aren't the current representative
-      if (hiddenChildIds.has(t.id)) return false;
+      // Always hide child recurring tasks that aren't the current representative,
+      // EXCEPT children that were done early today — they must still appear in the klara section
+      if (hiddenChildIds.has(t.id)) {
+        const doneEarlyToday = t.status === "done" && t.completed_at && t.due_date &&
+          new Date(t.completed_at) >= simTodayStart &&
+          new Date(t.due_date) > simTodayEnd;
+        if (!doneEarlyToday) return false;
+      }
       // Always hide recurring parents that have children (they're represented by children)
       if (recurringParentIds.has(t.id) && currentChildByParent.has(t.id)) return false;
 
@@ -2096,10 +2104,12 @@ function TasksPage() {
     // Completed tasks: those with status done. For recurring tasks completed before their due_date, flag them.
     const doneTodayTasks = filtered.filter(t => t.status === "done");
 
-    // Detect early completion: done before due_date (due_date is in the future)
+    // Detect early completion: done on a calendar day strictly before the due date's calendar day
     const isEarlyCompletion = (t: TaskFull): boolean => {
       if (t.status !== "done" || !t.due_date || !t.completed_at) return false;
-      return new Date(t.completed_at) < new Date(t.due_date);
+      const completedDay = midnight(new Date(t.completed_at));
+      const dueDay = midnight(new Date(t.due_date));
+      return completedDay < dueDay;
     };
     const totalToday = filtered.length; // includes done tasks for accurate ratio
     const doneCount = doneTodayTasks.length;
