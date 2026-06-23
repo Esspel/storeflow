@@ -188,17 +188,8 @@ function LiveBoard({ storeId }: { storeId: string }) {
           })
       : Promise.resolve([] as LiveTask[]);
 
-    const [{ data: storeRow }, { data: directTasks }, groupTasks, { data: incidents }] = await Promise.all([
+    const [{ data: storeRow }, groupTasks, { data: incidents }] = await Promise.all([
       supabase.from("stores").select("name,upshop_url").eq("id", storeId).maybeSingle(),
-      supabase
-        .from("tasks")
-        .select("id,title,category,status,due_date,assignee:app_users!assigned_to(display_name)")
-        .eq("store_id", storeId)
-        .in("status", ["todo", "progress", "late"])
-        .gte("due_date", todayStr)
-        .lt("due_date", endStr)
-        .order("status")
-        .limit(20),
       groupTasksPromise,
       supabase
         .from("incidents")
@@ -209,9 +200,8 @@ function LiveBoard({ storeId }: { storeId: string }) {
         .limit(8),
     ]);
 
-    // Merge direct tasks + group tasks, deduplicate by id
+    // Only show tasks assigned to "Alla medarbetare" group
     const allTasksMap = new Map<string, LiveTask>();
-    for (const t of (directTasks ?? []) as LiveTask[]) allTasksMap.set(t.id, t);
     for (const t of groupTasks) allTasksMap.set(t.id, t);
     const mergedTasks = Array.from(allTasksMap.values()).slice(0, 12);
 

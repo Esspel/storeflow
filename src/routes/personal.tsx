@@ -1033,15 +1033,7 @@ function AccountsPage() {
                   e.target.value = "";
                 }}
               />
-              {/* Hide button on mobile */}
-              <Button className="rounded-full hidden sm:flex" onClick={() => { setShowCreateUser(true); setError(""); }}>
-                <Plus className="mr-2 h-4 w-4" /> Nytt konto
-              </Button>
-              {!isMobile && (
-                <Button className="rounded-full sm:hidden" size="icon" onClick={() => { setShowCreateUser(true); setError(""); }}>
-                  <Plus className="h-4 w-4" />
-                </Button>
-              )}
+              {/* Create account button removed - use CSV import instead */}
             </div>
             {/* User CSV import result */}
             {userCsvResult && (

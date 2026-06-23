@@ -1897,7 +1897,12 @@ function TasksPage() {
           : false;
         const isOverdueTask = isOverdue(t.due_date, t.status);
         const hasNoDate = !t.due_date;
-        return isDueToday || isOverdueTask || (hasNoDate && t.status !== "done");
+        // Also include done tasks that were completed today or were due today
+        const isDoneToday = t.status === "done" && t.completed_at
+          ? new Date(t.completed_at) >= simTodayStart
+          : false;
+        const isDoneDueToday = t.status === "done" && isDueToday;
+        return isDueToday || isOverdueTask || isDoneToday || isDoneDueToday || (hasNoDate && t.status !== "done");
       }
       if (tab === "active") {
         // Active = non-done, non-cancelled, non-past (unless user chose to show past)
@@ -2096,7 +2101,7 @@ function TasksPage() {
       if (t.status !== "done" || !t.due_date || !t.completed_at) return false;
       return new Date(t.completed_at) < new Date(t.due_date);
     };
-    const totalToday = filtered.length;
+    const totalToday = filtered.length; // includes done tasks for accurate ratio
     const doneCount = doneTodayTasks.length;
     const progressPct = totalToday > 0 ? Math.round((doneCount / totalToday) * 100) : 0;
     const todayLabel = new Date(simNow).toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" });
@@ -2441,22 +2446,6 @@ function TasksPage() {
       ) : (
         <div className="space-y-2">
           {filtered.map(renderTaskCard)}
-          {hiddenPastCount > 0 && (
-            <button
-              className="w-full rounded-2xl border border-dashed border-border/60 bg-card py-3 text-center text-xs text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground mt-1"
-              onClick={() => setShowPastTasks(true)}
-            >
-              Visa {hiddenPastCount} äldre uppgifter
-            </button>
-          )}
-          {showPastTasks && hiddenPastCount === 0 && tab === "active" && (
-            <button
-              className="w-full rounded-2xl border border-dashed border-border/60 bg-card py-3 text-center text-xs text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground mt-1"
-              onClick={() => setShowPastTasks(false)}
-            >
-              Dölj äldre uppgifter
-            </button>
-          )}
         </div>
       )}
 

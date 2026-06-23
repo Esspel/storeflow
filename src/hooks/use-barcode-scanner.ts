@@ -94,9 +94,24 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
       timerRef.current = setTimeout(flush, FLUSH_TIMEOUT_MS);
     };
 
+    // TC52 / Zebra DataWedge also fires a `textInput` event containing the
+    // entire barcode as a single string (like a paste). Handle this separately
+    // so scanners that skip individual keydown events still work.
+    const onTextInput = (e: Event) => {
+      const data = (e as InputEvent).data ?? "";
+      if (data.length >= SCAN_MIN_CHARS) {
+        e.preventDefault();
+        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+        bufRef.current = "";
+        onScanRef.current(data.trim());
+      }
+    };
+
     window.addEventListener("keydown", onKeyDown, { capture: true });
+    window.addEventListener("textInput", onTextInput, { capture: true });
     return () => {
       window.removeEventListener("keydown", onKeyDown, { capture: true });
+      window.removeEventListener("textInput", onTextInput, { capture: true });
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []); // Empty deps — listener registered once, uses refs for live values

@@ -219,6 +219,8 @@ function KundrundaPage() {
   const [deleteCheckpointTarget, setDeleteCheckpointTarget] = useState<{ checkpoint: KundrundaCheckpoint; zoneId: string } | null>(null);
   const [deleteSessionTarget, setDeleteSessionTarget] = useState<KundrundaSession | null>(null);
   const [priorSessionAction, setPriorSessionAction] = useState<KundrundaSession | null>(null);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const [dragZoneIdx, setDragZoneIdx] = useState<number | null>(null);
   const [dropZoneIdx, setDropZoneIdx] = useState<number | null>(null);
@@ -787,6 +789,21 @@ function KundrundaPage() {
     await supabase.from("kundrunda_responses").delete().eq("session_id", target.id);
     await supabase.from("kundrunda_sessions").delete().eq("id", target.id);
     logAudit(user?.id ?? null, "kundrunda.session.delete", "kundrunda_sessions", target.id, {});
+    await fetchData();
+  };
+
+  const bulkDeleteSessions = async () => {
+    if (selectedSessionIds.size === 0) return;
+    setBulkDeleting(true);
+    const ids = Array.from(selectedSessionIds);
+    for (const id of ids) {
+      await supabase.from("kundrunda_response_images").delete().eq("session_id", id);
+      await supabase.from("kundrunda_responses").delete().eq("session_id", id);
+      await supabase.from("kundrunda_sessions").delete().eq("id", id);
+      logAudit(user?.id ?? null, "kundrunda.session.delete", "kundrunda_sessions", id, { bulk: true });
+    }
+    setSelectedSessionIds(new Set());
+    setBulkDeleting(false);
     await fetchData();
   };
 
@@ -1804,9 +1821,16 @@ function KundrundaPage() {
                   onClick={() => setPriorSessionAction(priorSessionAction?.id === s.id ? null : s)}
                   className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left hover:bg-muted/50 transition-colors"
                 >
-                  <span className="text-sm text-foreground">
-                    Startad {new Date(s.started_at).toLocaleString("sv-SE", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                  </span>
+                  <div className="min-w-0">
+                    <span className="text-sm text-foreground">
+                      Startad {new Date(s.started_at).toLocaleString("sv-SE", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    {(s as KundrundaSession & { conductor?: { display_name: string } }).conductor?.display_name && (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        · {(s as KundrundaSession & { conductor?: { display_name: string } }).conductor!.display_name}
+                      </span>
+                    )}
+                  </div>
                   <ChevronDown className={cn("h-4 w-4 text-muted-foreground shrink-0 transition-transform", priorSessionAction?.id === s.id && "rotate-180")} />
                 </button>
                 {priorSessionAction?.id === s.id && (
@@ -1838,6 +1862,9 @@ function KundrundaPage() {
                 <p className="font-semibold">Pågående runda</p>
                 <p className="text-xs text-muted-foreground">
                   Startad kl {new Date(inProgressSession.started_at).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}
+                  {(inProgressSession as KundrundaSession & { conductor?: { display_name: string } }).conductor?.display_name && (
+                    <span className="ml-1">· {(inProgressSession as KundrundaSession & { conductor?: { display_name: string } }).conductor!.display_name}</span>
+                  )}
                   {localDraftTime && <span className="ml-1 text-muted-foreground/70">· Autosparat {new Date(localDraftTime).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}</span>}
                 </p>
               </div>
@@ -1875,13 +1902,45 @@ function KundrundaPage() {
       {/* Recent sessions */}
       {completedSessions.length > 0 && (
         <div>
-          <h3 className="mb-3 text-sm font-semibold">Senaste rundor</h3>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Senaste rundor</h3>
+            <div className="flex items-center gap-2">
+              {selectedSessionIds.size > 0 && (
+                <Button
+                  size="sm" variant="destructive" className="rounded-full gap-1.5 h-7 text-xs"
+                  disabled={bulkDeleting}
+                  onClick={bulkDeleteSessions}
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Ta bort {selectedSessionIds.size} valda
+                </Button>
+              )}
+              {selectedSessionIds.size > 0 && (
+                <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setSelectedSessionIds(new Set())}>
+                  Avmarkera
+                </button>
+              )}
+            </div>
+          </div>
           <div className="space-y-2">
             {completedSessions.slice(0, 10).map((s) => {
               const pct = s.max_score > 0 ? s.total_score / s.max_score : 0;
               const scoreColor = scoreColorClass(pct);
+              const conductedByMe = s.conducted_by === user?.id;
+              const canDelete = isManager || conductedByMe;
+              const isSelected = selectedSessionIds.has(s.id);
               return (
-                <div key={s.id} className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-card px-5 py-4">
+                <div key={s.id} className={cn("group flex items-center gap-3 rounded-2xl border bg-card px-4 py-4 transition-colors", isSelected ? "border-primary/40 bg-primary/5" : "border-border/60")}>
+                  {canDelete && (
+                    <button
+                      className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors", isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border/60 bg-background hover:border-primary/60")}
+                      onClick={() => setSelectedSessionIds(prev => { const n = new Set(prev); isSelected ? n.delete(s.id) : n.add(s.id); return n; })}
+                      aria-label={isSelected ? "Avmarkera" : "Markera"}
+                    >
+                      {isSelected && <span className="text-[10px] font-bold leading-none">✓</span>}
+                    </button>
+                  )}
+                  {!canDelete && <div className="w-5 shrink-0" />}
                   <BarChart3 className={cn("h-5 w-5 shrink-0", scoreColor)} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">
@@ -1898,8 +1957,8 @@ function KundrundaPage() {
                   <button className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:bg-primary-soft hover:text-primary" onClick={() => resumeSession(s)} aria-label="Granska">
                     <ZoomIn className="h-3.5 w-3.5" />
                   </button>
-                  {isManager && (
-                    <button className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-muted/60 hover:text-destructive transition-opacity" onClick={() => setDeleteSessionTarget(s)} aria-label="Ta bort">
+                  {canDelete && (
+                    <button className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" onClick={() => setDeleteSessionTarget(s)} aria-label="Ta bort">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
