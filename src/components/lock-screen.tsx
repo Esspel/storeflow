@@ -49,6 +49,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
   // Hidden input that captures DataWedge / barcode scanner input regardless of focus state
   const hiddenInputRef = useRef<HTMLInputElement>(null);
   const hiddenInputLastKeyTime = useRef<number>(0);
+  const submitSwitchRef = useRef<((opts: { mode: "pin"; userId: string; pin: string } | { mode: "barcode"; barcode: string }) => void) | null>(null);
 
   // Keep the hidden input focused whenever the lock screen is visible and no modal/input has focus
   const refocusHiddenInput = useCallback(() => {
@@ -82,18 +83,16 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
         if (scannerTestRef.current) {
           setLastScanned(val);
         } else if (!loadingRef.current) {
-          submitSwitch({ mode: "barcode", barcode: val });
+          submitSwitchRef.current?.({ mode: "barcode", barcode: val });
         }
       }
       e.preventDefault();
       return;
     }
 
-    // If gap is very long this is a human typing into a focused PIN pad button — ignore
-    if (e.key.length === 1 && gap > 200 && (hiddenInputRef.current?.value.length ?? 0) === 0) {
-      // Could be manual — still accumulate (scanner detection via Enter/flush)
-    }
-  }, [submitSwitch]);
+    // Suppress gap warning — accumulation still works via Enter
+    void gap;
+  }, []);
 
   // Take exclusive ownership of barcode events while the lock screen is mounted
   useEffect(() => {
@@ -158,6 +157,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
       setLoading(false);
     }
   }, [activeStoreId, onUnlock]);
+  submitSwitchRef.current = submitSwitch;
 
   const loadingRef = useRef(loading);
   loadingRef.current = loading;
