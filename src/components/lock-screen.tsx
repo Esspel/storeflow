@@ -46,6 +46,55 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
   const scannerTestRef = useRef(scannerTestActive);
   scannerTestRef.current = scannerTestActive;
 
+  // Hidden input that captures DataWedge / barcode scanner input regardless of focus state
+  const hiddenInputRef = useRef<HTMLInputElement>(null);
+  const hiddenInputLastKeyTime = useRef<number>(0);
+
+  // Keep the hidden input focused whenever the lock screen is visible and no modal/input has focus
+  const refocusHiddenInput = useCallback(() => {
+    const active = document.activeElement;
+    if (
+      active &&
+      active !== document.body &&
+      active !== hiddenInputRef.current &&
+      (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || (active as HTMLElement).isContentEditable)
+    ) {
+      return; // Don't steal focus from real inputs
+    }
+    hiddenInputRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  useEffect(() => {
+    refocusHiddenInput();
+    const interval = setInterval(refocusHiddenInput, 500);
+    return () => clearInterval(interval);
+  }, [refocusHiddenInput]);
+
+  const handleHiddenInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    const now = Date.now();
+    const gap = now - hiddenInputLastKeyTime.current;
+    hiddenInputLastKeyTime.current = now;
+
+    if (e.key === "Enter") {
+      const val = hiddenInputRef.current?.value.trim() ?? "";
+      if (hiddenInputRef.current) hiddenInputRef.current.value = "";
+      if (val.length >= 4) {
+        if (scannerTestRef.current) {
+          setLastScanned(val);
+        } else if (!loadingRef.current) {
+          submitSwitch({ mode: "barcode", barcode: val });
+        }
+      }
+      e.preventDefault();
+      return;
+    }
+
+    // If gap is very long this is a human typing into a focused PIN pad button — ignore
+    if (e.key.length === 1 && gap > 200 && (hiddenInputRef.current?.value.length ?? 0) === 0) {
+      // Could be manual — still accumulate (scanner detection via Enter/flush)
+    }
+  }, [submitSwitch]);
+
   // Take exclusive ownership of barcode events while the lock screen is mounted
   useEffect(() => {
     setScanSuppressed(true);
@@ -152,6 +201,19 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/95 backdrop-blur-sm">
+      {/* Hidden barcode scanner input — always present so DataWedge can type into it */}
+      <input
+        ref={hiddenInputRef}
+        aria-hidden="true"
+        tabIndex={-1}
+        onKeyDown={handleHiddenInputKeyDown}
+        onBlur={() => setTimeout(refocusHiddenInput, 50)}
+        className="absolute opacity-0 pointer-events-none w-0 h-0 overflow-hidden"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+      />
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-4">
         <div className="flex flex-col">

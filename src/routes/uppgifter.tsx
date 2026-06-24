@@ -1162,7 +1162,7 @@ function TasksPage() {
           await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
         }
       } else if ((task.recurrence_rule || isChild) && recurringScope === "single") {
-        if (isChild && task.status !== "done" && !task.completed_at) {
+        if (isChild) {
           const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", task.id);
           deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
           await supabase.from("tasks").delete().eq("id", task.id);
@@ -1176,12 +1176,10 @@ function TasksPage() {
           }
         }
       } else {
-        if (task.status !== "done" && !task.completed_at) {
-          const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", task.id);
-          deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
-          await supabase.from("tasks").delete().eq("id", task.id);
-          allDeletedIds.push(task.id);
-        }
+        const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", task.id);
+        deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+        await supabase.from("tasks").delete().eq("id", task.id);
+        allDeletedIds.push(task.id);
       }
     }
 
