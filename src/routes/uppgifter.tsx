@@ -395,7 +395,8 @@ function TasksPage() {
     dismissUndoToast();
     // Optimistically reflect the toggle in the UI immediately
     const isDone = task.status === "done";
-    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: isDone ? "todo" : "done" } : t));
+    const nowIso = new Date().toISOString();
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: isDone ? "todo" : "done", completed_at: isDone ? null : nowIso } : t));
     const tid = setTimeout(() => {
       setUndoToast(null);
       void completeTask(task);
@@ -436,6 +437,8 @@ function TasksPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [createStep, setCreateStep] = useState<1 | 2>(1);
+  const [showRecurrenceSetup, setShowRecurrenceSetup] = useState(false);
+  const [timeSlotInput, setTimeSlotInput] = useState("");
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
@@ -1863,19 +1866,19 @@ function TasksPage() {
       t.status !== "done" && t.status !== "cancelled"
     );
     if (overdueUndone) { currentChildByParent.set(parentId, overdueUndone); continue; }
-    // Priority 3: nearest upcoming undone (due_date strictly after today)
-    const nextUndone = children.find(t =>
-      t.due_date && new Date(t.due_date) > simTodayEnd &&
-      t.status !== "done" && t.status !== "cancelled"
-    );
-    if (nextUndone) { currentChildByParent.set(parentId, nextUndone); continue; }
-    // Priority 3: today's done instance (so it appears in "klara" tab)
+    // Priority 3: today's done instance — shows in "klara" section, takes priority over future undone
     const todayDone = children.find(t =>
       t.due_date && new Date(t.due_date) >= simTodayStart && new Date(t.due_date) <= simTodayEnd &&
       t.status === "done"
     );
     if (todayDone) { currentChildByParent.set(parentId, todayDone); continue; }
-    // Priority 4: most recently completed (last in sorted order that is done)
+    // Priority 4: nearest upcoming undone (due_date strictly after today)
+    const nextUndone = children.find(t =>
+      t.due_date && new Date(t.due_date) > simTodayEnd &&
+      t.status !== "done" && t.status !== "cancelled"
+    );
+    if (nextUndone) { currentChildByParent.set(parentId, nextUndone); continue; }
+    // Priority 5: most recently completed (last in sorted order that is done)
     const lastDone = [...children].reverse().find(t => t.status === "done");
     if (lastDone) { currentChildByParent.set(parentId, lastDone); continue; }
     // Fallback: first child
@@ -2136,17 +2139,20 @@ function TasksPage() {
   };
 
   const renderTodayView = () => {
+    const sortByPriority = (a: TaskFull, b: TaskFull) =>
+      (PRIORITY_ORDER[a.priority ?? "Medel"] ?? 2) - (PRIORITY_ORDER[b.priority ?? "Medel"] ?? 2);
+
     // "Försenade" in today view = tasks from previous days (before today's midnight)
     const overdueTasks = filtered.filter(t =>
       t.status !== "done" && t.due_date && new Date(t.due_date) < simTodayStart
-    );
+    ).sort(sortByPriority);
     const todayTasks = filtered.filter(t =>
       t.status !== "done" &&
       t.due_date &&
       new Date(t.due_date) >= simTodayStart &&
       new Date(t.due_date) <= simTodayEnd
-    );
-    const noDateTasks = filtered.filter(t => !t.due_date && t.status !== "done");
+    ).sort(sortByPriority);
+    const noDateTasks = filtered.filter(t => !t.due_date && t.status !== "done").sort(sortByPriority);
     // Completed tasks: those with status done. For recurring tasks completed before their due_date, flag them.
     const doneTodayTasks = filtered.filter(t => t.status === "done");
 
@@ -2206,7 +2212,7 @@ function TasksPage() {
             <p className="text-sm font-semibold">Inga uppgifter för idag</p>
             <p className="text-xs text-muted-foreground mt-1">{isManager ? "Njut av dagen eller lägg till nya uppgifter." : "Njut av dagen!"}</p>
             {isManager && (
-              <Button className="mt-4 rounded-full" size="sm" onClick={() => { setShowCreate(true); setSaveError(""); }}>
+              <Button className="mt-4 rounded-full" size="sm" onClick={() => { setShowRecurrenceSetup(true); setSaveError(""); }}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" /> Ny uppgift
               </Button>
             )}
@@ -2292,7 +2298,7 @@ function TasksPage() {
             <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={() => setShowTaskImportDialog(true)}>
               <Upload className="mr-1.5 h-3.5 w-3.5" /> Importera
             </Button>
-            <Button size="sm" className="rounded-full text-xs" onClick={() => { setShowCreate(true); setSaveError(""); }}>
+            <Button size="sm" className="rounded-full text-xs" onClick={() => { setShowRecurrenceSetup(true); setSaveError(""); }}>
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Ny uppgift
             </Button>
           </div>
@@ -2494,7 +2500,7 @@ function TasksPage() {
           <ListChecks className="mb-3 h-10 w-10 text-muted-foreground/40" />
           <p className="text-sm font-medium text-muted-foreground">Inga uppgifter hittades</p>
           {isManager && (
-            <Button className="mt-4 rounded-full" size="sm" onClick={() => { setShowCreate(true); setSaveError(""); }}>
+            <Button className="mt-4 rounded-full" size="sm" onClick={() => { setShowRecurrenceSetup(true); setSaveError(""); }}>
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Skapa uppgift
             </Button>
           )}
@@ -2529,7 +2535,7 @@ function TasksPage() {
         <button
           className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
           aria-label="Ny uppgift"
-          onClick={() => { setShowCreate(true); setSaveError(""); }}
+          onClick={() => { setShowRecurrenceSetup(true); setSaveError(""); }}
         >
           <Plus className="h-6 w-6" />
         </button>
@@ -2863,6 +2869,125 @@ function TasksPage() {
         </Dialog>
       )}
 
+      {/* RECURRENCE SETUP POPUP — appears first when creating a task */}
+      <Dialog open={showRecurrenceSetup} onOpenChange={(o) => { if (!o) setShowRecurrenceSetup(false); }}>
+        <DialogContent className="max-w-sm p-0 gap-0 overflow-hidden">
+          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
+            <Repeat className="h-4 w-4 text-muted-foreground shrink-0" />
+            <DialogTitle className="text-sm font-semibold">Återkommande uppgift?</DialogTitle>
+          </div>
+          <div className="overflow-y-auto max-h-[70vh] p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground w-28 shrink-0">Upprepning</span>
+              <Select value={newTask.recurrence_rule || "__none"} onValueChange={(v) => {
+                const rule = v === "__none" ? "" : v;
+                setNewTask(p => ({
+                  ...p,
+                  recurrence_rule: rule,
+                  recurrence_interval: 1,
+                  recurrence_start: rule && !p.recurrence_start ? localDateStr(new Date(getSimulatedNow())) : p.recurrence_start,
+                }));
+              }}>
+                <SelectTrigger className="flex-1 h-8 text-xs border-border/60">
+                  <SelectValue placeholder="Ingen (engångsgift)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {RECURRENCE_OPTIONS.map(o => <SelectItem key={o.value || "__none"} value={o.value || "__none"}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {newTask.recurrence_rule === "custom" && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">Var</span>
+                <input type="number" min={1} max={365} value={newTask.recurrence_interval}
+                  onChange={(e) => setNewTask(p => ({ ...p, recurrence_interval: Math.max(1, parseInt(e.target.value) || 1) }))}
+                  className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center" />
+                <span className="text-[11px] text-muted-foreground">dag(ar)</span>
+              </div>
+            )}
+            {(newTask.recurrence_rule === "weekly" || newTask.recurrence_rule === "biweekly") && (
+              <div className="space-y-1.5">
+                <span className="text-[11px] text-muted-foreground">Veckodagar</span>
+                <div className="flex flex-wrap gap-1">
+                  {WEEKDAYS.map((day, idx) => (
+                    <button key={idx} type="button"
+                      className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                        newTask.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                      onClick={() => {
+                        const days = newTask.recurrence_days.includes(idx) ? newTask.recurrence_days.filter(d => d !== idx) : [...newTask.recurrence_days, idx];
+                        setNewTask(p => ({ ...p, recurrence_days: days }));
+                      }}>{day}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {newTask.recurrence_rule === "monthly" && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">Dag i månaden</span>
+                <input type="number" min={1} max={31} value={newTask.recurrence_month_day}
+                  onChange={(e) => setNewTask(p => ({ ...p, recurrence_month_day: Math.min(31, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                  className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center" />
+              </div>
+            )}
+            {newTask.recurrence_rule === "quarterly" && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-muted-foreground">Månader per kvartal</p>
+                <div className="space-y-1">
+                  {QUARTER_MONTHS.map(({ q, months }) => (
+                    <div key={q} className="flex items-center gap-1">
+                      <span className="text-[11px] font-medium text-muted-foreground w-6">{q}</span>
+                      {months.map(m => (
+                        <button key={m} type="button"
+                          className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                            newTask.recurrence_months.includes(m) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                          onClick={() => {
+                            const ms = newTask.recurrence_months.includes(m) ? newTask.recurrence_months.filter(x => x !== m) : [...newTask.recurrence_months, m];
+                            setNewTask(p => ({ ...p, recurrence_months: ms }));
+                          }}>{MONTHS_SV[m]}</button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground">Dag i månaden</span>
+                  <input type="number" min={1} max={31} value={newTask.recurrence_month_day}
+                    onChange={(e) => setNewTask(p => ({ ...p, recurrence_month_day: Math.min(31, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                    className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center" />
+                </div>
+              </div>
+            )}
+            {newTask.recurrence_rule && (
+              <div className="space-y-2 pt-1 border-t border-border/40">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground w-10">Start</span>
+                  <Input type="date" value={newTask.recurrence_start}
+                    onChange={(e) => setNewTask(p => ({ ...p, recurrence_start: e.target.value }))}
+                    className="flex-1 h-7 text-xs" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground w-10">Slut</span>
+                  <Input type="date" value={newTask.recurrence_end}
+                    onChange={(e) => setNewTask(p => ({ ...p, recurrence_end: e.target.value }))}
+                    className="flex-1 h-7 text-xs" />
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-3">
+            <button type="button" onClick={() => setShowRecurrenceSetup(false)}
+              className="rounded-full border border-border/60 px-4 py-1.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground">
+              Avbryt
+            </button>
+            <Button size="sm" className="rounded-full text-xs" onClick={() => {
+              setShowRecurrenceSetup(false);
+              setShowCreate(true);
+            }}>
+              Fortsätt
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* CREATE DIALOG — two-panel on desktop, single-column on mobile */}
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setSaveError(""); setUploadFiles([]); setCreateStep(1); } }}>
         <DialogContent className="sm:max-h-[92vh] sm:max-w-4xl overflow-hidden p-0 gap-0">
@@ -3152,11 +3277,10 @@ function TasksPage() {
                 </div>
                 )}
 
-                {/* Förfallotid / Tidsluckor — hidden when recurrence is set */}
-                {!newTask.recurrence_rule && (
+                {/* Förfallotid / Tidsluckor */}
                 <div className="flex items-start gap-3 px-4 py-3">
                   <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60 opacity-0" />
-                  <div className="flex flex-col gap-1 min-w-0 flex-1">
+                  <div className="flex flex-col gap-1.5 min-w-0 flex-1">
                     {newTask.time_slots.length > 0 ? (
                       <>
                         <span className="text-xs text-muted-foreground">Tidsluckor (förfallotider)</span>
@@ -3167,14 +3291,30 @@ function TasksPage() {
                               <button type="button" onClick={() => setNewTask(p => ({ ...p, time_slots: p.time_slots.filter((_, idx) => idx !== i) }))}><X className="h-3 w-3" /></button>
                             </span>
                           ))}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <input
+                            type="time"
+                            value={timeSlotInput}
+                            onChange={(e) => setTimeSlotInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && timeSlotInput) {
+                                e.preventDefault();
+                                const { value, error } = parseTimeInput(timeSlotInput);
+                                if (!error) { setNewTask(p => ({ ...p, time_slots: [...p.time_slots, value] })); setTimeSlotInput(""); }
+                              }
+                            }}
+                            className="h-7 rounded border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                          />
                           <button
                             type="button"
-                            className="rounded-full border border-dashed border-border/60 px-2 py-0.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary"
+                            className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20"
                             onClick={() => {
-                              const t = prompt("Lägg till tid (t.ex. 1052 eller 10:52):");
-                              if (t) { const { value, error } = parseTimeInput(t); if (!error) setNewTask(p => ({ ...p, time_slots: [...p.time_slots, value] })); }
+                              if (!timeSlotInput) return;
+                              const { value, error } = parseTimeInput(timeSlotInput);
+                              if (!error) { setNewTask(p => ({ ...p, time_slots: [...p.time_slots, value] })); setTimeSlotInput(""); }
                             }}
-                          >+ Tid</button>
+                          >Lägg till</button>
                         </div>
                         <p className="text-[11px] text-muted-foreground">En uppgift skapas per tidslucka</p>
                       </>
@@ -3185,11 +3325,8 @@ function TasksPage() {
                           <button
                             type="button"
                             className="rounded-full border border-dashed border-border/60 px-2 py-0.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary"
-                            onClick={() => {
-                              const t = prompt("Lägg till tidslucka (t.ex. 1052 eller 10:52):");
-                              if (t) { const { value, error } = parseTimeInput(t); if (!error) setNewTask(p => ({ ...p, time_slots: [value], due_date_time: "" })); }
-                            }}
-                          >+ Tidsluckor</button>
+                            onClick={() => setNewTask(p => ({ ...p, time_slots: p.due_date_time ? [p.due_date_time] : [""], due_date_time: "" }))}
+                          >+ Fler tidsluckor</button>
                         </div>
                         <input
                           type="time"
@@ -3201,7 +3338,6 @@ function TasksPage() {
                     )}
                   </div>
                 </div>
-                )}
 
                 {/* Prioritet */}
                 <div className="flex items-center gap-3 px-4 py-3">
@@ -3622,7 +3758,19 @@ function TasksPage() {
                     <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
                     <div className="flex flex-col gap-1 min-w-0 flex-1">
                       <span className="text-xs text-muted-foreground">Förfallodatum</span>
-                      <input type="datetime-local" value={editForm.due_date} onChange={(e) => setEditForm(p => p ? { ...p, due_date: e.target.value } : p)} className="w-full rounded border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40" />
+                      <input
+                        type="date"
+                        value={editForm.due_date ? editForm.due_date.slice(0, 10) : ""}
+                        onChange={(e) => setEditForm(p => p ? { ...p, due_date: e.target.value + (p.due_date?.slice(10) || "T00:00") } : p)}
+                        className="w-full rounded border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      />
+                      <span className="text-xs text-muted-foreground mt-1">Tid</span>
+                      <input
+                        type="time"
+                        value={editForm.due_date?.length >= 16 ? editForm.due_date.slice(11, 16) : ""}
+                        onChange={(e) => setEditForm(p => p ? { ...p, due_date: (p.due_date?.slice(0, 10) || "") + "T" + e.target.value } : p)}
+                        className="w-full rounded border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      />
                     </div>
                   </div>
                   <div className="flex items-center gap-3 px-4 py-3">
