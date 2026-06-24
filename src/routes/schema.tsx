@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Calendar, CalendarClock, ChevronLeft, ChevronRight, Download, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Trash2, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight, RefreshCw, Sparkles } from "lucide-react";
 
+import { useVirtualList } from "@/hooks/use-virtual-list";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1613,6 +1615,9 @@ function SchemaPage() {
       return 0;
     });
 
+  const dayVirtual = useVirtualList(displayRows, 56);
+  const weekVirtual = useVirtualList(displayRows, 48);
+
   // Resolve which delivery plan applies to the selected week:
   // Uses selectedWeek (not activeImport) so deliveries show even on weeks without a schedule import.
   // 1. A plan imported specifically for this week (exact match)
@@ -2276,7 +2281,7 @@ function SchemaPage() {
 
           {/* ── DESKTOP TIMELINE VIEW (sm and above) ────────────────────────── */}
           {viewMode === "day" && (
-            <div className="hidden overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)] sm:flex sm:flex-col" style={{ maxHeight: "calc(100vh - 18rem)" }}>
+            <div ref={dayVirtual.scrollRef} onScroll={dayVirtual.onScroll} className="hidden overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)] sm:flex sm:flex-col" style={{ maxHeight: "calc(100vh - 18rem)" }}>
               <div className="sticky top-0 z-10 flex bg-card/95 backdrop-blur-sm border-b border-border/60">
                 <div className="w-48 shrink-0 border-r border-border/40 px-4 py-2.5">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Medarbetare</span>
@@ -2356,7 +2361,8 @@ function SchemaPage() {
                   <p className="text-sm text-muted-foreground">Inga pass schemalagda denna dag</p>
                 </div>
               ) : (
-                displayRows.map(({ emp, workShifts, shadowShifts, absenceShift, appUser, weekMinutes, initials, dayTasks }) => {
+                <div style={{ paddingTop: dayVirtual.paddingTop, paddingBottom: dayVirtual.paddingBottom }}>
+                  {dayVirtual.visibleItems.map(({ emp, workShifts, shadowShifts, absenceShift, appUser, weekMinutes, initials, dayTasks }) => {
                   const isSemesterDay = absenceShift?.deviation_cause?.toLowerCase().includes("semester") || absenceShift?.shift_name?.toLowerCase() === "semester";
                   return (
                   <div key={emp.id} className={["group flex border-b border-border/20 last:border-b-0 transition-colors", isSemesterDay ? "bg-red-50/60 hover:bg-red-50/80 dark:bg-red-950/20" : "hover:bg-muted/20"].join(" ")} style={{ minHeight: dayTasks.length > 0 ? "56px" : undefined }}>
@@ -2480,14 +2486,15 @@ function SchemaPage() {
                     </div>
                   </div>
                   );
-                })
+                })}
+                </div>
               )}
             </div>
           )}
 
           {/* ── WEEK OVERVIEW (desktop only) ─────────────────────────────── */}
           {viewMode === "week" && (
-            <div className="overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)]" style={{ maxHeight: "calc(100vh - 18rem)" }}>
+            <div ref={weekVirtual.scrollRef} onScroll={weekVirtual.onScroll} className="overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)]" style={{ maxHeight: "calc(100vh - 18rem)" }}>
               <div className="sticky top-0 z-10 grid bg-card/95 backdrop-blur-sm border-b border-border/60" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>
                 <div className="border-r border-border/40 px-4 py-2.5">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Medarbetare</span>
@@ -2511,8 +2518,9 @@ function SchemaPage() {
                   <p className="text-sm text-muted-foreground">Inga schemalagda pass</p>
                 </div>
               ) : (
-                displayRows.map(({ emp, appUser, weekMinutes, initials }) => (
-                  <div key={emp.id} className="grid border-b border-border/20 last:border-b-0 hover:bg-muted/10 transition-colors" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>
+                <div style={{ paddingTop: weekVirtual.paddingTop, paddingBottom: weekVirtual.paddingBottom }}>
+                  {weekVirtual.visibleItems.map(({ emp, appUser, weekMinutes, initials }) => (
+                    <div key={emp.id} className="grid border-b border-border/20 hover:bg-muted/10 transition-colors" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>
                     <div className="flex items-center gap-2.5 border-r border-border/30 px-4 py-3">
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
                         style={{ background: appUser ? "oklch(0.5 0.16 148)" : "oklch(0.88 0.02 145)", color: appUser ? "white" : "oklch(0.4 0.05 145)" }}>
@@ -2567,7 +2575,8 @@ function SchemaPage() {
                       );
                     })}
                   </div>
-                ))
+                ))}
+                </div>
               )}
 
               {/* Deliveries row in week view */}

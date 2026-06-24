@@ -1583,13 +1583,28 @@ function TasksPage() {
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
       "SAP-artikel", "Mallpaket",
     ];
+    // Exclude child recurrence instances (parent_task_id set) — they are just spawned
+    // copies of the parent. Export only parent/standalone tasks so importing into
+    // mallar doesn't create one template per occurrence.
+    const seenKeys = new Set<string>();
+    const exportableTasks = visibleTasks.filter((t) => {
+      if (t.parent_task_id !== null) return false;
+      const key = `${t.title}__${t.recurrence_rule ?? ""}__${t.category ?? ""}`;
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
     const rows = [
       headers,
-      ...visibleTasks.map((t) => {
-        const tAny = t as TaskFull & { due_date_time?: string; recurrence_interval?: number; time_slots?: string[]; sap_article_id?: string };
-        const dueDays = t.due_date
-          ? String(Math.round((new Date(t.due_date).getTime() - Date.now()) / 86400000))
-          : "";
+      ...exportableTasks.map((t) => {
+        const tAny = t as TaskFull & { due_date_time?: string; recurrence_interval?: number; time_slots?: string[]; sap_article_id?: string; due_date_offset?: number };
+        // Use stored offset when available; for recurring tasks the live due_date
+        // is instance-specific and should not be recalculated as offset.
+        const dueDays = tAny.due_date_offset != null
+          ? String(tAny.due_date_offset)
+          : (t.recurrence_rule ? "" : t.due_date
+            ? String(Math.round((new Date(t.due_date).getTime() - Date.now()) / 86400000))
+            : "");
         const stepsStr = (t.steps ?? []).sort((a, b) => a.sort_order - b.sort_order).map((s, i) => {
           let part = `${i + 1}. ${s.label}`;
           if (s.requires_photo) part += " [foto]";
