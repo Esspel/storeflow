@@ -40,7 +40,6 @@ function ScanToast({ code, label, onClose }: { code: string; label: string; onCl
         ▐▌
       </span>
       <div className="min-w-0">
-        <p className="text-xs font-medium text-muted-foreground">Streckkod scannad</p>
         <p className="truncate text-sm font-bold text-foreground">{label || code}</p>
         <p className="font-mono text-[10px] text-muted-foreground/60">{code}</p>
       </div>

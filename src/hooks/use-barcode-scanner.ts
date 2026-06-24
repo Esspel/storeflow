@@ -11,9 +11,9 @@ import { useEffect, useRef } from "react";
 //
 // The hook fires `onScan(code)` globally — no input field needs focus.
 
-const SCAN_MAX_GAP_MS = 120;  // TC52: up to ~120ms between chars is still hardware
+const SCAN_MAX_GAP_MS = 150;  // TC52: up to ~150ms between chars is still hardware
 const SCAN_MIN_CHARS = 4;     // shortest valid barcode
-const FLUSH_TIMEOUT_MS = 200; // flush buffer if nothing arrives within 200ms
+const FLUSH_TIMEOUT_MS = 300; // flush buffer if nothing arrives within 300ms
 
 type Options = {
   onScan: (code: string) => void;
@@ -55,10 +55,22 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
         const code = bufRef.current.trim();
         bufRef.current = "";
         // Accept if we had a burst (gap since last char is still within scan window)
-        if (code.length >= SCAN_MIN_CHARS && gap < SCAN_MAX_GAP_MS * 3) {
+        if (code.length >= SCAN_MIN_CHARS && gap < SCAN_MAX_GAP_MS * 4) {
           onScanRef.current(code);
           // Prevent Enter from submitting a focused form while we handled it
           if (!isEditable) e.preventDefault();
+        }
+        return;
+      }
+
+      // Tab can also terminate some DataWedge configurations
+      if (e.key === "Tab" && bufRef.current.length >= SCAN_MIN_CHARS) {
+        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+        const code = bufRef.current.trim();
+        bufRef.current = "";
+        if (code.length >= SCAN_MIN_CHARS) {
+          onScanRef.current(code);
+          e.preventDefault();
         }
         return;
       }
@@ -107,11 +119,32 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
       }
     };
 
+    // Some Zebra DataWedge configurations use clipboard paste (Ctrl+V equivalent)
+    // Handle paste events globally as well
+    const onPaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData("text") ?? "";
+      if (text.length >= SCAN_MIN_CHARS && text.length <= 64 && !/\n/.test(text)) {
+        const target = e.target as HTMLElement;
+        const isEditable =
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable;
+        // Only intercept paste in non-editable contexts (scanner paste outside input)
+        if (!isEditable) {
+          e.preventDefault();
+          bufRef.current = "";
+          onScanRef.current(text.trim());
+        }
+      }
+    };
+
     window.addEventListener("keydown", onKeyDown, { capture: true });
     window.addEventListener("textInput", onTextInput, { capture: true });
+    window.addEventListener("paste", onPaste, { capture: true });
     return () => {
       window.removeEventListener("keydown", onKeyDown, { capture: true });
       window.removeEventListener("textInput", onTextInput, { capture: true });
+      window.removeEventListener("paste", onPaste, { capture: true });
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []); // Empty deps — listener registered once, uses refs for live values

@@ -109,10 +109,10 @@ function isDueSoon(due_date: string | null): boolean {
   return diff > 0 && diff < 24 * 60 * 60 * 1000;
 }
 
-// A task is overdue only if its due date is BEFORE the start of today (i.e. due yesterday or earlier)
+// A task is overdue if its due date is before NOW (includes earlier today)
 function isOverdue(due_date: string | null, status: string): boolean {
   if (!due_date || status === "done" || status === "cancelled") return false;
-  return new Date(due_date).getTime() < getSimTodayStartMs();
+  return new Date(due_date).getTime() < getSimulatedNow();
 }
 
 // Returns effective status considering simulated time
@@ -460,6 +460,7 @@ function TasksPage() {
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<TaskFull | null>(null);
   const [deleteScope, setDeleteScope] = useState<"single" | "future" | null>(null);
+  const [deleteHasFuture, setDeleteHasFuture] = useState(false);
 
   // Bulk operations
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
@@ -1043,9 +1044,23 @@ function TasksPage() {
     }
   };
 
-  const openDelete = (task: TaskFull) => {
+  const openDelete = async (task: TaskFull) => {
     setDeleteTarget(task);
     setDeleteScope(null);
+    if (task.recurrence_rule || task.parent_task_id) {
+      const parentId = task.parent_task_id ?? task.id;
+      const today = localDateStr(new Date(getSimulatedNow()));
+      const { count } = await supabase
+        .from("tasks")
+        .select("id", { count: "exact", head: true })
+        .eq("parent_task_id", parentId)
+        .gte("recurrence_period_start", today)
+        .neq("status", "done")
+        .is("deleted_at", null);
+      setDeleteHasFuture((count ?? 0) > 0);
+    } else {
+      setDeleteHasFuture(false);
+    }
   };
 
   const confirmDelete = async (scope: "single" | "future") => {
@@ -2085,6 +2100,22 @@ function TasksPage() {
                     <span className="text-[10px] text-muted-foreground tabular-nums">{doneItems}/{totalItems}</span>
                   </div>
                 )}
+                {stepsTotal > 0 && (
+                  <div className="mt-2.5 space-y-1">
+                    {(t.steps ?? []).slice(0, 4).map((s, i) => (
+                      <div key={i} className={cn("flex items-center gap-1.5 text-[11px]", s.is_done ? "text-muted-foreground line-through" : "text-foreground/70")}>
+                        {s.is_done
+                          ? <CheckCircle2 className="h-3 w-3 shrink-0 text-success" />
+                          : <Circle className="h-3 w-3 shrink-0 text-muted-foreground/40" />
+                        }
+                        <span className="truncate">{s.label}</span>
+                      </div>
+                    ))}
+                    {stepsTotal > 4 && (
+                      <p className="text-[10px] text-muted-foreground/60 pl-4">+{stepsTotal - 4} fler steg</p>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="shrink-0 mt-0.5">
                 {done
@@ -2105,7 +2136,10 @@ function TasksPage() {
   };
 
   const renderTodayView = () => {
-    const overdueTasks = filtered.filter(t => isOverdue(t.due_date, t.status) && t.status !== "done");
+    // "Försenade" in today view = tasks from previous days (before today's midnight)
+    const overdueTasks = filtered.filter(t =>
+      t.status !== "done" && t.due_date && new Date(t.due_date) < simTodayStart
+    );
     const todayTasks = filtered.filter(t =>
       t.status !== "done" &&
       t.due_date &&
@@ -2186,7 +2220,7 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-destructive">Försenade</h2>
               <span className="ml-auto text-[11px] text-muted-foreground">{overdueTasks.length}</span>
             </div>
-            <div className="space-y-2">{overdueTasks.map(renderTaskCard)}</div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">{overdueTasks.map(renderTaskCard)}</div>
           </div>
         )}
 
@@ -2197,7 +2231,7 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-primary/80">Idag</h2>
               <span className="ml-auto text-[11px] text-muted-foreground">{todayTasks.length}</span>
             </div>
-            <div className="space-y-2">{todayTasks.map(renderTaskCard)}</div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">{todayTasks.map(renderTaskCard)}</div>
           </div>
         )}
 
@@ -2208,7 +2242,7 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Utan datum</h2>
               <span className="ml-auto text-[11px] text-muted-foreground">{noDateTasks.length}</span>
             </div>
-            <div className="space-y-2">{noDateTasks.map(renderTaskCard)}</div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">{noDateTasks.map(renderTaskCard)}</div>
           </div>
         )}
 
@@ -2219,7 +2253,7 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-success/80">Klara</h2>
               <span className="ml-auto text-[11px] text-muted-foreground">{doneTodayTasks.length}</span>
             </div>
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {doneTodayTasks.map(t => (
                 <div key={t.id} className="relative">
                   {renderTaskCard(t)}
@@ -2239,7 +2273,7 @@ function TasksPage() {
   };
 
   return (
-    <div className="mx-auto max-w-[900px] px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-[1400px] px-4 py-6 md:px-6 md:py-8">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Uppgifter</h1>
@@ -2466,7 +2500,7 @@ function TasksPage() {
           )}
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map(renderTaskCard)}
         </div>
       )}
@@ -2817,7 +2851,7 @@ function TasksPage() {
                     size="sm"
                     variant="outline"
                     className="rounded-full gap-1.5 border-destructive/60 text-destructive hover:bg-destructive/10 hover:border-destructive"
-                    onClick={() => openDelete(detailTask)}
+                    onClick={() => void openDelete(detailTask)}
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Ta bort
                   </Button>
@@ -3394,12 +3428,12 @@ function TasksPage() {
             <AlertDialogHeader>
               <AlertDialogTitle className="text-destructive">Ta bort uppgift</AlertDialogTitle>
               <AlertDialogDescription>
-                {deleteTarget.recurrence_rule
+                {(deleteTarget.recurrence_rule || deleteTarget.parent_task_id) && deleteHasFuture
                   ? "Denna uppgift är återkommande. Vad vill du ta bort?"
                   : `Är du säker på att du vill ta bort "${deleteTarget.title}"?`}
               </AlertDialogDescription>
             </AlertDialogHeader>
-            {deleteTarget.recurrence_rule ? (
+            {(deleteTarget.recurrence_rule || deleteTarget.parent_task_id) && deleteHasFuture ? (
               <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
                 <button
                   className="w-full rounded-lg border-2 border-destructive/60 bg-destructive/10 px-4 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors text-left"
