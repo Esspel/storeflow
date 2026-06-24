@@ -2251,20 +2251,20 @@ function TasksPage() {
                 {sortDir === "asc" ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               </Button>
             )}
-            {isManager && visibleTasks.length > 0 && (
+            {isManager && filtered.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
                 className="h-9 rounded-full text-xs shrink-0"
                 onClick={() => {
-                  if (selectedTaskIds.size === visibleTasks.length) {
+                  if (selectedTaskIds.size === filtered.length) {
                     setSelectedTaskIds(new Set());
                   } else {
-                    setSelectedTaskIds(new Set(visibleTasks.map(t => t.id)));
+                    setSelectedTaskIds(new Set(filtered.map(t => t.id)));
                   }
                 }}
               >
-                {selectedTaskIds.size === visibleTasks.length && visibleTasks.length > 0 ? "Avmarkera alla" : "Markera alla"}
+                {selectedTaskIds.size === filtered.length && filtered.length > 0 ? "Avmarkera alla" : "Markera alla"}
               </Button>
             )}
           </div>
