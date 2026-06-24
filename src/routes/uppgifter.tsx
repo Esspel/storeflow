@@ -1948,7 +1948,7 @@ function TasksPage() {
                 }
               </div>
             </div>
-            {earlyCompletion && (
+            {earlyCompletion && done && (
               <div className="mt-2 flex items-center gap-1 w-fit rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-medium text-warning-foreground">
                 <AlertTriangle className="h-3 w-3 shrink-0" />
                 Klar i förtid
@@ -3168,26 +3168,28 @@ function TasksPage() {
 
                 {/* SAP artikel-ID */}
                 <div className="px-4 py-3 min-w-0 space-y-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                    <span className="text-xs text-muted-foreground shrink-0">SAP-artikel</span>
-                    <div className="flex flex-1 items-center gap-1 min-w-0">
-                      <input
-                        value={newTask.sap_article_id}
-                        onChange={(e) => setNewTask(p => ({ ...p, sap_article_id: e.target.value }))}
-                        placeholder="t.ex. 1047133"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        autoCorrect="off"
-                        autoCapitalize="none"
-                        spellCheck={false}
-                        className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none overflow-hidden"
-                      />
-                      {newTask.sap_article_id && (
-                        <button type="button" onClick={() => setNewTask(p => ({ ...p, sap_article_id: "" }))} className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/60 hover:text-destructive shrink-0">
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
+                    <div className="flex flex-col gap-1 flex-1 min-w-0">
+                      <span className="text-xs text-muted-foreground">SAP-artikel</span>
+                      <div className="flex items-center gap-1">
+                        <input
+                          value={newTask.sap_article_id}
+                          onChange={(e) => setNewTask(p => ({ ...p, sap_article_id: e.target.value }))}
+                          placeholder="t.ex. 1047133"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          autoCorrect="off"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          className="flex-1 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        />
+                        {newTask.sap_article_id && (
+                          <button type="button" onClick={() => setNewTask(p => ({ ...p, sap_article_id: "" }))} className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/60 hover:text-destructive shrink-0">
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   {newTask.sap_article_id && (

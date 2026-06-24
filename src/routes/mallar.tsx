@@ -1051,13 +1051,16 @@ function MallarPage() {
         ? String(result.options.scope ?? "forening")
         : "store";
 
-    // Resolve forening_id for forening-scope imports: use user's forening_id,
-    // fall back to admin-selected foreningId, or look up from user_foreningar.
-    let resolvedForeningId: string | null = user?.forening_id ?? null;
-    if (importScope === "forening" && !resolvedForeningId) {
+    // Resolve forening_id for forening-scope imports: prefer dialog selection,
+    // then user's own forening_id, then look up from user_foreningar.
+    let resolvedForeningId: string | null = null;
+    if (importScope === "forening") {
       if (result.options.foreningId) {
         resolvedForeningId = String(result.options.foreningId);
       } else {
+        resolvedForeningId = user?.forening_id ?? null;
+      }
+      if (!resolvedForeningId) {
         const { data: uf } = await supabase
           .from("user_foreningar")
           .select("forening_id")
@@ -1065,7 +1068,6 @@ function MallarPage() {
           .eq("is_primary", true)
           .maybeSingle();
         resolvedForeningId = uf?.forening_id ?? null;
-        // If no primary, take any membership
         if (!resolvedForeningId) {
           const { data: anyUf } = await supabase
             .from("user_foreningar")
@@ -1828,6 +1830,14 @@ function MallarPage() {
                     { value: "store", label: "Butiksmall" },
                   ],
                   defaultValue: "forening",
+                }, {
+                  key: "foreningId",
+                  type: "select" as const,
+                  label: "Förening",
+                  description: "Vilken förening ska mallarna publiceras till",
+                  options: [{ value: "", label: "Välj förening..." }, ...allForeningar.map(f => ({ value: f.id, label: f.name }))],
+                  defaultValue: user?.forening_id ?? "",
+                  showWhen: { key: "scope", value: "forening" },
                 }] : []),
               ]}
             />
