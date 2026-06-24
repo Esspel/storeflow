@@ -1,0 +1,1 @@
+ALTER TABLE checklist_templates ADD COLUMN IF NOT EXISTS sap_article_id text;

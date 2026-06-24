@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
-import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil, Store as StoreIcon, Building2, Eye, EyeOff, Search, History, GitBranch, Copy, Layers, CircleCheck as CheckCircle, ListChecks, CalendarClock, Users, ExternalLink } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil, Store as StoreIcon, Building2, Eye, EyeOff, Search, History, GitBranch, Copy, Layers, CircleCheck as CheckCircle, ListChecks, CalendarClock, Users, ExternalLink, Hash } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,7 @@ const QUARTER_MONTHS = [
 // Instruction header injected into every downloadable CSV template.
 // Lines starting with '#' are treated as comments and skipped by the importer.
 const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Månader;Månadsdag;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor;Tidsluckor (HH:MM);Mallpaket
+# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Månader;Månadsdag;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor;Tidsluckor (HH:MM);SAP-artikel;Mallpaket
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Status: active | review | deprecated | archived  (lämna tomt för active)
@@ -121,6 +121,7 @@ type FormState = {
   recurrence_end: string;
   due_date_offset: string;
   due_date_time: string;
+  sap_article_id: string;
   time_slots: string[];
   storeIds: string[];
   isGlobal: boolean;
@@ -137,7 +138,7 @@ const emptyForm = (): FormState => ({
   recurrence_rule: "", recurrence_days: [], recurrence_interval: 1,
   recurrence_months: [], recurrence_month_day: 1,
   recurrence_start: "", recurrence_end: "",
-  due_date_offset: "", due_date_time: "", time_slots: [],
+  due_date_offset: "", due_date_time: "", sap_article_id: "", time_slots: [],
   storeIds: [], isGlobal: false, isLocked: false, foreningId: "",
   changeSummary: "",
   items: [{ label: "", requires_photo: false, link_url: "" }],
@@ -497,6 +498,8 @@ function MallarPage() {
       recurrence_start: form.recurrence_start || null,
       recurrence_end: form.recurrence_end || null,
       due_date_offset: form.due_date_offset !== "" ? (parseInt(form.due_date_offset, 10) || null) : null,
+      due_date_time: form.due_date_time || null,
+      sap_article_id: form.sap_article_id?.trim() || null,
       is_global: createScope === "hk",
       locked_by_admin: form.isLocked,
       hierarchy_scope: createScope,
@@ -687,6 +690,7 @@ function MallarPage() {
       recurrence_end: (t as ChecklistTemplate & { recurrence_end?: string }).recurrence_end ?? "",
       due_date_offset: t.due_date_offset != null ? String(t.due_date_offset) : "",
       due_date_time: t.due_date_time ?? "",
+      sap_article_id: (t as ChecklistTemplate & { sap_article_id?: string }).sap_article_id ?? "",
       time_slots: (t as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? [],
       storeIds: t.storeIds,
       isGlobal: t.is_global ?? false,
@@ -725,6 +729,7 @@ function MallarPage() {
       recurrence_end: editForm.recurrence_end || null,
       due_date_offset: editForm.due_date_offset !== "" ? (parseInt(editForm.due_date_offset, 10) || null) : null,
       due_date_time: editForm.due_date_time || null,
+      sap_article_id: editForm.sap_article_id?.trim() || null,
       time_slots: editForm.time_slots.length > 0 ? editForm.time_slots : null,
       is_global: editForm.isGlobal,
       locked_by_admin: editForm.isLocked,
@@ -919,7 +924,7 @@ function MallarPage() {
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
-      "Mallpaket",
+      "SAP-artikel", "Mallpaket",
     ];
     const today = new Date().toISOString().slice(0, 10);
     const exampleA = [
@@ -931,6 +936,7 @@ function MallarPage() {
       "1. Temperaturavvikelse? [obligatorisk] [ja_nej] | 2. Notering",
       "",
       "",
+      "",
     ];
     const exampleB = [
       "Städning med tidsluckor", "Städ", "Tre rengöringsrundor per dag", "Medel", "active", "",
@@ -940,6 +946,7 @@ function MallarPage() {
       "1. Torka bord och bänkar | 2. Dammsuga [foto] | 3. Töm sopkorgar",
       "",
       "08:00 | 13:00 | 17:00",
+      "",
       "Städpaket",
     ];
     const csv = CSV_TEMPLATE_INSTRUCTIONS
@@ -954,7 +961,7 @@ function MallarPage() {
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
-      "Mallpaket",
+      "SAP-artikel", "Mallpaket",
     ];
     const rows = [
       headers,
@@ -976,7 +983,7 @@ function MallarPage() {
         const tAny = t as ChecklistTemplate & {
           recurrence_start?: string; recurrence_end?: string;
           recurrence_months?: number[]; recurrence_month_day?: number;
-          time_slots?: string[];
+          time_slots?: string[]; sap_article_id?: string;
         };
         return [
           t.title,
@@ -999,6 +1006,7 @@ function MallarPage() {
           stepsStr,
           questionsStr,
           tAny.time_slots?.join(" | ") ?? "",
+          tAny.sap_article_id ?? "",
           packages.filter(pkg => (pkg.items ?? []).some(item => item.template_id === t.id)).map(pkg => pkg.name).join(" | "),
         ];
       }),
@@ -1049,13 +1057,13 @@ function MallarPage() {
       // 0:Titel 1:Kategori 2:Beskrivning 3:Prioritet 4:Status 5:Version
       // 6:Återkommande 7:Veckodagar 8:Månader 9:Månadsdag 10:Intervall
       // 11:Förfaller om 12:Förfallotid 13:Startdatum 14:Slutdatum
-      // 15:Ursprungsmall 16:Arvläge 17:Steg 18:Frågor 19:Tidsluckor 20:Mallpaket
+      // 15:Ursprungsmall 16:Arvläge 17:Steg 18:Frågor 19:Tidsluckor 20:SAP-artikel 21:Mallpaket
       const [
         title, category, description, priority, statusRaw, ,
         recurrence, weekdaysRaw, monthsRaw, monthDayRaw, intervalRaw,
         dueDays, dueTime, startDate, endDate,
         parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw, timeSlotsRaw,
-        packageNameRaw,
+        sapArticleIdRaw, packageNameRaw,
       ] = cols;
       if (!title?.trim()) continue;
 
@@ -1099,6 +1107,7 @@ function MallarPage() {
         time_slots: timeSlotsRaw?.trim()
           ? timeSlotsRaw.split("|").map(s => s.trim()).filter(Boolean)
           : null,
+        sap_article_id: sapArticleIdRaw?.trim() || null,
         forening_id: importScope === "forening"
           ? (user?.forening_id ?? (result.options.foreningId ? String(result.options.foreningId) : null) ?? null)
           : null,
@@ -1568,7 +1577,20 @@ function MallarPage() {
               </div>
             </div>
 
-            {/* Tidsluckor — genererar en uppgift per tid */}
+            {/* SAP artikel-ID */}
+            <div className="flex items-center gap-3 px-4 py-3">
+              <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+              <div className="flex flex-col gap-1 flex-1 min-w-0">
+                <span className="text-xs text-muted-foreground">SAP-artikel</span>
+                <Input
+                  value={f.sap_article_id}
+                  onChange={(e) => setF((p) => ({ ...p, sap_article_id: e.target.value }))}
+                  placeholder="t.ex. 1047133"
+                  inputMode="numeric"
+                  className="h-7 border border-border/60 text-xs"
+                />
+              </div>
+            </div>
             <div className="px-4 py-3 space-y-2">
               <div className="flex items-center gap-2">
                 <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground/60" />

@@ -578,6 +578,8 @@ function TasksPage() {
   //
   // Children inherit recurrence_rule/recurrence_days so the badge renders.
   const spawnRef = useRef(false);
+  const dragStepRef = useRef<{ idx: number; startY: number; currentY: number } | null>(null);
+  const dragQuestionRef = useRef<{ idx: number; startY: number; currentY: number } | null>(null);
 
   // Shared helpers used both at creation time and in the load-time spawn pass.
   const midnight = midnightStockholm;
@@ -1108,14 +1110,15 @@ function TasksPage() {
         hardDeleteIds.push(t.id);
       }
     } else if ((t.recurrence_rule || isChild) && scope === "single") {
-      // Single-instance delete: only soft-delete the task itself if incomplete
-      if (t.status !== "done" && !t.completed_at) {
+      // Single-instance delete: soft-delete the child task; for a recurring parent shown directly,
+      // do NOT soft-delete the parent (it is the series template) — only mark the period skipped.
+      if (isChild && t.status !== "done" && !t.completed_at) {
         await supabase.from("tasks").update({ deleted_at: now }).eq("id", t.id);
         hardDeleteIds.push(t.id);
       }
       // Mark the period as deleted on the parent so spawn skips it
       if (periodStart) {
-        const pidToUpdate = isChild ? parentId : t.id;
+        const pidToUpdate = parentId;
         const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", pidToUpdate).maybeSingle();
         const existing: string[] = (parent?.deleted_periods ?? []) as string[];
         if (!existing.includes(periodStart)) {
@@ -1181,11 +1184,12 @@ function TasksPage() {
           allSoftDeleteIds.push(task.id);
         }
       } else if ((task.recurrence_rule || isChild) && recurringScope === "single") {
-        if (task.status !== "done" && !task.completed_at) {
+        // Only soft-delete the child, not a recurring parent (which is the series template)
+        if (isChild && task.status !== "done" && !task.completed_at) {
           await supabase.from("tasks").update({ deleted_at: now }).eq("id", task.id);
           allSoftDeleteIds.push(task.id);
         }
-        if (periodStart && parentId !== task.id) {
+        if (periodStart) {
           const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
           const existing: string[] = (parent?.deleted_periods ?? []) as string[];
           if (!existing.includes(periodStart)) {
@@ -1603,7 +1607,7 @@ function TasksPage() {
   // Comment lines starting with # are ignored by importer
   const TASK_CSV_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
 # Samma format som Mallar — exporterade mallar kan importeras direkt som uppgifter och vice versa
-# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Månader;Månadsdag;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor;Tidsluckor (HH:MM)
+# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Månader;Månadsdag;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor;Tidsluckor (HH:MM);SAP-artikel
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Kategori: Drift | Säkerhet | Kundärenden | Övrigt
@@ -1635,7 +1639,7 @@ function TasksPage() {
       "Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version",
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
-      "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
+      "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)", "SAP-artikel",
     ];
     const today = new Date().toISOString().slice(0, 10);
     const example = [
@@ -1645,6 +1649,7 @@ function TasksPage() {
       "", "",
       "1. Kolla temperaturer [foto] | 2. Öppna kassor | 3. Kontrollera ingång",
       "1. Är allt klart? [obligatorisk] [ja_nej]",
+      "",
       "",
     ];
     const csv = TASK_CSV_INSTRUCTIONS
@@ -1685,7 +1690,7 @@ function TasksPage() {
       const [title, category, description, priority, , ,
         recurrence, weekdaysRaw, monthsRaw, monthDayRaw, intervalRaw,
         dueDays, dueTime, startDate, endDate,
-        , , stepsRaw, questionsRaw] = cols;
+        , , stepsRaw, questionsRaw, timeSlotsRaw, sapArticleIdRaw] = cols;
       if (!title?.trim()) continue;
 
       const dueDate = dueDays?.trim()
@@ -1698,7 +1703,7 @@ function TasksPage() {
         : null;
       const recurrenceInterval = intervalRaw?.trim() ? parseInt(intervalRaw.trim()) : null;
       void monthsRaw; void monthDayRaw; // template-only fields, ignored for tasks
-
+      const timeSlots = timeSlotsRaw?.trim() ? timeSlotsRaw.split("|").map(s => s.trim()).filter(Boolean) : null;
       const { data: task } = await supabase.from("tasks").insert({
         title: title.trim(),
         description: (description ?? "").trim(),
@@ -1715,6 +1720,8 @@ function TasksPage() {
         due_date: dueDate,
         due_date_time: dueTime?.trim() || null,
         completion_mode: "manual",
+        time_slots: timeSlots && timeSlots.length > 0 ? timeSlots : null,
+        sap_article_id: sapArticleIdRaw?.trim() || null,
       }).select("id").maybeSingle();
 
       if (!task?.id) continue;
@@ -1778,7 +1785,7 @@ function TasksPage() {
       "Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version",
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
-      "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
+      "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)", "SAP-artikel",
     ];
     const rows = [
       headers,
@@ -1807,7 +1814,8 @@ function TasksPage() {
           "", // Arvläge
           (t.steps ?? []).sort((a, b) => a.sort_order - b.sort_order).map((s, i) => `${i + 1}. ${s.label}${s.requires_photo ? " [foto]" : ""}${s.link_url ? ` [url:${s.link_url}]` : ""}`).join(" | "),
           (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q, i) => `${i + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}${q.link_url ? ` [url:${q.link_url}]` : ""}`).join(" | "),
-          "", // Tidsluckor — not applicable to tasks
+          ((t as TaskFull & { time_slots?: string[] }).time_slots ?? []).join(" | "),
+          (t as TaskFull & { sap_article_id?: string }).sap_article_id ?? "",
         ];
       }),
     ];
@@ -2011,7 +2019,7 @@ function TasksPage() {
   // Render a single task card (compact list style used across all views)
   const weekdayShort = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 
-  const renderTaskCard = (t: TaskFull) => {
+  const renderTaskCard = (t: TaskFull, earlyCompletion = false) => {
     const overdue = isOverdue(t.due_date, t.status);
     const dueSoon = isDueSoon(t.due_date);
     const done = effectiveStatus(t) === "done";
@@ -2133,6 +2141,12 @@ function TasksPage() {
                 }
               </div>
             </div>
+            {earlyCompletion && (
+              <div className="mt-2 flex items-center gap-1 w-fit rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-medium text-warning-foreground">
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                Klar i förtid
+              </div>
+            )}
           </div>
         </div>
       </SwipeableCard>
@@ -2262,17 +2276,7 @@ function TasksPage() {
               <span className="ml-auto text-[11px] text-muted-foreground">{doneTodayTasks.length}</span>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {doneTodayTasks.map(t => (
-                <div key={t.id} className="relative">
-                  {renderTaskCard(t)}
-                  {isEarlyCompletion(t) && (
-                    <div className="absolute bottom-2 left-3 flex items-center gap-1 rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-medium text-warning-foreground pointer-events-none z-20">
-                      <AlertTriangle className="h-3 w-3 text-warning-foreground" />
-                      Klar i förtid
-                    </div>
-                  )}
-                </div>
-              ))}
+              {doneTodayTasks.map(t => renderTaskCard(t, isEarlyCompletion(t)))}
             </div>
           </div>
         )}
@@ -3098,22 +3102,33 @@ function TasksPage() {
                     <div
                       key={i}
                       className="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-colors hover:bg-muted/40"
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        const from = Number(e.dataTransfer.getData("stepIdx"));
-                        if (from === i) return;
-                        setNewTask(p => {
-                          const arr = [...p.steps];
-                          const [moved] = arr.splice(from, 1);
-                          arr.splice(i, 0, moved);
-                          return { ...p, steps: arr };
-                        });
-                      }}
                     >
                       <div
-                        className="drag-handle shrink-0 cursor-grab active:cursor-grabbing"
-                        draggable
-                        onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData("stepIdx", String(i)); }}
+                        className="drag-handle shrink-0 cursor-grab active:cursor-grabbing touch-none"
+                        onPointerDown={(e) => {
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                          dragStepRef.current = { idx: i, startY: e.clientY, currentY: e.clientY };
+                        }}
+                        onPointerMove={(e) => {
+                          if (!dragStepRef.current || dragStepRef.current.idx !== i) return;
+                          dragStepRef.current.currentY = e.clientY;
+                        }}
+                        onPointerUp={() => {
+                          if (!dragStepRef.current || dragStepRef.current.idx !== i) return;
+                          const delta = dragStepRef.current.currentY - dragStepRef.current.startY;
+                          dragStepRef.current = null;
+                          const itemHeight = 44;
+                          const steps = delta > 0 ? Math.floor(delta / itemHeight) : Math.ceil(delta / itemHeight);
+                          if (steps === 0) return;
+                          const to = Math.max(0, Math.min(newTask.steps.length - 1, i + steps));
+                          if (to === i) return;
+                          setNewTask(p => {
+                            const arr = [...p.steps];
+                            const [moved] = arr.splice(i, 1);
+                            arr.splice(to, 0, moved);
+                            return { ...p, steps: arr };
+                          });
+                        }}
                       >
                         <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30" />
                       </div>
@@ -3170,23 +3185,34 @@ function TasksPage() {
                     <div
                       key={i}
                       className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2"
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        const from = Number(e.dataTransfer.getData("qIdx"));
-                        if (from === i) return;
-                        setNewTask(p => {
-                          const arr = [...p.questions];
-                          const [moved] = arr.splice(from, 1);
-                          arr.splice(i, 0, moved);
-                          return { ...p, questions: arr };
-                        });
-                      }}
                     >
                       <div className="flex items-center gap-2">
                         <div
-                          className="drag-handle shrink-0 cursor-grab active:cursor-grabbing"
-                          draggable
-                          onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData("qIdx", String(i)); }}
+                          className="drag-handle shrink-0 cursor-grab active:cursor-grabbing touch-none"
+                          onPointerDown={(e) => {
+                            e.currentTarget.setPointerCapture(e.pointerId);
+                            dragQuestionRef.current = { idx: i, startY: e.clientY, currentY: e.clientY };
+                          }}
+                          onPointerMove={(e) => {
+                            if (!dragQuestionRef.current || dragQuestionRef.current.idx !== i) return;
+                            dragQuestionRef.current.currentY = e.clientY;
+                          }}
+                          onPointerUp={() => {
+                            if (!dragQuestionRef.current || dragQuestionRef.current.idx !== i) return;
+                            const delta = dragQuestionRef.current.currentY - dragQuestionRef.current.startY;
+                            dragQuestionRef.current = null;
+                            const itemHeight = 90;
+                            const steps = delta > 0 ? Math.floor(delta / itemHeight) : Math.ceil(delta / itemHeight);
+                            if (steps === 0) return;
+                            const to = Math.max(0, Math.min(newTask.questions.length - 1, i + steps));
+                            if (to === i) return;
+                            setNewTask(p => {
+                              const arr = [...p.questions];
+                              const [moved] = arr.splice(i, 1);
+                              arr.splice(to, 0, moved);
+                              return { ...p, questions: arr };
+                            });
+                          }}
                         >
                           <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30" />
                         </div>
@@ -3715,18 +3741,29 @@ function TasksPage() {
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Checkpoints</p>
                   {editForm.steps.map((step, i) => (
                     <div key={i} className="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-                      <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/30 cursor-grab active:cursor-grabbing"
-                        draggable
-                        onDragStart={(e) => e.dataTransfer.setData("stepIdx", String(i))}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          const from = parseInt(e.dataTransfer.getData("stepIdx"));
-                          if (isNaN(from) || from === i) return;
+                      <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/30 cursor-grab active:cursor-grabbing touch-none"
+                        onPointerDown={(e) => {
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                          dragStepRef.current = { idx: i, startY: e.clientY, currentY: e.clientY };
+                        }}
+                        onPointerMove={(e) => {
+                          if (!dragStepRef.current || dragStepRef.current.idx !== i) return;
+                          dragStepRef.current.currentY = e.clientY;
+                        }}
+                        onPointerUp={(e) => {
+                          if (!dragStepRef.current || dragStepRef.current.idx !== i) return;
+                          const delta = dragStepRef.current.currentY - dragStepRef.current.startY;
+                          dragStepRef.current = null;
+                          const itemHeight = 44;
+                          const steps = delta > 0 ? Math.floor(delta / itemHeight) : Math.ceil(delta / itemHeight);
+                          if (steps === 0) return;
+                          const to = Math.max(0, Math.min(editForm.steps.length - 1, i + steps));
+                          if (to === i) return;
                           setEditForm(p => {
                             if (!p) return p;
                             const arr = [...p.steps];
-                            const [moved] = arr.splice(from, 1);
-                            arr.splice(i, 0, moved);
+                            const [moved] = arr.splice(i, 1);
+                            arr.splice(to, 0, moved);
                             return { ...p, steps: arr };
                           });
                         }}
@@ -3755,18 +3792,29 @@ function TasksPage() {
                   {editForm.questions.map((q, i) => (
                     <div key={i} className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2">
                       <div className="flex items-center gap-2">
-                        <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/30 cursor-grab active:cursor-grabbing"
-                          draggable
-                          onDragStart={(e) => e.dataTransfer.setData("questionIdx", String(i))}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={(e) => {
-                            const from = parseInt(e.dataTransfer.getData("questionIdx"));
-                            if (isNaN(from) || from === i) return;
+                        <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/30 cursor-grab active:cursor-grabbing touch-none"
+                          onPointerDown={(e) => {
+                            e.currentTarget.setPointerCapture(e.pointerId);
+                            dragQuestionRef.current = { idx: i, startY: e.clientY, currentY: e.clientY };
+                          }}
+                          onPointerMove={(e) => {
+                            if (!dragQuestionRef.current || dragQuestionRef.current.idx !== i) return;
+                            dragQuestionRef.current.currentY = e.clientY;
+                          }}
+                          onPointerUp={(e) => {
+                            if (!dragQuestionRef.current || dragQuestionRef.current.idx !== i) return;
+                            const delta = dragQuestionRef.current.currentY - dragQuestionRef.current.startY;
+                            dragQuestionRef.current = null;
+                            const itemHeight = 90;
+                            const steps = delta > 0 ? Math.floor(delta / itemHeight) : Math.ceil(delta / itemHeight);
+                            if (steps === 0) return;
+                            const to = Math.max(0, Math.min(editForm.questions.length - 1, i + steps));
+                            if (to === i) return;
                             setEditForm(p => {
                               if (!p) return p;
                               const arr = [...p.questions];
-                              const [moved] = arr.splice(from, 1);
-                              arr.splice(i, 0, moved);
+                              const [moved] = arr.splice(i, 1);
+                              arr.splice(to, 0, moved);
                               return { ...p, questions: arr };
                             });
                           }}
