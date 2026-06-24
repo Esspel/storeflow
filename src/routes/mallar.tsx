@@ -1055,8 +1055,10 @@ function MallarPage() {
     // then user's own forening_id, then look up from user_foreningar.
     let resolvedForeningId: string | null = null;
     if (importScope === "forening") {
-      if (result.options.foreningId) {
-        resolvedForeningId = String(result.options.foreningId);
+      const selectedForeningId = result.options.foreningId && result.options.foreningId !== "__none"
+        ? String(result.options.foreningId) : null;
+      if (selectedForeningId) {
+        resolvedForeningId = selectedForeningId;
       } else {
         resolvedForeningId = user?.forening_id ?? null;
       }
@@ -1818,8 +1820,8 @@ function MallarPage() {
                   type: "select" as const,
                   label: "Förening",
                   description: "Vilken förening ska föreningsmallar publiceras till",
-                  options: [{ value: "", label: "Välj förening..." }, ...allForeningar.map(f => ({ value: f.id, label: f.name }))],
-                  defaultValue: "",
+                  options: [{ value: "__none", label: "Välj förening..." }, ...allForeningar.map(f => ({ value: f.id, label: f.name }))],
+                  defaultValue: "__none",
                   showWhen: { key: "scope", value: "forening" },
                 }] : isForening ? [{
                   key: "scope",
@@ -1835,8 +1837,8 @@ function MallarPage() {
                   type: "select" as const,
                   label: "Förening",
                   description: "Vilken förening ska mallarna publiceras till",
-                  options: [{ value: "", label: "Välj förening..." }, ...allForeningar.map(f => ({ value: f.id, label: f.name }))],
-                  defaultValue: user?.forening_id ?? "",
+                  options: [{ value: "__none", label: "Välj förening..." }, ...allForeningar.map(f => ({ value: f.id, label: f.name }))],
+                  defaultValue: user?.forening_id ?? "__none",
                   showWhen: { key: "scope", value: "forening" },
                 }] : []),
               ]}
