@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDownUp, Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, Upload, MoveHorizontal as MoreHorizontal, CalendarDays } from "lucide-react";
+import { ArrowDownUp, Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, MoveHorizontal as MoreHorizontal, CalendarDays } from "lucide-react";
 
 import { PhotoViewer } from "@/components/photo-viewer";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,6 @@ import {
   logAudit, createNotification, notifyUsers, uploadAttachment, getPublicUrl, deleteStorageFiles, mittCoopUrl,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
-import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
 import { cn, ensureHttps, sanitizeCsvCell, parseTimeInput } from "@/lib/utils";
 import { getSimulatedNow } from "@/lib/time-simulation";
 
@@ -443,8 +442,6 @@ function TasksPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const detailFileInputRef = useRef<HTMLInputElement>(null);
   const stepPhotoInputRef = useRef<HTMLInputElement>(null);
-  const taskImportInputRef = useRef<HTMLInputElement>(null);
-  const [showTaskImportDialog, setShowTaskImportDialog] = useState(false);
   const [pendingPhotoStepId, setPendingPhotoStepId] = useState<string | null>(null);
 
   // Detail modal
@@ -1578,207 +1575,41 @@ function TasksPage() {
     setUploadFiles([]);
   };
 
-  // Comment lines starting with # are ignored by importer
-  const TASK_CSV_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Samma format som Mallar — exporterade mallar kan importeras direkt som uppgifter och vice versa
-# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Månader;Månadsdag;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor;Tidsluckor (HH:MM);SAP-artikel
-#
-# Prioritet: Låg | Medel | Hög | Kritisk
-# Kategori: Drift | Säkerhet | Kundärenden | Övrigt
-# Återkommande: daily | every_other_day | weekly | monthly | yearly (lämna tomt för ingen)
-# Veckodagar: kommaseparerade siffror 0–6 (0=Mån, 1=Tis, ... 6=Sön), används när Återkommande=weekly
-#   Exempel: 0,1,4 (Mån, Tis, Fre)
-# Månader: kommaseparerade månader 1–12 för yearly-recurrence
-# Månadsdag: dag i månaden 1–31, används med monthly/yearly
-# Intervall: antal enheter mellan upprepningar (t.ex. 2 = varannan vecka), lämna tomt för 1
-# Förfaller om (dagar): antal dagar tills uppgiften förfaller (t.ex. 1)
-# Förfallotid (HH:MM): klockslag för förfallodatumet, t.ex. 08:00 (lämna tomt för ingen tid)
-# Startdatum/Slutdatum: ÅÅÅÅ-MM-DD — Slutdatum är obligatoriskt för återkommande uppgifter
-# Status, Version, Ursprungsmall, Arvläge, Tidsluckor: används av Mallar — ignoreras vid uppgiftsimport
-#
-# Steg: separera med " | " — lägg till flaggor efter etiketten
-#   [foto]            — kräver fotobevis
-#   [url:https://...]  — länk som visas vid checkpointen
-#   [om:FrågeLabel=ja] — villkorligt steg
-#   Exempel: "1. Torka hyllor | 2. Kontrollera kyl [foto] [url:https://manual.se]"
-#
-# Frågor: separera med " | " — lägg till [obligatorisk] och/eller [ja_nej] och/eller [url:...]
-#   Exempel: "1. Är allt klart? [obligatorisk] [ja_nej] [url:https://rutin.se] | 2. Kommentar"
-#
-# Tips: Spara filen i UTF-8-format och använd semikolon (;) som separator
-`;
-
-  const downloadTaskTemplate = () => {
-    const headers = [
-      "Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version",
-      "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
-      "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
-      "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)", "SAP-artikel",
-    ];
-    const today = new Date().toISOString().slice(0, 10);
-    const example = [
-      "Morgonkontroll", "Drift", "Kontroll av butikens öppning", "Medel", "", "",
-      "weekly", "0,1,2,3,4", "", "", "1",
-      "1", "08:00", today, "2026-12-31",
-      "", "",
-      "1. Kolla temperaturer [foto] | 2. Öppna kassor | 3. Kontrollera ingång",
-      "1. Är allt klart? [obligatorisk] [ja_nej]",
-      "",
-      "",
-    ];
-    const csv = TASK_CSV_INSTRUCTIONS
-      + [headers, example].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "uppgifter-import-mall.csv"; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const importTaskCSV = async (result: ImportDialogResult) => {
-    setShowTaskImportDialog(false);
-    const file = result.file;
-    const text = await file.text();
-    const cleaned = text.startsWith("\ufeff") ? text.slice(1) : text;
-    const lines = cleaned.split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"));
-    if (lines.length < 2) return;
-
-    const parseRow = (line: string): string[] => {
-      const cols: string[] = []; let cur = ""; let inQuote = false;
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (ch === '"') {
-          if (inQuote && line[i + 1] === '"') { cur += '"'; i++; } else inQuote = !inQuote;
-        } else if (ch === ";" && !inQuote) { cols.push(cur); cur = ""; } else { cur += ch; }
-      }
-      cols.push(cur);
-      return cols;
-    };
-
-    const defaultCategory = String(result.options.category ?? "Övrigt");
-    const defaultPriority = String(result.options.priority ?? "Medel");
-    const assignToStore = result.options.assignToStore !== false;
-
-    const rows = lines.slice(1).map(parseRow);
-    for (const cols of rows) {
-      const [title, category, description, priority, , ,
-        recurrence, weekdaysRaw, monthsRaw, monthDayRaw, intervalRaw,
-        dueDays, dueTime, startDate, endDate,
-        , , stepsRaw, questionsRaw, timeSlotsRaw, sapArticleIdRaw] = cols;
-      if (!title?.trim()) continue;
-
-      const dueDate = dueDays?.trim()
-        ? (() => { const d = midnightStockholm(new Date(getSimulatedNow())); d.setDate(d.getDate() + parseInt(dueDays.trim(), 10)); return localDateStr(d); })()
-        : null;
-
-      const recurrenceRule = (recurrence ?? "").trim() || null;
-      const recurrenceDays = weekdaysRaw?.trim()
-        ? weekdaysRaw.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 0 && n <= 6)
-        : null;
-      const recurrenceInterval = intervalRaw?.trim() ? parseInt(intervalRaw.trim()) : null;
-      void monthsRaw; void monthDayRaw; // template-only fields, ignored for tasks
-      const timeSlots = timeSlotsRaw?.trim() ? timeSlotsRaw.split("|").map(s => s.trim()).filter(Boolean) : null;
-      const { data: task } = await supabase.from("tasks").insert({
-        title: title.trim(),
-        description: (description ?? "").trim(),
-        category: (category ?? "").trim() || defaultCategory,
-        priority: (priority ?? "").trim() || defaultPriority,
-        status: "todo",
-        store_id: assignToStore ? (activeStore?.id ?? null) : null,
-        created_by: user?.id ?? null,
-        recurrence_rule: recurrenceRule,
-        recurrence_days: recurrenceDays && recurrenceDays.length > 0 ? recurrenceDays : null,
-        recurrence_interval: recurrenceInterval && recurrenceInterval > 1 ? recurrenceInterval : null,
-        recurrence_start: startDate?.trim() || null,
-        recurrence_end: endDate?.trim() || null,
-        due_date: dueDate,
-        due_date_time: dueTime?.trim() || null,
-        completion_mode: "manual",
-        time_slots: timeSlots && timeSlots.length > 0 ? timeSlots : null,
-        sap_article_id: sapArticleIdRaw?.trim() || null,
-      }).select("id").maybeSingle();
-
-      if (!task?.id) continue;
-
-      // Parse steps (with possible [om:...] conditions) and questions, then resolve condition links
-      const parsedSteps = stepsRaw?.trim()
-        ? stepsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => {
-            const condMatch = part.match(/\[om:([^\]=]+)=([^\]]+)\]/i);
-            const urlMatch = part.match(/\[url:([^\]]+)\]/i);
-            return {
-              task_id: task.id,
-              label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[foto\]/i, "").replace(/\s*\[om:[^\]]+\]/i, "").replace(/\s*\[url:[^\]]+\]/i, "").trim(),
-              requires_photo: /\[foto\]/i.test(part),
-              link_url: urlMatch ? urlMatch[1].trim() : null,
-              condition_question_label: condMatch ? condMatch[1].trim() : null,
-              condition_answer: condMatch ? condMatch[2].trim() : null,
-              is_done: false,
-              sort_order: idx,
-            };
-          })
-        : [];
-
-      const parsedQuestions = questionsRaw?.trim()
-        ? questionsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => {
-            const urlMatch = part.match(/\[url:([^\]]+)\]/i);
-            return {
-              task_id: task.id,
-              label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[obligatorisk\]/i, "").replace(/\s*\[ja_nej\]/i, "").replace(/\s*\[url:[^\]]+\]/i, "").trim(),
-              question_type: (/\[ja_nej\]/i.test(part) ? "yes_no" : "text") as "text" | "yes_no",
-              is_required: /\[obligatorisk\]/i.test(part),
-              link_url: urlMatch ? urlMatch[1].trim() : null,
-              sort_order: idx,
-            };
-          })
-        : [];
-
-      // Insert questions first so we can resolve condition_question_id by label
-      let insertedQs: { id: string; label: string }[] = [];
-      if (parsedQuestions.length > 0) {
-        const { data } = await supabase.from("task_questions").insert(parsedQuestions).select("id, label");
-        insertedQs = data ?? [];
-      }
-
-      if (parsedSteps.length > 0) {
-        const stepsToInsert = parsedSteps.map(({ condition_question_label, ...rest }) => {
-          const matchedQ = condition_question_label
-            ? insertedQs.find(q => q.label.toLowerCase() === condition_question_label.toLowerCase())
-            : null;
-          return { ...rest, condition_question_id: matchedQ?.id ?? null };
-        });
-        await supabase.from("task_steps").insert(stepsToInsert);
-      }
-
-      logAudit(user?.id ?? null, "task.import", "tasks", task.id, { title: title.trim() });
-    }
-    await fetchTasks();
-  };
-
   const exportCSV = () => {
     const headers = [
       "Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version",
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
-      "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)", "SAP-artikel",
+      "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
+      "SAP-artikel", "Mallpaket",
     ];
     const rows = [
       headers,
       ...visibleTasks.map((t) => {
-        const tAny = t as TaskFull & { due_date_time?: string; recurrence_interval?: number };
+        const tAny = t as TaskFull & { due_date_time?: string; recurrence_interval?: number; time_slots?: string[]; sap_article_id?: string };
         const dueDays = t.due_date
           ? String(Math.round((new Date(t.due_date).getTime() - Date.now()) / 86400000))
           : "";
+        const stepsStr = (t.steps ?? []).sort((a, b) => a.sort_order - b.sort_order).map((s, i) => {
+          let part = `${i + 1}. ${s.label}`;
+          if (s.requires_photo) part += " [foto]";
+          if ((s as typeof s & { link_url?: string }).link_url) part += ` [url:${(s as typeof s & { link_url?: string }).link_url}]`;
+          return part;
+        }).join(" | ");
+        const questionsStr = (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q, i) =>
+          `${i + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}${(q as typeof q & { link_url?: string }).link_url ? ` [url:${(q as typeof q & { link_url?: string }).link_url}]` : ""}`
+        ).join(" | ");
         return [
           t.title,
           t.category ?? "",
           t.description ?? "",
           t.priority ?? "Medel",
-          "", // Status — task-only concept, omitted
+          "", // Status
           "", // Version
           t.recurrence_rule ?? "",
           (t.recurrence_days ?? []).join(","),
-          "", // Månader — not applicable to tasks
-          "", // Månadsdag — not applicable to tasks
+          "", // Månader
+          "", // Månadsdag
           tAny.recurrence_interval != null ? String(tAny.recurrence_interval) : "",
           dueDays,
           tAny.due_date_time ?? "",
@@ -1786,14 +1617,15 @@ function TasksPage() {
           t.recurrence_end ?? "",
           "", // Ursprungsmall
           "", // Arvläge
-          (t.steps ?? []).sort((a, b) => a.sort_order - b.sort_order).map((s, i) => `${i + 1}. ${s.label}${s.requires_photo ? " [foto]" : ""}${s.link_url ? ` [url:${s.link_url}]` : ""}`).join(" | "),
-          (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q, i) => `${i + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}${q.link_url ? ` [url:${q.link_url}]` : ""}`).join(" | "),
-          ((t as TaskFull & { time_slots?: string[] }).time_slots ?? []).join(" | "),
-          (t as TaskFull & { sap_article_id?: string }).sap_article_id ?? "",
+          stepsStr,
+          questionsStr,
+          (tAny.time_slots ?? []).join(" | "),
+          tAny.sap_article_id ?? "",
+          "", // Mallpaket — tasks don't belong to template packages
         ];
       }),
     ];
-    const instructions = `# Exporterat ${new Date().toLocaleDateString("sv-SE")} — kan importeras direkt\n` + TASK_CSV_INSTRUCTIONS;
+    const instructions = `# Exporterat ${new Date().toLocaleDateString("sv-SE")} — kan importeras direkt som mallar\n`;
     const csv = instructions + rows.map((r) => r.map((v) => `"${sanitizeCsvCell(String(v ?? "").replace(/"/g, '""'))}"`).join(";")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -1803,6 +1635,7 @@ function TasksPage() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
 
   const filters = [
     { value: "today", label: "Idag" },
@@ -2269,14 +2102,8 @@ function TasksPage() {
         </div>
         {isManager && (
           <div className="hidden lg:flex items-center gap-2 shrink-0">
-            <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={downloadTaskTemplate}>
-              <Download className="mr-1.5 h-3.5 w-3.5" /> CSV-mall
-            </Button>
             <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={exportCSV}>
               <Download className="mr-1.5 h-3.5 w-3.5" /> Exportera
-            </Button>
-            <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={() => setShowTaskImportDialog(true)}>
-              <Upload className="mr-1.5 h-3.5 w-3.5" /> Importera
             </Button>
             <Button size="sm" className="rounded-full text-xs" onClick={() => { setShowRecurrenceSetup(true); setSaveError(""); }}>
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Ny uppgift
@@ -2315,52 +2142,6 @@ function TasksPage() {
           </div>
         </div>
       )}
-
-      {/* Task CSV import dialog */}
-      <ImportDialog
-        open={showTaskImportDialog}
-        onClose={() => setShowTaskImportDialog(false)}
-        onImport={importTaskCSV}
-        title="Importera uppgifter"
-        description="Ladda upp en CSV-fil med uppgifter, steg och frågor"
-        loading={false}
-        importLabel="Importera uppgifter"
-        options={[
-          {
-            key: "category",
-            type: "select",
-            label: "Standardkategori",
-            description: "Används för rader som saknar kategori",
-            options: [
-              { value: "Övrigt", label: "Övrigt" },
-              { value: "Drift", label: "Drift" },
-              { value: "Säkerhet", label: "Säkerhet" },
-              { value: "Kundärenden", label: "Kundärenden" },
-            ],
-            defaultValue: "Övrigt",
-          },
-          {
-            key: "priority",
-            type: "select",
-            label: "Standardprioritet",
-            description: "Används för rader som saknar prioritet",
-            options: [
-              { value: "Medel", label: "Medel" },
-              { value: "Låg", label: "Låg" },
-              { value: "Hög", label: "Hög" },
-              { value: "Kritisk", label: "Kritisk" },
-            ],
-            defaultValue: "Medel",
-          },
-          {
-            key: "assignToStore",
-            type: "checkbox",
-            label: "Tilldela till aktiv butik",
-            description: "Koppla alla importerade uppgifter till den butik du är inloggad på",
-            defaultValue: true,
-          },
-        ]}
-      />
 
       {/* Tabs + search */}
       <div className="mb-5 space-y-3">
@@ -3317,7 +3098,7 @@ function TasksPage() {
                       type="date"
                       value={newTask.due_date}
                       onChange={(e) => setNewTask(p => ({ ...p, due_date: e.target.value }))}
-                      className="w-full rounded border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
                     />
                   </div>
                 </div>
@@ -3350,7 +3131,7 @@ function TasksPage() {
                                 if (!error) { setNewTask(p => ({ ...p, time_slots: [...p.time_slots, value] })); setTimeSlotInput(""); }
                               }
                             }}
-                            className="h-7 rounded border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                            className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
                           />
                           <button
                             type="button"
@@ -3378,7 +3159,7 @@ function TasksPage() {
                           type="time"
                           value={newTask.due_date_time}
                           onChange={(e) => setNewTask(p => ({ ...p, due_date_time: e.target.value }))}
-                          className="w-full rounded border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                          className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
                         />
                       </>
                     )}
@@ -3834,14 +3615,14 @@ function TasksPage() {
                         type="date"
                         value={editForm.due_date ? editForm.due_date.slice(0, 10) : ""}
                         onChange={(e) => setEditForm(p => p ? { ...p, due_date: e.target.value + (p.due_date?.slice(10) || "T00:00") } : p)}
-                        className="w-full rounded border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
                       />
                       <span className="text-xs text-muted-foreground mt-1">Tid</span>
                       <input
                         type="time"
                         value={editForm.due_date?.length >= 16 ? editForm.due_date.slice(11, 16) : ""}
                         onChange={(e) => setEditForm(p => p ? { ...p, due_date: (p.due_date?.slice(0, 10) || "") + "T" + e.target.value } : p)}
-                        className="w-full rounded border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
                       />
                     </div>
                   </div>

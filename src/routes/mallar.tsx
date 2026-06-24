@@ -17,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   supabase, type ChecklistTemplate, type ChecklistTemplateItem,
   type ChecklistTemplateQuestion, type Store, type Forening,
-  type TemplateVersion, type TemplatePackage, type AppUser, type UserGroup, logAudit,
+  type TemplateVersion, type TemplatePackage, type TemplatePackageItem, type AppUser, type UserGroup, logAudit,
 } from "@/lib/supabase";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
@@ -1047,9 +1047,43 @@ function MallarPage() {
 
     const importScope = isAdmin
       ? String(result.options.scope ?? "store")
-      : isForening ? "forening" : "store";
+      : isForening
+        ? String(result.options.scope ?? "forening")
+        : "store";
+
+    // Resolve forening_id for forening-scope imports: use user's forening_id,
+    // fall back to admin-selected foreningId, or look up from user_foreningar.
+    let resolvedForeningId: string | null = user?.forening_id ?? null;
+    if (importScope === "forening" && !resolvedForeningId) {
+      if (result.options.foreningId) {
+        resolvedForeningId = String(result.options.foreningId);
+      } else {
+        const { data: uf } = await supabase
+          .from("user_foreningar")
+          .select("forening_id")
+          .eq("user_id", user?.id ?? "")
+          .eq("is_primary", true)
+          .maybeSingle();
+        resolvedForeningId = uf?.forening_id ?? null;
+        // If no primary, take any membership
+        if (!resolvedForeningId) {
+          const { data: anyUf } = await supabase
+            .from("user_foreningar")
+            .select("forening_id")
+            .eq("user_id", user?.id ?? "")
+            .limit(1)
+            .maybeSingle();
+          resolvedForeningId = anyUf?.forening_id ?? null;
+        }
+      }
+    }
 
     const rows = lines.slice(1).map(parseRow);
+    // Local cache keyed by lowercase name so multiple rows with the same package
+    // name reuse the same package record instead of creating duplicates.
+    const pkgCache = new Map<string, TemplatePackage>(
+      packages.map(p => [p.name.toLowerCase(), p])
+    );
     for (const cols of rows) {
       // Column order (0-indexed):
       // 0:Titel 1:Kategori 2:Beskrivning 3:Prioritet 4:Status 5:Version
@@ -1106,9 +1140,7 @@ function MallarPage() {
           ? timeSlotsRaw.split("|").map(s => s.trim()).filter(Boolean)
           : null,
         sap_article_id: sapArticleIdRaw?.trim() || null,
-        forening_id: importScope === "forening"
-          ? (user?.forening_id ?? (result.options.foreningId ? String(result.options.foreningId) : null) ?? null)
-          : null,
+        forening_id: importScope === "forening" ? resolvedForeningId : null,
       }).select("id").maybeSingle();
 
       if (!tmpl?.id) continue;
@@ -1185,8 +1217,9 @@ function MallarPage() {
       // Assign to package if specified
       if (packageNameRaw?.trim() && tmpl?.id) {
         const pkgName = packageNameRaw.trim();
+        const pkgKey = pkgName.toLowerCase();
         const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
-        let pkg = packages.find(p => p.name.toLowerCase() === pkgName.toLowerCase());
+        let pkg = pkgCache.get(pkgKey);
         if (!pkg) {
           const { data: newPkg } = await supabase.from("template_packages")
             .insert({ name: pkgName, description: "", store_id: storeId, created_by: user?.id ?? null })
@@ -1194,16 +1227,18 @@ function MallarPage() {
             .maybeSingle();
           if (newPkg) {
             pkg = { ...newPkg, items: [] } as TemplatePackage;
+            pkgCache.set(pkgKey, pkg);
           }
         }
         if (pkg?.id) {
-          const existingItems = (pkg.items ?? []);
-          const nextOrder = existingItems.length;
+          const nextOrder = (pkg.items ?? []).length;
           await supabase.from("template_package_items").insert({
             package_id: pkg.id,
             template_id: tmpl.id,
             sort_order: nextOrder,
           });
+          // Keep items count in sync so subsequent rows get correct sort_order
+          pkg.items = [...(pkg.items ?? []), { template_id: tmpl.id } as TemplatePackageItem];
         }
       }
 
