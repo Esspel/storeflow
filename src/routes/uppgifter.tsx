@@ -468,6 +468,7 @@ function TasksPage() {
   // Bulk operations
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [bulkDeleteTasksOpen, setBulkDeleteTasksOpen] = useState(false);
+  const [bulkDeleteHasFuture, setBulkDeleteHasFuture] = useState(false);
 
   // Edit state
   const [editTask, setEditTask] = useState<TaskFull | null>(null);
@@ -1099,27 +1100,26 @@ function TasksPage() {
         dayBefore.setDate(dayBefore.getDate() - 1);
         await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
       }
-      // Soft-delete the triggering task only if it's incomplete
-      if (!t.completed_at && t.status !== "done" && !hardDeleteIds.includes(t.id)) {
-        await supabase.from("tasks").update({ deleted_at: now }).eq("id", t.id);
-        hardDeleteIds.push(t.id);
-      }
-      // If this is the parent (non-child), soft-delete it too
-      if (!isChild && !hardDeleteIds.includes(t.id) && t.status !== "done" && !t.completed_at) {
+      // If this was a non-recurring parent task being deleted outright, soft-delete it too.
+      // For recurring series (parent OR child), we keep the parent alive as the template definition;
+      // only children are removed. The recurrence_end cap above stops future spawning.
+      if (!t.recurrence_rule && !isChild && !hardDeleteIds.includes(t.id) && t.status !== "done" && !t.completed_at) {
         await supabase.from("tasks").update({ deleted_at: now }).eq("id", t.id);
         hardDeleteIds.push(t.id);
       }
     } else if ((t.recurrence_rule || isChild) && scope === "single") {
-      // Single-instance delete: only soft-delete if the task is not completed
+      // Single-instance delete: only soft-delete the task itself if incomplete
       if (t.status !== "done" && !t.completed_at) {
         await supabase.from("tasks").update({ deleted_at: now }).eq("id", t.id);
         hardDeleteIds.push(t.id);
       }
-      if (periodStart && parentId !== t.id) {
-        const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
+      // Mark the period as deleted on the parent so spawn skips it
+      if (periodStart) {
+        const pidToUpdate = isChild ? parentId : t.id;
+        const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", pidToUpdate).maybeSingle();
         const existing: string[] = (parent?.deleted_periods ?? []) as string[];
         if (!existing.includes(periodStart)) {
-          await supabase.from("tasks").update({ deleted_periods: [...existing, periodStart] }).eq("id", parentId);
+          await supabase.from("tasks").update({ deleted_periods: [...existing, periodStart] }).eq("id", pidToUpdate);
         }
       }
     } else {
@@ -1141,6 +1141,7 @@ function TasksPage() {
     setDeleteTarget(null);
     setDeleteScope(null);
     setDetailTask(null);
+    spawnRef.current = false; // allow spawn to re-evaluate after deletion
     await fetchTasks();
   };
 
@@ -1207,6 +1208,7 @@ function TasksPage() {
     logAudit(user?.id ?? null, "task.bulk_delete", "tasks", ids[0] ?? "", { count: ids.length, scope: recurringScope });
     setSelectedTaskIds(new Set());
     setBulkDeleteTasksOpen(false);
+    spawnRef.current = false;
     await fetchTasks();
   };
 
@@ -2264,7 +2266,7 @@ function TasksPage() {
                 <div key={t.id} className="relative">
                   {renderTaskCard(t)}
                   {isEarlyCompletion(t) && (
-                    <div className="absolute top-2 right-10 flex items-center gap-1 rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-medium text-warning-foreground pointer-events-none">
+                    <div className="absolute bottom-2 left-3 flex items-center gap-1 rounded-full bg-warning/20 px-2 py-0.5 text-[10px] font-medium text-warning-foreground pointer-events-none z-20">
                       <AlertTriangle className="h-3 w-3 text-warning-foreground" />
                       Klar i förtid
                     </div>
@@ -2313,7 +2315,23 @@ function TasksPage() {
             <Button variant="ghost" size="sm" className="rounded-full h-8 text-xs" onClick={() => setSelectedTaskIds(new Set())}>
               Avmarkera
             </Button>
-            <Button variant="destructive" size="sm" className="rounded-full h-8 gap-1.5 text-xs" onClick={() => setBulkDeleteTasksOpen(true)}>
+            <Button variant="destructive" size="sm" className="rounded-full h-8 gap-1.5 text-xs" onClick={async () => {
+              const recurringIds = tasks.filter(t => selectedTaskIds.has(t.id) && (t.recurrence_rule || t.parent_task_id));
+              if (recurringIds.length > 0) {
+                const today = localDateStr(new Date(getSimulatedNow()));
+                let hasFuture = false;
+                for (const t of recurringIds) {
+                  const parentId = t.parent_task_id ?? t.id;
+                  const { count } = await supabase.from("tasks").select("id", { count: "exact", head: true })
+                    .eq("parent_task_id", parentId).gte("recurrence_period_start", today).neq("status", "done").is("deleted_at", null);
+                  if ((count ?? 0) > 0) { hasFuture = true; break; }
+                }
+                setBulkDeleteHasFuture(hasFuture);
+              } else {
+                setBulkDeleteHasFuture(false);
+              }
+              setBulkDeleteTasksOpen(true);
+            }}>
               <Trash2 className="h-3.5 w-3.5" /> Ta bort markerade
             </Button>
           </div>
@@ -3608,12 +3626,12 @@ function TasksPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort {selectedTaskIds.size} uppgifter</AlertDialogTitle>
             <AlertDialogDescription>
-              {tasks.some(t => selectedTaskIds.has(t.id) && (t.recurrence_rule || t.parent_task_id))
+              {bulkDeleteHasFuture
                 ? "Urvalet innehåller återkommande uppgifter. Hur ska de raderas?"
                 : "Är du säker? Alla markerade uppgifter, steg, bilder och svar raderas permanent."}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {tasks.some(t => selectedTaskIds.has(t.id) && (t.recurrence_rule || t.parent_task_id)) ? (
+          {bulkDeleteHasFuture ? (
             <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
               <button
                 className="w-full rounded-lg border-2 border-destructive/60 bg-destructive/10 px-4 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors text-left"
@@ -3697,6 +3715,22 @@ function TasksPage() {
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Checkpoints</p>
                   {editForm.steps.map((step, i) => (
                     <div key={i} className="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+                      <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/30 cursor-grab active:cursor-grabbing"
+                        draggable
+                        onDragStart={(e) => e.dataTransfer.setData("stepIdx", String(i))}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          const from = parseInt(e.dataTransfer.getData("stepIdx"));
+                          if (isNaN(from) || from === i) return;
+                          setEditForm(p => {
+                            if (!p) return p;
+                            const arr = [...p.steps];
+                            const [moved] = arr.splice(from, 1);
+                            arr.splice(i, 0, moved);
+                            return { ...p, steps: arr };
+                          });
+                        }}
+                      />
                       <Input placeholder={`Checkpoint ${i+1}`} value={step.label} onChange={(e) => setEditForm(p => p ? { ...p, steps: p.steps.map((s,idx) => idx===i ? {...s,label:e.target.value} : s) } : p)} className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0" />
                       <label className="flex items-center gap-1 text-[11px] text-muted-foreground/70 whitespace-nowrap cursor-pointer">
                         <Checkbox checked={step.requires_photo} onCheckedChange={(v) => setEditForm(p => p ? { ...p, steps: p.steps.map((s,idx) => idx===i ? {...s,requires_photo:!!v} : s) } : p)} className="h-3 w-3" />Foto
@@ -3721,6 +3755,22 @@ function TasksPage() {
                   {editForm.questions.map((q, i) => (
                     <div key={i} className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2">
                       <div className="flex items-center gap-2">
+                        <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/30 cursor-grab active:cursor-grabbing"
+                          draggable
+                          onDragStart={(e) => e.dataTransfer.setData("questionIdx", String(i))}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            const from = parseInt(e.dataTransfer.getData("questionIdx"));
+                            if (isNaN(from) || from === i) return;
+                            setEditForm(p => {
+                              if (!p) return p;
+                              const arr = [...p.questions];
+                              const [moved] = arr.splice(from, 1);
+                              arr.splice(i, 0, moved);
+                              return { ...p, questions: arr };
+                            });
+                          }}
+                        />
                         <Input placeholder={`Fråga ${i+1}`} value={q.label} onChange={(e) => setEditForm(p => p ? { ...p, questions: p.questions.map((qr,idx) => idx===i ? {...qr,label:e.target.value} : qr) } : p)} className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0" />
                         <button type="button" onClick={() => setEditForm(p => p ? { ...p, questions: p.questions.filter((_,idx) => idx!==i) } : p)}><X className="h-3.5 w-3.5 text-muted-foreground/50" /></button>
                       </div>
