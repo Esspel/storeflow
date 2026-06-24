@@ -198,8 +198,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title ?? "StoreFlow";
   const options = {
     body: payload.body ?? "",
-    icon: "/manifest.json",
-    badge: "/badge-72x72.png",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
     vibrate: [200, 100, 200],
     requireInteraction: true,
     tag: payload.tag ?? "storeflow-notification",

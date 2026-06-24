@@ -474,10 +474,6 @@ function MallarPage() {
   async function createTemplate() {
     setError("");
     if (!form.title.trim()) { setError("Titel är obligatorisk."); return; }
-    if (createScope === "store" && user?.role === "manager" && form.storeIds.length === 0) {
-      setError("Du måste välja minst en butik.");
-      return;
-    }
     if (createScope === "forening" && !form.foreningId) {
       setError("Välj en förening.");
       return;
@@ -515,8 +511,11 @@ function MallarPage() {
       );
     }
 
-    if (createScope === "store" && form.storeIds.length > 0) {
-      await supabase.from("template_stores").insert(form.storeIds.map((sid) => ({ template_id: tmpl.id, store_id: sid })));
+    if (createScope === "store") {
+      const storeList = form.storeIds.length > 0 ? form.storeIds : activeStore ? [activeStore.id] : [];
+      if (storeList.length > 0) {
+        await supabase.from("template_stores").insert(storeList.map((sid) => ({ template_id: tmpl.id, store_id: sid })));
+      }
     }
 
     const validQuestions = form.questions.filter((q) => q.label.trim());
@@ -708,10 +707,6 @@ function MallarPage() {
     setError("");
     if (!editForm.title.trim()) { setError("Titel är obligatorisk."); return; }
     const scope = editTarget.hierarchy_scope ?? "store";
-    if (scope === "store" && user?.role === "manager" && editForm.storeIds.length === 0) {
-      setError("Du måste välja minst en butik.");
-      return;
-    }
     setSaving(true);
 
     await supabase.from("checklist_templates").update({
@@ -752,8 +747,11 @@ function MallarPage() {
     }
 
     await supabase.from("template_stores").delete().eq("template_id", editTarget.id);
-    if (!editForm.isGlobal && scope === "store" && editForm.storeIds.length > 0) {
-      await supabase.from("template_stores").insert(editForm.storeIds.map((sid) => ({ template_id: editTarget.id, store_id: sid })));
+    if (!editForm.isGlobal && scope === "store") {
+      const storeList = editForm.storeIds.length > 0 ? editForm.storeIds : activeStore ? [activeStore.id] : editTarget.storeIds;
+      if (storeList.length > 0) {
+        await supabase.from("template_stores").insert(storeList.map((sid) => ({ template_id: editTarget.id, store_id: sid })));
+      }
     }
 
     logAudit(user?.id ?? null, "template.edit", "checklist_templates", editTarget.id, { title: editForm.title });
@@ -1545,20 +1543,6 @@ function MallarPage() {
               </Select>
             </div>
 
-            {/* Change summary */}
-            <div className="flex items-start gap-3 px-4 py-3">
-              <History className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
-              <div className="flex flex-col gap-1 flex-1 min-w-0">
-                <span className="text-xs text-muted-foreground">Ändringsnotering</span>
-                <Input
-                  placeholder="Vad ändrades? (valfritt)"
-                  value={f.changeSummary}
-                  onChange={(e) => setF((p) => ({ ...p, changeSummary: e.target.value }))}
-                  className="h-7 border border-border/60 text-xs"
-                />
-              </div>
-            </div>
-
             {/* Förfallodagar */}
             <div className="flex items-center gap-3 px-4 py-3">
               <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
@@ -1745,38 +1729,6 @@ function MallarPage() {
                     {allForeningar.map((f2) => <SelectItem key={f2.id} value={f2.id}>{f2.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
-            )}
-
-            {/* Store assignments — only for store-scope templates */}
-            {scope === "store" && displayStores.length > 0 && (
-              <div className="px-4 py-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    Tilldelade butiker{user?.role === "manager" && <span className="ml-1 text-destructive">*</span>}
-                  </span>
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      className="flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
-                      onClick={() => setBroadcastConfirm(editTarget ? "edit" : "create")}
-                    >
-                      <StoreIcon className="h-3 w-3" /> Alla butiker
-                    </button>
-                  )}
-                </div>
-                <div className="space-y-0.5 max-h-48 overflow-y-auto">
-                  {displayStores.map((s) => (
-                    <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
-                      <Checkbox
-                        checked={f.storeIds.includes(s.id)}
-                        onCheckedChange={() => toggleStore(s.id, f.storeIds, (ids) => setF((p) => ({ ...p, storeIds: ids })))}
-                        className="h-3.5 w-3.5"
-                      />
-                      <span className="text-xs">{s.name}</span>
-                    </label>
-                  ))}
-                </div>
               </div>
             )}
 

@@ -3279,6 +3279,34 @@ function TasksPage() {
               {/* Property rows */}
               <div className="divide-y divide-border/50">
 
+                {/* Kategori */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Kategori</span>
+                  <Select value={newTask.category} onValueChange={(v) => setNewTask(p => ({ ...p, category: v }))}>
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[...new Set(["Drift", "Säkerhet", "Kundärenden", "Övrigt", ...templates.map(t => t.category).filter(Boolean)])].sort().map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Prioritet */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Prioritet</span>
+                  <Select value={newTask.priority} onValueChange={(v) => setNewTask(p => ({ ...p, priority: v }))}>
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs font-medium shadow-none focus:ring-0 justify-end">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["Låg", "Medel", "Hög", "Kritisk"].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* Förfallodatum — hidden when recurrence is set (start date drives the first occurrence) */}
                 {!newTask.recurrence_rule && (
                 <div className="flex items-start gap-3 px-4 py-3">
@@ -3357,49 +3385,6 @@ function TasksPage() {
                   </div>
                 </div>
 
-                {/* Prioritet */}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Prioritet</span>
-                  <Select value={newTask.priority} onValueChange={(v) => setNewTask(p => ({ ...p, priority: v }))}>
-                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs font-medium shadow-none focus:ring-0 justify-end">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["Låg", "Medel", "Hög", "Kritisk"].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Kategori */}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Kategori</span>
-                  <Select value={newTask.category} onValueChange={(v) => setNewTask(p => ({ ...p, category: v }))}>
-                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[...new Set(["Drift", "Säkerhet", "Kundärenden", "Övrigt", ...templates.map(t => t.category).filter(Boolean)])].sort().map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Butik */}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <ListChecks className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Butik</span>
-                  <Select value={newTask.store_id || "__none"} onValueChange={(v) => setNewTask(p => ({ ...p, store_id: v === "__none" ? "" : v }))}>
-                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
-                      <SelectValue placeholder="Ingen" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none">Ingen</SelectItem>
-                      {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 {/* SAP artikel-ID */}
                 <div className="px-4 py-3 min-w-0 space-y-1">
                   <div className="flex items-center gap-2">
@@ -3434,6 +3419,21 @@ function TasksPage() {
                       <ExternalLink className="h-3 w-3" /> Öppna i Mitt Coop-sortiment
                     </a>
                   )}
+                </div>
+
+                {/* Butik */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <ListChecks className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="w-24 shrink-0 text-xs text-muted-foreground">Butik</span>
+                  <Select value={newTask.store_id || "__none"} onValueChange={(v) => setNewTask(p => ({ ...p, store_id: v === "__none" ? "" : v }))}>
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
+                      <SelectValue placeholder="Ingen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Ingen</SelectItem>
+                      {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Återkommande */}
