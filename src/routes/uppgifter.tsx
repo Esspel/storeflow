@@ -496,7 +496,6 @@ function TasksPage() {
     let q = supabase
       .from("tasks")
       .select("*, store:stores(*), steps:task_steps(*), questions:task_questions(*), assignees:task_assignees(*, user:app_users(id,display_name,username), group:user_groups(id,name)), images:task_images(*)")
-      .is("deleted_at", null)
       .order("created_at", { ascending: false });
 
     if (activeStore) {
@@ -1061,8 +1060,7 @@ function TasksPage() {
         .select("id", { count: "exact", head: true })
         .eq("parent_task_id", parentId)
         .gte("recurrence_period_start", today)
-        .neq("status", "done")
-        .is("deleted_at", null);
+        .neq("status", "done");
       setDeleteHasFuture((count ?? 0) > 0);
     } else {
       setDeleteHasFuture(false);
@@ -1072,29 +1070,29 @@ function TasksPage() {
   const confirmDelete = async (scope: "single" | "future") => {
     if (!deleteTarget) return;
     const t = deleteTarget;
-    const now = new Date().toISOString();
 
-    const hardDeleteIds: string[] = [];
+    const deletedIds: string[] = [];
     const parentId = t.parent_task_id ?? t.id;
     const isChild = !!t.parent_task_id;
     const periodStart = t.recurrence_period_start ?? (t.due_date ? t.due_date.slice(0, 10) : null);
 
     if ((t.recurrence_rule || isChild) && scope === "future") {
-      // Fetch all future incomplete children — completed tasks stay untouched (audit preservation).
       if (periodStart) {
         const { data: futureRows } = await supabase
           .from("tasks")
           .select("id, status, completed_at")
           .eq("parent_task_id", parentId)
-          .gte("recurrence_period_start", periodStart)
-          .is("deleted_at", null);
+          .gte("recurrence_period_start", periodStart);
 
-        const incomplete = (futureRows ?? []).filter((r: { status: string; completed_at: string | null }) => r.status !== "done" && !r.completed_at);
-        const incompleteIds = incomplete.map((r: { id: string }) => r.id);
+        const incompleteIds = (futureRows ?? [])
+          .filter((r: { status: string; completed_at: string | null }) => r.status !== "done" && !r.completed_at)
+          .map((r: { id: string }) => r.id);
 
         if (incompleteIds.length > 0) {
-          await supabase.from("tasks").update({ deleted_at: now }).in("id", incompleteIds);
-          hardDeleteIds.push(...incompleteIds);
+          const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", incompleteIds);
+          deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+          await supabase.from("tasks").delete().in("id", incompleteIds);
+          deletedIds.push(...incompleteIds);
         }
 
         // Cap recurrence_end so spawn won't recreate purged periods
@@ -1102,56 +1100,41 @@ function TasksPage() {
         dayBefore.setDate(dayBefore.getDate() - 1);
         await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
       }
-      // If this was a non-recurring parent task being deleted outright, soft-delete it too.
-      // For recurring series (parent OR child), we keep the parent alive as the template definition;
-      // only children are removed. The recurrence_end cap above stops future spawning.
-      if (!t.recurrence_rule && !isChild && !hardDeleteIds.includes(t.id) && t.status !== "done" && !t.completed_at) {
-        await supabase.from("tasks").update({ deleted_at: now }).eq("id", t.id);
-        hardDeleteIds.push(t.id);
-      }
     } else if ((t.recurrence_rule || isChild) && scope === "single") {
-      // Single-instance delete: soft-delete the child task; for a recurring parent shown directly,
-      // do NOT soft-delete the parent (it is the series template) — only mark the period skipped.
+      // Delete the child instance; for a recurring parent, only mark the period skipped
       if (isChild && t.status !== "done" && !t.completed_at) {
-        await supabase.from("tasks").update({ deleted_at: now }).eq("id", t.id);
-        hardDeleteIds.push(t.id);
+        const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", t.id);
+        deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+        await supabase.from("tasks").delete().eq("id", t.id);
+        deletedIds.push(t.id);
       }
-      // Mark the period as deleted on the parent so spawn skips it
       if (periodStart) {
-        const pidToUpdate = parentId;
-        const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", pidToUpdate).maybeSingle();
+        const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
         const existing: string[] = (parent?.deleted_periods ?? []) as string[];
         if (!existing.includes(periodStart)) {
-          await supabase.from("tasks").update({ deleted_periods: [...existing, periodStart] }).eq("id", pidToUpdate);
+          await supabase.from("tasks").update({ deleted_periods: [...existing, periodStart] }).eq("id", parentId);
         }
       }
     } else {
-      // Non-recurring: soft-delete only if incomplete; completed tasks are preserved
       if (t.status !== "done" && !t.completed_at) {
-        await supabase.from("tasks").update({ deleted_at: now }).eq("id", t.id);
-        hardDeleteIds.push(t.id);
+        const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", t.id);
+        deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+        await supabase.from("tasks").delete().eq("id", t.id);
+        deletedIds.push(t.id);
       }
-    }
-
-    // Clean up storage files for all soft-deleted tasks (images are no longer needed)
-    const cleanIds = [...new Set(hardDeleteIds)].filter(Boolean);
-    if (cleanIds.length > 0) {
-      const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", cleanIds);
-      deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
     }
 
     logAudit(user?.id ?? null, "task.delete", "tasks", t.id, { title: t.title, scope });
     setDeleteTarget(null);
     setDeleteScope(null);
     setDetailTask(null);
-    spawnRef.current = false; // allow spawn to re-evaluate after deletion
+    spawnRef.current = false;
     await fetchTasks();
   };
 
   const bulkDeleteTasks = async (recurringScope: "single" | "future") => {
     const ids = [...selectedTaskIds];
-    const allSoftDeleteIds: string[] = [];
-    const now = new Date().toISOString();
+    const allDeletedIds: string[] = [];
 
     for (const taskId of ids) {
       const task = tasks.find(t => t.id === taskId);
@@ -1167,27 +1150,26 @@ function TasksPage() {
             .from("tasks")
             .select("id, status, completed_at")
             .eq("parent_task_id", parentId)
-            .gte("recurrence_period_start", periodStart)
-            .is("deleted_at", null);
-          const incomplete = (futureRows ?? []).filter((r: { status: string; completed_at: string | null }) => r.status !== "done" && !r.completed_at);
-          const incompleteIds = incomplete.map((r: { id: string }) => r.id);
+            .gte("recurrence_period_start", periodStart);
+          const incompleteIds = (futureRows ?? [])
+            .filter((r: { status: string; completed_at: string | null }) => r.status !== "done" && !r.completed_at)
+            .map((r: { id: string }) => r.id);
           if (incompleteIds.length > 0) {
-            await supabase.from("tasks").update({ deleted_at: now }).in("id", incompleteIds);
-            allSoftDeleteIds.push(...incompleteIds);
+            const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", incompleteIds);
+            deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+            await supabase.from("tasks").delete().in("id", incompleteIds);
+            allDeletedIds.push(...incompleteIds);
           }
           const dayBefore = new Date(periodStart);
           dayBefore.setDate(dayBefore.getDate() - 1);
           await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
         }
-        if (!allSoftDeleteIds.includes(task.id) && task.status !== "done" && !task.completed_at) {
-          await supabase.from("tasks").update({ deleted_at: now }).eq("id", task.id);
-          allSoftDeleteIds.push(task.id);
-        }
       } else if ((task.recurrence_rule || isChild) && recurringScope === "single") {
-        // Only soft-delete the child, not a recurring parent (which is the series template)
         if (isChild && task.status !== "done" && !task.completed_at) {
-          await supabase.from("tasks").update({ deleted_at: now }).eq("id", task.id);
-          allSoftDeleteIds.push(task.id);
+          const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", task.id);
+          deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+          await supabase.from("tasks").delete().eq("id", task.id);
+          allDeletedIds.push(task.id);
         }
         if (periodStart) {
           const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
@@ -1198,17 +1180,14 @@ function TasksPage() {
         }
       } else {
         if (task.status !== "done" && !task.completed_at) {
-          await supabase.from("tasks").update({ deleted_at: now }).eq("id", task.id);
-          allSoftDeleteIds.push(task.id);
+          const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", task.id);
+          deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+          await supabase.from("tasks").delete().eq("id", task.id);
+          allDeletedIds.push(task.id);
         }
       }
     }
 
-    const cleanIds = [...new Set(allSoftDeleteIds)].filter(Boolean);
-    if (cleanIds.length > 0) {
-      const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", cleanIds);
-      deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
-    }
     logAudit(user?.id ?? null, "task.bulk_delete", "tasks", ids[0] ?? "", { count: ids.length, scope: recurringScope });
     setSelectedTaskIds(new Set());
     setBulkDeleteTasksOpen(false);
@@ -1261,7 +1240,6 @@ function TasksPage() {
       .eq("parent_task_id", parentId)
       .gte("recurrence_period_start", today)
       .neq("status", "done")
-      .is("deleted_at", null)
       .order("recurrence_period_start", { ascending: true });
     setFutureOccurrences((data ?? []) as TaskFull[]);
     setFutureOccLoading(false);
@@ -1301,12 +1279,9 @@ function TasksPage() {
   const bulkDeleteFutureOccs = async () => {
     if (selectedFutureIds.size === 0) return;
     const ids = [...selectedFutureIds];
-    const now = new Date().toISOString();
-    // Soft-delete selected occurrences and record their periods in the parent
     for (const id of ids) {
       const occ = futureOccurrences.find(o => o.id === id);
       if (!occ) continue;
-      await supabase.from("tasks").update({ deleted_at: now }).eq("id", id);
       const parentId = occ.parent_task_id ?? occ.id;
       const periodStart = occ.recurrence_period_start ?? occ.due_date?.slice(0, 10);
       if (periodStart && parentId !== id) {
@@ -1316,6 +1291,7 @@ function TasksPage() {
           await supabase.from("tasks").update({ deleted_periods: [...existing, periodStart] }).eq("id", parentId);
         }
       }
+      await supabase.from("tasks").delete().eq("id", id);
     }
     logAudit(user?.id ?? null, "task.bulk_delete", "tasks", ids[0] ?? "", { count: ids.length, scope: "future_manager" });
     setSelectedFutureIds(new Set());
@@ -1331,9 +1307,6 @@ function TasksPage() {
   };
 
   const deleteFutureOcc = async (occ: TaskFull) => {
-    const now = new Date().toISOString();
-    await supabase.from("tasks").update({ deleted_at: now }).eq("id", occ.id);
-    // Record in parent's deleted_periods
     const parentId = occ.parent_task_id ?? occ.id;
     const periodStart = occ.recurrence_period_start ?? occ.due_date?.slice(0, 10);
     if (periodStart && parentId !== occ.id) {
@@ -1343,6 +1316,7 @@ function TasksPage() {
         await supabase.from("tasks").update({ deleted_periods: [...existing, periodStart] }).eq("id", parentId);
       }
     }
+    await supabase.from("tasks").delete().eq("id", occ.id);
     logAudit(user?.id ?? null, "task.delete", "tasks", occ.id, { title: occ.title, scope: "single" });
     if (futureManagerTask) await fetchFutureOccurrences(futureManagerTask);
     await fetchTasks();
@@ -2327,7 +2301,7 @@ function TasksPage() {
                 for (const t of recurringIds) {
                   const parentId = t.parent_task_id ?? t.id;
                   const { count } = await supabase.from("tasks").select("id", { count: "exact", head: true })
-                    .eq("parent_task_id", parentId).gte("recurrence_period_start", today).neq("status", "done").is("deleted_at", null);
+                    .eq("parent_task_id", parentId).gte("recurrence_period_start", today).neq("status", "done");
                   if ((count ?? 0) > 0) { hasFuture = true; break; }
                 }
                 setBulkDeleteHasFuture(hasFuture);

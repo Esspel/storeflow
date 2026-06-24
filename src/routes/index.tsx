@@ -111,7 +111,6 @@ function HubPage() {
       let tasksQ = supabase
         .from("tasks")
         .select("id, title, status, due_date, recurrence_rule, parent_task_id, priority, recurrence_days, steps:task_steps(id, is_done)")
-        .is("deleted_at", null)
         .order("created_at", { ascending: false });
       if (storeFilter) tasksQ = tasksQ.eq("store_id", storeFilter);
 

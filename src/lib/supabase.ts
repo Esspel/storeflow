@@ -153,7 +153,6 @@ export type Task = {
   recurrence_period_start: string | null;
   deleted_periods: string[] | null;
   completed_at: string | null;
-  deleted_at: string | null;
   sap_article_id: string | null;
   // Sub-task / process fields
   completion_mode: "manual" | "auto_from_children" | "auto_complete_children";
