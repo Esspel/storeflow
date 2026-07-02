@@ -206,6 +206,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
         ref={hiddenInputRef}
         aria-hidden="true"
         tabIndex={-1}
+        inputMode="none"
         onKeyDown={handleHiddenInputKeyDown}
         onBlur={() => setTimeout(refocusHiddenInput, 50)}
         className="absolute opacity-0 pointer-events-none w-0 h-0 overflow-hidden"

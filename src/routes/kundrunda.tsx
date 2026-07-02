@@ -1883,7 +1883,7 @@ function KundrundaPage() {
 
       {/* Start / Resume */}
       <div className="mb-8 rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
-        {inProgressSession ? (
+        {inProgressSession && inProgressSessions.length === 1 ? (
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-warning/15">
