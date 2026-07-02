@@ -158,57 +158,30 @@ function LiveBoard({ storeId }: { storeId: string }) {
     const todayStr = today.toISOString().slice(0, 10);
     const endStr = new Date(today.getTime() + 86400000).toISOString().slice(0, 10);
 
-    // Find the "Alla medarbetare" group for this store
-    const { data: allGroup } = await supabase
-      .from("user_groups")
-      .select("id")
-      .eq("store_id", storeId)
-      .eq("name", "Alla medarbetare")
-      .maybeSingle();
-
-    const allGroupId = allGroup?.id ?? null;
-
-    // Fetch tasks assigned to "Alla medarbetare" group via task_assignees
-    const groupTasksPromise = allGroupId
-      ? supabase
-          .from("task_assignees")
-          .select("task:tasks!task_id(id,title,category,status,due_date,assignee:app_users!assigned_to(display_name))")
-          .eq("group_id", allGroupId)
-          .then(({ data: rows }) => {
-            if (!rows) return [] as LiveTask[];
-            return rows
-              .map((r) => r.task as LiveTask | null)
-              .filter((t): t is LiveTask => {
-                if (!t) return false;
-                if (!["todo", "progress", "late"].includes(t.status)) return false;
-                if (!t.due_date) return false;
-                const d = t.due_date.slice(0, 10);
-                return d >= todayStr && d < endStr;
-              });
-          })
-      : Promise.resolve([] as LiveTask[]);
-
-    const [{ data: storeRow }, groupTasks, { data: incidents }] = await Promise.all([
+    const [{ data: storeRow }, { data: rawTasks }, { data: incidents }] = await Promise.all([
       supabase.from("stores").select("name,upshop_url").eq("id", storeId).maybeSingle(),
-      groupTasksPromise,
+      supabase
+        .from("tasks")
+        .select("id,title,category,status,due_date,assignee:app_users!assigned_to(display_name)")
+        .eq("store_id", storeId)
+        .in("status", ["todo", "progress", "late", "done"])
+        .gte("due_date", todayStr)
+        .lt("due_date", endStr)
+        .order("due_date", { ascending: true })
+        .limit(20),
       supabase
         .from("incidents")
         .select("id,ref_number,title,priority,status,category")
         .eq("store_id", storeId)
         .in("status", ["open", "in_progress", "escalated"])
         .order("created_at", { ascending: false })
-        .limit(8),
+        .limit(20),
     ]);
-
-    // Only show tasks assigned to "Alla medarbetare" group
-    const allTasksMap = new Map<string, LiveTask>();
-    for (const t of groupTasks) allTasksMap.set(t.id, t);
-    const mergedTasks = Array.from(allTasksMap.values()).slice(0, 12);
 
     setData({
       storeName: storeRow?.name ?? "Butik",
       upshopUrl: (storeRow as { upshop_url?: string | null } | null)?.upshop_url ?? null,
-      tasks: mergedTasks,
+      tasks: (rawTasks ?? []) as LiveTask[],
       incidents: (incidents ?? []) as LiveIncident[],
       lastUpdated: new Date(),
     });
@@ -532,30 +505,27 @@ function StoreSelector({ onSelect }: { onSelect: (id: string) => void }) {
 }
 
 function PulstavlaPage() {
-  const { user, activeStore, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
-  // For unauthenticated visitors: store picked manually and remembered in localStorage
-  const [manualStoreId, setManualStoreId] = useState<string | null>(() => {
+  // Everyone picks a store explicitly — remembered in localStorage
+  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(() => {
     try { return localStorage.getItem("sf-pulstavla-store"); } catch { return null; }
   });
   const [unlocked, setUnlocked] = useState(false);
   const [hasPin, setHasPin] = useState<boolean | null>(null);
 
-  // When logged in, always use the active store; skip manual selection
-  const storeId = user ? (activeStore?.id ?? null) : manualStoreId;
-
   useEffect(() => {
-    if (!storeId) { setHasPin(null); return; }
-    supabase.from("pulstavla_pins").select("id").eq("store_id", storeId).maybeSingle()
+    if (!selectedStoreId) { setHasPin(null); return; }
+    supabase.from("pulstavla_pins").select("id").eq("store_id", selectedStoreId).maybeSingle()
       .then(({ data }) => setHasPin(!!data));
-  }, [storeId]);
+  }, [selectedStoreId]);
 
   // Reset unlock state when store changes
-  useEffect(() => { setUnlocked(false); }, [storeId]);
+  useEffect(() => { setUnlocked(false); }, [selectedStoreId]);
 
   const selectStore = (id: string) => {
     try { localStorage.setItem("sf-pulstavla-store", id); } catch {}
-    setManualStoreId(id);
+    setSelectedStoreId(id);
     setHasPin(null);
     setUnlocked(false);
   };
@@ -569,8 +539,8 @@ function PulstavlaPage() {
     );
   }
 
-  // Not logged in and no store selected → store selector
-  if (!storeId) return <StoreSelector onSelect={selectStore} />;
+  // No store selected → store selector (for everyone)
+  if (!selectedStoreId) return <StoreSelector onSelect={selectStore} />;
 
   // Checking if store has PIN
   if (hasPin === null) {
@@ -581,14 +551,13 @@ function PulstavlaPage() {
     );
   }
 
-  // Store has no PIN — unauthenticated users must pick again; logged-in users go straight to board
+  // Store has no PIN — show board directly (no lock screen needed)
   if (!hasPin) {
-    if (user) return <LiveBoard storeId={storeId} />;
     try { localStorage.removeItem("sf-pulstavla-store"); } catch {}
     return <StoreSelector onSelect={selectStore} />;
   }
 
-  if (!unlocked) return <PinGate storeId={storeId} onUnlock={() => setUnlocked(true)} />;
+  if (!unlocked) return <PinGate storeId={selectedStoreId} onUnlock={() => setUnlocked(true)} />;
 
-  return <LiveBoard storeId={storeId} />;
+  return <LiveBoard storeId={selectedStoreId} />;
 }

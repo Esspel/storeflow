@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   TriangleAlert as AlertTriangle, ChartBar as BarChart2, CalendarDays,
   CircleCheck as CheckCircle2, ChevronRight, ClipboardList,
-  Keyboard, LayoutDashboard, ListChecks,
+  LayoutDashboard, ListChecks,
   Package,
   QrCode, Settings, ShoppingCart, Tv as Tv2, UserRound, Users,
 } from "lucide-react";
@@ -225,22 +225,7 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
 ];
 
 // Keyboard shortcuts — same as keyboard-shortcuts.tsx but displayed here for reference
-const KEYBOARD_SHORTCUTS_ALL = [
-  { key: "?",   description: "Öppna/stäng genvägsöversikt",      access: "all" as const },
-  { key: "1",   description: "Gå till Dashboard",                 access: "all" as const },
-  { key: "2",   description: "Gå till Uppgifter",                 access: "all" as const },
-  { key: "3",   description: "Gå till Schema",                    access: "all" as const },
-  { key: "4",   description: "Gå till Avvikelser",                access: "all" as const },
-  { key: "5",   description: "Gå till Kundönskemål",              access: "all" as const },
-  { key: "6",   description: "Gå till Kundrunda",                 access: "all" as const },
-  { key: "7",   description: "Gå till Rapporter",                 access: "all" as const },
-  { key: "8",   description: "Gå till Personal",                  access: "manager" as const },
-  { key: "9",   description: "Gå till Inställningar",             access: "all" as const },
-  { key: "m",   description: "Gå till Mallar",                    access: "manager" as const },
-  { key: "b",   description: "Gå till Medarbetarbelastning",      access: "manager" as const },
-  { key: "p",   description: "Gå till Pulstavla",                 access: "all" as const },
-  { key: "Esc", description: "Stäng öppen dialog",                access: "all" as const },
-];
+const KEYBOARD_SHORTCUTS_ALL: never[] = [];
 
 function FeatureCard({ item }: { item: Feature }) {
   const Icon = item.icon;
@@ -295,10 +280,6 @@ function HjalpPage() {
   const { user } = useAuth();
   const isManager = user?.role === "manager" || user?.role === "admin";
 
-  const visibleShortcuts = KEYBOARD_SHORTCUTS_ALL.filter(
-    (s) => s.access === "all" || (s.access === "manager" && isManager)
-  );
-
   const visibleGroups = FEATURES.map((group) => ({
     ...group,
     items: group.items.filter((item) => {
@@ -315,35 +296,6 @@ function HjalpPage() {
       />
 
       <div className="space-y-10">
-        {/* Keyboard shortcuts */}
-        <section>
-          <div className="mb-4 flex items-center gap-2">
-            <Keyboard className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Tangentbordsgenvägar
-            </h2>
-          </div>
-          <div className="rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)] overflow-hidden">
-            <div className="border-b border-border/60 bg-muted/30 px-5 py-3">
-              <p className="text-sm text-muted-foreground">
-                Fungerar när du inte skriver i ett inmatningsfält. Tryck{" "}
-                <kbd className="rounded border border-border/60 bg-card px-1.5 py-0.5 font-mono text-xs">?</kbd>{" "}
-                var som helst i appen för att visa/dölja genvägsöversikten.
-              </p>
-            </div>
-            <div className="divide-y divide-border/40">
-              {visibleShortcuts.map((s) => (
-                <div key={s.key} className="flex items-center justify-between px-5 py-2.5">
-                  <span className="text-sm text-foreground">{s.description}</span>
-                  <kbd className="shrink-0 rounded-lg border border-border/60 bg-muted px-2.5 py-1 font-mono text-xs font-semibold text-muted-foreground">
-                    {s.key}
-                  </kbd>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
         {/* Feature sections */}
         {visibleGroups.map((group) => (
           <section key={group.section}>

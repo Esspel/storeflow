@@ -21,7 +21,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   supabase, type CustomerRequest, type Store as StoreType,
-  mittCoopUrlFromStored, mittCoopSearchUrl, encodeArticleNumber, decodeArticleNumber,
+  mittCoopUrlFromStored, mittCoopSearchUrl, mittCoopUrl, encodeArticleNumber, decodeArticleNumber,
   MITT_COOP_CATEGORIES, MITT_COOP_STATUS_CODES, type ArticleIdType,
   getPublicUrl, uploadAttachment, deleteStorageFiles,
 } from "@/lib/supabase";
@@ -105,6 +105,13 @@ function CustomerRequestsPage() {
   const [storeQrLoading, setStoreQrLoading] = useState(false);
   const [copiedQr, setCopiedQr] = useState(false);
   const [editComment, setEditComment] = useState("");
+  // Mitt Coop link builder (standalone, no article number required)
+  const [showLinkBuilder, setShowLinkBuilder] = useState(false);
+  const [linkBuilderMode, setLinkBuilderMode] = useState<"filter" | "search">("filter");
+  const [linkBuilderCategoryId, setLinkBuilderCategoryId] = useState<number | null>(null);
+  const [linkBuilderStatusCode, setLinkBuilderStatusCode] = useState<number | null>(null);
+  const [linkBuilderProductName, setLinkBuilderProductName] = useState("");
+  const [linkBuilderCategorySearch, setLinkBuilderCategorySearch] = useState("");
 
   // Image upload for create/edit (staff)
   const [createImages, setCreateImages] = useState<File[]>([]);
@@ -388,6 +395,114 @@ function CustomerRequestsPage() {
         <StatCard label="Inkomna" value={open} tone="default" />
         <StatCard label="Beställda" value={ordered} tone="success" />
         <StatCard label="Uppfyllda" value={fulfilled} tone="success" />
+      </div>
+
+      {/* Mitt Coop Link Builder */}
+      <div className="mb-5 rounded-2xl border border-border/60 bg-card overflow-hidden">
+        <button
+          onClick={() => setShowLinkBuilder(v => !v)}
+          className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-muted/40 transition-colors"
+        >
+          <ExternalLink className="h-4 w-4 text-primary shrink-0" />
+          <span className="text-sm font-medium">Mitt Coop-länkverktyg</span>
+          <ChevronDown className={cn("ml-auto h-4 w-4 text-muted-foreground transition-transform", showLinkBuilder && "rotate-180")} />
+        </button>
+        {showLinkBuilder && (
+          <div className="border-t border-border/60 px-4 py-4 space-y-4">
+            <div className="flex gap-1 rounded-full border border-border/60 bg-muted/40 p-0.5 w-max">
+              <button
+                onClick={() => setLinkBuilderMode("filter")}
+                className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", linkBuilderMode === "filter" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              >
+                Filtrera (status/kategori)
+              </button>
+              <button
+                onClick={() => setLinkBuilderMode("search")}
+                className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", linkBuilderMode === "search" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              >
+                Sök produktnamn
+              </button>
+            </div>
+
+            {linkBuilderMode === "filter" ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Kategori (valfri)</label>
+                  <div className="relative">
+                    <input
+                      value={linkBuilderCategorySearch}
+                      onChange={(e) => setLinkBuilderCategorySearch(e.target.value)}
+                      placeholder="Sök kategori..."
+                      className="w-full h-8 rounded-lg border border-border/60 bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    />
+                    {linkBuilderCategorySearch && (
+                      <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border/60 bg-card shadow-md">
+                        {linkBuilderCategoryId && (
+                          <button className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-muted/50 text-destructive" onClick={() => { setLinkBuilderCategoryId(null); setLinkBuilderCategorySearch(""); }}>
+                            Rensa kategori
+                          </button>
+                        )}
+                        {MITT_COOP_CATEGORIES.filter(c => c.label.toLowerCase().includes(linkBuilderCategorySearch.toLowerCase())).slice(0, 12).map(c => (
+                          <button key={c.id} className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-muted/50 text-left" onClick={() => { setLinkBuilderCategoryId(c.id); setLinkBuilderCategorySearch(c.label); }}>
+                            {c.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {linkBuilderCategoryId && !linkBuilderCategorySearch && (
+                    <p className="text-[10px] text-muted-foreground">{MITT_COOP_CATEGORIES.find(c => c.id === linkBuilderCategoryId)?.label}</p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Status (valfri)</label>
+                  <select
+                    value={linkBuilderStatusCode ?? ""}
+                    onChange={(e) => setLinkBuilderStatusCode(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full h-8 rounded-lg border border-border/60 bg-background px-3 text-xs focus:outline-none"
+                  >
+                    <option value="">Alla statusar</option>
+                    {MITT_COOP_STATUS_CODES.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Produktnamn / sökord</label>
+                <input
+                  value={linkBuilderProductName}
+                  onChange={(e) => setLinkBuilderProductName(e.target.value)}
+                  placeholder="t.ex. oat milk, havremjölk..."
+                  className="w-full h-8 rounded-lg border border-border/60 bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
+                />
+              </div>
+            )}
+
+            {(() => {
+              let builtUrl: string | null = null;
+              if (linkBuilderMode === "filter") {
+                builtUrl = mittCoopUrl("", siteId, { categoryId: linkBuilderCategoryId ?? undefined, statusCode: linkBuilderStatusCode ?? undefined });
+                if (!builtUrl && siteId) builtUrl = `https://mittcoop.coop.se/sortiment/artiklar?siteId=${siteId}${linkBuilderCategoryId ? `&categoryIds=${linkBuilderCategoryId}` : ""}${linkBuilderStatusCode ? `&statusCodes=${linkBuilderStatusCode}` : ""}`;
+                else if (!builtUrl) builtUrl = `https://mittcoop.coop.se/sortiment/artiklar?${linkBuilderCategoryId ? `categoryIds=${linkBuilderCategoryId}` : ""}${linkBuilderStatusCode ? `&statusCodes=${linkBuilderStatusCode}` : ""}`;
+              } else {
+                if (linkBuilderProductName.trim()) {
+                  builtUrl = mittCoopSearchUrl(linkBuilderProductName.trim(), siteId, { categoryId: linkBuilderCategoryId ?? undefined, statusCode: linkBuilderStatusCode ?? undefined });
+                }
+              }
+              if (!builtUrl) return <p className="text-xs text-muted-foreground">Fyll i minst ett fält för att generera en länk.</p>;
+              return (
+                <div className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
+                  <a href={builtUrl} target="_blank" rel="noopener noreferrer"
+                    className="flex-1 text-xs text-primary hover:underline truncate font-mono">{builtUrl}</a>
+                  <a href={builtUrl} target="_blank" rel="noopener noreferrer"
+                    className="shrink-0 inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+                    <ExternalLink className="h-3 w-3" /> Öppna
+                  </a>
+                </div>
+              );
+            })()}
+          </div>
+        )}
       </div>
 
       {/* Filters */}
@@ -918,7 +1033,7 @@ function CustomerRequestsPage() {
       {detailTarget && (() => {
         const r = detailTarget;
         const store = stores.find((s) => s.id === r.store_id) ?? null;
-        const mcUrl = mittCoopUrl(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null);
+        const mcUrl = mittCoopUrlFromStored(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null, { categoryId: r.mitt_coop_category_id ?? undefined, statusCode: r.mitt_coop_status_code ?? undefined });
         const staffComment = (r as CustomerRequest & { staff_comment?: string | null }).staff_comment;
         return (
           <Dialog open onOpenChange={(o) => { if (!o) { setDetailTarget(null); setRequestImages([]); } }}>
