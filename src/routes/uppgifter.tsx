@@ -1462,17 +1462,18 @@ function TasksPage() {
     // shows as 02:00 in UTC+2 — instead we set time explicitly in local time.
     const buildDueDate = (dueTime?: string): string | null => {
       if (!newTask.due_date) return null;
+      // Store as YYYY-MM-DD only when no time, to avoid UTC midnight becoming wrong day
+      if (!dueTime) return newTask.due_date;
       const [y, mo, d] = newTask.due_date.split("-").map(Number);
       const dt = new Date(y, mo - 1, d, 0, 0, 0, 0);
-      if (dueTime) {
-        const [h, m] = dueTime.split(":").map(Number);
-        dt.setHours(h, m, 0, 0);
-      }
+      const [h, m] = dueTime.split(":").map(Number);
+      dt.setHours(h, m, 0, 0);
       return dt.toISOString();
     };
 
     const insertSingleTask = async (dueTime: string) => {
-      const dueIso = buildDueDate(dueTime);
+      const cleanTime = dueTime.trim() || undefined;
+      const dueIso = buildDueDate(cleanTime);
       const { data: task, error } = await supabase.from("tasks").insert({
         title: newTask.title.trim(),
         description: newTask.description.trim(),
@@ -1480,7 +1481,7 @@ function TasksPage() {
         priority: newTask.priority,
         store_id: newTask.store_id || null,
         due_date: dueIso,
-        due_date_time: dueTime || null,
+        due_date_time: cleanTime ?? null,
         due_date_offset: null,
         recurring: newTask.recurrence_rule || null,
         recurrence_rule: newTask.recurrence_rule || null,

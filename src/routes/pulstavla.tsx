@@ -418,12 +418,12 @@ function LiveBoard({ storeId }: { storeId: string }) {
     const sevenDaysAgo = new Date(today.getTime() - 7 * 86400000).toISOString().slice(0, 10);
     const endStr = new Date(today.getTime() + 86400000).toISOString().slice(0, 10);
 
-    const [{ data: storeRow }, { data: rawTasks }, { data: incidents }, { data: assigneeRows }] =
+    const [{ data: storeRow }, { data: rawTasks }, { data: incidents }] =
       await Promise.all([
         supabase.from("stores").select("name,upshop_url").eq("id", storeId).maybeSingle(),
         supabase
           .from("tasks")
-          .select("id,title,category,status,due_date,due_time,assigned_to,assignee:app_users!assigned_to(display_name)")
+          .select("id,title,category,status,due_date,due_date_time,assigned_to,assignee:app_users!assigned_to(display_name)")
           .eq("store_id", storeId)
           .in("status", ["todo", "progress", "late", "done"])
           .gte("due_date", sevenDaysAgo)
@@ -437,15 +437,6 @@ function LiveBoard({ storeId }: { storeId: string }) {
           .in("status", ["open", "in_progress", "escalated"])
           .order("created_at", { ascending: false })
           .limit(40),
-        supabase
-          .from("task_assignees")
-          .select("task_id, user:app_users(display_name), group:user_groups(name)")
-          .in(
-            "task_id",
-            // We'll join below — fetch all; filter post
-            [],
-          )
-          .limit(0), // placeholder — real join below after we have task ids
       ]);
 
     // Build assignee map from task_assignees (fetch separately once we have task ids)
@@ -476,7 +467,7 @@ function LiveBoard({ storeId }: { storeId: string }) {
       category: string;
       status: "todo" | "progress" | "done" | "late" | "cancelled";
       due_date: string | null;
-      due_time?: string | null;
+      due_date_time?: string | null;
       assignee?: { display_name: string } | null;
     }) => {
       const names = assigneeMap[t.id] ?? [];
@@ -494,7 +485,7 @@ function LiveBoard({ storeId }: { storeId: string }) {
         category: t.category,
         status: t.status,
         due_date: t.due_date,
-        due_time: t.due_time,
+        due_time: t.due_date_time ?? null,
         assigneeLabel,
       };
     });
