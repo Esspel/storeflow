@@ -3184,7 +3184,7 @@ function TasksPage() {
                   <div className="flex items-center gap-3">
                     <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                     <div className="flex flex-col gap-1 flex-1 min-w-0">
-                      <span className="text-xs text-muted-foreground">SAP-artikel</span>
+                      <span className="text-xs text-muted-foreground">Materialnummer</span>
                       <div className="flex items-center gap-1">
                         <input
                           value={newTask.sap_article_id}

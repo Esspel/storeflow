@@ -4,7 +4,7 @@ import {
   Camera, ChartBar as BarChart3, CircleCheck as CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   Circle, Clock, CreditCard as Edit2, Download, FileText, GripVertical, Lock, MapPin, Plus, Search, Trash2,
   TriangleAlert as AlertTriangle, Upload, X, ArrowRight, Hash, ZoomIn, Image as ImageIcon,
-  GitMerge, Copy, RefreshCw, Info
+  GitMerge, Copy, RefreshCw, Info, ExternalLink
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -1185,7 +1185,18 @@ function KundrundaPage() {
                             {isDefect && (
                               <div className="mt-3 pt-2 space-y-1">
                                 {resp?.defect_description && <p className="text-xs text-destructive/80">{resp.defect_description}</p>}
-                                {resp?.sap_article_id && <p className="text-[11px] text-muted-foreground font-mono">SAP: {resp.sap_article_id}</p>}
+                                {resp?.sap_article_id && (() => {
+                                  const mcUrl = mittCoopUrl(resp.sap_article_id, activeSession.store?.sap_site_id ?? null);
+                                  return mcUrl ? (
+                                    <a href={mcUrl} target="_blank" rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-mono">
+                                      <ExternalLink className="h-3 w-3" />
+                                      {resp.sap_article_id} — Mitt Coop-sortiment
+                                    </a>
+                                  ) : (
+                                    <p className="text-[11px] text-muted-foreground font-mono">{resp.sap_article_id}</p>
+                                  );
+                                })()}
                                 <button className="text-[11px] text-primary underline" onClick={() => openDefectDialog(cp)}>Redigera</button>
                                 {resp?.id && (responseImages[resp.id] ?? []).length > 0 && (
                                   <div className="flex gap-1.5 pt-1 overflow-x-auto">

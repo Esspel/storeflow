@@ -17,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   supabase, type ChecklistTemplate, type ChecklistTemplateItem,
   type ChecklistTemplateQuestion, type Store, type Forening,
-  type TemplateVersion, type TemplatePackage, type TemplatePackageItem, type AppUser, type UserGroup, logAudit,
+  type TemplateVersion, type TemplatePackage, type TemplatePackageItem, type AppUser, type UserGroup, logAudit, mittCoopUrl,
 } from "@/lib/supabase";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
@@ -1600,11 +1600,11 @@ function MallarPage() {
               </div>
             </div>
 
-            {/* SAP artikel-ID */}
+            {/* Materialnummer / Mitt Coop-sortiment */}
             <div className="flex items-center gap-3 px-4 py-3">
               <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
               <div className="flex flex-col gap-1 flex-1 min-w-0">
-                <span className="text-xs text-muted-foreground">SAP-artikel</span>
+                <span className="text-xs text-muted-foreground">Materialnummer (Mitt Coop-sortiment)</span>
                 <Input
                   value={f.sap_article_id}
                   onChange={(e) => setF((p) => ({ ...p, sap_article_id: e.target.value }))}
@@ -1612,6 +1612,16 @@ function MallarPage() {
                   inputMode="numeric"
                   className="h-7 border border-border/60 text-xs"
                 />
+                {f.sap_article_id && (() => {
+                  const url = mittCoopUrl(f.sap_article_id, activeStore?.sap_site_id ?? null);
+                  return url ? (
+                    <a href={url} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                      <ExternalLink className="h-3 w-3" />
+                      Öppna i Mitt Coop-sortiment
+                    </a>
+                  ) : null;
+                })()}
               </div>
             </div>
             <div className="px-4 py-3 space-y-2">
@@ -2187,6 +2197,21 @@ function MallarPage() {
                         {expanded === t.id && (
                           <div className="border-t border-border/60 px-5 py-4 space-y-3">
                             {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
+                            {(t as ChecklistTemplate & { sap_article_id?: string | null }).sap_article_id && (() => {
+                              const url = mittCoopUrl((t as ChecklistTemplate & { sap_article_id?: string | null }).sap_article_id!, activeStore?.sap_site_id ?? null);
+                              return url ? (
+                                <a href={url} target="_blank" rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary-soft px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 w-fit">
+                                  <Hash className="h-3 w-3" />
+                                  {(t as ChecklistTemplate & { sap_article_id?: string | null }).sap_article_id}
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              ) : (
+                                <p className="text-xs text-muted-foreground font-mono">
+                                  Materialnummer: {(t as ChecklistTemplate & { sap_article_id?: string | null }).sap_article_id}
+                                </p>
+                              );
+                            })()}
                             {(t.items?.length ?? 0) > 0 && (
                               <div>
                                 <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">Checkpoints</p>

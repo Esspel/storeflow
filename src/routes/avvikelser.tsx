@@ -853,11 +853,11 @@ function IssuesPage() {
                   />
                 </div>
 
-                {/* SAP artikel-ID */}
+                {/* Materialnummer */}
                 <div className="px-4 py-3 min-w-0 space-y-1">
                   <div className="flex items-center gap-2">
                     <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                    <span className="text-xs text-muted-foreground shrink-0">SAP-artikel</span>
+                    <span className="text-xs text-muted-foreground shrink-0">Materialnummer</span>
                     <div className="flex flex-1 items-center gap-1 min-w-0">
                       <input
                         value={newIncident.sap_article_id}
