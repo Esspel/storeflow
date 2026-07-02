@@ -1462,12 +1462,12 @@ function TasksPage() {
     // shows as 02:00 in UTC+2 — instead we set time explicitly in local time.
     const buildDueDate = (dueTime?: string): string | null => {
       if (!newTask.due_date) return null;
-      // Store as YYYY-MM-DD only when no time, to avoid UTC midnight becoming wrong day
-      if (!dueTime) return newTask.due_date;
       const [y, mo, d] = newTask.due_date.split("-").map(Number);
       const dt = new Date(y, mo - 1, d, 0, 0, 0, 0);
-      const [h, m] = dueTime.split(":").map(Number);
-      dt.setHours(h, m, 0, 0);
+      if (dueTime) {
+        const [h, m] = dueTime.split(":").map(Number);
+        dt.setHours(h, m, 0, 0);
+      }
       return dt.toISOString();
     };
 

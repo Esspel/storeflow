@@ -54,9 +54,10 @@ type PulstavlaData = {
 
 function getDeadlineMs(task: LiveTask): number {
   if (!task.due_date) return Infinity;
-  const base = task.due_date;
-  const time = task.due_time ? task.due_time.slice(0, 5) : "23:59";
-  return new Date(`${base}T${time}:00`).getTime();
+  // due_date is a full ISO timestamp — use it directly for the deadline
+  // If due_date has no time component (rare legacy), fall back to end-of-day
+  const ts = new Date(task.due_date).getTime();
+  return isNaN(ts) ? Infinity : ts;
 }
 
 function useCountdown(targetMs: number): string {
@@ -413,10 +414,9 @@ function LiveBoard({ storeId }: { storeId: string }) {
   const fetchData = useCallback(async () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().slice(0, 10);
-    // Fetch tasks for today + overdue (7 days back) — sorted by deadline asc
-    const sevenDaysAgo = new Date(today.getTime() - 7 * 86400000).toISOString().slice(0, 10);
-    const endStr = new Date(today.getTime() + 86400000).toISOString().slice(0, 10);
+    // Use full ISO timestamps so the timestamptz column comparison works correctly
+    const sevenDaysAgo = new Date(today.getTime() - 7 * 86400000).toISOString();
+    const endOfToday = new Date(today.getTime() + 86400000).toISOString();
 
     const [{ data: storeRow }, { data: rawTasks }, { data: incidents }] =
       await Promise.all([
@@ -427,7 +427,7 @@ function LiveBoard({ storeId }: { storeId: string }) {
           .eq("store_id", storeId)
           .in("status", ["todo", "progress", "late", "done"])
           .gte("due_date", sevenDaysAgo)
-          .lt("due_date", endStr)
+          .lt("due_date", endOfToday)
           .order("due_date", { ascending: true })
           .limit(60),
         supabase
