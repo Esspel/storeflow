@@ -695,11 +695,22 @@ export async function withRetry<T>(
   throw lastError;
 }
 
-// Helper: build a SAP product catalog deep-link for an article
+// Helper: build a Mitt Coop product catalog deep-link for an article
 // Returns null if either ID is missing
 export function mittCoopUrl(sapArticleId: string | null | undefined, sapSiteId: string | null | undefined): string | null {
   if (!sapArticleId?.trim() || !sapSiteId?.trim()) return null;
   return `https://mittcoop.coop.se/sortiment/articles/${sapArticleId.trim()}?siteId=${sapSiteId.trim()}`;
+}
+
+// Build a Mitt Coop search URL from an EAN barcode
+export function mittCoopEanUrl(ean: string | null | undefined, sapSiteId: string | null | undefined): string | null {
+  if (!ean?.trim() || !sapSiteId?.trim()) return null;
+  return `https://mittcoop.coop.se/sortiment/artiklar?siteId=${sapSiteId.trim()}&search=${ean.trim()}`;
+}
+
+// Returns true if the value looks like an EAN (8 or 13 digits, no letters)
+export function looksLikeEan(value: string): boolean {
+  return /^\d{8}$|^\d{13}$/.test(value.trim());
 }
 
 

@@ -21,7 +21,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   supabase, type CustomerRequest, type Store as StoreType,
-  mittCoopUrl, getPublicUrl, uploadAttachment, deleteStorageFiles,
+  mittCoopUrl, mittCoopEanUrl, looksLikeEan, getPublicUrl, uploadAttachment, deleteStorageFiles,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -76,6 +76,8 @@ function CustomerRequestsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [articleCameraOpen, setArticleCameraOpen] = useState(false);
+  // EAN disambiguation: when a scanned/entered value could be EAN or mat-nr
+  const [eanPrompt, setEanPrompt] = useState<{ value: string; target: "create" | "edit" } | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CustomerRequest | null>(null);
   const [editTarget, setEditTarget] = useState<CustomerRequest | null>(null);
@@ -311,6 +313,29 @@ function CustomerRequestsPage() {
     await fetchRequests();
   };
 
+  // When a value is entered into the article/mat-nr field and it looks like an EAN,
+  // ask the user which type it is. If confirmed as EAN, store it with "EAN:" prefix
+  // so the link logic can distinguish. If confirmed as mat-nr, store as-is.
+  const handleArticleInput = (value: string, target: "create" | "edit") => {
+    if (looksLikeEan(value)) {
+      setEanPrompt({ value, target });
+    } else {
+      if (target === "create") setForm((p) => ({ ...p, article_number: value }));
+      else setEditArticleNumber(value);
+    }
+  };
+
+  const siteId = activeStore?.sap_site_id ?? null;
+
+  // Build the correct Mitt Coop URL depending on whether article_number is EAN or mat-nr
+  const buildMcUrl = (articleNumber: string | null | undefined, storeSapSiteId: string | null | undefined): string | null => {
+    if (!articleNumber?.trim()) return null;
+    if (articleNumber.startsWith("EAN:")) {
+      return mittCoopEanUrl(articleNumber.slice(4).trim(), storeSapSiteId);
+    }
+    return mittCoopUrl(articleNumber, storeSapSiteId);
+  };
+
   const filtered = requests.filter((r) => {
     if (filterStatus === "active" && (r.status === "fulfilled" || r.status === "declined")) return false;
     if (filterStatus !== "active" && filterStatus !== "all" && r.status !== filterStatus) return false;
@@ -377,7 +402,7 @@ function CustomerRequestsPage() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Sök produkt eller artikelnummer..."
+            placeholder="Sök produkt eller materialnummer..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-9 rounded-full pl-9 text-sm"
@@ -406,7 +431,7 @@ function CustomerRequestsPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((r) => {
             const store = stores.find((s) => s.id === r.store_id) ?? null;
-            const mcUrl = mittCoopUrl(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null);
+            const mcUrl = buildMcUrl(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null);
             return (
               <div
                 key={r.id}
@@ -419,7 +444,7 @@ function CustomerRequestsPage() {
                     {r.article_number && (
                       <div className="flex items-center gap-1.5 mt-1">
                         <Hash className="h-3 w-3 text-muted-foreground/60 shrink-0" />
-                        <span className="text-xs text-muted-foreground font-mono">{r.article_number}</span>
+                        <span className="text-xs text-muted-foreground font-mono">{r.article_number?.startsWith("EAN:") ? r.article_number.slice(4) : r.article_number}</span>
                         {mcUrl && (
                           <a
                             href={mcUrl}
@@ -517,15 +542,28 @@ function CustomerRequestsPage() {
             <div className="space-y-1.5">
               <Label className="text-xs flex items-center gap-1.5">
                 <Hash className="h-3 w-3 text-muted-foreground" />
-                Artikelnummer (SAP-sortiment, valfritt)
+                Materialnummer (Mitt Coop-sortiment, valfritt)
               </Label>
-              <Input
-                placeholder="T.ex. 123456"
-                value={form.article_number}
-                onChange={(e) => setForm((p) => ({ ...p, article_number: e.target.value }))}
-              />
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Materialnummer eller EAN"
+                  value={form.article_number}
+                  onChange={(e) => setForm((p) => ({ ...p, article_number: e.target.value }))}
+                  onBlur={(e) => { if (e.target.value) handleArticleInput(e.target.value, "create"); }}
+                  className="font-mono text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setArticleCameraOpen(true)}
+                  className="flex items-center gap-1 shrink-0 rounded-xl border border-border/60 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                  title="Scanna EAN-kod"
+                >
+                  <ScanLine className="h-3 w-3" />
+                  Scanna
+                </button>
+              </div>
               <p className="text-[11px] text-muted-foreground">
-                Artikelnumret används för direktlänk till SAP-sortiment.
+                Används för direktlänk till Mitt Coop-sortiment. Du kan ange materialnummer eller EAN.
               </p>
             </div>
             <div className="space-y-1.5">
@@ -542,18 +580,7 @@ function CustomerRequestsPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">Anteckning (valfritt)</Label>
-                <button
-                  type="button"
-                  onClick={() => setArticleCameraOpen(true)}
-                  className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
-                  title="Scanna EAN-kod och klistra in i anteckningen"
-                >
-                  <ScanLine className="h-3 w-3" />
-                  Scanna EAN
-                </button>
-              </div>
+              <Label className="text-xs">Anteckning (valfritt)</Label>
               <Textarea
                 placeholder="Ev. kommentar från kunden eller övrig info..."
                 value={form.notes}
@@ -561,16 +588,13 @@ function CustomerRequestsPage() {
                 rows={3}
                 className="resize-none text-sm"
               />
-              <p className="text-[11px] text-muted-foreground">
-                Scanna EAN-kod för att klistra in i anteckningen. Sök sedan upp artikelnumret manuellt i SAP-sortiment.
-              </p>
             </div>
 
             {articleCameraOpen && (
               <CameraScanner
                 onScan={(code) => {
                   setArticleCameraOpen(false);
-                  setForm(p => ({ ...p, notes: p.notes ? `${p.notes}\nEAN: ${code}` : `EAN: ${code}` }));
+                  setEanPrompt({ value: code, target: "create" });
                 }}
                 onClose={() => setArticleCameraOpen(false)}
               />
@@ -676,15 +700,16 @@ function CustomerRequestsPage() {
               <div className="space-y-1.5">
                 <Label className="text-xs flex items-center gap-1.5">
                   <Hash className="h-3 w-3 text-muted-foreground" />
-                  Materialnummer (SAP-sortiment)
+                  Materialnummer (Mitt Coop-sortiment)
                 </Label>
                 <Input
-                  placeholder="T.ex. 123456"
+                  placeholder="Materialnummer eller EAN"
                   value={editArticleNumber}
                   onChange={(e) => setEditArticleNumber(e.target.value)}
+                  onBlur={(e) => { if (e.target.value) handleArticleInput(e.target.value, "edit"); }}
                   className="font-mono text-sm"
                 />
-                <p className="text-[11px] text-muted-foreground">Syns bara internt — används för direktlänk till SAP-sortiment.</p>
+                <p className="text-[11px] text-muted-foreground">Syns bara internt — används för direktlänk till Mitt Coop-sortiment. Du kan ange materialnummer eller EAN.</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Status</Label>
@@ -764,12 +789,12 @@ function CustomerRequestsPage() {
                   <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-1">Materialnummer</p>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm text-foreground">{r.article_number}</span>
+                      <span className="font-mono text-sm text-foreground">{r.article_number?.startsWith("EAN:") ? r.article_number.slice(4) : r.article_number}</span>
                       {mcUrl && (
                         <a href={mcUrl} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
                           <ExternalLink className="h-3 w-3" />
-                          SAP-sortiment
+                          Mitt Coop-sortiment
                         </a>
                       )}
                     </div>
@@ -855,6 +880,39 @@ function CustomerRequestsPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* EAN / Materialnummer disambiguation */}
+      <AlertDialog open={!!eanPrompt} onOpenChange={(o) => { if (!o) setEanPrompt(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Materialnummer eller EAN?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Värdet <span className="font-mono font-semibold">{eanPrompt?.value}</span> kan vara ett materialnummer eller en EAN-streckkod. Vilket är det?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel onClick={() => {
+              if (eanPrompt) {
+                if (eanPrompt.target === "create") setForm((p) => ({ ...p, article_number: eanPrompt.value }));
+                else setEditArticleNumber(eanPrompt.value);
+              }
+              setEanPrompt(null);
+            }}>
+              Materialnummer
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (eanPrompt) {
+                const stored = `EAN:${eanPrompt.value}`;
+                if (eanPrompt.target === "create") setForm((p) => ({ ...p, article_number: stored }));
+                else setEditArticleNumber(stored);
+              }
+              setEanPrompt(null);
+            }}>
+              EAN-streckkod
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

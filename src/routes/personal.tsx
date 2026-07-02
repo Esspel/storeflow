@@ -1348,7 +1348,7 @@ function AccountsPage() {
                       .select("id, product_name, article_number, priority, status, staff_comment, created_at")
                       .eq("store_id", activeStore.id).order("created_at", { ascending: false }).limit(2000);
                     if (!data) return;
-                    const headers = ["ID", "Produkt", "Artikelnummer", "Prioritet", "Status", "Kommentar", "Skapad"];
+                    const headers = ["ID", "Produkt", "Materialnummer", "Prioritet", "Status", "Kommentar", "Skapad"];
                     const rows = (data as Record<string, unknown>[]).map(t => [t.id, t.product_name, t.article_number ?? "", t.priority ?? "", t.status, t.staff_comment ?? "", t.created_at].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";"));
                     const csv = "\ufeff" + [headers.join(";"), ...rows].join("\n");
                     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob);

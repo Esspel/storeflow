@@ -1309,7 +1309,7 @@ function KundrundaPage() {
                   </div>
                   {defectDialog.sap_article_id && (
                     <a href={mittCoopUrl(defectDialog.sap_article_id, activeSession.store?.sap_site_id ?? null) ?? `https://mittcoop.coop.se/sortiment/articles/${defectDialog.sap_article_id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                      <ArrowRight className="h-3 w-3" /> Öppna i SAP-sortiment
+                      <ArrowRight className="h-3 w-3" /> Öppna i Mitt Coop-sortiment
                     </a>
                   )}
                 </div>
