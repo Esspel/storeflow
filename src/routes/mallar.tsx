@@ -17,7 +17,8 @@ import { Switch } from "@/components/ui/switch";
 import {
   supabase, type ChecklistTemplate, type ChecklistTemplateItem,
   type ChecklistTemplateQuestion, type Store, type Forening,
-  type TemplateVersion, type TemplatePackage, type TemplatePackageItem, type AppUser, type UserGroup, logAudit, mittCoopUrl,
+  type TemplateVersion, type TemplatePackage, type TemplatePackageItem, type AppUser, type UserGroup, logAudit, mittCoopUrl, mittCoopSearchUrl,
+  type ArticleIdType,
 } from "@/lib/supabase";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
@@ -177,6 +178,8 @@ function MallarPage() {
 
   const [form, setForm] = useState<FormState>(emptyForm());
   const [editForm, setEditForm] = useState<FormState>(emptyForm());
+  const [mallArticleType, setMallArticleType] = useState<ArticleIdType>("mat-nr");
+  const [mallArticlePrompt, setMallArticlePrompt] = useState<string | null>(null);
 
   const [importing, setImporting] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -1601,28 +1604,52 @@ function MallarPage() {
             </div>
 
             {/* Materialnummer / Mitt Coop-sortiment */}
-            <div className="flex items-center gap-3 px-4 py-3">
-              <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-              <div className="flex flex-col gap-1 flex-1 min-w-0">
-                <span className="text-xs text-muted-foreground">Materialnummer (Mitt Coop-sortiment)</span>
-                <Input
-                  value={f.sap_article_id}
-                  onChange={(e) => setF((p) => ({ ...p, sap_article_id: e.target.value }))}
-                  placeholder="t.ex. 1047133"
-                  inputMode="numeric"
-                  className="h-7 border border-border/60 text-xs"
-                />
-                {f.sap_article_id && (() => {
-                  const url = mittCoopUrl(f.sap_article_id, activeStore?.sap_site_id ?? null);
-                  return url ? (
-                    <a href={url} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-                      <ExternalLink className="h-3 w-3" />
-                      Öppna i Mitt Coop-sortiment
-                    </a>
-                  ) : null;
-                })()}
+            <div className="px-4 py-3 min-w-0 space-y-1">
+              <div className="flex items-center gap-2">
+                <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {mallArticleType === "ean" ? "EAN" : mallArticleType === "bnr" ? "BNR" : "Materialnummer"}
+                </span>
+                <div className="flex flex-1 items-center gap-1 min-w-0">
+                  <input
+                    value={f.sap_article_id}
+                    onChange={(e) => setF((p) => ({ ...p, sap_article_id: e.target.value.replace(/\D/g, "") }))}
+                    onBlur={(e) => { if (e.target.value.trim()) setMallArticlePrompt(e.target.value.trim()); }}
+                    placeholder={mallArticleType === "ean" ? "t.ex. 7310865003294" : "t.ex. 1047133"}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none overflow-hidden"
+                  />
+                  <select
+                    value={mallArticleType}
+                    onChange={(e) => setMallArticleType(e.target.value as ArticleIdType)}
+                    className="border-0 bg-transparent text-[10px] text-muted-foreground outline-none cursor-pointer shrink-0"
+                  >
+                    <option value="mat-nr">Mat-nr</option>
+                    <option value="ean">EAN</option>
+                    <option value="bnr">BNR</option>
+                  </select>
+                  {f.sap_article_id && (
+                    <button type="button" onClick={() => setF((p) => ({ ...p, sap_article_id: "" }))} className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/60 hover:text-destructive shrink-0">
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               </div>
+              {f.sap_article_id && (() => {
+                const url = mallArticleType === "mat-nr"
+                  ? (mittCoopUrl(f.sap_article_id, activeStore?.sap_site_id ?? null) ?? `https://mittcoop.coop.se/sortiment/articles/${f.sap_article_id.trim()}`)
+                  : mittCoopSearchUrl(f.sap_article_id, activeStore?.sap_site_id ?? null);
+                return url ? (
+                  <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                    <ExternalLink className="h-3 w-3" />
+                    Öppna i Mitt Coop-sortiment
+                  </a>
+                ) : null;
+              })()}
             </div>
             <div className="px-4 py-3 space-y-2">
               <div className="flex items-center gap-2">
@@ -3051,6 +3078,23 @@ function MallarPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Article type disambiguation */}
+      <AlertDialog open={!!mallArticlePrompt} onOpenChange={(o) => { if (!o) setMallArticlePrompt(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Vad är <span className="font-mono">{mallArticlePrompt}</span>?</AlertDialogTitle>
+            <AlertDialogDescription>Välj vilken typ av nummer — det avgör länken till Mitt Coop-sortiment.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+            {(["mat-nr", "ean", "bnr"] as ArticleIdType[]).map((t) => (
+              <AlertDialogAction key={t} onClick={() => { setMallArticleType(t); setMallArticlePrompt(null); }}>
+                {t === "mat-nr" ? "Materialnummer" : t === "ean" ? "EAN-streckkod" : "BNR (Beställningsnr)"}
+              </AlertDialogAction>
+            ))}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

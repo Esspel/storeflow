@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  Copy, ExternalLink, Hash, ImagePlus, Plus, QrCode, ScanLine, Search, ShoppingCart, Store as StoreIcon, Trash2, X,
+  Copy, ExternalLink, Hash, ImagePlus, Plus, QrCode, ScanLine, Search, ShoppingCart, Store as StoreIcon, Trash2, X, ChevronDown,
 } from "lucide-react";
 import { CameraScanner } from "@/components/camera-scanner";
 import { QrDisplay } from "@/components/qr-display";
@@ -21,7 +21,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   supabase, type CustomerRequest, type Store as StoreType,
-  mittCoopUrl, mittCoopEanUrl, looksLikeEan, getPublicUrl, uploadAttachment, deleteStorageFiles,
+  mittCoopUrlFromStored, mittCoopSearchUrl, encodeArticleNumber, decodeArticleNumber,
+  MITT_COOP_CATEGORIES, MITT_COOP_STATUS_CODES, type ArticleIdType,
+  getPublicUrl, uploadAttachment, deleteStorageFiles,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -59,6 +61,9 @@ function priorityClass(p: string) {
 const emptyForm = () => ({
   product_name: "",
   article_number: "",
+  article_type: "mat-nr" as ArticleIdType,
+  mitt_coop_category_id: null as number | null,
+  mitt_coop_status_code: null as number | null,
   notes: "",
   priority: "normal" as "low" | "normal" | "high",
 });
@@ -76,8 +81,11 @@ function CustomerRequestsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [articleCameraOpen, setArticleCameraOpen] = useState(false);
-  // EAN disambiguation: when a scanned/entered value could be EAN or mat-nr
-  const [eanPrompt, setEanPrompt] = useState<{ value: string; target: "create" | "edit" } | null>(null);
+  // 3-way disambiguation for manually typed article numbers
+  const [articlePrompt, setArticlePrompt] = useState<{ value: string; target: "create" | "edit" } | null>(null);
+  // Category search state for the combobox
+  const [categorySearch, setCategorySearch] = useState("");
+  const [editCategorySearch, setEditCategorySearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CustomerRequest | null>(null);
   const [editTarget, setEditTarget] = useState<CustomerRequest | null>(null);
@@ -85,6 +93,9 @@ function CustomerRequestsPage() {
   const [editNotes, setEditNotes] = useState("");
   const [editInternalNotes, setEditInternalNotes] = useState("");
   const [editArticleNumber, setEditArticleNumber] = useState("");
+  const [editArticleType, setEditArticleType] = useState<ArticleIdType>("mat-nr");
+  const [editCategoryId, setEditCategoryId] = useState<number | null>(null);
+  const [editStatusCode, setEditStatusCode] = useState<number | null>(null);
   const [detailTarget, setDetailTarget] = useState<CustomerRequest | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrRequest, setQrRequest] = useState<CustomerRequest | null>(null);
@@ -257,13 +268,18 @@ function CustomerRequestsPage() {
   const createRequest = async () => {
     if (!form.product_name.trim()) return;
     setSaving(true);
+    const storedArticle = form.article_number.trim()
+      ? encodeArticleNumber(form.article_number.trim(), form.article_type)
+      : null;
     const { data: inserted } = await supabase.from("customer_requests").insert({
       store_id: activeStore?.id,
       product_name: form.product_name.trim(),
-      article_number: form.article_number.trim() || null,
+      article_number: storedArticle,
       notes: form.notes.trim() || null,
       priority: form.priority,
       requested_by: user?.id,
+      mitt_coop_category_id: form.mitt_coop_category_id,
+      mitt_coop_status_code: form.mitt_coop_status_code,
     }).select("id").maybeSingle();
     if (inserted?.id && createImages.length > 0) {
       await uploadImages(inserted.id, createImages);
@@ -280,11 +296,16 @@ function CustomerRequestsPage() {
   const updateRequest = async () => {
     if (!editTarget) return;
     setSaving(true);
+    const storedArticle = editArticleNumber.trim()
+      ? encodeArticleNumber(editArticleNumber.trim(), editArticleType)
+      : null;
     await supabase.from("customer_requests").update({
       status: editStatus,
-      article_number: editArticleNumber.trim() || null,
+      article_number: storedArticle,
       internal_notes: editInternalNotes.trim() || null,
       staff_comment: editComment.trim() || null,
+      mitt_coop_category_id: editCategoryId,
+      mitt_coop_status_code: editStatusCode,
     }).eq("id", editTarget.id);
     if (editImages.length > 0) {
       await uploadImages(editTarget.id, editImages);
@@ -313,28 +334,25 @@ function CustomerRequestsPage() {
     await fetchRequests();
   };
 
-  // When a value is entered into the article/mat-nr field and it looks like an EAN,
-  // ask the user which type it is. If confirmed as EAN, store it with "EAN:" prefix
-  // so the link logic can distinguish. If confirmed as mat-nr, store as-is.
+  // 3-way disambiguation for manually typed article numbers (not for scanned barcodes)
   const handleArticleInput = (value: string, target: "create" | "edit") => {
-    if (looksLikeEan(value)) {
-      setEanPrompt({ value, target });
-    } else {
-      if (target === "create") setForm((p) => ({ ...p, article_number: value }));
-      else setEditArticleNumber(value);
-    }
+    if (!value.trim()) return;
+    setArticlePrompt({ value: value.trim(), target });
   };
 
   const siteId = activeStore?.sap_site_id ?? null;
 
-  // Build the correct Mitt Coop URL depending on whether article_number is EAN or mat-nr
-  const buildMcUrl = (articleNumber: string | null | undefined, storeSapSiteId: string | null | undefined): string | null => {
-    if (!articleNumber?.trim()) return null;
-    if (articleNumber.startsWith("EAN:")) {
-      return mittCoopEanUrl(articleNumber.slice(4).trim(), storeSapSiteId);
-    }
-    return mittCoopUrl(articleNumber, storeSapSiteId);
-  };
+  // Build the Mitt Coop URL from a stored article_number + optional category/status
+  const buildMcUrl = (
+    articleNumber: string | null | undefined,
+    storeSapSiteId: string | null | undefined,
+    categoryId?: number | null,
+    statusCode?: number | null,
+  ): string | null =>
+    mittCoopUrlFromStored(articleNumber, storeSapSiteId, {
+      categoryId: categoryId ?? undefined,
+      statusCode: statusCode ?? undefined,
+    });
 
   const filtered = requests.filter((r) => {
     if (filterStatus === "active" && (r.status === "fulfilled" || r.status === "declined")) return false;
@@ -431,7 +449,7 @@ function CustomerRequestsPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((r) => {
             const store = stores.find((s) => s.id === r.store_id) ?? null;
-            const mcUrl = buildMcUrl(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null);
+            const mcUrl = buildMcUrl(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null, r.mitt_coop_category_id, r.mitt_coop_status_code);
             return (
               <div
                 key={r.id}
@@ -444,7 +462,7 @@ function CustomerRequestsPage() {
                     {r.article_number && (
                       <div className="flex items-center gap-1.5 mt-1">
                         <Hash className="h-3 w-3 text-muted-foreground/60 shrink-0" />
-                        <span className="text-xs text-muted-foreground font-mono">{r.article_number?.startsWith("EAN:") ? r.article_number.slice(4) : r.article_number}</span>
+                        <span className="text-xs text-muted-foreground font-mono">{decodeArticleNumber(r.article_number)?.value ?? r.article_number}</span>
                         {mcUrl && (
                           <a
                             href={mcUrl}
@@ -488,9 +506,14 @@ function CustomerRequestsPage() {
                         size="sm"
                         className="h-7 rounded-full px-2 text-xs"
                         onClick={() => {
+                          const decoded = decodeArticleNumber(r.article_number);
                           setEditTarget(r);
                           setEditStatus(r.status);
-                          setEditArticleNumber(r.article_number ?? "");
+                          setEditArticleNumber(decoded?.value ?? "");
+                          setEditArticleType(decoded?.type ?? "mat-nr");
+                          setEditCategoryId(r.mitt_coop_category_id ?? null);
+                          setEditStatusCode(r.mitt_coop_status_code ?? null);
+                          setEditCategorySearch("");
                           setEditInternalNotes(r.internal_notes ?? "");
                           setEditComment((r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "");
                         }}
@@ -542,29 +565,97 @@ function CustomerRequestsPage() {
             <div className="space-y-1.5">
               <Label className="text-xs flex items-center gap-1.5">
                 <Hash className="h-3 w-3 text-muted-foreground" />
-                Materialnummer (Mitt Coop-sortiment, valfritt)
+                Materialnummer / EAN / BNR (valfritt)
               </Label>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Materialnummer eller EAN"
+                  placeholder={form.article_type === "mat-nr" ? "T.ex. 1047133" : form.article_type === "ean" ? "T.ex. 7310865003294" : "T.ex. 123456"}
                   value={form.article_number}
-                  onChange={(e) => setForm((p) => ({ ...p, article_number: e.target.value }))}
-                  onBlur={(e) => { if (e.target.value) handleArticleInput(e.target.value, "create"); }}
+                  onChange={(e) => setForm((p) => ({ ...p, article_number: e.target.value.replace(/\D/g, "") }))}
+                  onBlur={(e) => { if (e.target.value.trim()) handleArticleInput(e.target.value.trim(), "create"); }}
+                  inputMode="numeric"
                   className="font-mono text-sm"
                 />
+                <Select value={form.article_type} onValueChange={(v) => setForm((p) => ({ ...p, article_type: v as ArticleIdType }))}>
+                  <SelectTrigger className="w-28 shrink-0 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mat-nr">Mat-nr</SelectItem>
+                    <SelectItem value="ean">EAN</SelectItem>
+                    <SelectItem value="bnr">BNR</SelectItem>
+                  </SelectContent>
+                </Select>
                 <button
                   type="button"
                   onClick={() => setArticleCameraOpen(true)}
                   className="flex items-center gap-1 shrink-0 rounded-xl border border-border/60 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
-                  title="Scanna EAN-kod"
+                  title="Scanna EAN-streckkod"
                 >
                   <ScanLine className="h-3 w-3" />
                   Scanna
                 </button>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Används för direktlänk till Mitt Coop-sortiment. Du kan ange materialnummer eller EAN.
+                Används för direktlänk till Mitt Coop-sortiment. Ange typ av nummer i rullgardinen.
               </p>
+            </div>
+            {/* Mitt Coop category */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Kategori i Mitt Coop (valfritt)</Label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Sök kategori..."
+                  value={categorySearch}
+                  onChange={(e) => setCategorySearch(e.target.value)}
+                  className="pl-8 text-xs h-8"
+                />
+              </div>
+              {form.mitt_coop_category_id && (
+                <div className="flex items-center gap-1.5">
+                  <Badge variant="secondary" className="text-xs font-mono">
+                    {MITT_COOP_CATEGORIES.find(c => c.id === form.mitt_coop_category_id)?.label ?? form.mitt_coop_category_id}
+                  </Badge>
+                  <button type="button" onClick={() => setForm(p => ({ ...p, mitt_coop_category_id: null }))} className="text-muted-foreground hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              {categorySearch && (
+                <div className="max-h-36 overflow-y-auto rounded-xl border border-border/60 bg-card shadow-sm">
+                  {MITT_COOP_CATEGORIES.filter(c =>
+                    c.label.toLowerCase().includes(categorySearch.toLowerCase()) ||
+                    String(c.id).includes(categorySearch)
+                  ).slice(0, 20).map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-muted/50 transition-colors"
+                      onClick={() => { setForm(p => ({ ...p, mitt_coop_category_id: c.id })); setCategorySearch(""); }}
+                    >
+                      <span className="font-mono text-muted-foreground">{c.id}</span>
+                      <span>{c.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Mitt Coop status filter */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Statusfilter i Mitt Coop (valfritt)</Label>
+              <Select
+                value={form.mitt_coop_status_code ? String(form.mitt_coop_status_code) : "none"}
+                onValueChange={(v) => setForm(p => ({ ...p, mitt_coop_status_code: v === "none" ? null : Number(v) }))}
+              >
+                <SelectTrigger className="text-xs h-8"><SelectValue placeholder="Välj status..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Inget filter</SelectItem>
+                  {MITT_COOP_STATUS_CODES.map(s => (
+                    <SelectItem key={s.code} value={String(s.code)}>{s.code.toString().padStart(2, "0")} — {s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Prioritet</Label>
@@ -594,7 +685,7 @@ function CustomerRequestsPage() {
               <CameraScanner
                 onScan={(code) => {
                   setArticleCameraOpen(false);
-                  setEanPrompt({ value: code, target: "create" });
+                  setForm(p => ({ ...p, article_number: code.replace(/\D/g, ""), article_type: "ean" }));
                 }}
                 onClose={() => setArticleCameraOpen(false)}
               />
@@ -700,16 +791,86 @@ function CustomerRequestsPage() {
               <div className="space-y-1.5">
                 <Label className="text-xs flex items-center gap-1.5">
                   <Hash className="h-3 w-3 text-muted-foreground" />
-                  Materialnummer (Mitt Coop-sortiment)
+                  Materialnummer / EAN / BNR
                 </Label>
-                <Input
-                  placeholder="Materialnummer eller EAN"
-                  value={editArticleNumber}
-                  onChange={(e) => setEditArticleNumber(e.target.value)}
-                  onBlur={(e) => { if (e.target.value) handleArticleInput(e.target.value, "edit"); }}
-                  className="font-mono text-sm"
-                />
-                <p className="text-[11px] text-muted-foreground">Syns bara internt — används för direktlänk till Mitt Coop-sortiment. Du kan ange materialnummer eller EAN.</p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder={editArticleType === "mat-nr" ? "T.ex. 1047133" : editArticleType === "ean" ? "T.ex. 7310865003294" : "T.ex. 123456"}
+                    value={editArticleNumber}
+                    onChange={(e) => setEditArticleNumber(e.target.value.replace(/\D/g, ""))}
+                    onBlur={(e) => { if (e.target.value.trim()) handleArticleInput(e.target.value.trim(), "edit"); }}
+                    inputMode="numeric"
+                    className="font-mono text-sm"
+                  />
+                  <Select value={editArticleType} onValueChange={(v) => setEditArticleType(v as ArticleIdType)}>
+                    <SelectTrigger className="w-28 shrink-0 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mat-nr">Mat-nr</SelectItem>
+                      <SelectItem value="ean">EAN</SelectItem>
+                      <SelectItem value="bnr">BNR</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-[11px] text-muted-foreground">Syns bara internt — används för direktlänk till Mitt Coop-sortiment.</p>
+              </div>
+              {/* Edit: category selector */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Kategori i Mitt Coop (valfritt)</Label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Input
+                    placeholder="Sök kategori..."
+                    value={editCategorySearch}
+                    onChange={(e) => setEditCategorySearch(e.target.value)}
+                    className="pl-8 text-xs h-8"
+                  />
+                </div>
+                {editCategoryId && (
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="secondary" className="text-xs font-mono">
+                      {MITT_COOP_CATEGORIES.find(c => c.id === editCategoryId)?.label ?? editCategoryId}
+                    </Badge>
+                    <button type="button" onClick={() => setEditCategoryId(null)} className="text-muted-foreground hover:text-destructive">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+                {editCategorySearch && (
+                  <div className="max-h-36 overflow-y-auto rounded-xl border border-border/60 bg-card shadow-sm">
+                    {MITT_COOP_CATEGORIES.filter(c =>
+                      c.label.toLowerCase().includes(editCategorySearch.toLowerCase()) ||
+                      String(c.id).includes(editCategorySearch)
+                    ).slice(0, 20).map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-muted/50 transition-colors"
+                        onClick={() => { setEditCategoryId(c.id); setEditCategorySearch(""); }}
+                      >
+                        <span className="font-mono text-muted-foreground">{c.id}</span>
+                        <span>{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* Edit: status filter */}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Statusfilter i Mitt Coop (valfritt)</Label>
+                <Select
+                  value={editStatusCode ? String(editStatusCode) : "none"}
+                  onValueChange={(v) => setEditStatusCode(v === "none" ? null : Number(v))}
+                >
+                  <SelectTrigger className="text-xs h-8"><SelectValue placeholder="Välj status..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Inget filter</SelectItem>
+                    {MITT_COOP_STATUS_CODES.map(s => (
+                      <SelectItem key={s.code} value={String(s.code)}>{s.code.toString().padStart(2, "0")} — {s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Status</Label>
@@ -787,9 +948,21 @@ function CustomerRequestsPage() {
                 {/* Article number — internal */}
                 {r.article_number && (
                   <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-1">Materialnummer</p>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm text-foreground">{r.article_number?.startsWith("EAN:") ? r.article_number.slice(4) : r.article_number}</span>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-1">
+                      {decodeArticleNumber(r.article_number)?.type === "ean" ? "EAN" : decodeArticleNumber(r.article_number)?.type === "bnr" ? "BNR" : "Materialnummer"}
+                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-sm text-foreground">{decodeArticleNumber(r.article_number)?.value ?? r.article_number}</span>
+                      {r.mitt_coop_category_id && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {MITT_COOP_CATEGORIES.find(c => c.id === r.mitt_coop_category_id)?.label}
+                        </span>
+                      )}
+                      {r.mitt_coop_status_code && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {MITT_COOP_STATUS_CODES.find(s => s.code === r.mitt_coop_status_code)?.label}
+                        </span>
+                      )}
                       {mcUrl && (
                         <a href={mcUrl} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
@@ -851,7 +1024,12 @@ function CustomerRequestsPage() {
                     setDetailTarget(null);
                     setEditTarget(r);
                     setEditStatus(r.status);
-                    setEditArticleNumber(r.article_number ?? "");
+                    const decoded2 = decodeArticleNumber(r.article_number);
+                    setEditArticleNumber(decoded2?.value ?? "");
+                    setEditArticleType(decoded2?.type ?? "mat-nr");
+                    setEditCategoryId(r.mitt_coop_category_id ?? null);
+                    setEditStatusCode(r.mitt_coop_status_code ?? null);
+                    setEditCategorySearch("");
                     setEditInternalNotes(r.internal_notes ?? "");
                     setEditComment((r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "");
                   }}>
@@ -885,35 +1063,35 @@ function CustomerRequestsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* EAN / Materialnummer disambiguation */}
-      <AlertDialog open={!!eanPrompt} onOpenChange={(o) => { if (!o) setEanPrompt(null); }}>
+      {/* 3-way article number disambiguation */}
+      <AlertDialog open={!!articlePrompt} onOpenChange={(o) => { if (!o) setArticlePrompt(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Materialnummer eller EAN?</AlertDialogTitle>
+            <AlertDialogTitle>Vad är <span className="font-mono">{articlePrompt?.value}</span>?</AlertDialogTitle>
             <AlertDialogDescription>
-              Värdet <span className="font-mono font-semibold">{eanPrompt?.value}</span> kan vara ett materialnummer eller en EAN-streckkod. Vilket är det?
+              Välj vilken typ av nummer du angett — det avgör vilken länk som genereras i Mitt Coop-sortiment.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel onClick={() => {
-              if (eanPrompt) {
-                if (eanPrompt.target === "create") setForm((p) => ({ ...p, article_number: eanPrompt.value }));
-                else setEditArticleNumber(eanPrompt.value);
-              }
-              setEanPrompt(null);
-            }}>
-              Materialnummer
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={() => {
-              if (eanPrompt) {
-                const stored = `EAN:${eanPrompt.value}`;
-                if (eanPrompt.target === "create") setForm((p) => ({ ...p, article_number: stored }));
-                else setEditArticleNumber(stored);
-              }
-              setEanPrompt(null);
-            }}>
-              EAN-streckkod
-            </AlertDialogAction>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+            {(["mat-nr", "ean", "bnr"] as ArticleIdType[]).map((t) => (
+              <AlertDialogAction
+                key={t}
+                onClick={() => {
+                  if (articlePrompt) {
+                    if (articlePrompt.target === "create") {
+                      setForm(p => ({ ...p, article_number: articlePrompt.value, article_type: t }));
+                    } else {
+                      setEditArticleNumber(articlePrompt.value);
+                      setEditArticleType(t);
+                    }
+                  }
+                  setArticlePrompt(null);
+                }}
+                className={t === "mat-nr" ? "" : t === "ean" ? "bg-info/90 hover:bg-info" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"}
+              >
+                {t === "mat-nr" ? "Materialnummer" : t === "ean" ? "EAN-streckkod" : "BNR (Beställningsnr)"}
+              </AlertDialogAction>
+            ))}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

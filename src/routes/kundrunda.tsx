@@ -25,7 +25,8 @@ import {
   type KundrundaZone, type KundrundaCheckpoint, type KundrundaSession,
   type KundrundaResponse, type KundrundaResponseImage,
   type CommonDefect, type AppUser,
-  logAudit, createNotification, mittCoopUrl, uploadAttachment, getPublicUrl,
+  logAudit, createNotification, mittCoopUrl, mittCoopSearchUrl, uploadAttachment, getPublicUrl,
+  type ArticleIdType,
 } from "@/lib/supabase";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
@@ -188,6 +189,8 @@ function KundrundaPage() {
   const [responses, setResponses] = useState<ResponseMap>({});
   const [responseImages, setResponseImages] = useState<Record<string, KundrundaResponseImage[]>>({});
   const [defectDialog, setDefectDialog] = useState<DefectForm | null>(null);
+  const [defectArticleType, setDefectArticleType] = useState<ArticleIdType>("mat-nr");
+  const [defectArticlePrompt, setDefectArticlePrompt] = useState<string | null>(null);
   const [defectUserSearch, setDefectUserSearch] = useState("");
   const [defectUserOpen, setDefectUserOpen] = useState(false);
   const [savingDefect, setSavingDefect] = useState(false);
@@ -1302,27 +1305,44 @@ function KundrundaPage() {
                   })()}
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">SAP-artikel-ID</Label>
+                  <Label className="text-xs">
+                    {defectArticleType === "ean" ? "EAN" : defectArticleType === "bnr" ? "BNR" : "Materialnummer"}
+                  </Label>
                   <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2">
                     <Hash className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <input
                       value={defectDialog.sap_article_id}
-                      onChange={(e) => setDefectDialog(p => p ? { ...p, sap_article_id: e.target.value } : null)}
-                      placeholder="t.ex. 1047133"
+                      onChange={(e) => setDefectDialog(p => p ? { ...p, sap_article_id: e.target.value.replace(/\D/g, "") } : null)}
+                      onBlur={(e) => { if (e.target.value.trim()) setDefectArticlePrompt(e.target.value.trim()); }}
+                      placeholder={defectArticleType === "ean" ? "t.ex. 7310865003294" : "t.ex. 1047133"}
                       inputMode="numeric" pattern="[0-9]*" autoCorrect="off" autoCapitalize="none" spellCheck={false}
                       className="flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground/40"
                     />
+                    <select
+                      value={defectArticleType}
+                      onChange={(e) => setDefectArticleType(e.target.value as ArticleIdType)}
+                      className="border-0 bg-transparent text-[10px] text-muted-foreground outline-none cursor-pointer shrink-0"
+                    >
+                      <option value="mat-nr">Mat-nr</option>
+                      <option value="ean">EAN</option>
+                      <option value="bnr">BNR</option>
+                    </select>
                     {defectDialog.sap_article_id && (
                       <button type="button" onClick={() => setDefectDialog(p => p ? { ...p, sap_article_id: "" } : null)} className="text-muted-foreground hover:text-destructive">
                         <X className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>
-                  {defectDialog.sap_article_id && (
-                    <a href={mittCoopUrl(defectDialog.sap_article_id, activeSession.store?.sap_site_id ?? null) ?? `https://mittcoop.coop.se/sortiment/articles/${defectDialog.sap_article_id}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                      <ArrowRight className="h-3 w-3" /> Öppna i Mitt Coop-sortiment
-                    </a>
-                  )}
+                  {defectDialog.sap_article_id && (() => {
+                    const url = defectArticleType === "mat-nr"
+                      ? (mittCoopUrl(defectDialog.sap_article_id, activeSession.store?.sap_site_id ?? null) ?? `https://mittcoop.coop.se/sortiment/articles/${defectDialog.sap_article_id}`)
+                      : mittCoopSearchUrl(defectDialog.sap_article_id, activeSession.store?.sap_site_id ?? null);
+                    return url ? (
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                        <ArrowRight className="h-3 w-3" /> Öppna i Mitt Coop-sortiment
+                      </a>
+                    ) : null;
+                  })()}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Ansvarig</Label>
@@ -2071,6 +2091,23 @@ function KundrundaPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Article type disambiguation */}
+      <AlertDialog open={!!defectArticlePrompt} onOpenChange={(o) => { if (!o) setDefectArticlePrompt(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Vad är <span className="font-mono">{defectArticlePrompt}</span>?</AlertDialogTitle>
+            <AlertDialogDescription>Välj vilken typ av nummer — det avgör länken till Mitt Coop-sortiment.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+            {(["mat-nr", "ean", "bnr"] as ArticleIdType[]).map((t) => (
+              <AlertDialogAction key={t} onClick={() => { setDefectArticleType(t); setDefectArticlePrompt(null); }}>
+                {t === "mat-nr" ? "Materialnummer" : t === "ean" ? "EAN-streckkod" : "BNR (Beställningsnr)"}
+              </AlertDialogAction>
+            ))}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

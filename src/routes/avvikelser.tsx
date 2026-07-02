@@ -28,7 +28,8 @@ import {
   supabase, type Incident, type IncidentComment, type IncidentImage,
   type Store as StoreType, type AppUser, type CommonDefect, type UserGroup,
   logAudit, createNotification, notifyUsers,
-  uploadAttachment, getPublicUrl, deleteStorageFiles, mittCoopUrl,
+  uploadAttachment, getPublicUrl, deleteStorageFiles, mittCoopUrl, mittCoopSearchUrl,
+  type ArticleIdType,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -158,6 +159,8 @@ function IssuesPage() {
   const [detailImages, setDetailImages] = useState<IncidentImage[]>([]);
   const [newComment, setNewComment] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
+  const [incidentArticleType, setIncidentArticleType] = useState<ArticleIdType>("mat-nr");
+  const [incidentArticlePrompt, setIncidentArticlePrompt] = useState<string | null>(null);
   const INCIDENT_DRAFT_KEY = `sf-incident-draft-${user?.id ?? ""}`;
   const emptyIncident = () => ({ title: "", description: "", category: "Drift", store_id: activeStore?.id ?? "", priority: "Medel", responsible_user_id: "", responsible_group_id: "", sap_article_id: "" });
   const [newIncident, _setNewIncident] = useState(() => {
@@ -857,12 +860,15 @@ function IssuesPage() {
                 <div className="px-4 py-3 min-w-0 space-y-1">
                   <div className="flex items-center gap-2">
                     <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                    <span className="text-xs text-muted-foreground shrink-0">Materialnummer</span>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {incidentArticleType === "ean" ? "EAN" : incidentArticleType === "bnr" ? "BNR" : "Materialnummer"}
+                    </span>
                     <div className="flex flex-1 items-center gap-1 min-w-0">
                       <input
                         value={newIncident.sap_article_id}
-                        onChange={(e) => setNewIncident(p => ({ ...p, sap_article_id: e.target.value }))}
-                        placeholder="t.ex. 1047133"
+                        onChange={(e) => setNewIncident(p => ({ ...p, sap_article_id: e.target.value.replace(/\D/g, "") }))}
+                        onBlur={(e) => { if (e.target.value.trim()) setIncidentArticlePrompt(e.target.value.trim()); }}
+                        placeholder={incidentArticleType === "ean" ? "t.ex. 7310865003294" : "t.ex. 1047133"}
                         inputMode="numeric"
                         pattern="[0-9]*"
                         autoCorrect="off"
@@ -870,6 +876,15 @@ function IssuesPage() {
                         spellCheck={false}
                         className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none overflow-hidden"
                       />
+                      <select
+                        value={incidentArticleType}
+                        onChange={(e) => setIncidentArticleType(e.target.value as ArticleIdType)}
+                        className="border-0 bg-transparent text-[10px] text-muted-foreground outline-none cursor-pointer shrink-0"
+                      >
+                        <option value="mat-nr">Mat-nr</option>
+                        <option value="ean">EAN</option>
+                        <option value="bnr">BNR</option>
+                      </select>
                       {newIncident.sap_article_id && (
                         <button type="button" onClick={() => setNewIncident(p => ({ ...p, sap_article_id: "" }))} className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/60 hover:text-destructive shrink-0">
                           <X className="h-3 w-3" />
@@ -877,16 +892,17 @@ function IssuesPage() {
                       )}
                     </div>
                   </div>
-                  {newIncident.sap_article_id && (
-                    <a
-                      href={mittCoopUrl(newIncident.sap_article_id, activeStore?.sap_site_id ?? null) ?? `https://mittcoop.coop.se/sortiment/articles/${newIncident.sap_article_id.trim()}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                    >
-                      <ExternalLink className="h-3 w-3" /> Öppna i Mitt Coop-sortiment
-                    </a>
-                  )}
+                  {newIncident.sap_article_id && (() => {
+                    const url = incidentArticleType === "mat-nr"
+                      ? (mittCoopUrl(newIncident.sap_article_id, activeStore?.sap_site_id ?? null) ?? `https://mittcoop.coop.se/sortiment/articles/${newIncident.sap_article_id.trim()}`)
+                      : mittCoopSearchUrl(newIncident.sap_article_id, activeStore?.sap_site_id ?? null);
+                    return url ? (
+                      <a href={url} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                        <ExternalLink className="h-3 w-3" /> Öppna i Mitt Coop-sortiment
+                      </a>
+                    ) : null;
+                  })()}
                 </div>
 
               </div>
@@ -1159,15 +1175,30 @@ function IssuesPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {isManager && (
-        <ManageCommonDefects
-          open={showManageDefects}
-          onOpenChange={setShowManageDefects}
-          storeId={isAdmin ? null : (activeStore?.id ?? null)}
-          isAdmin={isAdmin}
-          onDefectsChanged={fetchCommonDefects}
-        />
-      )}
+      {/* Article type disambiguation */}
+      <AlertDialog open={!!incidentArticlePrompt} onOpenChange={(o) => { if (!o) setIncidentArticlePrompt(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Vad är <span className="font-mono">{incidentArticlePrompt}</span>?</AlertDialogTitle>
+            <AlertDialogDescription>Välj vilken typ av nummer — det avgör länken till Mitt Coop-sortiment.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+            {(["mat-nr", "ean", "bnr"] as ArticleIdType[]).map((t) => (
+              <AlertDialogAction key={t} onClick={() => { setIncidentArticleType(t); setIncidentArticlePrompt(null); }}>
+                {t === "mat-nr" ? "Materialnummer" : t === "ean" ? "EAN-streckkod" : "BNR (Beställningsnr)"}
+              </AlertDialogAction>
+            ))}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <ManageCommonDefects
+        open={showManageDefects}
+        onOpenChange={setShowManageDefects}
+        storeId={isAdmin ? null : (activeStore?.id ?? null)}
+        isAdmin={isAdmin}
+        onDefectsChanged={fetchCommonDefects}
+      />
 
       {/* ── QR-KODER DIALOG ──────────────────────────────────────────────────── */}
       <Dialog open={showQrModal} onOpenChange={(o) => { setShowQrModal(o); if (!o) setSelectedQrToken(null); }}>

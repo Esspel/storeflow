@@ -671,6 +671,8 @@ export type CustomerRequest = {
   requested_by: string | null;
   status: "open" | "ordered" | "declined" | "fulfilled";
   priority: "low" | "normal" | "high";
+  mitt_coop_category_id: number | null;
+  mitt_coop_status_code: number | null;
   created_at: string;
   requester?: { display_name: string };
   store?: { name: string };
@@ -695,22 +697,252 @@ export async function withRetry<T>(
   throw lastError;
 }
 
+// Mitt Coop article status codes
+export const MITT_COOP_STATUS_CODES: { code: number; label: string }[] = [
+  { code: 2, label: "Kommande" },
+  { code: 3, label: "Aktiv" },
+  { code: 4, label: "Brist" },
+  { code: 5, label: "Ska utgå" },
+  { code: 6, label: "Har utgått" },
+  { code: 7, label: "Produktspärr" },
+  { code: 8, label: "Slut säsong" },
+  { code: 9, label: "Långtidsrestad" },
+  { code: 10, label: "Orderblock" },
+  { code: 13, label: "Tidig förhands" },
+];
+
+// Mitt Coop product categories
+export const MITT_COOP_CATEGORIES: { id: number; label: string }[] = [
+  { id: 1000, label: "FRUKT & BÄR" },
+  { id: 1001, label: "GRÖNSAKER" },
+  { id: 1101, label: "MATBRÖD MJUKT FÄRSKT" },
+  { id: 1102, label: "HÅRT BRÖD & MATKEX" },
+  { id: 1103, label: "FIKABRÖD KOLONIALT" },
+  { id: 1104, label: "BUTIKSBAKAT FRYST" },
+  { id: 1105, label: "BUTIKSBAKAT FÄRSKT" },
+  { id: 1106, label: "MATBRÖD MJUKT TINA & SÄLJ" },
+  { id: 1107, label: "MATBRÖD MJUKT KOLONIAL" },
+  { id: 1108, label: "FIKABRÖD TINA & SÄLJ" },
+  { id: 1109, label: "FIKABRÖD FÄRSKT" },
+  { id: 1110, label: "MATCHARK" },
+  { id: 1111, label: "MANUELL CHARK" },
+  { id: 1112, label: "PÅLÄGGSCHARK" },
+  { id: 1113, label: "DELI KONSUMENTPACK" },
+  { id: 1120, label: "MATOST" },
+  { id: 1121, label: "PÅLÄGGSOST" },
+  { id: 1122, label: "MANUELL OST" },
+  { id: 1123, label: "DESSERTOST" },
+  { id: 1130, label: "FISK & SKALDJURSKONSERV KYLD" },
+  { id: 1131, label: "FISK & SKALDJUR PACKAD FÄRSK" },
+  { id: 1132, label: "MANUELL FISK & SKALDJUR" },
+  { id: 1140, label: "MANUELL BUTIKSGRILLAD" },
+  { id: 1141, label: "FÄRDIGLAGAD MAT & TILLBEHÖR" },
+  { id: 1142, label: "TILLBEHÖR SALLADER" },
+  { id: 1143, label: "MANUELL FÄRDIGMAT" },
+  { id: 1144, label: "VEGETARISKA PROTEINER" },
+  { id: 1150, label: "KÖTT FÄRSKT MANUELL" },
+  { id: 1151, label: "KÖTT FÄRSKT KPK" },
+  { id: 1152, label: "FÅGEL FÄRSK" },
+  { id: 1153, label: "KÖTTRÅVAROR" },
+  { id: 1160, label: "SMÅMÅL MEJERI" },
+  { id: 1161, label: "VEG. MEJERI KYLT" },
+  { id: 1162, label: "MATFETT" },
+  { id: 1163, label: "ÄGG" },
+  { id: 1164, label: "MEJERI – MJÖLK" },
+  { id: 1165, label: "JUICE & FRUKTDRYCK KYLD" },
+  { id: 1166, label: "MEJERI – LAKTOSFRITT" },
+  { id: 1167, label: "VEG. MEJERI OKYLT" },
+  { id: 1168, label: "MEJERI – MATLAGNING" },
+  { id: 1169, label: "MEJERI – FRUKOST" },
+  { id: 1201, label: "FRYST FRUKT & BÄR" },
+  { id: 1202, label: "FRYST GRÖNSAKER" },
+  { id: 1210, label: "FRYST BRÖD" },
+  { id: 1211, label: "FRYST DESSERT" },
+  { id: 1212, label: "FRYST FÄRDIGLAGAT" },
+  { id: 1213, label: "FRYST POTATIS" },
+  { id: 1214, label: "FRYST VEGETARISK" },
+  { id: 1215, label: "GLASS" },
+  { id: 1216, label: "MATÖVERKÄNSLIGHET DJUPFRYST" },
+  { id: 1220, label: "FRYST FISK & SKALDJUR" },
+  { id: 1221, label: "FRYST FÅGEL" },
+  { id: 1222, label: "FRYST KÖTT" },
+  { id: 1310, label: "GODIS" },
+  { id: 1311, label: "LÖSGODIS" },
+  { id: 1312, label: "SNACKS" },
+  { id: 1313, label: "NATURGODIS LÖSVIKT" },
+  { id: 1320, label: "KRYDDOR" },
+  { id: 1321, label: "OLJA & VINÄGER" },
+  { id: 1322, label: "SMAKSÄTTARE" },
+  { id: 1330, label: "GRÖNSAKSKONSERVER" },
+  { id: 1331, label: "MELLANMÅL & EFTERRÄTTER" },
+  { id: 1332, label: "PASTA, RIS & MOS" },
+  { id: 1333, label: "FÄRDIGMAT & FISKKONSERVER" },
+  { id: 1334, label: "BAKNING" },
+  { id: 1335, label: "MATÖVERKÄNSLIGHET TORR" },
+  { id: 1336, label: "TLLBH BUTIKSTILLAGAT" },
+  { id: 1337, label: "VÄRLDENS MAT" },
+  { id: 1350, label: "FLINGOR, GRYN & VÄLLING" },
+  { id: 1351, label: "SYLT, MOS & MARMELAD" },
+  { id: 1360, label: "ÖL, VIN & CIDER" },
+  { id: 1361, label: "LÄSK & SAFT" },
+  { id: 1362, label: "VATTEN" },
+  { id: 1363, label: "FUNKTIONSDRYCKER" },
+  { id: 1364, label: "JUICE & FRUKTDRYCK OKYLD" },
+  { id: 1370, label: "BARNMAT, MELLANMÅL & DRYCK" },
+  { id: 1371, label: "BARNVÄLLING, GRÖT & ERSÄTTNING" },
+  { id: 1380, label: "KAFFE" },
+  { id: 1381, label: "TE & CHOKLAD" },
+  { id: 1400, label: "FÖRBUTIK & CAFE 12% moms" },
+  { id: 1401, label: "RESTAURANG 25% moms" },
+  { id: 1402, label: "TAKE AWAY 12% moms" },
+  { id: 1410, label: "BUTIKSBAGERI" },
+  { id: 2000, label: "TRÄDGÅRDSPLANTOR & VÄXTER" },
+  { id: 2001, label: "BLOMMOR" },
+  { id: 2002, label: "LÖKAR & FRÖER" },
+  { id: 2010, label: "KRUKOR" },
+  { id: 2011, label: "INOMHUS BLOMJORD & VÄXTNÄRING" },
+  { id: 2100, label: "TIDSKRIFTER" },
+  { id: 2101, label: "DAGSTIDNINGAR" },
+  { id: 2110, label: "BÖCKER" },
+  { id: 2111, label: "GRATTISKORT & PRESENTPAPPER" },
+  { id: 2200, label: "CIGARETTER" },
+  { id: 2201, label: "SNUS" },
+  { id: 2202, label: "TOBAKSTILLBEHÖR" },
+  { id: 2203, label: "TOBAKSFRIA NIK.PR" },
+  { id: 2210, label: "PORTO" },
+  { id: 2211, label: "TELE KONTANTKORT" },
+  { id: 2212, label: "UPPLEVELSER & PRESENTKORT" },
+  { id: 2213, label: "FÄRDBEVIS" },
+  { id: 2214, label: "BÄRKASSAR" },
+  { id: 2300, label: "LJUS" },
+  { id: 2301, label: "SERVETTER & ENGÅNGSMATERIAL" },
+  { id: 2310, label: "LJUSKÄLLOR" },
+  { id: 2311, label: "BATTERIER & SÄKRINGAR" },
+  { id: 2320, label: "MINIHEMMAFIXAREN" },
+  { id: 2321, label: "GRILLKOL & VED" },
+  { id: 2400, label: "TVÄTTMEDEL & SKÖLJMEDEL" },
+  { id: 2401, label: "RENGÖRING" },
+  { id: 2410, label: "HUSHÅLL & TOAPAPPER" },
+  { id: 2411, label: "MATEMBALLAGE" },
+  { id: 2520, label: "BLÖJOR" },
+  { id: 2521, label: "BARNTILLBEHÖR" },
+  { id: 2522, label: "BABYVÅRD" },
+  { id: 2600, label: "HÄLSA" },
+  { id: 2601, label: "RECEPTFRIA LÄKEMEDEL" },
+  { id: 2602, label: "APOTEKSVAROR" },
+  { id: 2610, label: "KROPPSVÅRD" },
+  { id: 2611, label: "ANSIKTSVÅRD" },
+  { id: 2612, label: "MUNVÅRD" },
+  { id: 2613, label: "HÅRVÅRD" },
+  { id: 2614, label: "INTIMHYGIEN" },
+  { id: 2615, label: "RAKVÅRD" },
+  { id: 2616, label: "MAKEUP & ACCESSOARER" },
+  { id: 2700, label: "DJURMAT" },
+  { id: 2701, label: "DJURTILLBEHÖR" },
+  { id: 3000, label: "BYGG" },
+  { id: 3100, label: "SKRIV & KONTOR" },
+  { id: 3101, label: "HOBBY, SY & STICKA" },
+  { id: 3110, label: "HEMTEXTIL" },
+  { id: 3111, label: "INREDNING" },
+  { id: 3112, label: "HÖGTIDER & FEST" },
+  { id: 3120, label: "STÄDA, TVÄTT & STRYK" },
+  { id: 3130, label: "MUSIK" },
+  { id: 3131, label: "FILM" },
+  { id: 3200, label: "MATFÖRVARING" },
+  { id: 3201, label: "KOK & STEKKÄRL" },
+  { id: 3202, label: "KÖKSREDSKAP" },
+  { id: 3210, label: "DUKNING" },
+  { id: 3211, label: "KÖKSTEXTIL" },
+  { id: 3300, label: "EL - STÄDA" },
+  { id: 3301, label: "EL - SKÖNHET" },
+  { id: 3302, label: "EL - KÖKSMASKINER" },
+  { id: 3400, label: "UNDERKLÄDER & STRUMPOR" },
+  { id: 3401, label: "JEANS" },
+  { id: 3402, label: "KLÄDER" },
+  { id: 3403, label: "SKOR" },
+  { id: 3404, label: "BARNUNDERKLÄDER & STRUMPOR" },
+  { id: 3500, label: "VÄSKOR" },
+  { id: 3501, label: "CYKLAR" },
+  { id: 3502, label: "ÖVRIG SPECIAL" },
+  { id: 3510, label: "TRÄDGÅRDSMÖBLER" },
+  { id: 3511, label: "UTOMHUSJORD & BEKÄMPNING" },
+  { id: 3512, label: "REDSKAP" },
+  { id: 3513, label: "GRILLAR & TILLBEHÖR" },
+  { id: 3800, label: "LEGO" },
+  { id: 3801, label: "LEKSAKER" },
+  { id: 3802, label: "SPORT" },
+  { id: 3810, label: "BARNRUMMET" },
+  { id: 3811, label: "BARNSKÖTSEL" },
+];
+
+export type ArticleIdType = "mat-nr" | "ean" | "bnr";
+
+// Decode the stored article_number string into its type and raw value
+export function decodeArticleNumber(stored: string | null | undefined): { type: ArticleIdType; value: string } | null {
+  if (!stored?.trim()) return null;
+  if (stored.startsWith("EAN:")) return { type: "ean", value: stored.slice(4) };
+  if (stored.startsWith("BNR:")) return { type: "bnr", value: stored.slice(4) };
+  return { type: "mat-nr", value: stored };
+}
+
+// Encode an article id with its type prefix for storage
+export function encodeArticleNumber(value: string, type: ArticleIdType): string {
+  if (type === "ean") return `EAN:${value.trim()}`;
+  if (type === "bnr") return `BNR:${value.trim()}`;
+  return value.trim();
+}
+
+export type MittCoopUrlOpts = {
+  categoryId?: number | null;
+  statusCode?: number | null;
+};
+
 // Helper: build a Mitt Coop product catalog deep-link for an article
 // Returns null if either ID is missing
-export function mittCoopUrl(sapArticleId: string | null | undefined, sapSiteId: string | null | undefined): string | null {
+export function mittCoopUrl(
+  sapArticleId: string | null | undefined,
+  sapSiteId: string | null | undefined,
+  opts?: MittCoopUrlOpts,
+): string | null {
   if (!sapArticleId?.trim() || !sapSiteId?.trim()) return null;
-  return `https://mittcoop.coop.se/sortiment/articles/${sapArticleId.trim()}?siteId=${sapSiteId.trim()}`;
+  let url = `https://mittcoop.coop.se/sortiment/articles/${sapArticleId.trim()}?siteId=${sapSiteId.trim()}`;
+  if (opts?.categoryId) url += `&categoryIds=${opts.categoryId}`;
+  if (opts?.statusCode) url += `&statusCodes=${opts.statusCode}`;
+  return url;
 }
 
-// Build a Mitt Coop search URL from an EAN barcode
-export function mittCoopEanUrl(ean: string | null | undefined, sapSiteId: string | null | undefined): string | null {
-  if (!ean?.trim() || !sapSiteId?.trim()) return null;
-  return `https://mittcoop.coop.se/sortiment/artiklar?siteId=${sapSiteId.trim()}&search=${ean.trim()}`;
+// Build a Mitt Coop search URL from a search term (EAN, BNR, free text)
+export function mittCoopSearchUrl(
+  search: string | null | undefined,
+  sapSiteId: string | null | undefined,
+  opts?: MittCoopUrlOpts,
+): string | null {
+  if (!search?.trim() || !sapSiteId?.trim()) return null;
+  let url = `https://mittcoop.coop.se/sortiment/artiklar?siteId=${sapSiteId.trim()}&search=${encodeURIComponent(search.trim())}`;
+  if (opts?.categoryId) url += `&categoryIds=${opts.categoryId}`;
+  if (opts?.statusCode) url += `&statusCodes=${opts.statusCode}`;
+  return url;
 }
 
-// Returns true if the value looks like an EAN (8 or 13 digits, no letters)
+// Keep the old name as an alias so existing callers don't break
+export const mittCoopEanUrl = mittCoopSearchUrl;
+
+// Build the correct Mitt Coop URL from a stored article_number string
+export function mittCoopUrlFromStored(
+  stored: string | null | undefined,
+  sapSiteId: string | null | undefined,
+  opts?: MittCoopUrlOpts,
+): string | null {
+  const decoded = decodeArticleNumber(stored);
+  if (!decoded) return null;
+  if (decoded.type === "mat-nr") return mittCoopUrl(decoded.value, sapSiteId, opts);
+  return mittCoopSearchUrl(decoded.value, sapSiteId, opts);
+}
+
+// Returns true if the value looks like an EAN (8 or 13 digits)
 export function looksLikeEan(value: string): boolean {
   return /^\d{8}$|^\d{13}$/.test(value.trim());
 }
+
 
 

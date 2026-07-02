@@ -24,7 +24,8 @@ import {
   type Store as StoreType, type AppUser,
   type ChecklistTemplate, type ChecklistTemplateItem, type ChecklistTemplateQuestion,
   type TaskAssignee, type UserGroup,
-  logAudit, createNotification, notifyUsers, uploadAttachment, getPublicUrl, deleteStorageFiles, mittCoopUrl,
+  logAudit, createNotification, notifyUsers, uploadAttachment, getPublicUrl, deleteStorageFiles, mittCoopUrl, mittCoopSearchUrl,
+  type ArticleIdType,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn, ensureHttps, sanitizeCsvCell, parseTimeInput } from "@/lib/utils";
@@ -403,6 +404,8 @@ function TasksPage() {
     setUndoToast({ task, timeoutId: tid });
   };
   const [showCreate, setShowCreate] = useState(false);
+  const [taskArticleType, setTaskArticleType] = useState<ArticleIdType>("mat-nr");
+  const [taskArticlePrompt, setTaskArticlePrompt] = useState<string | null>(null);
   const TASK_DRAFT_KEY = `sf-task-draft-${user?.id ?? ""}`;
   const [newTask, _setNewTask] = useState<ReturnType<typeof emptyForm>>(() => {
     try {
@@ -3181,40 +3184,50 @@ function TasksPage() {
 
                 {/* SAP artikel-ID */}
                 <div className="px-4 py-3 min-w-0 space-y-1">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                    <div className="flex flex-col gap-1 flex-1 min-w-0">
-                      <span className="text-xs text-muted-foreground">Materialnummer</span>
-                      <div className="flex items-center gap-1">
-                        <input
-                          value={newTask.sap_article_id}
-                          onChange={(e) => setNewTask(p => ({ ...p, sap_article_id: e.target.value }))}
-                          placeholder="t.ex. 1047133"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          autoCorrect="off"
-                          autoCapitalize="none"
-                          spellCheck={false}
-                          className="flex-1 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/40"
-                        />
-                        {newTask.sap_article_id && (
-                          <button type="button" onClick={() => setNewTask(p => ({ ...p, sap_article_id: "" }))} className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/60 hover:text-destructive shrink-0">
-                            <X className="h-3 w-3" />
-                          </button>
-                        )}
-                      </div>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {taskArticleType === "ean" ? "EAN" : taskArticleType === "bnr" ? "BNR" : "Materialnummer"}
+                    </span>
+                    <div className="flex flex-1 items-center gap-1 min-w-0">
+                      <input
+                        value={newTask.sap_article_id}
+                        onChange={(e) => setNewTask(p => ({ ...p, sap_article_id: e.target.value.replace(/\D/g, "") }))}
+                        onBlur={(e) => { if (e.target.value.trim()) setTaskArticlePrompt(e.target.value.trim()); }}
+                        placeholder={taskArticleType === "ean" ? "t.ex. 7310865003294" : "t.ex. 1047133"}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoCorrect="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none overflow-hidden"
+                      />
+                      <select
+                        value={taskArticleType}
+                        onChange={(e) => setTaskArticleType(e.target.value as ArticleIdType)}
+                        className="border-0 bg-transparent text-[10px] text-muted-foreground outline-none cursor-pointer shrink-0"
+                      >
+                        <option value="mat-nr">Mat-nr</option>
+                        <option value="ean">EAN</option>
+                        <option value="bnr">BNR</option>
+                      </select>
+                      {newTask.sap_article_id && (
+                        <button type="button" onClick={() => setNewTask(p => ({ ...p, sap_article_id: "" }))} className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/60 hover:text-destructive shrink-0">
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
                   </div>
-                  {newTask.sap_article_id && (
-                    <a
-                      href={mittCoopUrl(newTask.sap_article_id, activeStore?.sap_site_id ?? null) ?? `https://mittcoop.coop.se/sortiment/articles/${newTask.sap_article_id.trim()}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-                    >
-                      <ExternalLink className="h-3 w-3" /> Öppna i Mitt Coop-sortiment
-                    </a>
-                  )}
+                  {newTask.sap_article_id && (() => {
+                    const url = taskArticleType === "mat-nr"
+                      ? (mittCoopUrl(newTask.sap_article_id, activeStore?.sap_site_id ?? null) ?? `https://mittcoop.coop.se/sortiment/articles/${newTask.sap_article_id.trim()}`)
+                      : mittCoopSearchUrl(newTask.sap_article_id, activeStore?.sap_site_id ?? null);
+                    return url ? (
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+                        <ExternalLink className="h-3 w-3" /> Öppna i Mitt Coop-sortiment
+                      </a>
+                    ) : null;
+                  })()}
                 </div>
 
                 {/* Butik */}
@@ -3926,6 +3939,23 @@ function TasksPage() {
           onClose={() => { setLightboxTask(null); }}
         />
       )}
+
+      {/* Article type disambiguation */}
+      <AlertDialog open={!!taskArticlePrompt} onOpenChange={(o) => { if (!o) setTaskArticlePrompt(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Vad är <span className="font-mono">{taskArticlePrompt}</span>?</AlertDialogTitle>
+            <AlertDialogDescription>Välj vilken typ av nummer — det avgör länken till Mitt Coop-sortiment.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+            {(["mat-nr", "ean", "bnr"] as ArticleIdType[]).map((t) => (
+              <AlertDialogAction key={t} onClick={() => { setTaskArticleType(t); setTaskArticlePrompt(null); }}>
+                {t === "mat-nr" ? "Materialnummer" : t === "ean" ? "EAN-streckkod" : "BNR (Beställningsnr)"}
+              </AlertDialogAction>
+            ))}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
