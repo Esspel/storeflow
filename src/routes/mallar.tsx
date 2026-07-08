@@ -477,7 +477,15 @@ function MallarPage() {
 
   async function restoreVersion(ver: TemplateVersion) {
     if (!versionHistoryTarget) return;
-    const snap = ver.snapshot as TemplateWithMeta;
+    const snap = ver.snapshot as TemplateWithMeta & {
+      template_type?: string; template_mode?: string; is_critical?: boolean;
+      recurrence_start?: string; recurrence_end?: string; recurrence_interval?: number;
+      sap_article_id?: string; time_slots?: string[];
+      is_delivery_task?: boolean; delivery_flow_name?: string;
+      delivery_supplier_name?: string; delivery_entry_keys?: string;
+      event_trigger_description?: string; event_trigger_user_id?: string;
+      depends_on_template_title?: string; review_interval_months?: number;
+    };
     const newVersion = (versionHistoryTarget.version ?? 1) + 1;
     await supabase.from("checklist_templates").update({
       title: snap.title,
@@ -485,11 +493,26 @@ function MallarPage() {
       category: snap.category ?? "",
       priority: snap.priority ?? "Medel",
       status: snap.status ?? "active",
+      template_type: snap.template_type ?? "regular",
+      template_mode: snap.template_mode ?? "both",
+      is_critical: snap.is_critical ?? false,
       recurrence_rule: snap.recurrence_rule ?? null,
       recurrence_days: snap.recurrence_days ?? null,
       recurrence_interval: snap.recurrence_interval ?? null,
+      recurrence_start: snap.recurrence_start ?? null,
+      recurrence_end: snap.recurrence_end ?? null,
       due_date_offset: snap.due_date_offset ?? null,
       due_date_time: snap.due_date_time ?? null,
+      sap_article_id: snap.sap_article_id ?? null,
+      time_slots: snap.time_slots ?? null,
+      is_delivery_task: snap.is_delivery_task ?? false,
+      delivery_flow_name: snap.delivery_flow_name ?? null,
+      delivery_supplier_name: snap.delivery_supplier_name ?? null,
+      delivery_entry_keys: snap.delivery_entry_keys ?? null,
+      event_trigger_description: snap.event_trigger_description ?? null,
+      event_trigger_user_id: snap.event_trigger_user_id ?? null,
+      depends_on_template_title: snap.depends_on_template_title ?? null,
+      review_interval_months: snap.review_interval_months ?? null,
       version: newVersion,
       updated_by: user?.id ?? null,
     }).eq("id", versionHistoryTarget.id);
@@ -715,7 +738,26 @@ function MallarPage() {
     await saveVersionSnapshot(
       tmpl.id,
       1,
-      { title: form.title, description: form.description, category: form.category, priority: form.priority, status: form.status, items: validItems, questions: validQuestions },
+      {
+        title: form.title, description: form.description, category: form.category,
+        priority: form.priority, status: form.status,
+        template_type: form.template_type, template_mode: form.template_mode,
+        is_critical: form.is_critical,
+        recurrence_rule: form.recurrence_rule, recurrence_days: form.recurrence_days,
+        recurrence_interval: form.recurrence_interval,
+        recurrence_start: form.recurrence_start, recurrence_end: form.recurrence_end,
+        due_date_offset: form.due_date_offset, due_date_time: form.due_date_time,
+        sap_article_id: form.sap_article_id, time_slots: form.time_slots,
+        is_delivery_task: form.is_delivery_task,
+        delivery_flow_name: form.delivery_flow_name,
+        delivery_supplier_name: form.delivery_supplier_name,
+        delivery_entry_keys: form.delivery_entry_keys,
+        event_trigger_description: form.event_trigger_description,
+        event_trigger_user_id: form.event_trigger_user_id,
+        depends_on_template_title: form.depends_on_template_title,
+        review_interval_months: form.review_interval_months,
+        items: validItems, questions: validQuestions,
+      },
       form.changeSummary || "Initial version",
     );
     await load();
@@ -1244,7 +1286,26 @@ function MallarPage() {
     await saveVersionSnapshot(
       editTarget.id,
       newVersion,
-      { title: editForm.title, description: editForm.description, category: editForm.category, priority: editForm.priority, status: editForm.status, items: validItemsEdit, questions: validQuestionsEdit },
+      {
+        title: editForm.title, description: editForm.description, category: editForm.category,
+        priority: editForm.priority, status: editForm.status,
+        template_type: editForm.template_type, template_mode: editForm.template_mode,
+        is_critical: editForm.is_critical,
+        recurrence_rule: editForm.recurrence_rule, recurrence_days: editForm.recurrence_days,
+        recurrence_interval: editForm.recurrence_interval,
+        recurrence_start: editForm.recurrence_start, recurrence_end: editForm.recurrence_end,
+        due_date_offset: editForm.due_date_offset, due_date_time: editForm.due_date_time,
+        sap_article_id: editForm.sap_article_id, time_slots: editForm.time_slots,
+        is_delivery_task: editForm.is_delivery_task,
+        delivery_flow_name: editForm.delivery_flow_name,
+        delivery_supplier_name: editForm.delivery_supplier_name,
+        delivery_entry_keys: editForm.delivery_entry_keys,
+        event_trigger_description: editForm.event_trigger_description,
+        event_trigger_user_id: editForm.event_trigger_user_id,
+        depends_on_template_title: editForm.depends_on_template_title,
+        review_interval_months: editForm.review_interval_months,
+        items: validItemsEdit, questions: validQuestionsEdit,
+      },
       editForm.changeSummary || "Redigerat",
     );
     await load();
@@ -3542,16 +3603,49 @@ function MallarPage() {
             ) : (
               <div className="space-y-3">
                 {versions.map((v, vIdx) => {
-                  const snap = v.snapshot as { title?: string; description?: string; items?: { label: string }[]; questions?: { label: string; is_required?: boolean }[]; priority?: string; status?: string; recurrence_rule?: string; due_date_time?: string };
-                  const prev = vIdx < versions.length - 1 ? versions[vIdx + 1].snapshot as typeof snap : null;
+                  type SnapType = {
+                    title?: string; description?: string; category?: string;
+                    items?: { label: string }[]; questions?: { label: string; is_required?: boolean }[];
+                    priority?: string; status?: string;
+                    template_type?: string; template_mode?: string; is_critical?: boolean;
+                    recurrence_rule?: string; recurrence_days?: number[]; recurrence_interval?: number;
+                    recurrence_start?: string; recurrence_end?: string;
+                    due_date_offset?: string | number; due_date_time?: string;
+                    sap_article_id?: string; time_slots?: string[];
+                    is_delivery_task?: boolean; delivery_flow_name?: string;
+                    delivery_supplier_name?: string; delivery_entry_keys?: string;
+                    event_trigger_description?: string;
+                    depends_on_template_title?: string;
+                    review_interval_months?: number;
+                  };
+                  const snap = v.snapshot as SnapType;
+                  const prev = vIdx < versions.length - 1 ? versions[vIdx + 1].snapshot as SnapType : null;
                   const diffs: string[] = [];
                   if (prev) {
                     if (snap.title !== prev.title) diffs.push(`Titel: "${prev.title}" → "${snap.title}"`);
                     if (snap.description !== prev.description) diffs.push("Beskrivning ändrad");
+                    if (snap.category !== prev.category) diffs.push(`Kategori: ${prev.category || "–"} → ${snap.category || "–"}`);
                     if (snap.priority !== prev.priority) diffs.push(`Prioritet: ${prev.priority ?? "–"} → ${snap.priority ?? "–"}`);
                     if (snap.status !== prev.status) diffs.push(`Status: ${prev.status ?? "–"} → ${snap.status ?? "–"}`);
+                    if (snap.template_type !== prev.template_type) diffs.push(`Malltyp: ${prev.template_type ?? "–"} → ${snap.template_type ?? "–"}`);
+                    if (snap.template_mode !== prev.template_mode) diffs.push(`Läge: ${prev.template_mode ?? "–"} → ${snap.template_mode ?? "–"}`);
+                    if (snap.is_critical !== prev.is_critical) diffs.push(`Kritisk: ${prev.is_critical ? "Ja" : "Nej"} → ${snap.is_critical ? "Ja" : "Nej"}`);
                     if (snap.recurrence_rule !== prev.recurrence_rule) diffs.push(`Upprepning: ${prev.recurrence_rule || "Ingen"} → ${snap.recurrence_rule || "Ingen"}`);
+                    if (JSON.stringify(snap.recurrence_days) !== JSON.stringify(prev.recurrence_days)) diffs.push(`Upprepningsdagar ändrade`);
+                    if (snap.recurrence_interval !== prev.recurrence_interval) diffs.push(`Upprepningsintervall: ${prev.recurrence_interval ?? 1} → ${snap.recurrence_interval ?? 1}`);
+                    if (snap.recurrence_start !== prev.recurrence_start) diffs.push(`Startdatum: ${prev.recurrence_start || "–"} → ${snap.recurrence_start || "–"}`);
+                    if (snap.recurrence_end !== prev.recurrence_end) diffs.push(`Slutdatum: ${prev.recurrence_end || "–"} → ${snap.recurrence_end || "–"}`);
+                    if (String(snap.due_date_offset ?? "") !== String(prev.due_date_offset ?? "")) diffs.push(`Förfallsoffset: ${prev.due_date_offset || "–"} → ${snap.due_date_offset || "–"}`);
                     if (snap.due_date_time !== prev.due_date_time) diffs.push(`Förfallotid: ${prev.due_date_time || "–"} → ${snap.due_date_time || "–"}`);
+                    if (snap.sap_article_id !== prev.sap_article_id) diffs.push(`SAP-artikel: ${prev.sap_article_id || "–"} → ${snap.sap_article_id || "–"}`);
+                    if (JSON.stringify(snap.time_slots) !== JSON.stringify(prev.time_slots)) diffs.push(`Tidsluckor ändrade`);
+                    if (snap.is_delivery_task !== prev.is_delivery_task) diffs.push(`Leveransmall: ${prev.is_delivery_task ? "Ja" : "Nej"} → ${snap.is_delivery_task ? "Ja" : "Nej"}`);
+                    if (snap.delivery_supplier_name !== prev.delivery_supplier_name) diffs.push(`Leverantör: ${prev.delivery_supplier_name || "–"} → ${snap.delivery_supplier_name || "–"}`);
+                    if (snap.delivery_flow_name !== prev.delivery_flow_name) diffs.push(`Flöde: ${prev.delivery_flow_name || "–"} → ${snap.delivery_flow_name || "–"}`);
+                    if (snap.delivery_entry_keys !== prev.delivery_entry_keys) diffs.push(`Leveransnyckel ändrad`);
+                    if (snap.event_trigger_description !== prev.event_trigger_description) diffs.push(`Händelseutlösare: ${prev.event_trigger_description || "–"} → ${snap.event_trigger_description || "–"}`);
+                    if (snap.depends_on_template_title !== prev.depends_on_template_title) diffs.push(`Beroende av: ${prev.depends_on_template_title || "Ingen"} → ${snap.depends_on_template_title || "Ingen"}`);
+                    if (snap.review_interval_months !== prev.review_interval_months) diffs.push(`Granskningsintervall: ${prev.review_interval_months ?? "–"} mån → ${snap.review_interval_months ?? "–"} mån`);
                     // Detailed step diff
                     const prevLabels = (prev.items ?? []).map(it => it.label);
                     const snapLabels = (snap.items ?? []).map(it => it.label);
@@ -3582,7 +3676,14 @@ function MallarPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-foreground">{v.change_summary || "Sparad"}</p>
                           <p className="text-[11px] text-muted-foreground">{new Date(v.saved_at).toLocaleString("sv-SE")}</p>
-                          {snap.title && <p className="text-[11px] text-muted-foreground mt-0.5">"{snap.title}" — {snap.items?.length ?? 0} steg, {snap.questions?.length ?? 0} frågor</p>}
+                          {snap.title && (
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                              "{snap.title}" — {snap.items?.length ?? 0} steg, {snap.questions?.length ?? 0} frågor
+                              {snap.recurrence_rule ? `, ${snap.recurrence_rule}` : ""}
+                              {snap.is_delivery_task ? ", leveransmall" : ""}
+                              {snap.is_critical ? ", kritisk" : ""}
+                            </p>
+                          )}
                         </div>
                         {isManager && v.version !== (versionHistoryTarget?.version ?? 1) && (
                           <Button variant="outline" size="sm" className="rounded-full h-7 text-xs shrink-0" onClick={() => setRestoreConfirm(v)}>
