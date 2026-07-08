@@ -30,6 +30,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { cn, ensureHttps, sanitizeCsvCell, parseTimeInput } from "@/lib/utils";
 import { getSimulatedNow } from "@/lib/time-simulation";
+import { dedupRecurringSeries, midnightStockholm, localDateStr, buildPeriodStarts } from "@/lib/task-utils";
 
 export const Route = createFileRoute("/uppgifter")({
   component: TasksPage,
@@ -76,29 +77,6 @@ function statusBadge(s: string) {
 // Returns the start-of-day timestamp for a simulated "today" (Stockholm timezone)
 function getSimTodayStartMs(): number {
   return midnightStockholm(new Date(getSimulatedNow())).getTime();
-}
-
-// All date arithmetic for recurring tasks uses Europe/Stockholm to prevent DST drift.
-// Using Intl.DateTimeFormat ensures the correct local calendar date regardless of the
-// device's system timezone.
-const TZ = "Europe/Stockholm";
-const dtfParts = new Intl.DateTimeFormat("sv-SE", {
-  timeZone: TZ,
-  year: "numeric", month: "2-digit", day: "2-digit",
-  hour: "2-digit", minute: "2-digit", second: "2-digit",
-});
-
-// Returns a Date object representing midnight (00:00:00) in Stockholm time for the given date.
-function midnightStockholm(d: Date): Date {
-  const parts = Object.fromEntries(dtfParts.formatToParts(d).filter(p => p.type !== "literal").map(p => [p.type, p.value]));
-  // Construct an ISO string at midnight Stockholm and parse it back via the local TZ offset
-  return new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00`);
-}
-
-// YYYY-MM-DD string using Stockholm calendar date
-function localDateStr(d: Date): string {
-  const parts = Object.fromEntries(dtfParts.formatToParts(d).filter(p => p.type !== "literal").map(p => [p.type, p.value]));
-  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 // A task is due soon if its due_date is within today (but not yet past end of today)
@@ -670,52 +648,6 @@ function TasksPage() {
 
   // Shared helpers used both at creation time and in the load-time spawn pass.
   const midnight = midnightStockholm;
-
-  const MAX_SPAWN_INSTANCES = 90;
-
-  function buildPeriodStarts(originDue: Date, rule: string, weekdays: number[] | null, startDate: Date | null, endDate: Date | null, ceil: Date): Date[] {
-    const effectiveCeil = endDate
-      ? (midnight(new Date(endDate)) < ceil ? midnight(new Date(endDate)) : ceil)
-      : ceil;
-    let floor: Date;
-    if (startDate) {
-      floor = midnight(new Date(startDate));
-    } else {
-      floor = midnight(new Date(originDue));
-      floor.setDate(floor.getDate() + 1);
-    }
-    const results: Date[] = [];
-    if (rule === "weekly" && weekdays && weekdays.length > 0) {
-      const cur = new Date(floor);
-      while (cur <= effectiveCeil && results.length < MAX_SPAWN_INSTANCES) {
-        const jsDay = cur.getDay();
-        const ourDay = jsDay === 0 ? 6 : jsDay - 1;
-        if (weekdays.includes(ourDay)) results.push(new Date(cur));
-        cur.setDate(cur.getDate() + 1);
-      }
-      return results;
-    }
-    const advance = (d: Date): Date => {
-      const n = new Date(d);
-      if (rule === "daily") { n.setDate(n.getDate() + 1); }
-      else if (rule === "every_other_day") { n.setDate(n.getDate() + 2); }
-      else if (rule === "weekly") { n.setDate(n.getDate() + 7); }
-      else if (rule === "monthly") {
-        const origDay = originDue.getDate();
-        n.setMonth(n.getMonth() + 1);
-        const daysInMonth = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
-        n.setDate(Math.min(origDay, daysInMonth));
-      } else if (rule === "yearly") { n.setFullYear(n.getFullYear() + 1); }
-      else { n.setDate(n.getDate() + 1); }
-      n.setHours(0, 0, 0, 0);
-      return n;
-    };
-    let cur = midnight(new Date(originDue));
-    cur = advance(cur);
-    while (cur < floor) cur = advance(cur);
-    while (cur <= effectiveCeil && results.length < MAX_SPAWN_INSTANCES) { results.push(new Date(cur)); cur = advance(new Date(cur)); }
-    return results;
-  }
 
   async function copyChildData(childId: string, t: TaskFull) {
     // Insert questions first so we can remap condition_question_id from parent IDs → child IDs

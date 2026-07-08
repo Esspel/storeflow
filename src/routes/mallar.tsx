@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/lib/auth-context";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
 import { cn, ensureHttps, sanitizeCsvCell } from "@/lib/utils";
+import { spawnChildrenForParent } from "@/lib/task-utils";
 
 const RECURRENCE_OPTIONS = [
   { value: "", label: "Ingen" },
@@ -679,6 +680,9 @@ function MallarPage() {
       const tmpl = templates.find(t => t.id === cfg.templateId);
       if (!tmpl) continue;
 
+      // Leveransmallar skapas via leveransflödet på uppgiftssidan — inte här
+      if ((tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task) continue;
+
       const validItems = (tmpl.items ?? []).filter(it => it.label.trim());
       const validQuestions = (tmpl.questions ?? []).filter(q => q.label.trim());
       const assigneeRows = (taskId: string) => {
@@ -695,9 +699,14 @@ function MallarPage() {
           )?.id ?? null)
         : null;
 
+      const tmplAny = tmpl as ChecklistTemplate & {
+        recurrence_months?: number[]; recurrence_month_day?: number;
+        recurrence_start?: string; recurrence_end?: string;
+        event_trigger_description?: string;
+      };
+
       const insertTask = async (dueTime: string) => {
         const baseDue = cfg.dueDate ? new Date(cfg.dueDate) : null;
-        // Combine date + time into a proper ISO datetime when both are set
         let dueIso: string | null = null;
         if (baseDue) {
           if (dueTime) {
@@ -720,21 +729,20 @@ function MallarPage() {
           recurrence_rule: tmpl.recurrence_rule ?? null,
           recurrence_days: tmpl.recurrence_days ?? null,
           recurrence_interval: tmpl.recurrence_interval ?? null,
-          recurrence_months: (tmpl as ChecklistTemplate & { recurrence_months?: number[] }).recurrence_months ?? null,
-          recurrence_month_day: (tmpl as ChecklistTemplate & { recurrence_month_day?: number }).recurrence_month_day ?? null,
-          recurrence_start: (tmpl as ChecklistTemplate & { recurrence_start?: string }).recurrence_start ?? null,
-          recurrence_end: (tmpl as ChecklistTemplate & { recurrence_end?: string }).recurrence_end ?? null,
-          event_trigger_description: (tmpl as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description ?? null,
+          recurrence_months: tmplAny.recurrence_months ?? null,
+          recurrence_month_day: tmplAny.recurrence_month_day ?? null,
+          recurrence_start: tmplAny.recurrence_start ?? null,
+          recurrence_end: tmplAny.recurrence_end ?? null,
+          event_trigger_description: tmplAny.event_trigger_description ?? null,
           depends_on_task_id: dependsOnTaskId,
           created_by: user?.id ?? null,
           assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
           status: "todo",
-        }).select("id").maybeSingle();
+        }).select("id, created_at").maybeSingle();
 
         if (!task?.id) return;
 
-        // Insert questions first, then resolve condition_question_id by matching template question id → new task question id
-        let questionIdMap = new Map<string, string>(); // template question id → task question id
+        let questionIdMap = new Map<string, string>();
         if (validQuestions.length > 0) {
           const { data: insertedQs } = await supabase.from("task_questions").insert(
             validQuestions.map((q, idx) => ({ task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: idx }))
@@ -762,6 +770,42 @@ function MallarPage() {
         const aRows = assigneeRows(task.id);
         if (aRows.length > 0) await supabase.from("task_assignees").insert(aRows);
         logAudit(user?.id ?? null, "task.create", "tasks", task.id, { title: tmpl.title, from_template: tmpl.id });
+
+        // Spawna barninstanser direkt om mallen är återkommande
+        if (tmpl.recurrence_rule) {
+          await spawnChildrenForParent({
+            id: task.id,
+            title: tmpl.title,
+            description: tmpl.description ?? "",
+            category: tmpl.category ?? "",
+            priority: cfg.priority,
+            store_id: storeId,
+            due_date: dueIso,
+            due_date_time: dueTime || null,
+            recurrence_rule: tmpl.recurrence_rule,
+            recurrence_days: tmpl.recurrence_days ?? null,
+            recurrence_start: tmplAny.recurrence_start ?? null,
+            recurrence_end: tmplAny.recurrence_end ?? null,
+            created_by: user?.id ?? null,
+            assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
+            created_at: task.created_at ?? new Date().toISOString(),
+            steps: validItems.map((it, idx) => ({
+              label: it.label, sort_order: idx, requires_photo: it.requires_photo,
+              link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url || null,
+              condition_question_id: it.condition_question_id ? (questionIdMap.get(it.condition_question_id) ?? null) : null,
+              condition_answer: it.condition_answer ?? null,
+            })),
+            questions: validQuestions.map((q, idx) => ({
+              id: [...questionIdMap.entries()].find(([tmplId]) => tmplId === q.id)?.[1] ?? "",
+              label: q.label, question_type: q.question_type ?? "text",
+              is_required: q.is_required, sort_order: idx,
+            })),
+            assignees: [
+              ...cfg.assigneeUserIds.map(uid => ({ user_id: uid, group_id: null })),
+              ...cfg.assigneeGroupIds.map(gid => ({ user_id: null, group_id: gid })),
+            ],
+          }, Date.now());
+        }
       };
 
       // Time slots → one task per slot; otherwise one task with dueTime (or no time)
@@ -1230,13 +1274,13 @@ function MallarPage() {
       // 6:Återkommande 7:Veckodagar 8:Månader 9:Månadsdag 10:Intervall
       // 11:Förfaller om 12:Förfallotid 13:Startdatum 14:Slutdatum
       // 15:Ursprungsmall 16:Arvläge 17:Steg 18:Frågor 19:Tidsluckor 20:SAP-artikel
-      // 21:Mallpaket 22:Händelsevillkor 23:Leveransuppgift 24:Leveransflöde 25:Kedja
+      // 21:Mallpaket 22:Händelsevillkor 23:Leveransuppgift 24:Leveransflöde 25:Kedja 26:Malltyp
       const [
         title, category, description, priority, statusRaw, ,
         recurrence, weekdaysRaw, monthsRaw, monthDayRaw, intervalRaw,
         dueDays, dueTime, startDate, endDate,
         parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw, timeSlotsRaw,
-        sapArticleIdRaw, packageNameRaw, eventTriggerRaw, deliveryTaskRaw, deliveryFlowRaw, chainTitleRaw,
+        sapArticleIdRaw, packageNameRaw, eventTriggerRaw, deliveryTaskRaw, deliveryFlowRaw, chainTitleRaw, templateTypeRaw,
       ] = cols;
       if (!title?.trim()) continue;
 
@@ -1256,6 +1300,14 @@ function MallarPage() {
         ? inheritModeRaw.trim() as "copy" | "variant"
         : null;
 
+      const isDeliveryTask = (deliveryTaskRaw?.trim().toLowerCase() === "ja") || false;
+      // Leveransmallar och mallar med explicit "grundmall" i CSV sätts till "base"
+      const csvTemplateType = templateTypeRaw?.trim().toLowerCase();
+      const inferredTemplateType: "regular" | "base" =
+        isDeliveryTask || csvTemplateType === "grundmall" || csvTemplateType === "base"
+          ? "base"
+          : "regular";
+
       const { data: tmpl } = await supabase.from("checklist_templates").insert({
         title: title.trim(),
         category: (category ?? "").trim(),
@@ -1263,6 +1315,7 @@ function MallarPage() {
         priority: (priority ?? "Medel").trim() || "Medel",
         status: templateStatus,
         version: 1,
+        template_type: inferredTemplateType,
         recurrence_rule: recurrenceRule,
         recurrence_days: recurrenceDays && recurrenceDays.length > 0 ? recurrenceDays : null,
         recurrence_months: recurrenceMonths && recurrenceMonths.length > 0 ? recurrenceMonths : null,
@@ -1283,7 +1336,7 @@ function MallarPage() {
         sap_article_id: sapArticleIdRaw?.trim() || null,
         forening_id: importScope === "forening" ? resolvedForeningId : null,
         event_trigger_description: eventTriggerRaw?.trim() || null,
-        is_delivery_task: (deliveryTaskRaw?.trim().toLowerCase() === "ja") || false,
+        is_delivery_task: isDeliveryTask,
         delivery_flow_name: deliveryFlowRaw?.trim() || null,
         depends_on_template_title: chainTitleRaw?.trim() || null,
       }).select("id").maybeSingle();
@@ -1291,7 +1344,7 @@ function MallarPage() {
       if (!tmpl?.id) continue;
 
       // Track delivery templates so we can prompt for supplier mapping after import
-      if (deliveryTaskRaw?.trim().toLowerCase() === "ja") {
+      if (isDeliveryTask) {
         importedDeliveryTemplates.push({ id: tmpl.id, title: title.trim() });
       }
 
@@ -3207,11 +3260,13 @@ function MallarPage() {
             {bulkTaskConfigs.map((cfg, idx) => {
               const tmpl = templates.find(t => t.id === cfg.templateId);
               if (!tmpl) return null;
+              const isDeliveryTmpl = !!(tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task;
+              const hasDueDateOffset = (tmpl as ChecklistTemplate & { due_date_offset?: number }).due_date_offset != null;
               const storeUsers = allUsers.filter(u => !activeStore || u.store_id === activeStore.id);
               const storeGroups = allGroups.filter(g => !activeStore || g.store_id === activeStore.id);
               const taskCount = Math.max(1, cfg.timeSlots.length);
               return (
-                <div key={cfg.templateId} className="rounded-2xl border border-border/60 bg-card p-4 space-y-4">
+                <div key={cfg.templateId} className={cn("rounded-2xl border bg-card p-4 space-y-4", isDeliveryTmpl ? "border-amber-300/60 bg-amber-50/30" : "border-border/60")}>
                   <div className="flex items-start gap-3">
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{idx + 1}</div>
                     <div className="flex-1 min-w-0">
@@ -3220,10 +3275,17 @@ function MallarPage() {
                         {tmpl.category && <Badge variant="secondary" className="text-xs">{tmpl.category}</Badge>}
                         <span className="text-xs text-muted-foreground">{tmpl.items?.length ?? 0} steg</span>
                         {taskCount > 1 && <Badge className="text-xs bg-primary/10 text-primary border-0">{taskCount} uppgifter (tidsluckor)</Badge>}
+                        {isDeliveryTmpl && <Badge variant="outline" className="text-xs border-amber-400 text-amber-700 bg-amber-50"><Truck className="h-3 w-3 mr-1" />Leveransmall</Badge>}
                       </div>
+                      {isDeliveryTmpl && (
+                        <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          Leveransmallar kopplas automatiskt till leveransplanen. Skapa leveransuppgifter via <strong>Uppgifter → Leveranser</strong> istället.
+                        </p>
+                      )}
                     </div>
                   </div>
 
+                  {!isDeliveryTmpl && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {/* Priority */}
                     <div className="space-y-1">
@@ -3240,12 +3302,14 @@ function MallarPage() {
                     </div>
                     {/* Due date */}
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">Förfallodatum</label>
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Förfallodatum{!hasDueDateOffset && <span className="text-destructive ml-0.5">*</span>}
+                      </label>
                       <Input
                         type="date"
                         value={cfg.dueDate}
                         onChange={(e) => setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, dueDate: e.target.value } : c))}
-                        className="h-8 text-xs"
+                        className={cn("h-8 text-xs", !cfg.dueDate && !hasDueDateOffset && "border-destructive/50 bg-destructive/5")}
                       />
                     </div>
                     {/* Due time / time slots */}
@@ -3278,8 +3342,9 @@ function MallarPage() {
                       )}
                     </div>
                   </div>
+                  )}
 
-                  {/* Assignees */}
+                  {!isDeliveryTmpl && (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <Users className="h-3.5 w-3.5 text-muted-foreground" />
@@ -3332,6 +3397,7 @@ function MallarPage() {
                       </div>
                     </div>
                   </div>
+                  )}
                 </div>
               );
             })}
