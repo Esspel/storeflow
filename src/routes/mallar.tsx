@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, Fragment } from "react";
 import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil, Store as StoreIcon, Building2, Eye, EyeOff, Search, History, GitBranch, Copy, Layers, CircleCheck as CheckCircle, ListChecks, CalendarClock, Users, ExternalLink, Hash, Zap, Truck, Link2 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -380,6 +380,8 @@ function MallarPage() {
   const [scheduledUsersByDate, setScheduledUsersByDate] = useState<Record<string, Set<string>>>({});
   // Per-template "show all users" toggle
   const [showAllUsersForTemplate, setShowAllUsersForTemplate] = useState<Record<string, boolean>>({});
+  // Templates that already have tasks created (subsequent batch)
+  const [templatesWithExistingTasks, setTemplatesWithExistingTasks] = useState<Set<string>>(new Set());
 
   // Template preview
   const [previewTarget, setPreviewTarget] = useState<TemplateWithMeta | null>(null);
@@ -1092,12 +1094,16 @@ function MallarPage() {
             const uid = nrToUserId.get(e.employee_nr);
             if (uid) empIdToUserId.set(e.id, uid);
           }
-          // Group by date
+          // Group by day-of-week (0=Sun … 6=Sat) — schedule week may differ from delivery week
           const byDate: Record<string, Set<string>> = {};
           for (const s of (shifts ?? [])) {
             if (!s.day_date) continue;
             const uid = empIdToUserId.get(s.schedule_employee_id);
             if (!uid) continue;
+            const dow = new Date(s.day_date + "T12:00:00").getDay().toString();
+            if (!byDate[dow]) byDate[dow] = new Set();
+            byDate[dow].add(uid);
+            // Also keep exact-date key for precision if schedule is current week
             if (!byDate[s.day_date]) byDate[s.day_date] = new Set();
             byDate[s.day_date].add(uid);
           }
@@ -1108,6 +1114,33 @@ function MallarPage() {
       } catch {
         setScheduledUsersByDate({});
       }
+    }
+
+    // Check which templates already have tasks (subsequent batch detection)
+    const selectedIds = selectedTemplateIds.filter(id => {
+      const t = templates.find(x => x.id === id);
+      return t && !!(t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task;
+    });
+    if (selectedIds.length > 0 && storeIdForSchedule) {
+      try {
+        const { data: existingTitles } = await supabase
+          .from("tasks")
+          .select("title")
+          .eq("store_id", storeIdForSchedule)
+          .not("delivery_entry_id", "is", null);
+        const existingTitleSet = new Set((existingTitles ?? []).map(t => t.title?.toLowerCase()));
+        const withExisting = new Set(
+          selectedIds.filter(id => {
+            const t = templates.find(x => x.id === id);
+            return t && existingTitleSet.has(t.title?.toLowerCase());
+          })
+        );
+        setTemplatesWithExistingTasks(withExisting);
+      } catch {
+        setTemplatesWithExistingTasks(new Set());
+      }
+    } else {
+      setTemplatesWithExistingTasks(new Set());
     }
 
     setBulkCreateOpen(true);
@@ -4089,31 +4122,44 @@ function MallarPage() {
               const storeGroups = allGroups.filter(g => !activeStore || g.store_id === activeStore.id);
               const smartDate = calcNextDueDate(tmpl);
 
-              // Compute set of users scheduled on any day covered by this template's selected deliveries
-              const deliveryDates = cfg.selectedDeliveryIds
-                .map(id => deliveryWeekEntries.find(e => e.id === id))
-                .flatMap(e => {
-                  if (!e) return [];
-                  if (e.delivery_date) return [e.delivery_date];
-                  const d = e.delivery_day ? nextWeekdayDate(e.delivery_day) : null;
-                  return d ? [d] : [];
-                });
+              // Compute set of users scheduled on any weekday covered by this template
+              const swedishDayToJs: Record<string, number> = {
+                "Söndag": 0, "Måndag": 1, "Tisdag": 2, "Onsdag": 3,
+                "Torsdag": 4, "Fredag": 5, "Lördag": 6,
+              };
               const scheduledOnDays = new Set<string>();
-              for (const date of deliveryDates) {
-                const set = scheduledUsersByDate[date];
-                if (set) for (const uid of set) scheduledOnDays.add(uid);
-              }
-              // For non-delivery templates use the smartDate
-              if (!isDeliveryTmpl && smartDate?.iso) {
+              if (isDeliveryTmpl) {
+                const daysInDeliveries = new Set(
+                  cfg.selectedDeliveryIds
+                    .map(id => deliveryWeekEntries.find(e => e.id === id)?.delivery_day)
+                    .filter(Boolean) as string[]
+                );
+                for (const dayName of daysInDeliveries) {
+                  const dow = swedishDayToJs[dayName];
+                  if (dow === undefined) continue;
+                  // Try exact date first, fall back to day-of-week
+                  const exactDate = deliveryWeekEntries.find(e =>
+                    cfg.selectedDeliveryIds.includes(e.id) && e.delivery_day === dayName
+                  )?.delivery_date;
+                  const set = (exactDate && scheduledUsersByDate[exactDate])
+                    ? scheduledUsersByDate[exactDate]
+                    : scheduledUsersByDate[dow.toString()];
+                  if (set) for (const uid of set) scheduledOnDays.add(uid);
+                }
+              } else if (smartDate?.iso) {
                 const dateStr = smartDate.iso.slice(0, 10);
-                const set = scheduledUsersByDate[dateStr];
+                const dow = new Date(dateStr + "T12:00:00").getDay().toString();
+                const set = scheduledUsersByDate[dateStr] ?? scheduledUsersByDate[dow];
                 if (set) for (const uid of set) scheduledOnDays.add(uid);
               }
               const hasScheduleData = Object.keys(scheduledUsersByDate).length > 0;
               const showAll = showAllUsersForTemplate[cfg.templateId] ?? false;
-              const visibleUsers = hasScheduleData && !showAll && scheduledOnDays.size > 0
-                ? storeUsers.filter(u => scheduledOnDays.has(u.id))
-                : storeUsers;
+              // Sort: scheduled workers first, then others. "Visa alla" expands to include non-scheduled.
+              const scheduledUsers = storeUsers.filter(u => scheduledOnDays.has(u.id));
+              const unscheduledUsers = storeUsers.filter(u => !scheduledOnDays.has(u.id));
+              const visibleUsers = hasScheduleData && scheduledOnDays.size > 0 && !showAll
+                ? scheduledUsers
+                : [...scheduledUsers, ...unscheduledUsers];
               return (
                 <div key={cfg.templateId} className={cn("rounded-2xl border bg-card p-4 space-y-4", isDeliveryTmpl ? "border-amber-300/60 bg-amber-50/30" : "border-border/60")}>
                   <div className="flex items-start gap-3">
@@ -4173,6 +4219,19 @@ function MallarPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Warning for subsequent batch: template already has tasks created */}
+                  {isDeliveryTmpl && templatesWithExistingTasks.has(cfg.templateId) && (
+                    <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50/60 px-3 py-2.5">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs font-medium text-amber-800">Uppgifter finns redan</p>
+                        <p className="text-[11px] text-amber-700 mt-0.5">
+                          Kontrollera vem som jobbar dagen innan uppgiften ska göras och justera tilldelningen nedan om det behövs.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Delivery template: pick specific deliveries from the current week's plan */}
                   {isDeliveryTmpl && (() => {
@@ -4331,24 +4390,41 @@ function MallarPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <p className="text-[11px] text-muted-foreground/70 mb-1.5">Användare</p>
-                        <div className="space-y-0.5 max-h-28 overflow-y-auto rounded-lg border border-border/50 p-2">
+                        <div className="space-y-0.5 max-h-36 overflow-y-auto rounded-lg border border-border/50 p-2">
                           {visibleUsers.length === 0 ? (
                             <p className="text-xs text-muted-foreground py-1">Inga användare</p>
-                          ) : visibleUsers.map(u => (
-                            <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
-                              <Checkbox
-                                checked={cfg.assigneeUserIds.includes(u.id)}
-                                onCheckedChange={(checked) => {
-                                  const ids = checked
-                                    ? [...cfg.assigneeUserIds, u.id]
-                                    : cfg.assigneeUserIds.filter(id => id !== u.id);
-                                  setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, assigneeUserIds: ids } : c));
-                                }}
-                                className="h-3.5 w-3.5"
-                              />
-                              <span className="text-xs">{u.display_name}</span>
-                            </label>
-                          ))}
+                          ) : visibleUsers.map((u, uIdx) => {
+                            const isScheduled = scheduledOnDays.has(u.id);
+                            const showSeparator = showAll && hasScheduleData && scheduledOnDays.size > 0
+                              && uIdx === scheduledUsers.length && unscheduledUsers.length > 0;
+                            return (
+                              <Fragment key={u.id}>
+                                {showSeparator && (
+                                  <div className="flex items-center gap-1.5 py-1">
+                                    <div className="flex-1 h-px bg-border/60" />
+                                    <span className="text-[9px] text-muted-foreground/60 uppercase tracking-wide">Ej inplanerade</span>
+                                    <div className="flex-1 h-px bg-border/60" />
+                                  </div>
+                                )}
+                                <label className={cn(
+                                  "flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50",
+                                  !isScheduled && showAll && "opacity-50"
+                                )}>
+                                  <Checkbox
+                                    checked={cfg.assigneeUserIds.includes(u.id)}
+                                    onCheckedChange={(checked) => {
+                                      const ids = checked
+                                        ? [...cfg.assigneeUserIds, u.id]
+                                        : cfg.assigneeUserIds.filter(id => id !== u.id);
+                                      setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, assigneeUserIds: ids } : c));
+                                    }}
+                                    className="h-3.5 w-3.5"
+                                  />
+                                  <span className="text-xs">{u.display_name}</span>
+                                </label>
+                              </Fragment>
+                            );
+                          })}
                         </div>
                       </div>
                       <div>
