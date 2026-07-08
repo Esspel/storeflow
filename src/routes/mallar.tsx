@@ -1117,7 +1117,7 @@ function MallarPage() {
     }
 
     // Check which templates already have tasks (subsequent batch detection)
-    const selectedIds = selectedTemplateIds.filter(id => {
+    const selectedIds = [...selectedTemplateIds].filter(id => {
       const t = templates.find(x => x.id === id);
       return t && !!(t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task;
     });
