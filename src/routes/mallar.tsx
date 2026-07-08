@@ -25,6 +25,7 @@ import { useAuth } from "@/lib/auth-context";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
 import { cn, ensureHttps, sanitizeCsvCell } from "@/lib/utils";
 import { spawnChildrenForParent } from "@/lib/task-utils";
+import { toast } from "sonner";
 
 const RECURRENCE_OPTIONS = [
   { value: "", label: "Ingen" },
@@ -803,6 +804,7 @@ function MallarPage() {
   async function bulkCreateTasks() {
     setBulkCreating(true);
     const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
+    const skippedDueToDependency: string[] = [];
 
     // Pre-fetch existing tasks to resolve depends_on_template_title
     const { data: existingTasks } = await supabase
@@ -905,9 +907,14 @@ function MallarPage() {
       if (dependsOnTitle) {
         const key = dependsOnTitle.toLowerCase();
         dependsOnTaskId =
-          existingTaskList.find(t => (t.title ?? "").toLowerCase() === key)?.id ??
           createdInBatch.get(key) ??
+          existingTaskList.find(t => (t.title ?? "").toLowerCase() === key)?.id ??
           null;
+        // Dependency not satisfied — skip this template entirely
+        if (!dependsOnTaskId) {
+          skippedDueToDependency.push(tmpl.title);
+          continue;
+        }
       }
 
       const timeSlots: string[] = tmplAny.time_slots ?? [];
@@ -1041,6 +1048,9 @@ function MallarPage() {
     setBulkCreating(false);
     setBulkCreateOpen(false);
     setSelectedTemplateIds(new Set());
+    if (skippedDueToDependency.length > 0) {
+      toast.warning(`${skippedDueToDependency.length} mall${skippedDueToDependency.length !== 1 ? "ar" : ""} hoppades över: ${skippedDueToDependency.join(", ")}. Beroende uppgift saknades — skapa beroendets mall i samma batch.`);
+    }
   }
 
   function openEdit(t: TemplateWithMeta) {
@@ -2527,13 +2537,32 @@ function MallarPage() {
                 <Link2 className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 <span className="text-xs text-muted-foreground">Beror på mall</span>
               </div>
-              <p className="text-[11px] text-muted-foreground/60 pl-6">Blockeras tills föregångarmallen är klar.</p>
-              <Input
-                placeholder="Titel på föregångarmall"
-                value={f.depends_on_template_title}
-                onChange={(e) => setF((p) => ({ ...p, depends_on_template_title: e.target.value }))}
-                className="h-7 border border-border/60 text-xs"
-              />
+              <p className="text-[11px] text-muted-foreground/60 pl-6">Uppgiften blockeras tills föregångarmallen är klar.</p>
+              <div className="pl-0 space-y-1">
+                <Select
+                  value={f.depends_on_template_title || "__none__"}
+                  onValueChange={(v) => setF((p) => ({ ...p, depends_on_template_title: v === "__none__" ? "" : v }))}
+                >
+                  <SelectTrigger className="h-7 border border-border/60 text-xs">
+                    <SelectValue placeholder="Ingen beroende" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Ingen beroende</SelectItem>
+                    {templates
+                      .filter(t => t.title.trim() && t.title !== f.title)
+                      .sort((a, b) => a.title.localeCompare(b.title, "sv"))
+                      .map(t => (
+                        <SelectItem key={t.id} value={t.title}>{t.title}</SelectItem>
+                      ))
+                    }
+                  </SelectContent>
+                </Select>
+                {f.depends_on_template_title && (
+                  <p className="text-[10px] text-blue-600 pl-1">
+                    Kräver att "{f.depends_on_template_title}" skapas i samma batch eller redan existerar.
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Granskningsintervall */}
@@ -3317,8 +3346,26 @@ function MallarPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort mall</AlertDialogTitle>
-            <AlertDialogDescription>
-              Är du säker på att du vill ta bort <strong>{deleteTarget?.title}</strong>?
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>Är du säker på att du vill ta bort <strong>{deleteTarget?.title}</strong>?</p>
+                {(() => {
+                  if (!deleteTarget) return null;
+                  const dependents = templates.filter(t =>
+                    ((t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title ?? "").toLowerCase() === deleteTarget.title.toLowerCase()
+                  );
+                  if (dependents.length === 0) return null;
+                  return (
+                    <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 space-y-1">
+                      <p className="text-sm font-medium text-destructive">Varning: Följande mallar beror på den här mallen:</p>
+                      <ul className="text-sm text-destructive/80 list-disc pl-4">
+                        {dependents.map(d => <li key={d.id}>{d.title}</li>)}
+                      </ul>
+                      <p className="text-xs text-destructive/70">Ta bort eller uppdatera dessa mallar först.</p>
+                    </div>
+                  );
+                })()}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -3702,10 +3749,17 @@ function MallarPage() {
                             const t = templates.find(x => x.id === c.templateId);
                             return t && t.title.toLowerCase() === depTitle.toLowerCase();
                           });
+                          // Check if a matching task already exists (we can't query here, but show "okänd" if not in batch)
+                          const status = inBatch ? "batch" : "extern";
                           return (
-                            <Badge variant="outline" className={cn("text-xs gap-1", inBatch ? "border-green-400 text-green-700 bg-green-50" : "border-blue-300 text-blue-700 bg-blue-50")}>
+                            <Badge variant="outline" className={cn(
+                              "text-xs gap-1",
+                              status === "batch" ? "border-green-400 text-green-700 bg-green-50" :
+                              "border-orange-400 text-orange-700 bg-orange-50"
+                            )}>
                               <Link2 className="h-3 w-3" />
-                              Beror på: {depTitle} {inBatch ? "(i batch)" : "(befintlig)"}
+                              Beror på: {depTitle}
+                              {status === "batch" ? " (i batch)" : " — måste finnas i batch!"}
                             </Badge>
                           );
                         })()}

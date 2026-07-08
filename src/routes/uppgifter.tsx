@@ -3777,10 +3777,27 @@ function TasksPage() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle className="text-destructive">Ta bort uppgift</AlertDialogTitle>
-              <AlertDialogDescription>
-                {(deleteTarget.recurrence_rule || deleteTarget.parent_task_id) && deleteHasFuture
-                  ? "Denna uppgift är återkommande. Vad vill du ta bort?"
-                  : `Är du säker på att du vill ta bort "${deleteTarget.title}"?`}
+              <AlertDialogDescription asChild>
+                <div className="space-y-2">
+                  <p>
+                    {(deleteTarget.recurrence_rule || deleteTarget.parent_task_id) && deleteHasFuture
+                      ? "Denna uppgift är återkommande. Vad vill du ta bort?"
+                      : `Är du säker på att du vill ta bort "${deleteTarget.title}"?`}
+                  </p>
+                  {(() => {
+                    const dependents = tasks.filter(t => t.depends_on_task_id === deleteTarget.id && t.id !== deleteTarget.id);
+                    if (dependents.length === 0) return null;
+                    return (
+                      <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 space-y-1">
+                        <p className="text-sm font-medium text-destructive">Varning: Följande uppgifter beror på den här uppgiften:</p>
+                        <ul className="text-sm text-destructive/80 list-disc pl-4">
+                          {dependents.map(d => <li key={d.id}>{d.title}</li>)}
+                        </ul>
+                        <p className="text-xs text-destructive/70">Ta bort dessa uppgifter samtidigt eller uppdatera deras beroende.</p>
+                      </div>
+                    );
+                  })()}
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             {(deleteTarget.recurrence_rule || deleteTarget.parent_task_id) && deleteHasFuture ? (
