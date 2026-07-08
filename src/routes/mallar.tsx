@@ -178,6 +178,7 @@ type FormState = {
   is_delivery_task: boolean;
   delivery_flow_name: string;
   delivery_supplier_name: string;
+  delivery_entry_keys: string;
   depends_on_template_title: string;
   items: { id?: string; label: string; requires_photo: boolean; link_url?: string; condition_question_id?: string; condition_answer?: string }[];
   questions: { id?: string; label: string; question_type: "text" | "yes_no"; is_required: boolean; link_url?: string }[];
@@ -201,6 +202,7 @@ const emptyForm = (): FormState => ({
   is_delivery_task: false,
   delivery_flow_name: "",
   delivery_supplier_name: "",
+  delivery_entry_keys: "",
   depends_on_template_title: "",
   items: [{ label: "", requires_photo: false, link_url: "" }],
   questions: [],
@@ -676,6 +678,7 @@ function MallarPage() {
       is_delivery_task: form.is_delivery_task,
       delivery_flow_name: form.delivery_flow_name?.trim() || null,
       delivery_supplier_name: form.delivery_supplier_name?.trim() || null,
+      delivery_entry_keys: form.delivery_entry_keys?.trim() || null,
       depends_on_template_title: form.depends_on_template_title?.trim() || null,
       review_interval_months: form.review_interval_months > 0 ? form.review_interval_months : null,
       // Set next_review_at for recurring base templates without a near end date
@@ -830,18 +833,30 @@ function MallarPage() {
       if (!tmpl) return null;
       const tmplAny = tmpl as ChecklistTemplate & { event_trigger_user_id?: string; delivery_flow_name?: string; delivery_supplier_name?: string };
 
-      // Pre-select delivery entries matching the template's stored supplier/flow config
+      // Pre-select delivery entries matching the template's stored config
+      // If delivery_entry_keys is set, use day+supplier+flow key matching (precise)
+      // Otherwise fall back to supplier+flow matching (backwards compat)
       let preselectedDeliveryIds: string[] = [];
       if ((tmplAny as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task && deliveryWeekEntries.length > 0) {
-        const tmplFlows = (tmplAny.delivery_flow_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
-        const tmplSuppliers = (tmplAny.delivery_supplier_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
-        preselectedDeliveryIds = deliveryWeekEntries
-          .filter(e => {
-            const flowMatch = tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
-            const suppMatch = tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
-            return flowMatch && suppMatch;
-          })
-          .map(e => e.id);
+        const tmplEntryKeys = ((tmplAny as ChecklistTemplate & { delivery_entry_keys?: string }).delivery_entry_keys ?? "")
+          .split("|").map(s => s.trim()).filter(s => s.includes("||"));
+        if (tmplEntryKeys.length > 0) {
+          // Precise per-day matching using stored keys
+          preselectedDeliveryIds = deliveryWeekEntries
+            .filter(e => tmplEntryKeys.includes(`${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`))
+            .map(e => e.id);
+        } else {
+          // Legacy: match by supplier+flow across all days
+          const tmplFlows = (tmplAny.delivery_flow_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
+          const tmplSuppliers = (tmplAny.delivery_supplier_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
+          preselectedDeliveryIds = deliveryWeekEntries
+            .filter(e => {
+              const flowMatch = tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
+              const suppMatch = tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
+              return flowMatch && suppMatch;
+            })
+            .map(e => e.id);
+        }
       }
 
       return {
@@ -1145,6 +1160,7 @@ function MallarPage() {
       is_delivery_task: (t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task ?? false,
       delivery_flow_name: (t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "",
       delivery_supplier_name: (t as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name ?? "",
+      delivery_entry_keys: (t as ChecklistTemplate & { delivery_entry_keys?: string }).delivery_entry_keys ?? "",
       depends_on_template_title: (t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title ?? "",
       items: (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ id: it.id, label: it.label, requires_photo: it.requires_photo, link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url ?? "", condition_question_id: (it as ChecklistTemplateItem & { condition_question_id?: string }).condition_question_id ?? undefined, condition_answer: (it as ChecklistTemplateItem & { condition_answer?: string }).condition_answer ?? undefined })),
       questions: (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q) => ({ id: q.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, link_url: (q as ChecklistTemplateQuestion & { link_url?: string }).link_url ?? "" })),
@@ -1186,6 +1202,7 @@ function MallarPage() {
       is_delivery_task: editForm.is_delivery_task,
       delivery_flow_name: editForm.delivery_flow_name?.trim() || null,
       delivery_supplier_name: editForm.delivery_supplier_name?.trim() || null,
+      delivery_entry_keys: editForm.delivery_entry_keys?.trim() || null,
       depends_on_template_title: editForm.depends_on_template_title?.trim() || null,
       review_interval_months: editForm.review_interval_months > 0 ? editForm.review_interval_months : null,
       // Ensure next_review_at is set if this becomes a recurring base template
@@ -2504,28 +2521,28 @@ function MallarPage() {
                 <div className="pl-6 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-medium text-muted-foreground">Koppla till leveranser</span>
-                    {deliveryWeekEntries.length > 1 && (
-                      <button
-                        type="button"
-                        className="text-[11px] text-primary hover:underline"
-                        onClick={() => {
-                          const allSelected = deliveryWeekEntries.every(e =>
-                            f.delivery_supplier_name.split("|").map(s => s.trim()).filter(Boolean).includes(e.supplier?.trim() ?? "")
-                          );
-                          if (allSelected) {
-                            setF(p => ({ ...p, delivery_supplier_name: "", delivery_flow_name: "" }));
-                          } else {
-                            const allSupp = [...new Set(deliveryWeekEntries.map(e => e.supplier?.trim() ?? "").filter(Boolean))];
-                            const allFlow = [...new Set(deliveryWeekEntries.map(e => e.flow_name?.trim() ?? "").filter(Boolean))];
-                            setF(p => ({ ...p, delivery_supplier_name: allSupp.join("|"), delivery_flow_name: allFlow.join("|") }));
-                          }
-                        }}
-                      >
-                        {deliveryWeekEntries.every(e =>
-                          f.delivery_supplier_name.split("|").map(s => s.trim()).filter(Boolean).includes(e.supplier?.trim() ?? "")
-                        ) ? "Avmarkera alla" : "Välj alla"}
-                      </button>
-                    )}
+                    {deliveryWeekEntries.length > 1 && (() => {
+                      const allKeys = deliveryWeekEntries.map(e => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`);
+                      const currentKeys = new Set(f.delivery_entry_keys.split("|").map(s => s.trim()).filter(s => s.includes("||")));
+                      const allSelected = allKeys.every(k => currentKeys.has(k));
+                      return (
+                        <button
+                          type="button"
+                          className="text-[11px] text-primary hover:underline"
+                          onClick={() => {
+                            if (allSelected) {
+                              setF(p => ({ ...p, delivery_entry_keys: "", delivery_supplier_name: "", delivery_flow_name: "" }));
+                            } else {
+                              const allSupp = [...new Set(deliveryWeekEntries.map(e => e.supplier?.trim() ?? "").filter(Boolean))];
+                              const allFlow = [...new Set(deliveryWeekEntries.map(e => e.flow_name?.trim() ?? "").filter(Boolean))];
+                              setF(p => ({ ...p, delivery_entry_keys: allKeys.join("|"), delivery_supplier_name: allSupp.join("|"), delivery_flow_name: allFlow.join("|") }));
+                            }
+                          }}
+                        >
+                          {allSelected ? "Avmarkera alla" : "Välj alla"}
+                        </button>
+                      );
+                    })()}
                   </div>
                   {deliveryWeekEntries.length > 0 ? (() => {
                     const dayOrder = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
@@ -2540,63 +2557,44 @@ function MallarPage() {
                       const bi = dayOrder.indexOf(b);
                       return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
                     });
-                    const selectedSuppliers = f.delivery_supplier_name.split("|").map(s => s.trim()).filter(Boolean);
+                    // Selection is per-entry: key = "Day||Supplier||Flow"
+                    // Stored in delivery_entry_keys; supplier+flow kept in sync for batch create matching
+                    const selectedKeys = new Set(
+                      f.delivery_entry_keys.split("|").map(s => s.trim()).filter(s => s.includes("||"))
+                    );
+                    const entryKey = (e: { delivery_day: string; supplier: string; flow_name: string }) =>
+                      `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`;
 
-                    const toggleEntry = (entry: { supplier: string; flow_name: string }) => {
-                      const suppName = entry.supplier?.trim() ?? "";
-                      const flowName = entry.flow_name?.trim() ?? "";
-                      const hasSupp = selectedSuppliers.includes(suppName);
-                      if (hasSupp) {
-                        // Remove supplier; remove flow if no other selected supplier uses it
-                        const newSuppliers = selectedSuppliers.filter(s => s !== suppName);
-                        const newFlows = [...new Set(
-                          deliveryWeekEntries
-                            .filter(e => newSuppliers.includes(e.supplier?.trim() ?? ""))
-                            .map(e => e.flow_name?.trim() ?? "")
-                            .filter(Boolean)
-                        )];
-                        setF(p => ({ ...p, delivery_supplier_name: newSuppliers.join("|"), delivery_flow_name: newFlows.join("|") }));
-                      } else {
-                        const newSuppliers = [...new Set([...selectedSuppliers, suppName])];
-                        const newFlows = [...new Set([
-                          ...f.delivery_flow_name.split("|").map(s => s.trim()).filter(Boolean),
-                          flowName,
-                        ])];
-                        setF(p => ({ ...p, delivery_supplier_name: newSuppliers.join("|"), delivery_flow_name: newFlows.join("|") }));
-                      }
+                    const syncSupplierFlow = (keys: Set<string>) => {
+                      const entries = deliveryWeekEntries.filter(e => keys.has(entryKey(e)));
+                      return {
+                        delivery_supplier_name: [...new Set(entries.map(e => e.supplier?.trim() ?? "").filter(Boolean))].join("|"),
+                        delivery_flow_name: [...new Set(entries.map(e => e.flow_name?.trim() ?? "").filter(Boolean))].join("|"),
+                      };
+                    };
+
+                    const toggleEntry = (entry: typeof deliveryWeekEntries[0]) => {
+                      const k = entryKey(entry);
+                      const next = new Set(selectedKeys);
+                      if (next.has(k)) next.delete(k); else next.add(k);
+                      setF(p => ({ ...p, delivery_entry_keys: [...next].join("|"), ...syncSupplierFlow(next) }));
                     };
 
                     const toggleDay = (entries: typeof deliveryWeekEntries) => {
-                      const daySuppliers = [...new Set(entries.map(e => e.supplier?.trim() ?? "").filter(Boolean))];
-                      const allSelected = daySuppliers.every(s => selectedSuppliers.includes(s));
-                      if (allSelected) {
-                        const newSuppliers = selectedSuppliers.filter(s => !daySuppliers.includes(s));
-                        const newFlows = [...new Set(
-                          deliveryWeekEntries
-                            .filter(e => newSuppliers.includes(e.supplier?.trim() ?? ""))
-                            .map(e => e.flow_name?.trim() ?? "")
-                            .filter(Boolean)
-                        )];
-                        setF(p => ({ ...p, delivery_supplier_name: newSuppliers.join("|"), delivery_flow_name: newFlows.join("|") }));
-                      } else {
-                        const newSuppliers = [...new Set([...selectedSuppliers, ...daySuppliers])];
-                        const newFlows = [...new Set(
-                          deliveryWeekEntries
-                            .filter(e => newSuppliers.includes(e.supplier?.trim() ?? ""))
-                            .map(e => e.flow_name?.trim() ?? "")
-                            .filter(Boolean)
-                        )];
-                        setF(p => ({ ...p, delivery_supplier_name: newSuppliers.join("|"), delivery_flow_name: newFlows.join("|") }));
-                      }
+                      const dayKeys = entries.map(entryKey);
+                      const allSelected = dayKeys.every(k => selectedKeys.has(k));
+                      const next = new Set(selectedKeys);
+                      if (allSelected) { dayKeys.forEach(k => next.delete(k)); } else { dayKeys.forEach(k => next.add(k)); }
+                      setF(p => ({ ...p, delivery_entry_keys: [...next].join("|"), ...syncSupplierFlow(next) }));
                     };
 
                     return (
                       <div className="space-y-1.5 rounded-lg border border-border/50 p-2 max-h-56 overflow-y-auto">
                         {sortedDays.map(dayName => {
                           const entries = byDay[dayName];
-                          const daySuppliers = [...new Set(entries.map(e => e.supplier?.trim() ?? "").filter(Boolean))];
-                          const allDaySelected = daySuppliers.every(s => selectedSuppliers.includes(s));
-                          const someDaySelected = daySuppliers.some(s => selectedSuppliers.includes(s));
+                          const dayKeys = entries.map(entryKey);
+                          const allDaySelected = dayKeys.every(k => selectedKeys.has(k));
+                          const someDaySelected = dayKeys.some(k => selectedKeys.has(k));
                           return (
                             <div key={dayName} className="space-y-0.5">
                               <label className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 bg-muted/30 hover:bg-muted/50">
@@ -2610,8 +2608,7 @@ function MallarPage() {
                                 <span className="text-[10px] text-muted-foreground">{entries.length} leverans{entries.length !== 1 ? "er" : ""}</span>
                               </label>
                               {entries.map(entry => {
-                                const suppName = entry.supplier?.trim() ?? "";
-                                const checked = selectedSuppliers.includes(suppName);
+                                const checked = selectedKeys.has(entryKey(entry));
                                 return (
                                   <label key={entry.id} className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 pl-6 hover:bg-muted/50">
                                     <Checkbox
@@ -2645,9 +2642,9 @@ function MallarPage() {
                       <p className="text-[10px] text-muted-foreground/60">Inga leveranser i aktiv plan — ange flödesnamn manuellt</p>
                     </div>
                   )}
-                  {(f.delivery_supplier_name || f.delivery_flow_name) && (
+                  {f.delivery_entry_keys && (
                     <p className="text-[10px] text-muted-foreground/60">
-                      Valt: {f.delivery_supplier_name.split("|").filter(Boolean).join(", ")}
+                      {f.delivery_entry_keys.split("|").filter(s => s.includes("||")).length} specifik{f.delivery_entry_keys.split("|").filter(s => s.includes("||")).length !== 1 ? "a" : ""} leverans{f.delivery_entry_keys.split("|").filter(s => s.includes("||")).length !== 1 ? "er" : ""} vald{f.delivery_entry_keys.split("|").filter(s => s.includes("||")).length !== 1 ? "a" : ""}
                     </p>
                   )}
                 </div>
@@ -3913,18 +3910,24 @@ function MallarPage() {
 
                   {/* Delivery template: pick specific deliveries from the current week's plan */}
                   {isDeliveryTmpl && (() => {
+                    const tmplEntryKeys = ((tmpl as ChecklistTemplate & { delivery_entry_keys?: string }).delivery_entry_keys ?? "")
+                      .split("|").map(s => s.trim()).filter(s => s.includes("||"));
                     const tmplFlows = ((tmpl as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "")
                       .split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
                     const tmplSuppliers = ((tmpl as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name ?? "")
                       .split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
 
-                    // An entry is "suggested" if it matches the template's configured suppliers/flows
-                    const isSuggested = (s: { supplier: string; flow_name: string }) => {
-                      const flowOk = tmplFlows.length === 0 || tmplFlows.includes(s.flow_name?.toLowerCase() ?? "");
-                      const suppOk = tmplSuppliers.length === 0 || tmplSuppliers.includes(s.supplier?.toLowerCase() ?? "");
+                    // An entry is "suggested" (pre-checked) if it matches the template config:
+                    // prefer precise key match, fall back to supplier+flow
+                    const isSuggested = (e: { delivery_day: string; supplier: string; flow_name: string }) => {
+                      if (tmplEntryKeys.length > 0) {
+                        return tmplEntryKeys.includes(`${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`);
+                      }
+                      const flowOk = tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
+                      const suppOk = tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
                       return flowOk && suppOk;
                     };
-                    const hasSuggestions = tmplFlows.length > 0 || tmplSuppliers.length > 0;
+                    const hasSuggestions = tmplEntryKeys.length > 0 || tmplFlows.length > 0 || tmplSuppliers.length > 0;
 
                     // Group by delivery_day — day and time are key info for deliveries
                     const dayOrder = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
