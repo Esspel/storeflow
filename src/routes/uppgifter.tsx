@@ -1704,8 +1704,8 @@ function TasksPage() {
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
-      "SAP-artikel", "Mallpaket", "Händelsevillkor", "Kedja (beror på mallnamn)",
-      "Malltyp", "Skapningsläge", "Händelse-bekräftare", "Granskningsintervall (månader)",
+      "SAP-artikel", "Mallpaket", "Händelsevillkor", "Leveransuppgift (ja/nej)", "Leveransflöde",
+      "Kedja (beror på mallnamn)", "Malltyp", "Skapningsläge", "Händelse-bekräftare", "Granskningsintervall (månader)",
     ];
     // Exclude child recurrence instances (parent_task_id set) — they are just spawned
     // copies of the parent. Export only parent/standalone tasks so importing into
@@ -1747,8 +1747,10 @@ function TasksPage() {
           "", // Version
           t.recurrence_rule ?? "",
           (t.recurrence_days ?? []).join(","),
-          "", // Månader
-          "", // Månadsdag
+          (t as TaskFull & { recurrence_months?: number[] }).recurrence_months?.join(",") ?? "",
+          (t as TaskFull & { recurrence_month_day?: number }).recurrence_month_day != null
+            ? String((t as TaskFull & { recurrence_month_day?: number }).recurrence_month_day)
+            : "",
           tAny.recurrence_interval != null ? String(tAny.recurrence_interval) : "",
           dueDays,
           tAny.due_date_time ?? "",
@@ -1762,13 +1764,15 @@ function TasksPage() {
           tAny.sap_article_id ?? "",
           "", // Mallpaket — tasks don't belong to template packages
           (t as TaskFull).event_trigger_description ?? "",
+          (t as TaskFull).delivery_entry_id ? "ja" : "", // Leveransuppgift
+          "", // Leveransflöde — not stored on tasks
           // Use predecessor task title (not ID) so exported CSV can be imported as templates
           (() => {
             const predId = (t as TaskFull).depends_on_task_id;
             if (!predId) return "";
             return tasks.find(p => p.id === predId)?.title ?? predId;
           })(),
-          "", // Malltyp — exporteras ej som template-typ
+          "", // Malltyp
           "", // Skapningsläge
           "", // Händelse-bekräftare
           "", // Granskningsintervall
