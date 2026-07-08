@@ -307,6 +307,13 @@ function MallarPage() {
   const [deliveryMappingSaving, setDeliveryMappingSaving] = useState(false);
   const [deliveryFlowNames, setDeliveryFlowNames] = useState<string[]>([]);
 
+  // Parse "Day||Supplier||Flow" keys stored pipe-delimited.
+  // Can't split by "|" because "||" internal separator would be destroyed.
+  // Regex extracts each 3-part key directly.
+  const parseEntryKeys = (str: string): string[] =>
+    str ? (str.match(/[^|]+\|\|[^|]+\|\|[^|]+/g) ?? []) : [];
+
+
   // View filter: "all" | "hk" | "forening" | "store"
   const [viewFilter, setViewFilter] = useState<"all" | "hk" | "forening" | "store">("all");
   const [search, setSearch] = useState("");
@@ -925,8 +932,7 @@ function MallarPage() {
       // Otherwise fall back to supplier+flow matching (backwards compat)
       let preselectedDeliveryIds: string[] = [];
       if ((tmplAny as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task && deliveryWeekEntries.length > 0) {
-        const tmplEntryKeys = ((tmplAny as ChecklistTemplate & { delivery_entry_keys?: string }).delivery_entry_keys ?? "")
-          .split("|").map(s => s.trim()).filter(s => s.includes("||"));
+        const tmplEntryKeys = parseEntryKeys((tmplAny as ChecklistTemplate & { delivery_entry_keys?: string }).delivery_entry_keys ?? "");
         if (tmplEntryKeys.length > 0) {
           // Precise per-day matching using stored keys
           preselectedDeliveryIds = deliveryWeekEntries
@@ -2067,9 +2073,7 @@ function MallarPage() {
       const bi = dayOrder.indexOf(b);
       return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
     });
-    const selectedKeys = new Set(
-      selectedKeysStr.split("|").map(s => s.trim()).filter(s => s.includes("||"))
-    );
+    const selectedKeys = new Set(parseEntryKeys(selectedKeysStr));
     const entryKey = (e: DeliveryEntry) =>
       `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`;
     const syncAndEmit = (next: Set<string>) => {
@@ -2626,27 +2630,7 @@ function MallarPage() {
               )}
             </div>
 
-            {/* Recurrence start/end dates — shown only when recurrence is set */}
-            {f.recurrence_rule && (
-              <div className="px-4 py-3 space-y-2">
-                <span className="text-xs text-muted-foreground">Upprepningsperiod</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-muted-foreground w-10">Start</span>
-                  <Input type="date" value={f.recurrence_start}
-                    onChange={(e) => setF((p) => ({ ...p, recurrence_start: e.target.value }))}
-                    className="flex-1 h-7 border border-border/60 text-xs" />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-muted-foreground w-10">Slut</span>
-                  <Input type="date" value={f.recurrence_end}
-                    onChange={(e) => setF((p) => ({ ...p, recurrence_end: e.target.value }))}
-                    className="flex-1 h-7 border border-border/60 text-xs" />
-                </div>
-                {!f.recurrence_end && (
-                  <p className="text-[11px] text-muted-foreground/60">Inget slutdatum = 365 dagar framåt.</p>
-                )}
-              </div>
-            )}
+            {/* Recurrence start/end dates — hidden in template form; start = today, end chosen at task creation */}
 
             {/* Förening selector — shown when scope is forening and user is admin */}
             {scope === "forening" && isAdmin && (
@@ -2740,7 +2724,7 @@ function MallarPage() {
                         className="text-[11px] text-primary hover:underline"
                         onClick={() => {
                           const allKeys = deliveryWeekEntries.map(e => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`);
-                          const currentKeys = new Set((f.delivery_entry_keys ?? "").split("|").map(s => s.trim()).filter(s => s.includes("||")));
+                          const currentKeys = new Set(parseEntryKeys(f.delivery_entry_keys ?? ""));
                           const allSelected = allKeys.every(k => currentKeys.has(k));
                           if (allSelected) {
                             setF(p => ({ ...p, delivery_entry_keys: "", delivery_supplier_name: "", delivery_flow_name: "" }));
@@ -2751,9 +2735,11 @@ function MallarPage() {
                           }
                         }}
                       >
-                        {deliveryWeekEntries.every(e =>
-                          (f.delivery_entry_keys ?? "").split("|").map(s => s.trim()).includes(`${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`)
-                        ) ? "Avmarkera alla" : "Välj alla"}
+                        {(() => {
+                          const currentKeys = new Set(parseEntryKeys(f.delivery_entry_keys ?? ""));
+                          return deliveryWeekEntries.every(e => currentKeys.has(`${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`))
+                            ? "Avmarkera alla" : "Välj alla";
+                        })()}
                       </button>
                     )}
                   </div>
@@ -2776,11 +2762,15 @@ function MallarPage() {
                       <p className="text-[10px] text-muted-foreground/60">Inga leveranser i aktiv plan — ange flödesnamn manuellt</p>
                     </div>
                   )}
-                  {f.delivery_entry_keys && (
-                    <p className="text-[10px] text-muted-foreground/60">
-                      {f.delivery_entry_keys.split("|").filter(s => s.includes("||")).length} specifik{f.delivery_entry_keys.split("|").filter(s => s.includes("||")).length !== 1 ? "a" : ""} leverans{f.delivery_entry_keys.split("|").filter(s => s.includes("||")).length !== 1 ? "er" : ""} vald{f.delivery_entry_keys.split("|").filter(s => s.includes("||")).length !== 1 ? "a" : ""}
-                    </p>
-                  )}
+                  {f.delivery_entry_keys && (() => {
+                    const cnt = parseEntryKeys(f.delivery_entry_keys).length;
+                    if (cnt === 0) return null;
+                    return (
+                      <p className="text-[10px] text-muted-foreground/60">
+                        {cnt} specifik{cnt !== 1 ? "a" : ""} leverans{cnt !== 1 ? "er" : ""} vald{cnt !== 1 ? "a" : ""}
+                      </p>
+                    );
+                  })()}
                 </div>
               )}
             </div>
