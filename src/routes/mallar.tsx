@@ -297,7 +297,7 @@ function MallarPage() {
   const [reviewEndDate, setReviewEndDate] = useState("");
 
   // CSV delivery supplier mapping
-  type DeliveryMappingItem = { templateId: string; templateTitle: string; supplierIds: string[] };
+  type DeliveryMappingItem = { templateId: string; templateTitle: string; entryKeys: string[] };
   const [deliveryMappingOpen, setDeliveryMappingOpen] = useState(false);
   const [deliveryMappingItems, setDeliveryMappingItems] = useState<DeliveryMappingItem[]>([]);
   // Template config picker: unique supplier+flow combos across all plans
@@ -314,6 +314,51 @@ function MallarPage() {
   const [filterPriority, setFilterPriority] = useState("");
 
   useEffect(() => { load(); }, [user, activeStore]);
+
+  // When editing a template that has supplier/flow config but no entry keys (old format),
+  // backfill delivery_entry_keys from the current week's entries so the picker shows correctly.
+  useEffect(() => {
+    if (!editTarget || deliveryWeekEntries.length === 0) return;
+    setEditForm(prev => {
+      if (!prev.is_delivery_task) return prev;
+      if (prev.delivery_entry_keys) return prev; // already has keys
+      if (!prev.delivery_supplier_name && !prev.delivery_flow_name) return prev;
+      const tmplFlows = prev.delivery_flow_name.split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
+      const tmplSuppliers = prev.delivery_supplier_name.split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
+      const matchedEntries = deliveryWeekEntries.filter(e => {
+        const flowOk = tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
+        const suppOk = tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
+        return flowOk && suppOk;
+      });
+      if (matchedEntries.length === 0) return prev;
+      return {
+        ...prev,
+        delivery_entry_keys: matchedEntries.map(e => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`).join("|"),
+      };
+    });
+  }, [editTarget, deliveryWeekEntries]);
+
+  // Same backfill for the create form when delivery_entry_keys is empty but supplier/flow are set.
+  useEffect(() => {
+    if (deliveryWeekEntries.length === 0) return;
+    setForm(prev => {
+      if (!prev.is_delivery_task) return prev;
+      if (prev.delivery_entry_keys) return prev;
+      if (!prev.delivery_supplier_name && !prev.delivery_flow_name) return prev;
+      const tmplFlows = prev.delivery_flow_name.split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
+      const tmplSuppliers = prev.delivery_supplier_name.split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
+      const matchedEntries = deliveryWeekEntries.filter(e => {
+        const flowOk = tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
+        const suppOk = tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
+        return flowOk && suppOk;
+      });
+      if (matchedEntries.length === 0) return prev;
+      return {
+        ...prev,
+        delivery_entry_keys: matchedEntries.map(e => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`).join("|"),
+      };
+    });
+  }, [deliveryWeekEntries]);
 
   async function load() {
     setLoading(true);
@@ -1871,17 +1916,21 @@ function MallarPage() {
     // If any imported templates are delivery tasks, show supplier mapping dialog
     if (importedDeliveryTemplates.length > 0) {
       const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
-      if (storeId) {
+      if (storeId && deliveryWeekEntries.length > 0) {
+        setDeliveryMappingItems(importedDeliveryTemplates.map(t => ({ templateId: t.id, templateTitle: t.title, entryKeys: [] })));
+        setDeliveryMappingOpen(true);
+      } else if (storeId) {
+        // Fallback: fetch entries if deliveryWeekEntries not loaded yet
         const { data: entries } = await supabase
           .from("delivery_entries")
-          .select("id, supplier, flow_name, delivery_time")
+          .select("id, supplier, flow_name, delivery_time, delivery_day")
           .eq("plan_id",
             (await supabase.from("delivery_plans").select("id").eq("store_id", storeId).order("imported_at", { ascending: false }).limit(1).maybeSingle()).data?.id ?? ""
           )
-          .order("supplier");
+          .order("delivery_day").order("delivery_time");
         if (entries && entries.length > 0) {
-          setDeliverySuppliers(entries as { id: string; supplier: string; flow_name: string; delivery_time: string }[]);
-          setDeliveryMappingItems(importedDeliveryTemplates.map(t => ({ templateId: t.id, templateTitle: t.title, supplierIds: [] })));
+          setDeliveryWeekEntries(prev => prev.length > 0 ? prev : (entries as typeof deliveryWeekEntries));
+          setDeliveryMappingItems(importedDeliveryTemplates.map(t => ({ templateId: t.id, templateTitle: t.title, entryKeys: [] })));
           setDeliveryMappingOpen(true);
         }
       }
@@ -1891,12 +1940,18 @@ function MallarPage() {
   const saveDeliveryMapping = async () => {
     setDeliveryMappingSaving(true);
     for (const item of deliveryMappingItems) {
-      if (!item.supplierIds.length) continue;
-      // Collect unique flow_names from selected entries
-      const selectedSuppliers = deliverySuppliers.filter(s => item.supplierIds.includes(s.id));
-      const flowNames = [...new Set(selectedSuppliers.map(s => s.flow_name).filter(Boolean))];
+      if (!item.entryKeys.length) continue;
+      const matched = deliveryWeekEntries.filter(e =>
+        item.entryKeys.includes(`${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`)
+      );
+      const supplierNames = [...new Set(matched.map(e => e.supplier?.trim() ?? "").filter(Boolean))];
+      const flowNames = [...new Set(matched.map(e => e.flow_name?.trim() ?? "").filter(Boolean))];
       await supabase.from("checklist_templates")
-        .update({ delivery_flow_name: flowNames.join("|") || null })
+        .update({
+          delivery_supplier_name: supplierNames.join("|") || null,
+          delivery_flow_name: flowNames.join("|") || null,
+          delivery_entry_keys: item.entryKeys.join("|") || null,
+        })
         .eq("id", item.templateId);
     }
     setDeliveryMappingOpen(false);
@@ -4433,45 +4488,101 @@ function MallarPage() {
             <span className="text-sm font-medium">Koppla leveranser till mallar</span>
           </div>
           <p className="px-5 pt-4 pb-2 text-xs text-muted-foreground">
-            Välj vilka leverantörer varje leveransmall ska kopplas till. En mall kan kopplas till flera leveranser.
+            Välj vilka leveranser varje leveransmall ska kopplas till.
           </p>
           <div className="flex-1 overflow-y-auto px-5 space-y-5 pb-8">
             {deliveryMappingItems.map((item, idx) => {
-              const toggleSupplier = (sid: string) => {
-                const next = item.supplierIds.includes(sid)
-                  ? item.supplierIds.filter(id => id !== sid)
-                  : [...item.supplierIds, sid];
-                setDeliveryMappingItems(prev => prev.map((it, i) => i === idx ? { ...it, supplierIds: next } : it));
+              const dayOrder = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
+              const byDay = deliveryWeekEntries.reduce<Record<string, typeof deliveryWeekEntries>>((acc, e) => {
+                const k = e.delivery_day || "Okänd dag";
+                if (!acc[k]) acc[k] = [];
+                acc[k].push(e);
+                return acc;
+              }, {});
+              const sortedDays = Object.keys(byDay).sort((a, b) => {
+                const ai = dayOrder.indexOf(a); const bi = dayOrder.indexOf(b);
+                return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+              });
+              const selectedKeys = new Set(item.entryKeys);
+              const entryKey = (e: typeof deliveryWeekEntries[0]) => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`;
+
+              const toggleEntry = (e: typeof deliveryWeekEntries[0]) => {
+                const k = entryKey(e);
+                const next = selectedKeys.has(k) ? item.entryKeys.filter(x => x !== k) : [...item.entryKeys, k];
+                setDeliveryMappingItems(prev => prev.map((it, i) => i === idx ? { ...it, entryKeys: next } : it));
               };
+              const toggleDay = (entries: typeof deliveryWeekEntries) => {
+                const dayKeys = entries.map(entryKey);
+                const allSelected = dayKeys.every(k => selectedKeys.has(k));
+                const next = allSelected
+                  ? item.entryKeys.filter(k => !dayKeys.includes(k))
+                  : [...new Set([...item.entryKeys, ...dayKeys])];
+                setDeliveryMappingItems(prev => prev.map((it, i) => i === idx ? { ...it, entryKeys: next } : it));
+              };
+              const allKeys = deliveryWeekEntries.map(entryKey);
+              const allSelected = allKeys.length > 0 && allKeys.every(k => selectedKeys.has(k));
+
               return (
                 <div key={item.templateId} className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Truck className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
-                    <span className="text-sm font-semibold">{item.templateTitle}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Truck className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                      <span className="text-sm font-semibold">{item.templateTitle}</span>
+                    </div>
+                    {deliveryWeekEntries.length > 1 && (
+                      <button
+                        type="button"
+                        className="text-[11px] text-primary hover:underline shrink-0"
+                        onClick={() => setDeliveryMappingItems(prev => prev.map((it, i) => i !== idx ? it : {
+                          ...it,
+                          entryKeys: allSelected ? [] : allKeys,
+                        }))}
+                      >
+                        {allSelected ? "Avmarkera alla" : "Välj alla"}
+                      </button>
+                    )}
                   </div>
-                  <p className="text-[11px] text-muted-foreground">Markera de leveranser som ska trigga den här mallen:</p>
-                  <div className="space-y-1 max-h-48 overflow-y-auto rounded-lg border border-border/50 p-2">
-                    {deliverySuppliers.length === 0 ? (
+                  <div className="space-y-1 max-h-56 overflow-y-auto rounded-lg border border-border/50 p-2">
+                    {deliveryWeekEntries.length === 0 ? (
                       <p className="text-xs text-muted-foreground py-1">Inga leveranser i aktiv plan</p>
-                    ) : deliverySuppliers.map(s => (
-                      <label key={s.id} className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 hover:bg-muted/50">
-                        <Checkbox
-                          checked={item.supplierIds.includes(s.id)}
-                          onCheckedChange={() => toggleSupplier(s.id)}
-                          className="h-4 w-4 shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <span className="text-sm font-medium">{s.supplier}</span>
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            {s.flow_name}{s.delivery_time ? ` · ${s.delivery_time}` : ""}
-                          </span>
+                    ) : sortedDays.map(dayName => {
+                      const entries = byDay[dayName];
+                      const dayKeys = entries.map(entryKey);
+                      const allDaySelected = dayKeys.every(k => selectedKeys.has(k));
+                      const someDaySelected = dayKeys.some(k => selectedKeys.has(k));
+                      return (
+                        <div key={dayName} className="space-y-0.5">
+                          <label className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 bg-muted/30 hover:bg-muted/50">
+                            <Checkbox
+                              checked={allDaySelected}
+                              data-state={someDaySelected && !allDaySelected ? "indeterminate" : undefined}
+                              onCheckedChange={() => toggleDay(entries)}
+                              className="h-3.5 w-3.5"
+                            />
+                            <span className="text-xs font-semibold flex-1">{dayName}</span>
+                            <span className="text-[10px] text-muted-foreground">{entries.length} lev.</span>
+                          </label>
+                          {entries.map(e => (
+                            <label key={e.id} className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 pl-6 hover:bg-muted/50">
+                              <Checkbox
+                                checked={selectedKeys.has(entryKey(e))}
+                                onCheckedChange={() => toggleEntry(e)}
+                                className="h-3.5 w-3.5"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-xs">{e.supplier}</span>
+                                <span className="text-[10px] text-muted-foreground ml-1.5">{e.flow_name}</span>
+                              </div>
+                              {e.delivery_time && <span className="text-[11px] font-medium text-foreground/70 tabular-nums shrink-0">{e.delivery_time}</span>}
+                            </label>
+                          ))}
                         </div>
-                      </label>
-                    ))}
+                      );
+                    })}
                   </div>
-                  {item.supplierIds.length > 0 && (
+                  {item.entryKeys.length > 0 && (
                     <p className="text-[11px] text-primary">
-                      {item.supplierIds.length} leverans{item.supplierIds.length !== 1 ? "er" : ""} vald
+                      {item.entryKeys.length} leverans{item.entryKeys.length !== 1 ? "er" : ""} vald{item.entryKeys.length !== 1 ? "a" : ""}
                     </p>
                   )}
                 </div>
@@ -4485,7 +4596,7 @@ function MallarPage() {
             <Button
               size="sm"
               className="rounded-full"
-              disabled={deliveryMappingSaving || deliveryMappingItems.every(i => !i.supplierIds.length)}
+              disabled={deliveryMappingSaving || deliveryMappingItems.every(i => !i.entryKeys.length)}
               onClick={saveDeliveryMapping}
             >
               {deliveryMappingSaving ? "Sparar..." : "Spara kopplingar"}
