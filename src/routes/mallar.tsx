@@ -2048,6 +2048,103 @@ function MallarPage() {
   const isHiddenForMyForening = (t: TemplateWithMeta) =>
     !!(user?.forening_id && hiddenEntries.some((h) => h.template_id === t.id && h.forening_id === user.forening_id));
 
+  type DeliveryEntry = { id: string; supplier: string; flow_name: string; delivery_time: string; delivery_day: string; delivery_date: string | null };
+
+  function DeliveryPicker({ entries, selectedKeys: selectedKeysStr, onChange }: {
+    entries: DeliveryEntry[];
+    selectedKeys: string;
+    onChange: (keys: string, supplierName: string, flowName: string) => void;
+  }) {
+    const dayOrder = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
+    const byDay = entries.reduce<Record<string, DeliveryEntry[]>>((acc, e) => {
+      const k = e.delivery_day || "Okänd dag";
+      if (!acc[k]) acc[k] = [];
+      acc[k].push(e);
+      return acc;
+    }, {});
+    const sortedDays = Object.keys(byDay).sort((a, b) => {
+      const ai = dayOrder.indexOf(a);
+      const bi = dayOrder.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+    const selectedKeys = new Set(
+      selectedKeysStr.split("|").map(s => s.trim()).filter(s => s.includes("||"))
+    );
+    const entryKey = (e: DeliveryEntry) =>
+      `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`;
+    const syncAndEmit = (next: Set<string>) => {
+      const matched = entries.filter(e => next.has(entryKey(e)));
+      const supplierName = [...new Set(matched.map(e => e.supplier?.trim() ?? "").filter(Boolean))].join("|");
+      const flowName = [...new Set(matched.map(e => e.flow_name?.trim() ?? "").filter(Boolean))].join("|");
+      onChange([...next].join("|"), supplierName, flowName);
+    };
+    const toggleEntry = (e: DeliveryEntry) => {
+      const k = entryKey(e);
+      const next = new Set(selectedKeys);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      syncAndEmit(next);
+    };
+    const toggleDay = (dayEntries: DeliveryEntry[]) => {
+      const dayKeys = dayEntries.map(entryKey);
+      const allSel = dayKeys.every(k => selectedKeys.has(k));
+      const next = new Set(selectedKeys);
+      if (allSel) { dayKeys.forEach(k => next.delete(k)); } else { dayKeys.forEach(k => next.add(k)); }
+      syncAndEmit(next);
+    };
+    return (
+      <div className="space-y-1.5 rounded-lg border border-border/50 p-2 max-h-56 overflow-y-auto">
+        {sortedDays.map(dayName => {
+          const dayEntries = byDay[dayName];
+          const dayKeys = dayEntries.map(entryKey);
+          const allDaySelected = dayKeys.every(k => selectedKeys.has(k));
+          const someDaySelected = dayKeys.some(k => selectedKeys.has(k));
+          return (
+            <div key={dayName} className="space-y-0.5">
+              <div
+                className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 bg-muted/30 hover:bg-muted/50"
+                onClick={() => toggleDay(dayEntries)}
+              >
+                <Checkbox
+                  checked={allDaySelected}
+                  data-state={someDaySelected && !allDaySelected ? "indeterminate" : undefined}
+                  onCheckedChange={() => toggleDay(dayEntries)}
+                  onClick={e => e.stopPropagation()}
+                  className="h-3.5 w-3.5"
+                />
+                <span className="text-xs font-semibold flex-1">{dayName}</span>
+                <span className="text-[10px] text-muted-foreground">{dayEntries.length} leverans{dayEntries.length !== 1 ? "er" : ""}</span>
+              </div>
+              {dayEntries.map(entry => {
+                const checked = selectedKeys.has(entryKey(entry));
+                return (
+                  <div
+                    key={entry.id}
+                    className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 pl-6 hover:bg-muted/50"
+                    onClick={() => toggleEntry(entry)}
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={() => toggleEntry(entry)}
+                      onClick={e => e.stopPropagation()}
+                      className="h-3.5 w-3.5"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs">{entry.supplier}</span>
+                      <span className="text-[10px] text-muted-foreground ml-1.5">{entry.flow_name}</span>
+                    </div>
+                    {entry.delivery_time && (
+                      <span className="text-[11px] font-medium text-foreground/70 tabular-nums shrink-0">{entry.delivery_time}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   // Shared form panels rendered for both create and edit dialogs
   function renderFormContent(
     f: FormState,
@@ -2637,117 +2734,38 @@ function MallarPage() {
                 <div className="pl-6 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-medium text-muted-foreground">Koppla till leveranser</span>
-                    {deliveryWeekEntries.length > 1 && (() => {
-                      const allKeys = deliveryWeekEntries.map(e => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`);
-                      const currentKeys = new Set((f.delivery_entry_keys ?? "").split("|").map(s => s.trim()).filter(s => s.includes("||")));
-                      const allSelected = allKeys.every(k => currentKeys.has(k));
-                      return (
-                        <button
-                          type="button"
-                          className="text-[11px] text-primary hover:underline"
-                          onClick={() => {
-                            if (allSelected) {
-                              setF(p => ({ ...p, delivery_entry_keys: "", delivery_supplier_name: "", delivery_flow_name: "" }));
-                            } else {
-                              const allSupp = [...new Set(deliveryWeekEntries.map(e => e.supplier?.trim() ?? "").filter(Boolean))];
-                              const allFlow = [...new Set(deliveryWeekEntries.map(e => e.flow_name?.trim() ?? "").filter(Boolean))];
-                              setF(p => ({ ...p, delivery_entry_keys: allKeys.join("|"), delivery_supplier_name: allSupp.join("|"), delivery_flow_name: allFlow.join("|") }));
-                            }
-                          }}
-                        >
-                          {allSelected ? "Avmarkera alla" : "Välj alla"}
-                        </button>
-                      );
-                    })()}
+                    {deliveryWeekEntries.length > 1 && (
+                      <button
+                        type="button"
+                        className="text-[11px] text-primary hover:underline"
+                        onClick={() => {
+                          const allKeys = deliveryWeekEntries.map(e => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`);
+                          const currentKeys = new Set((f.delivery_entry_keys ?? "").split("|").map(s => s.trim()).filter(s => s.includes("||")));
+                          const allSelected = allKeys.every(k => currentKeys.has(k));
+                          if (allSelected) {
+                            setF(p => ({ ...p, delivery_entry_keys: "", delivery_supplier_name: "", delivery_flow_name: "" }));
+                          } else {
+                            const allSupp = [...new Set(deliveryWeekEntries.map(e => e.supplier?.trim() ?? "").filter(Boolean))];
+                            const allFlow = [...new Set(deliveryWeekEntries.map(e => e.flow_name?.trim() ?? "").filter(Boolean))];
+                            setF(p => ({ ...p, delivery_entry_keys: allKeys.join("|"), delivery_supplier_name: allSupp.join("|"), delivery_flow_name: allFlow.join("|") }));
+                          }
+                        }}
+                      >
+                        {deliveryWeekEntries.every(e =>
+                          (f.delivery_entry_keys ?? "").split("|").map(s => s.trim()).includes(`${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`)
+                        ) ? "Avmarkera alla" : "Välj alla"}
+                      </button>
+                    )}
                   </div>
-                  {deliveryWeekEntries.length > 0 ? (() => {
-                    const dayOrder = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
-                    const byDay = deliveryWeekEntries.reduce<Record<string, typeof deliveryWeekEntries>>((acc, e) => {
-                      const k = e.delivery_day || "Okänd dag";
-                      if (!acc[k]) acc[k] = [];
-                      acc[k].push(e);
-                      return acc;
-                    }, {});
-                    const sortedDays = Object.keys(byDay).sort((a, b) => {
-                      const ai = dayOrder.indexOf(a);
-                      const bi = dayOrder.indexOf(b);
-                      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-                    });
-                    // Selection is per-entry: key = "Day||Supplier||Flow"
-                    // Stored in delivery_entry_keys; supplier+flow kept in sync for batch create matching
-                    const selectedKeys = new Set(
-                      (f.delivery_entry_keys ?? "").split("|").map(s => s.trim()).filter(s => s.includes("||"))
-                    );
-                    const entryKey = (e: { delivery_day: string; supplier: string; flow_name: string }) =>
-                      `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`;
-
-                    const syncSupplierFlow = (keys: Set<string>) => {
-                      const entries = deliveryWeekEntries.filter(e => keys.has(entryKey(e)));
-                      return {
-                        delivery_supplier_name: [...new Set(entries.map(e => e.supplier?.trim() ?? "").filter(Boolean))].join("|"),
-                        delivery_flow_name: [...new Set(entries.map(e => e.flow_name?.trim() ?? "").filter(Boolean))].join("|"),
-                      };
-                    };
-
-                    const toggleEntry = (entry: typeof deliveryWeekEntries[0]) => {
-                      const k = entryKey(entry);
-                      const next = new Set(selectedKeys);
-                      if (next.has(k)) next.delete(k); else next.add(k);
-                      setF(p => ({ ...p, delivery_entry_keys: [...next].join("|"), ...syncSupplierFlow(next) }));
-                    };
-
-                    const toggleDay = (entries: typeof deliveryWeekEntries) => {
-                      const dayKeys = entries.map(entryKey);
-                      const allSelected = dayKeys.every(k => selectedKeys.has(k));
-                      const next = new Set(selectedKeys);
-                      if (allSelected) { dayKeys.forEach(k => next.delete(k)); } else { dayKeys.forEach(k => next.add(k)); }
-                      setF(p => ({ ...p, delivery_entry_keys: [...next].join("|"), ...syncSupplierFlow(next) }));
-                    };
-
-                    return (
-                      <div className="space-y-1.5 rounded-lg border border-border/50 p-2 max-h-56 overflow-y-auto">
-                        {sortedDays.map(dayName => {
-                          const entries = byDay[dayName];
-                          const dayKeys = entries.map(entryKey);
-                          const allDaySelected = dayKeys.every(k => selectedKeys.has(k));
-                          const someDaySelected = dayKeys.some(k => selectedKeys.has(k));
-                          return (
-                            <div key={dayName} className="space-y-0.5">
-                              <label className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 bg-muted/30 hover:bg-muted/50">
-                                <Checkbox
-                                  checked={allDaySelected}
-                                  data-state={someDaySelected && !allDaySelected ? "indeterminate" : undefined}
-                                  onCheckedChange={() => toggleDay(entries)}
-                                  className="h-3.5 w-3.5"
-                                />
-                                <span className="text-xs font-semibold flex-1">{dayName}</span>
-                                <span className="text-[10px] text-muted-foreground">{entries.length} leverans{entries.length !== 1 ? "er" : ""}</span>
-                              </label>
-                              {entries.map(entry => {
-                                const checked = selectedKeys.has(entryKey(entry));
-                                return (
-                                  <label key={entry.id} className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 pl-6 hover:bg-muted/50">
-                                    <Checkbox
-                                      checked={checked}
-                                      onCheckedChange={() => toggleEntry(entry)}
-                                      className="h-3.5 w-3.5"
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                      <span className="text-xs">{entry.supplier}</span>
-                                      <span className="text-[10px] text-muted-foreground ml-1.5">{entry.flow_name}</span>
-                                    </div>
-                                    {entry.delivery_time && (
-                                      <span className="text-[11px] font-medium text-foreground/70 tabular-nums shrink-0">{entry.delivery_time}</span>
-                                    )}
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })() : (
+                  {deliveryWeekEntries.length > 0 ? (
+                    <DeliveryPicker
+                      entries={deliveryWeekEntries}
+                      selectedKeys={f.delivery_entry_keys ?? ""}
+                      onChange={(keys, supplierName, flowName) =>
+                        setF(p => ({ ...p, delivery_entry_keys: keys, delivery_supplier_name: supplierName, delivery_flow_name: flowName }))
+                      }
+                    />
+                  ) : (
                     <div className="space-y-1">
                       <Input
                         placeholder="t.ex. Färskt"
