@@ -1202,20 +1202,28 @@ function TasksPage() {
           deletedIds.push(...incompleteIds);
         }
 
-        // Cap recurrence_end so spawn won't recreate purged periods
-        const dayBefore = new Date(periodStart);
-        dayBefore.setDate(dayBefore.getDate() - 1);
-        await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
+        if (!isChild && t.status !== "done" && !t.completed_at) {
+          // Also delete the parent itself when deleting "this and future"
+          const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", t.id);
+          deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+          await supabase.from("tasks").delete().eq("id", t.id);
+          deletedIds.push(t.id);
+        } else if (isChild) {
+          // Cap recurrence_end so spawn won't recreate purged periods
+          const dayBefore = new Date(periodStart);
+          dayBefore.setDate(dayBefore.getDate() - 1);
+          await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
+        }
       }
     } else if ((t.recurrence_rule || isChild) && scope === "single") {
-      // Delete the child instance; for a recurring parent, only mark the period skipped
-      if (isChild && t.status !== "done" && !t.completed_at) {
+      if (t.status !== "done" && !t.completed_at) {
         const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", t.id);
         deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
         await supabase.from("tasks").delete().eq("id", t.id);
         deletedIds.push(t.id);
       }
-      if (periodStart) {
+      if (isChild && periodStart) {
+        // Mark this period as skipped on the parent so spawn doesn't recreate it
         const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
         const existing: string[] = (parent?.deleted_periods ?? []) as string[];
         if (!existing.includes(periodStart)) {
@@ -1266,18 +1274,25 @@ function TasksPage() {
             await supabase.from("tasks").delete().in("id", incompleteIds);
             allDeletedIds.push(...incompleteIds);
           }
-          const dayBefore = new Date(periodStart);
-          dayBefore.setDate(dayBefore.getDate() - 1);
-          await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
+          if (!isChild && task.status !== "done" && !task.completed_at) {
+            const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", task.id);
+            deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+            await supabase.from("tasks").delete().eq("id", task.id);
+            allDeletedIds.push(task.id);
+          } else if (isChild) {
+            const dayBefore = new Date(periodStart);
+            dayBefore.setDate(dayBefore.getDate() - 1);
+            await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
+          }
         }
       } else if ((task.recurrence_rule || isChild) && recurringScope === "single") {
-        if (isChild) {
+        if (task.status !== "done" && !task.completed_at) {
           const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", task.id);
           deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
           await supabase.from("tasks").delete().eq("id", task.id);
           allDeletedIds.push(task.id);
         }
-        if (periodStart) {
+        if (isChild && periodStart) {
           const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
           const existing: string[] = (parent?.deleted_periods ?? []) as string[];
           if (!existing.includes(periodStart)) {
@@ -2574,7 +2589,7 @@ function TasksPage() {
       {/* DETAIL MODAL */}
       {detailTask && (
         <Dialog open={!!detailTask && !lightboxTask} onOpenChange={(o) => { if (!o) { setDetailTask(null); setAnswerDraft({}); setCompleteError(""); } }}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto pb-16">
             <DialogHeader>
               <div className="flex items-start justify-between gap-2 pr-6">
                 <div className="min-w-0">
@@ -3118,7 +3133,7 @@ function TasksPage() {
           <div className="flex flex-col sm:flex-row overflow-y-auto sm:overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
 
             {/* CONTENT column — always visible on desktop, step 1 on mobile */}
-            <div className={cn("flex-1 sm:overflow-y-auto p-5 space-y-5 sm:p-6 sm:space-y-6 min-w-0", createStep === 2 && "hidden sm:block")}>
+            <div className={cn("flex-1 sm:overflow-y-auto p-5 space-y-5 sm:p-6 sm:space-y-6 pb-16 min-w-0", createStep === 2 && "hidden sm:block")}>
 
               {/* Template picker — only regular templates, not base templates */}
               {/* Template picker — only regular/both templates, not base or batch_only */}
@@ -3879,7 +3894,7 @@ function TasksPage() {
               </div>
             )}
             <div className="flex flex-col sm:flex-row overflow-y-auto sm:overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
-              <div className="flex-1 sm:overflow-y-auto p-5 sm:p-6 space-y-5 sm:space-y-6 min-w-0">
+              <div className="flex-1 sm:overflow-y-auto p-5 sm:p-6 space-y-5 sm:space-y-6 pb-16 min-w-0">
                 <input
                   placeholder="Titel..."
                   value={editForm.title}
@@ -4321,7 +4336,7 @@ function TasksPage() {
               Skapa uppgifter från dagens leveranser
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 max-h-80 overflow-y-auto">
+          <div className="space-y-2 max-h-80 overflow-y-auto pb-4">
             {todayDeliveries.map(entry => {
               const alreadyCreated = tasks.some(t => t.delivery_entry_id === entry.id);
               return (

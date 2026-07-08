@@ -260,6 +260,9 @@ function MallarPage() {
     templateId: string;
     assigneeUserIds: string[];
     assigneeGroupIds: string[];
+    eventTriggerUserId: string;
+    // For delivery templates: which delivery entry ids to create tasks for
+    selectedDeliveryIds: string[];
   };
   const [bulkCreateOpen, setBulkCreateOpen] = useState(false);
   const [bulkTaskConfigs, setBulkTaskConfigs] = useState<BulkTaskConfig[]>([]);
@@ -691,46 +694,59 @@ function MallarPage() {
     await load();
   }
 
-  // Calculate the next due date for a recurring template from today
+  // Calculate the next due date for a recurring template from today — never returns a past date
   function calcNextDueDate(tmpl: ChecklistTemplate): { iso: string; time: string } | null {
     const rule = tmpl.recurrence_rule;
     if (!rule) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const today = new Date(now); today.setHours(0, 0, 0, 0);
     let base = new Date(today);
 
-    if (rule === "weekly" || rule === "biweekly") {
+    if (rule === "daily" || rule === "every_other_day") {
+      base = new Date(today); // today is always valid for daily
+    } else if (rule === "weekly" || rule === "biweekly") {
       const days = tmpl.recurrence_days ?? [];
       if (days.length > 0) {
         // 0=Mon…6=Sun (our convention) → JS getDay(): 0=Sun,1=Mon…6=Sat
-        const todayJs = today.getDay(); // 0=Sun
+        const todayJs = today.getDay();
         const todayConv = todayJs === 0 ? 6 : todayJs - 1; // convert to Mon=0
+        let found = false;
         for (let i = 0; i <= 7; i++) {
           if (days.includes((todayConv + i) % 7)) {
             base = new Date(today);
             base.setDate(today.getDate() + i);
+            found = true;
             break;
           }
         }
+        if (!found) { base = new Date(today); base.setDate(today.getDate() + 1); }
       }
     } else if (rule === "monthly" || rule === "quarterly") {
       const tAny = tmpl as ChecklistTemplate & { recurrence_month_day?: number };
       const targetDay = tAny.recurrence_month_day ?? 1;
-      base = new Date(today);
-      base.setDate(targetDay);
+      base = new Date(today.getFullYear(), today.getMonth(), targetDay);
+      // If target day already passed this month (strictly before today), move to next month
       if (base < today) base.setMonth(base.getMonth() + 1);
     } else if (rule === "yearly") {
       const tAny = tmpl as ChecklistTemplate & { recurrence_months?: number[]; recurrence_month_day?: number };
       const months = tAny.recurrence_months ?? [];
       const targetDay = tAny.recurrence_month_day ?? 1;
       if (months.length > 0) {
-        const curMonth = today.getMonth() + 1;
-        const next = months.find(m => m >= curMonth) ?? months[0];
-        base = new Date(today.getFullYear(), next - 1, targetDay);
-        if (base < today) base = new Date(today.getFullYear() + 1, months[0] - 1, targetDay);
+        const curMonth = today.getMonth() + 1; // 1-based
+        const curDay = today.getDate();
+        // Find next month >= current where targetDay hasn't passed
+        const nextMonth = months.find(m => m > curMonth || (m === curMonth && targetDay >= curDay));
+        if (nextMonth != null) {
+          base = new Date(today.getFullYear(), nextMonth - 1, targetDay);
+        } else {
+          base = new Date(today.getFullYear() + 1, months[0] - 1, targetDay);
+        }
       }
     }
-    // Apply due_date_time if set
+
+    // Ensure base is never in the past
+    if (base < today) base = new Date(today);
+
     const timeStr = (tmpl as ChecklistTemplate & { due_date_time?: string }).due_date_time ?? "";
     if (timeStr) {
       const [h, m] = timeStr.split(":").map(Number);
@@ -743,7 +759,14 @@ function MallarPage() {
     const configs = [...selectedTemplateIds].map((id) => {
       const tmpl = templates.find(t => t.id === id);
       if (!tmpl) return null;
-      return { templateId: id, assigneeUserIds: [] as string[], assigneeGroupIds: [] as string[] };
+      const tmplAny = tmpl as ChecklistTemplate & { event_trigger_user_id?: string };
+      return {
+        templateId: id,
+        assigneeUserIds: [] as string[],
+        assigneeGroupIds: [] as string[],
+        eventTriggerUserId: tmplAny.event_trigger_user_id ?? "",
+        selectedDeliveryIds: [] as string[],
+      };
     });
     setBulkTaskConfigs(configs.filter((c): c is BulkTaskConfig => c !== null));
     setBulkCreateOpen(true);
@@ -766,8 +789,49 @@ function MallarPage() {
       const tmpl = templates.find(t => t.id === cfg.templateId);
       if (!tmpl) continue;
 
-      // Leveransmallar skapas via leveransflödet på uppgiftssidan — inte här
-      if ((tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task) continue;
+      // Leveransmallar: skapa en uppgift per vald leverans
+      if ((tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task) {
+        if (cfg.selectedDeliveryIds.length === 0) continue;
+        for (const deliveryId of cfg.selectedDeliveryIds) {
+          const delivery = deliverySuppliers.find(s => s.id === deliveryId);
+          const dueTime = delivery?.delivery_time ?? "";
+          const { data: task } = await supabase.from("tasks").insert({
+            title: tmpl.title,
+            description: tmpl.description ?? "",
+            category: tmpl.category ?? "",
+            priority: tmpl.priority ?? "Medel",
+            store_id: storeId,
+            due_date: (() => {
+              const d = new Date(); d.setHours(0, 0, 0, 0);
+              if (dueTime) { const [h, m] = dueTime.split(":").map(Number); d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0); }
+              return d.toISOString();
+            })(),
+            due_date_time: dueTime || null,
+            delivery_entry_id: deliveryId,
+            event_trigger_description: tmplAny.event_trigger_description ?? null,
+            event_trigger_user_id: cfg.eventTriggerUserId || null,
+            is_critical: tmplAny.is_critical ?? false,
+            created_by: user?.id ?? null,
+            assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
+            status: "todo",
+          }).select("id").maybeSingle();
+          if (!task?.id) continue;
+          if (validQuestions.length > 0) {
+            await supabase.from("task_questions").insert(
+              validQuestions.map((q, i) => ({ task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: i }))
+            );
+          }
+          if (validItems.length > 0) {
+            await supabase.from("task_steps").insert(
+              validItems.map((it, i) => ({ task_id: task.id, label: it.label, sort_order: i, requires_photo: it.requires_photo, link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url || null }))
+            );
+          }
+          const aRows = assigneeRows(task.id);
+          if (aRows.length > 0) await supabase.from("task_assignees").insert(aRows);
+          logAudit(user?.id ?? null, "task.create", "tasks", task.id, { title: tmpl.title, from_template: tmpl.id, delivery_entry_id: deliveryId });
+        }
+        continue;
+      }
       // Manuell-only-mallar skapas inte i batch
       if ((tmpl as ChecklistTemplate & { template_mode?: string }).template_mode === "manual_only") continue;
 
@@ -833,6 +897,7 @@ function MallarPage() {
           recurrence_start: tmplAny.recurrence_start ?? null,
           recurrence_end: tmplAny.recurrence_end ?? null,
           event_trigger_description: tmplAny.event_trigger_description ?? null,
+          event_trigger_user_id: cfg.eventTriggerUserId || null,
           depends_on_task_id: dependsOnTaskId,
           is_critical: tmplAny.is_critical ?? false,
           created_by: user?.id ?? null,
@@ -1925,7 +1990,7 @@ function MallarPage() {
 
         {/* RIGHT: Properties sidebar */}
         <div className="w-64 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/30">
-          <div className="divide-y divide-border/50">
+          <div className="divide-y divide-border/50 pb-16">
 
             {/* Malltyp */}
             <div className="px-4 py-3 space-y-2">
@@ -1954,32 +2019,6 @@ function MallarPage() {
                   ? "Grundmallar visas bara vid batchskapning och schemalagda körningar."
                   : "Vanliga mallar visas i mallväljaren vid manuell uppgiftsskapning."}
               </p>
-            </div>
-
-            {/* Skapningsläge */}
-            <div className="px-4 py-3 space-y-2">
-              <span className="text-xs font-medium text-muted-foreground">Skapningsläge</span>
-              <div className="flex flex-col gap-1">
-                {([
-                  { value: "both", label: "Batch + Manuell" },
-                  { value: "batch_only", label: "Endast batch" },
-                  { value: "manual_only", label: "Endast manuell" },
-                ] as const).map(({ value, label }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={cn(
-                      "w-full rounded-lg border px-2 py-1.5 text-[11px] font-medium text-left transition-colors",
-                      f.template_mode === value
-                        ? "bg-primary/10 text-primary border-primary/40"
-                        : "border-border/60 text-muted-foreground hover:border-primary/30"
-                    )}
-                    onClick={() => setF((p) => ({ ...p, template_mode: value }))}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* Kategori */}
@@ -3539,15 +3578,55 @@ function MallarPage() {
                           )}
                         </div>
                       )}
-                      {isDeliveryTmpl && (
-                        <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                          Leveransmallar kopplas automatiskt till leveransplanen. Skapa leveransuppgifter via <strong>Uppgifter → Leveranser</strong> istället.
-                        </p>
-                      )}
                     </div>
                   </div>
 
-                  {!isDeliveryTmpl && (
+                  {/* Delivery template: pick deliveries from plan */}
+                  {isDeliveryTmpl && (() => {
+                    const tmplFlows = ((tmpl as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "")
+                      .split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
+                    const filteredSuppliers = tmplFlows.length
+                      ? deliverySuppliers.filter(s => tmplFlows.includes(s.flow_name?.toLowerCase() ?? ""))
+                      : deliverySuppliers;
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+                          <label className="text-xs font-medium text-muted-foreground">
+                            Välj leveranser{filteredSuppliers.length !== deliverySuppliers.length ? ` (filtrerat på flöde)` : ""}
+                          </label>
+                        </div>
+                        {filteredSuppliers.length === 0 ? (
+                          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                            Ingen aktiv leveransplan hittades. Importera en leveransplan under Inställningar.
+                          </p>
+                        ) : (
+                          <div className="space-y-0.5 max-h-36 overflow-y-auto rounded-lg border border-border/50 p-2">
+                            {filteredSuppliers.map(s => (
+                              <label key={s.id} className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 hover:bg-muted/50">
+                                <Checkbox
+                                  checked={cfg.selectedDeliveryIds.includes(s.id)}
+                                  onCheckedChange={(checked) => {
+                                    const ids = checked
+                                      ? [...cfg.selectedDeliveryIds, s.id]
+                                      : cfg.selectedDeliveryIds.filter(id => id !== s.id);
+                                    setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, selectedDeliveryIds: ids } : c));
+                                  }}
+                                  className="h-3.5 w-3.5"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <span className="text-xs font-medium">{s.supplier}</span>
+                                  <span className="ml-2 text-[11px] text-muted-foreground">{s.flow_name}{s.delivery_time ? ` · ${s.delivery_time}` : ""}</span>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Assignees */}
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <Users className="h-3.5 w-3.5 text-muted-foreground" />
@@ -3600,6 +3679,40 @@ function MallarPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Händelsevillkor bekräftare — only when template has event trigger */}
+                  {(tmpl as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-3.5 w-3.5 text-amber-500" />
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Bekräftare för: <span className="text-foreground font-semibold">{(tmpl as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description}</span>
+                        </label>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Välj vem som ska bekräfta att händelsen inträffat innan uppgiften visas.</p>
+                      <div className="space-y-0.5 max-h-28 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50/30 p-2">
+                        <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
+                          <Checkbox
+                            checked={cfg.eventTriggerUserId === ""}
+                            onCheckedChange={() => setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, eventTriggerUserId: "" } : c))}
+                            className="h-3.5 w-3.5"
+                          />
+                          <span className="text-xs text-muted-foreground italic">Ingen specifik bekräftare</span>
+                        </label>
+                        {storeUsers.map(u => (
+                          <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
+                            <Checkbox
+                              checked={cfg.eventTriggerUserId === u.id}
+                              onCheckedChange={(checked) => {
+                                setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, eventTriggerUserId: checked ? u.id : "" } : c));
+                              }}
+                              className="h-3.5 w-3.5"
+                            />
+                            <span className="text-xs">{u.display_name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               );
@@ -3689,7 +3802,7 @@ function MallarPage() {
                           <Button
                             variant="outline" size="sm"
                             className="rounded-full h-7 text-xs"
-                            onClick={() => { setActivatePackageTarget(pkg); const _now2 = new Date(); setBulkTaskConfigs(pkgTemplates.map(t => { const slots = (t as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? []; const dd = t.due_date_offset != null ? (() => { const d = new Date(_now2); d.setDate(d.getDate() + t.due_date_offset!); return d.toISOString().slice(0, 10); })() : ""; return { templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], dueDate: dd, priority: t.priority ?? "Medel", dueTime: slots.length > 0 ? "" : (t.due_date_time ?? ""), timeSlots: slots }; })); setShowPackagesPanel(false); setBulkCreateOpen(true); }}
+                            onClick={() => { setActivatePackageTarget(pkg); setBulkTaskConfigs(pkgTemplates.map(t => { const tAny = t as ChecklistTemplate & { event_trigger_user_id?: string }; return { templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], eventTriggerUserId: tAny.event_trigger_user_id ?? "", selectedDeliveryIds: [] }; })); setShowPackagesPanel(false); setBulkCreateOpen(true); }}
                           >
                             <ListChecks className="h-3 w-3 mr-1" /> Aktivera
                           </Button>
