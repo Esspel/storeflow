@@ -401,6 +401,13 @@ function TasksPage() {
 
   // Called by SwipeableCard's onSwipeRight — delays the actual DB write by 4s
   const swipeComplete = (task: TaskFull) => {
+    // Block swipe-complete for unconfirmed event tasks
+    if (unconfirmedEventIds.has(task.id)) return;
+    // Block swipe-complete for dependency-blocked tasks
+    if (task.depends_on_task_id) {
+      const pred = tasks.find(t => t.id === task.depends_on_task_id);
+      if (pred && pred.status !== "done") return;
+    }
     // Cancel any prior pending undo first
     dismissUndoToast();
     // Optimistically reflect the toggle in the UI immediately
@@ -1110,6 +1117,11 @@ function TasksPage() {
     if (completingRef.current.has(task.id)) return;
     // Block completion if event has not been confirmed
     if (unconfirmedEventIds.has(task.id)) return;
+    // Block completion if predecessor task is not done
+    if (task.depends_on_task_id) {
+      const pred = tasks.find(t => t.id === task.depends_on_task_id);
+      if (pred && pred.status !== "done") return;
+    }
     completingRef.current.add(task.id);
     try {
       const isDone = task.status === "done";
@@ -1359,6 +1371,9 @@ function TasksPage() {
       questions: (task.questions ?? []).map(q => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required, link_url: "" })),
       assigneeUserIds: (task.assignees ?? []).filter(a => a.user_id).map(a => a.user_id!),
       assigneeGroupIds: (task.assignees ?? []).filter(a => a.group_id).map(a => a.group_id!),
+      event_trigger_description: task.event_trigger_description ?? "",
+      event_trigger_user_id: task.event_trigger_user_id ?? "",
+      depends_on_task_id: task.depends_on_task_id ?? "",
     });
   };
 
@@ -1511,6 +1526,9 @@ function TasksPage() {
       // recurrence_start intentionally NOT updated — start date is locked
       recurrence_end: editForm.recurrence_end || null,
       completion_mode: editForm.completion_mode || "manual",
+      event_trigger_description: editForm.event_trigger_description?.trim() || null,
+      event_trigger_user_id: editForm.event_trigger_user_id || null,
+      depends_on_task_id: editForm.depends_on_task_id || null,
     };
 
 
@@ -2321,9 +2339,6 @@ function TasksPage() {
             <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={exportCSV}>
               <Download className="mr-1.5 h-3.5 w-3.5" /> Exportera
             </Button>
-            <Button variant="outline" size="sm" className="rounded-full text-xs border-blue-500/40 text-blue-700 hover:bg-blue-50 dark:text-blue-400" onClick={() => { setShowDeliveryModal(true); setSelectedDeliveryIds(new Set(todayDeliveries.map(d => d.id))); }}>
-              <Truck className="mr-1.5 h-3.5 w-3.5" /> Leveranser{todayDeliveries.length > 0 ? ` (${todayDeliveries.length})` : ""}
-            </Button>
             <Button size="sm" className="rounded-full text-xs" onClick={() => { setShowRecurrenceSetup(true); setSaveError(""); }}>
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Ny uppgift
             </Button>
@@ -2557,21 +2572,6 @@ function TasksPage() {
         </div>
       )}
 
-      {/* Mobile FAB — delivery */}
-      {isManager && (
-        <button
-          className="fixed bottom-44 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
-          aria-label="Leveransuppgifter"
-          onClick={() => { setShowDeliveryModal(true); setSelectedDeliveryIds(new Set(todayDeliveries.map(d => d.id))); }}
-        >
-          <Truck className="h-5 w-5" />
-          {todayDeliveries.length > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
-              {todayDeliveries.length}
-            </span>
-          )}
-        </button>
-      )}
       {/* Mobile FAB — new task */}
       {isManager && (
         <button
@@ -2902,15 +2902,22 @@ function TasksPage() {
                   <p className="text-xs text-destructive">{completeError}</p>
                 )}
                 <div className="flex flex-wrap items-center gap-2">
-                {detailTask.status !== "done" && detailTask.status !== "cancelled" && (
+                {detailTask.status !== "done" && detailTask.status !== "cancelled" && (() => {
+                  const blockedByChain = detailTask.depends_on_task_id
+                    ? (() => { const pred = tasks.find(p => p.id === detailTask.depends_on_task_id); return !!(pred && pred.status !== "done"); })()
+                    : false;
+                  const blockedByEvent = unconfirmedEventIds.has(detailTask.id);
+                  return (
                   <Button
                     size="sm"
                     className="rounded-full gap-1.5"
+                    disabled={blockedByChain || blockedByEvent}
                     onClick={() => void completeTask(detailTask)}
                   >
                     <CheckCircle2 className="h-3.5 w-3.5" /> Markera klar
                   </Button>
-                )}
+                  );
+                })()}
                 {detailTask.status === "done" && (
                   <Button
                     size="sm"
@@ -3120,10 +3127,10 @@ function TasksPage() {
           </div>
 
           {/* Body: stacked on mobile (step-gated), side-by-side on desktop */}
-          <div className="flex flex-col sm:flex-row overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
+          <div className="flex flex-col sm:flex-row overflow-y-auto sm:overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
 
             {/* CONTENT column — always visible on desktop, step 1 on mobile */}
-            <div className={cn("flex-1 overflow-y-auto p-5 space-y-5 sm:p-6 sm:space-y-6 min-w-0", createStep === 2 && "hidden sm:block")}>
+            <div className={cn("flex-1 sm:overflow-y-auto p-5 space-y-5 sm:p-6 sm:space-y-6 min-w-0", createStep === 2 && "hidden sm:block")}>
 
               {/* Template picker */}
               {templates.length > 0 && (
@@ -3858,8 +3865,8 @@ function TasksPage() {
                 </div>
               </div>
             )}
-            <div className="flex flex-col sm:flex-row overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
-              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 sm:space-y-6 min-w-0">
+            <div className="flex flex-col sm:flex-row overflow-y-auto sm:overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
+              <div className="flex-1 sm:overflow-y-auto p-5 sm:p-6 space-y-5 sm:space-y-6 min-w-0">
                 <input
                   placeholder="Titel..."
                   value={editForm.title}
@@ -4064,6 +4071,63 @@ function TasksPage() {
                       onToggleGroup={(gid) => setEditForm(p => { if (!p) return p; const ids = p.assigneeGroupIds.includes(gid) ? p.assigneeGroupIds.filter(id=>id!==gid) : [...p.assigneeGroupIds, gid]; return {...p, assigneeGroupIds:ids}; })}
                     />
                   )}
+
+                  {/* Händelsebaserad uppgift */}
+                  <div className="px-4 py-3 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 shrink-0 text-amber-500" />
+                      <span className="text-xs text-muted-foreground flex-1">Händelsevillkor</span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Beskriv händelsen (t.ex. Andel inkommen)..."
+                      value={editForm.event_trigger_description ?? ""}
+                      onChange={(e) => setEditForm(p => p ? { ...p, event_trigger_description: e.target.value } : p)}
+                      className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    />
+                    {editForm.event_trigger_description && (
+                      <>
+                        <p className="text-[11px] text-muted-foreground">Vem kan bekräfta händelsen?</p>
+                        <Select
+                          value={editForm.event_trigger_user_id || "__none"}
+                          onValueChange={(v) => setEditForm(p => p ? { ...p, event_trigger_user_id: v === "__none" ? "" : v } : p)}
+                        >
+                          <SelectTrigger className="h-7 text-xs border-border/60">
+                            <SelectValue placeholder="Vem som helst (manager)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">Vem som helst (manager)</SelectItem>
+                            {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Uppgiftskedja — beror på */}
+                  <div className="px-4 py-3 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Link2 className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                      <span className="text-xs text-muted-foreground flex-1">Beror på uppgift</span>
+                    </div>
+                    <Select
+                      value={editForm.depends_on_task_id || "__none"}
+                      onValueChange={(v) => setEditForm(p => p ? { ...p, depends_on_task_id: v === "__none" ? "" : v } : p)}
+                    >
+                      <SelectTrigger className="h-7 text-xs border-border/60">
+                        <SelectValue placeholder="Ingen" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">Ingen</SelectItem>
+                        {tasks.filter(t => t.status !== "done" && t.id !== editTask.id).slice(0, 50).map(t => (
+                          <SelectItem key={t.id} value={t.id}>{t.title.slice(0, 40)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {editForm.depends_on_task_id && (
+                      <p className="text-[11px] text-muted-foreground">Uppgiften visas som blockerad tills föregångaren är klar.</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
