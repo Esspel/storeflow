@@ -699,6 +699,14 @@ function MallarPage() {
     await load();
   }
 
+  // Add minutes to a HH:MM time string, returns HH:MM (clamped to same day)
+  function addMinutesToTime(time: string, minutes: number): string {
+    const [h, m] = time.split(":").map(Number);
+    if (isNaN(h) || isNaN(m)) return time;
+    const total = Math.min(h * 60 + m + minutes, 23 * 60 + 59);
+    return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  }
+
   // Calculate the next due date for a recurring template from today — never returns a past date
   function calcNextDueDate(tmpl: ChecklistTemplate): { iso: string; time: string } | null {
     const rule = tmpl.recurrence_rule;
@@ -846,7 +854,9 @@ function MallarPage() {
         if (cfg.selectedDeliveryIds.length === 0) continue;
         for (const deliveryId of cfg.selectedDeliveryIds) {
           const delivery = deliverySuppliers.find(s => s.id === deliveryId);
-          const dueTime = delivery?.delivery_time ?? "";
+          const rawTime = delivery?.delivery_time ?? "";
+          // Due time = delivery time + 30 min (buffer for delays)
+          const dueTime = rawTime ? addMinutesToTime(rawTime, 30) : "";
           const { data: task } = await supabase.from("tasks").insert({
             title: tmpl.title,
             description: tmpl.description ?? "",
@@ -3733,60 +3743,54 @@ function MallarPage() {
                     const tmplSuppliers = ((tmpl as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name ?? "")
                       .split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
 
-                    // Filter by both flow and supplier when set — if neither is set, show all
-                    const filteredSuppliers = deliverySuppliers.filter(s => {
-                      const flowOk = tmplFlows.length === 0 || tmplFlows.includes(s.flow_name?.toLowerCase() ?? "");
-                      const suppOk = tmplSuppliers.length === 0 || tmplSuppliers.includes(s.supplier?.toLowerCase() ?? "");
-                      return flowOk && suppOk;
-                    });
-                    const showAll = filteredSuppliers.length === 0 && deliverySuppliers.length > 0;
-                    const visibleSuppliers = showAll ? deliverySuppliers : filteredSuppliers;
-
-                    // Group by flow
-                    const byFlow = visibleSuppliers.reduce<Record<string, typeof deliverySuppliers>>((acc, s) => {
+                    // Always show ALL delivery entries — never hide any
+                    // Group by flow for readable display
+                    const byFlow = deliverySuppliers.reduce<Record<string, typeof deliverySuppliers>>((acc, s) => {
                       const k = s.flow_name || "Okänt flöde";
                       if (!acc[k]) acc[k] = [];
                       acc[k].push(s);
                       return acc;
                     }, {});
 
-                    const filterDesc = tmplSuppliers.length > 0
-                      ? `filtrerat på ${tmplSuppliers.join(", ")}`
-                      : tmplFlows.length > 0 ? `filtrerat på flöde` : "";
+                    // An entry is "suggested" (pre-checked) if it matches the template's configured suppliers/flows
+                    const isSuggested = (s: { supplier: string; flow_name: string }) => {
+                      const flowOk = tmplFlows.length === 0 || tmplFlows.includes(s.flow_name?.toLowerCase() ?? "");
+                      const suppOk = tmplSuppliers.length === 0 || tmplSuppliers.includes(s.supplier?.toLowerCase() ?? "");
+                      return flowOk && suppOk;
+                    };
+                    const hasSuggestions = tmplFlows.length > 0 || tmplSuppliers.length > 0;
 
                     return (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                            <label className="text-xs font-medium text-muted-foreground">
-                              Välj leveranser{filterDesc ? ` (${filterDesc})` : ""}
-                            </label>
+                            <label className="text-xs font-medium text-muted-foreground">Välj leveranser</label>
+                            {hasSuggestions && (
+                              <span className="text-[10px] text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">Förvalda markerade</span>
+                            )}
                           </div>
-                          {visibleSuppliers.length > 1 && (
+                          {deliverySuppliers.length > 1 && (
                             <button
                               type="button"
                               className="text-[11px] text-primary hover:underline"
                               onClick={() => {
-                                const allIds = visibleSuppliers.map(s => s.id);
+                                const allIds = deliverySuppliers.map(s => s.id);
                                 const allSelected = allIds.every(id => cfg.selectedDeliveryIds.includes(id));
-                                const ids = allSelected ? cfg.selectedDeliveryIds.filter(id => !allIds.includes(id)) : [...new Set([...cfg.selectedDeliveryIds, ...allIds])];
+                                const ids = allSelected ? [] : allIds;
                                 setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, selectedDeliveryIds: ids } : c));
                               }}
                             >
-                              {visibleSuppliers.every(s => cfg.selectedDeliveryIds.includes(s.id)) ? "Avmarkera alla" : "Välj alla"}
+                              {deliverySuppliers.every(s => cfg.selectedDeliveryIds.includes(s.id)) ? "Avmarkera alla" : "Välj alla"}
                             </button>
                           )}
                         </div>
-                        {visibleSuppliers.length === 0 ? (
+                        {deliverySuppliers.length === 0 ? (
                           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                             Ingen aktiv leveransplan hittades. Importera en leveransplan under Inställningar.
                           </p>
                         ) : (
-                          <div className="space-y-1.5 max-h-48 overflow-y-auto rounded-lg border border-border/50 p-2">
-                            {showAll && (
-                              <p className="text-[10px] text-amber-700 bg-amber-50 rounded px-2 py-1 mb-1">Mallen är inte kopplad till specifika leveranser — alla visas</p>
-                            )}
+                          <div className="space-y-1.5 max-h-52 overflow-y-auto rounded-lg border border-border/50 p-2">
                             {Object.entries(byFlow).map(([flowName, entries]) => {
                               const flowIds = entries.map(s => s.id);
                               const allFlowSelected = flowIds.every(id => cfg.selectedDeliveryIds.includes(id));
@@ -3806,24 +3810,37 @@ function MallarPage() {
                                       className="h-3.5 w-3.5"
                                     />
                                     <span className="text-xs font-medium flex-1">{flowName}</span>
-                                    <span className="text-[10px] text-muted-foreground">{entries.length} företag</span>
+                                    <span className="text-[10px] text-muted-foreground">{entries.length} leverantör{entries.length !== 1 ? "er" : ""}</span>
                                   </label>
-                                  {entries.map(s => (
-                                    <label key={s.id} className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 pl-6 hover:bg-muted/50">
-                                      <Checkbox
-                                        checked={cfg.selectedDeliveryIds.includes(s.id)}
-                                        onCheckedChange={(checked) => {
-                                          const ids = checked
-                                            ? [...cfg.selectedDeliveryIds, s.id]
-                                            : cfg.selectedDeliveryIds.filter(id => id !== s.id);
-                                          setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, selectedDeliveryIds: ids } : c));
-                                        }}
-                                        className="h-3.5 w-3.5"
-                                      />
-                                      <span className="text-xs flex-1">{s.supplier}</span>
-                                      {s.delivery_time && <span className="text-[10px] text-muted-foreground">{s.delivery_time}</span>}
-                                    </label>
-                                  ))}
+                                  {entries.map(s => {
+                                    const suggested = isSuggested(s);
+                                    return (
+                                      <label key={s.id} className={cn(
+                                        "flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 pl-6 hover:bg-muted/50",
+                                        suggested && hasSuggestions && "bg-blue-50/50"
+                                      )}>
+                                        <Checkbox
+                                          checked={cfg.selectedDeliveryIds.includes(s.id)}
+                                          onCheckedChange={(checked) => {
+                                            const ids = checked
+                                              ? [...cfg.selectedDeliveryIds, s.id]
+                                              : cfg.selectedDeliveryIds.filter(id => id !== s.id);
+                                            setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, selectedDeliveryIds: ids } : c));
+                                          }}
+                                          className="h-3.5 w-3.5"
+                                        />
+                                        <span className="text-xs flex-1">{s.supplier}</span>
+                                        <div className="flex items-center gap-1.5">
+                                          {s.delivery_time && (
+                                            <span className="text-[10px] text-muted-foreground">{s.delivery_time}</span>
+                                          )}
+                                          {suggested && hasSuggestions && (
+                                            <span className="text-[10px] text-blue-600">●</span>
+                                          )}
+                                        </div>
+                                      </label>
+                                    );
+                                  })}
                                 </div>
                               );
                             })}

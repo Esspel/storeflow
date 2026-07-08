@@ -494,6 +494,7 @@ function TasksPage() {
   // Delivery entries for today (used by "Generera från leveransplan")
   type DeliveryEntry = { id: string; delivery_time: string; supplier: string; flow_name: string; delivery_date: string | null };
   const [todayDeliveries, setTodayDeliveries] = useState<DeliveryEntry[]>([]);
+  const [modalDeliveries, setModalDeliveries] = useState<DeliveryEntry[]>([]);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [selectedDeliveryIds, setSelectedDeliveryIds] = useState<Set<string>>(new Set());
   const [generatingDeliveries, setGeneratingDeliveries] = useState(false);
@@ -530,9 +531,15 @@ function TasksPage() {
         .gte("due_date", todayStr + "T00:00:00")
         .lt("due_date", todayStr + "T23:59:59");
       if ((count ?? 0) > 0) continue;
-      const [h, m] = (entry.delivery_time ?? "00:00").split(":").map(Number);
+      const rawTime = (entry.delivery_time ?? "00:00").slice(0, 5);
+      const [rh, rm] = rawTime.split(":").map(Number);
+      // Due time = delivery time + 30 min (buffer for delays)
+      const dueTotalMin = Math.min((isNaN(rh) ? 0 : rh) * 60 + (isNaN(rm) ? 0 : rm) + 30, 23 * 60 + 59);
+      const dueH = Math.floor(dueTotalMin / 60);
+      const dueM = dueTotalMin % 60;
+      const dueTimeStr = `${String(dueH).padStart(2, "0")}:${String(dueM).padStart(2, "0")}`;
       const dt = new Date(todayStr + "T00:00:00");
-      dt.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+      dt.setHours(dueH, dueM, 0, 0);
       await supabase.from("tasks").insert({
         title: `${entry.supplier} — Varumottagning`,
         description: `${entry.flow_name} · ${entry.delivery_time}`,
@@ -540,7 +547,7 @@ function TasksPage() {
         priority: "Medel",
         store_id: activeStore.id,
         due_date: dt.toISOString(),
-        due_date_time: entry.delivery_time.slice(0, 5),
+        due_date_time: dueTimeStr,
         status: "todo",
         completion_mode: "manual",
         created_by: user?.id,
@@ -910,16 +917,22 @@ function TasksPage() {
       depends_on_template_title?: string;
     };
 
-    // Delivery template: open delivery picker filtered by flow_name (pipe-separated)
+    // Delivery template: open delivery picker — always show all deliveries, pre-select matching ones
     if (tmplAny.is_delivery_task) {
       const allowedFlows = tmplAny.delivery_flow_name
         ? tmplAny.delivery_flow_name.split("|").map((s: string) => s.trim().toLowerCase()).filter(Boolean)
         : [];
-      const filtered = allowedFlows.length
-        ? todayDeliveries.filter(d => allowedFlows.includes(d.flow_name?.toLowerCase() ?? ""))
-        : todayDeliveries;
-      setTodayDeliveries(filtered.length ? filtered : todayDeliveries);
-      setSelectedDeliveryIds(new Set((filtered.length ? filtered : todayDeliveries).map(d => d.id)));
+      const allowedSuppliers = (tmpl as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name
+        ? ((tmpl as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name ?? "").split("|").map((s: string) => s.trim().toLowerCase()).filter(Boolean)
+        : [];
+      // Always show all deliveries; pre-select those matching the template config
+      const preSelected = todayDeliveries.filter(d => {
+        const flowOk = allowedFlows.length === 0 || allowedFlows.includes(d.flow_name?.toLowerCase() ?? "");
+        const suppOk = allowedSuppliers.length === 0 || allowedSuppliers.includes(d.supplier?.toLowerCase() ?? "");
+        return flowOk && suppOk;
+      });
+      setModalDeliveries(todayDeliveries);
+      setSelectedDeliveryIds(new Set((preSelected.length ? preSelected : todayDeliveries).map(d => d.id)));
       setShowDeliveryModal(true);
       return;
     }
@@ -4310,7 +4323,7 @@ function TasksPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-2 max-h-80 overflow-y-auto pb-4">
-            {todayDeliveries.map(entry => {
+            {modalDeliveries.map(entry => {
               const alreadyCreated = tasks.some(t => t.delivery_entry_id === entry.id);
               return (
                 <label key={entry.id} className={cn(
