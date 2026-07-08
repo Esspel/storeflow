@@ -776,7 +776,7 @@ function MallarPage() {
     setBulkCreating(true);
     const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
 
-    // Pre-fetch existing tasks once so we can resolve depends_on_template_title
+    // Pre-fetch existing tasks to resolve depends_on_template_title
     const { data: existingTasks } = await supabase
       .from("tasks")
       .select("id, title, status")
@@ -785,9 +785,41 @@ function MallarPage() {
       .limit(500);
     const existingTaskList = existingTasks ?? [];
 
-    for (const cfg of bulkTaskConfigs) {
+    // Track tasks created in this batch: title (lowercase) → task id
+    const createdInBatch = new Map<string, string>();
+
+    // Sort configs: tasks with no dependency come first, then those whose dependency
+    // is either already existing or created earlier in the same batch run
+    const getDependsTitle = (cfg: BulkTaskConfig) => {
+      const tmpl = templates.find(t => t.id === cfg.templateId);
+      return ((tmpl as ChecklistTemplate & { depends_on_template_title?: string })?.depends_on_template_title ?? "").toLowerCase().trim();
+    };
+    const sortedConfigs = [...bulkTaskConfigs].sort((a, b) => {
+      const aDep = getDependsTitle(a);
+      const bDep = getDependsTitle(b);
+      if (!aDep && bDep) return -1;
+      if (aDep && !bDep) return 1;
+      return 0;
+    });
+
+    for (const cfg of sortedConfigs) {
       const tmpl = templates.find(t => t.id === cfg.templateId);
       if (!tmpl) continue;
+
+      const validItems = (tmpl.items ?? []).filter(it => it.label.trim());
+      const validQuestions = (tmpl.questions ?? []).filter(q => q.label.trim());
+      const assigneeRows = (taskId: string) => {
+        const rows: { task_id: string; user_id?: string; group_id?: string }[] = [];
+        cfg.assigneeUserIds.forEach(uid => rows.push({ task_id: taskId, user_id: uid }));
+        cfg.assigneeGroupIds.forEach(gid => rows.push({ task_id: taskId, group_id: gid }));
+        return rows;
+      };
+      const tmplAny = tmpl as ChecklistTemplate & {
+        recurrence_months?: number[]; recurrence_month_day?: number;
+        recurrence_start?: string; recurrence_end?: string;
+        event_trigger_description?: string; is_critical?: boolean;
+        template_mode?: string; time_slots?: string[];
+      };
 
       // Leveransmallar: skapa en uppgift per vald leverans
       if ((tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task) {
@@ -829,34 +861,24 @@ function MallarPage() {
           const aRows = assigneeRows(task.id);
           if (aRows.length > 0) await supabase.from("task_assignees").insert(aRows);
           logAudit(user?.id ?? null, "task.create", "tasks", task.id, { title: tmpl.title, from_template: tmpl.id, delivery_entry_id: deliveryId });
+          createdInBatch.set(tmpl.title.toLowerCase(), task.id);
         }
         continue;
       }
+
       // Manuell-only-mallar skapas inte i batch
-      if ((tmpl as ChecklistTemplate & { template_mode?: string }).template_mode === "manual_only") continue;
+      if (tmplAny.template_mode === "manual_only") continue;
 
-      const validItems = (tmpl.items ?? []).filter(it => it.label.trim());
-      const validQuestions = (tmpl.questions ?? []).filter(q => q.label.trim());
-      const assigneeRows = (taskId: string) => {
-        const rows: { task_id: string; user_id?: string; group_id?: string }[] = [];
-        cfg.assigneeUserIds.forEach(uid => rows.push({ task_id: taskId, user_id: uid }));
-        cfg.assigneeGroupIds.forEach(gid => rows.push({ task_id: taskId, group_id: gid }));
-        return rows;
-      };
-
+      // Resolve dependency: check existing tasks first, then within-batch created tasks
       const dependsOnTitle = (tmpl as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title;
-      const dependsOnTaskId = dependsOnTitle
-        ? (existingTaskList.find(t =>
-            (t.title ?? "").toLowerCase() === dependsOnTitle.toLowerCase()
-          )?.id ?? null)
-        : null;
-
-      const tmplAny = tmpl as ChecklistTemplate & {
-        recurrence_months?: number[]; recurrence_month_day?: number;
-        recurrence_start?: string; recurrence_end?: string;
-        event_trigger_description?: string; is_critical?: boolean;
-        template_mode?: string; time_slots?: string[];
-      };
+      let dependsOnTaskId: string | null = null;
+      if (dependsOnTitle) {
+        const key = dependsOnTitle.toLowerCase();
+        dependsOnTaskId =
+          existingTaskList.find(t => (t.title ?? "").toLowerCase() === key)?.id ??
+          createdInBatch.get(key) ??
+          null;
+      }
 
       const timeSlots: string[] = tmplAny.time_slots ?? [];
       const templatePriority = tmpl.priority ?? "Medel";
@@ -906,6 +928,9 @@ function MallarPage() {
         }).select("id, created_at").maybeSingle();
 
         if (!task?.id) return;
+
+        // Register in batch map so later dependencies can resolve to this task
+        createdInBatch.set(tmpl.title.toLowerCase(), task.id);
 
         let questionIdMap = new Map<string, string>();
         if (validQuestions.length > 0) {
@@ -3554,6 +3579,20 @@ function MallarPage() {
                         <span className="text-xs text-muted-foreground">{tmpl.items?.length ?? 0} steg</span>
                         {taskCount > 1 && <Badge className="text-xs bg-primary/10 text-primary border-0">{taskCount} uppgifter (tidsluckor)</Badge>}
                         {isDeliveryTmpl && <Badge variant="outline" className="text-xs border-amber-400 text-amber-700 bg-amber-50"><Truck className="h-3 w-3 mr-1" />Leveransmall</Badge>}
+                        {(() => {
+                          const depTitle = (tmpl as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title;
+                          if (!depTitle) return null;
+                          const inBatch = bulkTaskConfigs.some(c => {
+                            const t = templates.find(x => x.id === c.templateId);
+                            return t && t.title.toLowerCase() === depTitle.toLowerCase();
+                          });
+                          return (
+                            <Badge variant="outline" className={cn("text-xs gap-1", inBatch ? "border-green-400 text-green-700 bg-green-50" : "border-blue-300 text-blue-700 bg-blue-50")}>
+                              <Link2 className="h-3 w-3" />
+                              Beror på: {depTitle} {inBatch ? "(i batch)" : "(befintlig)"}
+                            </Badge>
+                          );
+                        })()}
                       </div>
                       {/* Smart date info */}
                       {!isDeliveryTmpl && (

@@ -3750,21 +3750,7 @@ function TasksPage() {
                   )}
                 </div>
 
-                {/* Kritisk uppgift */}
-                {isManager && (
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2">
-                      <div>
-                        <p className="text-xs font-medium">Kritisk uppgift</p>
-                        <p className="text-[11px] text-muted-foreground">Stoppas aldrig automatiskt, kräver chefsbeslut.</p>
-                      </div>
-                      <Switch
-                        checked={newTask.is_critical ?? false}
-                        onCheckedChange={(v) => setNewTask(p => ({ ...p, is_critical: v }))}
-                      />
-                    </div>
-                  </div>
-                )}
+                {/* Kritisk uppgift — removed from UI, handled via template settings */}
 
               </div>
             </div>
@@ -4158,19 +4144,6 @@ function TasksPage() {
                   </div>
                 </div>
 
-                {/* Kritisk uppgift */}
-                {isManager && (
-                  <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2 mt-2">
-                    <div>
-                      <p className="text-xs font-medium">Kritisk uppgift</p>
-                      <p className="text-[11px] text-muted-foreground">Stoppas aldrig automatiskt.</p>
-                    </div>
-                    <Switch
-                      checked={editForm.is_critical ?? false}
-                      onCheckedChange={(v) => setEditForm(p => p ? { ...p, is_critical: v } : p)}
-                    />
-                  </div>
-                )}
               </div>
             </div>
           </DialogContent>
