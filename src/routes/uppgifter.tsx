@@ -519,10 +519,12 @@ function TasksPage() {
     for (const entryId of Array.from(selectedDeliveryIds)) {
       const entry = todayDeliveries.find(e => e.id === entryId);
       if (!entry) continue;
-      // Skip if already linked task exists for this entry today
+      // Skip if a task already exists for this entry on today's date
       const { count } = await supabase.from("tasks")
         .select("id", { count: "exact", head: true })
-        .eq("delivery_entry_id", entryId);
+        .eq("delivery_entry_id", entryId)
+        .gte("due_date", todayStr + "T00:00:00")
+        .lt("due_date", todayStr + "T23:59:59");
       if ((count ?? 0) > 0) continue;
       const [h, m] = (entry.delivery_time ?? "00:00").split(":").map(Number);
       const dt = new Date(todayStr + "T00:00:00");
@@ -930,7 +932,7 @@ function TasksPage() {
     // Chain: find a matching predecessor task by title
     const chainPredecessorId = tmplAny.depends_on_template_title
       ? (tasks.find(t =>
-          (t.title ?? "").toLowerCase().includes(tmplAny.depends_on_template_title!.toLowerCase()) &&
+          (t.title ?? "").toLowerCase() === tmplAny.depends_on_template_title!.toLowerCase() &&
           t.status !== "done"
         )?.id ?? "")
       : "";
@@ -969,15 +971,24 @@ function TasksPage() {
 
   // Check if a task should auto-complete (all steps done + all questions answered with no blank text fields)
   const shouldAutoComplete = (steps: TaskFull["steps"], questions: TaskFull["questions"]): boolean => {
+    const qs = questions ?? [];
     const visibleSteps = (steps ?? []).filter(s => {
       const sa = s as typeof s & { condition_question_id?: string | null; condition_answer?: string | null };
       if (!sa.condition_question_id) return true;
-      const condQ = (questions ?? []).find(q => q.id === sa.condition_question_id);
+      const condQ = qs.find(q => q.id === sa.condition_question_id);
       if (!condQ?.answer) return false;
       return condQ.answer.toLowerCase() === (sa.condition_answer ?? "ja").toLowerCase();
     });
     const allStepsDone = visibleSteps.every(s => s.is_done);
-    const allAnswered = (questions ?? []).every(q => q.answer?.trim());
+    // Only require questions that are not used purely as conditions for hidden steps
+    const conditionedByHiddenStep = new Set<string>();
+    (steps ?? []).forEach(s => {
+      const sa = s as typeof s & { condition_question_id?: string | null; condition_answer?: string | null };
+      if (!sa.condition_question_id) return;
+      if (!visibleSteps.includes(s)) conditionedByHiddenStep.add(sa.condition_question_id);
+    });
+    const requiredQs = qs.filter(q => !conditionedByHiddenStep.has(q.id));
+    const allAnswered = requiredQs.every(q => q.answer?.trim());
     return allStepsDone && allAnswered;
   };
 
@@ -1650,17 +1661,20 @@ function TasksPage() {
       }
 
       if (firstTask.recurrence_rule) {
-        const assigneesFull = newTask.assigneeUserIds.map(uid => ({ task_id: firstTask.id, user_id: uid, group_id: null }));
-        newTask.assigneeGroupIds.forEach(gid => assigneesFull.push({ task_id: firstTask.id, user_id: null as unknown as string, group_id: gid }));
-        const parentFull: TaskFull = {
-          ...firstTask,
-          steps: validSteps.map((s, i) => ({ id: "", task_id: firstTask.id, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false, link_url: s.link_url || null })),
-          questions: validQuestions.map((q, i) => ({ id: "", task_id: firstTask.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: i, answer: null })),
-          assignees: assigneesFull.map(a => ({ task_id: firstTask.id, user_id: a.user_id, group_id: a.group_id })),
-          images: [],
-        };
         spawnRef.current = false;
-        await spawnChildrenForNewParent(parentFull);
+        // Spawn recurring children for every time-slot task, not only the first
+        for (const ct of createdTasks) {
+          const assigneesFull = newTask.assigneeUserIds.map(uid => ({ task_id: ct.id, user_id: uid, group_id: null }));
+          newTask.assigneeGroupIds.forEach(gid => assigneesFull.push({ task_id: ct.id, user_id: null as unknown as string, group_id: gid }));
+          const parentFull: TaskFull = {
+            ...ct,
+            steps: validSteps.map((s, i) => ({ id: "", task_id: ct.id, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false, link_url: s.link_url || null })),
+            questions: validQuestions.map((q, i) => ({ id: "", task_id: ct.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: i, answer: null })),
+            assignees: assigneesFull.map(a => ({ task_id: ct.id, user_id: a.user_id, group_id: a.group_id })),
+            images: [],
+          };
+          await spawnChildrenForNewParent(parentFull);
+        }
       }
     } else {
       setSaveError("Kunde inte spara uppgiften. Försök igen.");

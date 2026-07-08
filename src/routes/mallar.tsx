@@ -695,7 +695,7 @@ function MallarPage() {
       const dependsOnTitle = (tmpl as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title;
       const dependsOnTaskId = dependsOnTitle
         ? (existingTaskList.find(t =>
-            (t.title ?? "").toLowerCase().includes(dependsOnTitle.toLowerCase())
+            (t.title ?? "").toLowerCase() === dependsOnTitle.toLowerCase()
           )?.id ?? null)
         : null;
 
