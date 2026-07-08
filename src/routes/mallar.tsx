@@ -1336,7 +1336,12 @@ function MallarPage() {
     const pkgCache = new Map<string, TemplatePackage>(
       packages.map(p => [p.name.toLowerCase(), p])
     );
-    for (const cols of rows) {
+    for (let cols of rows) {
+      // Backwards-compat: old 30-col format lacked SAP-artikel at col 20.
+      // Insert empty string there so all subsequent columns align correctly.
+      if (cols.length === 30) {
+        cols = [...cols.slice(0, 20), "", ...cols.slice(20)];
+      }
       // Column order (0-indexed):
       // 0:Titel 1:Kategori 2:Beskrivning 3:Prioritet 4:Status 5:Version
       // 6:Återkommande 7:Veckodagar 8:Månader 9:Månadsdag 10:Intervall

@@ -1,0 +1,34 @@
+Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Månader;Månadsdag;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor;Tidsluckor (HH:MM);SAP-artikel;Mallpaket;Händelsevillkor;Leveransuppgift (ja/nej);Leveransflöde;Kedja (beror på mallnamn);Malltyp;Skapningsläge;Händelse-bekräftare;Granskningsintervall (månader);Kritisk (ja/nej)
+Öppning butik;Drift;Öppning av butik;Kritisk;active;;daily;;;;;0;08:00;;;;;;;;;Daglig drift;;;;;grundmall;batch_only;;24;ja
+Förbutik öppning;Förbutik;Förbered förbutik;Hög;active;;daily;;;;;0;08:00;;;;;;;;;Förbutik;;;;;grundmall;batch_only;;24;
+Kundrunda;Drift;Daglig kundrunda;Hög;active;;daily;;;;;0;09:00;;;;;;;;;Daglig drift;;;;;grundmall;batch_only;;24;
+Frontning FM;Drift;Frontning förmiddag;Medel;active;;daily;;;;;0;11:00;;;;;;;;;Daglig drift;;;;;grundmall;batch_only;;24;
+Frontning EM;Drift;Frontning eftermiddag;Medel;active;;daily;;;;;0;17:00;;;;;;;;;Daglig drift;;;;;grundmall;batch_only;;24;
+Coopnet FM;Drift;Kontrollera Coopnet-larm;Medel;active;;daily;;;;;0;09:00;;;;;;;;;Daglig drift;;;;;grundmall;batch_only;;24;
+Coopnet EM;Drift;Kontrollera Coopnet-larm;Medel;active;;daily;;;;;0;15:00;;;;;;;;;Daglig drift;;;;;grundmall;batch_only;;24;
+Mejl FM;Drift;Kontrollera mejl;Låg;active;;daily;;;;;0;09:00;;;;;;;;;Daglig drift;;;;;grundmall;batch_only;;24;
+Mejl EM;Drift;Kontrollera mejl;Låg;active;;daily;;;;;0;15:00;;;;;;;;;Daglig drift;;;;;grundmall;batch_only;;24;
+Pant & sopor;Drift;Daglig hantering;Medel;active;;daily;;;;;0;19:00;;;;;;;;;Daglig drift;;;;;grundmall;batch_only;;24;
+Datumboken Upshop;Drift;Genomför datumboken;Hög;active;;daily;;;;;0;17:00;;;;;;;;;Daglig drift;;;;;grundmall;batch_only;;24;
+Kort datum kvällsgenomgång;Drift;Kvällsrond kort datum;Hög;active;;daily;;;;;0;21:00;;;;;;;;;Daglig drift;;;;;grundmall;batch_only;;24;
+Stängning butik;Drift;Stängning av butik;Kritisk;active;;daily;;;;;0;22:00;;;;;;;;;Daglig drift;;;;;grundmall;batch_only;;24;ja
+Betala andelar;Förbutik;Betala inkomna andelar;Hög;active;;;;;;;;;;;;;;;;;Förbutik;Andel inkommen;;;;regular;manual_only;;24;
+Kassalinje påfyllnad;Förbutik;Påfyllnad kassalinje;Medel;active;;weekly;0,2,4;;;;0;14:00;;;;;;;;;Förbutik;;;;;grundmall;batch_only;;24;
+Städa lösviktsgodis;Förbutik;Städning lösviktsgodis;Medel;active;;daily;;;;;0;20:00;;;;;;;;;Förbutik;;;;;grundmall;batch_only;;24;
+F&G-rond;Frukt & Grönt;Kvalitet och varufyllnad;Hög;active;;daily;;;;;0;;;;;;;;08:00 | 12:00 | 16:00;;Frukt & Grönt;;;;;grundmall;batch_only;;24;
+Beställ Frukt & Grönt;Frukt & Grönt;Everfresh;Hög;active;;weekly;1,3,6;;;;0;20:00;;;;;;;;;Frukt & Grönt;;;;;grundmall;batch_only;;24;
+Fruktimport;Frukt & Grönt;Beställ vid behov;Medel;active;;;;;;;;;;;;;;;;;Frukt & Grönt;Fruktimport behövs;;;;regular;manual_only;;24;
+Fyll på fruktpåsar;Frukt & Grönt;Påfyllnad fruktpåsar;Låg;active;;weekly;4;;;;0;10:00;;;;;;;;;Frukt & Grönt;;;;;grundmall;batch_only;;24;
+Blomrond;Frukt & Grönt;Blommor;Medel;active;;weekly;2,4,6;;;;0;12:00;;;;;;;;;Frukt & Grönt;;;;;grundmall;batch_only;;24;
+Picadeli öppning;Picadeli;Öppningsrutin;Hög;active;;daily;;;;;0;09:00;;;;;;;;;Picadeli;;;;;grundmall;batch_only;;24;
+Picadeli kvalitetskontroll;Picadeli;Löpande kontroll;Medel;active;;daily;;;;;0;;;;;;;;10:00 | 12:00 | 14:00 | 16:00 | 18:00 | 20:00;;Picadeli;;;;;grundmall;batch_only;;24;
+Picadeli beställning & inventering;Picadeli;Beställning;Hög;active;;weekly;0,2,4;;;;0;09:00;;;;;;;;;Picadeli;;;;;grundmall;batch_only;;24;
+Picadeli stängning;Picadeli;Stängning;Hög;active;;daily;;;;;0;21:00;;;;;;;;;Picadeli;;;;;grundmall;batch_only;;24;
+Bake Off-plock;Bake Off;Plock;Hög;active;;weekly;0,2,4;;;;0;15:00;;;;;;;;;Bake Off;;;;;grundmall;batch_only;;24;
+Bake Off-påfyllnad;Bake Off;Påfyllnad;Medel;active;;daily;;;;;0;;;;;;;;10:00 | 12:00 | 14:00 | 16:00 | 18:00 | 20:00;;Bake Off;;;;;grundmall;batch_only;;24;
+Grillkyckling;Färskvaror;Grillproduktion;Medel;active;;daily;;;;;0;;;;;;;;10:00 | 12:00 | 14:00 | 16:00 | 18:00 | 20:00;;Färskvaror;;;;;grundmall;batch_only;;24;
+Påfyllnad från baklager FM;Färskvaror;Baklager;Medel;active;;daily;;;;;0;10:00;;;;;;;;;Färskvaror;;;;;grundmall;batch_only;;24;
+Påfyllnad från baklager EM;Färskvaror;Baklager;Medel;active;;daily;;;;;0;16:00;;;;;;;;;Färskvaror;;;;;grundmall;batch_only;;24;
+Kampanjförberedelse;Skyltning;Förbered kampanj;Hög;active;;weekly;6;;;;0;18:00;;;;;;;;;Kampanj;;;;;grundmall;batch_only;;24;
+Kampanjbyte;Skyltning;Byte av kampanj;Hög;active;;weekly;0;;;;0;09:00;;;;;;;;;Kampanj;;;;Kampanjförberedelse;grundmall;batch_only;;24;
+Varumottagning;Varumottagning;Mottagning av leveranser;Hög;active;;;;;;;;;;;;;;;;;Leveranser;;ja;;;grundmall;batch_only;;24;
