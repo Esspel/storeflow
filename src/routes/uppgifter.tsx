@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDownUp, Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, MoveHorizontal as MoreHorizontal, CalendarDays } from "lucide-react";
+import { ArrowDownUp, Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, MoveHorizontal as MoreHorizontal, CalendarDays, Truck, Zap, Link2, ShieldCheck } from "lucide-react";
 
 import { PhotoViewer } from "@/components/photo-viewer";
 import { Button } from "@/components/ui/button";
@@ -127,6 +127,11 @@ type TaskFull = Task & {
   store?: StoreType;
   assignees?: (TaskAssignee & { user?: AppUser; group?: UserGroup })[];
   images?: TaskImage[];
+  event_trigger_description?: string | null;
+  event_trigger_user_id?: string | null;
+  event_triggered_at?: string | null;
+  depends_on_task_id?: string | null;
+  delivery_entry_id?: string | null;
 };
 
 type FormQuestion = { label: string; question_type: "text" | "yes_no"; is_required: boolean; link_url: string };
@@ -172,6 +177,11 @@ const emptyForm = (storeId: string) => ({
   questions: [] as FormQuestion[],
   assigneeUserIds: [] as string[],
   assigneeGroupIds: [] as string[],
+  // Event-based task fields
+  event_trigger_description: "",
+  event_trigger_user_id: "",
+  // Task chain
+  depends_on_task_id: "",
 });
 
 
@@ -492,6 +502,74 @@ function TasksPage() {
   const completingRef = useRef<Set<string>>(new Set());
   const savingAnswerRef = useRef<Set<string>>(new Set());
 
+  // Delivery entries for today (used by "Generera från leveransplan")
+  type DeliveryEntry = { id: string; delivery_time: string; supplier: string; flow_name: string; delivery_date: string | null };
+  const [todayDeliveries, setTodayDeliveries] = useState<DeliveryEntry[]>([]);
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [selectedDeliveryIds, setSelectedDeliveryIds] = useState<Set<string>>(new Set());
+  const [generatingDeliveries, setGeneratingDeliveries] = useState(false);
+
+  const fetchTodayDeliveries = useCallback(async () => {
+    if (!activeStore) return;
+    const todayStr = localDateStr(new Date(getSimulatedNow()));
+    const { data: plans } = await supabase
+      .from("delivery_plans")
+      .select("id")
+      .eq("store_id", activeStore.id);
+    if (!plans?.length) return;
+    const planIds = plans.map((p: { id: string }) => p.id);
+    const { data: entries } = await supabase
+      .from("delivery_entries")
+      .select("id,delivery_time,supplier,flow_name,delivery_date")
+      .in("plan_id", planIds)
+      .eq("delivery_date", todayStr)
+      .order("delivery_time", { ascending: true });
+    setTodayDeliveries((entries ?? []) as DeliveryEntry[]);
+  }, [activeStore]);
+
+  const generateDeliveryTasks = async () => {
+    if (!activeStore || selectedDeliveryIds.size === 0) return;
+    setGeneratingDeliveries(true);
+    const todayStr = localDateStr(new Date(getSimulatedNow()));
+    for (const entryId of Array.from(selectedDeliveryIds)) {
+      const entry = todayDeliveries.find(e => e.id === entryId);
+      if (!entry) continue;
+      // Skip if already linked task exists for this entry today
+      const { count } = await supabase.from("tasks")
+        .select("id", { count: "exact", head: true })
+        .eq("delivery_entry_id", entryId);
+      if ((count ?? 0) > 0) continue;
+      const [h, m] = entry.delivery_time.split(":").map(Number);
+      const dt = new Date(todayStr + "T00:00:00");
+      dt.setHours(h, m, 0, 0);
+      await supabase.from("tasks").insert({
+        title: `${entry.supplier} — Varumottagning`,
+        description: `${entry.flow_name} · ${entry.delivery_time}`,
+        category: "Drift",
+        priority: "Medel",
+        store_id: activeStore.id,
+        due_date: dt.toISOString(),
+        due_date_time: entry.delivery_time.slice(0, 5),
+        status: "todo",
+        completion_mode: "manual",
+        created_by: user?.id,
+        assigned_to: user?.id,
+        delivery_entry_id: entryId,
+      });
+    }
+    setGeneratingDeliveries(false);
+    setShowDeliveryModal(false);
+    setSelectedDeliveryIds(new Set());
+    await fetchTasks();
+  };
+
+  const confirmEventTrigger = async (task: TaskFull) => {
+    const now = new Date().toISOString();
+    await supabase.from("tasks").update({ event_triggered_at: now }).eq("id", task.id);
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, event_triggered_at: now } : t));
+    if (detailTask?.id === task.id) setDetailTask(prev => prev ? { ...prev, event_triggered_at: now } : prev);
+  };
+
   const fetchTasks = useCallback(async () => {
     let q = supabase
       .from("tasks")
@@ -520,6 +598,7 @@ function TasksPage() {
     setLoading(true);
     fetchTasks();
     fetchUserGroups();
+    fetchTodayDeliveries();
 
     const storeQ = user?.role === "admin"
       ? supabase.from("stores").select("*").eq("is_active", true)
@@ -855,7 +934,7 @@ function TasksPage() {
       ? (() => { const d = new Date(getSimulatedNow()); d.setDate(d.getDate() + tmpl.due_date_offset!); return localDateStr(d); })()
       : "";
     const todayStr = localDateStr(new Date(getSimulatedNow()));
-    const tmplAny = tmpl as ChecklistTemplate & { recurrence_months?: number[]; recurrence_month_day?: number };
+    const tmplAny = tmpl as ChecklistTemplate & { recurrence_months?: number[]; recurrence_month_day?: number; event_trigger_description?: string };
     const timeSlots = (tmpl.time_slots ?? []) as string[];
     setNewTask((p) => ({
       ...p,
@@ -875,6 +954,7 @@ function TasksPage() {
       time_slots: timeSlots.length > 0 ? timeSlots : p.time_slots,
       steps: steps.length > 0 ? steps : p.steps,
       questions: questions.length > 0 ? questions : p.questions,
+      event_trigger_description: tmplAny.event_trigger_description ?? p.event_trigger_description,
     }));
   };
 
@@ -1496,6 +1576,9 @@ function TasksPage() {
         created_by: user?.id,
         assigned_to: newTask.assigneeUserIds[0] ?? user?.id,
         status: "todo",
+        event_trigger_description: newTask.event_trigger_description?.trim() || null,
+        event_trigger_user_id: newTask.event_trigger_user_id || null,
+        depends_on_task_id: newTask.depends_on_task_id || null,
       }).select().maybeSingle();
 
       if (error || !task) return null;
@@ -1583,7 +1666,7 @@ function TasksPage() {
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
-      "SAP-artikel", "Mallpaket",
+      "SAP-artikel", "Mallpaket", "Händelsevillkor", "Beror på (uppgifts-ID)",
     ];
     // Exclude child recurrence instances (parent_task_id set) — they are just spawned
     // copies of the parent. Export only parent/standalone tasks so importing into
@@ -1639,6 +1722,8 @@ function TasksPage() {
           (tAny.time_slots ?? []).join(" | "),
           tAny.sap_article_id ?? "",
           "", // Mallpaket — tasks don't belong to template packages
+          (t as TaskFull).event_trigger_description ?? "",
+          (t as TaskFull).depends_on_task_id ?? "",
         ];
       }),
     ];
@@ -1925,6 +2010,31 @@ function TasksPage() {
                   {t.category && t.category !== "Drift" && (
                     <span className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{t.category}</span>
                   )}
+                  {/* Event-based: not yet triggered */}
+                  {t.event_trigger_description && !t.event_triggered_at && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                      <Zap className="h-2.5 w-2.5" />
+                      Väntar på händelse
+                    </span>
+                  )}
+                  {/* Task chain: blocked */}
+                  {t.depends_on_task_id && (() => {
+                    const pred = tasks.find(p => p.id === t.depends_on_task_id);
+                    if (pred && pred.status !== "done") return (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                        <Link2 className="h-2.5 w-2.5" />
+                        Blockerad
+                      </span>
+                    );
+                    return null;
+                  })()}
+                  {/* Delivery task */}
+                  {t.delivery_entry_id && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-400">
+                      <Truck className="h-2.5 w-2.5" />
+                      Leverans
+                    </span>
+                  )}
                 </div>
                 {totalItems > 0 && (
                   <div className="mt-2.5 flex items-center gap-2">
@@ -2122,6 +2232,11 @@ function TasksPage() {
             <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={exportCSV}>
               <Download className="mr-1.5 h-3.5 w-3.5" /> Exportera
             </Button>
+            {todayDeliveries.length > 0 && (
+              <Button variant="outline" size="sm" className="rounded-full text-xs border-blue-500/40 text-blue-700 hover:bg-blue-50 dark:text-blue-400" onClick={() => { setShowDeliveryModal(true); setSelectedDeliveryIds(new Set(todayDeliveries.map(d => d.id))); }}>
+                <Truck className="mr-1.5 h-3.5 w-3.5" /> Leveranser ({todayDeliveries.length})
+              </Button>
+            )}
             <Button size="sm" className="rounded-full text-xs" onClick={() => { setShowRecurrenceSetup(true); setSaveError(""); }}>
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Ny uppgift
             </Button>
@@ -2394,6 +2509,53 @@ function TasksPage() {
                   </span>
                 )}
               </div>
+
+              {/* Event trigger panel */}
+              {detailTask.event_trigger_description && (
+                <div className={cn(
+                  "rounded-xl border p-3 space-y-2",
+                  detailTask.event_triggered_at
+                    ? "border-success/40 bg-success/5"
+                    : "border-amber-400/40 bg-amber-50/50 dark:bg-amber-900/10"
+                )}>
+                  <div className="flex items-center gap-2">
+                    <Zap className={cn("h-4 w-4 shrink-0", detailTask.event_triggered_at ? "text-success" : "text-amber-600 dark:text-amber-400")} />
+                    <p className="text-xs font-semibold text-foreground">Händelsebaserad uppgift</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{detailTask.event_trigger_description}</p>
+                  {detailTask.event_triggered_at ? (
+                    <p className="text-xs text-success font-medium flex items-center gap-1">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      Bekräftad {new Date(detailTask.event_triggered_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}
+                    </p>
+                  ) : (
+                    (user?.id === detailTask.event_trigger_user_id || !detailTask.event_trigger_user_id || isManager) && (
+                      <button
+                        className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600 transition-colors"
+                        onClick={() => void confirmEventTrigger(detailTask)}
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Bekräfta — händelsen har inträffat
+                      </button>
+                    )
+                  )}
+                </div>
+              )}
+
+              {/* Task chain: blocked notice */}
+              {detailTask.depends_on_task_id && (() => {
+                const pred = tasks.find(p => p.id === detailTask.depends_on_task_id);
+                if (!pred || pred.status === "done") return null;
+                return (
+                  <div className="rounded-xl border border-slate-400/30 bg-slate-50/50 dark:bg-slate-800/20 p-3 flex items-start gap-2">
+                    <Link2 className="h-4 w-4 shrink-0 text-slate-500 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">Blockerad av föregående uppgift</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{pred.title}</p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Checkpoints */}
               {detailTask.steps && detailTask.steps.length > 0 && (
@@ -3379,6 +3541,63 @@ function TasksPage() {
                   />
                 )}
 
+                {/* Händelsebaserad uppgift */}
+                <div className="px-4 py-3 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 shrink-0 text-amber-500" />
+                    <span className="text-xs text-muted-foreground flex-1">Händelsevillkor</span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Beskriv händelsen (t.ex. Andel inkommen)..."
+                    value={newTask.event_trigger_description}
+                    onChange={(e) => setNewTask(p => ({ ...p, event_trigger_description: e.target.value }))}
+                    className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                  />
+                  {newTask.event_trigger_description && (
+                    <>
+                      <p className="text-[11px] text-muted-foreground">Vem kan bekräfta händelsen?</p>
+                      <Select
+                        value={newTask.event_trigger_user_id || "__none"}
+                        onValueChange={(v) => setNewTask(p => ({ ...p, event_trigger_user_id: v === "__none" ? "" : v }))}
+                      >
+                        <SelectTrigger className="h-7 text-xs border-border/60">
+                          <SelectValue placeholder="Vem som helst (manager)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Vem som helst (manager)</SelectItem>
+                          {storeUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </>
+                  )}
+                </div>
+
+                {/* Uppgiftskedja — beror på */}
+                <div className="px-4 py-3 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Link2 className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <span className="text-xs text-muted-foreground flex-1">Beror på uppgift</span>
+                  </div>
+                  <Select
+                    value={newTask.depends_on_task_id || "__none"}
+                    onValueChange={(v) => setNewTask(p => ({ ...p, depends_on_task_id: v === "__none" ? "" : v }))}
+                  >
+                    <SelectTrigger className="h-7 text-xs border-border/60">
+                      <SelectValue placeholder="Ingen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Ingen</SelectItem>
+                      {tasks.filter(t => t.status !== "done").slice(0, 50).map(t => (
+                        <SelectItem key={t.id} value={t.id}>{t.title.slice(0, 40)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {newTask.depends_on_task_id && (
+                    <p className="text-[11px] text-muted-foreground">Uppgiften visas som blockerad tills föregångaren är klar.</p>
+                  )}
+                </div>
+
               </div>
             </div>
           </div>
@@ -3868,6 +4087,57 @@ function TasksPage() {
           onClose={() => { setLightboxTask(null); }}
         />
       )}
+
+      {/* DELIVERY TASKS MODAL */}
+      <Dialog open={showDeliveryModal} onOpenChange={setShowDeliveryModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-4 w-4 text-blue-600" />
+              Skapa uppgifter från dagens leveranser
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {todayDeliveries.map(entry => {
+              const alreadyCreated = tasks.some(t => t.delivery_entry_id === entry.id);
+              return (
+                <label key={entry.id} className={cn(
+                  "flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-colors",
+                  alreadyCreated ? "opacity-50 cursor-not-allowed border-border/40" : "hover:bg-muted/40 border-border/60",
+                  selectedDeliveryIds.has(entry.id) && !alreadyCreated && "border-primary/50 bg-primary/5"
+                )}>
+                  <input
+                    type="checkbox"
+                    disabled={alreadyCreated}
+                    checked={selectedDeliveryIds.has(entry.id)}
+                    onChange={(e) => {
+                      const next = new Set(selectedDeliveryIds);
+                      if (e.target.checked) next.add(entry.id); else next.delete(entry.id);
+                      setSelectedDeliveryIds(next);
+                    }}
+                    className="h-4 w-4 accent-primary"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">{entry.supplier}</p>
+                    <p className="text-xs text-muted-foreground">{entry.flow_name} · {entry.delivery_time}</p>
+                  </div>
+                  {alreadyCreated && <span className="text-[10px] text-success font-medium">Skapad</span>}
+                </label>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeliveryModal(false)}>Avbryt</Button>
+            <Button
+              disabled={generatingDeliveries || selectedDeliveryIds.size === 0}
+              onClick={() => void generateDeliveryTasks()}
+              className="gap-1.5"
+            >
+              {generatingDeliveries ? "Skapar..." : `Skapa ${selectedDeliveryIds.size} uppgifter`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Article type disambiguation */}
       <AlertDialog open={!!taskArticlePrompt} onOpenChange={(o) => { if (!o) setTaskArticlePrompt(null); }}>

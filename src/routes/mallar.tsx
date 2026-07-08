@@ -925,7 +925,7 @@ function MallarPage() {
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
-      "SAP-artikel", "Mallpaket",
+      "SAP-artikel", "Mallpaket", "Händelsevillkor",
     ];
     const today = new Date().toISOString().slice(0, 10);
     const exampleA = [
@@ -962,7 +962,7 @@ function MallarPage() {
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
-      "SAP-artikel", "Mallpaket",
+      "SAP-artikel", "Mallpaket", "Händelsevillkor",
     ];
     const rows = [
       headers,
@@ -1009,6 +1009,7 @@ function MallarPage() {
           tAny.time_slots?.join(" | ") ?? "",
           tAny.sap_article_id ?? "",
           packages.filter(pkg => (pkg.items ?? []).some(item => item.template_id === t.id)).map(pkg => pkg.name).join(" | "),
+          (t as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description ?? "",
         ];
       }),
     ];
@@ -1096,13 +1097,14 @@ function MallarPage() {
       // 0:Titel 1:Kategori 2:Beskrivning 3:Prioritet 4:Status 5:Version
       // 6:Återkommande 7:Veckodagar 8:Månader 9:Månadsdag 10:Intervall
       // 11:Förfaller om 12:Förfallotid 13:Startdatum 14:Slutdatum
-      // 15:Ursprungsmall 16:Arvläge 17:Steg 18:Frågor 19:Tidsluckor 20:SAP-artikel 21:Mallpaket
+      // 15:Ursprungsmall 16:Arvläge 17:Steg 18:Frågor 19:Tidsluckor 20:SAP-artikel
+      // 21:Mallpaket 22:Händelsevillkor
       const [
         title, category, description, priority, statusRaw, ,
         recurrence, weekdaysRaw, monthsRaw, monthDayRaw, intervalRaw,
         dueDays, dueTime, startDate, endDate,
         parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw, timeSlotsRaw,
-        sapArticleIdRaw, packageNameRaw,
+        sapArticleIdRaw, packageNameRaw, eventTriggerRaw,
       ] = cols;
       if (!title?.trim()) continue;
 
@@ -1148,6 +1150,7 @@ function MallarPage() {
           : null,
         sap_article_id: sapArticleIdRaw?.trim() || null,
         forening_id: importScope === "forening" ? resolvedForeningId : null,
+        event_trigger_description: eventTriggerRaw?.trim() || null,
       }).select("id").maybeSingle();
 
       if (!tmpl?.id) continue;
