@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
-import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil, Store as StoreIcon, Building2, Eye, EyeOff, Search, History, GitBranch, Copy, Layers, CircleCheck as CheckCircle, ListChecks, CalendarClock, Users, ExternalLink, Hash } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil, Store as StoreIcon, Building2, Eye, EyeOff, Search, History, GitBranch, Copy, Layers, CircleCheck as CheckCircle, ListChecks, CalendarClock, Users, ExternalLink, Hash, Zap, Truck, Link2 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -144,6 +144,10 @@ type FormState = {
   isLocked: boolean;
   foreningId: string;
   changeSummary: string;
+  event_trigger_description: string;
+  is_delivery_task: boolean;
+  delivery_flow_name: string;
+  depends_on_template_title: string;
   items: { id?: string; label: string; requires_photo: boolean; link_url?: string; condition_question_id?: string; condition_answer?: string }[];
   questions: { id?: string; label: string; question_type: "text" | "yes_no"; is_required: boolean; link_url?: string }[];
 };
@@ -157,6 +161,10 @@ const emptyForm = (): FormState => ({
   due_date_offset: "", due_date_time: "", sap_article_id: "", time_slots: [],
   storeIds: [], isGlobal: false, isLocked: false, foreningId: "",
   changeSummary: "",
+  event_trigger_description: "",
+  is_delivery_task: false,
+  delivery_flow_name: "",
+  depends_on_template_title: "",
   items: [{ label: "", requires_photo: false, link_url: "" }],
   questions: [],
 });
@@ -235,6 +243,7 @@ function MallarPage() {
   // Template packages
   const [packages, setPackages] = useState<TemplatePackage[]>([]);
   const [showPackagesPanel, setShowPackagesPanel] = useState(false);
+  const [showPackagesInline, setShowPackagesInline] = useState(false);
   const [packageForm, setPackageForm] = useState({ name: "", description: "" });
   const [packageTemplateIds, setPackageTemplateIds] = useState<string[]>([]);
   const [editPackageTarget, setEditPackageTarget] = useState<TemplatePackage | null>(null);
@@ -518,6 +527,10 @@ function MallarPage() {
       locked_by_admin: form.isLocked,
       hierarchy_scope: createScope,
       forening_id: createScope === "forening" ? form.foreningId : null,
+      event_trigger_description: form.event_trigger_description?.trim() || null,
+      is_delivery_task: form.is_delivery_task,
+      delivery_flow_name: form.delivery_flow_name?.trim() || null,
+      depends_on_template_title: form.depends_on_template_title?.trim() || null,
     }).select("id").maybeSingle();
 
     if (!tmpl?.id) { setSaving(false); return; }
@@ -599,6 +612,15 @@ function MallarPage() {
     setBulkCreating(true);
     const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
 
+    // Pre-fetch existing tasks once so we can resolve depends_on_template_title
+    const { data: existingTasks } = await supabase
+      .from("tasks")
+      .select("id, title, status")
+      .eq("store_id", storeId ?? "")
+      .neq("status", "done")
+      .limit(500);
+    const existingTaskList = existingTasks ?? [];
+
     for (const cfg of bulkTaskConfigs) {
       const tmpl = templates.find(t => t.id === cfg.templateId);
       if (!tmpl) continue;
@@ -611,6 +633,13 @@ function MallarPage() {
         cfg.assigneeGroupIds.forEach(gid => rows.push({ task_id: taskId, group_id: gid }));
         return rows;
       };
+
+      const dependsOnTitle = (tmpl as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title;
+      const dependsOnTaskId = dependsOnTitle
+        ? (existingTaskList.find(t =>
+            t.title.toLowerCase().includes(dependsOnTitle.toLowerCase())
+          )?.id ?? null)
+        : null;
 
       const insertTask = async (dueTime: string) => {
         const baseDue = cfg.dueDate ? new Date(cfg.dueDate) : null;
@@ -635,8 +664,12 @@ function MallarPage() {
           recurrence_rule: tmpl.recurrence_rule ?? null,
           recurrence_days: tmpl.recurrence_days ?? null,
           recurrence_interval: tmpl.recurrence_interval ?? null,
+          recurrence_months: (tmpl as ChecklistTemplate & { recurrence_months?: number[] }).recurrence_months ?? null,
+          recurrence_month_day: (tmpl as ChecklistTemplate & { recurrence_month_day?: number }).recurrence_month_day ?? null,
           recurrence_start: (tmpl as ChecklistTemplate & { recurrence_start?: string }).recurrence_start ?? null,
           recurrence_end: (tmpl as ChecklistTemplate & { recurrence_end?: string }).recurrence_end ?? null,
+          event_trigger_description: (tmpl as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description ?? null,
+          depends_on_task_id: dependsOnTaskId,
           created_by: user?.id ?? null,
           assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
           status: "todo",
@@ -714,6 +747,10 @@ function MallarPage() {
       isLocked: t.locked_by_admin ?? false,
       foreningId: t.forening_id ?? "",
       changeSummary: "",
+      event_trigger_description: (t as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description ?? "",
+      is_delivery_task: (t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task ?? false,
+      delivery_flow_name: (t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "",
+      depends_on_template_title: (t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title ?? "",
       items: (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ id: it.id, label: it.label, requires_photo: it.requires_photo, link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url ?? "", condition_question_id: (it as ChecklistTemplateItem & { condition_question_id?: string }).condition_question_id ?? undefined, condition_answer: (it as ChecklistTemplateItem & { condition_answer?: string }).condition_answer ?? undefined })),
       questions: (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q) => ({ id: q.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, link_url: (q as ChecklistTemplateQuestion & { link_url?: string }).link_url ?? "" })),
     });
@@ -746,6 +783,10 @@ function MallarPage() {
       time_slots: editForm.time_slots.length > 0 ? editForm.time_slots : null,
       is_global: editForm.isGlobal,
       locked_by_admin: editForm.isLocked,
+      event_trigger_description: editForm.event_trigger_description?.trim() || null,
+      is_delivery_task: editForm.is_delivery_task,
+      delivery_flow_name: editForm.delivery_flow_name?.trim() || null,
+      depends_on_template_title: editForm.depends_on_template_title?.trim() || null,
     }).eq("id", editTarget.id);
 
     await supabase.from("checklist_template_items").delete().eq("template_id", editTarget.id);
@@ -1848,6 +1889,61 @@ function MallarPage() {
                 <Switch checked={f.isLocked} onCheckedChange={(v) => setF((p) => ({ ...p, isLocked: v }))} />
               </div>
             )}
+
+            {/* Händelsevillkor */}
+            <div className="px-4 py-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                <span className="text-xs text-muted-foreground">Händelsevillkor</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground/60 pl-6">Uppgiften döljs tills händelsen bekräftas.</p>
+              <Input
+                placeholder="t.ex. Truck lossat"
+                value={f.event_trigger_description}
+                onChange={(e) => setF((p) => ({ ...p, event_trigger_description: e.target.value }))}
+                className="h-7 border border-border/60 text-xs"
+              />
+            </div>
+
+            {/* Leveransuppgift */}
+            <div className="px-4 py-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Truck className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="text-xs text-muted-foreground">Leveransuppgift</span>
+                </div>
+                <Switch
+                  checked={f.is_delivery_task}
+                  onCheckedChange={(v) => setF((p) => ({ ...p, is_delivery_task: v }))}
+                />
+              </div>
+              {f.is_delivery_task && (
+                <div className="pl-6 space-y-1">
+                  <span className="text-[11px] text-muted-foreground/70">Leveransflöde (valfritt filter)</span>
+                  <Input
+                    placeholder="t.ex. Färskt"
+                    value={f.delivery_flow_name}
+                    onChange={(e) => setF((p) => ({ ...p, delivery_flow_name: e.target.value }))}
+                    className="h-7 border border-border/60 text-xs"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Kedja / Beror på */}
+            <div className="px-4 py-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <Link2 className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                <span className="text-xs text-muted-foreground">Beror på mall</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground/60 pl-6">Blockeras tills föregångarmallen är klar.</p>
+              <Input
+                placeholder="Titel på föregångarmall"
+                value={f.depends_on_template_title}
+                onChange={(e) => setF((p) => ({ ...p, depends_on_template_title: e.target.value }))}
+                className="h-7 border border-border/60 text-xs"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -2076,44 +2172,53 @@ function MallarPage() {
         </div>
       ) : (
         <div className="mt-6 space-y-8">
-          {/* Template packages section */}
+          {/* Template packages section — hidden by default, toggled via button */}
           {packages.length > 0 && isManager && (
             <div>
               <div className="mb-3 flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-foreground">Mallpaket</h2>
                 <Badge variant="outline" className="text-xs border-amber-300 text-amber-600">Paket</Badge>
+                <button
+                  onClick={() => setShowPackagesInline(v => !v)}
+                  className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPackagesInline ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  {showPackagesInline ? "Dölj" : `Visa (${packages.length})`}
+                </button>
                 <Button variant="ghost" size="sm" className="ml-auto text-xs text-muted-foreground h-7 rounded-full" onClick={() => setShowPackagesPanel(true)}>
                   <Layers className="h-3.5 w-3.5 mr-1" /> Hantera
                 </Button>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {packages.map(pkg => {
-                  const pkgTemplates = (pkg.items ?? []).map(it => templates.find(t => t.id === it.template_id)).filter(Boolean) as TemplateWithMeta[];
-                  return (
-                    <div key={pkg.id} className="rounded-2xl border border-amber-200/60 bg-card p-4 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm">{pkg.name}</p>
-                          {pkg.description && <p className="text-xs text-muted-foreground">{pkg.description}</p>}
-                          <p className="text-xs text-muted-foreground mt-0.5">{pkgTemplates.length} mallar</p>
+              {showPackagesInline && (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {packages.map(pkg => {
+                    const pkgTemplates = (pkg.items ?? []).map(it => templates.find(t => t.id === it.template_id)).filter(Boolean) as TemplateWithMeta[];
+                    return (
+                      <div key={pkg.id} className="rounded-2xl border border-amber-200/60 bg-card p-4 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm">{pkg.name}</p>
+                            {pkg.description && <p className="text-xs text-muted-foreground">{pkg.description}</p>}
+                            <p className="text-xs text-muted-foreground mt-0.5">{pkgTemplates.length} mallar</p>
+                          </div>
+                          <Button
+                            size="sm" variant="outline"
+                            className="shrink-0 rounded-full h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                            onClick={() => { setActivatePackageTarget(pkg); const _now = new Date(); setBulkTaskConfigs(pkgTemplates.map(t => { const slots = (t as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? []; const dd = t.due_date_offset != null ? (() => { const d = new Date(_now); d.setDate(d.getDate() + t.due_date_offset!); return d.toISOString().slice(0, 10); })() : ""; return { templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], dueDate: dd, priority: t.priority ?? "Medel", dueTime: slots.length > 0 ? "" : (t.due_date_time ?? ""), timeSlots: slots }; })); setBulkCreateOpen(true); }}
+                          >
+                            <ListChecks className="h-3 w-3 mr-1" /> Aktivera
+                          </Button>
                         </div>
-                        <Button
-                          size="sm" variant="outline"
-                          className="shrink-0 rounded-full h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
-                          onClick={() => { setActivatePackageTarget(pkg); const _now = new Date(); setBulkTaskConfigs(pkgTemplates.map(t => { const slots = (t as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? []; const dd = t.due_date_offset != null ? (() => { const d = new Date(_now); d.setDate(d.getDate() + t.due_date_offset!); return d.toISOString().slice(0, 10); })() : ""; return { templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], dueDate: dd, priority: t.priority ?? "Medel", dueTime: slots.length > 0 ? "" : (t.due_date_time ?? ""), timeSlots: slots }; })); setBulkCreateOpen(true); }}
-                        >
-                          <ListChecks className="h-3 w-3 mr-1" /> Aktivera
-                        </Button>
+                        <div className="flex flex-wrap gap-1">
+                          {pkgTemplates.map(t => (
+                            <Badge key={t.id} variant="secondary" className="text-xs">{t.title}</Badge>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-1">
-                        {pkgTemplates.map(t => (
-                          <Badge key={t.id} variant="secondary" className="text-xs">{t.title}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
           {visibleGroups.map((group) => (
@@ -2254,6 +2359,36 @@ function MallarPage() {
                         {expanded === t.id && (
                           <div className="border-t border-border/60 px-5 py-4 space-y-3">
                             {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
+                            {/* Special type indicators */}
+                            <div className="flex flex-wrap gap-2">
+                              {(t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task && (
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700">
+                                  <Truck className="h-3 w-3" />
+                                  Leveransuppgift
+                                  {(t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name && (
+                                    <span className="opacity-70">— {(t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name}</span>
+                                  )}
+                                </span>
+                              )}
+                              {(t as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description && (
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
+                                  <Zap className="h-3 w-3" />
+                                  {(t as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description}
+                                </span>
+                              )}
+                              {(t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title && (
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                                  <Link2 className="h-3 w-3" />
+                                  Beror på: {(t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title}
+                                </span>
+                              )}
+                              {((t as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? []).length > 0 && (
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                                  <Clock className="h-3 w-3" />
+                                  {((t as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? []).join(", ")}
+                                </span>
+                              )}
+                            </div>
                             {(t as ChecklistTemplate & { sap_article_id?: string | null }).sap_article_id && (() => {
                               const url = mittCoopUrl((t as ChecklistTemplate & { sap_article_id?: string | null }).sap_article_id!, activeStore?.sap_site_id ?? null);
                               return url ? (

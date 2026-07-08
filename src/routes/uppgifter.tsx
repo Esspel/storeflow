@@ -747,7 +747,7 @@ function TasksPage() {
     if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
   }
 
-  // Called immediately after a recurring parent is fully saved so near-term instances are visible right away.
+    // Called immediately after a recurring parent is fully saved so near-term instances are visible right away.
   // Only spawns up to 30 days ahead to avoid freezing the UI; spawnRecurringTasks handles ongoing catch-up.
   async function spawnChildrenForNewParent(parent: TaskFull) {
     if (!parent.recurrence_rule) return;
@@ -761,8 +761,8 @@ function TasksPage() {
     const durationMs = parent.due_date
       ? Math.max(0, new Date(parent.due_date).getTime() - originDate.getTime())
       : 0;
-    // Ceiling: recurrence_end if set, otherwise 365 days from today (rolling window)
-    const maxCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 365); return midnight(d); })();
+    // Only spawn 30 days ahead on initial creation to avoid massive task counts
+    const maxCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 30); return midnight(d); })();
     const ceilDate = parent.recurrence_end
       ? (() => { const e = midnight(new Date(parent.recurrence_end)); return e < maxCeil ? e : maxCeil; })()
       : maxCeil;
@@ -840,8 +840,8 @@ function TasksPage() {
 
     let didSpawn = false;
 
-    // Spawn up to 365 days ahead (rolling window) when no end date is set
-    const spawnCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 365); return midnight(d); })();
+    // Spawn up to 30 days ahead (rolling window) when no end date is set
+    const spawnCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 30); return midnight(d); })();
 
     for (const t of recurringTasks) {
       const originDate: Date = t.recurrence_start
