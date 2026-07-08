@@ -922,19 +922,28 @@ function TasksPage() {
   });
 
   // Unconfirmed event tasks: have event_trigger_description but no event_triggered_at today.
-  // Only managers or the designated trigger user see these in a confirmation section.
-  // They are hidden from the main task list until confirmed.
+  // These are hidden from the main task list for EVERYONE until confirmed.
+  // Only managers OR the designated trigger user sees the confirmation panel.
+  // The assignee does NOT see the task at all — confirmed tasks reappear normally.
   const todayStartStr = localDateStr(new Date(getSimulatedNow()));
-  const unconfirmedEventTasks = allVisibleTasks.filter(t => {
+
+  // Use all store tasks (not just employee-visible ones) so the trigger user
+  // can always see the confirmation panel, even if they're not the assignee.
+  const allUnconfirmedEventTasks = tasks.filter(t => {
     if (!t.event_trigger_description) return false;
     if (!t.event_triggered_at) return true;
-    // If triggered, check if it was today (Stockholm TZ) — if earlier, treat as not yet confirmed for today
     const triggeredDate = localDateStr(new Date(t.event_triggered_at));
     return triggeredDate < todayStartStr;
-  }).filter(t => isManager || t.event_trigger_user_id === user?.id || !t.event_trigger_user_id);
+  });
 
-  // Main task list excludes unconfirmed event tasks
-  const unconfirmedEventIds = new Set(unconfirmedEventTasks.map(t => t.id));
+  const unconfirmedEventIds = new Set(allUnconfirmedEventTasks.map(t => t.id));
+
+  // Only managers and the trigger user see the confirmation section
+  const unconfirmedEventTasks = allUnconfirmedEventTasks.filter(t =>
+    isManager || t.event_trigger_user_id === user?.id || !t.event_trigger_user_id
+  );
+
+  // Main task list: exclude all unconfirmed event tasks (assignees can't see or act on them)
   const visibleTasks = allVisibleTasks.filter(t => !unconfirmedEventIds.has(t.id));
 
   const applyTemplate = (templateId: string) => {
@@ -1099,6 +1108,8 @@ function TasksPage() {
 
   const completeTask = async (task: TaskFull) => {
     if (completingRef.current.has(task.id)) return;
+    // Block completion if event has not been confirmed
+    if (unconfirmedEventIds.has(task.id)) return;
     completingRef.current.add(task.id);
     try {
       const isDone = task.status === "done";
@@ -2310,11 +2321,9 @@ function TasksPage() {
             <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={exportCSV}>
               <Download className="mr-1.5 h-3.5 w-3.5" /> Exportera
             </Button>
-            {todayDeliveries.length > 0 && (
-              <Button variant="outline" size="sm" className="rounded-full text-xs border-blue-500/40 text-blue-700 hover:bg-blue-50 dark:text-blue-400" onClick={() => { setShowDeliveryModal(true); setSelectedDeliveryIds(new Set(todayDeliveries.map(d => d.id))); }}>
-                <Truck className="mr-1.5 h-3.5 w-3.5" /> Leveranser ({todayDeliveries.length})
-              </Button>
-            )}
+            <Button variant="outline" size="sm" className="rounded-full text-xs border-blue-500/40 text-blue-700 hover:bg-blue-50 dark:text-blue-400" onClick={() => { setShowDeliveryModal(true); setSelectedDeliveryIds(new Set(todayDeliveries.map(d => d.id))); }}>
+              <Truck className="mr-1.5 h-3.5 w-3.5" /> Leveranser{todayDeliveries.length > 0 ? ` (${todayDeliveries.length})` : ""}
+            </Button>
             <Button size="sm" className="rounded-full text-xs" onClick={() => { setShowRecurrenceSetup(true); setSaveError(""); }}>
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Ny uppgift
             </Button>
@@ -2548,7 +2557,22 @@ function TasksPage() {
         </div>
       )}
 
-      {/* Mobile FAB */}
+      {/* Mobile FAB — delivery */}
+      {isManager && (
+        <button
+          className="fixed bottom-44 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
+          aria-label="Leveransuppgifter"
+          onClick={() => { setShowDeliveryModal(true); setSelectedDeliveryIds(new Set(todayDeliveries.map(d => d.id))); }}
+        >
+          <Truck className="h-5 w-5" />
+          {todayDeliveries.length > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+              {todayDeliveries.length}
+            </span>
+          )}
+        </button>
+      )}
+      {/* Mobile FAB — new task */}
       {isManager && (
         <button
           className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"

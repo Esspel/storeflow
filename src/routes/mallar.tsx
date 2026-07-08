@@ -90,6 +90,21 @@ const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid im
 # Mallpaket: namn på det mallpaket mallen ska ingå i — skapas automatiskt om det inte finns
 #   Exempel: "Öppningspaket"
 #
+# Händelsevillkor (kol 22): beskrivning av den händelse som måste bekräftas av ansvarig
+#   Uppgiften är helt dold för alla tills händelsen bekräftats för dagen
+#   Bekräftaren (event_trigger_user) sätts i uppgiftsformuläret — kan skilja sig från utföraren
+#   Exempel: "Andel inkommen" eller "Truck lossat"
+#
+# Leveransuppgift (kol 23): ja | (tomt) — om "ja" genereras uppgiften automatiskt från
+#   dagens leveransplan när mallen tillämpas; en uppgift per leverans
+#
+# Leveransflöde (kol 24): filtrera leveranser på flödesnamn (t.ex. Färskt | Torrt | Fryst | Standard)
+#   Lämna tomt för att visa alla flöden i leveransmodalen
+#
+# Kedja (kol 25): titel på föregångarmallen — uppgiften blockeras (visas som "Blockerad")
+#   tills föregångaren är markerad som klar; matchas mot aktiva uppgifter vid skapande
+#   Exempel: "Öppningskontroll"
+#
 # Tips: Spara i UTF-8 och använd semikolon (;) som separator
 `;
 
