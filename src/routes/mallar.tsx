@@ -260,10 +260,6 @@ function MallarPage() {
     templateId: string;
     assigneeUserIds: string[];
     assigneeGroupIds: string[];
-    dueDate: string;
-    priority: string;
-    dueTime: string;
-    timeSlots: string[];
   };
   const [bulkCreateOpen, setBulkCreateOpen] = useState(false);
   const [bulkTaskConfigs, setBulkTaskConfigs] = useState<BulkTaskConfig[]>([]);
@@ -293,11 +289,12 @@ function MallarPage() {
   const [reviewEndDate, setReviewEndDate] = useState("");
 
   // CSV delivery supplier mapping
-  type DeliveryMappingItem = { templateId: string; templateTitle: string; supplierId: string };
+  type DeliveryMappingItem = { templateId: string; templateTitle: string; supplierIds: string[] };
   const [deliveryMappingOpen, setDeliveryMappingOpen] = useState(false);
   const [deliveryMappingItems, setDeliveryMappingItems] = useState<DeliveryMappingItem[]>([]);
   const [deliverySuppliers, setDeliverySuppliers] = useState<{ id: string; supplier: string; flow_name: string; delivery_time: string }[]>([]);
   const [deliveryMappingSaving, setDeliveryMappingSaving] = useState(false);
+  const [deliveryFlowNames, setDeliveryFlowNames] = useState<string[]>([]);
 
   // View filter: "all" | "hk" | "forening" | "store"
   const [viewFilter, setViewFilter] = useState<"all" | "hk" | "forening" | "store">("all");
@@ -385,6 +382,22 @@ function MallarPage() {
     setAllUsers((usersRes.data ?? []) as AppUser[]);
     setAllGroups((groupsRes.data ?? []) as UserGroup[]);
     setPackages((packagesRes.data ?? []) as TemplatePackage[]);
+
+    // Load distinct delivery flow names for the flow-name multi-select
+    const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
+    if (storeId) {
+      const { data: planRow } = await supabase
+        .from("delivery_plans").select("id").eq("store_id", storeId)
+        .order("imported_at", { ascending: false }).limit(1).maybeSingle();
+      if (planRow?.id) {
+        const { data: flowRows } = await supabase
+          .from("delivery_entries").select("flow_name")
+          .eq("plan_id", planRow.id).order("flow_name");
+        const names = [...new Set((flowRows ?? []).map((r: { flow_name: string }) => r.flow_name).filter(Boolean))];
+        setDeliveryFlowNames(names);
+      }
+    }
+
     setLoading(false);
   }
 
@@ -678,24 +691,59 @@ function MallarPage() {
     await load();
   }
 
+  // Calculate the next due date for a recurring template from today
+  function calcNextDueDate(tmpl: ChecklistTemplate): { iso: string; time: string } | null {
+    const rule = tmpl.recurrence_rule;
+    if (!rule) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let base = new Date(today);
+
+    if (rule === "weekly" || rule === "biweekly") {
+      const days = tmpl.recurrence_days ?? [];
+      if (days.length > 0) {
+        // 0=Mon…6=Sun (our convention) → JS getDay(): 0=Sun,1=Mon…6=Sat
+        const todayJs = today.getDay(); // 0=Sun
+        const todayConv = todayJs === 0 ? 6 : todayJs - 1; // convert to Mon=0
+        for (let i = 0; i <= 7; i++) {
+          if (days.includes((todayConv + i) % 7)) {
+            base = new Date(today);
+            base.setDate(today.getDate() + i);
+            break;
+          }
+        }
+      }
+    } else if (rule === "monthly" || rule === "quarterly") {
+      const tAny = tmpl as ChecklistTemplate & { recurrence_month_day?: number };
+      const targetDay = tAny.recurrence_month_day ?? 1;
+      base = new Date(today);
+      base.setDate(targetDay);
+      if (base < today) base.setMonth(base.getMonth() + 1);
+    } else if (rule === "yearly") {
+      const tAny = tmpl as ChecklistTemplate & { recurrence_months?: number[]; recurrence_month_day?: number };
+      const months = tAny.recurrence_months ?? [];
+      const targetDay = tAny.recurrence_month_day ?? 1;
+      if (months.length > 0) {
+        const curMonth = today.getMonth() + 1;
+        const next = months.find(m => m >= curMonth) ?? months[0];
+        base = new Date(today.getFullYear(), next - 1, targetDay);
+        if (base < today) base = new Date(today.getFullYear() + 1, months[0] - 1, targetDay);
+      }
+    }
+    // Apply due_date_time if set
+    const timeStr = (tmpl as ChecklistTemplate & { due_date_time?: string }).due_date_time ?? "";
+    if (timeStr) {
+      const [h, m] = timeStr.split(":").map(Number);
+      base.setHours(isNaN(h) ? 8 : h, isNaN(m) ? 0 : m, 0, 0);
+    }
+    return { iso: base.toISOString().slice(0, 10), time: timeStr };
+  }
+
   function openBulkCreate() {
-    const now = new Date();
     const configs = [...selectedTemplateIds].map((id) => {
       const tmpl = templates.find(t => t.id === id);
       if (!tmpl) return null;
-      const timeSlots = (tmpl as ChecklistTemplate & { time_slots?: string[] })?.time_slots ?? [];
-      const dueDate = tmpl?.due_date_offset != null
-        ? (() => { const d = new Date(now); d.setDate(d.getDate() + tmpl.due_date_offset!); return d.toISOString().slice(0, 10); })()
-        : "";
-      return {
-        templateId: id,
-        assigneeUserIds: [] as string[],
-        assigneeGroupIds: [] as string[],
-        dueDate,
-        priority: tmpl?.priority ?? "Medel",
-        dueTime: timeSlots.length > 0 ? "" : (tmpl?.due_date_time ?? ""),
-        timeSlots,
-      };
+      return { templateId: id, assigneeUserIds: [] as string[], assigneeGroupIds: [] as string[] };
     });
     setBulkTaskConfigs(configs.filter((c): c is BulkTaskConfig => c !== null));
     setBulkCreateOpen(true);
@@ -743,27 +791,37 @@ function MallarPage() {
         recurrence_months?: number[]; recurrence_month_day?: number;
         recurrence_start?: string; recurrence_end?: string;
         event_trigger_description?: string; is_critical?: boolean;
-        template_mode?: string;
+        template_mode?: string; time_slots?: string[];
       };
 
+      const timeSlots: string[] = tmplAny.time_slots ?? [];
+      const templatePriority = tmpl.priority ?? "Medel";
+      const smartDate = calcNextDueDate(tmpl);
+
       const insertTask = async (dueTime: string) => {
-        const baseDue = cfg.dueDate ? new Date(cfg.dueDate) : null;
         let dueIso: string | null = null;
-        if (baseDue) {
+        if (smartDate) {
+          const d = new Date(smartDate.iso);
           if (dueTime) {
-            const timeParts = dueTime.split(":");
-            const h = parseInt(timeParts[0] ?? "0", 10);
-            const m = parseInt(timeParts[1] ?? "0", 10);
-            baseDue.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+            const [h, m] = dueTime.split(":").map(Number);
+            d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
           }
-          dueIso = isNaN(baseDue.getTime()) ? null : baseDue.toISOString();
+          dueIso = isNaN(d.getTime()) ? null : d.toISOString();
+        } else if (tmpl.due_date_offset != null) {
+          const d = new Date();
+          d.setDate(d.getDate() + tmpl.due_date_offset);
+          if (dueTime) {
+            const [h, m] = dueTime.split(":").map(Number);
+            d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+          }
+          dueIso = d.toISOString();
         }
 
         const { data: task } = await supabase.from("tasks").insert({
           title: tmpl.title,
           description: tmpl.description ?? "",
           category: tmpl.category ?? "",
-          priority: cfg.priority,
+          priority: templatePriority,
           store_id: storeId,
           due_date: dueIso,
           due_date_time: dueTime || null,
@@ -820,7 +878,7 @@ function MallarPage() {
             title: tmpl.title,
             description: tmpl.description ?? "",
             category: tmpl.category ?? "",
-            priority: cfg.priority,
+            priority: templatePriority,
             store_id: storeId,
             due_date: dueIso,
             due_date_time: dueTime || null,
@@ -850,13 +908,13 @@ function MallarPage() {
         }
       };
 
-      // Time slots → one task per slot; otherwise one task with dueTime (or no time)
-      if (cfg.timeSlots.length > 0) {
-        for (const slot of cfg.timeSlots) {
+      // Time slots → one task per slot; otherwise one task using template's due_date_time
+      if (timeSlots.length > 0) {
+        for (const slot of timeSlots) {
           await insertTask(slot);
         }
       } else {
-        await insertTask(cfg.dueTime);
+        await insertTask((tmpl as ChecklistTemplate & { due_date_time?: string }).due_date_time ?? "");
       }
     }
 
@@ -1549,7 +1607,7 @@ function MallarPage() {
           .order("supplier");
         if (entries && entries.length > 0) {
           setDeliverySuppliers(entries as { id: string; supplier: string; flow_name: string; delivery_time: string }[]);
-          setDeliveryMappingItems(importedDeliveryTemplates.map(t => ({ templateId: t.id, templateTitle: t.title, supplierId: "" })));
+          setDeliveryMappingItems(importedDeliveryTemplates.map(t => ({ templateId: t.id, templateTitle: t.title, supplierIds: [] })));
           setDeliveryMappingOpen(true);
         }
       }
@@ -1559,11 +1617,12 @@ function MallarPage() {
   const saveDeliveryMapping = async () => {
     setDeliveryMappingSaving(true);
     for (const item of deliveryMappingItems) {
-      if (!item.supplierId) continue;
-      const supplier = deliverySuppliers.find(s => s.id === item.supplierId);
-      if (!supplier) continue;
+      if (!item.supplierIds.length) continue;
+      // Collect unique flow_names from selected entries
+      const selectedSuppliers = deliverySuppliers.filter(s => item.supplierIds.includes(s.id));
+      const flowNames = [...new Set(selectedSuppliers.map(s => s.flow_name).filter(Boolean))];
       await supabase.from("checklist_templates")
-        .update({ delivery_flow_name: supplier.supplier })
+        .update({ delivery_flow_name: flowNames.join("|") || null })
         .eq("id", item.templateId);
     }
     setDeliveryMappingOpen(false);
@@ -1669,7 +1728,7 @@ function MallarPage() {
     return (
       <div className="flex overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
         {/* LEFT */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 min-w-0">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-10 min-w-0">
           <input
             placeholder="Mallens namn..."
             value={f.title}
@@ -2248,14 +2307,39 @@ function MallarPage() {
                 />
               </div>
               {f.is_delivery_task && (
-                <div className="pl-6 space-y-1">
-                  <span className="text-[11px] text-muted-foreground/70">Leveransflöde (valfritt filter)</span>
-                  <Input
-                    placeholder="t.ex. Färskt"
-                    value={f.delivery_flow_name}
-                    onChange={(e) => setF((p) => ({ ...p, delivery_flow_name: e.target.value }))}
-                    className="h-7 border border-border/60 text-xs"
-                  />
+                <div className="pl-6 space-y-1.5">
+                  <span className="text-[11px] text-muted-foreground/70">Leveransflöden (välj ett eller flera)</span>
+                  {deliveryFlowNames.length > 0 ? (
+                    <div className="space-y-0.5 rounded-lg border border-border/50 p-2 max-h-36 overflow-y-auto">
+                      {deliveryFlowNames.map(name => {
+                        const selected = f.delivery_flow_name.split("|").map(s => s.trim()).filter(Boolean).includes(name);
+                        return (
+                          <label key={name} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
+                            <Checkbox
+                              checked={selected}
+                              onCheckedChange={(checked) => {
+                                const current = f.delivery_flow_name.split("|").map(s => s.trim()).filter(Boolean);
+                                const next = checked ? [...current, name] : current.filter(n => n !== name);
+                                setF(p => ({ ...p, delivery_flow_name: next.join("|") }));
+                              }}
+                              className="h-3.5 w-3.5"
+                            />
+                            <span className="text-xs">{name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <Input
+                      placeholder="t.ex. Färskt"
+                      value={f.delivery_flow_name}
+                      onChange={(e) => setF((p) => ({ ...p, delivery_flow_name: e.target.value }))}
+                      className="h-7 border border-border/60 text-xs"
+                    />
+                  )}
+                  {f.delivery_flow_name && (
+                    <p className="text-[10px] text-muted-foreground/60">Valt: {f.delivery_flow_name}</p>
+                  )}
                 </div>
               )}
             </div>
@@ -3105,7 +3189,7 @@ function MallarPage() {
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-4 pb-8">
             {loadingVersions ? (
               <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />)}</div>
             ) : versions.length === 0 ? (
@@ -3283,7 +3367,7 @@ function MallarPage() {
             </button>
           </div>
           {previewTarget && (
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-10">
               {/* Meta badges */}
               <div className="flex flex-wrap gap-2">
                 {previewTarget.category && <Badge variant="secondary">{previewTarget.category}</Badge>}
@@ -3395,25 +3479,30 @@ function MallarPage() {
             <ListChecks className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Skapa uppgifter från {bulkTaskConfigs.length} mallar</span>
             <span className="text-xs text-muted-foreground">
-              ({bulkTaskConfigs.reduce((sum, c) => sum + Math.max(1, c.timeSlots.length), 0)} uppgifter totalt)
+              ({bulkTaskConfigs.reduce((sum, cfg) => {
+                const tmpl = templates.find(t => t.id === cfg.templateId);
+                const slots = (tmpl as ChecklistTemplate & { time_slots?: string[] })?.time_slots ?? [];
+                return sum + Math.max(1, slots.length);
+              }, 0)} uppgifter totalt)
             </span>
             <div className="ml-auto flex items-center gap-2">
               <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setBulkCreateOpen(false)}>Avbryt</Button>
               <Button size="sm" className="rounded-full" onClick={bulkCreateTasks} disabled={bulkCreating}>
-                {bulkCreating ? "Skapar..." : `Skapa ${bulkTaskConfigs.reduce((sum, c) => sum + Math.max(1, c.timeSlots.length), 0)} uppgifter`}
+                {bulkCreating ? "Skapar..." : `Skapa uppgifter`}
               </Button>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
-            <p className="text-sm text-muted-foreground">Konfigurera tilldelning, förfallodatum och prioritet per uppgift innan du skapar dem.</p>
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 pb-8">
+            <p className="text-sm text-muted-foreground">Förfallodatum, tid och prioritet hämtas direkt från mallen. Välj vem som ska tilldelas varje uppgift.</p>
             {bulkTaskConfigs.map((cfg, idx) => {
               const tmpl = templates.find(t => t.id === cfg.templateId);
               if (!tmpl) return null;
               const isDeliveryTmpl = !!(tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task;
-              const hasDueDateOffset = (tmpl as ChecklistTemplate & { due_date_offset?: number }).due_date_offset != null;
+              const timeSlots = (tmpl as ChecklistTemplate & { time_slots?: string[] })?.time_slots ?? [];
+              const taskCount = Math.max(1, timeSlots.length);
               const storeUsers = allUsers.filter(u => !activeStore || u.store_id === activeStore.id);
               const storeGroups = allGroups.filter(g => !activeStore || g.store_id === activeStore.id);
-              const taskCount = Math.max(1, cfg.timeSlots.length);
+              const smartDate = calcNextDueDate(tmpl);
               return (
                 <div key={cfg.templateId} className={cn("rounded-2xl border bg-card p-4 space-y-4", isDeliveryTmpl ? "border-amber-300/60 bg-amber-50/30" : "border-border/60")}>
                   <div className="flex items-start gap-3">
@@ -3422,10 +3511,34 @@ function MallarPage() {
                       <p className="font-medium text-sm">{tmpl.title}</p>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {tmpl.category && <Badge variant="secondary" className="text-xs">{tmpl.category}</Badge>}
+                        <Badge variant="outline" className="text-xs">{tmpl.priority ?? "Medel"}</Badge>
                         <span className="text-xs text-muted-foreground">{tmpl.items?.length ?? 0} steg</span>
                         {taskCount > 1 && <Badge className="text-xs bg-primary/10 text-primary border-0">{taskCount} uppgifter (tidsluckor)</Badge>}
                         {isDeliveryTmpl && <Badge variant="outline" className="text-xs border-amber-400 text-amber-700 bg-amber-50"><Truck className="h-3 w-3 mr-1" />Leveransmall</Badge>}
                       </div>
+                      {/* Smart date info */}
+                      {!isDeliveryTmpl && (
+                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                          {tmpl.recurrence_rule && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5">
+                              <Repeat className="h-3 w-3" />
+                              {RECURRENCE_OPTIONS.find(r => r.value === tmpl.recurrence_rule)?.label ?? tmpl.recurrence_rule}
+                            </span>
+                          )}
+                          {smartDate && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5">
+                              <Clock className="h-3 w-3" />
+                              Nästa: {smartDate.iso}{smartDate.time ? ` kl ${smartDate.time}` : ""}
+                            </span>
+                          )}
+                          {timeSlots.length > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5">
+                              <Clock className="h-3 w-3" />
+                              {timeSlots.join(" · ")}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {isDeliveryTmpl && (
                         <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                           Leveransmallar kopplas automatiskt till leveransplanen. Skapa leveransuppgifter via <strong>Uppgifter → Leveranser</strong> istället.
@@ -3433,65 +3546,6 @@ function MallarPage() {
                       )}
                     </div>
                   </div>
-
-                  {!isDeliveryTmpl && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {/* Priority */}
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">Prioritet</label>
-                      <Select
-                        value={cfg.priority}
-                        onValueChange={(v) => setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, priority: v } : c))}
-                      >
-                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {["Låg", "Medel", "Hög", "Kritisk"].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {/* Due date */}
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">
-                        Förfallodatum{!hasDueDateOffset && <span className="text-destructive ml-0.5">*</span>}
-                      </label>
-                      <Input
-                        type="date"
-                        value={cfg.dueDate}
-                        onChange={(e) => setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, dueDate: e.target.value } : c))}
-                        className={cn("h-8 text-xs", !cfg.dueDate && !hasDueDateOffset && "border-destructive/50 bg-destructive/5")}
-                      />
-                    </div>
-                    {/* Due time / time slots */}
-                    <div className="space-y-1">
-                      {cfg.timeSlots.length > 0 ? (
-                        <>
-                          <label className="text-xs font-medium text-muted-foreground">Tidsluckor</label>
-                          <div className="flex flex-wrap gap-1 min-h-[2rem] items-center">
-                            {cfg.timeSlots.map((slot, si) => (
-                              <span key={si} className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                                {slot}
-                                <button type="button" onClick={() => setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, timeSlots: c.timeSlots.filter((_, j) => j !== si) } : c))}>
-                                  <X className="h-2.5 w-2.5" />
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                          <p className="text-[11px] text-muted-foreground">En uppgift per tidslucka</p>
-                        </>
-                      ) : (
-                        <>
-                          <label className="text-xs font-medium text-muted-foreground">Förfallotid</label>
-                          <Input
-                            type="time"
-                            value={cfg.dueTime}
-                            onChange={(e) => setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, dueTime: e.target.value } : c))}
-                            className="h-8 text-xs"
-                          />
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  )}
 
                   {!isDeliveryTmpl && (
                   <div className="space-y-2">
@@ -3569,7 +3623,7 @@ function MallarPage() {
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-5 space-y-6">
+          <div className="flex-1 overflow-y-auto p-5 space-y-6 pb-10">
             {/* Create / Edit form — only admins and HK users can manage packages */}
             {(isAdmin || isHK) && (
             <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
@@ -3745,48 +3799,69 @@ function MallarPage() {
 
       {/* CSV delivery supplier mapping dialog */}
       <Dialog open={deliveryMappingOpen} onOpenChange={(o) => { if (!o) setDeliveryMappingOpen(false); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Koppla leveranser till mallar</DialogTitle>
-            <DialogDescription>
-              Välj vilken leverantör varje leveransmall gäller. Bara leverantörer från din aktiva leveransplan visas.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto">
-            {deliveryMappingItems.map((item, idx) => (
-              <div key={item.templateId} className="space-y-1.5">
-                <label className="text-sm font-medium">{item.templateTitle}</label>
-                <select
-                  value={item.supplierId}
-                  onChange={(e) => setDeliveryMappingItems(prev => prev.map((it, i) => i === idx ? { ...it, supplierId: e.target.value } : it))}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                >
-                  <option value="">-- Välj leverantör --</option>
-                  {Array.from(new Map(deliverySuppliers.map(s => [s.supplier, s])).values()).map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.supplier} ({s.flow_name}{s.delivery_time ? ` · ${s.delivery_time}` : ""})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
+          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+            <Truck className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Koppla leveranser till mallar</span>
           </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setDeliveryMappingOpen(false)}
-              className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted/50 transition-colors"
-            >
-              Hoppa over
-            </button>
-            <button
-              type="button"
-              disabled={deliveryMappingSaving || deliveryMappingItems.every(i => !i.supplierId)}
+          <p className="px-5 pt-4 pb-2 text-xs text-muted-foreground">
+            Välj vilka leverantörer varje leveransmall ska kopplas till. En mall kan kopplas till flera leveranser.
+          </p>
+          <div className="flex-1 overflow-y-auto px-5 space-y-5 pb-8">
+            {deliveryMappingItems.map((item, idx) => {
+              const toggleSupplier = (sid: string) => {
+                const next = item.supplierIds.includes(sid)
+                  ? item.supplierIds.filter(id => id !== sid)
+                  : [...item.supplierIds, sid];
+                setDeliveryMappingItems(prev => prev.map((it, i) => i === idx ? { ...it, supplierIds: next } : it));
+              };
+              return (
+                <div key={item.templateId} className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Truck className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                    <span className="text-sm font-semibold">{item.templateTitle}</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Markera de leveranser som ska trigga den här mallen:</p>
+                  <div className="space-y-1 max-h-48 overflow-y-auto rounded-lg border border-border/50 p-2">
+                    {deliverySuppliers.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-1">Inga leveranser i aktiv plan</p>
+                    ) : deliverySuppliers.map(s => (
+                      <label key={s.id} className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 hover:bg-muted/50">
+                        <Checkbox
+                          checked={item.supplierIds.includes(s.id)}
+                          onCheckedChange={() => toggleSupplier(s.id)}
+                          className="h-4 w-4 shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium">{s.supplier}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {s.flow_name}{s.delivery_time ? ` · ${s.delivery_time}` : ""}
+                          </span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  {item.supplierIds.length > 0 && (
+                    <p className="text-[11px] text-primary">
+                      {item.supplierIds.length} leverans{item.supplierIds.length !== 1 ? "er" : ""} vald
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="border-t border-border/60 flex justify-end gap-2 px-5 py-3">
+            <Button variant="ghost" size="sm" onClick={() => setDeliveryMappingOpen(false)}>
+              Hoppa över
+            </Button>
+            <Button
+              size="sm"
+              className="rounded-full"
+              disabled={deliveryMappingSaving || deliveryMappingItems.every(i => !i.supplierIds.length)}
               onClick={saveDeliveryMapping}
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50 transition-opacity"
             >
               {deliveryMappingSaving ? "Sparar..." : "Spara kopplingar"}
-            </button>
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

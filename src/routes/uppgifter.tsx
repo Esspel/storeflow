@@ -910,10 +910,13 @@ function TasksPage() {
       depends_on_template_title?: string;
     };
 
-    // Delivery template: open delivery picker filtered by flow_name
+    // Delivery template: open delivery picker filtered by flow_name (pipe-separated)
     if (tmplAny.is_delivery_task) {
-      const filtered = tmplAny.delivery_flow_name
-        ? todayDeliveries.filter(d => d.flow_name.toLowerCase() === tmplAny.delivery_flow_name!.toLowerCase())
+      const allowedFlows = tmplAny.delivery_flow_name
+        ? tmplAny.delivery_flow_name.split("|").map((s: string) => s.trim().toLowerCase()).filter(Boolean)
+        : [];
+      const filtered = allowedFlows.length
+        ? todayDeliveries.filter(d => allowedFlows.includes(d.flow_name?.toLowerCase() ?? ""))
         : todayDeliveries;
       setTodayDeliveries(filtered.length ? filtered : todayDeliveries);
       setSelectedDeliveryIds(new Set((filtered.length ? filtered : todayDeliveries).map(d => d.id)));
