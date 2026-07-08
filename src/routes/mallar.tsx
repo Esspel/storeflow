@@ -1244,6 +1244,7 @@ function MallarPage() {
             created_by: user?.id ?? null,
             assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
             status: "todo",
+            assignee_confirmed: cfg.assigneeUserIds.length > 0 && cfg.assigneeGroupIds.length === 0 ? false : null,
           }).select("id").maybeSingle();
           if (!task?.id) continue;
           if (validQuestions.length > 0) {
@@ -1328,6 +1329,7 @@ function MallarPage() {
           created_by: user?.id ?? null,
           assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
           status: "todo",
+          assignee_confirmed: cfg.assigneeUserIds.length > 0 && cfg.assigneeGroupIds.length === 0 ? false : null,
         }).select("id, created_at").maybeSingle();
 
         if (!task?.id) return;

@@ -354,6 +354,23 @@ function TasksPage() {
   const isManager = user?.role === "manager" || user?.role === "admin";
   const isEmployee = user?.role === "employee";
 
+  // Tasks with individual assignees that need manager confirmation
+  // Computed from tasks state — reactive
+  const unconfirmedTasks = React.useMemo(() =>
+    isManager
+      ? tasks.filter(t =>
+          (t as TaskFull & { assignee_confirmed?: boolean | null }).assignee_confirmed === false &&
+          t.status !== "done"
+        )
+      : [],
+    [tasks, isManager]
+  );
+  const tomorrowStr = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
+
   const [tasks, setTasks] = useState<TaskFull[]>([]);
   const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
   const [groups, setGroups] = useState<UserGroup[]>([]);
@@ -478,6 +495,15 @@ function TasksPage() {
   // 'single' = change only this specific occurrence (due date change isolated)
   const [editScope, setEditScope] = useState<"all_future" | "single">("all_future");
 
+  // Assignee confirmation banner + popup
+  const [assigneeConfirmOpen, setAssigneeConfirmOpen] = useState(false);
+  const [assigneeConfirmDismissed, setAssigneeConfirmDismissed] = useState(false);
+  // Per-task override: user has chosen a new assignee in the popup
+  const [assigneeOverrides, setAssigneeOverrides] = useState<Record<string, string>>({});
+  // Which tasks are selected for bulk confirm action
+  const [confirmSelectedIds, setConfirmSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmSaving, setConfirmSaving] = useState(false);
+
   // Future occurrences manager state
   const [showFutureManager, setShowFutureManager] = useState(false);
   const [futureManagerTask, setFutureManagerTask] = useState<TaskFull | null>(null);
@@ -569,6 +595,41 @@ function TasksPage() {
     if (detailTask?.id === task.id) setDetailTask(prev => prev ? { ...prev, event_triggered_at: now } : prev);
   };
 
+  // Confirm assignees for selected tasks (same person or new override)
+  const confirmAssignees = async (taskIds: string[]) => {
+    setConfirmSaving(true);
+    for (const taskId of taskIds) {
+      const override = assigneeOverrides[taskId];
+      if (override) {
+        // Replace assignees entirely with the chosen user
+        await supabase.from("task_assignees").delete().eq("task_id", taskId);
+        await supabase.from("task_assignees").insert({ task_id: taskId, user_id: override });
+        await supabase.from("tasks").update({ assignee_confirmed: true, assigned_to: override }).eq("id", taskId);
+      } else {
+        // Confirm same person
+        await supabase.from("tasks").update({ assignee_confirmed: true }).eq("id", taskId);
+      }
+    }
+    setTasks(prev => prev.map(t =>
+      taskIds.includes(t.id)
+        ? {
+            ...t,
+            assignee_confirmed: true,
+            ...(assigneeOverrides[t.id] ? {
+              assigned_to: assigneeOverrides[t.id],
+              assignees: [{ id: "", task_id: t.id, user_id: assigneeOverrides[t.id], group_id: null, user: storeUsers.find(u => u.id === assigneeOverrides[t.id]) ?? null, group: null }]
+            } : {})
+          }
+        : t
+    ));
+    setConfirmSaving(false);
+    setAssigneeConfirmOpen(false);
+    setAssigneeConfirmDismissed(true);
+    setAssigneeOverrides({});
+    setConfirmSelectedIds(new Set());
+    toast.success(`${taskIds.length} uppgift${taskIds.length !== 1 ? "er" : ""} bekräftad${taskIds.length !== 1 ? "e" : ""}`);
+  };
+
   const fetchTasks = useCallback(async () => {
     let q = supabase
       .from("tasks")
@@ -626,6 +687,24 @@ function TasksPage() {
 
     setNewTask(emptyForm(activeStore?.id ?? ""));
   }, [activeStore, user]);
+
+  // Auto-show confirmation popup when manager has tasks due tomorrow needing confirmation
+  useEffect(() => {
+    if (!isManager || assigneeConfirmDismissed) return;
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+    const dueTomorrow = tasks.filter(t =>
+      (t as TaskFull & { assignee_confirmed?: boolean | null }).assignee_confirmed === false &&
+      t.status !== "done" &&
+      t.due_date?.slice(0, 10) === tomorrowStr
+    );
+    if (dueTomorrow.length > 0) {
+      setAssigneeConfirmOpen(true);
+      // Pre-select all tasks due tomorrow
+      setConfirmSelectedIds(new Set(dueTomorrow.map(t => t.id)));
+    }
+  }, [tasks, isManager, assigneeConfirmDismissed]);
 
   // Realtime channel — skip full reload when user has unsaved text drafts open
   useEffect(() => {
@@ -2383,7 +2462,41 @@ function TasksPage() {
         )}
       </div>
 
-      {/* Bulk action bar */}
+      {/* Assignee confirmation banner — yellow, shown to managers when tasks need re-confirmation */}
+      {isManager && unconfirmedTasks.length > 0 && !assigneeConfirmDismissed && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-amber-900">
+                {unconfirmedTasks.length} uppgift{unconfirmedTasks.length !== 1 ? "er" : ""} behöver bekräftelse av tilldelad person
+              </p>
+              {unconfirmedTasks.some(t => t.due_date?.slice(0, 10) === tomorrowStr) && (
+                <p className="text-xs text-amber-700 mt-0.5">Varav {unconfirmedTasks.filter(t => t.due_date?.slice(0, 10) === tomorrowStr).length} är planerade imorgon</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full text-xs border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
+              onClick={() => {
+                setConfirmSelectedIds(new Set(unconfirmedTasks.map(t => t.id)));
+                setAssigneeConfirmOpen(true);
+              }}
+            >
+              Granska
+            </Button>
+            <button
+              className="text-amber-600 hover:text-amber-800 p-1"
+              onClick={() => setAssigneeConfirmDismissed(true)}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
       {selectedTaskIds.size > 0 && isManager && (
         <div className="mb-4 flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-2.5">
           <span className="text-sm font-medium text-destructive">{selectedTaskIds.size} uppgifter markerade</span>
@@ -4409,6 +4522,167 @@ function TasksPage() {
             >
               {generatingDeliveries ? "Skapar..." : `Skapa ${selectedDeliveryIds.size} uppgifter`}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ASSIGNEE CONFIRMATION DIALOG */}
+      <Dialog open={assigneeConfirmOpen} onOpenChange={(o) => { if (!o) { setAssigneeConfirmOpen(false); setAssigneeConfirmDismissed(true); } }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-amber-600" />
+              Bekräfta tilldelade medarbetare
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Scheman ändras — kontrollera vem som ska utföra dessa uppgifter. Bekräfta samma person eller välj en annan.
+            </p>
+          </DialogHeader>
+
+          {/* Bulk toolbar */}
+          <div className="flex items-center justify-between gap-3 py-2 border-b">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={confirmSelectedIds.size === unconfirmedTasks.length && unconfirmedTasks.length > 0}
+                onCheckedChange={(checked) =>
+                  setConfirmSelectedIds(checked ? new Set(unconfirmedTasks.map(t => t.id)) : new Set())
+                }
+                className="h-4 w-4"
+              />
+              <span className="text-xs text-muted-foreground">
+                {confirmSelectedIds.size === 0
+                  ? "Välj uppgifter"
+                  : `${confirmSelectedIds.size} valda`}
+              </span>
+            </div>
+            {confirmSelectedIds.size > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full text-xs"
+                disabled={confirmSaving}
+                onClick={() => confirmAssignees([...confirmSelectedIds])}
+              >
+                Bekräfta valda ({confirmSelectedIds.size}) med samma person
+              </Button>
+            )}
+          </div>
+
+          {/* Task list */}
+          <div className="flex-1 overflow-y-auto space-y-2 py-2">
+            {unconfirmedTasks.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">Inga uppgifter att bekräfta.</p>
+            ) : unconfirmedTasks.map(task => {
+              const currentAssignees = (task.assignees ?? []).filter(a => a.user_id);
+              const dueTomorrow = task.due_date?.slice(0, 10) === tomorrowStr;
+              const overrideUserId = assigneeOverrides[task.id];
+              const overrideUser = overrideUserId ? storeUsers.find(u => u.id === overrideUserId) : null;
+              return (
+                <div
+                  key={task.id}
+                  className={`rounded-xl border p-3 space-y-2 ${confirmSelectedIds.has(task.id) ? "border-primary/40 bg-primary/5" : "border-border/60"}`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <Checkbox
+                      checked={confirmSelectedIds.has(task.id)}
+                      onCheckedChange={(checked) => {
+                        setConfirmSelectedIds(prev => {
+                          const next = new Set(prev);
+                          if (checked) next.add(task.id); else next.delete(task.id);
+                          return next;
+                        });
+                      }}
+                      className="h-4 w-4 mt-0.5"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium">{task.title}</p>
+                        {dueTomorrow && (
+                          <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-700 bg-amber-50">Imorgon</Badge>
+                        )}
+                        {task.due_date && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {new Date(task.due_date).toLocaleDateString("sv-SE", { weekday: "short", month: "short", day: "numeric" })}
+                            {task.due_date_time ? ` kl ${task.due_date_time}` : ""}
+                          </span>
+                        )}
+                      </div>
+                      {/* Current assignee(s) */}
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <span className="text-[11px] text-muted-foreground">Tilldelad:</span>
+                        {overrideUser ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-800 text-[11px] px-2 py-0.5">
+                            {overrideUser.display_name}
+                            <button onClick={() => setAssigneeOverrides(p => { const n = {...p}; delete n[task.id]; return n; })} className="hover:text-green-600">
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </span>
+                        ) : currentAssignees.length > 0 ? (
+                          currentAssignees.map(a => (
+                            <span key={a.id} className="text-[11px] font-medium text-foreground">{a.user?.display_name ?? "Okänd"}</span>
+                          ))
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground italic">Ingen tilldelad</span>
+                        )}
+                      </div>
+                      {/* Change assignee picker */}
+                      <div className="mt-2">
+                        <Select
+                          value={overrideUserId ?? "__same__"}
+                          onValueChange={(val) => {
+                            if (val === "__same__") {
+                              setAssigneeOverrides(p => { const n = {...p}; delete n[task.id]; return n; });
+                            } else {
+                              setAssigneeOverrides(p => ({ ...p, [task.id]: val }));
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-7 text-xs rounded-lg w-full max-w-[220px]">
+                            <SelectValue placeholder="Välj annan anställd…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__same__">Samma person (bekräfta)</SelectItem>
+                            {storeUsers.filter(u => !currentAssignees.some(a => a.user_id === u.id)).map(u => (
+                              <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full text-xs shrink-0"
+                      disabled={confirmSaving}
+                      onClick={() => confirmAssignees([task.id])}
+                    >
+                      Bekräfta
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2 pt-2 border-t">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={() => { setAssigneeConfirmOpen(false); setAssigneeConfirmDismissed(true); }}
+            >
+              Hantera senare
+            </Button>
+            {unconfirmedTasks.length > 0 && (
+              <Button
+                size="sm"
+                className="rounded-full text-xs"
+                disabled={confirmSaving}
+                onClick={() => confirmAssignees(unconfirmedTasks.map(t => t.id))}
+              >
+                {confirmSaving ? "Sparar…" : `Bekräfta alla (${unconfirmedTasks.length})`}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
