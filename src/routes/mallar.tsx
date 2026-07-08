@@ -636,6 +636,7 @@ function MallarPage() {
     const now = new Date();
     const configs = [...selectedTemplateIds].map((id) => {
       const tmpl = templates.find(t => t.id === id);
+      if (!tmpl) return null;
       const timeSlots = (tmpl as ChecklistTemplate & { time_slots?: string[] })?.time_slots ?? [];
       const dueDate = tmpl?.due_date_offset != null
         ? (() => { const d = new Date(now); d.setDate(d.getDate() + tmpl.due_date_offset!); return d.toISOString().slice(0, 10); })()
@@ -650,7 +651,7 @@ function MallarPage() {
         timeSlots,
       };
     });
-    setBulkTaskConfigs(configs);
+    setBulkTaskConfigs(configs.filter((c): c is BulkTaskConfig => c !== null));
     setBulkCreateOpen(true);
   }
 
@@ -683,7 +684,7 @@ function MallarPage() {
       const dependsOnTitle = (tmpl as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title;
       const dependsOnTaskId = dependsOnTitle
         ? (existingTaskList.find(t =>
-            t.title.toLowerCase().includes(dependsOnTitle.toLowerCase())
+            (t.title ?? "").toLowerCase().includes(dependsOnTitle.toLowerCase())
           )?.id ?? null)
         : null;
 
@@ -693,10 +694,12 @@ function MallarPage() {
         let dueIso: string | null = null;
         if (baseDue) {
           if (dueTime) {
-            const [h, m] = dueTime.split(":").map(Number);
-            baseDue.setHours(h, m, 0, 0);
+            const timeParts = dueTime.split(":");
+            const h = parseInt(timeParts[0] ?? "0", 10);
+            const m = parseInt(timeParts[1] ?? "0", 10);
+            baseDue.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
           }
-          dueIso = baseDue.toISOString();
+          dueIso = isNaN(baseDue.getTime()) ? null : baseDue.toISOString();
         }
 
         const { data: task } = await supabase.from("tasks").insert({
@@ -1235,8 +1238,8 @@ function MallarPage() {
       const recurrenceMonths = monthsRaw?.trim()
         ? monthsRaw.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 12)
         : null;
-      const recurrenceMonthDay = monthDayRaw?.trim() ? parseInt(monthDayRaw.trim()) : null;
-      const recurrenceInterval = intervalRaw?.trim() ? parseInt(intervalRaw.trim()) : null;
+      const recurrenceMonthDay = monthDayRaw?.trim() ? (parseInt(monthDayRaw.trim()) || null) : null;
+      const recurrenceInterval = intervalRaw?.trim() ? (parseInt(intervalRaw.trim()) || null) : null;
       const templateStatus = (["active", "review", "deprecated", "archived"].includes((statusRaw ?? "").trim()))
         ? (statusRaw!.trim() as "active" | "review" | "deprecated" | "archived")
         : "active";
@@ -1331,7 +1334,7 @@ function MallarPage() {
           const pending = (tmpl as typeof tmpl & { _pendingConditions?: { itemSortOrder: number; questionLabel: string; answer: string }[] })._pendingConditions;
           if (pending?.length && insertedQs?.length) {
             for (const cond of pending) {
-              const matchedQ = insertedQs.find(q => q.label.toLowerCase() === cond.questionLabel.toLowerCase());
+              const matchedQ = insertedQs.find(q => (q.label ?? "").toLowerCase() === cond.questionLabel.toLowerCase());
               if (!matchedQ) continue;
               await supabase.from("checklist_template_items")
                 .update({ condition_question_id: matchedQ.id, condition_answer: cond.answer })
@@ -1394,7 +1397,7 @@ function MallarPage() {
     return templates.filter((t) => {
       if (filterCategory && t.category !== filterCategory) return false;
       if (filterPriority && t.priority !== filterPriority) return false;
-      if (q && !t.title.toLowerCase().includes(q) && !(t.category ?? "").toLowerCase().includes(q) && !(t.description ?? "").toLowerCase().includes(q)) return false;
+      if (q && !(t.title ?? "").toLowerCase().includes(q) && !(t.category ?? "").toLowerCase().includes(q) && !(t.description ?? "").toLowerCase().includes(q)) return false;
       return true;
     });
   }, [templates, search, filterCategory, filterPriority]);

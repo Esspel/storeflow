@@ -323,8 +323,8 @@ function AssigneePicker({
 }) {
   const [q, setQ] = React.useState("");
   const lq = q.toLowerCase();
-  const filteredUsers = users.filter(u => u.display_name.toLowerCase().includes(lq));
-  const filteredGroups = groups.filter(g => g.name.toLowerCase().includes(lq));
+  const filteredUsers = users.filter(u => (u.display_name ?? "").toLowerCase().includes(lq));
+  const filteredGroups = groups.filter(g => (g.name ?? "").toLowerCase().includes(lq));
 
   return (
     <div className="px-4 py-3 space-y-2">
@@ -353,7 +353,7 @@ function AssigneePicker({
           <label key={u.id} className="flex min-h-[36px] cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/50">
             <Checkbox checked={selectedUserIds.includes(u.id)} onCheckedChange={() => onToggleUser(u.id)} className="h-3.5 w-3.5 shrink-0" />
             <span className="h-5 w-5 shrink-0 inline-flex items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
-              {u.display_name.charAt(0).toUpperCase()}
+              {(u.display_name ?? "?").charAt(0).toUpperCase()}
             </span>
             <span className="text-xs">{u.display_name}</span>
           </label>
@@ -546,9 +546,9 @@ function TasksPage() {
         .select("id", { count: "exact", head: true })
         .eq("delivery_entry_id", entryId);
       if ((count ?? 0) > 0) continue;
-      const [h, m] = entry.delivery_time.split(":").map(Number);
+      const [h, m] = (entry.delivery_time ?? "00:00").split(":").map(Number);
       const dt = new Date(todayStr + "T00:00:00");
-      dt.setHours(h, m, 0, 0);
+      dt.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
       await supabase.from("tasks").insert({
         title: `${entry.supplier} — Varumottagning`,
         description: `${entry.flow_name} · ${entry.delivery_time}`,
@@ -991,7 +991,7 @@ function TasksPage() {
     // Chain: find a matching predecessor task by title
     const chainPredecessorId = tmplAny.depends_on_template_title
       ? (tasks.find(t =>
-          t.title.toLowerCase().includes(tmplAny.depends_on_template_title!.toLowerCase()) &&
+          (t.title ?? "").toLowerCase().includes(tmplAny.depends_on_template_title!.toLowerCase()) &&
           t.status !== "done"
         )?.id ?? "")
       : "";
@@ -1617,13 +1617,17 @@ function TasksPage() {
     // shows as 02:00 in UTC+2 — instead we set time explicitly in local time.
     const buildDueDate = (dueTime?: string): string | null => {
       if (!newTask.due_date) return null;
-      const [y, mo, d] = newTask.due_date.split("-").map(Number);
+      const parts = newTask.due_date.split("-").map(Number);
+      if (parts.length < 3 || parts.some(isNaN)) return null;
+      const [y, mo, d] = parts;
       const dt = new Date(y, mo - 1, d, 0, 0, 0, 0);
       if (dueTime) {
-        const [h, m] = dueTime.split(":").map(Number);
-        dt.setHours(h, m, 0, 0);
+        const timeParts = dueTime.split(":").map(Number);
+        const h = timeParts[0] ?? 0;
+        const m = timeParts[1] ?? 0;
+        dt.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
       }
-      return dt.toISOString();
+      return isNaN(dt.getTime()) ? null : dt.toISOString();
     };
 
     const insertSingleTask = async (dueTime: string) => {
@@ -1914,7 +1918,7 @@ function TasksPage() {
       if (recurringParentIds.has(t.id) && currentChildByParent.has(t.id)) return false;
 
       // Search filter
-      if (search && !t.title.toLowerCase().includes(search.toLowerCase()) && !(t.category ?? "").toLowerCase().includes(search.toLowerCase())) return false;
+      if (search && !(t.title ?? "").toLowerCase().includes(search.toLowerCase()) && !(t.category ?? "").toLowerCase().includes(search.toLowerCase())) return false;
       // Category filter
       if (filterCategory && t.category !== filterCategory) return false;
       // Priority filter
@@ -2015,7 +2019,7 @@ function TasksPage() {
     const doneItems = stepsDone + answeredQuestions;
     const progress = totalItems > 0 ? doneItems / totalItems : done ? 1 : 0;
     const recLabel = t.recurrence_rule === "weekly" && t.recurrence_days && t.recurrence_days.length > 0
-      ? `${RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label} (${[...t.recurrence_days].sort((a, b) => a - b).map(d => weekdayShort[d]).join(", ")})`
+      ? `${RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label} (${[...t.recurrence_days].sort((a, b) => a - b).map(d => weekdayShort[d] ?? "?").join(", ")})`
       : RECURRENCE_OPTIONS.find(r => r.value === t.recurrence_rule)?.label;
 
     return (

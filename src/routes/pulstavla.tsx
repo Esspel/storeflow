@@ -783,7 +783,7 @@ function StoreSelector({ onSelect }: { onSelect: (id: string) => void }) {
   }, []);
 
   const filtered = stores.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase()),
+    (s.name ?? "").toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
