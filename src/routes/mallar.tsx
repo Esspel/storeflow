@@ -262,6 +262,13 @@ function MallarPage() {
   const [reviewSaving, setReviewSaving] = useState(false);
   const [reviewEndDate, setReviewEndDate] = useState("");
 
+  // CSV delivery supplier mapping
+  type DeliveryMappingItem = { templateId: string; templateTitle: string; supplierId: string };
+  const [deliveryMappingOpen, setDeliveryMappingOpen] = useState(false);
+  const [deliveryMappingItems, setDeliveryMappingItems] = useState<DeliveryMappingItem[]>([]);
+  const [deliverySuppliers, setDeliverySuppliers] = useState<{ id: string; supplier: string; flow_name: string; delivery_time: string }[]>([]);
+  const [deliveryMappingSaving, setDeliveryMappingSaving] = useState(false);
+
   // View filter: "all" | "hk" | "forening" | "store"
   const [viewFilter, setViewFilter] = useState<"all" | "hk" | "forening" | "store">("all");
   const [search, setSearch] = useState("");
@@ -1210,6 +1217,8 @@ function MallarPage() {
     }
 
     const rows = lines.slice(1).map(parseRow);
+    // Track delivery templates for post-import supplier mapping
+    const importedDeliveryTemplates: { id: string; title: string }[] = [];
     // Local cache keyed by lowercase name so multiple rows with the same package
     // name reuse the same package record instead of creating duplicates.
     const pkgCache = new Map<string, TemplatePackage>(
@@ -1280,6 +1289,11 @@ function MallarPage() {
       }).select("id").maybeSingle();
 
       if (!tmpl?.id) continue;
+
+      // Track delivery templates so we can prompt for supplier mapping after import
+      if (deliveryTaskRaw?.trim().toLowerCase() === "ja") {
+        importedDeliveryTemplates.push({ id: tmpl.id, title: title.trim() });
+      }
 
       if (stepsRaw?.trim()) {
         const items = stepsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => {
@@ -1383,6 +1397,41 @@ function MallarPage() {
 
     await load();
     setImporting(false);
+
+    // If any imported templates are delivery tasks, show supplier mapping dialog
+    if (importedDeliveryTemplates.length > 0) {
+      const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
+      if (storeId) {
+        const { data: entries } = await supabase
+          .from("delivery_entries")
+          .select("id, supplier, flow_name, delivery_time")
+          .eq("plan_id",
+            (await supabase.from("delivery_plans").select("id").eq("store_id", storeId).order("imported_at", { ascending: false }).limit(1).maybeSingle()).data?.id ?? ""
+          )
+          .order("supplier");
+        if (entries && entries.length > 0) {
+          setDeliverySuppliers(entries as { id: string; supplier: string; flow_name: string; delivery_time: string }[]);
+          setDeliveryMappingItems(importedDeliveryTemplates.map(t => ({ templateId: t.id, templateTitle: t.title, supplierId: "" })));
+          setDeliveryMappingOpen(true);
+        }
+      }
+    }
+  };
+
+  const saveDeliveryMapping = async () => {
+    setDeliveryMappingSaving(true);
+    for (const item of deliveryMappingItems) {
+      if (!item.supplierId) continue;
+      const supplier = deliverySuppliers.find(s => s.id === item.supplierId);
+      if (!supplier) continue;
+      await supabase.from("checklist_templates")
+        .update({ delivery_flow_name: supplier.supplier })
+        .eq("id", item.templateId);
+    }
+    setDeliveryMappingOpen(false);
+    setDeliveryMappingItems([]);
+    setDeliveryMappingSaving(false);
+    await load();
   };
 
   // Unique categories from loaded templates
@@ -3454,6 +3503,54 @@ function MallarPage() {
             >
               <span className="block text-sm font-medium text-destructive">Arkivera mall</span>
               <span className="block text-xs text-muted-foreground mt-0.5">Mallen arkiveras och skapar inga fler uppgifter.</span>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV delivery supplier mapping dialog */}
+      <Dialog open={deliveryMappingOpen} onOpenChange={(o) => { if (!o) setDeliveryMappingOpen(false); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Koppla leveranser till mallar</DialogTitle>
+            <DialogDescription>
+              Välj vilken leverantör varje leveransmall gäller. Bara leverantörer från din aktiva leveransplan visas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto">
+            {deliveryMappingItems.map((item, idx) => (
+              <div key={item.templateId} className="space-y-1.5">
+                <label className="text-sm font-medium">{item.templateTitle}</label>
+                <select
+                  value={item.supplierId}
+                  onChange={(e) => setDeliveryMappingItems(prev => prev.map((it, i) => i === idx ? { ...it, supplierId: e.target.value } : it))}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="">-- Välj leverantör --</option>
+                  {Array.from(new Map(deliverySuppliers.map(s => [s.supplier, s])).values()).map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.supplier} ({s.flow_name}{s.delivery_time ? ` · ${s.delivery_time}` : ""})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setDeliveryMappingOpen(false)}
+              className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted/50 transition-colors"
+            >
+              Hoppa over
+            </button>
+            <button
+              type="button"
+              disabled={deliveryMappingSaving || deliveryMappingItems.every(i => !i.supplierId)}
+              onClick={saveDeliveryMapping}
+              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50 transition-opacity"
+            >
+              {deliveryMappingSaving ? "Sparar..." : "Spara kopplingar"}
             </button>
           </div>
         </DialogContent>

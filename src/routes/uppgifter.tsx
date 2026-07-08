@@ -663,6 +663,8 @@ function TasksPage() {
   //
   // Children inherit recurrence_rule/recurrence_days so the badge renders.
   const spawnRef = useRef(false);
+  // Track last spawn date so we only run once per calendar day (not on every tasks reload)
+  const lastSpawnDateRef = useRef<string | null>(null);
   const dragStepRef = useRef<{ idx: number; startY: number; currentY: number } | null>(null);
   const dragQuestionRef = useRef<{ idx: number; startY: number; currentY: number } | null>(null);
 
@@ -819,9 +821,12 @@ function TasksPage() {
 
   const spawnRecurringTasks = useCallback(async (taskList: TaskFull[]) => {
     if (!isManager || spawnRef.current) return;
+    const nowMs = getSimulatedNow();
+    const todayKey = new Date(nowMs).toISOString().slice(0, 10);
+    // Only run once per calendar day to prevent runaway spawning on each tasks reload
+    if (lastSpawnDateRef.current === todayKey) return;
     spawnRef.current = true;
 
-    const nowMs = getSimulatedNow();
     const simToday = new Date(nowMs);
     simToday.setHours(0, 0, 0, 0);
 
@@ -895,6 +900,7 @@ function TasksPage() {
     }
 
     spawnRef.current = false;
+    lastSpawnDateRef.current = todayKey;
     if (didSpawn) await fetchTasks();
   }, [isManager, user, fetchTasks]);
 
@@ -908,6 +914,7 @@ function TasksPage() {
   useEffect(() => {
     const handler = () => {
       spawnRef.current = false; // allow a fresh spawn run
+      lastSpawnDateRef.current = null; // allow spawning on the new simulated date
       void fetchTasks();
     };
     window.addEventListener("sf-time-changed", handler);
@@ -1277,7 +1284,6 @@ function TasksPage() {
     setDeleteTarget(null);
     setDeleteScope(null);
     setDetailTask(null);
-    spawnRef.current = false;
     await fetchTasks();
   };
 
@@ -1338,7 +1344,6 @@ function TasksPage() {
     logAudit(user?.id ?? null, "task.bulk_delete", "tasks", ids[0] ?? "", { count: ids.length, scope: recurringScope });
     setSelectedTaskIds(new Set());
     setBulkDeleteTasksOpen(false);
-    spawnRef.current = false;
     await fetchTasks();
   };
 
