@@ -2639,7 +2639,7 @@ function MallarPage() {
                     <span className="text-xs font-medium text-muted-foreground">Koppla till leveranser</span>
                     {deliveryWeekEntries.length > 1 && (() => {
                       const allKeys = deliveryWeekEntries.map(e => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`);
-                      const currentKeys = new Set(f.delivery_entry_keys.split("|").map(s => s.trim()).filter(s => s.includes("||")));
+                      const currentKeys = new Set((f.delivery_entry_keys ?? "").split("|").map(s => s.trim()).filter(s => s.includes("||")));
                       const allSelected = allKeys.every(k => currentKeys.has(k));
                       return (
                         <button
@@ -2676,7 +2676,7 @@ function MallarPage() {
                     // Selection is per-entry: key = "Day||Supplier||Flow"
                     // Stored in delivery_entry_keys; supplier+flow kept in sync for batch create matching
                     const selectedKeys = new Set(
-                      f.delivery_entry_keys.split("|").map(s => s.trim()).filter(s => s.includes("||"))
+                      (f.delivery_entry_keys ?? "").split("|").map(s => s.trim()).filter(s => s.includes("||"))
                     );
                     const entryKey = (e: { delivery_day: string; supplier: string; flow_name: string }) =>
                       `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`;
@@ -3501,6 +3501,7 @@ function MallarPage() {
       {/* CREATE DIALOG */}
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setError(""); }}>
         <DialogContent className="max-h-[92dvh] w-full sm:max-w-4xl sm:max-h-[92vh] overflow-hidden p-0 gap-0">
+          <DialogTitle className="sr-only">{createScope === "hk" ? "Ny HK-mall" : createScope === "forening" ? "Ny föreningsmall" : "Ny butiksmall"}</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <GripVertical className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground">
@@ -3522,6 +3523,7 @@ function MallarPage() {
       {/* EDIT DIALOG */}
       <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
         <DialogContent className="max-h-[92dvh] w-full sm:max-w-4xl sm:max-h-[92vh] overflow-hidden p-0 gap-0">
+          <DialogTitle className="sr-only">Redigera mall{editTarget ? `: ${editTarget.title}` : ""}</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <GripVertical className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground">Redigera mall</span>
@@ -3637,6 +3639,7 @@ function MallarPage() {
       {/* VERSION HISTORY DIALOG */}
       <Dialog open={!!versionHistoryTarget} onOpenChange={(o) => !o && setVersionHistoryTarget(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogTitle className="sr-only">Versionshistorik</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <History className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Versionshistorik</span>
@@ -3855,6 +3858,7 @@ function MallarPage() {
       {/* TEMPLATE PREVIEW DIALOG */}
       <Dialog open={!!previewTarget} onOpenChange={(o) => !o && setPreviewTarget(null)}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogTitle className="sr-only">Förhandsgranska mall</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <Eye className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Förhandsgranska mall</span>
@@ -3976,6 +3980,7 @@ function MallarPage() {
       {/* BULK TASK CREATION WIZARD */}
       <Dialog open={bulkCreateOpen} onOpenChange={(o) => !o && setBulkCreateOpen(false)}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogTitle className="sr-only">Skapa uppgifter från mallar</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <ListChecks className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Skapa uppgifter från {bulkTaskConfigs.length} mallar</span>
@@ -4294,6 +4299,7 @@ function MallarPage() {
       {/* TEMPLATE PACKAGES PANEL */}
       <Dialog open={showPackagesPanel} onOpenChange={(o) => { if (!o) { setShowPackagesPanel(false); setEditPackageTarget(null); setPackageForm({ name: "", description: "" }); setPackageTemplateIds([]); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogTitle className="sr-only">Mallpaket</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <Layers className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Mallpaket</span>
@@ -4483,6 +4489,7 @@ function MallarPage() {
       {/* CSV delivery supplier mapping dialog */}
       <Dialog open={deliveryMappingOpen} onOpenChange={(o) => { if (!o) setDeliveryMappingOpen(false); }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogTitle className="sr-only">Koppla leveranser till mallar</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
             <Truck className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Koppla leveranser till mallar</span>
