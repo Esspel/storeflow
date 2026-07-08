@@ -2703,8 +2703,8 @@ function MallarPage() {
               )}
             </div>
 
-            {/* Leveransuppgift */}
-            <div className="px-4 py-3 space-y-2">
+            {/* Leveransuppgift — only for store-scope templates */}
+            {scope === "store" && <div className="px-4 py-3 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Truck className="h-4 w-4 shrink-0 text-muted-foreground/60" />
@@ -2774,7 +2774,7 @@ function MallarPage() {
                   })()}
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Kedja / Beror på */}
             <div className="px-4 py-3 space-y-1">
