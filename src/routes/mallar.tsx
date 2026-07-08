@@ -400,31 +400,46 @@ function MallarPage() {
         .from("delivery_plans").select("id").eq("store_id", storeId).order("imported_at", { ascending: false });
       const planIds = (planRows ?? []).map((p: { id: string }) => p.id);
       if (planIds.length > 0) {
-        // 1. deliverySuppliers = unique supplier+flow combos across ALL plans (for template config picker)
-        //    Each company appears once per flow even if it delivers on multiple days
-        const { data: allEntryRows } = await supabase
-          .from("delivery_entries").select("id, supplier, flow_name, delivery_time")
-          .in("plan_id", planIds).order("flow_name").order("supplier");
-        const seen = new Set<string>();
-        const unique = (allEntryRows ?? []).filter((e: { supplier: string; flow_name: string }) => {
-          const key = `${e.flow_name}||${e.supplier}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
+        // Load ALL entries from ALL plans with full day+time info
+        // Plans are ordered newest first — so when deduplicating, first match = most recent schedule
+        type EntryRow = { id: string; supplier: string; flow_name: string; delivery_time: string; delivery_day: string; delivery_date: string | null; plan_id: string };
+        const { data: allRows } = await supabase
+          .from("delivery_entries")
+          .select("id, supplier, flow_name, delivery_time, delivery_day, delivery_date, plan_id")
+          .in("plan_id", planIds);
+
+        // Sort by plan recency (planIds is sorted newest first)
+        const planOrder = new Map(planIds.map((id, i) => [id, i]));
+        const sorted = [...(allRows ?? []) as EntryRow[]].sort((a, b) =>
+          (planOrder.get(a.plan_id) ?? 99) - (planOrder.get(b.plan_id) ?? 99)
+        );
+
+        // deliveryWeekEntries: one entry per unique (day+time+supplier+flow) — newest plan wins
+        // This is the COMPLETE weekly delivery schedule (day + time are key info)
+        const scheduleSeen = new Set<string>();
+        const schedule = sorted.filter(e => {
+          const key = `${e.delivery_day}||${e.delivery_time}||${e.supplier}||${e.flow_name}`;
+          if (scheduleSeen.has(key)) return false;
+          scheduleSeen.add(key);
+          return true;
+        });
+        const dayOrder = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
+        schedule.sort((a, b) => {
+          const di = dayOrder.indexOf(a.delivery_day) - dayOrder.indexOf(b.delivery_day);
+          return di !== 0 ? di : a.delivery_time.localeCompare(b.delivery_time);
+        });
+        setDeliveryWeekEntries(schedule);
+
+        // deliverySuppliers: one entry per unique (supplier+flow) combo — for template config picker
+        const comboSeen = new Set<string>();
+        const combos = schedule.filter(e => {
+          const key = `${e.supplier}||${e.flow_name}`;
+          if (comboSeen.has(key)) return false;
+          comboSeen.add(key);
           return true;
         }) as { id: string; supplier: string; flow_name: string; delivery_time: string }[];
-        setDeliverySuppliers(unique);
-        const names = [...new Set(unique.map(r => r.flow_name).filter(Boolean))];
-        setDeliveryFlowNames(names);
-
-        // 2. deliveryWeekEntries = all entries from the LATEST plan with day+time (for batch create picker)
-        //    Shows every specific delivery occurrence — day and time are important info
-        const latestPlanId = planIds[0];
-        const { data: weekRows } = await supabase
-          .from("delivery_entries")
-          .select("id, supplier, flow_name, delivery_time, delivery_day, delivery_date")
-          .eq("plan_id", latestPlanId)
-          .order("delivery_day").order("delivery_time").order("supplier");
-        setDeliveryWeekEntries((weekRows ?? []) as { id: string; supplier: string; flow_name: string; delivery_time: string; delivery_day: string; delivery_date: string | null }[]);
+        setDeliverySuppliers(combos);
+        setDeliveryFlowNames([...new Set(combos.map(r => r.flow_name).filter(Boolean))]);
       }
     }
 
@@ -730,6 +745,24 @@ function MallarPage() {
     return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
   }
 
+  // Return the date string (YYYY-MM-DD) for the next occurrence of a Swedish weekday from today
+  // If today IS that day, returns today.
+  function nextWeekdayDate(dayName: string): string {
+    const dayMap: Record<string, number> = {
+      "Söndag": 0, "Måndag": 1, "Tisdag": 2, "Onsdag": 3,
+      "Torsdag": 4, "Fredag": 5, "Lördag": 6,
+    };
+    const target = dayMap[dayName];
+    const now = new Date();
+    if (target === undefined) return now.toISOString().slice(0, 10);
+    const todayDay = now.getDay();
+    let diff = target - todayDay;
+    if (diff < 0) diff += 7;
+    const result = new Date(now);
+    result.setDate(now.getDate() + diff);
+    return result.toISOString().slice(0, 10);
+  }
+
   // Calculate the next due date for a recurring template from today — never returns a past date
   function calcNextDueDate(tmpl: ChecklistTemplate): { iso: string; time: string } | null {
     const rule = tmpl.recurrence_rule;
@@ -878,12 +911,13 @@ function MallarPage() {
         if (cfg.selectedDeliveryIds.length === 0) continue;
         for (const deliveryId of cfg.selectedDeliveryIds) {
           // Look up in deliveryWeekEntries first (has day+date), fall back to deliverySuppliers
-          const delivery = deliveryWeekEntries.find(e => e.id === deliveryId) ?? deliverySuppliers.find(s => s.id === deliveryId);
+          const delivery = deliveryWeekEntries.find(e => e.id === deliveryId) ?? deliverySuppliers.find(s => s.id === deliveryId) as (typeof deliveryWeekEntries[0]) | undefined;
           const rawTime = delivery?.delivery_time ?? "";
           // Due time = delivery time + 30 min (buffer for delays)
           const dueTime = rawTime ? addMinutesToTime(rawTime, 30) : "";
-          // Use the delivery's specific date if available, otherwise today
-          const deliveryDate = (delivery as { delivery_date?: string | null } | undefined)?.delivery_date;
+          // Calculate due date: use next occurrence of the delivery's weekday from today
+          const deliveryDay = (delivery as { delivery_day?: string } | undefined)?.delivery_day ?? "";
+          const dueDateStr = deliveryDay ? nextWeekdayDate(deliveryDay) : new Date().toISOString().slice(0, 10);
           const { data: task } = await supabase.from("tasks").insert({
             title: tmpl.title,
             description: tmpl.description ?? "",
@@ -891,8 +925,7 @@ function MallarPage() {
             priority: tmpl.priority ?? "Medel",
             store_id: storeId,
             due_date: (() => {
-              const base = deliveryDate ? deliveryDate + "T00:00:00" : new Date().toISOString().slice(0, 10) + "T00:00:00";
-              const d = new Date(base);
+              const d = new Date(dueDateStr + "T00:00:00");
               if (dueTime) { const [h, m] = dueTime.split(":").map(Number); d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0); }
               return d.toISOString();
             })(),
@@ -2152,23 +2185,43 @@ function MallarPage() {
               </Select>
             </div>
 
-            {/* Förfallodagar */}
-            <div className="flex items-center gap-3 px-4 py-3">
-              <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-              <div className="flex flex-col gap-1 flex-1 min-w-0">
-                <span className="text-xs text-muted-foreground">Förfaller om (dagar)</span>
-                <Input type="number" min={0} placeholder="t.ex. 1" value={f.due_date_offset} onChange={(e) => setF((p) => ({ ...p, due_date_offset: e.target.value }))} className="h-7 border border-border/60 text-xs" />
+            {/* Förfallodagar — locked for delivery tasks */}
+            {f.is_delivery_task ? (
+              <div className="flex items-center gap-3 px-4 py-3 opacity-50">
+                <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                <div className="flex flex-col gap-1 flex-1 min-w-0">
+                  <span className="text-xs text-muted-foreground">Förfaller om (dagar)</span>
+                  <span className="text-xs text-muted-foreground/60 italic">Bestäms av leveransschemat</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                <div className="flex flex-col gap-1 flex-1 min-w-0">
+                  <span className="text-xs text-muted-foreground">Förfaller om (dagar)</span>
+                  <Input type="number" min={0} placeholder="t.ex. 1" value={f.due_date_offset} onChange={(e) => setF((p) => ({ ...p, due_date_offset: e.target.value }))} className="h-7 border border-border/60 text-xs" />
+                </div>
+              </div>
+            )}
 
-            {/* Förfallotid */}
-            <div className="flex items-center gap-3 px-4 py-3">
-              <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-              <div className="flex flex-col gap-1 flex-1 min-w-0">
-                <span className="text-xs text-muted-foreground">Förfallotid (HH:MM)</span>
-                <Input type="time" value={f.due_date_time} onChange={(e) => setF((p) => ({ ...p, due_date_time: e.target.value }))} className="h-7 border border-border/60 text-xs" />
+            {/* Förfallotid — locked for delivery tasks */}
+            {f.is_delivery_task ? (
+              <div className="flex items-center gap-3 px-4 py-3 opacity-50">
+                <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                <div className="flex flex-col gap-1 flex-1 min-w-0">
+                  <span className="text-xs text-muted-foreground">Förfallotid (HH:MM)</span>
+                  <span className="text-xs text-muted-foreground/60 italic">Bestäms av leveransschemat</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                <div className="flex flex-col gap-1 flex-1 min-w-0">
+                  <span className="text-xs text-muted-foreground">Förfallotid (HH:MM)</span>
+                  <Input type="time" value={f.due_date_time} onChange={(e) => setF((p) => ({ ...p, due_date_time: e.target.value }))} className="h-7 border border-border/60 text-xs" />
+                </div>
+              </div>
+            )}
 
             {/* Materialnummer / Mitt Coop-sortiment */}
             <div className="px-4 py-3 min-w-0 space-y-1">
@@ -2252,15 +2305,19 @@ function MallarPage() {
               </div>
             </div>
 
-            {/* Återkommande */}
+            {/* Återkommande — locked for delivery tasks since schedule is set by delivery plan */}
             <div className="px-4 py-3 space-y-2">
               <div className="flex items-center gap-3">
                 <Repeat className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 <span className="w-20 shrink-0 text-xs text-muted-foreground">Återkommande</span>
-                <Select value={f.recurrence_rule || "__none"} onValueChange={(v) => setF((p) => ({ ...p, recurrence_rule: v === "__none" ? "" : v, recurrence_interval: 1 }))}>
-                  <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end"><SelectValue placeholder="Ingen" /></SelectTrigger>
-                  <SelectContent>{RECURRENCE_OPTIONS.map((o) => <SelectItem key={o.value === "" ? "__none" : o.value} value={o.value === "" ? "__none" : o.value}>{o.label}</SelectItem>)}</SelectContent>
-                </Select>
+                {f.is_delivery_task ? (
+                  <span className="flex-1 text-xs text-right text-muted-foreground/60 italic">Bestäms av leveransschemat</span>
+                ) : (
+                  <Select value={f.recurrence_rule || "__none"} onValueChange={(v) => setF((p) => ({ ...p, recurrence_rule: v === "__none" ? "" : v, recurrence_interval: 1 }))}>
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end"><SelectValue placeholder="Ingen" /></SelectTrigger>
+                    <SelectContent>{RECURRENCE_OPTIONS.map((o) => <SelectItem key={o.value === "" ? "__none" : o.value} value={o.value === "" ? "__none" : o.value}>{o.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                )}
               </div>
               {f.recurrence_rule === "custom" && (
                 <div className="flex items-center gap-2 pl-7">

@@ -3453,27 +3453,42 @@ function TasksPage() {
                   </Select>
                 </div>
 
-                {/* Förfallodatum — hidden when recurrence is set (start date drives the first occurrence) */}
+                {/* Förfallodatum — hidden when recurrence is set; locked for delivery tasks */}
                 {!newTask.recurrence_rule && (
-                <div className="flex items-start gap-3 px-4 py-3">
-                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <div className="flex flex-col gap-1 min-w-0 flex-1">
-                    <span className="text-xs text-muted-foreground">Förfallodatum</span>
-                    <input
-                      type="date"
-                      value={newTask.due_date}
-                      onChange={(e) => setNewTask(p => ({ ...p, due_date: e.target.value }))}
-                      className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
-                    />
+                  newTask.delivery_entry_id ? (
+                    <div className="flex items-start gap-3 px-4 py-3 opacity-60">
+                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
+                      <div className="flex flex-col gap-1 min-w-0 flex-1">
+                        <span className="text-xs text-muted-foreground">Förfallodatum</span>
+                        <span className="text-xs text-muted-foreground/70 italic">Bestäms av leveransschemat — {newTask.due_date || "beräknas vid skapande"}</span>
+                      </div>
+                    </div>
+                  ) : (
+                  <div className="flex items-start gap-3 px-4 py-3">
+                    <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <div className="flex flex-col gap-1 min-w-0 flex-1">
+                      <span className="text-xs text-muted-foreground">Förfallodatum</span>
+                      <input
+                        type="date"
+                        value={newTask.due_date}
+                        onChange={(e) => setNewTask(p => ({ ...p, due_date: e.target.value }))}
+                        className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      />
+                    </div>
                   </div>
-                </div>
+                  )
                 )}
 
-                {/* Förfallotid / Tidsluckor */}
+                {/* Förfallotid / Tidsluckor — locked for delivery tasks */}
                 <div className="flex items-start gap-3 px-4 py-3">
                   <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60 opacity-0" />
                   <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                    {newTask.time_slots.length > 0 ? (
+                    {newTask.delivery_entry_id ? (
+                      <div className="opacity-60">
+                        <span className="text-xs text-muted-foreground">Förfallotid</span>
+                        <p className="text-xs text-muted-foreground/70 italic mt-0.5">Bestäms av leveransschemat — {newTask.due_date_time || "beräknas vid skapande"}</p>
+                      </div>
+                    ) : newTask.time_slots.length > 0 ? (
                       <>
                         <span className="text-xs text-muted-foreground">Tidsluckor (förfallotider)</span>
                         <div className="flex flex-wrap gap-1">
