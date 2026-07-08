@@ -390,18 +390,27 @@ function MallarPage() {
     setPackages((packagesRes.data ?? []) as TemplatePackage[]);
 
     // Load delivery entries for the flow + supplier pickers
+    // Load ALL unique supplier+flow combinations across every plan for this store
+    // so that even if the latest imported plan was partial, all companies are visible
     const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
     if (storeId) {
-      const { data: planRow } = await supabase
-        .from("delivery_plans").select("id").eq("store_id", storeId)
-        .order("imported_at", { ascending: false }).limit(1).maybeSingle();
-      if (planRow?.id) {
+      const { data: planRows } = await supabase
+        .from("delivery_plans").select("id").eq("store_id", storeId);
+      const planIds = (planRows ?? []).map((p: { id: string }) => p.id);
+      if (planIds.length > 0) {
         const { data: entryRows } = await supabase
           .from("delivery_entries").select("id, supplier, flow_name, delivery_time")
-          .eq("plan_id", planRow.id).order("flow_name").order("supplier");
-        const entries = (entryRows ?? []) as { id: string; supplier: string; flow_name: string; delivery_time: string }[];
-        setDeliverySuppliers(entries);
-        const names = [...new Set(entries.map(r => r.flow_name).filter(Boolean))];
+          .in("plan_id", planIds).order("flow_name").order("supplier");
+        // Deduplicate by supplier+flow so each company only appears once per flow
+        const seen = new Set<string>();
+        const unique = (entryRows ?? []).filter((e: { supplier: string; flow_name: string }) => {
+          const key = `${e.flow_name}||${e.supplier}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }) as { id: string; supplier: string; flow_name: string; delivery_time: string }[];
+        setDeliverySuppliers(unique);
+        const names = [...new Set(unique.map(r => r.flow_name).filter(Boolean))];
         setDeliveryFlowNames(names);
       }
     }
@@ -3346,28 +3355,26 @@ function MallarPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort mall</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2">
-                <p>Är du säker på att du vill ta bort <strong>{deleteTarget?.title}</strong>?</p>
-                {(() => {
-                  if (!deleteTarget) return null;
-                  const dependents = templates.filter(t =>
-                    ((t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title ?? "").toLowerCase() === deleteTarget.title.toLowerCase()
-                  );
-                  if (dependents.length === 0) return null;
-                  return (
-                    <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 space-y-1">
-                      <p className="text-sm font-medium text-destructive">Varning: Följande mallar beror på den här mallen:</p>
-                      <ul className="text-sm text-destructive/80 list-disc pl-4">
-                        {dependents.map(d => <li key={d.id}>{d.title}</li>)}
-                      </ul>
-                      <p className="text-xs text-destructive/70">Ta bort eller uppdatera dessa mallar först.</p>
-                    </div>
-                  );
-                })()}
-              </div>
+            <AlertDialogDescription>
+              Är du säker på att du vill ta bort <strong>{deleteTarget?.title}</strong>?
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {(() => {
+            if (!deleteTarget) return null;
+            const dependents = templates.filter(t =>
+              ((t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title ?? "").toLowerCase() === deleteTarget.title.toLowerCase()
+            );
+            if (dependents.length === 0) return null;
+            return (
+              <div className="mx-6 -mt-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 space-y-1">
+                <p className="text-sm font-medium text-destructive">Varning: Följande mallar beror på den här:</p>
+                <ul className="text-sm text-destructive/80 list-disc pl-4">
+                  {dependents.map(d => <li key={d.id}>{d.title}</li>)}
+                </ul>
+                <p className="text-xs text-destructive/70">Ta bort eller uppdatera dessa mallar först.</p>
+              </div>
+            );
+          })()}
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteTemplate}>

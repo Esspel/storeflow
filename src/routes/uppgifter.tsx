@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDownUp, Camera, CircleCheck as CheckCircle2, Circle, Clock, Download, GripVertical, ImagePlus, ListChecks, Plus, Repeat, X, Search, FileText, Users, Image as ImageIcon, ChevronDown, ChevronUp, ChevronRight, TriangleAlert as AlertTriangle, ZoomIn, Pencil, Trash2, Hash, ExternalLink, MoveHorizontal as MoreHorizontal, CalendarDays, Truck, Zap, Link2, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
 
 import { PhotoViewer } from "@/components/photo-viewer";
 import { Button } from "@/components/ui/button";
@@ -950,9 +951,21 @@ function TasksPage() {
     const timeSlots = (tmpl.time_slots ?? []) as string[];
 
     // Chain: find a matching predecessor task by title
-    const chainPredecessorId = tmplAny.depends_on_template_title
+    const dependsOnTitle = tmplAny.depends_on_template_title;
+    if (dependsOnTitle) {
+      const predecessor = tasks.find(t =>
+        (t.title ?? "").toLowerCase() === dependsOnTitle.toLowerCase() &&
+        t.status !== "done"
+      );
+      if (!predecessor) {
+        toast.error(`Kan inte skapa uppgift: mallen beror på "${dependsOnTitle}" men ingen aktiv sådan uppgift finns. Skapa den uppgiften först.`);
+        return;
+      }
+    }
+
+    const chainPredecessorId = dependsOnTitle
       ? (tasks.find(t =>
-          (t.title ?? "").toLowerCase() === tmplAny.depends_on_template_title!.toLowerCase() &&
+          (t.title ?? "").toLowerCase() === dependsOnTitle.toLowerCase() &&
           t.status !== "done"
         )?.id ?? "")
       : "";
@@ -1252,6 +1265,11 @@ function TasksPage() {
       }
     }
 
+    // Clear depends_on_task_id on any tasks that referenced the deleted task(s)
+    if (deletedIds.length > 0) {
+      await supabase.from("tasks").update({ depends_on_task_id: null }).in("depends_on_task_id", deletedIds);
+    }
+
     logAudit(user?.id ?? null, "task.delete", "tasks", t.id, { title: t.title, scope });
     setDeleteTarget(null);
     setDeleteScope(null);
@@ -1321,6 +1339,9 @@ function TasksPage() {
     }
 
     logAudit(user?.id ?? null, "task.bulk_delete", "tasks", ids[0] ?? "", { count: ids.length, scope: recurringScope });
+    if (allDeletedIds.length > 0) {
+      await supabase.from("tasks").update({ depends_on_task_id: null }).in("depends_on_task_id", allDeletedIds);
+    }
     setSelectedTaskIds(new Set());
     setBulkDeleteTasksOpen(false);
     await fetchTasks();
@@ -3777,29 +3798,25 @@ function TasksPage() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle className="text-destructive">Ta bort uppgift</AlertDialogTitle>
-              <AlertDialogDescription asChild>
-                <div className="space-y-2">
-                  <p>
-                    {(deleteTarget.recurrence_rule || deleteTarget.parent_task_id) && deleteHasFuture
-                      ? "Denna uppgift är återkommande. Vad vill du ta bort?"
-                      : `Är du säker på att du vill ta bort "${deleteTarget.title}"?`}
-                  </p>
-                  {(() => {
-                    const dependents = tasks.filter(t => t.depends_on_task_id === deleteTarget.id && t.id !== deleteTarget.id);
-                    if (dependents.length === 0) return null;
-                    return (
-                      <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 space-y-1">
-                        <p className="text-sm font-medium text-destructive">Varning: Följande uppgifter beror på den här uppgiften:</p>
-                        <ul className="text-sm text-destructive/80 list-disc pl-4">
-                          {dependents.map(d => <li key={d.id}>{d.title}</li>)}
-                        </ul>
-                        <p className="text-xs text-destructive/70">Ta bort dessa uppgifter samtidigt eller uppdatera deras beroende.</p>
-                      </div>
-                    );
-                  })()}
-                </div>
+              <AlertDialogDescription>
+                {(deleteTarget.recurrence_rule || deleteTarget.parent_task_id) && deleteHasFuture
+                  ? "Denna uppgift är återkommande. Vad vill du ta bort?"
+                  : `Är du säker på att du vill ta bort "${deleteTarget.title}"?`}
               </AlertDialogDescription>
             </AlertDialogHeader>
+            {(() => {
+              const dependents = tasks.filter(t => t.depends_on_task_id === deleteTarget.id && t.id !== deleteTarget.id);
+              if (dependents.length === 0) return null;
+              return (
+                <div className="mx-6 -mt-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 space-y-1">
+                  <p className="text-sm font-medium text-destructive">Varning: Följande uppgifter beror på den här:</p>
+                  <ul className="text-sm text-destructive/80 list-disc pl-4">
+                    {dependents.map(d => <li key={d.id}>{d.title}</li>)}
+                  </ul>
+                  <p className="text-xs text-destructive/70">Deras beroende rensas automatiskt vid borttagning.</p>
+                </div>
+              );
+            })()}
             {(deleteTarget.recurrence_rule || deleteTarget.parent_task_id) && deleteHasFuture ? (
               <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
                 <button
