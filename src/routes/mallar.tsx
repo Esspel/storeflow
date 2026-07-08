@@ -56,7 +56,7 @@ const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid im
 #   15:Ursprungsmall  16:Arvläge  17:Steg (detaljer)  18:Frågor  19:Tidsluckor (HH:MM)
 #   20:SAP-artikel  21:Mallpaket  22:Händelsevillkor  23:Leveransuppgift (ja/nej)
 #   24:Leveransflöde  25:Kedja (beror på mallnamn)  26:Malltyp  27:Skapningsläge
-#   28:Händelse-bekräftare  29:Granskningsintervall (månader)  30:Kritisk (ja/nej)
+#   28:Händelse-bekräftare  29:Granskningsintervall (månader)  30:Kritisk (ja/nej)  31:Leveransföretag
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Status: active | review | deprecated | archived  (lämna tomt för active)
@@ -176,6 +176,7 @@ type FormState = {
   event_trigger_user_id: string;
   is_delivery_task: boolean;
   delivery_flow_name: string;
+  delivery_supplier_name: string;
   depends_on_template_title: string;
   items: { id?: string; label: string; requires_photo: boolean; link_url?: string; condition_question_id?: string; condition_answer?: string }[];
   questions: { id?: string; label: string; question_type: "text" | "yes_no"; is_required: boolean; link_url?: string }[];
@@ -198,6 +199,7 @@ const emptyForm = (): FormState => ({
   event_trigger_user_id: "",
   is_delivery_task: false,
   delivery_flow_name: "",
+  delivery_supplier_name: "",
   depends_on_template_title: "",
   items: [{ label: "", requires_photo: false, link_url: "" }],
   questions: [],
@@ -386,17 +388,19 @@ function MallarPage() {
     setAllGroups((groupsRes.data ?? []) as UserGroup[]);
     setPackages((packagesRes.data ?? []) as TemplatePackage[]);
 
-    // Load distinct delivery flow names for the flow-name multi-select
+    // Load delivery entries for the flow + supplier pickers
     const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
     if (storeId) {
       const { data: planRow } = await supabase
         .from("delivery_plans").select("id").eq("store_id", storeId)
         .order("imported_at", { ascending: false }).limit(1).maybeSingle();
       if (planRow?.id) {
-        const { data: flowRows } = await supabase
-          .from("delivery_entries").select("flow_name")
-          .eq("plan_id", planRow.id).order("flow_name");
-        const names = [...new Set((flowRows ?? []).map((r: { flow_name: string }) => r.flow_name).filter(Boolean))];
+        const { data: entryRows } = await supabase
+          .from("delivery_entries").select("id, supplier, flow_name, delivery_time")
+          .eq("plan_id", planRow.id).order("flow_name").order("supplier");
+        const entries = (entryRows ?? []) as { id: string; supplier: string; flow_name: string; delivery_time: string }[];
+        setDeliverySuppliers(entries);
+        const names = [...new Set(entries.map(r => r.flow_name).filter(Boolean))];
         setDeliveryFlowNames(names);
       }
     }
@@ -633,6 +637,7 @@ function MallarPage() {
       event_trigger_user_id: form.event_trigger_user_id || null,
       is_delivery_task: form.is_delivery_task,
       delivery_flow_name: form.delivery_flow_name?.trim() || null,
+      delivery_supplier_name: form.delivery_supplier_name?.trim() || null,
       depends_on_template_title: form.depends_on_template_title?.trim() || null,
       review_interval_months: form.review_interval_months > 0 ? form.review_interval_months : null,
       // Set next_review_at for recurring base templates without a near end date
@@ -759,13 +764,28 @@ function MallarPage() {
     const configs = [...selectedTemplateIds].map((id) => {
       const tmpl = templates.find(t => t.id === id);
       if (!tmpl) return null;
-      const tmplAny = tmpl as ChecklistTemplate & { event_trigger_user_id?: string };
+      const tmplAny = tmpl as ChecklistTemplate & { event_trigger_user_id?: string; delivery_flow_name?: string; delivery_supplier_name?: string };
+
+      // Pre-select delivery entries matching the template's stored supplier/flow config
+      let preselectedDeliveryIds: string[] = [];
+      if ((tmplAny as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task && deliverySuppliers.length > 0) {
+        const tmplFlows = (tmplAny.delivery_flow_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
+        const tmplSuppliers = (tmplAny.delivery_supplier_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
+        preselectedDeliveryIds = deliverySuppliers
+          .filter(s => {
+            const flowMatch = tmplFlows.length === 0 || tmplFlows.includes(s.flow_name?.toLowerCase() ?? "");
+            const suppMatch = tmplSuppliers.length === 0 || tmplSuppliers.includes(s.supplier?.toLowerCase() ?? "");
+            return flowMatch && suppMatch;
+          })
+          .map(s => s.id);
+      }
+
       return {
         templateId: id,
         assigneeUserIds: [] as string[],
         assigneeGroupIds: [] as string[],
         eventTriggerUserId: tmplAny.event_trigger_user_id ?? "",
-        selectedDeliveryIds: [] as string[],
+        selectedDeliveryIds: preselectedDeliveryIds,
       };
     });
     setBulkTaskConfigs(configs.filter((c): c is BulkTaskConfig => c !== null));
@@ -1045,6 +1065,7 @@ function MallarPage() {
       event_trigger_user_id: (t as ChecklistTemplate & { event_trigger_user_id?: string }).event_trigger_user_id ?? "",
       is_delivery_task: (t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task ?? false,
       delivery_flow_name: (t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "",
+      delivery_supplier_name: (t as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name ?? "",
       depends_on_template_title: (t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title ?? "",
       items: (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ id: it.id, label: it.label, requires_photo: it.requires_photo, link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url ?? "", condition_question_id: (it as ChecklistTemplateItem & { condition_question_id?: string }).condition_question_id ?? undefined, condition_answer: (it as ChecklistTemplateItem & { condition_answer?: string }).condition_answer ?? undefined })),
       questions: (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q) => ({ id: q.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, link_url: (q as ChecklistTemplateQuestion & { link_url?: string }).link_url ?? "" })),
@@ -1085,6 +1106,7 @@ function MallarPage() {
       event_trigger_user_id: editForm.event_trigger_user_id || null,
       is_delivery_task: editForm.is_delivery_task,
       delivery_flow_name: editForm.delivery_flow_name?.trim() || null,
+      delivery_supplier_name: editForm.delivery_supplier_name?.trim() || null,
       depends_on_template_title: editForm.depends_on_template_title?.trim() || null,
       review_interval_months: editForm.review_interval_months > 0 ? editForm.review_interval_months : null,
       // Ensure next_review_at is set if this becomes a recurring base template
@@ -1288,7 +1310,7 @@ function MallarPage() {
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
       "SAP-artikel", "Mallpaket", "Händelsevillkor", "Leveransuppgift (ja/nej)", "Leveransflöde",
       "Kedja (beror på mallnamn)", "Malltyp", "Skapningsläge", "Händelse-bekräftare",
-      "Granskningsintervall (månader)", "Kritisk (ja/nej)",
+      "Granskningsintervall (månader)", "Kritisk (ja/nej)", "Leveransföretag",
     ];
     const today = new Date().toISOString().slice(0, 10);
     const exampleA = [
@@ -1309,6 +1331,7 @@ function MallarPage() {
       "", // Händelse-bekräftare
       "", // Granskningsintervall
       "", // Kritisk
+      "", // Leveransföretag
     ];
     const exampleB = [
       "Varumottagning Färskt", "Drift", "Tas emot vid leverans", "Medel", "active", "",
@@ -1328,6 +1351,7 @@ function MallarPage() {
       "", // Händelse-bekräftare
       "24", // Granskningsintervall
       "", // Kritisk
+      "Eskilstuna Coop logistik AB", // Leveransföretag — kopplar till specifikt företag
     ];
     const csv = CSV_TEMPLATE_INSTRUCTIONS
       + [headers, exampleA, exampleB].map((r) => r.map((v) => `"${sanitizeCsvCell(String(v).replace(/"/g, '""'))}"`).join(";")).join("\n");
@@ -1342,7 +1366,7 @@ function MallarPage() {
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
       "SAP-artikel", "Mallpaket", "Händelsevillkor", "Leveransuppgift (ja/nej)", "Leveransflöde", "Kedja (beror på mallnamn)",
-      "Malltyp", "Skapningsläge", "Händelse-bekräftare", "Granskningsintervall (månader)", "Kritisk (ja/nej)",
+      "Malltyp", "Skapningsläge", "Händelse-bekräftare", "Granskningsintervall (månader)", "Kritisk (ja/nej)", "Leveransföretag",
     ];
     const rows = [
       headers,
@@ -1400,6 +1424,7 @@ function MallarPage() {
             ? String((t as ChecklistTemplate & { review_interval_months?: number }).review_interval_months)
             : "",
           (t as ChecklistTemplate & { is_critical?: boolean }).is_critical ? "ja" : "",
+          (t as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name ?? "",
         ];
       }),
     ];
@@ -1496,7 +1521,7 @@ function MallarPage() {
       // 11:Förfaller om 12:Förfallotid 13:Startdatum 14:Slutdatum
       // 15:Ursprungsmall 16:Arvläge 17:Steg 18:Frågor 19:Tidsluckor 20:SAP-artikel
       // 21:Mallpaket 22:Händelsevillkor 23:Leveransuppgift 24:Leveransflöde 25:Kedja
-      // 26:Malltyp 27:Skapningsläge 28:Händelse-bekräftare 29:Granskningsintervall 30:Kritisk
+      // 26:Malltyp 27:Skapningsläge 28:Händelse-bekräftare 29:Granskningsintervall 30:Kritisk 31:Leveransföretag
       const [
         title, category, description, priority, statusRaw, ,
         recurrence, weekdaysRaw, monthsRaw, monthDayRaw, intervalRaw,
@@ -1504,6 +1529,7 @@ function MallarPage() {
         parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw, timeSlotsRaw,
         sapArticleIdRaw, packageNameRaw, eventTriggerRaw, deliveryTaskRaw, deliveryFlowRaw, chainTitleRaw,
         templateTypeRaw, templateModeRaw, eventTriggerUserIdRaw, reviewIntervalRaw, isCriticalRaw,
+        deliverySupplierRaw,
       ] = cols;
       if (!title?.trim()) continue;
 
@@ -1569,6 +1595,7 @@ function MallarPage() {
         event_trigger_user_id: eventTriggerUserIdRaw?.trim() || null,
         is_delivery_task: isDeliveryTask,
         delivery_flow_name: deliveryFlowRaw?.trim() || null,
+        delivery_supplier_name: deliverySupplierRaw?.trim() || null,
         depends_on_template_title: chainTitleRaw?.trim() || null,
         review_interval_months: reviewIntervalMonths,
         is_critical: isCriticalRaw?.trim().toLowerCase() === "ja",
@@ -2371,38 +2398,114 @@ function MallarPage() {
                 />
               </div>
               {f.is_delivery_task && (
-                <div className="pl-6 space-y-1.5">
-                  <span className="text-[11px] text-muted-foreground/70">Leveransflöden (välj ett eller flera)</span>
-                  {deliveryFlowNames.length > 0 ? (
-                    <div className="space-y-0.5 rounded-lg border border-border/50 p-2 max-h-36 overflow-y-auto">
-                      {deliveryFlowNames.map(name => {
-                        const selected = f.delivery_flow_name.split("|").map(s => s.trim()).filter(Boolean).includes(name);
-                        return (
-                          <label key={name} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
-                            <Checkbox
-                              checked={selected}
-                              onCheckedChange={(checked) => {
-                                const current = f.delivery_flow_name.split("|").map(s => s.trim()).filter(Boolean);
-                                const next = checked ? [...current, name] : current.filter(n => n !== name);
-                                setF(p => ({ ...p, delivery_flow_name: next.join("|") }));
-                              }}
-                              className="h-3.5 w-3.5"
-                            />
-                            <span className="text-xs">{name}</span>
-                          </label>
-                        );
-                      })}
+                <div className="pl-6 space-y-2">
+                  <span className="text-[11px] text-muted-foreground/70">
+                    Koppla till specifika leveranser (välj ett eller flera flöden/företag)
+                  </span>
+                  {deliverySuppliers.length > 0 ? (() => {
+                    // Group entries by flow_name
+                    const byFlow = deliverySuppliers.reduce<Record<string, typeof deliverySuppliers>>((acc, s) => {
+                      const k = s.flow_name || "Okänt flöde";
+                      if (!acc[k]) acc[k] = [];
+                      acc[k].push(s);
+                      return acc;
+                    }, {});
+                    const selectedSuppliers = f.delivery_supplier_name.split("|").map(s => s.trim()).filter(Boolean);
+                    const selectedFlows = f.delivery_flow_name.split("|").map(s => s.trim()).filter(Boolean);
+
+                    const toggleEntry = (entry: { supplier: string; flow_name: string }) => {
+                      const suppName = entry.supplier?.trim() ?? "";
+                      const flowName = entry.flow_name?.trim() ?? "";
+                      const hasSupp = selectedSuppliers.includes(suppName);
+                      const hasFlow = selectedFlows.includes(flowName);
+                      const newSuppliers = hasSupp ? selectedSuppliers.filter(s => s !== suppName) : [...selectedSuppliers, suppName];
+                      const newFlows = hasFlow ? selectedFlows.filter(f => f !== flowName) : [...selectedFlows, flowName];
+                      // Remove flow if no more suppliers in that flow are selected
+                      const remainingFlows = newFlows.filter(fl => {
+                        const entriesInFlow = deliverySuppliers.filter(s => s.flow_name === fl);
+                        return entriesInFlow.some(s => newSuppliers.includes(s.supplier?.trim() ?? ""));
+                      });
+                      setF(p => ({
+                        ...p,
+                        delivery_supplier_name: newSuppliers.join("|"),
+                        delivery_flow_name: remainingFlows.join("|"),
+                      }));
+                    };
+
+                    const toggleFlow = (flowName: string, entries: typeof deliverySuppliers) => {
+                      const allSuppInFlow = entries.map(s => s.supplier?.trim() ?? "").filter(Boolean);
+                      const allSelected = allSuppInFlow.every(s => selectedSuppliers.includes(s));
+                      let newSuppliers: string[];
+                      let newFlows: string[];
+                      if (allSelected) {
+                        newSuppliers = selectedSuppliers.filter(s => !allSuppInFlow.includes(s));
+                        newFlows = selectedFlows.filter(f => f !== flowName);
+                      } else {
+                        newSuppliers = [...new Set([...selectedSuppliers, ...allSuppInFlow])];
+                        newFlows = [...new Set([...selectedFlows, flowName])];
+                      }
+                      setF(p => ({
+                        ...p,
+                        delivery_supplier_name: newSuppliers.join("|"),
+                        delivery_flow_name: newFlows.join("|"),
+                      }));
+                    };
+
+                    return (
+                      <div className="space-y-1.5 rounded-lg border border-border/50 p-2 max-h-48 overflow-y-auto">
+                        {Object.entries(byFlow).map(([flowName, entries]) => {
+                          const allSuppInFlow = entries.map(s => s.supplier?.trim() ?? "").filter(Boolean);
+                          const allSelected = allSuppInFlow.every(s => selectedSuppliers.includes(s));
+                          const someSelected = allSuppInFlow.some(s => selectedSuppliers.includes(s));
+                          return (
+                            <div key={flowName} className="space-y-0.5">
+                              <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50 bg-muted/30">
+                                <Checkbox
+                                  checked={allSelected}
+                                  data-state={someSelected && !allSelected ? "indeterminate" : undefined}
+                                  onCheckedChange={() => toggleFlow(flowName, entries)}
+                                  className="h-3.5 w-3.5"
+                                />
+                                <span className="text-xs font-medium">{flowName}</span>
+                                <span className="ml-auto text-[10px] text-muted-foreground">{entries.length} företag</span>
+                              </label>
+                              {entries.map(entry => {
+                                const suppName = entry.supplier?.trim() ?? "";
+                                const checked = selectedSuppliers.includes(suppName);
+                                return (
+                                  <label key={entry.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 pl-5 hover:bg-muted/50">
+                                    <Checkbox
+                                      checked={checked}
+                                      onCheckedChange={() => toggleEntry(entry)}
+                                      className="h-3.5 w-3.5"
+                                    />
+                                    <span className="text-xs flex-1">{entry.supplier}</span>
+                                    {entry.delivery_time && (
+                                      <span className="text-[10px] text-muted-foreground">{entry.delivery_time}</span>
+                                    )}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })() : (
+                    <div className="space-y-1">
+                      <Input
+                        placeholder="t.ex. Färskt"
+                        value={f.delivery_flow_name}
+                        onChange={(e) => setF((p) => ({ ...p, delivery_flow_name: e.target.value }))}
+                        className="h-7 border border-border/60 text-xs"
+                      />
+                      <p className="text-[10px] text-muted-foreground/60">Inga leveranser i aktiv plan — ange flödesnamn manuellt</p>
                     </div>
-                  ) : (
-                    <Input
-                      placeholder="t.ex. Färskt"
-                      value={f.delivery_flow_name}
-                      onChange={(e) => setF((p) => ({ ...p, delivery_flow_name: e.target.value }))}
-                      className="h-7 border border-border/60 text-xs"
-                    />
                   )}
-                  {f.delivery_flow_name && (
-                    <p className="text-[10px] text-muted-foreground/60">Valt: {f.delivery_flow_name}</p>
+                  {(f.delivery_supplier_name || f.delivery_flow_name) && (
+                    <p className="text-[10px] text-muted-foreground/60">
+                      Valt: {[f.delivery_supplier_name, f.delivery_flow_name].filter(Boolean).join(" / ")}
+                    </p>
                   )}
                 </div>
               )}
@@ -2921,7 +3024,10 @@ function MallarPage() {
                                 <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700">
                                   <Truck className="h-3 w-3" />
                                   Leveransuppgift
-                                  {(t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name && (
+                                  {(t as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name && (
+                                    <span className="opacity-70">— {(t as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name}</span>
+                                  )}
+                                  {!(t as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name && (t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name && (
                                     <span className="opacity-70">— {(t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name}</span>
                                   )}
                                 </span>
@@ -3841,7 +3947,7 @@ function MallarPage() {
                           <Button
                             variant="outline" size="sm"
                             className="rounded-full h-7 text-xs"
-                            onClick={() => { setActivatePackageTarget(pkg); setBulkTaskConfigs(pkgTemplates.map(t => { const tAny = t as ChecklistTemplate & { event_trigger_user_id?: string }; return { templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], eventTriggerUserId: tAny.event_trigger_user_id ?? "", selectedDeliveryIds: [] }; })); setShowPackagesPanel(false); setBulkCreateOpen(true); }}
+                            onClick={() => { setActivatePackageTarget(pkg); setBulkTaskConfigs(pkgTemplates.map(t => { const tAny = t as ChecklistTemplate & { event_trigger_user_id?: string; delivery_flow_name?: string; delivery_supplier_name?: string; is_delivery_task?: boolean }; const tmplFlows = (tAny.delivery_flow_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean); const tmplSupps = (tAny.delivery_supplier_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean); const preIds = tAny.is_delivery_task ? deliverySuppliers.filter(s => (tmplFlows.length === 0 || tmplFlows.includes(s.flow_name?.toLowerCase() ?? "")) && (tmplSupps.length === 0 || tmplSupps.includes(s.supplier?.toLowerCase() ?? ""))).map(s => s.id) : []; return { templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], eventTriggerUserId: tAny.event_trigger_user_id ?? "", selectedDeliveryIds: preIds }; })); setShowPackagesPanel(false); setBulkCreateOpen(true); }}
                           >
                             <ListChecks className="h-3 w-3 mr-1" /> Aktivera
                           </Button>
