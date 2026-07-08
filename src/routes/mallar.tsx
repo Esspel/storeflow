@@ -925,7 +925,7 @@ function MallarPage() {
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
-      "SAP-artikel", "Mallpaket", "Händelsevillkor",
+      "SAP-artikel", "Mallpaket", "Händelsevillkor", "Leveransuppgift (ja/nej)", "Leveransflöde", "Kedja (beror på mallnamn)",
     ];
     const today = new Date().toISOString().slice(0, 10);
     const exampleA = [
@@ -937,18 +937,24 @@ function MallarPage() {
       "1. Temperaturavvikelse? [obligatorisk] [ja_nej] | 2. Notering",
       "",
       "",
-      "",
+      "", // Händelsevillkor
+      "", // Leveransuppgift
+      "", // Leveransflöde
+      "", // Kedja
     ];
     const exampleB = [
-      "Städning med tidsluckor", "Städ", "Tre rengöringsrundor per dag", "Medel", "active", "",
-      "daily", "", "", "", "1",
-      "0", "", today, "2026-12-31",
+      "Varumottagning Färskt", "Drift", "Tas emot vid leverans", "Medel", "active", "",
+      "", "", "", "", "",
+      "0", "", today, "",
       "", "",
-      "1. Torka bord och bänkar | 2. Dammsuga [foto] | 3. Töm sopkorgar",
+      "1. Kontrollera följesedel | 2. Kontrollera temperatur [foto] | 3. Signera kvitto",
       "",
-      "08:00 | 13:00 | 17:00",
       "",
-      "Städpaket",
+      "",
+      "", // Händelsevillkor
+      "ja", // Leveransuppgift — sätts till is_delivery_task=true
+      "Färskt", // Leveransflöde — filtrar på detta flöde i leveransplanen
+      "", // Kedja
     ];
     const csv = CSV_TEMPLATE_INSTRUCTIONS
       + [headers, exampleA, exampleB].map((r) => r.map((v) => `"${sanitizeCsvCell(String(v).replace(/"/g, '""'))}"`).join(";")).join("\n");
@@ -962,7 +968,7 @@ function MallarPage() {
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
-      "SAP-artikel", "Mallpaket", "Händelsevillkor",
+      "SAP-artikel", "Mallpaket", "Händelsevillkor", "Leveransuppgift (ja/nej)", "Leveransflöde", "Kedja (beror på mallnamn)",
     ];
     const rows = [
       headers,
@@ -1010,6 +1016,9 @@ function MallarPage() {
           tAny.sap_article_id ?? "",
           packages.filter(pkg => (pkg.items ?? []).some(item => item.template_id === t.id)).map(pkg => pkg.name).join(" | "),
           (t as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description ?? "",
+          (t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task ? "ja" : "",
+          (t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "",
+          (t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title ?? "",
         ];
       }),
     ];
@@ -1098,13 +1107,13 @@ function MallarPage() {
       // 6:Återkommande 7:Veckodagar 8:Månader 9:Månadsdag 10:Intervall
       // 11:Förfaller om 12:Förfallotid 13:Startdatum 14:Slutdatum
       // 15:Ursprungsmall 16:Arvläge 17:Steg 18:Frågor 19:Tidsluckor 20:SAP-artikel
-      // 21:Mallpaket 22:Händelsevillkor
+      // 21:Mallpaket 22:Händelsevillkor 23:Leveransuppgift 24:Leveransflöde 25:Kedja
       const [
         title, category, description, priority, statusRaw, ,
         recurrence, weekdaysRaw, monthsRaw, monthDayRaw, intervalRaw,
         dueDays, dueTime, startDate, endDate,
         parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw, timeSlotsRaw,
-        sapArticleIdRaw, packageNameRaw, eventTriggerRaw,
+        sapArticleIdRaw, packageNameRaw, eventTriggerRaw, deliveryTaskRaw, deliveryFlowRaw, chainTitleRaw,
       ] = cols;
       if (!title?.trim()) continue;
 
@@ -1151,6 +1160,9 @@ function MallarPage() {
         sap_article_id: sapArticleIdRaw?.trim() || null,
         forening_id: importScope === "forening" ? resolvedForeningId : null,
         event_trigger_description: eventTriggerRaw?.trim() || null,
+        is_delivery_task: (deliveryTaskRaw?.trim().toLowerCase() === "ja") || false,
+        delivery_flow_name: deliveryFlowRaw?.trim() || null,
+        depends_on_template_title: chainTitleRaw?.trim() || null,
       }).select("id").maybeSingle();
 
       if (!tmpl?.id) continue;

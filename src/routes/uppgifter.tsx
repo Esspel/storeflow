@@ -911,7 +911,7 @@ function TasksPage() {
   // - Managers/admins see all tasks
   // - Employees: if task has no assignees → visible to all; otherwise only if the user
   //   is directly assigned OR is a member of an assigned group
-  const visibleTasks = tasks.filter((t) => {
+  const allVisibleTasks = tasks.filter((t) => {
     if (!isEmployee) return true;
     const assignees = t.assignees ?? [];
     if (assignees.length === 0) return true;
@@ -921,9 +921,45 @@ function TasksPage() {
     return groupMatch;
   });
 
+  // Unconfirmed event tasks: have event_trigger_description but no event_triggered_at today.
+  // Only managers or the designated trigger user see these in a confirmation section.
+  // They are hidden from the main task list until confirmed.
+  const todayStartStr = localDateStr(new Date(getSimulatedNow()));
+  const unconfirmedEventTasks = allVisibleTasks.filter(t => {
+    if (!t.event_trigger_description) return false;
+    if (!t.event_triggered_at) return true;
+    // If triggered, check if it was today (Stockholm TZ) — if earlier, treat as not yet confirmed for today
+    const triggeredDate = localDateStr(new Date(t.event_triggered_at));
+    return triggeredDate < todayStartStr;
+  }).filter(t => isManager || t.event_trigger_user_id === user?.id || !t.event_trigger_user_id);
+
+  // Main task list excludes unconfirmed event tasks
+  const unconfirmedEventIds = new Set(unconfirmedEventTasks.map(t => t.id));
+  const visibleTasks = allVisibleTasks.filter(t => !unconfirmedEventIds.has(t.id));
+
   const applyTemplate = (templateId: string) => {
     const tmpl = templates.find((t) => t.id === templateId);
     if (!tmpl) return;
+    const tmplAny = tmpl as ChecklistTemplate & {
+      recurrence_months?: number[];
+      recurrence_month_day?: number;
+      event_trigger_description?: string;
+      is_delivery_task?: boolean;
+      delivery_flow_name?: string;
+      depends_on_template_title?: string;
+    };
+
+    // Delivery template: open delivery picker filtered by flow_name
+    if (tmplAny.is_delivery_task) {
+      const filtered = tmplAny.delivery_flow_name
+        ? todayDeliveries.filter(d => d.flow_name.toLowerCase() === tmplAny.delivery_flow_name!.toLowerCase())
+        : todayDeliveries;
+      setTodayDeliveries(filtered.length ? filtered : todayDeliveries);
+      setSelectedDeliveryIds(new Set((filtered.length ? filtered : todayDeliveries).map(d => d.id)));
+      setShowDeliveryModal(true);
+      return;
+    }
+
     const steps = (tmpl.items ?? [])
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((it) => ({ label: it.label, requires_photo: it.requires_photo, link_url: it.link_url ?? "" }));
@@ -934,8 +970,16 @@ function TasksPage() {
       ? (() => { const d = new Date(getSimulatedNow()); d.setDate(d.getDate() + tmpl.due_date_offset!); return localDateStr(d); })()
       : "";
     const todayStr = localDateStr(new Date(getSimulatedNow()));
-    const tmplAny = tmpl as ChecklistTemplate & { recurrence_months?: number[]; recurrence_month_day?: number; event_trigger_description?: string };
     const timeSlots = (tmpl.time_slots ?? []) as string[];
+
+    // Chain: find a matching predecessor task by title
+    const chainPredecessorId = tmplAny.depends_on_template_title
+      ? (tasks.find(t =>
+          t.title.toLowerCase().includes(tmplAny.depends_on_template_title!.toLowerCase()) &&
+          t.status !== "done"
+        )?.id ?? "")
+      : "";
+
     setNewTask((p) => ({
       ...p,
       title: p.title || tmpl.title,
@@ -949,12 +993,12 @@ function TasksPage() {
       recurrence_month_day: tmplAny.recurrence_month_day ?? p.recurrence_month_day,
       recurrence_start: tmpl.recurrence_rule ? todayStr : p.recurrence_start,
       due_date: dueDate || p.due_date,
-      // When template has time_slots, those become the due times (not due_date_time)
       due_date_time: timeSlots.length > 0 ? "" : (tmpl.due_date_time ? (p.due_date_time || tmpl.due_date_time) : p.due_date_time),
       time_slots: timeSlots.length > 0 ? timeSlots : p.time_slots,
       steps: steps.length > 0 ? steps : p.steps,
       questions: questions.length > 0 ? questions : p.questions,
       event_trigger_description: tmplAny.event_trigger_description ?? p.event_trigger_description,
+      depends_on_task_id: chainPredecessorId || p.depends_on_task_id,
     }));
   };
 
@@ -2169,6 +2213,40 @@ function TasksPage() {
           </div>
         )}
 
+        {/* Händelser som väntar bekräftelse — only visible to managers or the trigger user */}
+        {unconfirmedEventTasks.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 px-0.5">
+              <Zap className="h-3.5 w-3.5 text-amber-500" />
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-400">Händelser att bekräfta</h2>
+              <span className="ml-auto text-[11px] text-muted-foreground">{unconfirmedEventTasks.length}</span>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {unconfirmedEventTasks.map(t => (
+                <div key={t.id} className="rounded-2xl border border-amber-400/40 bg-amber-50/60 dark:bg-amber-900/10 px-4 py-3 space-y-2">
+                  <p className="text-sm font-semibold text-foreground">{t.title}</p>
+                  <p className="text-xs text-muted-foreground">{t.event_trigger_description}</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600 transition-colors"
+                      onClick={() => void confirmEventTrigger(t)}
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      Bekräfta — aktuell idag
+                    </button>
+                    <button
+                      className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={() => openDetail(t)}
+                    >
+                      Detaljer
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {overdueTasks.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-0.5">
@@ -2415,8 +2493,39 @@ function TasksPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map(renderTaskCard)}
+        <div className="space-y-6">
+          {unconfirmedEventTasks.length > 0 && tab !== "done" && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 px-0.5">
+                <Zap className="h-3.5 w-3.5 text-amber-500" />
+                <h2 className="text-xs font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-400">Händelser att bekräfta</h2>
+                <span className="ml-auto text-[11px] text-muted-foreground">{unconfirmedEventTasks.length}</span>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {unconfirmedEventTasks.map(t => (
+                  <div key={t.id} className="rounded-2xl border border-amber-400/40 bg-amber-50/60 dark:bg-amber-900/10 px-4 py-3 space-y-2">
+                    <p className="text-sm font-semibold text-foreground">{t.title}</p>
+                    <p className="text-xs text-muted-foreground">{t.event_trigger_description}</p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600 transition-colors"
+                        onClick={() => void confirmEventTrigger(t)}
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Bekräfta — aktuell idag
+                      </button>
+                      <button className="text-[11px] text-muted-foreground hover:text-foreground transition-colors" onClick={() => openDetail(t)}>
+                        Detaljer
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {filtered.map(renderTaskCard)}
+          </div>
         </div>
       )}
 
