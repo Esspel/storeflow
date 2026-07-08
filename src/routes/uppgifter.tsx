@@ -354,23 +354,6 @@ function TasksPage() {
   const isManager = user?.role === "manager" || user?.role === "admin";
   const isEmployee = user?.role === "employee";
 
-  // Tasks with individual assignees that need manager confirmation
-  // Computed from tasks state — reactive
-  const unconfirmedTasks = React.useMemo(() =>
-    isManager
-      ? tasks.filter(t =>
-          (t as TaskFull & { assignee_confirmed?: boolean | null }).assignee_confirmed === false &&
-          t.status !== "done"
-        )
-      : [],
-    [tasks, isManager]
-  );
-  const tomorrowStr = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
-  })();
-
   const [tasks, setTasks] = useState<TaskFull[]>([]);
   const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
   const [groups, setGroups] = useState<UserGroup[]>([]);
@@ -513,6 +496,22 @@ function TasksPage() {
   const [futureBulkContent, setFutureBulkContent] = useState("");
   const [futureBulkAssigneeUserIds, setFutureBulkAssigneeUserIds] = useState<string[]>([]);
   const [futureBulkAssigneeGroupIds, setFutureBulkAssigneeGroupIds] = useState<string[]>([]);
+
+  // Tasks with individual assignees that need manager confirmation
+  const unconfirmedTasks = React.useMemo(() =>
+    isManager
+      ? tasks.filter(t =>
+          (t as TaskFull & { assignee_confirmed?: boolean | null }).assignee_confirmed === false &&
+          t.status !== "done"
+        )
+      : [],
+    [tasks, isManager]
+  );
+  const tomorrowStr = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
 
   // In-flight guard refs — prevent double-submit without triggering re-renders
   const completingRef = useRef<Set<string>>(new Set());
