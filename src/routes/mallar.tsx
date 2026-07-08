@@ -376,6 +376,10 @@ function MallarPage() {
   const [bulkCreating, setBulkCreating] = useState(false);
   const [allUsers, setAllUsers] = useState<AppUser[]>([]);
   const [allGroups, setAllGroups] = useState<UserGroup[]>([]);
+  // Scheduled user IDs per date (for batch assignee filtering)
+  const [scheduledUsersByDate, setScheduledUsersByDate] = useState<Record<string, Set<string>>>({});
+  // Per-template "show all users" toggle
+  const [showAllUsersForTemplate, setShowAllUsersForTemplate] = useState<Record<string, boolean>>({});
 
   // Template preview
   const [previewTarget, setPreviewTarget] = useState<TemplateWithMeta | null>(null);
@@ -1017,7 +1021,7 @@ function MallarPage() {
     return { iso: base.toISOString().slice(0, 10), time: timeStr };
   }
 
-  function openBulkCreate() {
+  async function openBulkCreate() {
     const configs = [...selectedTemplateIds].map((id) => {
       const tmpl = templates.find(t => t.id === id);
       if (!tmpl) return null;
@@ -1057,6 +1061,55 @@ function MallarPage() {
       };
     });
     setBulkTaskConfigs(configs.filter((c): c is BulkTaskConfig => c !== null));
+    setShowAllUsersForTemplate({});
+
+    // Load schedule data to pre-filter assignees by who is working
+    const storeIdForSchedule = activeStore?.id ?? userStores[0]?.id ?? null;
+    if (storeIdForSchedule) {
+      try {
+        // Get the latest schedule import for this store
+        const { data: imports } = await supabase
+          .from("schedule_imports")
+          .select("id")
+          .eq("store_id", storeIdForSchedule)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        const importId = imports?.[0]?.id;
+        if (importId) {
+          const [{ data: emps }, { data: shifts }, { data: mappings }] = await Promise.all([
+            supabase.from("schedule_employees").select("id, employee_nr").eq("import_id", importId),
+            supabase.from("schedule_shifts").select("schedule_employee_id, day_date, start_time, stop_time").eq("import_id", importId),
+            supabase.from("employee_mappings").select("employee_nr, app_user_id").eq("store_id", storeIdForSchedule),
+          ]);
+          // Build employee_nr → app_user_id map
+          const nrToUserId = new Map<string, string>();
+          for (const m of (mappings ?? [])) {
+            if (m.app_user_id) nrToUserId.set(m.employee_nr, m.app_user_id);
+          }
+          // Build schedule_employee.id → app_user_id map
+          const empIdToUserId = new Map<string, string>();
+          for (const e of (emps ?? [])) {
+            const uid = nrToUserId.get(e.employee_nr);
+            if (uid) empIdToUserId.set(e.id, uid);
+          }
+          // Group by date
+          const byDate: Record<string, Set<string>> = {};
+          for (const s of (shifts ?? [])) {
+            if (!s.day_date) continue;
+            const uid = empIdToUserId.get(s.schedule_employee_id);
+            if (!uid) continue;
+            if (!byDate[s.day_date]) byDate[s.day_date] = new Set();
+            byDate[s.day_date].add(uid);
+          }
+          setScheduledUsersByDate(byDate);
+        } else {
+          setScheduledUsersByDate({});
+        }
+      } catch {
+        setScheduledUsersByDate({});
+      }
+    }
+
     setBulkCreateOpen(true);
   }
 
@@ -4035,6 +4088,32 @@ function MallarPage() {
               const storeUsers = allUsers.filter(u => !activeStore || u.store_id === activeStore.id);
               const storeGroups = allGroups.filter(g => !activeStore || g.store_id === activeStore.id);
               const smartDate = calcNextDueDate(tmpl);
+
+              // Compute set of users scheduled on any day covered by this template's selected deliveries
+              const deliveryDates = cfg.selectedDeliveryIds
+                .map(id => deliveryWeekEntries.find(e => e.id === id))
+                .flatMap(e => {
+                  if (!e) return [];
+                  if (e.delivery_date) return [e.delivery_date];
+                  const d = e.delivery_day ? nextWeekdayDate(e.delivery_day) : null;
+                  return d ? [d] : [];
+                });
+              const scheduledOnDays = new Set<string>();
+              for (const date of deliveryDates) {
+                const set = scheduledUsersByDate[date];
+                if (set) for (const uid of set) scheduledOnDays.add(uid);
+              }
+              // For non-delivery templates use the smartDate
+              if (!isDeliveryTmpl && smartDate) {
+                const dateStr = new Date(smartDate).toISOString().slice(0, 10);
+                const set = scheduledUsersByDate[dateStr];
+                if (set) for (const uid of set) scheduledOnDays.add(uid);
+              }
+              const hasScheduleData = Object.keys(scheduledUsersByDate).length > 0;
+              const showAll = showAllUsersForTemplate[cfg.templateId] ?? false;
+              const visibleUsers = hasScheduleData && !showAll && scheduledOnDays.size > 0
+                ? storeUsers.filter(u => scheduledOnDays.has(u.id))
+                : storeUsers;
               return (
                 <div key={cfg.templateId} className={cn("rounded-2xl border bg-card p-4 space-y-4", isDeliveryTmpl ? "border-amber-300/60 bg-amber-50/30" : "border-border/60")}>
                   <div className="flex items-start gap-3">
@@ -4229,17 +4308,33 @@ function MallarPage() {
 
                   {/* Assignees */}
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                      <label className="text-xs font-medium text-muted-foreground">Tilldelad</label>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                        <label className="text-xs font-medium text-muted-foreground">Tilldelad</label>
+                        {hasScheduleData && scheduledOnDays.size > 0 && !showAll && (
+                          <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                            {visibleUsers.length} inplanerade
+                          </span>
+                        )}
+                      </div>
+                      {hasScheduleData && scheduledOnDays.size > 0 && (
+                        <button
+                          type="button"
+                          className="text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+                          onClick={() => setShowAllUsersForTemplate(prev => ({ ...prev, [cfg.templateId]: !showAll }))}
+                        >
+                          {showAll ? "Visa inplanerade" : `Visa alla (${storeUsers.length})`}
+                        </button>
+                      )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <p className="text-[11px] text-muted-foreground/70 mb-1.5">Användare</p>
                         <div className="space-y-0.5 max-h-28 overflow-y-auto rounded-lg border border-border/50 p-2">
-                          {storeUsers.length === 0 ? (
+                          {visibleUsers.length === 0 ? (
                             <p className="text-xs text-muted-foreground py-1">Inga användare</p>
-                          ) : storeUsers.map(u => (
+                          ) : visibleUsers.map(u => (
                             <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
                               <Checkbox
                                 checked={cfg.assigneeUserIds.includes(u.id)}
