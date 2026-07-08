@@ -2669,8 +2669,8 @@ function MallarPage() {
               </div>
             )}
 
-            {/* Händelsevillkor */}
-            <div className="px-4 py-3 space-y-1">
+            {/* Händelsevillkor — only for store-scope templates */}
+            {scope === "store" && <div className="px-4 py-3 space-y-1">
               <div className="flex items-center gap-2">
                 <Zap className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 <span className="text-xs text-muted-foreground">Händelsevillkor</span>
@@ -2701,7 +2701,7 @@ function MallarPage() {
                   </Select>
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Leveransuppgift — only for store-scope templates */}
             {scope === "store" && <div className="px-4 py-3 space-y-2">
