@@ -3134,16 +3134,18 @@ function TasksPage() {
             {/* CONTENT column — always visible on desktop, step 1 on mobile */}
             <div className={cn("flex-1 sm:overflow-y-auto p-5 space-y-5 sm:p-6 sm:space-y-6 min-w-0", createStep === 2 && "hidden sm:block")}>
 
-              {/* Template picker */}
-              {templates.length > 0 && (
+              {/* Template picker — only regular templates, not base templates */}
+              {templates.filter(t => (t as ChecklistTemplate & { template_type?: string }).template_type !== "base").length > 0 && (
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Använd mall</Label>
                   <Select onValueChange={applyTemplate}>
                     <SelectTrigger className="h-9"><SelectValue placeholder="Välj mall..." /></SelectTrigger>
                     <SelectContent>
-                      {templates.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>{t.title} {t.category ? `(${t.category})` : ""}</SelectItem>
-                      ))}
+                      {templates
+                        .filter(t => (t as ChecklistTemplate & { template_type?: string }).template_type !== "base")
+                        .map((t) => (
+                          <SelectItem key={t.id} value={t.id}>{t.title} {t.category ? `(${t.category})` : ""}</SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>

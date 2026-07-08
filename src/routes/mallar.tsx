@@ -128,6 +128,8 @@ type FormState = {
   category: string;
   priority: string;
   status: "active" | "review" | "deprecated" | "archived";
+  template_type: "regular" | "base";
+  is_critical: boolean;
   recurrence_rule: string;
   recurrence_days: number[];
   recurrence_interval: number;
@@ -155,6 +157,8 @@ type FormState = {
 const emptyForm = (): FormState => ({
   title: "", description: "", category: "", priority: "Medel",
   status: "active",
+  template_type: "regular",
+  is_critical: false,
   recurrence_rule: "", recurrence_days: [], recurrence_interval: 1,
   recurrence_months: [], recurrence_month_day: 1,
   recurrence_start: "", recurrence_end: "",
@@ -252,6 +256,11 @@ function MallarPage() {
   // Merge: when a parent HK/forening template has been updated after a local variant was created
   const [mergeTarget, setMergeTarget] = useState<{ variant: TemplateWithMeta; parent: TemplateWithMeta } | null>(null);
   const [merging, setMerging] = useState(false);
+
+  // 24-month review system
+  const [reviewTarget, setReviewTarget] = useState<TemplateWithMeta | null>(null);
+  const [reviewSaving, setReviewSaving] = useState(false);
+  const [reviewEndDate, setReviewEndDate] = useState("");
 
   // View filter: "all" | "hk" | "forening" | "store"
   const [viewFilter, setViewFilter] = useState<"all" | "hk" | "forening" | "store">("all");
@@ -486,6 +495,37 @@ function MallarPage() {
     setShowPackagesPanel(true);
   }
 
+  // Review actions
+  async function handleReview(action: "continue" | "set_end_date" | "archive") {
+    if (!reviewTarget) return;
+    setReviewSaving(true);
+    const now = new Date().toISOString();
+    const nextReview = (() => { const d = new Date(); d.setMonth(d.getMonth() + 24); return d.toISOString(); })();
+    if (action === "continue") {
+      await supabase.from("checklist_templates").update({
+        last_reviewed_at: now,
+        next_review_at: nextReview,
+      }).eq("id", reviewTarget.id);
+    } else if (action === "set_end_date" && reviewEndDate) {
+      await supabase.from("checklist_templates").update({
+        recurrence_end: reviewEndDate,
+        last_reviewed_at: now,
+        next_review_at: null,
+      }).eq("id", reviewTarget.id);
+    } else if (action === "archive") {
+      await supabase.from("checklist_templates").update({
+        status: "archived",
+        last_reviewed_at: now,
+        next_review_at: null,
+      }).eq("id", reviewTarget.id);
+    }
+    logAudit(user?.id ?? null, "template.review", "checklist_templates", reviewTarget.id, { action, review_date: now });
+    setReviewTarget(null);
+    setReviewEndDate("");
+    setReviewSaving(false);
+    await load();
+  }
+
   function openCreate(scope: "store" | "hk" | "forening") {
     setCreateScope(scope);
     const f = emptyForm();
@@ -527,10 +567,16 @@ function MallarPage() {
       locked_by_admin: form.isLocked,
       hierarchy_scope: createScope,
       forening_id: createScope === "forening" ? form.foreningId : null,
+      template_type: form.template_type,
+      is_critical: form.is_critical,
       event_trigger_description: form.event_trigger_description?.trim() || null,
       is_delivery_task: form.is_delivery_task,
       delivery_flow_name: form.delivery_flow_name?.trim() || null,
       depends_on_template_title: form.depends_on_template_title?.trim() || null,
+      // Set 24-month review for recurring base templates without a near end date
+      next_review_at: (form.template_type === "base" && form.recurrence_rule && !form.recurrence_end)
+        ? (() => { const d = new Date(); d.setMonth(d.getMonth() + 24); return d.toISOString(); })()
+        : null,
     }).select("id").maybeSingle();
 
     if (!tmpl?.id) { setSaving(false); return; }
@@ -747,6 +793,8 @@ function MallarPage() {
       isLocked: t.locked_by_admin ?? false,
       foreningId: t.forening_id ?? "",
       changeSummary: "",
+      template_type: ((t as ChecklistTemplate & { template_type?: string }).template_type ?? "regular") as "regular" | "base",
+      is_critical: (t as ChecklistTemplate & { is_critical?: boolean }).is_critical ?? false,
       event_trigger_description: (t as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description ?? "",
       is_delivery_task: (t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task ?? false,
       delivery_flow_name: (t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "",
@@ -783,10 +831,17 @@ function MallarPage() {
       time_slots: editForm.time_slots.length > 0 ? editForm.time_slots : null,
       is_global: editForm.isGlobal,
       locked_by_admin: editForm.isLocked,
+      template_type: editForm.template_type,
+      is_critical: editForm.is_critical,
       event_trigger_description: editForm.event_trigger_description?.trim() || null,
       is_delivery_task: editForm.is_delivery_task,
       delivery_flow_name: editForm.delivery_flow_name?.trim() || null,
       depends_on_template_title: editForm.depends_on_template_title?.trim() || null,
+      // Ensure next_review_at is set if this becomes a recurring base template
+      ...((editForm.template_type === "base" && editForm.recurrence_rule && !editForm.recurrence_end &&
+          !(editTarget as ChecklistTemplate & { next_review_at?: string }).next_review_at)
+        ? { next_review_at: (() => { const d = new Date(); d.setMonth(d.getMonth() + 24); return d.toISOString(); })() }
+        : {}),
     }).eq("id", editTarget.id);
 
     await supabase.from("checklist_template_items").delete().eq("template_id", editTarget.id);
@@ -1623,6 +1678,35 @@ function MallarPage() {
         <div className="w-64 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/30">
           <div className="divide-y divide-border/50">
 
+            {/* Malltyp */}
+            <div className="px-4 py-3 space-y-2">
+              <span className="text-xs font-medium text-muted-foreground">Malltyp</span>
+              <div className="flex gap-1.5">
+                {(["regular", "base"] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    className={cn(
+                      "flex-1 rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors",
+                      f.template_type === type
+                        ? type === "base"
+                          ? "bg-amber-500 text-white border-amber-500"
+                          : "bg-primary text-primary-foreground border-primary"
+                        : "border-border/60 text-muted-foreground hover:border-primary/40"
+                    )}
+                    onClick={() => setF((p) => ({ ...p, template_type: type }))}
+                  >
+                    {type === "regular" ? "Vanlig mall" : "Grundmall"}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground/70">
+                {f.template_type === "base"
+                  ? "Grundmallar visas bara vid batchskapning och schemalagda körningar."
+                  : "Vanliga mallar visas i mallväljaren vid manuell uppgiftsskapning."}
+              </p>
+            </div>
+
             {/* Kategori */}
             <div className="flex items-start gap-3 px-4 py-3">
               <div className="mt-0.5 h-4 w-4 shrink-0 flex items-center justify-center">
@@ -1887,6 +1971,17 @@ function MallarPage() {
                   <p className="text-[10px] text-muted-foreground/60">Chefer kan inte redigera</p>
                 </div>
                 <Switch checked={f.isLocked} onCheckedChange={(v) => setF((p) => ({ ...p, isLocked: v }))} />
+              </div>
+            )}
+
+            {/* Kritisk mall */}
+            {f.template_type === "base" && f.recurrence_rule && (
+              <div className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground">Kritisk rutin</span>
+                  <p className="text-[10px] text-muted-foreground/60">Stoppas aldrig automatiskt</p>
+                </div>
+                <Switch checked={f.is_critical} onCheckedChange={(v) => setF((p) => ({ ...p, is_critical: v }))} />
               </div>
             )}
 
@@ -2172,6 +2267,59 @@ function MallarPage() {
         </div>
       ) : (
         <div className="mt-6 space-y-8">
+          {/* 24-month review banners — shown to managers for overdue/due-soon recurring base templates */}
+          {isManager && (() => {
+            const now = new Date();
+            const warningThreshold = new Date(now); warningThreshold.setMonth(warningThreshold.getMonth() + 3);
+            const overdueTemplates = templates.filter(t => {
+              const nextReview = (t as ChecklistTemplate & { next_review_at?: string }).next_review_at;
+              return nextReview && new Date(nextReview) <= warningThreshold && t.status !== "archived";
+            });
+            if (overdueTemplates.length === 0) return null;
+            const isOverdue = (t: TemplateWithMeta) => {
+              const nr = (t as ChecklistTemplate & { next_review_at?: string }).next_review_at;
+              return nr && new Date(nr) <= now;
+            };
+            return (
+              <div className="space-y-2">
+                {overdueTemplates.map(t => {
+                  const overdue = isOverdue(t);
+                  const nr = (t as ChecklistTemplate & { next_review_at?: string }).next_review_at!;
+                  const monthsLeft = Math.ceil((new Date(nr).getTime() - now.getTime()) / (1000 * 60 * 60 * 24 * 30));
+                  return (
+                    <div key={t.id} className={cn(
+                      "flex items-center justify-between gap-3 rounded-xl border px-4 py-3",
+                      overdue
+                        ? "border-destructive/30 bg-destructive/5"
+                        : "border-amber-200 bg-amber-50/60"
+                    )}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <AlertTriangle className={cn("h-4 w-4 shrink-0", overdue ? "text-destructive" : "text-amber-600")} />
+                        <div className="min-w-0">
+                          <p className={cn("text-sm font-medium truncate", overdue ? "text-destructive" : "text-amber-800")}>
+                            {overdue ? "Granskning försenad" : `Granskning om ${monthsLeft} månad${monthsLeft !== 1 ? "er" : ""}`}
+                            <span className="ml-1.5 font-normal opacity-80">— {t.title}</span>
+                          </p>
+                          <p className={cn("text-xs", overdue ? "text-destructive/70" : "text-amber-700/70")}>
+                            Mallen har kört sedan skapandet. Bekräfta att rutinen fortfarande behövs.
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant={overdue ? "destructive" : "outline"}
+                        className={cn("shrink-0 rounded-full h-7 text-xs", !overdue && "border-amber-400 text-amber-800 hover:bg-amber-100")}
+                        onClick={() => setReviewTarget(t)}
+                      >
+                        Granska
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
           {/* Template packages section — hidden by default, toggled via button */}
           {packages.length > 0 && isManager && (
             <div>
@@ -2275,6 +2423,12 @@ function MallarPage() {
                               </p>
                               <div className="mt-0.5 flex items-center gap-2 flex-wrap">
                                 {t.category && <Badge variant="secondary" className="text-xs">{t.category}</Badge>}
+                                {(t as ChecklistTemplate & { template_type?: string }).template_type === "base" && (
+                                  <Badge variant="outline" className="text-xs border-amber-400 text-amber-700 bg-amber-50">Grundmall</Badge>
+                                )}
+                                {(t as ChecklistTemplate & { is_critical?: boolean }).is_critical && (
+                                  <Badge variant="outline" className="text-xs border-red-300 text-red-600">Kritisk</Badge>
+                                )}
                                 {scopeBadge && (
                                   <Badge variant="outline" className={cn("text-xs", scopeBadge.cls)}>{scopeBadge.label}</Badge>
                                 )}
@@ -3240,6 +3394,64 @@ function MallarPage() {
                 })}
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Review Dialog */}
+      <Dialog open={!!reviewTarget} onOpenChange={(o) => { if (!o) { setReviewTarget(null); setReviewEndDate(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Granska mall</DialogTitle>
+            <DialogDescription>
+              <span className="font-medium text-foreground">{reviewTarget?.title}</span>
+              {reviewTarget && (() => {
+                const created = new Date((reviewTarget as ChecklistTemplate & { created_at?: string }).created_at ?? "");
+                const months = isNaN(created.getTime()) ? null : Math.round((Date.now() - created.getTime()) / (1000 * 60 * 60 * 24 * 30));
+                return months != null ? ` — aktiv sedan ca ${months} månader` : "";
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">Denna återkommande mall har varit aktiv i 24 månader. Välj vad som ska hända:</p>
+            <button
+              type="button"
+              disabled={reviewSaving}
+              onClick={() => handleReview("continue")}
+              className="w-full rounded-lg border border-border px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+            >
+              <span className="block text-sm font-medium">Fortsatt till nasta granskning</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">Mallen fortsatter som vanligt. Nasta granskning om 24 manader.</span>
+            </button>
+            <div className="rounded-lg border border-border px-4 py-3 space-y-2">
+              <span className="block text-sm font-medium">Satt slutdatum</span>
+              <span className="block text-xs text-muted-foreground">Mallen slutar skapa uppgifter efter detta datum.</span>
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={reviewEndDate}
+                  onChange={(e) => setReviewEndDate(e.target.value)}
+                  className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <button
+                  type="button"
+                  disabled={reviewSaving || !reviewEndDate}
+                  onClick={() => handleReview("set_end_date")}
+                  className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50 transition-opacity"
+                >
+                  Spara
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={reviewSaving}
+              onClick={() => handleReview("archive")}
+              className="w-full rounded-lg border border-destructive/30 px-4 py-3 text-left hover:bg-destructive/5 transition-colors"
+            >
+              <span className="block text-sm font-medium text-destructive">Arkivera mall</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">Mallen arkiveras och skapar inga fler uppgifter.</span>
+            </button>
           </div>
         </DialogContent>
       </Dialog>
