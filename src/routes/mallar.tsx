@@ -130,7 +130,9 @@ type FormState = {
   priority: string;
   status: "active" | "review" | "deprecated" | "archived";
   template_type: "regular" | "base";
+  template_mode: "batch_only" | "manual_only" | "both";
   is_critical: boolean;
+  review_interval_months: number;
   recurrence_rule: string;
   recurrence_days: number[];
   recurrence_interval: number;
@@ -148,6 +150,7 @@ type FormState = {
   foreningId: string;
   changeSummary: string;
   event_trigger_description: string;
+  event_trigger_user_id: string;
   is_delivery_task: boolean;
   delivery_flow_name: string;
   depends_on_template_title: string;
@@ -159,7 +162,9 @@ const emptyForm = (): FormState => ({
   title: "", description: "", category: "", priority: "Medel",
   status: "active",
   template_type: "regular",
+  template_mode: "both",
   is_critical: false,
+  review_interval_months: 24,
   recurrence_rule: "", recurrence_days: [], recurrence_interval: 1,
   recurrence_months: [], recurrence_month_day: 1,
   recurrence_start: "", recurrence_end: "",
@@ -167,6 +172,7 @@ const emptyForm = (): FormState => ({
   storeIds: [], isGlobal: false, isLocked: false, foreningId: "",
   changeSummary: "",
   event_trigger_description: "",
+  event_trigger_user_id: "",
   is_delivery_task: false,
   delivery_flow_name: "",
   depends_on_template_title: "",
@@ -504,11 +510,17 @@ function MallarPage() {
   }
 
   // Review actions
-  async function handleReview(action: "continue" | "set_end_date" | "archive") {
+  async function handleReview(action: "continue" | "set_end_date" | "archive" | "edit") {
     if (!reviewTarget) return;
+    if (action === "edit") {
+      openEdit(reviewTarget as TemplateWithMeta);
+      setReviewTarget(null);
+      return;
+    }
     setReviewSaving(true);
     const now = new Date().toISOString();
-    const nextReview = (() => { const d = new Date(); d.setMonth(d.getMonth() + 24); return d.toISOString(); })();
+    const intervalMonths = (reviewTarget as ChecklistTemplate & { review_interval_months?: number }).review_interval_months ?? 24;
+    const nextReview = (() => { const d = new Date(); d.setMonth(d.getMonth() + intervalMonths); return d.toISOString(); })();
     if (action === "continue") {
       await supabase.from("checklist_templates").update({
         last_reviewed_at: now,
@@ -576,14 +588,17 @@ function MallarPage() {
       hierarchy_scope: createScope,
       forening_id: createScope === "forening" ? form.foreningId : null,
       template_type: form.template_type,
+      template_mode: form.template_mode,
       is_critical: form.is_critical,
       event_trigger_description: form.event_trigger_description?.trim() || null,
+      event_trigger_user_id: form.event_trigger_user_id || null,
       is_delivery_task: form.is_delivery_task,
       delivery_flow_name: form.delivery_flow_name?.trim() || null,
       depends_on_template_title: form.depends_on_template_title?.trim() || null,
-      // Set 24-month review for recurring base templates without a near end date
+      review_interval_months: form.review_interval_months > 0 ? form.review_interval_months : null,
+      // Set next_review_at for recurring base templates without a near end date
       next_review_at: (form.template_type === "base" && form.recurrence_rule && !form.recurrence_end)
-        ? (() => { const d = new Date(); d.setMonth(d.getMonth() + 24); return d.toISOString(); })()
+        ? (() => { const d = new Date(); d.setMonth(d.getMonth() + (form.review_interval_months || 24)); return d.toISOString(); })()
         : null,
     }).select("id").maybeSingle();
 
@@ -682,6 +697,8 @@ function MallarPage() {
 
       // Leveransmallar skapas via leveransflödet på uppgiftssidan — inte här
       if ((tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task) continue;
+      // Manuell-only-mallar skapas inte i batch
+      if ((tmpl as ChecklistTemplate & { template_mode?: string }).template_mode === "manual_only") continue;
 
       const validItems = (tmpl.items ?? []).filter(it => it.label.trim());
       const validQuestions = (tmpl.questions ?? []).filter(q => q.label.trim());
@@ -702,7 +719,8 @@ function MallarPage() {
       const tmplAny = tmpl as ChecklistTemplate & {
         recurrence_months?: number[]; recurrence_month_day?: number;
         recurrence_start?: string; recurrence_end?: string;
-        event_trigger_description?: string;
+        event_trigger_description?: string; is_critical?: boolean;
+        template_mode?: string;
       };
 
       const insertTask = async (dueTime: string) => {
@@ -735,6 +753,7 @@ function MallarPage() {
           recurrence_end: tmplAny.recurrence_end ?? null,
           event_trigger_description: tmplAny.event_trigger_description ?? null,
           depends_on_task_id: dependsOnTaskId,
+          is_critical: tmplAny.is_critical ?? false,
           created_by: user?.id ?? null,
           assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
           status: "todo",
@@ -848,8 +867,11 @@ function MallarPage() {
       foreningId: t.forening_id ?? "",
       changeSummary: "",
       template_type: ((t as ChecklistTemplate & { template_type?: string }).template_type ?? "regular") as "regular" | "base",
+      template_mode: ((t as ChecklistTemplate & { template_mode?: string }).template_mode ?? "both") as "batch_only" | "manual_only" | "both",
       is_critical: (t as ChecklistTemplate & { is_critical?: boolean }).is_critical ?? false,
+      review_interval_months: (t as ChecklistTemplate & { review_interval_months?: number }).review_interval_months ?? 24,
       event_trigger_description: (t as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description ?? "",
+      event_trigger_user_id: (t as ChecklistTemplate & { event_trigger_user_id?: string }).event_trigger_user_id ?? "",
       is_delivery_task: (t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task ?? false,
       delivery_flow_name: (t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "",
       depends_on_template_title: (t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title ?? "",
@@ -886,15 +908,18 @@ function MallarPage() {
       is_global: editForm.isGlobal,
       locked_by_admin: editForm.isLocked,
       template_type: editForm.template_type,
+      template_mode: editForm.template_mode,
       is_critical: editForm.is_critical,
       event_trigger_description: editForm.event_trigger_description?.trim() || null,
+      event_trigger_user_id: editForm.event_trigger_user_id || null,
       is_delivery_task: editForm.is_delivery_task,
       delivery_flow_name: editForm.delivery_flow_name?.trim() || null,
       depends_on_template_title: editForm.depends_on_template_title?.trim() || null,
+      review_interval_months: editForm.review_interval_months > 0 ? editForm.review_interval_months : null,
       // Ensure next_review_at is set if this becomes a recurring base template
       ...((editForm.template_type === "base" && editForm.recurrence_rule && !editForm.recurrence_end &&
           !(editTarget as ChecklistTemplate & { next_review_at?: string }).next_review_at)
-        ? { next_review_at: (() => { const d = new Date(); d.setMonth(d.getMonth() + 24); return d.toISOString(); })() }
+        ? { next_review_at: (() => { const d = new Date(); d.setMonth(d.getMonth() + (editForm.review_interval_months || 24)); return d.toISOString(); })() }
         : {}),
     }).eq("id", editTarget.id);
 
@@ -1134,6 +1159,7 @@ function MallarPage() {
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
       "SAP-artikel", "Mallpaket", "Händelsevillkor", "Leveransuppgift (ja/nej)", "Leveransflöde", "Kedja (beror på mallnamn)",
+      "Malltyp", "Skapningsläge", "Händelse-bekräftare", "Granskningsintervall (månader)",
     ];
     const rows = [
       headers,
@@ -1184,6 +1210,12 @@ function MallarPage() {
           (t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task ? "ja" : "",
           (t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "",
           (t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title ?? "",
+          ((t as ChecklistTemplate & { template_type?: string }).template_type === "base") ? "grundmall" : "regular",
+          (t as ChecklistTemplate & { template_mode?: string }).template_mode ?? "both",
+          (t as ChecklistTemplate & { event_trigger_user_id?: string }).event_trigger_user_id ?? "",
+          (t as ChecklistTemplate & { review_interval_months?: number }).review_interval_months != null
+            ? String((t as ChecklistTemplate & { review_interval_months?: number }).review_interval_months)
+            : "",
         ];
       }),
     ];
@@ -1274,13 +1306,15 @@ function MallarPage() {
       // 6:Återkommande 7:Veckodagar 8:Månader 9:Månadsdag 10:Intervall
       // 11:Förfaller om 12:Förfallotid 13:Startdatum 14:Slutdatum
       // 15:Ursprungsmall 16:Arvläge 17:Steg 18:Frågor 19:Tidsluckor 20:SAP-artikel
-      // 21:Mallpaket 22:Händelsevillkor 23:Leveransuppgift 24:Leveransflöde 25:Kedja 26:Malltyp
+      // 21:Mallpaket 22:Händelsevillkor 23:Leveransuppgift 24:Leveransflöde 25:Kedja
+      // 26:Malltyp 27:Skapningsläge 28:Händelse-bekräftare 29:Granskningsintervall
       const [
         title, category, description, priority, statusRaw, ,
         recurrence, weekdaysRaw, monthsRaw, monthDayRaw, intervalRaw,
         dueDays, dueTime, startDate, endDate,
         parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw, timeSlotsRaw,
-        sapArticleIdRaw, packageNameRaw, eventTriggerRaw, deliveryTaskRaw, deliveryFlowRaw, chainTitleRaw, templateTypeRaw,
+        sapArticleIdRaw, packageNameRaw, eventTriggerRaw, deliveryTaskRaw, deliveryFlowRaw, chainTitleRaw,
+        templateTypeRaw, templateModeRaw, , reviewIntervalRaw,
       ] = cols;
       if (!title?.trim()) continue;
 
@@ -1307,6 +1341,12 @@ function MallarPage() {
         isDeliveryTask || csvTemplateType === "grundmall" || csvTemplateType === "base"
           ? "base"
           : "regular";
+      const csvTemplateMode = templateModeRaw?.trim().toLowerCase();
+      const inferredTemplateMode: "batch_only" | "manual_only" | "both" =
+        csvTemplateMode === "batch_only" ? "batch_only"
+        : csvTemplateMode === "manual_only" ? "manual_only"
+        : "both";
+      const reviewIntervalMonths = reviewIntervalRaw?.trim() ? (parseInt(reviewIntervalRaw.trim()) || null) : null;
 
       const { data: tmpl } = await supabase.from("checklist_templates").insert({
         title: title.trim(),
@@ -1316,6 +1356,7 @@ function MallarPage() {
         status: templateStatus,
         version: 1,
         template_type: inferredTemplateType,
+        template_mode: inferredTemplateMode,
         recurrence_rule: recurrenceRule,
         recurrence_days: recurrenceDays && recurrenceDays.length > 0 ? recurrenceDays : null,
         recurrence_months: recurrenceMonths && recurrenceMonths.length > 0 ? recurrenceMonths : null,
@@ -1339,6 +1380,7 @@ function MallarPage() {
         is_delivery_task: isDeliveryTask,
         delivery_flow_name: deliveryFlowRaw?.trim() || null,
         depends_on_template_title: chainTitleRaw?.trim() || null,
+        review_interval_months: reviewIntervalMonths,
       }).select("id").maybeSingle();
 
       if (!tmpl?.id) continue;
@@ -1812,6 +1854,32 @@ function MallarPage() {
               </p>
             </div>
 
+            {/* Skapningsläge */}
+            <div className="px-4 py-3 space-y-2">
+              <span className="text-xs font-medium text-muted-foreground">Skapningsläge</span>
+              <div className="flex flex-col gap-1">
+                {([
+                  { value: "both", label: "Batch + Manuell" },
+                  { value: "batch_only", label: "Endast batch" },
+                  { value: "manual_only", label: "Endast manuell" },
+                ] as const).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={cn(
+                      "w-full rounded-lg border px-2 py-1.5 text-[11px] font-medium text-left transition-colors",
+                      f.template_mode === value
+                        ? "bg-primary/10 text-primary border-primary/40"
+                        : "border-border/60 text-muted-foreground hover:border-primary/30"
+                    )}
+                    onClick={() => setF((p) => ({ ...p, template_mode: value }))}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Kategori */}
             <div className="flex items-start gap-3 px-4 py-3">
               <div className="mt-0.5 h-4 w-4 shrink-0 flex items-center justify-center">
@@ -2103,6 +2171,25 @@ function MallarPage() {
                 onChange={(e) => setF((p) => ({ ...p, event_trigger_description: e.target.value }))}
                 className="h-7 border border-border/60 text-xs"
               />
+              {f.event_trigger_description && (
+                <div className="pl-0 space-y-1 pt-1">
+                  <span className="text-[11px] text-muted-foreground/70">Bekräftas av</span>
+                  <Select
+                    value={f.event_trigger_user_id || "__any"}
+                    onValueChange={(v) => setF((p) => ({ ...p, event_trigger_user_id: v === "__any" ? "" : v }))}
+                  >
+                    <SelectTrigger className="h-7 text-xs border-border/60">
+                      <SelectValue placeholder="Vem som helst" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__any">Vem som helst</SelectItem>
+                      {allUsers.filter(u => !activeStore || u.store_id === activeStore.id).map((u) => (
+                        <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             {/* Leveransuppgift */}
@@ -2144,6 +2231,25 @@ function MallarPage() {
                 className="h-7 border border-border/60 text-xs"
               />
             </div>
+
+            {/* Granskningsintervall */}
+            {f.template_type === "base" && f.recurrence_rule && (
+              <div className="px-4 py-3 space-y-1">
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="text-xs text-muted-foreground">Granskningsintervall (månader)</span>
+                </div>
+                <Input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={f.review_interval_months}
+                  onChange={(e) => setF((p) => ({ ...p, review_interval_months: Math.max(1, parseInt(e.target.value) || 24) }))}
+                  className="h-7 border border-border/60 text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground/60">Chef aviseras när granskningstiden löpt ut.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -3531,18 +3637,31 @@ function MallarPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <p className="text-sm text-muted-foreground">Denna återkommande mall har varit aktiv i 24 månader. Välj vad som ska hända:</p>
+            <p className="text-sm text-muted-foreground">
+              Denna återkommande mall har nått granskningsdatumet. Välj vad som ska hända:
+            </p>
             <button
               type="button"
               disabled={reviewSaving}
               onClick={() => handleReview("continue")}
               className="w-full rounded-lg border border-border px-4 py-3 text-left hover:bg-muted/50 transition-colors"
             >
-              <span className="block text-sm font-medium">Fortsatt till nasta granskning</span>
-              <span className="block text-xs text-muted-foreground mt-0.5">Mallen fortsatter som vanligt. Nasta granskning om 24 manader.</span>
+              <span className="block text-sm font-medium">Fortsätt till nästa granskning</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                Mallen fortsätter som vanligt. Nästa granskning om {(reviewTarget as ChecklistTemplate & { review_interval_months?: number })?.review_interval_months ?? 24} månader.
+              </span>
+            </button>
+            <button
+              type="button"
+              disabled={reviewSaving}
+              onClick={() => handleReview("edit")}
+              className="w-full rounded-lg border border-primary/30 px-4 py-3 text-left hover:bg-primary/5 transition-colors"
+            >
+              <span className="block text-sm font-medium">Redigera mall</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">Öppna mallen för redigering innan beslut fattas.</span>
             </button>
             <div className="rounded-lg border border-border px-4 py-3 space-y-2">
-              <span className="block text-sm font-medium">Satt slutdatum</span>
+              <span className="block text-sm font-medium">Sätt slutdatum</span>
               <span className="block text-xs text-muted-foreground">Mallen slutar skapa uppgifter efter detta datum.</span>
               <div className="flex gap-2">
                 <input
@@ -3561,15 +3680,22 @@ function MallarPage() {
                 </button>
               </div>
             </div>
-            <button
-              type="button"
-              disabled={reviewSaving}
-              onClick={() => handleReview("archive")}
-              className="w-full rounded-lg border border-destructive/30 px-4 py-3 text-left hover:bg-destructive/5 transition-colors"
-            >
-              <span className="block text-sm font-medium text-destructive">Arkivera mall</span>
-              <span className="block text-xs text-muted-foreground mt-0.5">Mallen arkiveras och skapar inga fler uppgifter.</span>
-            </button>
+            {!(reviewTarget as ChecklistTemplate & { is_critical?: boolean })?.is_critical && (
+              <button
+                type="button"
+                disabled={reviewSaving}
+                onClick={() => handleReview("archive")}
+                className="w-full rounded-lg border border-destructive/30 px-4 py-3 text-left hover:bg-destructive/5 transition-colors"
+              >
+                <span className="block text-sm font-medium text-destructive">Arkivera mall</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">Mallen arkiveras och skapar inga fler uppgifter.</span>
+              </button>
+            )}
+            {(reviewTarget as ChecklistTemplate & { is_critical?: boolean })?.is_critical && (
+              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                Kritisk rutin — kan inte arkiveras automatiskt.
+              </p>
+            )}
           </div>
         </DialogContent>
       </Dialog>

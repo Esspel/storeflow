@@ -18,6 +18,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   supabase,
   type Task, type TaskStep, type TaskQuestion, type TaskImage,
@@ -110,6 +111,7 @@ type TaskFull = Task & {
   event_triggered_at?: string | null;
   depends_on_task_id?: string | null;
   delivery_entry_id?: string | null;
+  is_critical?: boolean | null;
 };
 
 type FormQuestion = { label: string; question_type: "text" | "yes_no"; is_required: boolean; link_url: string };
@@ -160,6 +162,8 @@ const emptyForm = (storeId: string) => ({
   event_trigger_user_id: "",
   // Task chain
   depends_on_task_id: "",
+  // Critical flag
+  is_critical: false,
 });
 
 
@@ -958,6 +962,7 @@ function TasksPage() {
       questions: questions.length > 0 ? questions : p.questions,
       event_trigger_description: tmplAny.event_trigger_description ?? p.event_trigger_description,
       depends_on_task_id: chainPredecessorId || p.depends_on_task_id,
+      is_critical: (tmpl as ChecklistTemplate & { is_critical?: boolean }).is_critical ?? p.is_critical,
     }));
   };
 
@@ -1324,6 +1329,7 @@ function TasksPage() {
       event_trigger_description: task.event_trigger_description ?? "",
       event_trigger_user_id: task.event_trigger_user_id ?? "",
       depends_on_task_id: task.depends_on_task_id ?? "",
+      is_critical: task.is_critical ?? false,
     });
   };
 
@@ -1479,6 +1485,7 @@ function TasksPage() {
       event_trigger_description: editForm.event_trigger_description?.trim() || null,
       event_trigger_user_id: editForm.event_trigger_user_id || null,
       depends_on_task_id: editForm.depends_on_task_id || null,
+      is_critical: editForm.is_critical ?? false,
     };
 
 
@@ -1606,6 +1613,7 @@ function TasksPage() {
         event_trigger_description: newTask.event_trigger_description?.trim() || null,
         event_trigger_user_id: newTask.event_trigger_user_id || null,
         depends_on_task_id: newTask.depends_on_task_id || null,
+        is_critical: newTask.is_critical ?? false,
       }).select().maybeSingle();
 
       if (error || !task) return null;
@@ -1696,7 +1704,8 @@ function TasksPage() {
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
-      "SAP-artikel", "Mallpaket", "Händelsevillkor", "Beror på (uppgifts-ID)",
+      "SAP-artikel", "Mallpaket", "Händelsevillkor", "Kedja (beror på mallnamn)",
+      "Malltyp", "Skapningsläge", "Händelse-bekräftare", "Granskningsintervall (månader)",
     ];
     // Exclude child recurrence instances (parent_task_id set) — they are just spawned
     // copies of the parent. Export only parent/standalone tasks so importing into
@@ -1753,7 +1762,16 @@ function TasksPage() {
           tAny.sap_article_id ?? "",
           "", // Mallpaket — tasks don't belong to template packages
           (t as TaskFull).event_trigger_description ?? "",
-          (t as TaskFull).depends_on_task_id ?? "",
+          // Use predecessor task title (not ID) so exported CSV can be imported as templates
+          (() => {
+            const predId = (t as TaskFull).depends_on_task_id;
+            if (!predId) return "";
+            return tasks.find(p => p.id === predId)?.title ?? predId;
+          })(),
+          "", // Malltyp — exporteras ej som template-typ
+          "", // Skapningsläge
+          "", // Händelse-bekräftare
+          "", // Granskningsintervall
         ];
       }),
     ];
@@ -2045,6 +2063,12 @@ function TasksPage() {
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
                       <Zap className="h-2.5 w-2.5" />
                       Väntar på händelse
+                    </span>
+                  )}
+                  {/* Critical task badge */}
+                  {(t as TaskFull).is_critical && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-400">
+                      Kritisk
                     </span>
                   )}
                   {/* Task chain: blocked */}
@@ -3090,14 +3114,21 @@ function TasksPage() {
             <div className={cn("flex-1 sm:overflow-y-auto p-5 space-y-5 sm:p-6 sm:space-y-6 min-w-0", createStep === 2 && "hidden sm:block")}>
 
               {/* Template picker — only regular templates, not base templates */}
-              {templates.filter(t => (t as ChecklistTemplate & { template_type?: string }).template_type !== "base").length > 0 && (
+              {/* Template picker — only regular/both templates, not base or batch_only */}
+              {templates.filter(t => {
+                const tAny = t as ChecklistTemplate & { template_type?: string; template_mode?: string };
+                return tAny.template_type !== "base" && tAny.template_mode !== "batch_only";
+              }).length > 0 && (
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Använd mall</Label>
                   <Select onValueChange={applyTemplate}>
                     <SelectTrigger className="h-9"><SelectValue placeholder="Välj mall..." /></SelectTrigger>
                     <SelectContent>
                       {templates
-                        .filter(t => (t as ChecklistTemplate & { template_type?: string }).template_type !== "base")
+                        .filter(t => {
+                          const tAny = t as ChecklistTemplate & { template_type?: string; template_mode?: string };
+                          return tAny.template_type !== "base" && tAny.template_mode !== "batch_only";
+                        })
                         .map((t) => (
                           <SelectItem key={t.id} value={t.id}>{t.title} {t.category ? `(${t.category})` : ""}</SelectItem>
                         ))}
@@ -3697,6 +3728,22 @@ function TasksPage() {
                   )}
                 </div>
 
+                {/* Kritisk uppgift */}
+                {isManager && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2">
+                      <div>
+                        <p className="text-xs font-medium">Kritisk uppgift</p>
+                        <p className="text-[11px] text-muted-foreground">Stoppas aldrig automatiskt, kräver chefsbeslut.</p>
+                      </div>
+                      <Switch
+                        checked={newTask.is_critical ?? false}
+                        onCheckedChange={(v) => setNewTask(p => ({ ...p, is_critical: v }))}
+                      />
+                    </div>
+                  </div>
+                )}
+
               </div>
             </div>
           </div>
@@ -4088,6 +4135,20 @@ function TasksPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Kritisk uppgift */}
+                {isManager && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2 mt-2">
+                    <div>
+                      <p className="text-xs font-medium">Kritisk uppgift</p>
+                      <p className="text-[11px] text-muted-foreground">Stoppas aldrig automatiskt.</p>
+                    </div>
+                    <Switch
+                      checked={editForm.is_critical ?? false}
+                      onCheckedChange={(v) => setEditForm(p => p ? { ...p, is_critical: v } : p)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </DialogContent>
