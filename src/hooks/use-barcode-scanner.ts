@@ -45,6 +45,9 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
         target.tagName === "TEXTAREA" ||
         target.isContentEditable;
 
+      // Never intercept clipboard shortcuts or modifier combos in editable fields
+      if (isEditable && (e.ctrlKey || e.metaKey)) return;
+
       const now = Date.now();
       const gap = now - lastKeyTime.current;
       lastKeyTime.current = now;
@@ -110,6 +113,12 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
     // entire barcode as a single string (like a paste). Handle this separately
     // so scanners that skip individual keydown events still work.
     const onTextInput = (e: Event) => {
+      const target = e.target as HTMLElement;
+      const isEditable =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable;
+      if (isEditable) return;
       const data = (e as InputEvent).data ?? "";
       if (data.length >= SCAN_MIN_CHARS) {
         e.preventDefault();
