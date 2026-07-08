@@ -298,7 +298,10 @@ function MallarPage() {
   type DeliveryMappingItem = { templateId: string; templateTitle: string; supplierIds: string[] };
   const [deliveryMappingOpen, setDeliveryMappingOpen] = useState(false);
   const [deliveryMappingItems, setDeliveryMappingItems] = useState<DeliveryMappingItem[]>([]);
+  // Template config picker: unique supplier+flow combos across all plans
   const [deliverySuppliers, setDeliverySuppliers] = useState<{ id: string; supplier: string; flow_name: string; delivery_time: string }[]>([]);
+  // Batch create picker: full entries from current plan with day + time
+  const [deliveryWeekEntries, setDeliveryWeekEntries] = useState<{ id: string; supplier: string; flow_name: string; delivery_time: string; delivery_day: string; delivery_date: string | null }[]>([]);
   const [deliveryMappingSaving, setDeliveryMappingSaving] = useState(false);
   const [deliveryFlowNames, setDeliveryFlowNames] = useState<string[]>([]);
 
@@ -390,20 +393,20 @@ function MallarPage() {
     setPackages((packagesRes.data ?? []) as TemplatePackage[]);
 
     // Load delivery entries for the flow + supplier pickers
-    // Load ALL unique supplier+flow combinations across every plan for this store
-    // so that even if the latest imported plan was partial, all companies are visible
+    // Delivery plans are store-specific: load for the active store only
     const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
     if (storeId) {
       const { data: planRows } = await supabase
-        .from("delivery_plans").select("id").eq("store_id", storeId);
+        .from("delivery_plans").select("id").eq("store_id", storeId).order("imported_at", { ascending: false });
       const planIds = (planRows ?? []).map((p: { id: string }) => p.id);
       if (planIds.length > 0) {
-        const { data: entryRows } = await supabase
+        // 1. deliverySuppliers = unique supplier+flow combos across ALL plans (for template config picker)
+        //    Each company appears once per flow even if it delivers on multiple days
+        const { data: allEntryRows } = await supabase
           .from("delivery_entries").select("id, supplier, flow_name, delivery_time")
           .in("plan_id", planIds).order("flow_name").order("supplier");
-        // Deduplicate by supplier+flow so each company only appears once per flow
         const seen = new Set<string>();
-        const unique = (entryRows ?? []).filter((e: { supplier: string; flow_name: string }) => {
+        const unique = (allEntryRows ?? []).filter((e: { supplier: string; flow_name: string }) => {
           const key = `${e.flow_name}||${e.supplier}`;
           if (seen.has(key)) return false;
           seen.add(key);
@@ -412,6 +415,16 @@ function MallarPage() {
         setDeliverySuppliers(unique);
         const names = [...new Set(unique.map(r => r.flow_name).filter(Boolean))];
         setDeliveryFlowNames(names);
+
+        // 2. deliveryWeekEntries = all entries from the LATEST plan with day+time (for batch create picker)
+        //    Shows every specific delivery occurrence — day and time are important info
+        const latestPlanId = planIds[0];
+        const { data: weekRows } = await supabase
+          .from("delivery_entries")
+          .select("id, supplier, flow_name, delivery_time, delivery_day, delivery_date")
+          .eq("plan_id", latestPlanId)
+          .order("delivery_day").order("delivery_time").order("supplier");
+        setDeliveryWeekEntries((weekRows ?? []) as { id: string; supplier: string; flow_name: string; delivery_time: string; delivery_day: string; delivery_date: string | null }[]);
       }
     }
 
@@ -786,16 +799,16 @@ function MallarPage() {
 
       // Pre-select delivery entries matching the template's stored supplier/flow config
       let preselectedDeliveryIds: string[] = [];
-      if ((tmplAny as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task && deliverySuppliers.length > 0) {
+      if ((tmplAny as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task && deliveryWeekEntries.length > 0) {
         const tmplFlows = (tmplAny.delivery_flow_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
         const tmplSuppliers = (tmplAny.delivery_supplier_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
-        preselectedDeliveryIds = deliverySuppliers
-          .filter(s => {
-            const flowMatch = tmplFlows.length === 0 || tmplFlows.includes(s.flow_name?.toLowerCase() ?? "");
-            const suppMatch = tmplSuppliers.length === 0 || tmplSuppliers.includes(s.supplier?.toLowerCase() ?? "");
+        preselectedDeliveryIds = deliveryWeekEntries
+          .filter(e => {
+            const flowMatch = tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
+            const suppMatch = tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
             return flowMatch && suppMatch;
           })
-          .map(s => s.id);
+          .map(e => e.id);
       }
 
       return {
@@ -864,10 +877,13 @@ function MallarPage() {
       if ((tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task) {
         if (cfg.selectedDeliveryIds.length === 0) continue;
         for (const deliveryId of cfg.selectedDeliveryIds) {
-          const delivery = deliverySuppliers.find(s => s.id === deliveryId);
+          // Look up in deliveryWeekEntries first (has day+date), fall back to deliverySuppliers
+          const delivery = deliveryWeekEntries.find(e => e.id === deliveryId) ?? deliverySuppliers.find(s => s.id === deliveryId);
           const rawTime = delivery?.delivery_time ?? "";
           // Due time = delivery time + 30 min (buffer for delays)
           const dueTime = rawTime ? addMinutesToTime(rawTime, 30) : "";
+          // Use the delivery's specific date if available, otherwise today
+          const deliveryDate = (delivery as { delivery_date?: string | null } | undefined)?.delivery_date;
           const { data: task } = await supabase.from("tasks").insert({
             title: tmpl.title,
             description: tmpl.description ?? "",
@@ -875,7 +891,8 @@ function MallarPage() {
             priority: tmpl.priority ?? "Medel",
             store_id: storeId,
             due_date: (() => {
-              const d = new Date(); d.setHours(0, 0, 0, 0);
+              const base = deliveryDate ? deliveryDate + "T00:00:00" : new Date().toISOString().slice(0, 10) + "T00:00:00";
+              const d = new Date(base);
               if (dueTime) { const [h, m] = dueTime.split(":").map(Number); d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0); }
               return d.toISOString();
             })(),
@@ -3797,23 +3814,14 @@ function MallarPage() {
                     </div>
                   </div>
 
-                  {/* Delivery template: pick deliveries from plan */}
+                  {/* Delivery template: pick specific deliveries from the current week's plan */}
                   {isDeliveryTmpl && (() => {
                     const tmplFlows = ((tmpl as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "")
                       .split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
                     const tmplSuppliers = ((tmpl as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name ?? "")
                       .split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
 
-                    // Always show ALL delivery entries — never hide any
-                    // Group by flow for readable display
-                    const byFlow = deliverySuppliers.reduce<Record<string, typeof deliverySuppliers>>((acc, s) => {
-                      const k = s.flow_name || "Okänt flöde";
-                      if (!acc[k]) acc[k] = [];
-                      acc[k].push(s);
-                      return acc;
-                    }, {});
-
-                    // An entry is "suggested" (pre-checked) if it matches the template's configured suppliers/flows
+                    // An entry is "suggested" if it matches the template's configured suppliers/flows
                     const isSuggested = (s: { supplier: string; flow_name: string }) => {
                       const flowOk = tmplFlows.length === 0 || tmplFlows.includes(s.flow_name?.toLowerCase() ?? "");
                       const suppOk = tmplSuppliers.length === 0 || tmplSuppliers.includes(s.supplier?.toLowerCase() ?? "");
@@ -3821,79 +3829,97 @@ function MallarPage() {
                     };
                     const hasSuggestions = tmplFlows.length > 0 || tmplSuppliers.length > 0;
 
+                    // Group by delivery_day — day and time are key info for deliveries
+                    const dayOrder = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
+                    const byDay = deliveryWeekEntries.reduce<Record<string, typeof deliveryWeekEntries>>((acc, e) => {
+                      const k = e.delivery_day || "Okänd dag";
+                      if (!acc[k]) acc[k] = [];
+                      acc[k].push(e);
+                      return acc;
+                    }, {});
+                    const sortedDays = Object.keys(byDay).sort((a, b) => {
+                      const ai = dayOrder.indexOf(a);
+                      const bi = dayOrder.indexOf(b);
+                      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+                    });
+
                     return (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                            <label className="text-xs font-medium text-muted-foreground">Välj leveranser</label>
+                            <label className="text-xs font-medium text-muted-foreground">Välj leveranser (veckans plan)</label>
                             {hasSuggestions && (
                               <span className="text-[10px] text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">Förvalda markerade</span>
                             )}
                           </div>
-                          {deliverySuppliers.length > 1 && (
+                          {deliveryWeekEntries.length > 1 && (
                             <button
                               type="button"
                               className="text-[11px] text-primary hover:underline"
                               onClick={() => {
-                                const allIds = deliverySuppliers.map(s => s.id);
+                                const allIds = deliveryWeekEntries.map(s => s.id);
                                 const allSelected = allIds.every(id => cfg.selectedDeliveryIds.includes(id));
                                 const ids = allSelected ? [] : allIds;
                                 setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, selectedDeliveryIds: ids } : c));
                               }}
                             >
-                              {deliverySuppliers.every(s => cfg.selectedDeliveryIds.includes(s.id)) ? "Avmarkera alla" : "Välj alla"}
+                              {deliveryWeekEntries.every(s => cfg.selectedDeliveryIds.includes(s.id)) ? "Avmarkera alla" : "Välj alla"}
                             </button>
                           )}
                         </div>
-                        {deliverySuppliers.length === 0 ? (
+                        {deliveryWeekEntries.length === 0 ? (
                           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                             Ingen aktiv leveransplan hittades. Importera en leveransplan under Inställningar.
                           </p>
                         ) : (
-                          <div className="space-y-1.5 max-h-52 overflow-y-auto rounded-lg border border-border/50 p-2">
-                            {Object.entries(byFlow).map(([flowName, entries]) => {
-                              const flowIds = entries.map(s => s.id);
-                              const allFlowSelected = flowIds.every(id => cfg.selectedDeliveryIds.includes(id));
-                              const someFlowSelected = flowIds.some(id => cfg.selectedDeliveryIds.includes(id));
+                          <div className="space-y-1.5 max-h-56 overflow-y-auto rounded-lg border border-border/50 p-2">
+                            {sortedDays.map(dayName => {
+                              const entries = byDay[dayName];
+                              const dayIds = entries.map(e => e.id);
+                              const allDaySelected = dayIds.every(id => cfg.selectedDeliveryIds.includes(id));
+                              const someDaySelected = dayIds.some(id => cfg.selectedDeliveryIds.includes(id));
                               return (
-                                <div key={flowName} className="space-y-0.5">
+                                <div key={dayName} className="space-y-0.5">
                                   <label className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 bg-muted/30 hover:bg-muted/50">
                                     <Checkbox
-                                      checked={allFlowSelected}
-                                      data-state={someFlowSelected && !allFlowSelected ? "indeterminate" : undefined}
+                                      checked={allDaySelected}
+                                      data-state={someDaySelected && !allDaySelected ? "indeterminate" : undefined}
                                       onCheckedChange={() => {
-                                        const ids = allFlowSelected
-                                          ? cfg.selectedDeliveryIds.filter(id => !flowIds.includes(id))
-                                          : [...new Set([...cfg.selectedDeliveryIds, ...flowIds])];
+                                        const ids = allDaySelected
+                                          ? cfg.selectedDeliveryIds.filter(id => !dayIds.includes(id))
+                                          : [...new Set([...cfg.selectedDeliveryIds, ...dayIds])];
                                         setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, selectedDeliveryIds: ids } : c));
                                       }}
                                       className="h-3.5 w-3.5"
                                     />
-                                    <span className="text-xs font-medium flex-1">{flowName}</span>
-                                    <span className="text-[10px] text-muted-foreground">{entries.length} leverantör{entries.length !== 1 ? "er" : ""}</span>
+                                    <span className="text-xs font-semibold flex-1">{dayName}</span>
+                                    <span className="text-[10px] text-muted-foreground">{entries.length} leverans{entries.length !== 1 ? "er" : ""}</span>
                                   </label>
-                                  {entries.map(s => {
-                                    const suggested = isSuggested(s);
+                                  {entries.map(e => {
+                                    const suggested = isSuggested(e);
                                     return (
-                                      <label key={s.id} className={cn(
+                                      <label key={e.id} className={cn(
                                         "flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 pl-6 hover:bg-muted/50",
                                         suggested && hasSuggestions && "bg-blue-50/50"
                                       )}>
                                         <Checkbox
-                                          checked={cfg.selectedDeliveryIds.includes(s.id)}
+                                          checked={cfg.selectedDeliveryIds.includes(e.id)}
                                           onCheckedChange={(checked) => {
                                             const ids = checked
-                                              ? [...cfg.selectedDeliveryIds, s.id]
-                                              : cfg.selectedDeliveryIds.filter(id => id !== s.id);
+                                              ? [...cfg.selectedDeliveryIds, e.id]
+                                              : cfg.selectedDeliveryIds.filter(id => id !== e.id);
                                             setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, selectedDeliveryIds: ids } : c));
                                           }}
                                           className="h-3.5 w-3.5"
                                         />
-                                        <span className="text-xs flex-1">{s.supplier}</span>
-                                        <div className="flex items-center gap-1.5">
-                                          {s.delivery_time && (
-                                            <span className="text-[10px] text-muted-foreground">{s.delivery_time}</span>
+                                        <div className="flex-1 min-w-0">
+                                          <span className="text-xs">{e.supplier}</span>
+                                          <span className="text-[10px] text-muted-foreground ml-1.5">{e.flow_name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          {e.delivery_time && (
+                                            <span className="text-[11px] font-medium text-foreground/70 tabular-nums">{e.delivery_time}</span>
                                           )}
                                           {suggested && hasSuggestions && (
                                             <span className="text-[10px] text-blue-600">●</span>
