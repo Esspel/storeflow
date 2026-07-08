@@ -49,7 +49,14 @@ const QUARTER_MONTHS = [
 // Instruction header injected into every downloadable CSV template.
 // Lines starting with '#' are treated as comments and skipped by the importer.
 const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid import)
-# Kolumner: Titel;Kategori;Beskrivning;Prioritet;Status;Version;Återkommande;Veckodagar;Månader;Månadsdag;Intervall;Förfaller om (dagar);Förfallotid (HH:MM);Startdatum;Slutdatum;Ursprungsmall;Arvläge;Steg (detaljer);Frågor;Tidsluckor (HH:MM);SAP-artikel;Mallpaket
+# Kolumner (0-30):
+#   0:Titel  1:Kategori  2:Beskrivning  3:Prioritet  4:Status  5:Version
+#   6:Återkommande  7:Veckodagar  8:Månader  9:Månadsdag  10:Intervall
+#   11:Förfaller om (dagar)  12:Förfallotid (HH:MM)  13:Startdatum  14:Slutdatum
+#   15:Ursprungsmall  16:Arvläge  17:Steg (detaljer)  18:Frågor  19:Tidsluckor (HH:MM)
+#   20:SAP-artikel  21:Mallpaket  22:Händelsevillkor  23:Leveransuppgift (ja/nej)
+#   24:Leveransflöde  25:Kedja (beror på mallnamn)  26:Malltyp  27:Skapningsläge
+#   28:Händelse-bekräftare  29:Granskningsintervall (månader)  30:Kritisk (ja/nej)
 #
 # Prioritet: Låg | Medel | Hög | Kritisk
 # Status: active | review | deprecated | archived  (lämna tomt för active)
@@ -88,12 +95,11 @@ const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid im
 #   Förfallotid ignoreras om Tidsluckor är ifylld
 #   Exempel: "08:00 | 12:00 | 16:00"
 #
-# Mallpaket: namn på det mallpaket mallen ska ingå i — skapas automatiskt om det inte finns
+# Mallpaket (kol 21): namn på det mallpaket mallen ska ingå i — skapas automatiskt
 #   Exempel: "Öppningspaket"
 #
 # Händelsevillkor (kol 22): beskrivning av den händelse som måste bekräftas av ansvarig
 #   Uppgiften är helt dold för alla tills händelsen bekräftats för dagen
-#   Bekräftaren (event_trigger_user) sätts i uppgiftsformuläret — kan skilja sig från utföraren
 #   Exempel: "Andel inkommen" eller "Truck lossat"
 #
 # Leveransuppgift (kol 23): ja | (tomt) — om "ja" genereras uppgiften automatiskt från
@@ -105,6 +111,23 @@ const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid im
 # Kedja (kol 25): titel på föregångarmallen — uppgiften blockeras (visas som "Blockerad")
 #   tills föregångaren är markerad som klar; matchas mot aktiva uppgifter vid skapande
 #   Exempel: "Öppningskontroll"
+#
+# Malltyp (kol 26): grundmall | regular (lämna tomt för regular)
+#   Leveransmallar sätts automatiskt till grundmall
+#
+# Skapningsläge (kol 27): batch_only | manual_only | both (lämna tomt för both)
+#   batch_only  — visas bara i batchguiden, inte i manuellt skapande
+#   manual_only — visas bara i formuläret, aldrig i batchguiden
+#   both        — tillgänglig i båda flödena (standard)
+#
+# Händelse-bekräftare (kol 28): UUID för den användare som ska bekräfta händelsevillkoret
+#   Lämna tomt om bekräftaren väljs vid tillämpning
+#
+# Granskningsintervall (kol 29): antal månader mellan granskningar (lämna tomt för 24)
+#   Används enbart för grundmallar (template_type=base)
+#
+# Kritisk (kol 30): ja | (tomt) — kritiska mallar blockeras från automatisk arkivering
+#   och kräver chefsbeslut vid granskning
 #
 # Tips: Spara i UTF-8 och använd semikolon (;) som separator
 `;
@@ -1115,7 +1138,9 @@ function MallarPage() {
       "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
-      "SAP-artikel", "Mallpaket", "Händelsevillkor", "Leveransuppgift (ja/nej)", "Leveransflöde", "Kedja (beror på mallnamn)",
+      "SAP-artikel", "Mallpaket", "Händelsevillkor", "Leveransuppgift (ja/nej)", "Leveransflöde",
+      "Kedja (beror på mallnamn)", "Malltyp", "Skapningsläge", "Händelse-bekräftare",
+      "Granskningsintervall (månader)", "Kritisk (ja/nej)",
     ];
     const today = new Date().toISOString().slice(0, 10);
     const exampleA = [
@@ -1131,6 +1156,11 @@ function MallarPage() {
       "", // Leveransuppgift
       "", // Leveransflöde
       "", // Kedja
+      "", // Malltyp
+      "both", // Skapningsläge
+      "", // Händelse-bekräftare
+      "", // Granskningsintervall
+      "", // Kritisk
     ];
     const exampleB = [
       "Varumottagning Färskt", "Drift", "Tas emot vid leverans", "Medel", "active", "",
@@ -1145,6 +1175,11 @@ function MallarPage() {
       "ja", // Leveransuppgift — sätts till is_delivery_task=true
       "Färskt", // Leveransflöde — filtrar på detta flöde i leveransplanen
       "", // Kedja
+      "grundmall", // Malltyp
+      "batch_only", // Skapningsläge
+      "", // Händelse-bekräftare
+      "24", // Granskningsintervall
+      "", // Kritisk
     ];
     const csv = CSV_TEMPLATE_INSTRUCTIONS
       + [headers, exampleA, exampleB].map((r) => r.map((v) => `"${sanitizeCsvCell(String(v).replace(/"/g, '""'))}"`).join(";")).join("\n");
@@ -1159,7 +1194,7 @@ function MallarPage() {
       "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
       "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
       "SAP-artikel", "Mallpaket", "Händelsevillkor", "Leveransuppgift (ja/nej)", "Leveransflöde", "Kedja (beror på mallnamn)",
-      "Malltyp", "Skapningsläge", "Händelse-bekräftare", "Granskningsintervall (månader)",
+      "Malltyp", "Skapningsläge", "Händelse-bekräftare", "Granskningsintervall (månader)", "Kritisk (ja/nej)",
     ];
     const rows = [
       headers,
@@ -1216,6 +1251,7 @@ function MallarPage() {
           (t as ChecklistTemplate & { review_interval_months?: number }).review_interval_months != null
             ? String((t as ChecklistTemplate & { review_interval_months?: number }).review_interval_months)
             : "",
+          (t as ChecklistTemplate & { is_critical?: boolean }).is_critical ? "ja" : "",
         ];
       }),
     ];
@@ -1307,14 +1343,14 @@ function MallarPage() {
       // 11:Förfaller om 12:Förfallotid 13:Startdatum 14:Slutdatum
       // 15:Ursprungsmall 16:Arvläge 17:Steg 18:Frågor 19:Tidsluckor 20:SAP-artikel
       // 21:Mallpaket 22:Händelsevillkor 23:Leveransuppgift 24:Leveransflöde 25:Kedja
-      // 26:Malltyp 27:Skapningsläge 28:Händelse-bekräftare 29:Granskningsintervall
+      // 26:Malltyp 27:Skapningsläge 28:Händelse-bekräftare 29:Granskningsintervall 30:Kritisk
       const [
         title, category, description, priority, statusRaw, ,
         recurrence, weekdaysRaw, monthsRaw, monthDayRaw, intervalRaw,
         dueDays, dueTime, startDate, endDate,
         parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw, timeSlotsRaw,
         sapArticleIdRaw, packageNameRaw, eventTriggerRaw, deliveryTaskRaw, deliveryFlowRaw, chainTitleRaw,
-        templateTypeRaw, templateModeRaw, , reviewIntervalRaw,
+        templateTypeRaw, templateModeRaw, eventTriggerUserIdRaw, reviewIntervalRaw, isCriticalRaw,
       ] = cols;
       if (!title?.trim()) continue;
 
@@ -1377,10 +1413,12 @@ function MallarPage() {
         sap_article_id: sapArticleIdRaw?.trim() || null,
         forening_id: importScope === "forening" ? resolvedForeningId : null,
         event_trigger_description: eventTriggerRaw?.trim() || null,
+        event_trigger_user_id: eventTriggerUserIdRaw?.trim() || null,
         is_delivery_task: isDeliveryTask,
         delivery_flow_name: deliveryFlowRaw?.trim() || null,
         depends_on_template_title: chainTitleRaw?.trim() || null,
         review_interval_months: reviewIntervalMonths,
+        is_critical: isCriticalRaw?.trim().toLowerCase() === "ja",
       }).select("id").maybeSingle();
 
       if (!tmpl?.id) continue;
