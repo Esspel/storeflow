@@ -2502,89 +2502,129 @@ function MallarPage() {
               </div>
               {f.is_delivery_task && (
                 <div className="pl-6 space-y-2">
-                  <span className="text-[11px] text-muted-foreground/70">
-                    Koppla till specifika leveranser (välj ett eller flera flöden/företag)
-                  </span>
-                  {deliverySuppliers.length > 0 ? (() => {
-                    // Group entries by flow_name
-                    const byFlow = deliverySuppliers.reduce<Record<string, typeof deliverySuppliers>>((acc, s) => {
-                      const k = s.flow_name || "Okänt flöde";
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-muted-foreground">Koppla till leveranser</span>
+                    {deliveryWeekEntries.length > 1 && (
+                      <button
+                        type="button"
+                        className="text-[11px] text-primary hover:underline"
+                        onClick={() => {
+                          const allSelected = deliveryWeekEntries.every(e =>
+                            f.delivery_supplier_name.split("|").map(s => s.trim()).filter(Boolean).includes(e.supplier?.trim() ?? "")
+                          );
+                          if (allSelected) {
+                            setF(p => ({ ...p, delivery_supplier_name: "", delivery_flow_name: "" }));
+                          } else {
+                            const allSupp = [...new Set(deliveryWeekEntries.map(e => e.supplier?.trim() ?? "").filter(Boolean))];
+                            const allFlow = [...new Set(deliveryWeekEntries.map(e => e.flow_name?.trim() ?? "").filter(Boolean))];
+                            setF(p => ({ ...p, delivery_supplier_name: allSupp.join("|"), delivery_flow_name: allFlow.join("|") }));
+                          }
+                        }}
+                      >
+                        {deliveryWeekEntries.every(e =>
+                          f.delivery_supplier_name.split("|").map(s => s.trim()).filter(Boolean).includes(e.supplier?.trim() ?? "")
+                        ) ? "Avmarkera alla" : "Välj alla"}
+                      </button>
+                    )}
+                  </div>
+                  {deliveryWeekEntries.length > 0 ? (() => {
+                    const dayOrder = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
+                    const byDay = deliveryWeekEntries.reduce<Record<string, typeof deliveryWeekEntries>>((acc, e) => {
+                      const k = e.delivery_day || "Okänd dag";
                       if (!acc[k]) acc[k] = [];
-                      acc[k].push(s);
+                      acc[k].push(e);
                       return acc;
                     }, {});
+                    const sortedDays = Object.keys(byDay).sort((a, b) => {
+                      const ai = dayOrder.indexOf(a);
+                      const bi = dayOrder.indexOf(b);
+                      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+                    });
                     const selectedSuppliers = f.delivery_supplier_name.split("|").map(s => s.trim()).filter(Boolean);
-                    const selectedFlows = f.delivery_flow_name.split("|").map(s => s.trim()).filter(Boolean);
 
                     const toggleEntry = (entry: { supplier: string; flow_name: string }) => {
                       const suppName = entry.supplier?.trim() ?? "";
                       const flowName = entry.flow_name?.trim() ?? "";
                       const hasSupp = selectedSuppliers.includes(suppName);
-                      const hasFlow = selectedFlows.includes(flowName);
-                      const newSuppliers = hasSupp ? selectedSuppliers.filter(s => s !== suppName) : [...selectedSuppliers, suppName];
-                      const newFlows = hasFlow ? selectedFlows.filter(f => f !== flowName) : [...selectedFlows, flowName];
-                      // Remove flow if no more suppliers in that flow are selected
-                      const remainingFlows = newFlows.filter(fl => {
-                        const entriesInFlow = deliverySuppliers.filter(s => s.flow_name === fl);
-                        return entriesInFlow.some(s => newSuppliers.includes(s.supplier?.trim() ?? ""));
-                      });
-                      setF(p => ({
-                        ...p,
-                        delivery_supplier_name: newSuppliers.join("|"),
-                        delivery_flow_name: remainingFlows.join("|"),
-                      }));
+                      if (hasSupp) {
+                        // Remove supplier; remove flow if no other selected supplier uses it
+                        const newSuppliers = selectedSuppliers.filter(s => s !== suppName);
+                        const newFlows = [...new Set(
+                          deliveryWeekEntries
+                            .filter(e => newSuppliers.includes(e.supplier?.trim() ?? ""))
+                            .map(e => e.flow_name?.trim() ?? "")
+                            .filter(Boolean)
+                        )];
+                        setF(p => ({ ...p, delivery_supplier_name: newSuppliers.join("|"), delivery_flow_name: newFlows.join("|") }));
+                      } else {
+                        const newSuppliers = [...new Set([...selectedSuppliers, suppName])];
+                        const newFlows = [...new Set([
+                          ...f.delivery_flow_name.split("|").map(s => s.trim()).filter(Boolean),
+                          flowName,
+                        ])];
+                        setF(p => ({ ...p, delivery_supplier_name: newSuppliers.join("|"), delivery_flow_name: newFlows.join("|") }));
+                      }
                     };
 
-                    const toggleFlow = (flowName: string, entries: typeof deliverySuppliers) => {
-                      const allSuppInFlow = entries.map(s => s.supplier?.trim() ?? "").filter(Boolean);
-                      const allSelected = allSuppInFlow.every(s => selectedSuppliers.includes(s));
-                      let newSuppliers: string[];
-                      let newFlows: string[];
+                    const toggleDay = (entries: typeof deliveryWeekEntries) => {
+                      const daySuppliers = [...new Set(entries.map(e => e.supplier?.trim() ?? "").filter(Boolean))];
+                      const allSelected = daySuppliers.every(s => selectedSuppliers.includes(s));
                       if (allSelected) {
-                        newSuppliers = selectedSuppliers.filter(s => !allSuppInFlow.includes(s));
-                        newFlows = selectedFlows.filter(f => f !== flowName);
+                        const newSuppliers = selectedSuppliers.filter(s => !daySuppliers.includes(s));
+                        const newFlows = [...new Set(
+                          deliveryWeekEntries
+                            .filter(e => newSuppliers.includes(e.supplier?.trim() ?? ""))
+                            .map(e => e.flow_name?.trim() ?? "")
+                            .filter(Boolean)
+                        )];
+                        setF(p => ({ ...p, delivery_supplier_name: newSuppliers.join("|"), delivery_flow_name: newFlows.join("|") }));
                       } else {
-                        newSuppliers = [...new Set([...selectedSuppliers, ...allSuppInFlow])];
-                        newFlows = [...new Set([...selectedFlows, flowName])];
+                        const newSuppliers = [...new Set([...selectedSuppliers, ...daySuppliers])];
+                        const newFlows = [...new Set(
+                          deliveryWeekEntries
+                            .filter(e => newSuppliers.includes(e.supplier?.trim() ?? ""))
+                            .map(e => e.flow_name?.trim() ?? "")
+                            .filter(Boolean)
+                        )];
+                        setF(p => ({ ...p, delivery_supplier_name: newSuppliers.join("|"), delivery_flow_name: newFlows.join("|") }));
                       }
-                      setF(p => ({
-                        ...p,
-                        delivery_supplier_name: newSuppliers.join("|"),
-                        delivery_flow_name: newFlows.join("|"),
-                      }));
                     };
 
                     return (
-                      <div className="space-y-1.5 rounded-lg border border-border/50 p-2 max-h-48 overflow-y-auto">
-                        {Object.entries(byFlow).map(([flowName, entries]) => {
-                          const allSuppInFlow = entries.map(s => s.supplier?.trim() ?? "").filter(Boolean);
-                          const allSelected = allSuppInFlow.every(s => selectedSuppliers.includes(s));
-                          const someSelected = allSuppInFlow.some(s => selectedSuppliers.includes(s));
+                      <div className="space-y-1.5 rounded-lg border border-border/50 p-2 max-h-56 overflow-y-auto">
+                        {sortedDays.map(dayName => {
+                          const entries = byDay[dayName];
+                          const daySuppliers = [...new Set(entries.map(e => e.supplier?.trim() ?? "").filter(Boolean))];
+                          const allDaySelected = daySuppliers.every(s => selectedSuppliers.includes(s));
+                          const someDaySelected = daySuppliers.some(s => selectedSuppliers.includes(s));
                           return (
-                            <div key={flowName} className="space-y-0.5">
-                              <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50 bg-muted/30">
+                            <div key={dayName} className="space-y-0.5">
+                              <label className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 bg-muted/30 hover:bg-muted/50">
                                 <Checkbox
-                                  checked={allSelected}
-                                  data-state={someSelected && !allSelected ? "indeterminate" : undefined}
-                                  onCheckedChange={() => toggleFlow(flowName, entries)}
+                                  checked={allDaySelected}
+                                  data-state={someDaySelected && !allDaySelected ? "indeterminate" : undefined}
+                                  onCheckedChange={() => toggleDay(entries)}
                                   className="h-3.5 w-3.5"
                                 />
-                                <span className="text-xs font-medium">{flowName}</span>
-                                <span className="ml-auto text-[10px] text-muted-foreground">{entries.length} företag</span>
+                                <span className="text-xs font-semibold flex-1">{dayName}</span>
+                                <span className="text-[10px] text-muted-foreground">{entries.length} leverans{entries.length !== 1 ? "er" : ""}</span>
                               </label>
                               {entries.map(entry => {
                                 const suppName = entry.supplier?.trim() ?? "";
                                 const checked = selectedSuppliers.includes(suppName);
                                 return (
-                                  <label key={entry.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 pl-5 hover:bg-muted/50">
+                                  <label key={entry.id} className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 pl-6 hover:bg-muted/50">
                                     <Checkbox
                                       checked={checked}
                                       onCheckedChange={() => toggleEntry(entry)}
                                       className="h-3.5 w-3.5"
                                     />
-                                    <span className="text-xs flex-1">{entry.supplier}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <span className="text-xs">{entry.supplier}</span>
+                                      <span className="text-[10px] text-muted-foreground ml-1.5">{entry.flow_name}</span>
+                                    </div>
                                     {entry.delivery_time && (
-                                      <span className="text-[10px] text-muted-foreground">{entry.delivery_time}</span>
+                                      <span className="text-[11px] font-medium text-foreground/70 tabular-nums shrink-0">{entry.delivery_time}</span>
                                     )}
                                   </label>
                                 );
@@ -2607,7 +2647,7 @@ function MallarPage() {
                   )}
                   {(f.delivery_supplier_name || f.delivery_flow_name) && (
                     <p className="text-[10px] text-muted-foreground/60">
-                      Valt: {[f.delivery_supplier_name, f.delivery_flow_name].filter(Boolean).join(" / ")}
+                      Valt: {f.delivery_supplier_name.split("|").filter(Boolean).join(", ")}
                     </p>
                   )}
                 </div>
