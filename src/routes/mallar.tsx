@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/lib/auth-context";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
 import { cn, ensureHttps, sanitizeCsvCell } from "@/lib/utils";
+import { getSimulatedDate, getSimulatedNow } from "@/lib/time-simulation";
 import { spawnChildrenForParent } from "@/lib/task-utils";
 import { toast } from "sonner";
 
@@ -778,9 +779,9 @@ function MallarPage() {
       return;
     }
     setReviewSaving(true);
-    const now = new Date().toISOString();
+    const now = getSimulatedDate().toISOString();
     const intervalMonths = (reviewTarget as ChecklistTemplate & { review_interval_months?: number }).review_interval_months ?? 24;
-    const nextReview = (() => { const d = new Date(); d.setMonth(d.getMonth() + intervalMonths); return d.toISOString(); })();
+    const nextReview = (() => { const d = getSimulatedDate(); d.setMonth(d.getMonth() + intervalMonths); return d.toISOString(); })();
     if (action === "continue") {
       await supabase.from("checklist_templates").update({
         last_reviewed_at: now,
@@ -860,7 +861,7 @@ function MallarPage() {
       review_interval_months: form.review_interval_months > 0 ? form.review_interval_months : null,
       // Set next_review_at for recurring base templates without a near end date
       next_review_at: (form.template_type === "base" && form.recurrence_rule && !form.recurrence_end)
-        ? (() => { const d = new Date(); d.setMonth(d.getMonth() + (form.review_interval_months || 24)); return d.toISOString(); })()
+        ? (() => { const d = getSimulatedDate(); d.setMonth(d.getMonth() + (form.review_interval_months || 24)); return d.toISOString(); })()
         : null,
     }).select("id").maybeSingle();
 
@@ -952,7 +953,7 @@ function MallarPage() {
       "Torsdag": 4, "Fredag": 5, "Lördag": 6,
     };
     const target = dayMap[dayName];
-    const now = new Date();
+    const now = getSimulatedDate();
     if (target === undefined) return now.toISOString().slice(0, 10);
     const todayDay = now.getDay();
     let diff = target - todayDay;
@@ -966,7 +967,7 @@ function MallarPage() {
   function calcNextDueDate(tmpl: ChecklistTemplate): { iso: string; time: string } | null {
     const rule = tmpl.recurrence_rule;
     if (!rule) return null;
-    const now = new Date();
+    const now = getSimulatedDate();
     const today = new Date(now); today.setHours(0, 0, 0, 0);
     let base = new Date(today);
 
@@ -1216,7 +1217,7 @@ function MallarPage() {
           const dueTime = rawTime ? addMinutesToTime(rawTime, 30) : "";
           // Calculate due date: use next occurrence of the delivery's weekday from today
           const deliveryDay = (delivery as { delivery_day?: string } | undefined)?.delivery_day ?? "";
-          const dueDateStr = deliveryDay ? nextWeekdayDate(deliveryDay) : new Date().toISOString().slice(0, 10);
+          const dueDateStr = deliveryDay ? nextWeekdayDate(deliveryDay) : getSimulatedDate().toISOString().slice(0, 10);
 
           // Skip if a task already exists for the same delivery entry on the same day
           const alreadyExists = (existingDeliveryTasks ?? []).some(t =>
@@ -1298,7 +1299,7 @@ function MallarPage() {
           }
           dueIso = isNaN(d.getTime()) ? null : d.toISOString();
         } else if (tmpl.due_date_offset != null) {
-          const d = new Date();
+          const d = getSimulatedDate();
           d.setDate(d.getDate() + tmpl.due_date_offset);
           if (dueTime) {
             const [h, m] = dueTime.split(":").map(Number);
@@ -1399,7 +1400,7 @@ function MallarPage() {
               ...cfg.assigneeUserIds.map(uid => ({ user_id: uid, group_id: null })),
               ...cfg.assigneeGroupIds.map(gid => ({ user_id: null, group_id: gid })),
             ],
-          }, Date.now());
+          }, getSimulatedNow());
         }
       };
 
@@ -1502,7 +1503,7 @@ function MallarPage() {
       // Ensure next_review_at is set if this becomes a recurring base template
       ...((editForm.template_type === "base" && editForm.recurrence_rule && !editForm.recurrence_end &&
           !(editTarget as ChecklistTemplate & { next_review_at?: string }).next_review_at)
-        ? { next_review_at: (() => { const d = new Date(); d.setMonth(d.getMonth() + (editForm.review_interval_months || 24)); return d.toISOString(); })() }
+        ? { next_review_at: (() => { const d = getSimulatedDate(); d.setMonth(d.getMonth() + (editForm.review_interval_months || 24)); return d.toISOString(); })() }
         : {}),
     }).eq("id", editTarget.id);
 
@@ -1721,7 +1722,7 @@ function MallarPage() {
       "Kedja (beror på mallnamn)", "Malltyp", "Skapningsläge", "Händelse-bekräftare",
       "Granskningsintervall (månader)", "Kritisk (ja/nej)", "Leveransföretag",
     ];
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getSimulatedDate().toISOString().slice(0, 10);
     const exampleA = [
       "Daglig öppningskontroll", "Drift", "Genomförs varje morgon vid öppning", "Hög", "active", "",
       "weekly", "0,1,2,3,4", "", "", "1",
@@ -3163,7 +3164,7 @@ function MallarPage() {
         <div className="mt-6 space-y-8">
           {/* 24-month review banners — shown to managers for overdue/due-soon recurring base templates */}
           {isManager && (() => {
-            const now = new Date();
+            const now = getSimulatedDate();
             const warningThreshold = new Date(now); warningThreshold.setMonth(warningThreshold.getMonth() + 3);
             const overdueTemplates = templates.filter(t => {
               const nextReview = (t as ChecklistTemplate & { next_review_at?: string }).next_review_at;
@@ -4616,7 +4617,7 @@ function MallarPage() {
               <span className="font-medium text-foreground">{reviewTarget?.title}</span>
               {reviewTarget && (() => {
                 const created = new Date((reviewTarget as ChecklistTemplate & { created_at?: string }).created_at ?? "");
-                const months = isNaN(created.getTime()) ? null : Math.round((Date.now() - created.getTime()) / (1000 * 60 * 60 * 24 * 30));
+                const months = isNaN(created.getTime()) ? null : Math.round((getSimulatedNow() - created.getTime()) / (1000 * 60 * 60 * 24 * 30));
                 return months != null ? ` — aktiv sedan ca ${months} månader` : "";
               })()}
             </DialogDescription>

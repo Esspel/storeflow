@@ -31,7 +31,7 @@ import {
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn, ensureHttps, sanitizeCsvCell, parseTimeInput } from "@/lib/utils";
-import { getSimulatedNow } from "@/lib/time-simulation";
+import { getSimulatedNow, getSimulatedDate } from "@/lib/time-simulation";
 import { dedupRecurringSeries, midnightStockholm, localDateStr, buildPeriodStarts } from "@/lib/task-utils";
 
 export const Route = createFileRoute("/uppgifter")({
@@ -395,7 +395,7 @@ function TasksPage() {
     dismissUndoToast();
     // Optimistically reflect the toggle in the UI immediately
     const isDone = task.status === "done";
-    const nowIso = new Date().toISOString();
+    const nowIso = getSimulatedDate().toISOString();
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: isDone ? "todo" : "done", completed_at: isDone ? null : nowIso } : t));
     const tid = setTimeout(() => {
       setUndoToast(null);
@@ -508,7 +508,7 @@ function TasksPage() {
     [tasks, isManager]
   );
   const tomorrowStr = (() => {
-    const d = new Date();
+    const d = getSimulatedDate();
     d.setDate(d.getDate() + 1);
     return d.toISOString().slice(0, 10);
   })();
@@ -588,7 +588,7 @@ function TasksPage() {
   };
 
   const confirmEventTrigger = async (task: TaskFull) => {
-    const now = new Date().toISOString();
+    const now = getSimulatedDate().toISOString();
     await supabase.from("tasks").update({ event_triggered_at: now }).eq("id", task.id);
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, event_triggered_at: now } : t));
     if (detailTask?.id === task.id) setDetailTask(prev => prev ? { ...prev, event_triggered_at: now } : prev);
@@ -690,7 +690,7 @@ function TasksPage() {
   // Auto-show confirmation popup when manager has tasks due tomorrow needing confirmation
   useEffect(() => {
     if (!isManager || assigneeConfirmDismissed) return;
-    const tomorrow = new Date();
+    const tomorrow = getSimulatedDate();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().slice(0, 10);
     const dueTomorrow = tasks.filter(t =>
@@ -1147,12 +1147,12 @@ function TasksPage() {
       await supabase.from("task_questions").update({
         answer: value,
         answered_by: user?.id,
-        answered_at: new Date().toISOString(),
+        answered_at: getSimulatedDate().toISOString(),
       }).eq("id", question.id);
       logAudit(user?.id ?? null, "task.question.answer", "task_questions", question.id, { task_id: task.id, old: oldAnswer, new: value });
 
       const updatedQuestions = (task.questions ?? []).map(q =>
-        q.id === question.id ? { ...q, answer: value, answered_by: user?.id ?? null, answered_at: new Date().toISOString() } : q
+        q.id === question.id ? { ...q, answer: value, answered_by: user?.id ?? null, answered_at: getSimulatedDate().toISOString() } : q
       );
 
       // If answer cleared while task is done → auto-reopen
@@ -1202,7 +1202,7 @@ function TasksPage() {
 
       await supabase.from("tasks").update({
         status: newStatus,
-        completed_at: newStatus === "done" ? new Date().toISOString() : null,
+        completed_at: newStatus === "done" ? getSimulatedDate().toISOString() : null,
       }).eq("id", task.id);
 
       if (newStatus === "done") {
@@ -1223,7 +1223,7 @@ function TasksPage() {
           if (krResponse.incident_id) {
             await supabase.from("incidents").update({
               status: "resolved",
-              resolved_at: new Date().toISOString(),
+              resolved_at: getSimulatedDate().toISOString(),
             }).eq("id", krResponse.incident_id);
           }
           await supabase.from("kundrunda_responses").update({ result: "ok" }).eq("id", krResponse.id);
@@ -1534,7 +1534,7 @@ function TasksPage() {
   };
 
   const markFutureOccDone = async (occ: TaskFull) => {
-    await supabase.from("tasks").update({ status: "done", completed_at: new Date().toISOString() }).eq("id", occ.id);
+    await supabase.from("tasks").update({ status: "done", completed_at: getSimulatedDate().toISOString() }).eq("id", occ.id);
     logAudit(user?.id ?? null, "task.complete", "tasks", occ.id, { title: occ.title });
     if (futureManagerTask) await fetchFutureOccurrences(futureManagerTask);
     await fetchTasks();
@@ -1857,7 +1857,7 @@ function TasksPage() {
         const dueDays = tAny.due_date_offset != null
           ? String(tAny.due_date_offset)
           : (t.recurrence_rule ? "" : t.due_date
-            ? String(Math.round((new Date(t.due_date).getTime() - Date.now()) / 86400000))
+            ? String(Math.round((new Date(t.due_date).getTime() - getSimulatedNow()) / 86400000))
             : "");
         const stepsStr = (t.steps ?? []).sort((a, b) => a.sort_order - b.sort_order).map((s, i) => {
           let part = `${i + 1}. ${s.label}`;
