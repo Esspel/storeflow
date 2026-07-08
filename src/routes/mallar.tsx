@@ -1072,7 +1072,7 @@ function MallarPage() {
           .from("schedule_imports")
           .select("id")
           .eq("store_id", storeIdForSchedule)
-          .order("created_at", { ascending: false })
+          .order("imported_at", { ascending: false })
           .limit(1);
         const importId = imports?.[0]?.id;
         if (importId) {
@@ -4104,8 +4104,8 @@ function MallarPage() {
                 if (set) for (const uid of set) scheduledOnDays.add(uid);
               }
               // For non-delivery templates use the smartDate
-              if (!isDeliveryTmpl && smartDate) {
-                const dateStr = new Date(smartDate).toISOString().slice(0, 10);
+              if (!isDeliveryTmpl && smartDate?.iso) {
+                const dateStr = smartDate.iso.slice(0, 10);
                 const set = scheduledUsersByDate[dateStr];
                 if (set) for (const uid of set) scheduledOnDays.add(uid);
               }
