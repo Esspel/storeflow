@@ -1113,6 +1113,15 @@ function MallarPage() {
       // Leveransmallar: skapa en uppgift per vald leverans
       if ((tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task) {
         if (cfg.selectedDeliveryIds.length === 0) continue;
+
+        // Fetch existing delivery tasks for this store to avoid duplicates
+        const { data: existingDeliveryTasks } = await supabase
+          .from("tasks")
+          .select("delivery_entry_id, title, due_date")
+          .eq("store_id", storeId ?? "")
+          .eq("title", tmpl.title)
+          .in("delivery_entry_id", cfg.selectedDeliveryIds);
+
         for (const deliveryId of cfg.selectedDeliveryIds) {
           // Look up in deliveryWeekEntries first (has day+date), fall back to deliverySuppliers
           const delivery = deliveryWeekEntries.find(e => e.id === deliveryId) ?? deliverySuppliers.find(s => s.id === deliveryId) as (typeof deliveryWeekEntries[0]) | undefined;
@@ -1122,6 +1131,14 @@ function MallarPage() {
           // Calculate due date: use next occurrence of the delivery's weekday from today
           const deliveryDay = (delivery as { delivery_day?: string } | undefined)?.delivery_day ?? "";
           const dueDateStr = deliveryDay ? nextWeekdayDate(deliveryDay) : new Date().toISOString().slice(0, 10);
+
+          // Skip if a task already exists for the same delivery entry on the same day
+          const alreadyExists = (existingDeliveryTasks ?? []).some(t =>
+            t.delivery_entry_id === deliveryId &&
+            t.due_date?.slice(0, 10) === dueDateStr
+          );
+          if (alreadyExists) continue;
+
           const { data: task } = await supabase.from("tasks").insert({
             title: tmpl.title,
             description: tmpl.description ?? "",
