@@ -1068,52 +1068,66 @@ function MallarPage() {
     setBulkTaskConfigs(configs.filter((c): c is BulkTaskConfig => c !== null));
     setShowAllUsersForTemplate({});
 
-    // Load schedule data to pre-filter assignees by who is working
+    // Load schedule data across ALL imports for this store so dates from any week are covered.
     const storeIdForSchedule = activeStore?.id ?? userStores[0]?.id ?? null;
     if (storeIdForSchedule) {
       try {
-        // Get the latest schedule import for this store
-        const { data: imports } = await supabase
+        // Get all import ids for this store so we can resolve employee_nr across them.
+        const { data: allImports } = await supabase
           .from("schedule_imports")
           .select("id")
-          .eq("store_id", storeIdForSchedule)
-          .order("imported_at", { ascending: false })
-          .limit(1);
-        const importId = imports?.[0]?.id;
-        if (importId) {
+          .eq("store_id", storeIdForSchedule);
+        const importIds = (allImports ?? []).map(i => i.id);
+        if (importIds.length > 0) {
           const [{ data: emps }, { data: shifts }, { data: mappings }] = await Promise.all([
-            supabase.from("schedule_employees").select("id, employee_nr").eq("import_id", importId),
+            supabase.from("schedule_employees")
+              .select("id, employee_nr")
+              .in("import_id", importIds),
             supabase.from("schedule_shifts")
-              .select("schedule_employee_id, day_date, start_time, stop_time, is_absence_day, gross_minutes")
-              .eq("import_id", importId)
+              .select("schedule_employee_id, day_date, start_time, stop_time, gross_minutes")
+              .in("import_id", importIds)
               .eq("is_absence_day", false)
               .not("start_time", "is", null)
               .gt("gross_minutes", 0),
-            supabase.from("employee_mappings").select("employee_nr, app_user_id").eq("store_id", storeIdForSchedule),
+            supabase.from("employee_mappings")
+              .select("employee_nr, app_user_id")
+              .eq("store_id", storeIdForSchedule),
           ]);
           // Build employee_nr → app_user_id map
           const nrToUserId = new Map<string, string>();
           for (const m of (mappings ?? [])) {
             if (m.app_user_id) nrToUserId.set(m.employee_nr, m.app_user_id);
           }
-          // Build schedule_employee.id → app_user_id map
+          // Build schedule_employee.id → app_user_id map (across all imports)
           const empIdToUserId = new Map<string, string>();
           for (const e of (emps ?? [])) {
             const uid = nrToUserId.get(e.employee_nr);
             if (uid) empIdToUserId.set(e.id, uid);
           }
-          // Group shifts by exact date only.
-          const byDate: Record<string, Map<string, { start: string; end: string }[]>> = {};
+          // Group shifts by exact date — multiple imports may cover the same date,
+          // use a Set per date+user to avoid duplicates.
+          const byDate: Record<string, Map<string, Set<string>>> = {};
           for (const s of (shifts ?? [])) {
             if (!s.day_date || !s.start_time) continue;
             const uid = empIdToUserId.get(s.schedule_employee_id);
             if (!uid) continue;
             if (!byDate[s.day_date]) byDate[s.day_date] = new Map();
-            const existing = byDate[s.day_date].get(uid) ?? [];
-            existing.push({ start: s.start_time, end: s.stop_time ?? "23:59" });
+            const existing = byDate[s.day_date].get(uid) ?? new Set<string>();
+            existing.add(`${s.start_time}-${s.stop_time ?? "23:59"}`);
             byDate[s.day_date].set(uid, existing);
           }
-          setScheduledUsersByDate(byDate);
+          // Convert Sets to arrays for consumption by the rest of the code
+          const byDateArrays: Record<string, Map<string, { start: string; end: string }[]>> = {};
+          for (const [date, userMap] of Object.entries(byDate)) {
+            byDateArrays[date] = new Map();
+            for (const [uid, shiftSet] of userMap.entries()) {
+              byDateArrays[date].set(uid, [...shiftSet].map(s => {
+                const [start, end] = s.split("-");
+                return { start, end };
+              }));
+            }
+          }
+          setScheduledUsersByDate(byDateArrays);
         } else {
           setScheduledUsersByDate({});
         }
