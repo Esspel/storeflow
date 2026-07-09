@@ -379,6 +379,8 @@ function MallarPage() {
   const [allGroups, setAllGroups] = useState<UserGroup[]>([]);
   // Scheduled users per date: dateKey → Map<userId, { start: string; end: string }[]>
   const [scheduledUsersByDate, setScheduledUsersByDate] = useState<Record<string, Map<string, { start: string; end: string }[]>>>({});
+  // Absent users per exact date: date → Set<userId> (semester, frånvaro, etc.)
+  const [absentUsersByDate, setAbsentUsersByDate] = useState<Record<string, Set<string>>>({});
   // Per-template search query for assignee/bekraftare lists
   const [bulkUserSearch, setBulkUserSearch] = useState<Record<string, string>>({});  // Per-template "show all users" toggle
   const [showAllUsersForTemplate, setShowAllUsersForTemplate] = useState<Record<string, boolean>>({});
@@ -1099,6 +1101,7 @@ function MallarPage() {
           }
           // Group shifts by date and day-of-week, storing per-user time ranges
           const byDate: Record<string, Map<string, { start: string; end: string }[]>> = {};
+          const absentByDate: Record<string, Set<string>> = {};
           const addShift = (key: string, uid: string, start: string, end: string) => {
             if (!byDate[key]) byDate[key] = new Map();
             const existing = byDate[key].get(uid) ?? [];
@@ -1109,8 +1112,12 @@ function MallarPage() {
             if (!s.day_date) continue;
             const uid = empIdToUserId.get(s.schedule_employee_id);
             if (!uid) continue;
-            // Skip absence days (semester, sjuk, ledig, frånvaro) and shifts with no actual work time
-            if (s.is_absence_day) continue;
+            if (s.is_absence_day) {
+              // Track which users are absent on specific dates so they're excluded from DOW fallback
+              if (!absentByDate[s.day_date]) absentByDate[s.day_date] = new Set();
+              absentByDate[s.day_date].add(uid);
+              continue;
+            }
             if (!s.start_time || (s.gross_minutes != null && s.gross_minutes <= 0)) continue;
             const start = s.start_time ?? "00:00";
             const end = s.stop_time ?? "23:59";
@@ -1119,11 +1126,14 @@ function MallarPage() {
             addShift(s.day_date, uid, start, end);
           }
           setScheduledUsersByDate(byDate);
+          setAbsentUsersByDate(absentByDate);
         } else {
           setScheduledUsersByDate({});
+          setAbsentUsersByDate({});
         }
       } catch {
         setScheduledUsersByDate({});
+        setAbsentUsersByDate({});
       }
     }
 
@@ -4190,13 +4200,16 @@ function MallarPage() {
                   const deliveryTime = entry.delivery_time ?? "";
                   const dow = swedishDayToJs[dayName];
                   if (dow === undefined) continue;
+                  const exactDate = entry.delivery_date ?? "";
                   // Prefer exact date key, fall back to day-of-week
-                  const dateKey = (entry.delivery_date && scheduledUsersByDate[entry.delivery_date])
-                    ? entry.delivery_date
+                  const dateKey = (exactDate && scheduledUsersByDate[exactDate])
+                    ? exactDate
                     : dow.toString();
                   const dayMap = scheduledUsersByDate[dateKey];
                   if (!dayMap) continue;
+                  const absentOnDate = exactDate ? (absentUsersByDate[exactDate] ?? new Set()) : new Set();
                   for (const uid of dayMap.keys()) {
+                    if (absentOnDate.has(uid)) continue;
                     if (userWorksAtTime(dateKey, uid, deliveryTime)) scheduledOnDays.add(uid);
                   }
                 }
@@ -4204,10 +4217,13 @@ function MallarPage() {
                 const dateStr = smartDate.iso.slice(0, 10);
                 const dow = new Date(dateStr + "T12:00:00").getDay().toString();
                 const taskTime = smartDate.time ?? "";
-                const dateKey = scheduledUsersByDate[dateStr] ? dateStr : dow;
+                const usingExactDate = !!scheduledUsersByDate[dateStr];
+                const dateKey = usingExactDate ? dateStr : dow;
                 const dayMap = scheduledUsersByDate[dateKey];
+                const absentOnDate = absentUsersByDate[dateStr] ?? new Set();
                 if (dayMap) {
                   for (const uid of dayMap.keys()) {
+                    if (absentOnDate.has(uid)) continue;
                     if (userWorksAtTime(dateKey, uid, taskTime)) scheduledOnDays.add(uid);
                   }
                 }
