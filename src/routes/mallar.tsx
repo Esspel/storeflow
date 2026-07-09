@@ -1204,12 +1204,15 @@ function MallarPage() {
         if (cfg.selectedDeliveryIds.length === 0) continue;
 
         // Fetch all existing delivery tasks for this store to avoid duplicates.
-        // We match by due_date (day) + supplier since delivery_entry_id can differ across plan imports.
+        // Match on exact title + date (date part only via gte/lt range).
         const { data: existingDeliveryTasks } = await supabase
           .from("tasks")
           .select("due_date, title")
           .eq("store_id", storeId ?? "")
           .not("delivery_entry_id", "is", null);
+
+        // Track titles created in this batch run to avoid intra-batch duplicates
+        const createdThisBatch = new Set<string>();
 
         for (const deliveryId of cfg.selectedDeliveryIds) {
           // Look up in deliveryWeekEntries first (has day+date), fall back to deliverySuppliers
@@ -1221,20 +1224,27 @@ function MallarPage() {
           const deliveryDay = (delivery as { delivery_day?: string } | undefined)?.delivery_day ?? "";
           const dueDateStr = deliveryDay ? nextWeekdayDate(deliveryDay) : getSimulatedDate().toISOString().slice(0, 10);
 
-          // Skip if a task already exists for the same supplier+template on the same due date
-          // Match by title prefix (tmpl.title) + supplier name + due date — robust across plan imports
-          const supplierName = delivery?.supplier ?? "";
-          const alreadyExists = (existingDeliveryTasks ?? []).some(t =>
-            t.due_date?.slice(0, 10) === dueDateStr &&
-            supplierName &&
-            (t.title ?? "").includes(supplierName)
-          );
+          // Build the exact title we will insert — use for precise dedup
+          const taskTitle = delivery
+            ? `${tmpl.title} — ${delivery.supplier} (${deliveryDay || delivery.delivery_time})`
+            : tmpl.title;
+
+          const batchKey = `${taskTitle}||${dueDateStr}`;
+
+          // Skip if already created in this batch run
+          if (createdThisBatch.has(batchKey)) continue;
+
+          // Skip if a task with the same title already exists on the same date
+          const alreadyExists = (existingDeliveryTasks ?? []).some(t => {
+            const existingDate = t.due_date ? t.due_date.slice(0, 10) : "";
+            return existingDate === dueDateStr && t.title === taskTitle;
+          });
           if (alreadyExists) continue;
 
+          createdThisBatch.add(batchKey);
+
           const { data: task } = await supabase.from("tasks").insert({
-            title: delivery
-              ? `${tmpl.title} — ${delivery.supplier} (${deliveryDay || delivery.delivery_time})`
-              : tmpl.title,
+            title: taskTitle,
             description: tmpl.description ?? "",
             category: tmpl.category ?? "",
             priority: tmpl.priority ?? "Medel",
