@@ -1152,6 +1152,7 @@ function MallarPage() {
     setBulkCreating(true);
     const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
     const skippedDueToDependency: string[] = [];
+    try {
 
     // Pre-fetch existing tasks to resolve depends_on_template_title
     const { data: existingTasks } = await supabase
@@ -1422,6 +1423,11 @@ function MallarPage() {
     setSelectedTemplateIds(new Set());
     if (skippedDueToDependency.length > 0) {
       toast.warning(`${skippedDueToDependency.length} mall${skippedDueToDependency.length !== 1 ? "ar" : ""} hoppades över: ${skippedDueToDependency.join(", ")}. Beroende uppgift saknades — skapa beroendets mall i samma batch.`);
+    }
+    } catch (err) {
+      console.error("bulkCreateTasks failed:", err);
+      toast.error("Något gick fel vid skapandet av uppgifter. Försök igen.");
+      setBulkCreating(false);
     }
   }
 
@@ -4584,7 +4590,7 @@ function MallarPage() {
                           <Button
                             variant="outline" size="sm"
                             className="rounded-full h-7 text-xs"
-                            onClick={() => { setActivatePackageTarget(pkg); setBulkTaskConfigs(pkgTemplates.map(t => { const tAny = t as ChecklistTemplate & { event_trigger_user_id?: string; delivery_flow_name?: string; delivery_supplier_name?: string; is_delivery_task?: boolean }; const tmplFlows = (tAny.delivery_flow_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean); const tmplSupps = (tAny.delivery_supplier_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean); const preIds = tAny.is_delivery_task ? deliverySuppliers.filter(s => (tmplFlows.length === 0 || tmplFlows.includes(s.flow_name?.toLowerCase() ?? "")) && (tmplSupps.length === 0 || tmplSupps.includes(s.supplier?.toLowerCase() ?? ""))).map(s => s.id) : []; return { templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], eventTriggerUserId: tAny.event_trigger_user_id ?? "", selectedDeliveryIds: preIds }; })); setShowPackagesPanel(false); setBulkCreateOpen(true); }}
+                            onClick={() => { setActivatePackageTarget(pkg); setShowPackagesPanel(false); openBulkCreate(pkgTemplates.map(t => t.id)); }}
                           >
                             <ListChecks className="h-3 w-3 mr-1" /> Aktivera
                           </Button>
