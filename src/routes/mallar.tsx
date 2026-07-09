@@ -3055,7 +3055,7 @@ function MallarPage() {
             <Button variant="ghost" size="sm" className="rounded-full h-8 text-xs" onClick={() => setSelectedTemplateIds(new Set())}>
               Avmarkera alla
             </Button>
-            <Button size="sm" className="rounded-full h-8 gap-1.5 text-xs bg-primary text-primary-foreground" onClick={openBulkCreate}>
+            <Button size="sm" className="rounded-full h-8 gap-1.5 text-xs bg-primary text-primary-foreground" onClick={() => openBulkCreate()}>
               <ListChecks className="h-3.5 w-3.5" /> Skapa uppgifter
             </Button>
             {[...selectedTemplateIds].every((id) => { const t = templates.find((x) => x.id === id); return t ? canDelete(t) : false; }) && (
