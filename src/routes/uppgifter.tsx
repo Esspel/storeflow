@@ -1104,7 +1104,14 @@ function TasksPage() {
     return allStepsDone && allAnswered;
   };
 
+  const isBlockedByChain = (task: TaskFull): boolean => {
+    if (!task.depends_on_task_id) return false;
+    const pred = tasks.find(t => t.id === task.depends_on_task_id);
+    return !!(pred && pred.status !== "done");
+  };
+
   const toggleStep = async (task: TaskFull, stepId: string, current: boolean) => {
+    if (isBlockedByChain(task)) return;
     const wasChecking = !current;
     await markInProgress(task);
     await supabase.from("task_steps").update({ is_done: wasChecking }).eq("id", stepId);
@@ -1133,6 +1140,7 @@ function TasksPage() {
   };
 
   const saveAnswer = async (task: TaskFull, question: TaskQuestion, value: string) => {
+    if (isBlockedByChain(task)) return;
     if (savingAnswerRef.current.has(question.id)) return;
     savingAnswerRef.current.add(question.id);
     try {
@@ -1534,6 +1542,7 @@ function TasksPage() {
   };
 
   const markFutureOccDone = async (occ: TaskFull) => {
+    if (isBlockedByChain(occ)) return;
     await supabase.from("tasks").update({ status: "done", completed_at: getSimulatedDate().toISOString() }).eq("id", occ.id);
     logAudit(user?.id ?? null, "task.complete", "tasks", occ.id, { title: occ.title });
     if (futureManagerTask) await fetchFutureOccurrences(futureManagerTask);
@@ -2844,6 +2853,7 @@ function TasksPage() {
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Checkpoints</p>
                   {detailTask.steps.map((step) => {
+                    const chainBlocked = isBlockedByChain(detailTask);
                     // Conditional visibility: hide step if condition question has been answered but answer doesn't match
                     const stepAny = step as typeof step & { condition_question_id?: string | null; condition_answer?: string | null };
                     if (stepAny.condition_question_id) {
@@ -2858,9 +2868,10 @@ function TasksPage() {
                     const stepImages = (detailTask.images ?? []).filter(img => img.step_id === step.id);
                     return (
                       <div key={step.id} className="space-y-1.5">
-                        <label className="flex min-h-[44px] items-center gap-3 cursor-pointer group rounded-xl px-3 py-2.5 hover:bg-muted/40 active:bg-muted/60 transition-colors">
+                        <label className={cn("flex min-h-[44px] items-center gap-3 rounded-xl px-3 py-2.5 transition-colors", chainBlocked ? "cursor-not-allowed opacity-50" : "cursor-pointer group hover:bg-muted/40 active:bg-muted/60")}>
                           <Checkbox
                             checked={step.is_done}
+                            disabled={chainBlocked}
                             onCheckedChange={() => void toggleStep(detailTask, step.id, step.is_done)}
                             className="h-5 w-5 shrink-0"
                           />
@@ -2900,7 +2911,7 @@ function TasksPage() {
 
               {/* Questions */}
               {detailTask.questions && detailTask.questions.length > 0 && (
-                <div className="space-y-4">
+                <div className={cn("space-y-4", isBlockedByChain(detailTask) && "pointer-events-none opacity-50")}>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Frågor</p>
                   {detailTask.questions.map((q) => (
                     <div key={q.id} className="space-y-1.5">
