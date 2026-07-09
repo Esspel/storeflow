@@ -1203,13 +1203,13 @@ function MallarPage() {
       if ((tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task) {
         if (cfg.selectedDeliveryIds.length === 0) continue;
 
-        // Fetch existing delivery tasks for this store to avoid duplicates
-        // Match on delivery_entry_id only — title may vary
+        // Fetch all existing delivery tasks for this store to avoid duplicates.
+        // We match by due_date (day) + supplier since delivery_entry_id can differ across plan imports.
         const { data: existingDeliveryTasks } = await supabase
           .from("tasks")
-          .select("delivery_entry_id, due_date")
+          .select("due_date, title")
           .eq("store_id", storeId ?? "")
-          .in("delivery_entry_id", cfg.selectedDeliveryIds);
+          .not("delivery_entry_id", "is", null);
 
         for (const deliveryId of cfg.selectedDeliveryIds) {
           // Look up in deliveryWeekEntries first (has day+date), fall back to deliverySuppliers
@@ -1221,10 +1221,13 @@ function MallarPage() {
           const deliveryDay = (delivery as { delivery_day?: string } | undefined)?.delivery_day ?? "";
           const dueDateStr = deliveryDay ? nextWeekdayDate(deliveryDay) : getSimulatedDate().toISOString().slice(0, 10);
 
-          // Skip if a task already exists for the same delivery entry on the same day
+          // Skip if a task already exists for the same supplier+template on the same due date
+          // Match by title prefix (tmpl.title) + supplier name + due date — robust across plan imports
+          const supplierName = delivery?.supplier ?? "";
           const alreadyExists = (existingDeliveryTasks ?? []).some(t =>
-            t.delivery_entry_id === deliveryId &&
-            t.due_date?.slice(0, 10) === dueDateStr
+            t.due_date?.slice(0, 10) === dueDateStr &&
+            supplierName &&
+            (t.title ?? "").includes(supplierName)
           );
           if (alreadyExists) continue;
 
