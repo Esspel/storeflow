@@ -151,10 +151,12 @@ function HubPage() {
       const simTodayStart = new Date(now); simTodayStart.setHours(0,0,0,0);
       const simTodayEnd = new Date(now); simTodayEnd.setHours(23,59,59,999);
 
-      // Uppgifter idag: non-recurring tasks due today (not in the past, not done)
+      // Uppgifter idag: all tasks (one-off AND recurring children) due today, not done/cancelled.
+      // Recurring PARENTS are excluded here — they appear in "Återkommande" instead.
       const todayTasks = mapped.filter((t) => {
-        if (t.recurrence_rule || t.status === "done" || t.status === "cancelled") return false;
-        if (parentIdsWithChildren.has(t.id)) return false;
+        if (t.status === "done" || t.status === "cancelled") return false;
+        if (t.recurrence_rule && !t.parent_task_id) return false; // parent recurring → goes to "Återkommande"
+        if (!t.recurrence_rule && parentIdsWithChildren.has(t.id)) return false; // one-off parent with children
         if (!t.due_date) return false;
         const d = new Date(t.due_date);
         return d >= simTodayStart && d <= simTodayEnd;

@@ -2576,6 +2576,37 @@ function SchemaPage() {
                     })}
                   </div>
                 ))}
+                {/* Tasks assigned to users not mapped to any schedule employee */}
+                {(() => {
+                  const scheduledUserIds = new Set(
+                    displayRows.map(r => r.appUser?.id).filter((id): id is string => !!id)
+                  );
+                  const unscheduled = scheduleTasks.filter((t) => {
+                    if (!t.due_date || toLocalDateStr(t.due_date) !== currentDate) return false;
+                    if (!t.assigned_to) return false;
+                    return !scheduledUserIds.has(t.assigned_to);
+                  });
+                  if (unscheduled.length === 0) return null;
+                  return (
+                    <div className="rounded-xl border border-border/40 bg-muted/20 px-3 py-2.5">
+                      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        <Timer className="h-3 w-3" /> Uppgifter utan schemarad
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {unscheduled.map((t) => {
+                          const u = appUsers.find((u) => u.id === t.assigned_to);
+                          return (
+                            <div key={t.id} className="flex items-center gap-1.5 rounded-full border border-border/50 bg-card px-2.5 py-1 text-[11px] font-medium">
+                              <CheckCircle2 className={`h-3 w-3 shrink-0 ${t.status === "done" ? "text-green-500" : "text-muted-foreground/40"}`} />
+                              <span className="truncate max-w-[180px] text-foreground">{t.title}</span>
+                              {u && <span className="shrink-0 text-muted-foreground">· {u.display_name.split(" ")[0]}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
                 </div>
               )}
 
