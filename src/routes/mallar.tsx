@@ -1102,16 +1102,23 @@ function MallarPage() {
             const uid = nrToUserId.get(e.employee_nr);
             if (uid) empIdToUserId.set(e.id, uid);
           }
-          // Group shifts by exact date only — no day-of-week keys to avoid cross-week contamination
+          // Group shifts by exact date AND day-of-week.
+          // DB already excludes is_absence_day=true, so DOW keys are free from absent workers.
+          // DOW fallback is used when the template's due date falls outside the imported week.
           const byDate: Record<string, Map<string, { start: string; end: string }[]>> = {};
+          const addShift = (key: string, uid: string, start: string, end: string) => {
+            if (!byDate[key]) byDate[key] = new Map();
+            const existing = byDate[key].get(uid) ?? [];
+            existing.push({ start, end });
+            byDate[key].set(uid, existing);
+          };
           for (const s of (shifts ?? [])) {
             if (!s.day_date || !s.start_time) continue;
             const uid = empIdToUserId.get(s.schedule_employee_id);
             if (!uid) continue;
-            if (!byDate[s.day_date]) byDate[s.day_date] = new Map();
-            const existing = byDate[s.day_date].get(uid) ?? [];
-            existing.push({ start: s.start_time, end: s.stop_time ?? "23:59" });
-            byDate[s.day_date].set(uid, existing);
+            const dow = new Date(s.day_date + "T12:00:00").getDay().toString();
+            addShift(s.day_date, uid, s.start_time, s.stop_time ?? "23:59");
+            addShift(dow, uid, s.start_time, s.stop_time ?? "23:59");
           }
           setScheduledUsersByDate(byDate);
         } else {
@@ -4183,19 +4190,23 @@ function MallarPage() {
                   if (!entry) continue;
                   const deliveryTime = entry.delivery_time ?? "";
                   const exactDate = entry.delivery_date ?? "";
-                  const dayMap = exactDate ? scheduledUsersByDate[exactDate] : undefined;
+                  const dow = new Date((exactDate || "2000-01-03") + "T12:00:00").getDay().toString();
+                  const dateKey = (exactDate && scheduledUsersByDate[exactDate]) ? exactDate : dow;
+                  const dayMap = scheduledUsersByDate[dateKey];
                   if (!dayMap) continue;
                   for (const uid of dayMap.keys()) {
-                    if (userWorksAtTime(exactDate, uid, deliveryTime)) scheduledOnDays.add(uid);
+                    if (userWorksAtTime(dateKey, uid, deliveryTime)) scheduledOnDays.add(uid);
                   }
                 }
               } else if (smartDate?.iso) {
                 const dateStr = smartDate.iso.slice(0, 10);
+                const dow = new Date(dateStr + "T12:00:00").getDay().toString();
                 const taskTime = smartDate.time ?? "";
-                const dayMap = scheduledUsersByDate[dateStr];
+                const dateKey = scheduledUsersByDate[dateStr] ? dateStr : dow;
+                const dayMap = scheduledUsersByDate[dateKey];
                 if (dayMap) {
                   for (const uid of dayMap.keys()) {
-                    if (userWorksAtTime(dateStr, uid, taskTime)) scheduledOnDays.add(uid);
+                    if (userWorksAtTime(dateKey, uid, taskTime)) scheduledOnDays.add(uid);
                   }
                 }
               }
