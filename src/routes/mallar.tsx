@@ -1083,7 +1083,7 @@ function MallarPage() {
         if (importId) {
           const [{ data: emps }, { data: shifts }, { data: mappings }] = await Promise.all([
             supabase.from("schedule_employees").select("id, employee_nr").eq("import_id", importId),
-            supabase.from("schedule_shifts").select("schedule_employee_id, day_date, start_time, stop_time").eq("import_id", importId),
+            supabase.from("schedule_shifts").select("schedule_employee_id, day_date, start_time, stop_time, is_absence_day, gross_minutes").eq("import_id", importId),
             supabase.from("employee_mappings").select("employee_nr, app_user_id").eq("store_id", storeIdForSchedule),
           ]);
           // Build employee_nr → app_user_id map
@@ -1109,6 +1109,9 @@ function MallarPage() {
             if (!s.day_date) continue;
             const uid = empIdToUserId.get(s.schedule_employee_id);
             if (!uid) continue;
+            // Skip absence days (semester, sjuk, ledig, frånvaro) and shifts with no actual work time
+            if (s.is_absence_day) continue;
+            if (!s.start_time || (s.gross_minutes != null && s.gross_minutes <= 0)) continue;
             const start = s.start_time ?? "00:00";
             const end = s.stop_time ?? "23:59";
             const dow = new Date(s.day_date + "T12:00:00").getDay().toString();
