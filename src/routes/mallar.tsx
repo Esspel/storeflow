@@ -377,9 +377,10 @@ function MallarPage() {
   const [bulkCreating, setBulkCreating] = useState(false);
   const [allUsers, setAllUsers] = useState<AppUser[]>([]);
   const [allGroups, setAllGroups] = useState<UserGroup[]>([]);
-  // Scheduled user IDs per date (for batch assignee filtering)
-  const [scheduledUsersByDate, setScheduledUsersByDate] = useState<Record<string, Set<string>>>({});
-  // Per-template "show all users" toggle
+  // Scheduled users per date: dateKey → Map<userId, { start: string; end: string }[]>
+  const [scheduledUsersByDate, setScheduledUsersByDate] = useState<Record<string, Map<string, { start: string; end: string }[]>>>({});
+  // Per-template search query for assignee/bekraftare lists
+  const [bulkUserSearch, setBulkUserSearch] = useState<Record<string, string>>({});  // Per-template "show all users" toggle
   const [showAllUsersForTemplate, setShowAllUsersForTemplate] = useState<Record<string, boolean>>({});
   // Templates that already have tasks created (subsequent batch)
   const [templatesWithExistingTasks, setTemplatesWithExistingTasks] = useState<Set<string>>(new Set());
@@ -1096,18 +1097,23 @@ function MallarPage() {
             const uid = nrToUserId.get(e.employee_nr);
             if (uid) empIdToUserId.set(e.id, uid);
           }
-          // Group by day-of-week (0=Sun … 6=Sat) — schedule week may differ from delivery week
-          const byDate: Record<string, Set<string>> = {};
+          // Group shifts by date and day-of-week, storing per-user time ranges
+          const byDate: Record<string, Map<string, { start: string; end: string }[]>> = {};
+          const addShift = (key: string, uid: string, start: string, end: string) => {
+            if (!byDate[key]) byDate[key] = new Map();
+            const existing = byDate[key].get(uid) ?? [];
+            existing.push({ start, end });
+            byDate[key].set(uid, existing);
+          };
           for (const s of (shifts ?? [])) {
             if (!s.day_date) continue;
             const uid = empIdToUserId.get(s.schedule_employee_id);
             if (!uid) continue;
+            const start = s.start_time ?? "00:00";
+            const end = s.stop_time ?? "23:59";
             const dow = new Date(s.day_date + "T12:00:00").getDay().toString();
-            if (!byDate[dow]) byDate[dow] = new Set();
-            byDate[dow].add(uid);
-            // Also keep exact-date key for precision if schedule is current week
-            if (!byDate[s.day_date]) byDate[s.day_date] = new Set();
-            byDate[s.day_date].add(uid);
+            addShift(dow, uid, start, end);
+            addShift(s.day_date, uid, start, end);
           }
           setScheduledUsersByDate(byDate);
         } else {
@@ -4150,44 +4156,72 @@ function MallarPage() {
               const storeGroups = allGroups.filter(g => !activeStore || g.store_id === activeStore.id);
               const smartDate = calcNextDueDate(tmpl);
 
-              // Compute set of users scheduled on any weekday covered by this template
+              // Compute set of users scheduled and working at the task time
               const swedishDayToJs: Record<string, number> = {
                 "Söndag": 0, "Måndag": 1, "Tisdag": 2, "Onsdag": 3,
                 "Torsdag": 4, "Fredag": 5, "Lördag": 6,
               };
+
+              // Returns true if timeStr "HH:MM" falls within any of the user's shifts on the given date key
+              const userWorksAtTime = (dateKey: string, uid: string, timeStr: string): boolean => {
+                const map = scheduledUsersByDate[dateKey];
+                if (!map) return false;
+                const shifts = map.get(uid);
+                if (!shifts) return false;
+                if (!timeStr) return true; // no time restriction — just check they work that day
+                const [th, tm] = timeStr.split(":").map(Number);
+                const taskMins = th * 60 + tm;
+                return shifts.some(({ start, end }) => {
+                  const [sh, sm] = start.split(":").map(Number);
+                  const [eh, em] = end.split(":").map(Number);
+                  return taskMins >= sh * 60 + sm && taskMins <= eh * 60 + em;
+                });
+              };
+
               const scheduledOnDays = new Set<string>();
               if (isDeliveryTmpl) {
-                const daysInDeliveries = new Set(
-                  cfg.selectedDeliveryIds
-                    .map(id => deliveryWeekEntries.find(e => e.id === id)?.delivery_day)
-                    .filter(Boolean) as string[]
-                );
-                for (const dayName of daysInDeliveries) {
+                for (const deliveryId of cfg.selectedDeliveryIds) {
+                  const entry = deliveryWeekEntries.find(e => e.id === deliveryId);
+                  if (!entry) continue;
+                  const dayName = entry.delivery_day ?? "";
+                  const deliveryTime = entry.delivery_time ?? "";
                   const dow = swedishDayToJs[dayName];
                   if (dow === undefined) continue;
-                  // Try exact date first, fall back to day-of-week
-                  const exactDate = deliveryWeekEntries.find(e =>
-                    cfg.selectedDeliveryIds.includes(e.id) && e.delivery_day === dayName
-                  )?.delivery_date;
-                  const set = (exactDate && scheduledUsersByDate[exactDate])
-                    ? scheduledUsersByDate[exactDate]
-                    : scheduledUsersByDate[dow.toString()];
-                  if (set) for (const uid of set) scheduledOnDays.add(uid);
+                  // Prefer exact date key, fall back to day-of-week
+                  const dateKey = (entry.delivery_date && scheduledUsersByDate[entry.delivery_date])
+                    ? entry.delivery_date
+                    : dow.toString();
+                  const dayMap = scheduledUsersByDate[dateKey];
+                  if (!dayMap) continue;
+                  for (const uid of dayMap.keys()) {
+                    if (userWorksAtTime(dateKey, uid, deliveryTime)) scheduledOnDays.add(uid);
+                  }
                 }
               } else if (smartDate?.iso) {
                 const dateStr = smartDate.iso.slice(0, 10);
                 const dow = new Date(dateStr + "T12:00:00").getDay().toString();
-                const set = scheduledUsersByDate[dateStr] ?? scheduledUsersByDate[dow];
-                if (set) for (const uid of set) scheduledOnDays.add(uid);
+                const taskTime = smartDate.time ?? "";
+                const dateKey = scheduledUsersByDate[dateStr] ? dateStr : dow;
+                const dayMap = scheduledUsersByDate[dateKey];
+                if (dayMap) {
+                  for (const uid of dayMap.keys()) {
+                    if (userWorksAtTime(dateKey, uid, taskTime)) scheduledOnDays.add(uid);
+                  }
+                }
               }
               const hasScheduleData = Object.keys(scheduledUsersByDate).length > 0;
               const showAll = showAllUsersForTemplate[cfg.templateId] ?? false;
+              const userSearchQ = (bulkUserSearch[cfg.templateId] ?? "").toLowerCase();
               // Sort: scheduled workers first, then others. "Visa alla" expands to include non-scheduled.
               const scheduledUsers = storeUsers.filter(u => scheduledOnDays.has(u.id));
               const unscheduledUsers = storeUsers.filter(u => !scheduledOnDays.has(u.id));
-              const visibleUsers = hasScheduleData && scheduledOnDays.size > 0 && !showAll
+              const allSortedUsers = hasScheduleData && scheduledOnDays.size > 0
+                ? [...scheduledUsers, ...unscheduledUsers]
+                : storeUsers;
+              const visibleUsers = (hasScheduleData && scheduledOnDays.size > 0 && !showAll
                 ? scheduledUsers
-                : [...scheduledUsers, ...unscheduledUsers];
+                : allSortedUsers
+              ).filter(u => !userSearchQ || u.display_name.toLowerCase().includes(userSearchQ));
               return (
                 <div key={cfg.templateId} className={cn("rounded-2xl border bg-card p-4 space-y-4", isDeliveryTmpl ? "border-amber-300/60 bg-amber-50/30" : "border-border/60")}>
                   <div className="flex items-start gap-3">
@@ -4418,6 +4452,13 @@ function MallarPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <p className="text-[11px] text-muted-foreground/70 mb-1.5">Användare</p>
+                        <input
+                          type="text"
+                          placeholder="Sök användare..."
+                          value={bulkUserSearch[cfg.templateId] ?? ""}
+                          onChange={e => setBulkUserSearch(prev => ({ ...prev, [cfg.templateId]: e.target.value }))}
+                          className="mb-1.5 w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        />
                         <div className="space-y-0.5 max-h-36 overflow-y-auto rounded-lg border border-border/50 p-2">
                           {visibleUsers.length === 0 ? (
                             <p className="text-xs text-muted-foreground py-1">Inga användare</p>
@@ -4490,6 +4531,13 @@ function MallarPage() {
                         </label>
                       </div>
                       <p className="text-[11px] text-muted-foreground">Välj vem som ska bekräfta att händelsen inträffat innan uppgiften visas.</p>
+                      <input
+                        type="text"
+                        placeholder="Sök bekräftare..."
+                        value={(bulkUserSearch[cfg.templateId + "_confirm"] ?? "")}
+                        onChange={e => setBulkUserSearch(prev => ({ ...prev, [cfg.templateId + "_confirm"]: e.target.value }))}
+                        className="w-full rounded-md border border-amber-200 bg-background px-2 py-1 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-amber-400/40"
+                      />
                       <div className="space-y-0.5 max-h-28 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50/30 p-2">
                         <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
                           <Checkbox
@@ -4499,7 +4547,10 @@ function MallarPage() {
                           />
                           <span className="text-xs text-muted-foreground italic">Ingen specifik bekräftare</span>
                         </label>
-                        {storeUsers.map(u => (
+                        {storeUsers.filter(u => {
+                          const q = (bulkUserSearch[cfg.templateId + "_confirm"] ?? "").toLowerCase();
+                          return !q || u.display_name.toLowerCase().includes(q);
+                        }).map(u => (
                           <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
                             <Checkbox
                               checked={cfg.eventTriggerUserId === u.id}
