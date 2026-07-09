@@ -1114,14 +1114,11 @@ function MallarPage() {
             byDate[s.day_date].set(uid, existing);
           }
           setScheduledUsersByDate(byDate);
-          setAbsentUsersByDate({});
         } else {
           setScheduledUsersByDate({});
-          setAbsentUsersByDate({});
         }
       } catch {
         setScheduledUsersByDate({});
-        setAbsentUsersByDate({});
       }
     }
 
