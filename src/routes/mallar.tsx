@@ -1024,8 +1024,9 @@ function MallarPage() {
     return { iso: base.toISOString().slice(0, 10), time: timeStr };
   }
 
-  async function openBulkCreate() {
-    const configs = [...selectedTemplateIds].map((id) => {
+  async function openBulkCreate(overrideTemplateIds?: string[]) {
+    const ids = overrideTemplateIds ?? [...selectedTemplateIds];
+    const configs = ids.map((id) => {
       const tmpl = templates.find(t => t.id === id);
       if (!tmpl) return null;
       const tmplAny = tmpl as ChecklistTemplate & { event_trigger_user_id?: string; delivery_flow_name?: string; delivery_supplier_name?: string };
@@ -1202,11 +1203,11 @@ function MallarPage() {
         if (cfg.selectedDeliveryIds.length === 0) continue;
 
         // Fetch existing delivery tasks for this store to avoid duplicates
+        // Match on delivery_entry_id only — title may vary
         const { data: existingDeliveryTasks } = await supabase
           .from("tasks")
-          .select("delivery_entry_id, title, due_date")
+          .select("delivery_entry_id, due_date")
           .eq("store_id", storeId ?? "")
-          .eq("title", tmpl.title)
           .in("delivery_entry_id", cfg.selectedDeliveryIds);
 
         for (const deliveryId of cfg.selectedDeliveryIds) {
@@ -1227,7 +1228,9 @@ function MallarPage() {
           if (alreadyExists) continue;
 
           const { data: task } = await supabase.from("tasks").insert({
-            title: tmpl.title,
+            title: delivery
+              ? `${tmpl.title} — ${delivery.supplier} (${deliveryDay || delivery.delivery_time})`
+              : tmpl.title,
             description: tmpl.description ?? "",
             category: tmpl.category ?? "",
             priority: tmpl.priority ?? "Medel",
@@ -1245,7 +1248,7 @@ function MallarPage() {
             created_by: user?.id ?? null,
             assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
             status: "todo",
-            assignee_confirmed: cfg.assigneeUserIds.length > 0 && cfg.assigneeGroupIds.length === 0 ? false : null,
+            assignee_confirmed: cfg.assigneeUserIds.length > 0 && cfg.assigneeGroupIds.length === 0 && (existingDeliveryTasks ?? []).length > 0 ? false : null,
           }).select("id").maybeSingle();
           if (!task?.id) continue;
           if (validQuestions.length > 0) {
@@ -1330,7 +1333,7 @@ function MallarPage() {
           created_by: user?.id ?? null,
           assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
           status: "todo",
-          assignee_confirmed: cfg.assigneeUserIds.length > 0 && cfg.assigneeGroupIds.length === 0 ? false : null,
+          assignee_confirmed: cfg.assigneeUserIds.length > 0 && cfg.assigneeGroupIds.length === 0 && existingTaskList.some(t => (t.title ?? "").toLowerCase() === tmpl.title.toLowerCase()) ? false : null,
         }).select("id, created_at").maybeSingle();
 
         if (!task?.id) return;
@@ -3247,7 +3250,7 @@ function MallarPage() {
                           <Button
                             size="sm" variant="outline"
                             className="shrink-0 rounded-full h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
-                            onClick={() => { setActivatePackageTarget(pkg); const _now = new Date(); setBulkTaskConfigs(pkgTemplates.map(t => { const slots = (t as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? []; const dd = t.due_date_offset != null ? (() => { const d = new Date(_now); d.setDate(d.getDate() + t.due_date_offset!); return d.toISOString().slice(0, 10); })() : ""; return { templateId: t.id, assigneeUserIds: [], assigneeGroupIds: [], dueDate: dd, priority: t.priority ?? "Medel", dueTime: slots.length > 0 ? "" : (t.due_date_time ?? ""), timeSlots: slots }; })); setBulkCreateOpen(true); }}
+                            onClick={() => { setActivatePackageTarget(pkg); openBulkCreate(pkgTemplates.map(t => t.id)); }}
                           >
                             <ListChecks className="h-3 w-3 mr-1" /> Aktivera
                           </Button>
@@ -4102,6 +4105,9 @@ function MallarPage() {
             <span className="text-xs text-muted-foreground">
               ({bulkTaskConfigs.reduce((sum, cfg) => {
                 const tmpl = templates.find(t => t.id === cfg.templateId);
+                if (!tmpl) return sum + 1;
+                const isDeliveryTmpl = !!(tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task;
+                if (isDeliveryTmpl) return sum + Math.max(1, cfg.selectedDeliveryIds.length);
                 const slots = (tmpl as ChecklistTemplate & { time_slots?: string[] })?.time_slots ?? [];
                 return sum + Math.max(1, slots.length);
               }, 0)} uppgifter totalt)
