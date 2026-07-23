@@ -104,28 +104,39 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
   pinRef.current = pin;
 
   useEffect(() => {
-    if (!activeStoreId) return;
-    setLoadingUsers(true);
-    supabase
-      .from("user_stores")
-      .select("user:app_users(id, display_name, role, quick_pin_hash, barcode_id)")
-      .eq("store_id", activeStoreId)
-      .then(({ data }) => {
-        const users = (data ?? [])
-          .map((r: { user: unknown }) => r.user as { id: string; display_name: string; role: string; quick_pin_hash: string | null; barcode_id: string | null })
-          .filter(Boolean)
-          .filter((u) => u.id !== currentUser.id)
-          .map((u) => ({
-            id: u.id,
-            display_name: u.display_name,
-            role: u.role,
-            has_pin: !!u.quick_pin_hash,
-            has_barcode: !!u.barcode_id,
-          }));
-        setStoreUsers(users);
-        setLoadingUsers(false);
-      });
-  }, [activeStoreId, currentUser.id]);
+  // Avbryt direkt om vi saknar storeId eller användare
+  if (!activeStoreId || !currentUser?.id) return;
+
+  let isMounted = true;
+  setLoadingUsers(true);
+
+  supabase
+    .from("user_stores")
+    .select("user:app_users(id, display_name, role, quick_pin_hash, barcode_id)")
+    .eq("store_id", activeStoreId)
+    .then(({ data }) => {
+      if (!isMounted) return; // Förhindra state-uppdatering om komponenten hinner avmonteras
+
+      const users = (data ?? [])
+        .map((r: { user: unknown }) => r.user as { id: string; display_name: string; role: string; quick_pin_hash: string | null; barcode_id: string | null })
+        .filter(Boolean)
+        .filter((u) => u.id !== currentUser.id)
+        .map((u) => ({
+          id: u.id,
+          display_name: u.display_name,
+          role: u.role,
+          has_pin: !!u.quick_pin_hash,
+          has_barcode: !!u.barcode_id,
+        }));
+
+      setStoreUsers(users);
+      setLoadingUsers(false);
+    });
+
+  return () => {
+    isMounted = false;
+  };
+}, [activeStoreId, currentUser?.id]);
 
   const submitSwitch = useCallback(async (opts: { mode: "pin"; userId: string; pin: string } | { mode: "barcode"; barcode: string }) => {
     if (!activeStoreId) return;
