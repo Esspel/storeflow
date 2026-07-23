@@ -2298,7 +2298,9 @@ function TasksPage() {
     );
 
     const noDateTasks = filtered.filter(t => !t.due_date && t.status !== "done");
-
+    // Completed tasks: those with status done. For recurring tasks completed before their due_date, flag them.
+    const doneTodayTasks = filtered.filter(t => t.status === "done");
+    
     // Detect early completion: done on a calendar day strictly before the due date's calendar day
     const isEarlyCompletion = (t: TaskFull): boolean => {
       if (t.status !== "done" || !t.due_date || !t.completed_at) return false;
