@@ -42,11 +42,11 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
 
-  const message = error?.message || String(error);
+  const errorMessage = error?.stack || error?.message || String(error);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md w-full text-center">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
+      <div className="max-w-2xl w-full text-center">
         <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
           <svg className="h-6 w-6 text-destructive" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
@@ -58,16 +58,16 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <p className="mt-2 text-sm text-muted-foreground">
           Något gick fel. Prova att ladda om sidan.
         </p>
-        {message && (
-          <details className="mt-4 rounded-md border border-border bg-muted/50 px-4 py-3 text-left">
-            <summary className="cursor-pointer text-xs font-medium text-muted-foreground select-none">
-              Visa feldetaljer
-            </summary>
-            <pre className="mt-2 whitespace-pre-wrap break-all text-xs text-destructive font-mono">
-              {message}
-            </pre>
-          </details>
-        )}
+
+        <div className="mt-4 rounded-md border border-border bg-muted/50 px-4 py-3 text-left">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">
+            Feldetaljer:
+          </p>
+          <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-all text-xs text-destructive font-mono">
+            {errorMessage}
+          </pre>
+        </div>
+
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
