@@ -2290,18 +2290,19 @@ function TasksPage() {
       (PRIORITY_ORDER[a.priority ?? "Medel"] ?? 2) - (PRIORITY_ORDER[b.priority ?? "Medel"] ?? 2);
 
     // "Försenade" in today view = tasks from previous days (before today's midnight)
-    const overdueTasks = filtered.filter(t =>
-      t.status !== "done" && t.due_date && new Date(t.due_date) < simTodayStart
-    ).sort(sortByPriority);
-    const todayTasks = filtered.filter(t =>
-      t.status !== "done" &&
-      t.due_date &&
-      new Date(t.due_date) >= simTodayStart &&
-      new Date(t.due_date) <= simTodayEnd
-    ).sort(sortByPriority);
-    const noDateTasks = filtered.filter(t => !t.due_date && t.status !== "done").sort(sortByPriority);
-    // Completed tasks: those with status done. For recurring tasks completed before their due_date, flag them.
-    const doneTodayTasks = filtered.filter(t => t.status === "done");
+    const renderTodayView = () => {
+      const overdueTasks = filtered.filter(t =>
+        t.status !== "done" && t.due_date && new Date(t.due_date) < simTodayStart
+      );
+    
+      const todayTasks = filtered.filter(t =>
+        t.status !== "done" &&
+        t.due_date &&
+        new Date(t.due_date) >= simTodayStart &&
+        new Date(t.due_date) <= simTodayEnd
+      );
+    
+      const noDateTasks = filtered.filter(t => !t.due_date && t.status !== "done");
 
     // Detect early completion: done on a calendar day strictly before the due date's calendar day
     const isEarlyCompletion = (t: TaskFull): boolean => {
