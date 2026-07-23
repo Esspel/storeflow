@@ -74,7 +74,7 @@ function sortTasks(tasks: TaskRow[]): TaskRow[] {
       return 1;
     }
 
-    // 2. Sortera på prioritet
+    // 2. Sortera på prioritet (Kritisk > Hög > Medel > Låg)
     const pA = PRIORITY_WEIGHT[a.priority] ?? 99;
     const pB = PRIORITY_WEIGHT[b.priority] ?? 99;
     if (pA !== pB) return pA - pB;
@@ -141,38 +141,51 @@ function HubPage() {
         steps_done: t.steps?.filter((s) => s.is_done).length ?? 0,
       }));
 
-      const deduped = dedupRecurringSeries(mapped);
-      const { done, openTasks, overdueTasks: overdueCount } = deduped.reduce(
+      // 1. Identifiera föräldrauppgifter som har underuppgifter
+      const parentIdsWithChildren = new Set(mapped.filter((t) => t.parent_task_id).map((t) => t.parent_task_id!));
+
+      // 2. Filtrera bort mallar och föräldrauppgifter FÖRST så att vi endast jobbar med faktiska, utförbara uppgifter
+      const executableTasks = mapped.filter((t) => {
+        if (t.recurrence_rule && !t.parent_task_id) return false; // Återkommande mall
+        if (!t.recurrence_rule && parentIdsWithChildren.has(t.id)) return false; // Engångsförälder
+        return true;
+      });
+
+      // 3. Deduplicera och beräkna statistik utifrån enbart faktiska uppgifter
+      const deduped = dedupRecurringSeries(executableTasks);
+      
+      const { done, openTasks, overdueCount } = deduped.reduce(
         (acc, t) => {
-          if (t.status === "done") acc.done++;
-          else if (t.status === "late" || isEffectivelyLate(t, now)) acc.overdueTasks++;
-          else if (t.status === "todo" || t.status === "progress") acc.openTasks++;
+          if (t.status === "done") {
+            acc.done++;
+          } else if (t.status === "cancelled") {
+            // Ignorera avbrutna
+          } else if (t.status === "late" || isEffectivelyLate(t, now)) {
+            acc.overdueCount++;
+          } else if (t.status === "todo" || t.status === "progress") {
+            acc.openTasks++;
+          }
           return acc;
         },
-        { done: 0, openTasks: 0, overdueTasks: 0 }
+        { done: 0, openTasks: 0, overdueCount: 0 }
       );
+
       const inc = (incidents ?? []) as IncidentRow[];
       const openIncidents = inc.filter((i) => ["open", "in_progress", "escalated"].includes(i.status)).length;
 
       setStats({ todosCompleted: done, openTasks, overdueTasks: overdueCount, openIncidents });
       setRecentIncidents(inc.filter((i) => i.status !== "closed" && i.status !== "resolved"));
 
-      const parentIdsWithChildren = new Set(mapped.filter((t) => t.parent_task_id).map((t) => t.parent_task_id!));
+      // 4. Filtrera listor utifrån aktiva (ej klar/avbruten) körbara uppgifter
+      const activeTasks = deduped.filter((t) => t.status !== "done" && t.status !== "cancelled");
+
       const simTodayStart = new Date(now); simTodayStart.setHours(0,0,0,0);
       const simTodayEnd = new Date(now); simTodayEnd.setHours(23,59,59,999);
 
-      // Filtrera bort avslutade samt mallar/föräldrauppgifter
-      const activeTasks = mapped.filter((t) => {
-        if (t.status === "done" || t.status === "cancelled") return false;
-        if (t.recurrence_rule && !t.parent_task_id) return false;
-        if (!t.recurrence_rule && parentIdsWithChildren.has(t.id)) return false;
-        return true;
-      });
-
-      // Försenade uppgifter (status "late" eller förfallodatum passerat)
+      // Försenade uppgifter
       const overdueList = activeTasks.filter((t) => t.status === "late" || isEffectivelyLate(t, now));
 
-      // Dagens öppna uppgifter (förfaller idag och är Inte försenade än)
+      // Dagens öppna uppgifter (som förfaller idag och INTE är försenade ännu)
       const todayList = activeTasks.filter((t) => {
         if (t.status === "late" || isEffectivelyLate(t, now)) return false;
         if (!t.due_date) return false;
