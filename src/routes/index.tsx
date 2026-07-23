@@ -7,7 +7,6 @@ import {
   ListChecks,
   Clock,
   TrendingUp,
-  Repeat,
   CircleCheck as CheckCircle2,
   Circle,
   UserRound,
@@ -55,23 +54,34 @@ type Stats = {
   openIncidents: number;
 };
 
-const RECURRENCE_LABELS: Record<string, string> = {
-  daily: "Dagligen",
-  every_other_day: "Varannan dag",
-  weekly: "Varje vecka",
-  monthly: "Varje månad",
-  yearly: "Varje år",
+const PRIORITY_WEIGHT: Record<string, number> = {
+  Kritisk: 1,
+  Hög: 2,
+  Medel: 3,
+  Låg: 4,
 };
 
-const WEEKDAY_SHORT = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
+function sortTasks(tasks: TaskRow[]): TaskRow[] {
+  return [...tasks].sort((a, b) => {
+    // 1. Sortera på förfallodatum (tidigast först)
+    if (a.due_date && b.due_date) {
+      const timeA = new Date(a.due_date).getTime();
+      const timeB = new Date(b.due_date).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+    } else if (a.due_date) {
+      return -1;
+    } else if (b.due_date) {
+      return 1;
+    }
 
-function recurrenceLabel(task: TaskRow): string {
-  const base = RECURRENCE_LABELS[task.recurrence_rule ?? ""] ?? task.recurrence_rule ?? "";
-  if (task.recurrence_rule === "weekly" && task.recurrence_days && task.recurrence_days.length > 0) {
-    const days = [...task.recurrence_days].sort((a, b) => a - b).map((d) => WEEKDAY_SHORT[d]).join(", ");
-    return `${base} · ${days}`;
-  }
-  return base;
+    // 2. Sortera på prioritet
+    const pA = PRIORITY_WEIGHT[a.priority] ?? 99;
+    const pB = PRIORITY_WEIGHT[b.priority] ?? 99;
+    if (pA !== pB) return pA - pB;
+
+    // 3. Fallback på titel
+    return a.title.localeCompare(b.title, "sv");
+  });
 }
 
 function isEffectivelyLate(t: { status: string; due_date: string | null }, now: number): boolean {
@@ -96,8 +106,8 @@ function incidentStatusLabel(status: string): { text: string; cls: string } {
 function HubPage() {
   const { user, activeStore } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
-  const [oneOffTasks, setOneOffTasks] = useState<TaskRow[]>([]);
-  const [recurringTasks, setRecurringTasks] = useState<TaskRow[]>([]);
+  const [todayTasks, setTodayTasks] = useState<TaskRow[]>([]);
+  const [overdueTasks, setOverdueTasks] = useState<TaskRow[]>([]);
   const [recentIncidents, setRecentIncidents] = useState<IncidentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const isManager = user?.role === "manager" || user?.role === "admin";
@@ -132,7 +142,7 @@ function HubPage() {
       }));
 
       const deduped = dedupRecurringSeries(mapped);
-      const { done, openTasks, overdueTasks } = deduped.reduce(
+      const { done, openTasks, overdueTasks: overdueCount } = deduped.reduce(
         (acc, t) => {
           if (t.status === "done") acc.done++;
           else if (t.status === "late" || isEffectivelyLate(t, now)) acc.overdueTasks++;
@@ -144,35 +154,34 @@ function HubPage() {
       const inc = (incidents ?? []) as IncidentRow[];
       const openIncidents = inc.filter((i) => ["open", "in_progress", "escalated"].includes(i.status)).length;
 
-      setStats({ todosCompleted: done, openTasks, overdueTasks, openIncidents });
+      setStats({ todosCompleted: done, openTasks, overdueTasks: overdueCount, openIncidents });
       setRecentIncidents(inc.filter((i) => i.status !== "closed" && i.status !== "resolved"));
 
       const parentIdsWithChildren = new Set(mapped.filter((t) => t.parent_task_id).map((t) => t.parent_task_id!));
       const simTodayStart = new Date(now); simTodayStart.setHours(0,0,0,0);
       const simTodayEnd = new Date(now); simTodayEnd.setHours(23,59,59,999);
 
-      // Uppgifter idag: all tasks (one-off AND recurring children) due today, not done/cancelled.
-      // Recurring PARENTS are excluded here — they appear in "Återkommande" instead.
-      const todayTasks = mapped.filter((t) => {
+      // Filtrera bort avslutade samt mallar/föräldrauppgifter
+      const activeTasks = mapped.filter((t) => {
         if (t.status === "done" || t.status === "cancelled") return false;
-        if (t.recurrence_rule && !t.parent_task_id) return false; // parent recurring → goes to "Återkommande"
-        if (!t.recurrence_rule && parentIdsWithChildren.has(t.id)) return false; // one-off parent with children
+        if (t.recurrence_rule && !t.parent_task_id) return false;
+        if (!t.recurrence_rule && parentIdsWithChildren.has(t.id)) return false;
+        return true;
+      });
+
+      // Försenade uppgifter (status "late" eller förfallodatum passerat)
+      const overdueList = activeTasks.filter((t) => t.status === "late" || isEffectivelyLate(t, now));
+
+      // Dagens öppna uppgifter (förfaller idag och är Inte försenade än)
+      const todayList = activeTasks.filter((t) => {
+        if (t.status === "late" || isEffectivelyLate(t, now)) return false;
         if (!t.due_date) return false;
         const d = new Date(t.due_date);
         return d >= simTodayStart && d <= simTodayEnd;
       });
-      setOneOffTasks(todayTasks.slice(0, 5));
 
-      // Återkommande: parent recurring tasks, hide done, deduplicate by title (show each once)
-      const seenTitles = new Set<string>();
-      const recurringUnique = mapped.filter((t) => {
-        if (!t.recurrence_rule || t.parent_task_id) return false;
-        if (t.status === "done" || t.status === "cancelled") return false;
-        if (seenTitles.has(t.title)) return false;
-        seenTitles.add(t.title);
-        return true;
-      });
-      setRecurringTasks(recurringUnique.slice(0, 5));
+      setTodayTasks(sortTasks(todayList).slice(0, 5));
+      setOverdueTasks(sortTasks(overdueList).slice(0, 5));
       setLoading(false);
     };
     load();
@@ -181,7 +190,6 @@ function HubPage() {
   const firstName = user?.display_name?.split(" ")[0] ?? "";
 
   return (
-    /* Dashboard gets the mint-green background; everything else in the app uses white */
     <div className="min-h-full" style={{ background: "oklch(0.94 0.04 145)" }}>
       <div className="mx-auto w-full max-w-[1400px] px-5 py-10 md:px-8 md:py-14">
 
@@ -201,7 +209,7 @@ function HubPage() {
         {/* Main panel */}
         <div className="mb-6 overflow-hidden rounded-2xl border border-border/60 bg-white shadow-[var(--shadow-sm)]">
 
-          {/* Three-column top: tasks today | recurring | avvikelser */}
+          {/* Three-column top: tasks today | overdue tasks | avvikelser */}
           <div className="grid grid-cols-1 divide-y divide-border/50 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
 
             {/* Uppgifter idag */}
@@ -217,24 +225,24 @@ function HubPage() {
               </div>
               {loading ? (
                 <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-11 animate-pulse rounded-lg bg-muted/50" />)}</div>
-              ) : oneOffTasks.length === 0 ? (
+              ) : todayTasks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <CheckCircle2 className="mb-2 h-7 w-7 text-success/60" />
-                  <p className="text-xs font-medium text-muted-foreground">Inga aktiva uppgifter</p>
+                  <p className="text-xs font-medium text-muted-foreground">Inga aktiva uppgifter idag</p>
                 </div>
               ) : (
                 <div className="divide-y divide-border/40">
-                  {oneOffTasks.map((t) => <TaskPreviewRow key={t.id} task={t} />)}
+                  {todayTasks.map((t) => <TaskPreviewRow key={t.id} task={t} />)}
                 </div>
               )}
             </div>
 
-            {/* Återkommande uppgifter */}
+            {/* Försenade uppgifter */}
             <div className="p-5 md:p-6">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-success" />
-                  <h2 className="text-sm font-semibold text-foreground">Återkommande uppgifter</h2>
+                  <div className="h-2 w-2 rounded-full bg-destructive" />
+                  <h2 className="text-sm font-semibold text-foreground">Försenade uppgifter</h2>
                 </div>
                 <Link to="/uppgifter" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
                   Se alla <ArrowRight className="h-3 w-3" />
@@ -242,14 +250,14 @@ function HubPage() {
               </div>
               {loading ? (
                 <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-11 animate-pulse rounded-lg bg-muted/50" />)}</div>
-              ) : recurringTasks.length === 0 ? (
+              ) : overdueTasks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Repeat className="mb-2 h-7 w-7 text-muted-foreground/40" />
-                  <p className="text-xs font-medium text-muted-foreground">Inga återkommande uppgifter</p>
+                  <CheckCircle2 className="mb-2 h-7 w-7 text-success/60" />
+                  <p className="text-xs font-medium text-muted-foreground">Inga försenade uppgifter</p>
                 </div>
               ) : (
                 <div className="divide-y divide-border/40">
-                  {recurringTasks.map((t) => <TaskPreviewRow key={t.id} task={t} recurring />)}
+                  {overdueTasks.map((t) => <TaskPreviewRow key={t.id} task={t} />)}
                 </div>
               )}
             </div>
@@ -328,7 +336,7 @@ function HubPage() {
   );
 }
 
-function TaskPreviewRow({ task, recurring = false }: { task: TaskRow; recurring?: boolean }) {
+function TaskPreviewRow({ task }: { task: TaskRow }) {
   const now = getSimulatedNow();
   const late = isEffectivelyLate(task, now);
   const done = task.status === "done";
@@ -348,18 +356,16 @@ function TaskPreviewRow({ task, recurring = false }: { task: TaskRow; recurring?
           {task.title}
         </p>
         <p className="mt-0.5 text-[11px] text-muted-foreground">
-          {recurring && task.recurrence_rule
-            ? recurrenceLabel(task)
-            : task.due_date
-              ? new Date(task.due_date).toLocaleDateString("sv-SE", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
-              : "Inget datum"
+          {task.due_date
+            ? new Date(task.due_date).toLocaleDateString("sv-SE", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+            : "Inget datum"
           }
         </p>
       </div>
       <div className="w-16 shrink-0">
         <div className="h-1.5 overflow-hidden rounded-full bg-muted">
           <div
-            className={cn("h-full rounded-full transition-all", done ? "bg-success" : "bg-primary")}
+            className={cn("h-full rounded-full transition-all", done ? "bg-success" : late ? "bg-destructive" : "bg-primary")}
             style={{ width: `${Math.round(progress * 100)}%` }}
           />
         </div>
