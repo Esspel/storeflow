@@ -1330,7 +1330,10 @@ function TasksPage() {
         }
       }
     } else if ((t.recurrence_rule || isChild) && scope === "single") {
-      if (t.status !== "done" && !t.completed_at) {
+      // Always delete the specific instance the user picked, regardless of its
+      // status. (Previously this was guarded by "not done", which meant clicking
+      // delete on a completed occurrence silently did nothing.)
+      {
         const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", t.id);
         deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
         await supabase.from("tasks").delete().eq("id", t.id);
@@ -1345,12 +1348,25 @@ function TasksPage() {
         }
       }
     } else {
-      if (t.status !== "done" && !t.completed_at) {
+      // Same fix as above: delete regardless of status.
+      {
         const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", t.id);
         deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
         await supabase.from("tasks").delete().eq("id", t.id);
         deletedIds.push(t.id);
       }
+    }
+
+    // RLS can silently block a delete (0 rows affected, no thrown error) e.g. when
+    // the task belongs to a store that isn't the user's currently active store.
+    // Verify the click actually removed something instead of failing silently.
+    const { data: stillExists } = await supabase.from("tasks").select("id").eq("id", t.id).maybeSingle();
+    if (stillExists) {
+      toast.error("Kunde inte ta bort uppgiften. Den kan tillhöra en annan butik än din aktiva — byt butik och försök igen.");
+      setDeleteTarget(null);
+      setDeleteScope(null);
+      await fetchTasks();
+      return;
     }
 
     // Clear depends_on_task_id on any tasks that referenced the deleted task(s)
@@ -1405,7 +1421,7 @@ function TasksPage() {
           }
         }
       } else if ((task.recurrence_rule || isChild) && recurringScope === "single") {
-        if (task.status !== "done" && !task.completed_at) {
+        {
           const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", task.id);
           deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
           await supabase.from("tasks").delete().eq("id", task.id);
