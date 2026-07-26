@@ -1320,8 +1320,10 @@ function TasksPage() {
           deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
           await supabase.from("tasks").delete().eq("id", t.id);
           deletedIds.push(t.id);
-        } else if (isChild) {
-          // Cap recurrence_end so spawn won't recreate purged periods
+        } else {
+          // Parent survives (either it's a child instance being deleted, or the
+          // parent itself was already done/completed). Cap recurrence_end so the
+          // spawner won't recreate the periods we just purged.
           const dayBefore = new Date(periodStart);
           dayBefore.setDate(dayBefore.getDate() - 1);
           await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
@@ -1396,7 +1398,7 @@ function TasksPage() {
             deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
             await supabase.from("tasks").delete().eq("id", task.id);
             allDeletedIds.push(task.id);
-          } else if (isChild) {
+          } else {
             const dayBefore = new Date(periodStart);
             dayBefore.setDate(dayBefore.getDate() - 1);
             await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
@@ -1995,10 +1997,18 @@ function TasksPage() {
     currentChildByParent.set(parentId, children[0]);
   }
 
-  // IDs of all child tasks that are NOT the current representative — hide these
+  // IDs of all child tasks that are NOT the current representative — hide these.
+  // EXCEPTION: overdue, not-done occurrences are never grouped away. Each missed
+  // recurring occurrence must show up as its own separate task that has to be
+  // completed (or explicitly deleted) individually, instead of being collapsed
+  // into a single row.
   const hiddenChildIds = new Set<string>();
   for (const t of visibleTasks) {
     if (!t.parent_task_id) continue;
+    const isOverdueUndone = !!t.due_date &&
+      new Date(t.due_date) < simTodayStart &&
+      t.status !== "done" && t.status !== "cancelled";
+    if (isOverdueUndone) continue;
     const rep = currentChildByParent.get(t.parent_task_id);
     if (rep && rep.id !== t.id) hiddenChildIds.add(t.id);
   }
@@ -4714,4 +4724,3 @@ function TasksPage() {
     </div>
   );
 }
-
