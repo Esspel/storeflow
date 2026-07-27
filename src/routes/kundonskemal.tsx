@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   supabase, type CustomerRequest, type Store as StoreType,
   mittCoopUrlFromStored, decodeArticleNumber,
-  MITT_COOP_CATEGORIES, MITT_COOP_STATUS_CODES, type ArticleIdType,
+  encodeArticleNumber,MITT_COOP_CATEGORIES, MITT_COOP_STATUS_CODES, type ArticleIdType,
   getPublicUrl, uploadAttachment, deleteStorageFiles,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
