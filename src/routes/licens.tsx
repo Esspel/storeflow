@@ -21,7 +21,7 @@ function LicensePage() {
         <div className="rounded-xl border border-border/60 bg-muted/30 p-5">
           <p className="font-mono text-xs text-foreground">
             StoreFlow — Butiksdriftssystem<br />
-            Copyright (C) 2024–2026 StoreFlow Contributors<br /><br />
+            Copyright (C) 2026 Eric Söderström<br /><br />
             This program is free software: you can redistribute it and/or modify<br />
             it under the terms of the GNU General Public License as published by<br />
             the Free Software Foundation, either version 3 of the License, or<br />
