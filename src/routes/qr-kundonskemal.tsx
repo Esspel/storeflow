@@ -138,9 +138,6 @@ function QrKundonskemalPage() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-foreground">{request.product_name}</p>
-              {request.article_number && (
-                <p className="mt-0.5 text-xs font-mono text-muted-foreground">{request.article_number}</p>
-              )}
             </div>
             <div className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1", {
               "bg-success/10": request.status === "fulfilled",
