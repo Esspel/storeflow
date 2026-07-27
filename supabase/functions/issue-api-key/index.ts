@@ -3,24 +3,21 @@
 // Mints, lists, or revokes API keys used by storeflow-api and mcp-server.
 // Gated by the same IMPORT_WEBHOOK_SECRET used by the two import functions —
 // this is an admin-only operation, not something end users or agents call.
-//
-// Call:
-//   POST https://<project-ref>.supabase.co/functions/v1/issue-api-key
-//   Headers: Content-Type: application/json, x-import-secret: <IMPORT_WEBHOOK_SECRET>
-//   Body:
-//     { "action": "create", "name": "Power Automate", "store_id": "uuid" | null,
-//       "scopes": ["templates:read","templates:write","deliveries:read","schedule:read","products:search"] }
-//     { "action": "list" }
-//     { "action": "revoke", "key_id": "uuid" }
-//
-// "create" response includes the RAW key exactly once: { success: true, api_key: "sf_live_...", key_id, key_prefix }
-// Store it immediately — it is not recoverable afterwards, only key_prefix + metadata remain.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { serviceRoleClient } from "../_shared/auth.ts";
 
-const ALL_SCOPES = ["templates:read", "templates:write", "deliveries:read", "schedule:read", "products:search"];
+const ALL_SCOPES = [
+  "templates:read", "templates:write",
+  "tasks:read", "tasks:write",
+  "customer_requests:read", "customer_requests:write",
+  "customer_rounds:read",
+  "deviations:read", "deviations:write",
+  "stores:read",
+  "template_packages:read", "template_packages:write",
+  "deliveries:read", "schedule:read", "products:search",
+];
 
 async function sha256Hex(text: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
