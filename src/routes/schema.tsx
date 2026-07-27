@@ -28,6 +28,7 @@ import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getSpecialWeekHoliday, stockholmToUtc, formatStockholmTime, isoWeekNumber } from "@/lib/swedish-holidays";
+import { getISOWeek, getYear } from "date-fns";
 
 function SchemaRoute() {
   const { activeStore, user } = useAuth();
@@ -288,6 +289,34 @@ async function readFileText(file: File): Promise<string> {
 
 function nameToUsername(name: string): string {
   return name.toLowerCase().trim().replace(/\s+/g, ".").replace(/[åä]/g, "a").replace(/ö/g, "o").replace(/[^a-z0-9.]/g, "");
+}
+
+// Räkna ut minsta tillåtna vecka (2 veckor bakåt i tiden)
+function getMinAllowedWeek() {
+  const now = new Date();
+  const currentWeek = getISOWeek(now);
+  const currentYear = getYear(now);
+
+  let minWeek = currentWeek - 2;
+  let minYear = currentYear;
+
+  if (minWeek < 1) {
+    minYear -= 1;
+    // Hanterar årsskifte (ca 52 veckor beroende på år)
+    minWeek += 52; 
+  }
+
+  return { weekNumber: minWeek, year: minYear };
+}
+
+// Kontrollerar om en specifik vecka är äldre än tillåtet
+function isWeekTooOld(weekNumber: number, year: number): boolean {
+  const minAllowed = getMinAllowedWeek();
+  
+  if (year < minAllowed.year) return true;
+  if (year === minAllowed.year && weekNumber < minAllowed.weekNumber) return true;
+  
+  return false;
 }
 
 // ─── XML parsing ──────────────────────────────────────────────────────────────
@@ -1719,7 +1748,9 @@ function SchemaPage() {
                     onClick={() => {
                       if (currIdx > 0) {
                         const prev = allWeeks[currIdx - 1];
-                        navigateToWeek(prev.weekNumber, prev.year);
+                        if (!isWeekTooOld(prev.weekNumber, prev.year)) {
+                          navigateToWeek(prev.weekNumber, prev.year);
+                        }
                       }
                     }}
                     aria-label="Föregående vecka"
@@ -1736,22 +1767,24 @@ function SchemaPage() {
                     <SelectTrigger className="h-9 w-40 text-sm font-medium">
                       <SelectValue placeholder="Välj vecka" />
                     </SelectTrigger>
-                    <SelectContent className="max-h-64">
-                      {allWeeks.map((wk) => {
-                        const hasImport = imports.some((i) => i.week_number === wk.weekNumber && i.year === wk.year);
-                        const monthStr = new Date(parseInt(wk.weekStart.slice(0,4)), parseInt(wk.weekStart.slice(5,7))-1, parseInt(wk.weekStart.slice(8,10)))
-                          .toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
-                        return (
-                          <SelectItem key={`${wk.year}-${wk.weekNumber}`} value={`${wk.year}-${wk.weekNumber}`}>
-                            <span className="flex items-center gap-2">
-                              <span>V{wk.weekNumber}</span>
-                              <span className="text-muted-foreground text-xs">{monthStr}</span>
-                              {!hasImport && <span className="text-[10px] text-muted-foreground/50">–</span>}
-                            </span>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
+                      <SelectContent className="max-h-64">
+                        {allWeeks
+                          .filter((wk) => !isWeekTooOld(wk.weekNumber, wk.year)) // 👈 Filtrerar bort veckor äldre än 2 veckor
+                          .map((wk) => {
+                            const hasImport = imports.some((i) => i.week_number === wk.weekNumber && i.year === wk.year);
+                            const monthStr = new Date(parseInt(wk.weekStart.slice(0,4)), parseInt(wk.weekStart.slice(5,7))-1, parseInt(wk.weekStart.slice(8,10)))
+                              .toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
+                            return (
+                              <SelectItem key={`${wk.year}-${wk.weekNumber}`} value={`${wk.year}-${wk.weekNumber}`}>
+                                <span className="flex items-center gap-2">
+                                  <span>V{wk.weekNumber}</span>
+                                  <span className="text-muted-foreground text-xs">{monthStr}</span>
+                                  {!hasImport && <span className="text-[10px] text-muted-foreground/50">–</span>}
+                                </span>
+                              </SelectItem>
+                            );
+                          })}
+                      </SelectContent>
                   </Select>
                   <button
                     className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
