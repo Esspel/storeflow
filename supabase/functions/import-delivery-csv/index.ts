@@ -156,6 +156,27 @@ function getSpecialWeekHoliday(year: number, weekNumber: number): string | null 
   return null;
 }
 
+function decodeBase64Content(input: string): string {
+  let cleaned = input.trim();
+  if (cleaned.startsWith("data:")) {
+    const commaIdx = cleaned.indexOf(",");
+    if (commaIdx !== -1) {
+      cleaned = cleaned.slice(commaIdx + 1);
+    }
+  }
+  cleaned = cleaned.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  while (cleaned.length % 4 !== 0) {
+    cleaned += "=";
+  }
+  try {
+    const binaryString = atob(cleaned);
+    const bytes = Uint8Array.from(binaryString, (c) => c.charCodeAt(0));
+    return new TextDecoder("utf-8").decode(bytes).replace(/^\uFEFF/, "");
+  } catch {
+    return input.trim().replace(/^\uFEFF/, "");
+  }
+}
+
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -184,12 +205,17 @@ Deno.serve(async (req: Request) => {
   if (!body.csv && !body.csv_base64) return json({ error: "csv eller csv_base64 måste anges." }, 400);
 
   let csvText: string;
-  try {
-    csvText = body.csv ?? new TextDecoder("utf-8").decode(
-      Uint8Array.from(atob(body.csv_base64!), (c) => c.charCodeAt(0))
-    );
-  } catch {
-    return json({ error: "Kunde inte avkoda csv_base64 (måste vara giltig base64)." }, 400);
+  if (body.csv_base64) {
+    csvText = decodeBase64Content(body.csv_base64);
+  } else if (body.csv) {
+    const trimmed = body.csv.trim();
+    if (trimmed.startsWith("data:") || (!trimmed.includes(",") && !trimmed.includes("\n") && trimmed.length > 20)) {
+      csvText = decodeBase64Content(trimmed);
+    } else {
+      csvText = trimmed.replace(/^\uFEFF/, "");
+    }
+  } else {
+    return json({ error: "csv eller csv_base64 måste anges." }, 400);
   }
 
   const supabase = createClient(
