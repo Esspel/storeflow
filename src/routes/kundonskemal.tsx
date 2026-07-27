@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  Copy, ExternalLink, Hash, ImagePlus, Plus, QrCode, ScanLine, Search, ShoppingCart, Store as StoreIcon, Trash2, X, ChevronDown,
+  Copy, ExternalLink, Hash, ImagePlus, Plus, QrCode, ScanLine, Search, ShoppingCart, Store as StoreIcon, Trash2, X,
 } from "lucide-react";
 import { CameraScanner } from "@/components/camera-scanner";
 import { QrDisplay } from "@/components/qr-display";
@@ -21,7 +21,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   supabase, type CustomerRequest, type Store as StoreType,
-  mittCoopUrlFromStored, mittCoopSearchUrl, mittCoopUrl, encodeArticleNumber, decodeArticleNumber,
+  mittCoopUrlFromStored, decodeArticleNumber,
   MITT_COOP_CATEGORIES, MITT_COOP_STATUS_CODES, type ArticleIdType,
   getPublicUrl, uploadAttachment, deleteStorageFiles,
 } from "@/lib/supabase";
@@ -78,6 +78,7 @@ function CustomerRequestsPage() {
   const isManager = user?.role === "manager" || isAdmin;
 
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
+  const [requestImagesMap, setRequestImagesMap] = useState<Record<string, { id: string; storage_path: string }[]>>({});
   const [stores, setStores] = useState<StoreType[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -85,22 +86,18 @@ function CustomerRequestsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [articleCameraOpen, setArticleCameraOpen] = useState(false);
-  // 3-way disambiguation for manually typed article numbers
   const [articlePrompt, setArticlePrompt] = useState<{ value: string; target: "create" | "edit" } | null>(null);
-  // Category search state for the combobox
   const [categorySearch, setCategorySearch] = useState("");
   const [editCategorySearch, setEditCategorySearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CustomerRequest | null>(null);
   const [editTarget, setEditTarget] = useState<CustomerRequest | null>(null);
   const [editStatus, setEditStatus] = useState<CustomerRequest["status"]>("open");
-  const [editNotes, setEditNotes] = useState("");
   const [editInternalNotes, setEditInternalNotes] = useState("");
   const [editArticleNumber, setEditArticleNumber] = useState("");
   const [editArticleType, setEditArticleType] = useState<ArticleIdType>("mat-nr");
   const [editCategoryId, setEditCategoryId] = useState<number | null>(null);
   const [editStatusCode, setEditStatusCode] = useState<number | null>(null);
-  const [detailTarget, setDetailTarget] = useState<CustomerRequest | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrRequest, setQrRequest] = useState<CustomerRequest | null>(null);
   const [qrTokenUrl, setQrTokenUrl] = useState("");
@@ -109,33 +106,37 @@ function CustomerRequestsPage() {
   const [storeQrLoading, setStoreQrLoading] = useState(false);
   const [copiedQr, setCopiedQr] = useState(false);
   const [editComment, setEditComment] = useState("");
-  // Mitt Coop link builder (standalone, no article number required)
-  const [showLinkBuilder, setShowLinkBuilder] = useState(false);
-  const [linkBuilderMode, setLinkBuilderMode] = useState<"filter" | "search">("filter");
-  const [linkBuilderCategoryId, setLinkBuilderCategoryId] = useState<number | null>(null);
-  const [linkBuilderStatusCode, setLinkBuilderStatusCode] = useState<number | null>(null);
-  const [linkBuilderProductName, setLinkBuilderProductName] = useState("");
-  const [linkBuilderCategorySearch, setLinkBuilderCategorySearch] = useState("");
 
-  // Image upload for create/edit (staff)
+  // Image upload for create/edit
   const [createImages, setCreateImages] = useState<File[]>([]);
   const [createPreviews, setCreatePreviews] = useState<string[]>([]);
   const createFileRef = useRef<HTMLInputElement>(null);
   const [editImages, setEditImages] = useState<File[]>([]);
   const [editPreviews, setEditPreviews] = useState<string[]>([]);
   const editFileRef = useRef<HTMLInputElement>(null);
-  // Images loaded for the currently open request (detail + edit dialog)
-  const [requestImages, setRequestImages] = useState<{ id: string; storage_path: string }[]>([]);
+  const [currentEditImages, setCurrentEditImages] = useState<{ id: string; storage_path: string }[]>([]);
 
   const MAX_IMAGES = 5;
 
-  const loadRequestImages = async (requestId: string) => {
+  const loadAllImages = async (requestIds: string[]) => {
+    if (requestIds.length === 0) {
+      setRequestImagesMap({});
+      return;
+    }
     const { data } = await supabase
       .from("customer_request_images")
-      .select("id, storage_path")
-      .eq("request_id", requestId)
+      .select("id, request_id, storage_path")
+      .in("request_id", requestIds)
       .order("created_at");
-    setRequestImages(data ?? []);
+
+    if (data) {
+      const map: Record<string, { id: string; storage_path: string }[]> = {};
+      data.forEach((img) => {
+        if (!map[img.request_id]) map[img.request_id] = [];
+        map[img.request_id].push({ id: img.id, storage_path: img.storage_path });
+      });
+      setRequestImagesMap(map);
+    }
   };
 
   const addCreateImages = async (files: FileList | null, inputEl?: HTMLInputElement | null) => {
@@ -155,7 +156,7 @@ function CustomerRequestsPage() {
 
   const addEditImages = async (files: FileList | null, inputEl?: HTMLInputElement | null) => {
     if (!files || files.length === 0) return;
-    const remaining = MAX_IMAGES - (requestImages.length + editImages.length);
+    const remaining = MAX_IMAGES - (currentEditImages.length + editImages.length);
     const toAdd = Array.from(files).slice(0, remaining);
     if (inputEl) inputEl.value = "";
     setEditImages((prev) => [...prev, ...toAdd]);
@@ -169,10 +170,10 @@ function CustomerRequestsPage() {
   };
 
   const deleteExistingImage = async (imgId: string) => {
-    const img = requestImages.find((i) => i.id === imgId);
+    const img = currentEditImages.find((i) => i.id === imgId);
     await supabase.from("customer_request_images").delete().eq("id", imgId);
     if (img) deleteStorageFiles([img.storage_path]);
-    setRequestImages((prev) => prev.filter((i) => i.id !== imgId));
+    setCurrentEditImages((prev) => prev.filter((i) => i.id !== imgId));
   };
 
   const uploadImages = async (requestId: string, files: File[]) => {
@@ -189,13 +190,12 @@ function CustomerRequestsPage() {
   };
 
   useEffect(() => {
-    const id = detailTarget?.id ?? editTarget?.id;
-    if (id) {
-      loadRequestImages(id);
+    if (editTarget) {
+      setCurrentEditImages(requestImagesMap[editTarget.id] || []);
     } else {
-      setRequestImages([]);
+      setCurrentEditImages([]);
     }
-  }, [detailTarget?.id, editTarget?.id]);
+  }, [editTarget]);
 
   const openQrForRequest = async (req: CustomerRequest) => {
     if (!activeStore || !user) return;
@@ -259,7 +259,11 @@ function CustomerRequestsPage() {
       q = q.in("store_id", userStores.map((s) => s.id));
     }
     const { data } = await q;
-    if (data) setRequests(data as CustomerRequest[]);
+    if (data) {
+      const fetchedRequests = data as CustomerRequest[];
+      setRequests(fetchedRequests);
+      await loadAllImages(fetchedRequests.map((r) => r.id));
+    }
     setLoading(false);
   };
 
@@ -324,7 +328,7 @@ function CustomerRequestsPage() {
     editPreviews.forEach((p) => URL.revokeObjectURL(p));
     setEditImages([]);
     setEditPreviews([]);
-    setRequestImages([]);
+    setCurrentEditImages([]);
     setEditTarget(null);
     await fetchRequests();
   };
@@ -347,8 +351,6 @@ function CustomerRequestsPage() {
     if (!value.trim()) return;
     setArticlePrompt({ value: value.trim(), target });
   };
-
-  const siteId = activeStore?.sap_site_id ?? null;
 
   const buildMcUrl = (
     articleNumber: string | null | undefined,
@@ -395,114 +397,6 @@ function CustomerRequestsPage() {
         <StatCard label="Inkomna" value={open} tone="default" />
         <StatCard label="Beställda" value={ordered} tone="success" />
         <StatCard label="Uppfyllda" value={fulfilled} tone="success" />
-      </div>
-
-      {/* Mitt Coop Link Builder */}
-      <div className="mb-5 rounded-2xl border border-border/60 bg-card overflow-hidden">
-        <button
-          onClick={() => setShowLinkBuilder(v => !v)}
-          className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-muted/40 transition-colors"
-        >
-          <ExternalLink className="h-4 w-4 text-primary shrink-0" />
-          <span className="text-sm font-medium">Mitt Coop-länkverktyg</span>
-          <ChevronDown className={cn("ml-auto h-4 w-4 text-muted-foreground transition-transform", showLinkBuilder && "rotate-180")} />
-        </button>
-        {showLinkBuilder && (
-          <div className="border-t border-border/60 px-4 py-4 space-y-4">
-            <div className="flex gap-1 rounded-full border border-border/60 bg-muted/40 p-0.5 w-max">
-              <button
-                onClick={() => setLinkBuilderMode("filter")}
-                className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", linkBuilderMode === "filter" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
-              >
-                Filtrera (status/kategori)
-              </button>
-              <button
-                onClick={() => setLinkBuilderMode("search")}
-                className={cn("rounded-full px-3 py-1 text-xs font-medium transition-colors", linkBuilderMode === "search" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
-              >
-                Sök produktnamn
-              </button>
-            </div>
-
-            {linkBuilderMode === "filter" ? (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">Kategori (valfri)</label>
-                  <div className="relative">
-                    <input
-                      value={linkBuilderCategorySearch}
-                      onChange={(e) => setLinkBuilderCategorySearch(e.target.value)}
-                      placeholder="Sök kategori..."
-                      className="w-full h-8 rounded-lg border border-border/60 bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
-                    />
-                    {linkBuilderCategorySearch && (
-                      <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border/60 bg-card shadow-md">
-                        {linkBuilderCategoryId && (
-                          <button className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-muted/50 text-destructive" onClick={() => { setLinkBuilderCategoryId(null); setLinkBuilderCategorySearch(""); }}>
-                            Rensa kategori
-                          </button>
-                        )}
-                        {MITT_COOP_CATEGORIES.filter(c => c.label.toLowerCase().includes(linkBuilderCategorySearch.toLowerCase())).slice(0, 12).map(c => (
-                          <button key={c.id} className="flex w-full items-center gap-2 px-3 py-2 text-xs hover:bg-muted/50 text-left" onClick={() => { setLinkBuilderCategoryId(c.id); setLinkBuilderCategorySearch(c.label); }}>
-                            {c.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {linkBuilderCategoryId && !linkBuilderCategorySearch && (
-                    <p className="text-[10px] text-muted-foreground">{MITT_COOP_CATEGORIES.find(c => c.id === linkBuilderCategoryId)?.label}</p>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">Status (valfri)</label>
-                  <select
-                    value={linkBuilderStatusCode ?? ""}
-                    onChange={(e) => setLinkBuilderStatusCode(e.target.value ? Number(e.target.value) : null)}
-                    className="w-full h-8 rounded-lg border border-border/60 bg-background px-3 text-xs focus:outline-none"
-                  >
-                    <option value="">Alla statusar</option>
-                    {MITT_COOP_STATUS_CODES.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
-                  </select>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Produktnamn / sökord</label>
-                <input
-                  value={linkBuilderProductName}
-                  onChange={(e) => setLinkBuilderProductName(e.target.value)}
-                  placeholder="t.ex. oat milk, havremjölk..."
-                  className="w-full h-8 rounded-lg border border-border/60 bg-background px-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
-                />
-              </div>
-            )}
-
-            {(() => {
-              let builtUrl: string | null = null;
-              if (linkBuilderMode === "filter") {
-                builtUrl = mittCoopUrl("", siteId, { categoryId: linkBuilderCategoryId ?? undefined, statusCode: linkBuilderStatusCode ?? undefined });
-                if (!builtUrl && siteId) builtUrl = `https://mittcoop.coop.se/sortiment/artiklar?siteId=${siteId}${linkBuilderCategoryId ? `&categoryIds=${linkBuilderCategoryId}` : ""}${linkBuilderStatusCode ? `&statusCodes=${linkBuilderStatusCode}` : ""}`;
-                else if (!builtUrl) builtUrl = `https://mittcoop.coop.se/sortiment/artiklar?${linkBuilderCategoryId ? `categoryIds=${linkBuilderCategoryId}` : ""}${linkBuilderStatusCode ? `&statusCodes=${linkBuilderStatusCode}` : ""}`;
-              } else {
-                if (linkBuilderProductName.trim()) {
-                  builtUrl = mittCoopSearchUrl(linkBuilderProductName.trim(), siteId, { categoryId: linkBuilderCategoryId ?? undefined, statusCode: linkBuilderStatusCode ?? undefined });
-                }
-              }
-              if (!builtUrl) return <p className="text-xs text-muted-foreground">Fyll i minst ett fält för att generera en länk.</p>;
-              return (
-                <div className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
-                  <a href={builtUrl} target="_blank" rel="noopener noreferrer"
-                    className="flex-1 text-xs text-primary hover:underline truncate font-mono">{builtUrl}</a>
-                  <a href={builtUrl} target="_blank" rel="noopener noreferrer"
-                    className="shrink-0 inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
-                    <ExternalLink className="h-3 w-3" /> Öppna
-                  </a>
-                </div>
-              );
-            })()}
-          </div>
-        )}
       </div>
 
       {/* Filters */}
@@ -563,65 +457,131 @@ function CustomerRequestsPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((r) => {
             const store = stores.find((s) => s.id === r.store_id) ?? null;
             const mcUrl = buildMcUrl(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null, r.mitt_coop_category_id, r.mitt_coop_status_code);
+            const decodedArticle = decodeArticleNumber(r.article_number);
+            const images = requestImagesMap[r.id] || [];
+            const staffComment = (r as CustomerRequest & { staff_comment?: string | null }).staff_comment;
+
             return (
               <div
                 key={r.id}
-                className="rounded-2xl border border-border/60 bg-card p-4 space-y-3 hover:border-border transition-colors cursor-pointer"
-                onClick={() => setDetailTarget(r)}
+                className="flex flex-col justify-between rounded-2xl border border-border/60 bg-card p-4 space-y-3 shadow-sm hover:border-border transition-colors"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm leading-tight truncate">{r.product_name}</p>
-                    {r.article_number && (
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <Hash className="h-3 w-3 text-muted-foreground/60 shrink-0" />
-                        <span className="text-xs text-muted-foreground font-mono">{decodeArticleNumber(r.article_number)?.value ?? r.article_number}</span>
+                <div className="space-y-3">
+                  {/* Top bar: Name + badges */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-base leading-snug">{r.product_name}</p>
+                      {r.source === "qr" && (
+                        <span className="inline-block mt-1 rounded-full border border-border/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          Via QR
+                        </span>
+                      )}
+                    </div>
+                    <div className="shrink-0 flex flex-col items-end gap-1.5">
+                      {statusBadge(r.status)}
+                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", priorityClass(r.priority))}>
+                        {PRIORITY_LABELS[r.priority]}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Article number & Mitt Coop info */}
+                  {r.article_number && (
+                    <div className="rounded-xl border border-border/60 bg-muted/30 p-2.5 space-y-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                        {decodedArticle?.type === "ean" ? "EAN" : decodedArticle?.type === "bnr" ? "BNR" : "Materialnummer"}
+                      </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-semibold text-foreground">
+                          {decodedArticle?.value ?? r.article_number}
+                        </span>
+                        {r.mitt_coop_category_id && (
+                          <span className="text-[10px] text-muted-foreground bg-background px-1.5 py-0.5 rounded border border-border/40">
+                            {MITT_COOP_CATEGORIES.find((c) => c.id === r.mitt_coop_category_id)?.label}
+                          </span>
+                        )}
+                        {r.mitt_coop_status_code && (
+                          <span className="text-[10px] text-muted-foreground bg-background px-1.5 py-0.5 rounded border border-border/40">
+                            {MITT_COOP_STATUS_CODES.find((s) => s.code === r.mitt_coop_status_code)?.label}
+                          </span>
+                        )}
                         {mcUrl && (
                           <a
                             href={mcUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-primary hover:underline"
+                            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/20 transition-colors"
                           >
                             <ExternalLink className="h-3 w-3" />
+                            Mitt Coop
                           </a>
                         )}
                       </div>
-                    )}
-                  </div>
-                  <div className="shrink-0 flex flex-col items-end gap-1.5">
-                    {statusBadge(r.status)}
-                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", priorityClass(r.priority))}>
-                      {PRIORITY_LABELS[r.priority]}
-                    </span>
-                  </div>
+                    </div>
+                  )}
+
+                  {/* Customer notes */}
+                  {r.notes && (
+                    <div className="rounded-xl bg-muted/50 px-3 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-0.5">Kundens kommentar</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{r.notes}</p>
+                    </div>
+                  )}
+
+                  {/* Staff Comment */}
+                  {staffComment && (
+                    <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70 mb-0.5">Meddelande till kund</p>
+                      <p className="text-xs text-foreground leading-relaxed">{staffComment}</p>
+                    </div>
+                  )}
+
+                  {/* Internal Notes */}
+                  {r.internal_notes && (
+                    <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-0.5">Intern anteckning</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{r.internal_notes}</p>
+                    </div>
+                  )}
+
+                  {/* Images */}
+                  {images.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">Bilder</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {images.map((img) => (
+                          <a
+                            key={img.id}
+                            href={getPublicUrl(img.storage_path)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="h-14 w-14 overflow-hidden rounded-lg border border-border/60 block hover:opacity-90 transition-opacity"
+                          >
+                            <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {r.notes && (
-                  <div className="rounded-lg bg-muted/50 px-2.5 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-0.5">Kundens kommentar</p>
-                    <p className="text-xs text-muted-foreground line-clamp-2">{r.notes}</p>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between pt-1 border-t border-border/40" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-                    {r.requester?.display_name && (
-                      <span>{r.requester.display_name}</span>
-                    )}
-                    <span>·</span>
+                {/* Footer: Meta & actions */}
+                <div className="pt-2 border-t border-border/40 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground/70">
+                    <span>{r.requester?.display_name ?? "Anonym/Kund"}</span>
                     <span>{new Date(r.created_at).toLocaleDateString("sv-SE")}</span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {isManager && (
+
+                  <div className="flex items-center justify-between gap-1 pt-1">
+                    {isManager ? (
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        className="h-7 rounded-full px-2 text-xs"
+                        className="h-8 rounded-full px-3 text-xs"
                         onClick={() => {
                           const decoded = decodeArticleNumber(r.article_number);
                           setEditTarget(r);
@@ -637,24 +597,30 @@ function CustomerRequestsPage() {
                       >
                         Hantera
                       </Button>
+                    ) : (
+                      <div />
                     )}
-                    <button
-                      type="button"
-                      onClick={() => openQrForRequest(r)}
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary transition-colors"
-                      title="Dela status-QR med kund"
-                    >
-                      <QrCode className="h-3.5 w-3.5" />
-                    </button>
-                    {isManager && (
+
+                    <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => setDeleteTarget(r)}
-                        className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-destructive transition-colors"
+                        onClick={() => openQrForRequest(r)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:bg-muted/60 hover:text-primary transition-colors"
+                        title="Dela status-QR med kund"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <QrCode className="h-4 w-4" />
                       </button>
-                    )}
+                      {isManager && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(r)}
+                          className="flex h-8 w-8 items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:bg-muted/60 hover:text-destructive transition-colors"
+                          title="Ta bort önskemål"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -717,6 +683,7 @@ function CustomerRequestsPage() {
                 Används för direktlänk till Mitt Coop-sortiment. Ange typ av nummer i rullgardinen.
               </p>
             </div>
+
             {/* Mitt Coop category */}
             <div className="space-y-1.5">
               <Label className="text-xs">Kategori i Mitt Coop (valfritt)</Label>
@@ -758,6 +725,7 @@ function CustomerRequestsPage() {
                 </div>
               )}
             </div>
+
             {/* Mitt Coop status filter */}
             <div className="space-y-1.5">
               <Label className="text-xs">Statusfilter i Mitt Coop (valfritt)</Label>
@@ -774,6 +742,7 @@ function CustomerRequestsPage() {
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-1.5">
               <Label className="text-xs">Prioritet</Label>
               <Select value={form.priority} onValueChange={(v) => setForm((p) => ({ ...p, priority: v as typeof p.priority }))}>
@@ -787,6 +756,7 @@ function CustomerRequestsPage() {
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-1.5">
               <Label className="text-xs">Anteckning (valfritt)</Label>
               <Textarea
@@ -850,8 +820,9 @@ function CustomerRequestsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Edit Dialog */}
       {editTarget && (
-        <Dialog open onOpenChange={(o) => { if (!o) { setEditTarget(null); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setRequestImages([]); } }}>
+        <Dialog open onOpenChange={(o) => { if (!o) { setEditTarget(null); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setCurrentEditImages([]); } }}>
           <DialogContent className="w-full max-w-md sm:max-w-md mx-0 sm:mx-auto">
             <DialogHeader>
               <DialogTitle>Hantera önskemål</DialogTitle>
@@ -870,9 +841,9 @@ function CustomerRequestsPage() {
               {/* Images */}
               <div className="space-y-2">
                 <Label className="text-xs">Bilder</Label>
-                {(requestImages.length > 0 || editPreviews.length > 0) && (
+                {(currentEditImages.length > 0 || editPreviews.length > 0) && (
                   <div className="flex flex-wrap gap-2">
-                    {requestImages.map((img) => (
+                    {currentEditImages.map((img) => (
                       <div key={img.id} className="relative h-16 w-16 overflow-hidden rounded-lg border border-border/60">
                         <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
                         <button type="button" onClick={() => deleteExistingImage(img.id)}
@@ -892,7 +863,7 @@ function CustomerRequestsPage() {
                     ))}
                   </div>
                 )}
-                {(requestImages.length + editImages.length) < MAX_IMAGES && (
+                {(currentEditImages.length + editImages.length) < MAX_IMAGES && (
                   <>
                     <button type="button" onClick={() => editFileRef.current?.click()}
                       className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50">
@@ -932,6 +903,7 @@ function CustomerRequestsPage() {
                 </div>
                 <p className="text-[11px] text-muted-foreground">Syns bara internt — används för direktlänk till Mitt Coop-sortiment.</p>
               </div>
+
               {/* Edit: category selector */}
               <div className="space-y-1.5">
                 <Label className="text-xs">Kategori i Mitt Coop (valfritt)</Label>
@@ -973,6 +945,7 @@ function CustomerRequestsPage() {
                   </div>
                 )}
               </div>
+
               {/* Edit: status filter */}
               <div className="space-y-1.5">
                 <Label className="text-xs">Statusfilter i Mitt Coop (valfritt)</Label>
@@ -989,6 +962,7 @@ function CustomerRequestsPage() {
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs">Status</Label>
                 <Select value={editStatus} onValueChange={(v) => setEditStatus(v as typeof editStatus)}>
@@ -1000,6 +974,7 @@ function CustomerRequestsPage() {
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs">
                   Meddelande till kund (visas på statuslänk) {editStatus === "declined" && <span className="text-destructive">*</span>}
@@ -1017,6 +992,7 @@ function CustomerRequestsPage() {
                     : "Kunden ser detta meddelande på sin statuslänk."}
                 </p>
               </div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs">Intern anteckning</Label>
                 <Textarea
@@ -1029,7 +1005,7 @@ function CustomerRequestsPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" className="rounded-full" onClick={() => { setEditTarget(null); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setRequestImages([]); }}>Avbryt</Button>
+              <Button variant="outline" className="rounded-full" onClick={() => { setEditTarget(null); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setCurrentEditImages([]); }}>Avbryt</Button>
               <Button className="rounded-full" disabled={saving || (editStatus === "declined" && !editComment.trim())} onClick={updateRequest}>
                 {saving ? "Sparar..." : "Spara"}
               </Button>
@@ -1037,133 +1013,6 @@ function CustomerRequestsPage() {
           </DialogContent>
         </Dialog>
       )}
-
-      {detailTarget && (() => {
-        const r = detailTarget;
-        const store = stores.find((s) => s.id === r.store_id) ?? null;
-        const mcUrl = mittCoopUrlFromStored(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null, { categoryId: r.mitt_coop_category_id ?? undefined, statusCode: r.mitt_coop_status_code ?? undefined });
-        const staffComment = (r as CustomerRequest & { staff_comment?: string | null }).staff_comment;
-        return (
-          <Dialog open onOpenChange={(o) => { if (!o) { setDetailTarget(null); setRequestImages([]); } }}>
-            <DialogContent className="w-full max-w-md sm:max-w-md mx-0 sm:mx-auto">
-              <DialogHeader>
-                <button
-                  onClick={() => { setDetailTarget(null); setRequestImages([]); }}
-                  className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 transition-colors"
-                  aria-label="Stäng"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-                <DialogTitle className="text-base leading-tight">{r.product_name}</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                {/* Status + priority row */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  {statusBadge(r.status)}
-                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", priorityClass(r.priority))}>
-                    {PRIORITY_LABELS[r.priority]}
-                  </span>
-                  {r.source === "qr" && (
-                    <span className="rounded-full border border-border/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Via QR</span>
-                  )}
-                </div>
-
-                {/* Article number — internal */}
-                {r.article_number && (
-                  <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-1">
-                      {decodeArticleNumber(r.article_number)?.type === "ean" ? "EAN" : decodeArticleNumber(r.article_number)?.type === "bnr" ? "BNR" : "Materialnummer"}
-                    </p>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-sm text-foreground">{decodeArticleNumber(r.article_number)?.value ?? r.article_number}</span>
-                      {r.mitt_coop_category_id && (
-                        <span className="text-[10px] text-muted-foreground">
-                          {MITT_COOP_CATEGORIES.find(c => c.id === r.mitt_coop_category_id)?.label}
-                        </span>
-                      )}
-                      {r.mitt_coop_status_code && (
-                        <span className="text-[10px] text-muted-foreground">
-                          {MITT_COOP_STATUS_CODES.find(s => s.code === r.mitt_coop_status_code)?.label}
-                        </span>
-                      )}
-                      {mcUrl && (
-                        <a href={mcUrl} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
-                          <ExternalLink className="h-3 w-3" />
-                          Mitt Coop-sortiment
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Customer notes */}
-                {r.notes && (
-                  <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-1">Kundens kommentar</p>
-                    <p className="text-sm text-foreground">{r.notes}</p>
-                  </div>
-                )}
-
-                {/* Images */}
-                {requestImages.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">Bilder</p>
-                    <div className="flex flex-wrap gap-2">
-                      {requestImages.map((img) => (
-                        <a key={img.id} href={getPublicUrl(img.storage_path)} target="_blank" rel="noopener noreferrer"
-                          className="h-20 w-20 overflow-hidden rounded-xl border border-border/60 block">
-                          <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Staff message to customer */}
-                {staffComment && (
-                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70 mb-1">Meddelande till kund</p>
-                    <p className="text-sm text-foreground">{staffComment}</p>
-                  </div>
-                )}
-
-                {/* Internal notes */}
-                {r.internal_notes && (
-                  <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-1">Intern anteckning</p>
-                    <p className="text-sm text-foreground">{r.internal_notes}</p>
-                  </div>
-                )}
-
-                <p className="text-xs text-muted-foreground">
-                  {r.requester?.display_name && <>{r.requester.display_name} · </>}
-                  {new Date(r.created_at).toLocaleDateString("sv-SE", { year: "numeric", month: "long", day: "numeric" })}
-                </p>
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                {isManager && (
-                  <Button className="rounded-full" onClick={() => {
-                    setDetailTarget(null);
-                    setEditTarget(r);
-                    setEditStatus(r.status);
-                    const decoded2 = decodeArticleNumber(r.article_number);
-                    setEditArticleNumber(decoded2?.value ?? "");
-                    setEditArticleType(decoded2?.type ?? "mat-nr");
-                    setEditCategoryId(r.mitt_coop_category_id ?? null);
-                    setEditStatusCode(r.mitt_coop_status_code ?? null);
-                    setEditCategorySearch("");
-                    setEditInternalNotes(r.internal_notes ?? "");
-                    setEditComment((r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "");
-                  }}>
-                    Hantera
-                  </Button>
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
-        );
-      })()}
 
       {/* Delete confirm */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
