@@ -3,8 +3,7 @@
 // A remote MCP (Model Context Protocol) server for storeflow, built on the
 // same auth/scopes and core logic as storeflow-api. Implements the
 // "Streamable HTTP" transport in stateless mode: every request is a single
-// JSON-RPC 2.0 call over POST, answered with a single JSON response (no
-// session/SSE required for this tool set).
+// JSON-RPC 2.0 call over POST, answered with a single JSON response.
 //
 // Point an MCP client at:
 //   https://<project-ref>.supabase.co/functions/v1/mcp-server
@@ -16,26 +15,33 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { authenticate, serviceRoleClient } from "../_shared/auth.ts";
 import {
-  ScopeError, listTemplates, getTemplate, createTemplate,
+  ScopeError, listTemplates, getTemplate, createTemplate, updateTemplate,
+  listTasks, getTask, createTask, updateTask,
+  listCustomerRequests, getCustomerRequest, createCustomerRequest, updateCustomerRequest,
+  listCustomerRounds, getCustomerRound,
+  listDeviations, getDeviation, createDeviation, updateDeviation,
+  listStores, getStore,
+  listTemplatePackages, getTemplatePackage, createTemplatePackage, updateTemplatePackage,
   listDeliveryPlan, listSchedule, searchProduct,
 } from "../_shared/storeflow-core.ts";
 
-const SERVER_INFO = { name: "storeflow-mcp", version: "1.0.0" };
+const SERVER_INFO = { name: "storeflow-mcp", version: "2.0.0" };
 const PROTOCOL_VERSION = "2025-06-18";
 
 // deno-lint-ignore no-explicit-any
 type ToolHandler = (supabase: any, ctx: any, args: Record<string, unknown>) => Promise<unknown>;
 
 const TOOLS: { name: string; description: string; inputSchema: Record<string, unknown>; handler: ToolHandler }[] = [
+  // ── Mallar (Templates) ──
   {
     name: "list_templates",
-    description: "Lista checklistmallar (mallar) i storeflow, valfritt filtrerat på butik, kategori eller status.",
+    description: "Lista checklistmallar i storeflow, valfritt filtrerat på butik, kategori eller status.",
     inputSchema: {
       type: "object",
       properties: {
-        store_id: { type: "string", description: "Butiks-UUID. Utelämna för alla butiker nyckeln har åtkomst till." },
+        store_id: { type: "string", description: "Butiks-UUID." },
         category: { type: "string" },
-        status: { type: "string", description: "T.ex. 'active'" },
+        status: { type: "string", description: "T.ex. 'active', 'review', 'deprecated', 'archived'" },
         limit: { type: "number", description: "Max antal, default 50, max 200." },
       },
     },
@@ -53,18 +59,18 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
   },
   {
     name: "create_template",
-    description: "Skapa en ny checklistmall med steg och butikskoppling. Stödjer grundfälten (titel, beskrivning, kategori, prioritet, återkommelseregel, artikelkoppling) — inte de mer avancerade mall-funktionerna (processer, arv, villkorliga steg).",
+    description: "Skapa en ny checklistmall med steg och butikskoppling.",
     inputSchema: {
       type: "object",
       properties: {
         title: { type: "string" },
         description: { type: "string" },
         category: { type: "string" },
-        priority: { type: "string", description: "T.ex. 'Låg', 'Medel', 'Hög'" },
-        recurrence_rule: { type: "string", description: "Valfri återkommelseregel." },
+        priority: { type: "string", description: "'Låg', 'Medel', 'Hög', 'Kritisk'" },
+        recurrence_rule: { type: "string", description: "T.ex. 'daily', 'weekly', 'monthly'" },
         due_date_offset: { type: "number" },
-        sap_article_id: { type: "string", description: "Materialnummer att koppla mallen till, om relevant." },
-        store_ids: { type: "array", items: { type: "string" }, description: "Vilka butiker mallen ska tilldelas (minst en)." },
+        sap_article_id: { type: "string" },
+        store_ids: { type: "array", items: { type: "string" }, description: "Vilka butiker mallen ska tilldelas." },
         items: {
           type: "array",
           items: {
@@ -78,6 +84,376 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
     },
     handler: async (supabase, ctx, args) => createTemplate(supabase, ctx, args as never),
   },
+  {
+    name: "update_template",
+    description: "Redigera/uppdatera en befintlig checklistmall och dess steg/butikskopplingar.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        template_id: { type: "string" },
+        title: { type: "string" },
+        description: { type: "string" },
+        category: { type: "string" },
+        priority: { type: "string" },
+        status: { type: "string", description: "'active', 'review', 'deprecated', 'archived'" },
+        recurrence_rule: { type: "string" },
+        due_date_offset: { type: "number" },
+        sap_article_id: { type: "string" },
+        store_ids: { type: "array", items: { type: "string" } },
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { id: { type: "string" }, label: { type: "string" }, requires_photo: { type: "boolean" }, sort_order: { type: "number" } },
+            required: ["label"],
+          },
+        },
+      },
+      required: ["template_id"],
+    },
+    handler: async (supabase, ctx, args) => updateTemplate(supabase, ctx, args as never),
+  },
+
+  // ── Uppgifter (Tasks) ──
+  {
+    name: "list_tasks",
+    description: "Lista uppgifter/aktiva checklistor i storeflow, valfritt filtrerat på butik, status, kategori, tilldelad användare eller förfallodatum.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        store_id: { type: "string" },
+        status: { type: "string", description: "'todo', 'progress', 'done', 'late', 'cancelled'" },
+        category: { type: "string" },
+        assigned_to: { type: "string", description: "Användar-UUID" },
+        due_date: { type: "string", description: "ÅÅÅÅ-MM-DD" },
+        limit: { type: "number", description: "Max antal, default 50, max 200." },
+      },
+    },
+    handler: async (supabase, ctx, args) => listTasks(supabase, ctx, args as never),
+  },
+  {
+    name: "get_task",
+    description: "Hämta en specifik uppgift med alla dess tillhörande steg och frågor.",
+    inputSchema: {
+      type: "object",
+      properties: { task_id: { type: "string" } },
+      required: ["task_id"],
+    },
+    handler: async (supabase, ctx, args) => getTask(supabase, ctx, args.task_id as string),
+  },
+  {
+    name: "create_task",
+    description: "Skapa en ny uppgift (aktiv checklista) för en butik med valfria steg och frågor.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        description: { type: "string" },
+        category: { type: "string" },
+        priority: { type: "string", description: "'Låg', 'Medel', 'Hög', 'Kritisk'" },
+        status: { type: "string", description: "'todo', 'progress', 'done'" },
+        store_id: { type: "string" },
+        assigned_to: { type: "string" },
+        created_by: { type: "string" },
+        due_date: { type: "string" },
+        due_date_time: { type: "string" },
+        recurring: { type: "string" },
+        recurrence_rule: { type: "string" },
+        sap_article_id: { type: "string" },
+        steps: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { label: { type: "string" }, requires_photo: { type: "boolean" } },
+            required: ["label"],
+          },
+        },
+        questions: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { label: { type: "string" }, question_type: { type: "string" }, is_required: { type: "boolean" } },
+            required: ["label"],
+          },
+        },
+      },
+      required: ["title"],
+    },
+    handler: async (supabase, ctx, args) => createTask(supabase, ctx, args as never),
+  },
+  {
+    name: "update_task",
+    description: "Redigera/uppdatera en uppgift, ändra status (t.ex. markera som 'done'), förfallodatum, tilldelning eller steg.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string" },
+        title: { type: "string" },
+        description: { type: "string" },
+        category: { type: "string" },
+        priority: { type: "string" },
+        status: { type: "string", description: "'todo', 'progress', 'done', 'late', 'cancelled'" },
+        assigned_to: { type: "string" },
+        due_date: { type: "string" },
+        due_date_time: { type: "string" },
+        completed_at: { type: "string" },
+        steps: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { id: { type: "string" }, label: { type: "string" }, is_done: { type: "boolean" }, requires_photo: { type: "boolean" } },
+          },
+        },
+      },
+      required: ["task_id"],
+    },
+    handler: async (supabase, ctx, args) => updateTask(supabase, ctx, args as never),
+  },
+
+  // ── Kundönskemål (Customer Requests) ──
+  {
+    name: "list_customer_requests",
+    description: "Lista kundönskemål i storeflow, valfritt filtrerat på butik, status, prioritet eller fritextsökning.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        store_id: { type: "string" },
+        status: { type: "string", description: "'open', 'ordered', 'declined', 'fulfilled'" },
+        priority: { type: "string", description: "'low', 'normal', 'high'" },
+        query: { type: "string", description: "Sök i produktnamn, artikelnummer eller anteckningar." },
+        limit: { type: "number" },
+      },
+    },
+    handler: async (supabase, ctx, args) => listCustomerRequests(supabase, ctx, args as never),
+  },
+  {
+    name: "get_customer_request",
+    description: "Hämta detaljer för ett enskilt kundönskemål.",
+    inputSchema: {
+      type: "object",
+      properties: { request_id: { type: "string" } },
+      required: ["request_id"],
+    },
+    handler: async (supabase, ctx, args) => getCustomerRequest(supabase, ctx, args.request_id as string),
+  },
+  {
+    name: "create_customer_request",
+    description: "Skapa ett nytt kundönskemål för en butik.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        store_id: { type: "string" },
+        product_name: { type: "string" },
+        article_number: { type: "string" },
+        notes: { type: "string" },
+        priority: { type: "string", description: "'low', 'normal', 'high'" },
+        status: { type: "string", description: "'open', 'ordered', 'declined', 'fulfilled'" },
+        requested_by: { type: "string" },
+        source: { type: "string" },
+        mitt_coop_category_id: { type: "number" },
+        mitt_coop_status_code: { type: "number" },
+      },
+      required: ["store_id", "product_name"],
+    },
+    handler: async (supabase, ctx, args) => createCustomerRequest(supabase, ctx, args as never),
+  },
+  {
+    name: "update_customer_request",
+    description: "Redigera/uppdatera ett kundönskemål (t.ex. status, kommentarer, prioritet).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        request_id: { type: "string" },
+        status: { type: "string", description: "'open', 'ordered', 'declined', 'fulfilled'" },
+        staff_comment: { type: "string" },
+        internal_notes: { type: "string" },
+        priority: { type: "string" },
+        product_name: { type: "string" },
+        article_number: { type: "string" },
+        notes: { type: "string" },
+      },
+      required: ["request_id"],
+    },
+    handler: async (supabase, ctx, args) => updateCustomerRequest(supabase, ctx, args as never),
+  },
+
+  // ── Kundrundor (Customer Rounds) ──
+  {
+    name: "list_customer_rounds",
+    description: "Läsa av och lista genomförda och pågående kundrundor (butiksrundor) för en butik.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        store_id: { type: "string" },
+        status: { type: "string", description: "'in_progress', 'completed'" },
+        limit: { type: "number" },
+      },
+    },
+    handler: async (supabase, ctx, args) => listCustomerRounds(supabase, ctx, args as never),
+  },
+  {
+    name: "get_customer_round",
+    description: "Hämta en kundrunda i sin helhet inklusive alla svar, poäng och eventuella avvikelser.",
+    inputSchema: {
+      type: "object",
+      properties: { session_id: { type: "string" } },
+      required: ["session_id"],
+    },
+    handler: async (supabase, ctx, args) => getCustomerRound(supabase, ctx, args.session_id as string),
+  },
+
+  // ── Avvikelser (Deviations / Incidents) ──
+  {
+    name: "list_deviations",
+    description: "Läsa av och lista avvikelser (incidents) i storeflow, valfritt filtrerat på butik, status, prioritet, kategori eller sökord.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        store_id: { type: "string" },
+        status: { type: "string", description: "'open', 'in_progress', 'escalated', 'resolved', 'closed'" },
+        priority: { type: "string", description: "'Låg', 'Medel', 'Hög', 'Kritisk'" },
+        category: { type: "string" },
+        query: { type: "string" },
+        limit: { type: "number" },
+      },
+    },
+    handler: async (supabase, ctx, args) => listDeviations(supabase, ctx, args as never),
+  },
+  {
+    name: "get_deviation",
+    description: "Hämta en specifik avvikelse i sin helhet inklusive kommentarer.",
+    inputSchema: {
+      type: "object",
+      properties: { deviation_id: { type: "string" } },
+      required: ["deviation_id"],
+    },
+    handler: async (supabase, ctx, args) => getDeviation(supabase, ctx, args.deviation_id as string),
+  },
+  {
+    name: "create_deviation",
+    description: "Rapportera/skapa en ny avvikelse i en butik.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        description: { type: "string" },
+        category: { type: "string" },
+        store_id: { type: "string" },
+        reported_by: { type: "string" },
+        assigned_to: { type: "string" },
+        responsible_user_id: { type: "string" },
+        priority: { type: "string", description: "'Låg', 'Medel', 'Hög', 'Kritisk'" },
+        status: { type: "string", description: "'open', 'in_progress', 'escalated', 'resolved', 'closed'" },
+        sap_article_id: { type: "string" },
+        source: { type: "string" },
+      },
+      required: ["title"],
+    },
+    handler: async (supabase, ctx, args) => createDeviation(supabase, ctx, args as never),
+  },
+  {
+    name: "update_deviation",
+    description: "Redigera/uppdatera en avvikelse, ändra status (t.ex. till 'resolved'), tilldelning, prioritet eller beskrivning.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        deviation_id: { type: "string" },
+        title: { type: "string" },
+        description: { type: "string" },
+        priority: { type: "string" },
+        status: { type: "string", description: "'open', 'in_progress', 'escalated', 'resolved', 'closed'" },
+        assigned_to: { type: "string" },
+        responsible_user_id: { type: "string" },
+        resolved_at: { type: "string" },
+      },
+      required: ["deviation_id"],
+    },
+    handler: async (supabase, ctx, args) => updateDeviation(supabase, ctx, args as never),
+  },
+
+  // ── Butiksregister (Stores) ──
+  {
+    name: "list_stores",
+    description: "Läsa av butiksregistret i storeflow (alla butiker med kontaktuppgifter, koncept, adress, butikschef, etc.).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        is_active: { type: "boolean" },
+        region: { type: "string" },
+        query: { type: "string", description: "Sök på namn, stad, butiksnummer eller koncept." },
+        limit: { type: "number" },
+      },
+    },
+    handler: async (supabase, ctx, args) => listStores(supabase, ctx, args as never),
+  },
+  {
+    name: "get_store",
+    description: "Hämta fullständig information om en enskild butik.",
+    inputSchema: {
+      type: "object",
+      properties: { store_id: { type: "string" } },
+      required: ["store_id"],
+    },
+    handler: async (supabase, ctx, args) => getStore(supabase, ctx, args.store_id as string),
+  },
+
+  // ── Mallpaket (Template Packages) ──
+  {
+    name: "list_template_packages",
+    description: "Lista alla mallpaket (samlingar av mallar för t.ex. öppning/stängning/granskningar).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        store_id: { type: "string" },
+        limit: { type: "number" },
+      },
+    },
+    handler: async (supabase, ctx, args) => listTemplatePackages(supabase, ctx, args as never),
+  },
+  {
+    name: "get_template_package",
+    description: "Hämta ett mallpaket och se vilka mallar som ingår.",
+    inputSchema: {
+      type: "object",
+      properties: { package_id: { type: "string" } },
+      required: ["package_id"],
+    },
+    handler: async (supabase, ctx, args) => getTemplatePackage(supabase, ctx, args.package_id as string),
+  },
+  {
+    name: "create_template_package",
+    description: "Skapa ett nytt mallpaket med kopplade checklistmallar.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        description: { type: "string" },
+        store_id: { type: "string" },
+        created_by: { type: "string" },
+        template_ids: { type: "array", items: { type: "string" }, description: "Array av mall-UUIDs som ingår i paketet." },
+      },
+      required: ["name"],
+    },
+    handler: async (supabase, ctx, args) => createTemplatePackage(supabase, ctx, args as never),
+  },
+  {
+    name: "update_template_package",
+    description: "Redigera ett befintligt mallpaket (ändra namn, beskrivning eller ingående mallar).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        package_id: { type: "string" },
+        name: { type: "string" },
+        description: { type: "string" },
+        store_id: { type: "string" },
+        template_ids: { type: "array", items: { type: "string" } },
+      },
+      required: ["package_id"],
+    },
+    handler: async (supabase, ctx, args) => updateTemplatePackage(supabase, ctx, args as never),
+  },
+
+  // ── Existing Tools ──
   {
     name: "list_delivery_plans",
     description: "Läs leveransplan(er) med tillhörande leveranser för en butik, valfritt filtrerat på vecka/år.",
@@ -157,7 +533,6 @@ Deno.serve(async (req: Request) => {
   const respond = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-  // Notifications (no "id") never get a JSON-RPC response body — 202 is enough.
   const isNotification = rpc.id === undefined;
 
   if (rpc.method === "initialize") {
