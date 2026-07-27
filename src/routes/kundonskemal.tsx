@@ -35,8 +35,10 @@ export const Route = createFileRoute("/kundonskemal")({
 const STATUS_LABELS: Record<string, string> = {
   open: "Inkommit",
   ordered: "Beställd",
-  declined: "Avböjd",
   fulfilled: "Uppfylld",
+  declined: "Avböjd",
+  not_in_assortment: "Finns ej i sortiment",
+  discontinued: "Utgått",
 };
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -49,6 +51,8 @@ function statusBadge(s: string) {
   if (s === "ordered") return <Badge className="bg-info/15 text-info">Beställd</Badge>;
   if (s === "fulfilled") return <Badge className="bg-success/15 text-success">Uppfylld</Badge>;
   if (s === "declined") return <Badge variant="secondary" className="text-muted-foreground">Avböjd</Badge>;
+  if (s === "not_in_assortment") return <Badge variant="secondary" className="text-muted-foreground">Finns ej i sortiment</Badge>;
+  if (s === "discontinued") return <Badge variant="secondary" className="text-muted-foreground">Utgått</Badge>;
   return <Badge variant="secondary">Inkommit</Badge>;
 }
 
@@ -184,7 +188,6 @@ function CustomerRequestsPage() {
     }
   };
 
-  // Load images whenever a detail or edit dialog opens
   useEffect(() => {
     const id = detailTarget?.id ?? editTarget?.id;
     if (id) {
@@ -192,7 +195,6 @@ function CustomerRequestsPage() {
     } else {
       setRequestImages([]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailTarget?.id, editTarget?.id]);
 
   const openQrForRequest = async (req: CustomerRequest) => {
@@ -269,7 +271,6 @@ function CustomerRequestsPage() {
         if (data) setStores(data as StoreType[]);
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeStore, user]);
 
   const createRequest = async () => {
@@ -302,6 +303,8 @@ function CustomerRequestsPage() {
 
   const updateRequest = async () => {
     if (!editTarget) return;
+    if (editStatus === "declined" && !editComment.trim()) return;
+
     setSaving(true);
     const storedArticle = editArticleNumber.trim()
       ? encodeArticleNumber(editArticleNumber.trim(), editArticleType)
@@ -328,7 +331,6 @@ function CustomerRequestsPage() {
 
   const deleteRequest = async () => {
     if (!deleteTarget) return;
-    // Fetch image paths before deleting so we can clean up storage
     const { data: imgs } = await supabase
       .from("customer_request_images")
       .select("storage_path")
@@ -341,7 +343,6 @@ function CustomerRequestsPage() {
     await fetchRequests();
   };
 
-  // 3-way disambiguation for manually typed article numbers (not for scanned barcodes)
   const handleArticleInput = (value: string, target: "create" | "edit") => {
     if (!value.trim()) return;
     setArticlePrompt({ value: value.trim(), target });
@@ -349,7 +350,6 @@ function CustomerRequestsPage() {
 
   const siteId = activeStore?.sap_site_id ?? null;
 
-  // Build the Mitt Coop URL from a stored article_number + optional category/status
   const buildMcUrl = (
     articleNumber: string | null | undefined,
     storeSapSiteId: string | null | undefined,
@@ -362,7 +362,7 @@ function CustomerRequestsPage() {
     });
 
   const filtered = requests.filter((r) => {
-    if (filterStatus === "active" && (r.status === "fulfilled" || r.status === "declined")) return false;
+    if (filterStatus === "active" && (r.status === "fulfilled" || r.status === "declined" || r.status === "not_in_assortment" || r.status === "discontinued")) return false;
     if (filterStatus !== "active" && filterStatus !== "all" && r.status !== filterStatus) return false;
     if (search && !r.product_name.toLowerCase().includes(search.toLowerCase()) && !(r.article_number ?? "").toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -516,6 +516,8 @@ function CustomerRequestsPage() {
               { value: "ordered", label: "Beställda" },
               { value: "fulfilled", label: "Uppfyllda" },
               { value: "declined", label: "Avböjda" },
+              { value: "not_in_assortment", label: "Finns ej i sortiment" },
+              { value: "discontinued", label: "Utgått" },
             ].map((f) => (
               <button
                 key={f.value}
@@ -999,7 +1001,9 @@ function CustomerRequestsPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Meddelande till kund (visas på statuslänk)</Label>
+                <Label className="text-xs">
+                  Meddelande till kund (visas på statuslänk) {editStatus === "declined" && <span className="text-destructive">*</span>}
+                </Label>
                 <Textarea
                   value={editComment}
                   onChange={(e) => setEditComment(e.target.value)}
@@ -1007,7 +1011,11 @@ function CustomerRequestsPage() {
                   className="resize-none text-sm"
                   placeholder="T.ex. Varan är nu i hylla 3, kyl..."
                 />
-                <p className="text-[11px] text-muted-foreground">Kunden ser detta meddelande på sin statuslänk.</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {editStatus === "declined"
+                    ? "En kommentar måste anges när önskemålet avböjs."
+                    : "Kunden ser detta meddelande på sin statuslänk."}
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Intern anteckning</Label>
@@ -1022,7 +1030,7 @@ function CustomerRequestsPage() {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" className="rounded-full" onClick={() => { setEditTarget(null); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setRequestImages([]); }}>Avbryt</Button>
-              <Button className="rounded-full" disabled={saving} onClick={updateRequest}>
+              <Button className="rounded-full" disabled={saving || (editStatus === "declined" && !editComment.trim())} onClick={updateRequest}>
                 {saving ? "Sparar..." : "Spara"}
               </Button>
             </div>
