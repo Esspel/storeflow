@@ -28,7 +28,7 @@ import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getSpecialWeekHoliday, stockholmToUtc, formatStockholmTime, isoWeekNumber } from "@/lib/swedish-holidays";
-import { getISOWeek, getYear } from "date-fns";
+import { getYear } from "date-fns";
 
 function SchemaRoute() {
   const { activeStore, user } = useAuth();
