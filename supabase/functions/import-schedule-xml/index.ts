@@ -472,7 +472,30 @@ Deno.serve(async (req: Request) => {
   try {
     body = await req.json();
   } catch {
-    return json({ error: "Ogiltig JSON i request-body." }, 400);
+    // ── Provide a specific, actionable error instead of a generic message ──
+    let rawBody = "";
+    try { rawBody = await req.text(); } catch { /* body already consumed or unreadable */ }
+    const contentType = req.headers.get("content-type") ?? "";
+    const trimmed = rawBody.trim();
+
+    if (!trimmed) {
+      return json({
+        error: "Request-body är tomt. Skicka JSON med minst { \"store_id\", \"imported_by_user_id\", \"xml\" } (Content-Type: application/json).",
+      }, 400);
+    }
+    if (trimmed.startsWith("<?xml") || trimmed.startsWith("<SOE_") || trimmed.startsWith("<Time")) {
+      return json({
+        error: "Det ser ut som att du skickade rå XML direkt i request-body. XML-innehållet måste skickas inuti ett JSON-objekt, t.ex.: { \"store_id\": \"...\", \"imported_by_user_id\": \"...\", \"xml\": \"<xml-innehåll>\" } eller base64-kodat i fältet \"xml_base64\". Sätt Content-Type: application/json.",
+      }, 400);
+    }
+    if (!contentType.includes("application/json")) {
+      return json({
+        error: `Felaktig Content-Type: \"${contentType}\". Denna endpoint kräver Content-Type: application/json med ett JSON-objekt i body som innehåller fälten store_id, imported_by_user_id och xml/xml_base64.`,
+      }, 400);
+    }
+    return json({
+      error: `Kunde inte tolka request-body som JSON. Kontrollera att JSON-syntaxen är korrekt (t.ex. inga avslutande kommatecken, korrekt escaping av citattecken i XML-strängar). Rå body (första 200 tecken): ${trimmed.slice(0, 200)}`,
+    }, 400);
   }
 
   const { store_id, imported_by_user_id } = body;
