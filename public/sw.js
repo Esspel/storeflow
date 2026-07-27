@@ -83,16 +83,13 @@ async function drainSyncQueue() {
   for (let i = 0; i < all.length; i++) {
     const entry = all[i];
     try {
-      const res = await fetch(entry.url, {
-        method: entry.method || "POST",
-        headers: {
-          ...entry.headers,
-          "x-session-token": token,
-        },
-        body: entry.body ? JSON.stringify(entry.body) : undefined,
-      });
+      const res = await fetch(entry.url, { /* ... */ });
+  
       if (res.ok || res.status < 500) {
-        store.delete(keys[i]);
+        // Skapa en ny transaktion för varje radering
+        const delTx = db.transaction(SYNC_STORE, "readwrite");
+        delTx.objectStore(SYNC_STORE).delete(keys[i]);
+        await new Promise((r) => { delTx.oncomplete = r; });
       }
     } catch {
       break;
@@ -107,7 +104,7 @@ self.addEventListener("message", (event) => {
     self.skipWaiting();
   }
   if (event.data?.type === "ENQUEUE_SYNC") {
-    enqueueSync(event.data.entry);
+  event.waitUntil(enqueueSync(event.data.entry));
   }
 });
 
@@ -167,8 +164,10 @@ self.addEventListener("fetch", (event) => {
         (cached) =>
           cached ??
           fetch(request).then((res) => {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+            if (res && (res.status === 200 || res.type === "opaque")) {
+              const clone = res.clone();
+              caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+            }
             return res;
           }),
       ),
@@ -229,7 +228,8 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const targetUrl = event.notification.data?.url ?? "/";
+  const relativeUrl = event.notification.data?.url ?? "/";
+  const targetUrl = new URL(relativeUrl, self.location.origin).href;
 
   event.waitUntil(
     self.clients
