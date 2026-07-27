@@ -58,6 +58,14 @@ function StoreCard({ store }: { store: StoreType }) {
               {store.bolag && <span>{store.bolag}</span>}
               {store.distrikt_namn && <span>{store.distrikt_namn}</span>}
             </div>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(store.id)}
+              title="Klicka för att kopiera UUID"
+              className="mt-1 flex items-center gap-1 rounded font-mono text-[10px] text-muted-foreground/70 hover:text-primary transition-colors"
+            >
+              UUID: {store.id}
+            </button>
           </div>
         </div>
 
@@ -171,6 +179,7 @@ function ButiksregisterPage() {
     const q = search.toLowerCase();
     return (
       s.name.toLowerCase().includes(q) ||
+      s.id.toLowerCase().includes(q) ||
       (s.butiks_nr && s.butiks_nr.includes(q)) ||
       (s.butikschef && s.butikschef.toLowerCase().includes(q)) ||
       (s.distrikt_namn && s.distrikt_namn.toLowerCase().includes(q)) ||
