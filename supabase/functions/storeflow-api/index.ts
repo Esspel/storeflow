@@ -5,23 +5,18 @@
 // browser session required.
 //
 // Auth: Authorization: Bearer <api_key>   (mint one via the issue-api-key function)
-//
-// Routes (all relative to /functions/v1/storeflow-api):
-//   GET  /templates?store_id=&category=&status=&limit=
-//   GET  /templates/:id
-//   POST /templates                body: CreateTemplateInput (see _shared/storeflow-core.ts)
-//   GET  /delivery-plans?store_id=&week_number=&year=
-//   GET  /schedule?store_id=&week_number=&year=
-//   GET  /products/search?material_number=|ean=|bnr=|query=&category_id=&status_code=&store_id=
-//
-// Required scopes per route are documented in _shared/storeflow-core.ts and
-// enforced there — a 403 means the key is missing a scope or store access.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { authenticate, serviceRoleClient } from "../_shared/auth.ts";
 import {
-  ScopeError, listTemplates, getTemplate, createTemplate,
+  ScopeError, listTemplates, getTemplate, createTemplate, updateTemplate,
+  listTasks, getTask, createTask, updateTask,
+  listCustomerRequests, getCustomerRequest, createCustomerRequest, updateCustomerRequest,
+  listCustomerRounds, getCustomerRound,
+  listDeviations, getDeviation, createDeviation, updateDeviation,
+  listStores, getStore,
+  listTemplatePackages, getTemplatePackage, createTemplatePackage, updateTemplatePackage,
   listDeliveryPlan, listSchedule, searchProduct,
 } from "../_shared/storeflow-core.ts";
 
@@ -45,23 +40,174 @@ Deno.serve(async (req: Request) => {
 
   try {
     // ── /templates ──
-    if (segments[0] === "templates" && segments.length === 1 && req.method === "GET") {
-      const data = await listTemplates(supabase, ctx, {
-        store_id: q.get("store_id") ?? undefined,
-        category: q.get("category") ?? undefined,
-        status: q.get("status") ?? undefined,
-        limit: q.get("limit") ? Number(q.get("limit")) : undefined,
-      });
-      return json({ success: true, templates: data });
+    if (segments[0] === "templates") {
+      if (segments.length === 1 && req.method === "GET") {
+        const data = await listTemplates(supabase, ctx, {
+          store_id: q.get("store_id") ?? undefined,
+          category: q.get("category") ?? undefined,
+          status: q.get("status") ?? undefined,
+          limit: q.get("limit") ? Number(q.get("limit")) : undefined,
+        });
+        return json({ success: true, templates: data });
+      }
+      if (segments.length === 2 && req.method === "GET") {
+        const data = await getTemplate(supabase, ctx, segments[1]);
+        return json({ success: true, template: data });
+      }
+      if (segments.length === 1 && req.method === "POST") {
+        const body = await req.json();
+        const data = await createTemplate(supabase, ctx, body);
+        return json({ success: true, template: data }, 201);
+      }
+      if (segments.length === 2 && (req.method === "PUT" || req.method === "PATCH")) {
+        const body = await req.json();
+        const data = await updateTemplate(supabase, ctx, { ...body, template_id: segments[1] });
+        return json({ success: true, template: data });
+      }
     }
-    if (segments[0] === "templates" && segments.length === 2 && req.method === "GET") {
-      const data = await getTemplate(supabase, ctx, segments[1]);
-      return json({ success: true, template: data });
+
+    // ── /tasks ──
+    if (segments[0] === "tasks") {
+      if (segments.length === 1 && req.method === "GET") {
+        const data = await listTasks(supabase, ctx, {
+          store_id: q.get("store_id") ?? undefined,
+          status: q.get("status") ?? undefined,
+          category: q.get("category") ?? undefined,
+          assigned_to: q.get("assigned_to") ?? undefined,
+          due_date: q.get("due_date") ?? undefined,
+          limit: q.get("limit") ? Number(q.get("limit")) : undefined,
+        });
+        return json({ success: true, tasks: data });
+      }
+      if (segments.length === 2 && req.method === "GET") {
+        const data = await getTask(supabase, ctx, segments[1]);
+        return json({ success: true, task: data });
+      }
+      if (segments.length === 1 && req.method === "POST") {
+        const body = await req.json();
+        const data = await createTask(supabase, ctx, body);
+        return json({ success: true, task: data }, 201);
+      }
+      if (segments.length === 2 && (req.method === "PUT" || req.method === "PATCH")) {
+        const body = await req.json();
+        const data = await updateTask(supabase, ctx, { ...body, task_id: segments[1] });
+        return json({ success: true, task: data });
+      }
     }
-    if (segments[0] === "templates" && segments.length === 1 && req.method === "POST") {
-      const body = await req.json();
-      const data = await createTemplate(supabase, ctx, body);
-      return json({ success: true, template: data }, 201);
+
+    // ── /customer-requests ──
+    if (segments[0] === "customer-requests") {
+      if (segments.length === 1 && req.method === "GET") {
+        const data = await listCustomerRequests(supabase, ctx, {
+          store_id: q.get("store_id") ?? undefined,
+          status: q.get("status") ?? undefined,
+          priority: q.get("priority") ?? undefined,
+          query: q.get("query") ?? undefined,
+          limit: q.get("limit") ? Number(q.get("limit")) : undefined,
+        });
+        return json({ success: true, customer_requests: data });
+      }
+      if (segments.length === 2 && req.method === "GET") {
+        const data = await getCustomerRequest(supabase, ctx, segments[1]);
+        return json({ success: true, customer_request: data });
+      }
+      if (segments.length === 1 && req.method === "POST") {
+        const body = await req.json();
+        const data = await createCustomerRequest(supabase, ctx, body);
+        return json({ success: true, customer_request: data }, 201);
+      }
+      if (segments.length === 2 && (req.method === "PUT" || req.method === "PATCH")) {
+        const body = await req.json();
+        const data = await updateCustomerRequest(supabase, ctx, { ...body, request_id: segments[1] });
+        return json({ success: true, customer_request: data });
+      }
+    }
+
+    // ── /customer-rounds ──
+    if (segments[0] === "customer-rounds") {
+      if (segments.length === 1 && req.method === "GET") {
+        const data = await listCustomerRounds(supabase, ctx, {
+          store_id: q.get("store_id") ?? undefined,
+          status: q.get("status") ?? undefined,
+          limit: q.get("limit") ? Number(q.get("limit")) : undefined,
+        });
+        return json({ success: true, customer_rounds: data });
+      }
+      if (segments.length === 2 && req.method === "GET") {
+        const data = await getCustomerRound(supabase, ctx, segments[1]);
+        return json({ success: true, customer_round: data });
+      }
+    }
+
+    // ── /deviations ──
+    if (segments[0] === "deviations") {
+      if (segments.length === 1 && req.method === "GET") {
+        const data = await listDeviations(supabase, ctx, {
+          store_id: q.get("store_id") ?? undefined,
+          status: q.get("status") ?? undefined,
+          priority: q.get("priority") ?? undefined,
+          category: q.get("category") ?? undefined,
+          query: q.get("query") ?? undefined,
+          limit: q.get("limit") ? Number(q.get("limit")) : undefined,
+        });
+        return json({ success: true, deviations: data });
+      }
+      if (segments.length === 2 && req.method === "GET") {
+        const data = await getDeviation(supabase, ctx, segments[1]);
+        return json({ success: true, deviation: data });
+      }
+      if (segments.length === 1 && req.method === "POST") {
+        const body = await req.json();
+        const data = await createDeviation(supabase, ctx, body);
+        return json({ success: true, deviation: data }, 201);
+      }
+      if (segments.length === 2 && (req.method === "PUT" || req.method === "PATCH")) {
+        const body = await req.json();
+        const data = await updateDeviation(supabase, ctx, { ...body, deviation_id: segments[1] });
+        return json({ success: true, deviation: data });
+      }
+    }
+
+    // ── /stores ──
+    if (segments[0] === "stores") {
+      if (segments.length === 1 && req.method === "GET") {
+        const data = await listStores(supabase, ctx, {
+          is_active: q.get("is_active") !== null ? q.get("is_active") === "true" : undefined,
+          region: q.get("region") ?? undefined,
+          query: q.get("query") ?? undefined,
+          limit: q.get("limit") ? Number(q.get("limit")) : undefined,
+        });
+        return json({ success: true, stores: data });
+      }
+      if (segments.length === 2 && req.method === "GET") {
+        const data = await getStore(supabase, ctx, segments[1]);
+        return json({ success: true, store: data });
+      }
+    }
+
+    // ── /template-packages ──
+    if (segments[0] === "template-packages") {
+      if (segments.length === 1 && req.method === "GET") {
+        const data = await listTemplatePackages(supabase, ctx, {
+          store_id: q.get("store_id") ?? undefined,
+          limit: q.get("limit") ? Number(q.get("limit")) : undefined,
+        });
+        return json({ success: true, template_packages: data });
+      }
+      if (segments.length === 2 && req.method === "GET") {
+        const data = await getTemplatePackage(supabase, ctx, segments[1]);
+        return json({ success: true, template_package: data });
+      }
+      if (segments.length === 1 && req.method === "POST") {
+        const body = await req.json();
+        const data = await createTemplatePackage(supabase, ctx, body);
+        return json({ success: true, template_package: data }, 201);
+      }
+      if (segments.length === 2 && (req.method === "PUT" || req.method === "PATCH")) {
+        const body = await req.json();
+        const data = await updateTemplatePackage(supabase, ctx, { ...body, package_id: segments[1] });
+        return json({ success: true, template_package: data });
+      }
     }
 
     // ── /delivery-plans ──
