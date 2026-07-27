@@ -433,6 +433,27 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
   return null;
 }
 
+function decodeBase64Content(input: string): string {
+  let cleaned = input.trim();
+  if (cleaned.startsWith("data:")) {
+    const commaIdx = cleaned.indexOf(",");
+    if (commaIdx !== -1) {
+      cleaned = cleaned.slice(commaIdx + 1);
+    }
+  }
+  cleaned = cleaned.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  while (cleaned.length % 4 !== 0) {
+    cleaned += "=";
+  }
+  try {
+    const binaryString = atob(cleaned);
+    const bytes = Uint8Array.from(binaryString, (c) => c.charCodeAt(0));
+    return new TextDecoder("utf-8").decode(bytes).replace(/^\uFEFF/, "");
+  } catch {
+    return input.trim().replace(/^\uFEFF/, "");
+  }
+}
+
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -461,12 +482,17 @@ Deno.serve(async (req: Request) => {
   if (!body.xml && !body.xml_base64) return json({ error: "xml eller xml_base64 måste anges." }, 400);
 
   let xmlText: string;
-  try {
-    xmlText = body.xml ?? new TextDecoder("utf-8").decode(
-      Uint8Array.from(atob(body.xml_base64!), (c) => c.charCodeAt(0))
-    );
-  } catch {
-    return json({ error: "Kunde inte avkoda xml_base64 (måste vara giltig base64)." }, 400);
+  if (body.xml_base64) {
+    xmlText = decodeBase64Content(body.xml_base64);
+  } else if (body.xml) {
+    const trimmed = body.xml.trim();
+    if (trimmed.startsWith("data:") || (!trimmed.includes("<") && trimmed.length > 20)) {
+      xmlText = decodeBase64Content(trimmed);
+    } else {
+      xmlText = trimmed.replace(/^\uFEFF/, "");
+    }
+  } else {
+    return json({ error: "xml eller xml_base64 måste anges." }, 400);
   }
 
   const supabase = createClient(
