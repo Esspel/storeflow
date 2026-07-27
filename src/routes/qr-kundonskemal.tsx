@@ -1,7 +1,7 @@
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
-import { TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Clock, Package, ShoppingCart, Circle as XCircle } from "lucide-react";
+import { TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Clock, Package, ShoppingCart, Circle as XCircle, Ban, ArchiveX } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +21,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
   ordered: { label: "Beställd", color: "text-info", icon: ShoppingCart },
   fulfilled: { label: "Uppfylld", color: "text-success", icon: CheckCircle2 },
   declined: { label: "Avböjd", color: "text-muted-foreground", icon: XCircle },
+  not_in_assortment: { label: "Finns ej i sortiment", color: "text-muted-foreground", icon: Ban },
+  discontinued: { label: "Utgått", color: "text-muted-foreground", icon: ArchiveX },
 };
 
 function QrKundonskemalPage() {
@@ -106,6 +108,8 @@ function QrKundonskemalPage() {
   const statusCfg = STATUS_CONFIG[request.status] ?? STATUS_CONFIG.open;
   const StatusIcon = statusCfg.icon;
 
+  const isDetour = ["declined", "not_in_assortment", "discontinued"].includes(request.status);
+
   // Timeline steps
   const steps = [
     { key: "open", label: "Önskemål mottaget" },
@@ -113,7 +117,7 @@ function QrKundonskemalPage() {
     { key: "fulfilled", label: "Finns i butiken" },
   ];
   const stepIndex = steps.findIndex((s) => s.key === request.status);
-  const activeStep = request.status === "declined" ? -1 : stepIndex;
+  const activeStep = isDetour ? -1 : stepIndex;
 
   return (
     <div className="min-h-screen bg-background">
@@ -141,7 +145,7 @@ function QrKundonskemalPage() {
             <div className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1", {
               "bg-success/10": request.status === "fulfilled",
               "bg-info/10": request.status === "ordered",
-              "bg-muted": request.status === "open" || request.status === "declined",
+              "bg-muted": request.status === "open" || isDetour,
             })}>
               <StatusIcon className={cn("h-3.5 w-3.5", statusCfg.color)} />
               <span className={cn("text-xs font-semibold", statusCfg.color)}>{statusCfg.label}</span>
@@ -171,8 +175,8 @@ function QrKundonskemalPage() {
           </div>
         </div>
 
-        {/* Timeline */}
-        {request.status !== "declined" ? (
+        {/* Timeline / Sidospår */}
+        {!isDetour ? (
           <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
             <p className="mb-4 text-sm font-semibold text-foreground">Statusspårning</p>
             <div className="space-y-0">
@@ -212,11 +216,33 @@ function QrKundonskemalPage() {
           </div>
         ) : (
           <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 text-center">
-            <XCircle className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
-            <p className="text-sm font-medium text-foreground">Önskemål avböjt</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Tyvärr kan vi inte beställa den här produkten. Kontakta butikspersonalen för mer information.
-            </p>
+            {request.status === "declined" && (
+              <>
+                <XCircle className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
+                <p className="text-sm font-medium text-foreground">Önskemål avböjt</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Tyvärr kan vi inte ta in den här produkten. Se meddelande från butiken ovan eller kontakta personalen för mer information.
+                </p>
+              </>
+            )}
+            {request.status === "not_in_assortment" && (
+              <>
+                <Ban className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
+                <p className="text-sm font-medium text-foreground">Finns ej i sortiment</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Denna produkt ingår för närvarande inte i vårt leverantörssortiment och kan inte beställas in.
+                </p>
+              </>
+            )}
+            {request.status === "discontinued" && (
+              <>
+                <ArchiveX className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
+                <p className="text-sm font-medium text-foreground">Produkten har utgått</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Denna produkt har utgått ur tillverkarens eller leverantörens sortiment och går tyvärr inte längre att få tag på.
+                </p>
+              </>
+            )}
           </div>
         )}
 
