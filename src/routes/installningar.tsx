@@ -20,7 +20,6 @@ export const Route = createFileRoute("/installningar")({
 
 function SettingsPage() {
   const { user, refreshUser, activeStore } = useAuth();
-  const isManager = user?.role === "manager" || user?.role === "admin";
 
   // Quick PIN state
   const [newPin, setNewPin] = useState("");
@@ -102,18 +101,20 @@ function SettingsPage() {
     const trimmed = barcodeId.trim();
     if (!trimmed) return;
     setBarcodeSaving(true);
-    // Check uniqueness across users in same store(s)
+
     const { data: existing } = await supabase
       .from("app_users")
       .select("id, display_name")
       .eq("barcode_id", trimmed)
       .neq("id", user.id)
       .maybeSingle();
+
     if (existing) {
       setBarcodeError(`Streckkoden är redan registrerad på ${existing.display_name}.`);
       setBarcodeSaving(false);
       return;
     }
+
     await supabase.from("app_users").update({ barcode_id: trimmed }).eq("id", user.id);
     logAudit(user.id, "user.set_barcode", "app_users", user.id, {});
     setBarcodeSaving(false);
@@ -128,11 +129,6 @@ function SettingsPage() {
     setBarcodeId("");
   };
 
-  // Pulstavla PIN and Upshop are now managed under Administration (personal.tsx)
-  // Keep stub variables to avoid TS errors if referenced elsewhere
-  const [_unused_pulstavlaPin] = useState(["", "", "", ""]);
-  void _unused_pulstavlaPin;
-
   const [displayName, setDisplayName] = useState(user?.display_name ?? "");
   const [nameSaving, setNameSaving] = useState(false);
   const [nameSuccess, setNameSuccess] = useState(false);
@@ -146,7 +142,7 @@ function SettingsPage() {
   const [pwSuccess, setPwSuccess] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
 
-  // ── Diagnostics panel (hidden: tap version 7 times to unlock) ──────────────
+  // Diagnostics panel
   const [versionTapCount, setVersionTapCount] = useState(0);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -328,7 +324,6 @@ function SettingsPage() {
           <PushNotificationSetup />
         </div>
 
-        {/* Quick switch: barcode + PIN */}
         <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
@@ -416,7 +411,6 @@ function SettingsPage() {
                   : "Bekräfta PIN-koden:"}
               </p>
 
-              {/* PIN dots */}
               <div className="flex justify-center gap-4 py-1">
                 {[0, 1, 2, 3].map((i) => {
                   const active = pinStep === "enter" ? newPin : confirmPin;
@@ -439,7 +433,6 @@ function SettingsPage() {
                 <p className="rounded-lg bg-success/10 px-3 py-2 text-center text-sm text-success-foreground">PIN sparad!</p>
               )}
 
-              {/* PIN pad */}
               <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
                 {["1","2","3","4","5","6","7","8","9"].map((d) => (
                   <button
@@ -519,7 +512,7 @@ function SettingsPage() {
                   type={showNewPw ? "text" : "password"}
                   value={newPw}
                   onChange={(e) => setNewPw(e.target.value)}
-                  placeholder="Minst 6 tecken"
+                  placeholder="Minst 12 tecken"
                   className="pr-10"
                 />
                 <button
@@ -552,9 +545,6 @@ function SettingsPage() {
           </div>
         </div>
 
-        {/* Pulstavla PIN och Upshop — hanteras nu under Administration (personal.tsx) */}
-
-        {/* GDPR — min data, tillgänglig för alla */}
         <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
@@ -597,7 +587,6 @@ function SettingsPage() {
           </div>
         </div>
 
-        {/* Diagnostics panel — revealed by tapping the version number 7 times */}
         {showDiagnostics ? (
           <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -629,7 +618,6 @@ function SettingsPage() {
             </div>
 
             <div className="space-y-3">
-              {/* Network status */}
               <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   {diagOnline
@@ -642,7 +630,6 @@ function SettingsPage() {
                 </span>
               </div>
 
-              {/* IndexedDB */}
               <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <HardDrive className="h-4 w-4 text-muted-foreground" />
@@ -651,7 +638,6 @@ function SettingsPage() {
                 <span className="font-mono text-xs text-muted-foreground">{diagIdbUsage}</span>
               </div>
 
-              {/* Local drafts */}
               <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
                 <span className="text-sm font-medium">Lokala utkast (kö)</span>
                 <span className={cn("text-sm font-semibold tabular-nums", diagLocalDrafts > 0 ? "text-warning-foreground" : "text-muted-foreground")}>
@@ -659,13 +645,11 @@ function SettingsPage() {
                 </span>
               </div>
 
-              {/* Last error */}
               <div className="rounded-lg border border-border/60 px-3 py-2.5">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">Senaste systemfel</p>
                 <p className="break-all font-mono text-xs text-foreground/80">{diagLastError}</p>
               </div>
 
-              {/* Version */}
               <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
                 <span className="text-sm font-medium">App-version</span>
                 <span className="font-mono text-xs text-muted-foreground">{APP_VERSION}</span>
@@ -683,7 +667,6 @@ function SettingsPage() {
             </div>
           </div>
         ) : (
-          /* Version tap target — invisible but accessible */
           <div className="flex justify-center pt-2 pb-4">
             <button
               onClick={handleVersionTap}
@@ -698,7 +681,6 @@ function SettingsPage() {
           </div>
         )}
 
-        {/* Legal links */}
         <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <h2 className="mb-3 font-semibold">Juridisk information</h2>
           <nav className="space-y-1">
@@ -720,7 +702,6 @@ function SettingsPage() {
           </nav>
         </div>
 
-        {/* Copyright */}
         <p className="pb-4 text-center text-xs text-muted-foreground/50">
           &copy; 2024–2026 StoreFlow Contributors. Licensierat under GNU GPL v3.0.
         </p>
