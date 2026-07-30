@@ -1,5 +1,15 @@
-import { useState } from "react";
-import { Store, Users, ClipboardList, ChartBar as BarChart2, ShieldCheck, ChevronRight, CircleCheck as CheckCircle2, Building2 } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { 
+  Store, 
+  Users, 
+  ClipboardList, 
+  ChartBar as BarChart2, 
+  ShieldCheck, 
+  ChevronRight, 
+  ChevronLeft,
+  CircleCheck as CheckCircle2, 
+  Building2 
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 
@@ -88,88 +98,132 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
 
   const step = STEPS[currentStep];
   const isLast = currentStep === STEPS.length - 1;
-  const progress = ((currentStep + 1) / STEPS.length) * 100;
+  const isFirst = currentStep === 0;
+
+  const handleNext = useCallback(() => {
+    if (isLast) {
+      onComplete();
+    } else {
+      setCurrentStep((s) => s + 1);
+    }
+  }, [isLast, onComplete]);
+
+  const handlePrev = useCallback(() => {
+    if (isFirst) {
+      onComplete();
+    } else {
+      setCurrentStep((s) => s - 1);
+    }
+  }, [isFirst, onComplete]);
+
+  // Tangentbordsnavigering (Vänster/Höger pil)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") {
+        handleNext();
+      } else if (e.key === "ArrowLeft" && !isFirst) {
+        handlePrev();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleNext, handlePrev, isFirst]);
 
   const Icon = step.icon;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
-      <div className="w-full max-w-lg">
+      <div 
+        className="w-full max-w-lg"
+        role="region"
+        aria-roledescription="carousel"
+        aria-label="Introduktionsguide"
+      >
         {/* Header */}
         <div className="mb-8 text-center">
           <p className="text-sm font-medium text-muted-foreground">
             Välkommen,{" "}
-            <span className="text-foreground">
+            <span className="font-semibold text-foreground">
               {user?.name ?? user?.username}
             </span>
             {effectiveStore && (
-              <> · {effectiveStore.name}</>
+              <> · <span className="text-foreground/90">{effectiveStore.name}</span></>
             )}
           </p>
-          <div className="mt-3 flex items-center gap-2">
-            {STEPS.map((_, i) => (
-              <div
-                key={i}
-                className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-                  i <= currentStep ? "bg-primary" : "bg-border"
-                }`}
-              />
+
+          {/* Stegindikatorer (Progressbar) */}
+          <div 
+            className="mt-3 flex items-center gap-1.5"
+            role="progressbar"
+            aria-valuenow={currentStep + 1}
+            aria-valuemin={1}
+            aria-valuemax={STEPS.length}
+          >
+            {STEPS.map((s, i) => (
+              <button
+                key={s.id}
+                onClick={() => setCurrentStep(i)}
+                className="h-2 flex-1 rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`Gå till steg ${i + 1}: ${s.title}`}
+              >
+                <div
+                  className={`h-full w-full rounded-full transition-colors duration-300 ${
+                    i <= currentStep ? "bg-primary" : "bg-border"
+                  }`}
+                />
+              </button>
             ))}
           </div>
+
           <p className="mt-2 text-xs text-muted-foreground">
             Steg {currentStep + 1} av {STEPS.length}
           </p>
         </div>
 
-        {/* Card */}
-        <div className="rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-md)]">
-          <div className="p-8">
-            {/* Icon */}
+        {/* Huvudkort */}
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-md)] transition-all">
+          <div key={step.id} className="animate-in fade-in-50 duration-200 p-6 sm:p-8">
+            {/* Ikon */}
             <div className="mb-6 flex justify-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                <Icon className="h-8 w-8" />
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm">
+                <Icon className="h-8 w-8" aria-hidden="true" />
               </div>
             </div>
 
-            {/* Content */}
-            <h2 className="mb-2 text-center text-2xl font-bold tracking-tight">
+            {/* Rubrik & Beskrivning */}
+            <h2 className="mb-2 text-center text-2xl font-bold tracking-tight text-foreground">
               {step.title}
             </h2>
             <p className="mb-6 text-center text-sm leading-relaxed text-muted-foreground">
               {step.description}
             </p>
 
-            {/* Details */}
+            {/* Detaljlista */}
             <ul className="space-y-3">
               {step.details.map((detail, i) => (
                 <li key={i} className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                  <span className="text-sm text-foreground/80">{detail}</span>
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span className="text-sm text-foreground/80 leading-normal">{detail}</span>
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between border-t border-border/60 px-8 py-5">
+          {/* Footer / Navigering */}
+          <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-6 sm:px-8 py-4">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() =>
-                currentStep > 0
-                  ? setCurrentStep((s) => s - 1)
-                  : onComplete()
-              }
-              className="text-muted-foreground"
+              onClick={handlePrev}
+              className="gap-1 text-muted-foreground hover:text-foreground"
             >
-              {currentStep === 0 ? "Hoppa över" : "Tillbaka"}
+              {!isFirst && <ChevronLeft className="h-4 w-4" />}
+              {isFirst ? "Hoppa över" : "Tillbaka"}
             </Button>
 
             <Button
-              onClick={() =>
-                isLast ? onComplete() : setCurrentStep((s) => s + 1)
-              }
-              className="gap-2 rounded-full px-6"
+              onClick={handleNext}
+              className="gap-2 rounded-full px-6 shadow-sm"
             >
               {isLast ? "Kom igång" : "Nästa"}
               {!isLast && <ChevronRight className="h-4 w-4" />}
