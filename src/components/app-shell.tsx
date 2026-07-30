@@ -367,39 +367,10 @@ export function AppShell() {
     <div className="flex min-h-screen w-full flex-col bg-background" style={{ isolation: "isolate" }}>
       <SwUpdateBanner />
       <div className="pt-safe" />
-
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-card/95 backdrop-blur-sm">
-        <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4 md:h-16 md:gap-4 md:px-8">
-          <Link to="/" className="flex shrink-0 items-center gap-2">
-            <div className="flex flex-col leading-none">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Store</span>
-              <span className="text-2xl font-black tracking-tight text-primary">Flow</span>
-            </div>
-          </Link>
-
-          {/* Desktop Navigation */}
-          <nav className="hidden flex-1 items-center gap-1 md:flex">
-            {nav.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  "relative rounded-full px-3.5 py-2 text-sm font-medium text-foreground/70 transition-colors hover:text-primary",
-                  isActive(item.to) && "text-primary"
-                )}
-              >
-                {item.label}
-                {isActive(item.to) && (
-                  <span className="absolute inset-x-3.5 -bottom-[14px] h-[3px] rounded-t-full bg-primary" />
-                )}
-              </Link>
-            ))}
-          </nav>
-
-          {/* Mobile Bottom Nav */}
+      
+      {/* Mobile Bottom Nav */}
           <nav
             className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-card/95 backdrop-blur-sm pb-safe md:hidden"
-            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
             data-safe-bottom
           >
             {nav
@@ -441,6 +412,33 @@ export function AppShell() {
               </div>
               <span className="leading-none">Övrigt</span>
             </button>
+          </nav>
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-card/95 backdrop-blur-sm">
+        <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4 md:h-16 md:gap-4 md:px-8">
+          <Link to="/" className="flex shrink-0 items-center gap-2">
+            <div className="flex flex-col leading-none">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Store</span>
+              <span className="text-2xl font-black tracking-tight text-primary">Flow</span>
+            </div>
+          </Link>
+
+          {/* Desktop Navigation */}
+          <nav className="hidden flex-1 items-center gap-1 md:flex">
+            {nav.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={cn(
+                  "relative rounded-full px-3.5 py-2 text-sm font-medium text-foreground/70 transition-colors hover:text-primary",
+                  isActive(item.to) && "text-primary"
+                )}
+              >
+                {item.label}
+                {isActive(item.to) && (
+                  <span className="absolute inset-x-3.5 -bottom-[14px] h-[3px] rounded-t-full bg-primary" />
+                )}
+              </Link>
+            ))}
           </nav>
 
           <div className="ml-auto flex items-center gap-1.5 md:gap-2">
