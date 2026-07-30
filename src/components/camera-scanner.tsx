@@ -29,12 +29,13 @@ const NATIVE_FORMATS = [
   "qr_code", "upc_a", "upc_e", "itf", "data_matrix", "aztec", "pdf417", "codabar",
 ];
 
-
 export function CameraScanner({ onScan, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animRef = useRef<number | null>(null);
   const lastScannedRef = useRef<string>("");
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
   const [torchOn, setTorchOn] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,83 +44,125 @@ export function CameraScanner({ onScan, onClose }: Props) {
   const detectorRef = useRef<InstanceType<NonNullable<typeof window.BarcodeDetector>> | null>(null);
 
   const stopStream = useCallback(() => {
-    if (animRef.current) cancelAnimationFrame(animRef.current);
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
+    if (animRef.current) {
+      cancelAnimationFrame(animRef.current);
+      animRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
   }, []);
 
-  const handleScan = useCallback((code: string) => {
-    if (!code || code === lastScannedRef.current) return;
-    lastScannedRef.current = code;
-    stopStream();
-    onScan(code);
-    onClose();
-  }, [onScan, onClose, stopStream]);
+  const handleScan = useCallback(
+    (code: string) => {
+      if (!code || code === lastScannedRef.current) return;
+      lastScannedRef.current = code;
+      stopStream();
+      onScan(code);
+      onClose();
+    },
+    [onScan, onClose, stopStream]
+  );
 
+  // Initiera kamera och detektor
   useEffect(() => {
     let mounted = true;
 
     const start = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
         });
-        if (!mounted) { stream.getTracks().forEach(t => t.stop()); return; }
+
+        if (!mounted) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
 
         streamRef.current = stream;
+
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          await videoRef.current.play();
+          await videoRef.current.play().catch(() => {});
         }
 
         const track = stream.getVideoTracks()[0];
-        const caps = track.getCapabilities?.() as { torch?: boolean } | undefined;
+        const caps = track?.getCapabilities?.() as { torch?: boolean } | undefined;
         if (caps?.torch) setTorchSupported(true);
 
+        // Kontrollera stöd för Native BarcodeDetector
         if (window.BarcodeDetector) {
           try {
-            const supportedFormats = await window.BarcodeDetector.getSupportedFormats?.() ?? NATIVE_FORMATS;
-            const formats = NATIVE_FORMATS.filter(f => supportedFormats.includes(f));
+            const supportedFormats = (await window.BarcodeDetector.getSupportedFormats?.()) ?? NATIVE_FORMATS;
+            const formats = NATIVE_FORMATS.filter((f) => supportedFormats.includes(f));
             detectorRef.current = new window.BarcodeDetector({
               formats: formats.length > 0 ? formats : NATIVE_FORMATS,
             });
             setUseNative(true);
           } catch {
-            // Fall through to ZXing
+            // Fallback till ZXing
           }
         }
 
-        setScanning(true);
-      } catch {
-        if (mounted) setError("Kunde inte komma åt kameran. Kontrollera kamerabehörigheter.");
+        if (mounted) setScanning(true);
+      } catch (err) {
+        if (mounted) {
+          setError("Kunde inte komma åt kameran. Kontrollera kamerabehörigheter.");
+        }
       }
     };
 
     start();
-    return () => { mounted = false; stopStream(); };
+
+    return () => {
+      mounted = false;
+      stopStream();
+    };
   }, [stopStream]);
 
-  // Native BarcodeDetector loop (Chrome / Android / desktop)
+  // Native BarcodeDetector-loop (Chrome / Android / moderna webbläsare)
   useEffect(() => {
     if (!scanning || !useNative || !detectorRef.current) return;
+
+    let isScanningFrame = false;
 
     const scan = async () => {
       if (!videoRef.current || videoRef.current.readyState < 2) {
         animRef.current = requestAnimationFrame(scan);
         return;
       }
-      try {
-        const results = await detectorRef.current!.detect(videoRef.current);
-        if (results.length > 0) { handleScan(results[0].rawValue); return; }
-      } catch {}
+
+      if (!isScanningFrame) {
+        isScanningFrame = true;
+        try {
+          const results = await detectorRef.current!.detect(videoRef.current);
+          if (results.length > 0) {
+            handleScan(results[0].rawValue);
+            return;
+          }
+        } catch {
+          // Ignorera detekteringsfel och fortsätt söka
+        } finally {
+          isScanningFrame = false;
+        }
+      }
+
       animRef.current = requestAnimationFrame(scan);
     };
 
     animRef.current = requestAnimationFrame(scan);
-    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+
+    return () => {
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+    };
   }, [scanning, useNative, handleScan]);
 
-  // ZXing loop — EAN-13/8, Code-128/39, UPC etc. Works on iOS Safari
+  // ZXing-loop (Fallback för Safari/iOS m.fl.)
   useEffect(() => {
     if (!scanning || useNative) return;
 
@@ -131,35 +174,52 @@ export function CameraScanner({ onScan, onClose }: Props) {
     hints.set(HINT_TRY_HARDER, true);
 
     const reader = new BrowserMultiFormatOneDReader(hints);
-    const canvas = document.createElement("canvas");
+    
+    if (!canvasRef.current) {
+      canvasRef.current = document.createElement("canvas");
+    }
+    const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    let stopped = false;
 
-    const scan = () => {
+    let stopped = false;
+    let lastScanTime = 0;
+    const SCAN_INTERVAL_MS = 120; // Kör avkodning max var 120ms för att skona batteri/CPU
+
+    const scan = (time: number) => {
       if (stopped) return;
+
       if (!video || video.readyState < 2 || video.videoWidth === 0) {
         animRef.current = requestAnimationFrame(scan);
         return;
       }
 
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      if (time - lastScanTime >= SCAN_INTERVAL_MS) {
+        lastScanTime = time;
 
-      try {
-        const result = reader.decodeFromCanvas(canvas);
-        if (result?.getText()) {
-          handleScan(result.getText());
-          return;
+        // Anpassa canvas efter videons mått
+        if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
+        if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
+
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          try {
+            const result = reader.decodeFromCanvas(canvas);
+            if (result?.getText()) {
+              handleScan(result.getText());
+              return;
+            }
+          } catch {
+            // NotFoundException kastas när ingen kod hittas
+          }
         }
-      } catch {
-        // NotFoundException thrown when no barcode found — expected, keep scanning
       }
 
       animRef.current = requestAnimationFrame(scan);
     };
 
     animRef.current = requestAnimationFrame(scan);
+
     return () => {
       stopped = true;
       if (animRef.current) cancelAnimationFrame(animRef.current);
@@ -171,14 +231,17 @@ export function CameraScanner({ onScan, onClose }: Props) {
     if (!track) return;
     const next = !torchOn;
     try {
-      await (track as MediaStreamTrack & { applyConstraints(c: object): Promise<void> })
-        .applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+      await (track as MediaStreamTrack & { applyConstraints(c: object): Promise<void> }).applyConstraints({
+        advanced: [{ torch: next } as MediaTrackConstraintSet],
+      });
       setTorchOn(next);
-    } catch {}
+    } catch {
+      // Belysning stöds ej eller nekades
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-[300] bg-black flex flex-col">
+    <div className="fixed inset-0 z-[300] flex flex-col bg-black">
       <video
         ref={videoRef}
         muted
@@ -186,34 +249,41 @@ export function CameraScanner({ onScan, onClose }: Props) {
         className="absolute inset-0 h-full w-full object-cover"
       />
 
-      {/* Overlay with cutout */}
-      <div className="absolute inset-0 pointer-events-none">
+      {/* Overlay med utskärning för siktområde */}
+      <div className="pointer-events-none absolute inset-0">
         <div className="absolute inset-0 bg-black/55" />
         <div
           className="absolute"
           style={{
-            top: "22%", left: "8%", right: "8%", height: "42%",
+            top: "22%",
+            left: "8%",
+            right: "8%",
+            height: "42%",
             borderRadius: "20px",
             boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)",
             border: "2px solid rgba(255,255,255,0.25)",
           }}
         />
-        {/* Corner accents */}
+        {/* Hörnmarkeringar */}
         {[
           { top: "22%", left: "8%", borderTop: "3px solid white", borderLeft: "3px solid white", borderRadius: "18px 0 0 0" },
           { top: "22%", right: "8%", borderTop: "3px solid white", borderRight: "3px solid white", borderRadius: "0 18px 0 0" },
           { bottom: "36%", left: "8%", borderBottom: "3px solid white", borderLeft: "3px solid white", borderRadius: "0 0 0 18px" },
           { bottom: "36%", right: "8%", borderBottom: "3px solid white", borderRight: "3px solid white", borderRadius: "0 0 18px 0" },
         ].map((style, i) => (
-          <div key={i} className="absolute w-8 h-8" style={style} />
+          <div key={i} className="absolute h-8 w-8" style={style} />
         ))}
       </div>
 
       {/* Header */}
-      <div className="relative z-10 flex items-center justify-between px-5 pt-safe pt-12 pb-4">
+      <div className="relative z-10 flex items-center justify-between px-5 pt-12 pb-4 pt-safe">
         <button
-          onClick={() => { stopStream(); onClose(); }}
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 backdrop-blur-md text-white active:scale-95 transition-transform"
+          onClick={() => {
+            stopStream();
+            onClose();
+          }}
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-md transition-transform active:scale-95"
+          aria-label="Stäng"
         >
           <X className="h-5 w-5" />
         </button>
@@ -222,9 +292,10 @@ export function CameraScanner({ onScan, onClose }: Props) {
           <button
             onClick={toggleTorch}
             className={cn(
-              "flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-md active:scale-95 transition-all",
+              "flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-md transition-all active:scale-95",
               torchOn ? "bg-yellow-400 text-black" : "bg-white/10 text-white"
             )}
+            aria-label="Tänd/släck ficklampa"
           >
             {torchOn ? <Zap className="h-5 w-5" /> : <ZapOff className="h-5 w-5" />}
           </button>
@@ -233,14 +304,14 @@ export function CameraScanner({ onScan, onClose }: Props) {
         )}
       </div>
 
-      {/* Bottom hint */}
-      <div className="relative z-10 mt-auto px-6 pb-safe pb-12 text-center">
+      {/* Undre informationstext */}
+      <div className="relative z-10 mt-auto px-6 pb-12 text-center pb-safe">
         {error ? (
-          <div className="rounded-2xl bg-red-500/20 backdrop-blur-md px-4 py-3 border border-red-400/30">
+          <div className="rounded-2xl border border-red-400/30 bg-red-500/20 px-4 py-3 backdrop-blur-md">
             <p className="text-sm text-red-200">{error}</p>
           </div>
         ) : (
-          <p className="text-sm text-white/60">EAN-13 · EAN-8 · Code 128 · QR · och fler</p>
+          <p className="text-sm text-white/60">EAN-13 · EAN-8 · Code 128 · QR · med flera</p>
         )}
       </div>
     </div>
