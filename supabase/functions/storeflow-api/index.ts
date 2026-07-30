@@ -9,7 +9,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
-import { authenticate, serviceRoleClient } from "../_shared/auth.ts";
+import { serviceRoleClient, authenticateRequest } from "../_shared/auth.ts";
 import {
   ScopeError, listTemplates, getTemplate, createTemplate, updateTemplate,
   listTasks, getTask, createTask, updateTask,
@@ -31,9 +31,13 @@ function pathAfterFunctionName(req: Request): string[] {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
 
-  const supabase = serviceRoleClient();
-  const ctx = await authenticate(req, supabase);
+  // 1. Nytt autentiseringsflöde via auth.ts
+  // Validatorn läser Authorization-headern och returnerar en färdig AuthContext (ctx)
+  const ctx = await authenticateRequest(req);
   if (!ctx) return json({ error: "Ogiltig eller saknad Authorization: Bearer <token>." }, 401);
+
+  // 2. Skapa serviceRoleClient för anrop mot Supabase/database
+  const supabase = serviceRoleClient();
 
   const url = new URL(req.url);
   const segments = pathAfterFunctionName(req);
