@@ -1,18 +1,32 @@
-import { Bell, BellOff, Loader as Loader2 } from "lucide-react";
+import * as React from "react";
+import { Bell, BellOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 
 export function PushNotificationSetup() {
-  const { isSupported, isSubscribed, isLoading, permissionState, subscribe, unsubscribe } =
-    usePushNotifications();
+  const {
+    isSupported,
+    isSubscribed,
+    isLoading,
+    permissionState,
+    subscribe,
+    unsubscribe,
+  } = usePushNotifications();
 
+  // Om webbläsaren/enheten saknar stöd för Push API
   if (!isSupported) return null;
 
+  // Om användaren har blockerat notiser i webbläsaren
   if (permissionState === "denied") {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-        <BellOff className="h-4 w-4 shrink-0" />
-        <span>Notiser blockerade i webbläsaren. Ändra i webbläsarinställningarna för att aktivera.</span>
+      <div
+        role="alert"
+        className="flex items-center gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
+      >
+        <BellOff className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <span>
+          Notiser är blockerade. Ändra i webbläsarens inställningar för att aktivera.
+        </span>
       </div>
     );
   }
@@ -23,16 +37,27 @@ export function PushNotificationSetup() {
       size="sm"
       onClick={isSubscribed ? unsubscribe : subscribe}
       disabled={isLoading}
-      className="gap-2"
+      aria-busy={isLoading}
+      aria-label={
+        isSubscribed ? "Inaktivera push-notiser" : "Aktivera push-notiser"
+      }
+      className="gap-2 transition-all"
     >
       {isLoading ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
       ) : isSubscribed ? (
-        <BellOff className="h-4 w-4" />
+        <BellOff className="h-4 w-4 shrink-0 text-muted-foreground" />
       ) : (
-        <Bell className="h-4 w-4" />
+        <Bell className="h-4 w-4 shrink-0" />
       )}
-      {isLoading ? "Laddar..." : isSubscribed ? "Notiser på" : "Aktivera notiser"}
+      
+      <span>
+        {isLoading
+          ? "Uppdaterar..."
+          : isSubscribed
+            ? "Notiser aktiverade"
+            : "Aktivera notiser"}
+      </span>
     </Button>
   );
 }
