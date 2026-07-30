@@ -1,21 +1,11 @@
-@import "tailwindcss" source(none);
+@import "tailwindcss";
 @source "../src";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Design system definition.
- *
- * The @theme inline block maps CSS custom properties to Tailwind utility
- * classes (e.g. --color-primary -> bg-primary, text-primary).
- *
- * The :root and .dark blocks define the actual color values using oklch.
- * All colors MUST use oklch format.
- *
- * To add a new semantic color:
- * 1. Add the variable to :root (light value) and .dark (dark value)
- * 2. Register it in @theme inline as --color-<name>: var(--<name>)
+ * Design system definition (Tailwind v4)
  */
 
 @theme inline {
@@ -26,6 +16,7 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -46,11 +37,13 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-ring-offset-background: var(--background);
+
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -59,6 +52,7 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
@@ -66,13 +60,23 @@
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-primary-soft: var(--primary-soft);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Kartläggning av skuggor för att generera t.ex. `shadow-card` */
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-card: var(--shadow-card);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Registrera anpassad animation i temat */
+  --animate-overdue-pulse: overdue-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 :root {
   --radius: 0.875rem;
 
-  /* Coop-inspired: white surface, deep green primary, pink accent */
+  /* Coop-inspirerad färgpalett (OKLCH) */
   --background: oklch(0.99 0.005 145);
   --foreground: oklch(0.22 0.03 200);
 
@@ -89,10 +93,8 @@
   --secondary-foreground: oklch(0.3 0.04 160);
 
   --muted: oklch(0.95 0.018 148);
-  /* Darkened from 0.5 → 0.42 to reach WCAG AA 4.5:1 on white/near-white backgrounds */
   --muted-foreground: oklch(0.42 0.025 200);
 
-  /* Pink icon-bubble accent (matches Coop's pink rondell) */
   --accent: oklch(0.92 0.05 15);
   --accent-foreground: oklch(0.4 0.15 15);
 
@@ -127,6 +129,7 @@
 
   --gradient-primary: linear-gradient(135deg, oklch(0.55 0.17 148), oklch(0.45 0.16 158));
   --gradient-subtle: linear-gradient(180deg, oklch(0.95 0.04 145), oklch(0.92 0.05 145));
+
   --shadow-sm: 0 1px 2px 0 oklch(0.3 0.05 150 / 0.05);
   --shadow-md: 0 4px 16px -2px oklch(0.3 0.05 150 / 0.08);
   --shadow-lg: 0 20px 50px -12px oklch(0.3 0.08 148 / 0.15);
@@ -175,54 +178,62 @@
   --sidebar-ring: oklch(0.7 0.17 148);
 }
 
+@keyframes overdue-pulse {
+  0%, 100% {
+    border-color: oklch(0.577 0.245 27.325);
+    box-shadow: 0 0 0 0 oklch(0.577 0.245 27.325 / 0.3);
+  }
+  50% {
+    border-color: oklch(0.577 0.245 27.325 / 0.55);
+    box-shadow: 0 0 0 4px oklch(0.577 0.245 27.325 / 0);
+  }
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
-    /* Prevent iOS tap highlight flash on interactive elements */
     -webkit-tap-highlight-color: transparent;
   }
 
   html, body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    /* Allow natural body-level scrolling — Radix Dialog handles scroll lock */
+    font-family: var(--font-sans);
   }
 
-  /* ── Typography: WCAG-friendly baseline for store-floor use ────────────── */
-  /* Instruction text, descriptions, and body copy: min 16px, 1.6 line-height */
+  /* Förhindrar fördröjning vid dubbeltryck på mobila enheter */
+  button, a, input, select, textarea, [role="button"] {
+    touch-action: manipulation;
+  }
+
   p, li, label, .text-body {
     line-height: 1.6;
   }
 
-  /* Enforce minimum readable size on description-level text */
   .description-text {
-    font-size: 1rem;       /* 16px */
+    font-size: 1rem;
     line-height: 1.6;
   }
 
-  /* ── Safe area insets for notched/hole-punch devices ───────────────────── */
-  /* Applied via utility classes: pt-safe, pb-safe, etc. */
+  /* Safe Area Insets */
   .pt-safe  { padding-top:    env(safe-area-inset-top,    0px); }
   .pb-safe  { padding-bottom: env(safe-area-inset-bottom, 0px); }
   .pl-safe  { padding-left:   env(safe-area-inset-left,   0px); }
   .pr-safe  { padding-right:  env(safe-area-inset-right,  0px); }
 
-  /* Header safe-area supplement (adds on top of existing padding) */
   [data-safe-header] {
     padding-top: max(0px, env(safe-area-inset-top));
   }
 
-  /* Bottom fixed elements (FAB, bottom nav) */
   [data-safe-bottom] {
     padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
 
-  /* ── Swipe affordance: subtle drag handle on task cards (touch only) ────── */
+  /* Swipe-indikatorer */
   [data-swipe-hint] {
     position: relative;
   }
 
-  /* Swipe-to-complete: visible only on touch (coarse pointer) */
   @media (pointer: fine) {
     [data-swipe-hint]::after {
       display: none;
@@ -230,7 +241,6 @@
   }
 
   @media (pointer: coarse) {
-    /* Pulsing arrow hint — fades after first interaction via .swipe-used class */
     [data-swipe-hint]:not(.swipe-used)::after {
       content: "";
       position: absolute;
@@ -249,29 +259,17 @@
 
     @keyframes swipe-hint-pulse {
       0%, 100% { opacity: 0.35; transform: translateY(-50%) translateX(0); }
-      50%       { opacity: 0.6;  transform: translateY(-50%) translateX(4px); }
+      50%      { opacity: 0.6;  transform: translateY(-50%) translateX(4px); }
     }
-  }
 
-  /* Contain overscroll only on explicit inner scroll containers (e.g. kundrunda active view) */
-  [data-scroll-container] {
-    overscroll-behavior-y: contain;
-    -webkit-overflow-scrolling: touch;
-    overflow-y: auto;
-  }
-
-  /* On touch devices allow horizontal swipe detection in JS */
-  @media (pointer: coarse) {
     [data-swipeable] {
       touch-action: pan-y;
     }
 
-    /* Contain pull-to-refresh on inner scroll areas only on touch devices */
     [data-scroll-container] {
       overscroll-behavior-y: contain;
     }
 
-    /* Touch feedback for interactive elements */
     button:active,
     [role="button"]:active,
     a:active {
@@ -280,10 +278,15 @@
     }
   }
 
-  /* ── Offline snackbar ───────────────────────────────────────────────────── */
+  [data-scroll-container] {
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+  }
+
   #offline-snackbar {
     position: fixed;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 72px); /* above bottom FAB */
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 72px);
     left: 50%;
     transform: translateX(-50%) translateY(120%);
     z-index: 9999;
@@ -296,9 +299,3 @@
     transform: translateX(-50%) translateY(0);
   }
 }
-
-@keyframes overdue-pulse {
-  0%, 100% { border-color: oklch(0.577 0.245 27.325); box-shadow: 0 0 0 0 oklch(0.577 0.245 27.325 / 0.3); }
-  50% { border-color: oklch(0.577 0.245 27.325 / 0.55); box-shadow: 0 0 0 4px oklch(0.577 0.245 27.325 / 0); }
-}
-
