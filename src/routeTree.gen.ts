@@ -9,145 +9,35 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as UppgifterRouteImport } from './routes/uppgifter'
-import { Route as TestpanelRouteImport } from './routes/testpanel'
-import { Route as SchemaRouteImport } from './routes/schema'
-import { Route as RapporterRouteImport } from './routes/rapporter'
-import { Route as QrKundonskemalFormRouteImport } from './routes/qr-kundonskemal-form'
-import { Route as QrKundonskemalRouteImport } from './routes/qr-kundonskemal'
-import { Route as QrAvvikelseRouteImport } from './routes/qr-avvikelse'
-import { Route as PulstavlaRouteImport } from './routes/pulstavla'
-import { Route as ProcesserRouteImport } from './routes/processer'
-import { Route as PersonalRouteImport } from './routes/personal'
-import { Route as MallarRouteImport } from './routes/mallar'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as LicensRouteImport } from './routes/licens'
-import { Route as KundrundaRouteImport } from './routes/kundrunda'
-import { Route as KundonskemalRouteImport } from './routes/kundonskemal'
-import { Route as IntegritetspolicyRouteImport } from './routes/integritetspolicy'
-import { Route as InstallningarRouteImport } from './routes/installningar'
-import { Route as HkDashboardRouteImport } from './routes/hk-dashboard'
-import { Route as HjalpRouteImport } from './routes/hjalp'
-import { Route as GdprRouteImport } from './routes/gdpr'
-import { Route as ButiksregisterRouteImport } from './routes/butiksregister'
-import { Route as BelastningRouteImport } from './routes/belastning'
-import { Route as AvvikelserRouteImport } from './routes/avvikelser'
-import { Route as AnvandningsvillkorRouteImport } from './routes/anvandningsvillkor'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AnvandningsvillkorRouteImport } from './routes/anvandningsvillkor'
+import { Route as AvvikelserRouteImport } from './routes/avvikelser'
+import { Route as BelastningRouteImport } from './routes/belastning'
+import { Route as ButiksregisterRouteImport } from './routes/butiksregister'
+import { Route as GdprRouteImport } from './routes/gdpr'
+import { Route as HjalpRouteImport } from './routes/hjalp'
+import { Route as HkDashboardRouteImport } from './routes/hk-dashboard'
+import { Route as InstallningarRouteImport } from './routes/installningar'
+import { Route as IntegritetspolicyRouteImport } from './routes/integritetspolicy'
+import { Route as KundonskemalRouteImport } from './routes/kundonskemal'
+import { Route as KundrundaRouteImport } from './routes/kundrunda'
+import { Route as LicensRouteImport } from './routes/licens'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as MallarRouteImport } from './routes/mallar'
+import { Route as PersonalRouteImport } from './routes/personal'
+import { Route as ProcesserRouteImport } from './routes/processer'
+import { Route as PulstavlaRouteImport } from './routes/pulstavla'
+import { Route as QrAvvikelseRouteImport } from './routes/qr-avvikelse'
+import { Route as QrKundonskemalRouteImport } from './routes/qr-kundonskemal'
+import { Route as QrKundonskemalFormRouteImport } from './routes/qr-kundonskemal-form'
+import { Route as RapporterRouteImport } from './routes/rapporter'
+import { Route as SchemaRouteImport } from './routes/schema'
+import { Route as TestpanelRouteImport } from './routes/testpanel'
+import { Route as UppgifterRouteImport } from './routes/uppgifter'
 
-const UppgifterRoute = UppgifterRouteImport.update({
-  id: '/uppgifter',
-  path: '/uppgifter',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TestpanelRoute = TestpanelRouteImport.update({
-  id: '/testpanel',
-  path: '/testpanel',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SchemaRoute = SchemaRouteImport.update({
-  id: '/schema',
-  path: '/schema',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RapporterRoute = RapporterRouteImport.update({
-  id: '/rapporter',
-  path: '/rapporter',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QrKundonskemalFormRoute = QrKundonskemalFormRouteImport.update({
-  id: '/qr-kundonskemal-form',
-  path: '/qr-kundonskemal-form',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QrKundonskemalRoute = QrKundonskemalRouteImport.update({
-  id: '/qr-kundonskemal',
-  path: '/qr-kundonskemal',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QrAvvikelseRoute = QrAvvikelseRouteImport.update({
-  id: '/qr-avvikelse',
-  path: '/qr-avvikelse',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PulstavlaRoute = PulstavlaRouteImport.update({
-  id: '/pulstavla',
-  path: '/pulstavla',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProcesserRoute = ProcesserRouteImport.update({
-  id: '/processer',
-  path: '/processer',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PersonalRoute = PersonalRouteImport.update({
-  id: '/personal',
-  path: '/personal',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MallarRoute = MallarRouteImport.update({
-  id: '/mallar',
-  path: '/mallar',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LicensRoute = LicensRouteImport.update({
-  id: '/licens',
-  path: '/licens',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const KundrundaRoute = KundrundaRouteImport.update({
-  id: '/kundrunda',
-  path: '/kundrunda',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const KundonskemalRoute = KundonskemalRouteImport.update({
-  id: '/kundonskemal',
-  path: '/kundonskemal',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IntegritetspolicyRoute = IntegritetspolicyRouteImport.update({
-  id: '/integritetspolicy',
-  path: '/integritetspolicy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InstallningarRoute = InstallningarRouteImport.update({
-  id: '/installningar',
-  path: '/installningar',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HkDashboardRoute = HkDashboardRouteImport.update({
-  id: '/hk-dashboard',
-  path: '/hk-dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HjalpRoute = HjalpRouteImport.update({
-  id: '/hjalp',
-  path: '/hjalp',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GdprRoute = GdprRouteImport.update({
-  id: '/gdpr',
-  path: '/gdpr',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ButiksregisterRoute = ButiksregisterRouteImport.update({
-  id: '/butiksregister',
-  path: '/butiksregister',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BelastningRoute = BelastningRouteImport.update({
-  id: '/belastning',
-  path: '/belastning',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AvvikelserRoute = AvvikelserRouteImport.update({
-  id: '/avvikelser',
-  path: '/avvikelser',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AnvandningsvillkorRoute = AnvandningsvillkorRouteImport.update({
@@ -155,9 +45,119 @@ const AnvandningsvillkorRoute = AnvandningsvillkorRouteImport.update({
   path: '/anvandningsvillkor',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AvvikelserRoute = AvvikelserRouteImport.update({
+  id: '/avvikelser',
+  path: '/avvikelser',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BelastningRoute = BelastningRouteImport.update({
+  id: '/belastning',
+  path: '/belastning',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ButiksregisterRoute = ButiksregisterRouteImport.update({
+  id: '/butiksregister',
+  path: '/butiksregister',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GdprRoute = GdprRouteImport.update({
+  id: '/gdpr',
+  path: '/gdpr',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HjalpRoute = HjalpRouteImport.update({
+  id: '/hjalp',
+  path: '/hjalp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HkDashboardRoute = HkDashboardRouteImport.update({
+  id: '/hk-dashboard',
+  path: '/hk-dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InstallningarRoute = InstallningarRouteImport.update({
+  id: '/installningar',
+  path: '/installningar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntegritetspolicyRoute = IntegritetspolicyRouteImport.update({
+  id: '/integritetspolicy',
+  path: '/integritetspolicy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KundonskemalRoute = KundonskemalRouteImport.update({
+  id: '/kundonskemal',
+  path: '/kundonskemal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KundrundaRoute = KundrundaRouteImport.update({
+  id: '/kundrunda',
+  path: '/kundrunda',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LicensRoute = LicensRouteImport.update({
+  id: '/licens',
+  path: '/licens',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MallarRoute = MallarRouteImport.update({
+  id: '/mallar',
+  path: '/mallar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PersonalRoute = PersonalRouteImport.update({
+  id: '/personal',
+  path: '/personal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProcesserRoute = ProcesserRouteImport.update({
+  id: '/processer',
+  path: '/processer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PulstavlaRoute = PulstavlaRouteImport.update({
+  id: '/pulstavla',
+  path: '/pulstavla',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QrAvvikelseRoute = QrAvvikelseRouteImport.update({
+  id: '/qr-avvikelse',
+  path: '/qr-avvikelse',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QrKundonskemalRoute = QrKundonskemalRouteImport.update({
+  id: '/qr-kundonskemal',
+  path: '/qr-kundonskemal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QrKundonskemalFormRoute = QrKundonskemalFormRouteImport.update({
+  id: '/qr-kundonskemal-form',
+  path: '/qr-kundonskemal-form',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RapporterRoute = RapporterRouteImport.update({
+  id: '/rapporter',
+  path: '/rapporter',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SchemaRoute = SchemaRouteImport.update({
+  id: '/schema',
+  path: '/schema',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TestpanelRoute = TestpanelRouteImport.update({
+  id: '/testpanel',
+  path: '/testpanel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UppgifterRoute = UppgifterRouteImport.update({
+  id: '/uppgifter',
+  path: '/uppgifter',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -357,165 +357,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/uppgifter': {
-      id: '/uppgifter'
-      path: '/uppgifter'
-      fullPath: '/uppgifter'
-      preLoaderRoute: typeof UppgifterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/testpanel': {
-      id: '/testpanel'
-      path: '/testpanel'
-      fullPath: '/testpanel'
-      preLoaderRoute: typeof TestpanelRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/schema': {
-      id: '/schema'
-      path: '/schema'
-      fullPath: '/schema'
-      preLoaderRoute: typeof SchemaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rapporter': {
-      id: '/rapporter'
-      path: '/rapporter'
-      fullPath: '/rapporter'
-      preLoaderRoute: typeof RapporterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/qr-kundonskemal-form': {
-      id: '/qr-kundonskemal-form'
-      path: '/qr-kundonskemal-form'
-      fullPath: '/qr-kundonskemal-form'
-      preLoaderRoute: typeof QrKundonskemalFormRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/qr-kundonskemal': {
-      id: '/qr-kundonskemal'
-      path: '/qr-kundonskemal'
-      fullPath: '/qr-kundonskemal'
-      preLoaderRoute: typeof QrKundonskemalRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/qr-avvikelse': {
-      id: '/qr-avvikelse'
-      path: '/qr-avvikelse'
-      fullPath: '/qr-avvikelse'
-      preLoaderRoute: typeof QrAvvikelseRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pulstavla': {
-      id: '/pulstavla'
-      path: '/pulstavla'
-      fullPath: '/pulstavla'
-      preLoaderRoute: typeof PulstavlaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/processer': {
-      id: '/processer'
-      path: '/processer'
-      fullPath: '/processer'
-      preLoaderRoute: typeof ProcesserRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/personal': {
-      id: '/personal'
-      path: '/personal'
-      fullPath: '/personal'
-      preLoaderRoute: typeof PersonalRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/mallar': {
-      id: '/mallar'
-      path: '/mallar'
-      fullPath: '/mallar'
-      preLoaderRoute: typeof MallarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/licens': {
-      id: '/licens'
-      path: '/licens'
-      fullPath: '/licens'
-      preLoaderRoute: typeof LicensRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/kundrunda': {
-      id: '/kundrunda'
-      path: '/kundrunda'
-      fullPath: '/kundrunda'
-      preLoaderRoute: typeof KundrundaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/kundonskemal': {
-      id: '/kundonskemal'
-      path: '/kundonskemal'
-      fullPath: '/kundonskemal'
-      preLoaderRoute: typeof KundonskemalRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/integritetspolicy': {
-      id: '/integritetspolicy'
-      path: '/integritetspolicy'
-      fullPath: '/integritetspolicy'
-      preLoaderRoute: typeof IntegritetspolicyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/installningar': {
-      id: '/installningar'
-      path: '/installningar'
-      fullPath: '/installningar'
-      preLoaderRoute: typeof InstallningarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/hk-dashboard': {
-      id: '/hk-dashboard'
-      path: '/hk-dashboard'
-      fullPath: '/hk-dashboard'
-      preLoaderRoute: typeof HkDashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/hjalp': {
-      id: '/hjalp'
-      path: '/hjalp'
-      fullPath: '/hjalp'
-      preLoaderRoute: typeof HjalpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gdpr': {
-      id: '/gdpr'
-      path: '/gdpr'
-      fullPath: '/gdpr'
-      preLoaderRoute: typeof GdprRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/butiksregister': {
-      id: '/butiksregister'
-      path: '/butiksregister'
-      fullPath: '/butiksregister'
-      preLoaderRoute: typeof ButiksregisterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/belastning': {
-      id: '/belastning'
-      path: '/belastning'
-      fullPath: '/belastning'
-      preLoaderRoute: typeof BelastningRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/avvikelser': {
-      id: '/avvikelser'
-      path: '/avvikelser'
-      fullPath: '/avvikelser'
-      preLoaderRoute: typeof AvvikelserRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/anvandningsvillkor': {
@@ -525,11 +371,165 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AnvandningsvillkorRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/avvikelser': {
+      id: '/avvikelser'
+      path: '/avvikelser'
+      fullPath: '/avvikelser'
+      preLoaderRoute: typeof AvvikelserRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/belastning': {
+      id: '/belastning'
+      path: '/belastning'
+      fullPath: '/belastning'
+      preLoaderRoute: typeof BelastningRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/butiksregister': {
+      id: '/butiksregister'
+      path: '/butiksregister'
+      fullPath: '/butiksregister'
+      preLoaderRoute: typeof ButiksregisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gdpr': {
+      id: '/gdpr'
+      path: '/gdpr'
+      fullPath: '/gdpr'
+      preLoaderRoute: typeof GdprRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hjalp': {
+      id: '/hjalp'
+      path: '/hjalp'
+      fullPath: '/hjalp'
+      preLoaderRoute: typeof HjalpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hk-dashboard': {
+      id: '/hk-dashboard'
+      path: '/hk-dashboard'
+      fullPath: '/hk-dashboard'
+      preLoaderRoute: typeof HkDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/installningar': {
+      id: '/installningar'
+      path: '/installningar'
+      fullPath: '/installningar'
+      preLoaderRoute: typeof InstallningarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/integritetspolicy': {
+      id: '/integritetspolicy'
+      path: '/integritetspolicy'
+      fullPath: '/integritetspolicy'
+      preLoaderRoute: typeof IntegritetspolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kundonskemal': {
+      id: '/kundonskemal'
+      path: '/kundonskemal'
+      fullPath: '/kundonskemal'
+      preLoaderRoute: typeof KundonskemalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kundrunda': {
+      id: '/kundrunda'
+      path: '/kundrunda'
+      fullPath: '/kundrunda'
+      preLoaderRoute: typeof KundrundaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/licens': {
+      id: '/licens'
+      path: '/licens'
+      fullPath: '/licens'
+      preLoaderRoute: typeof LicensRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mallar': {
+      id: '/mallar'
+      path: '/mallar'
+      fullPath: '/mallar'
+      preLoaderRoute: typeof MallarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/personal': {
+      id: '/personal'
+      path: '/personal'
+      fullPath: '/personal'
+      preLoaderRoute: typeof PersonalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/processer': {
+      id: '/processer'
+      path: '/processer'
+      fullPath: '/processer'
+      preLoaderRoute: typeof ProcesserRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pulstavla': {
+      id: '/pulstavla'
+      path: '/pulstavla'
+      fullPath: '/pulstavla'
+      preLoaderRoute: typeof PulstavlaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qr-avvikelse': {
+      id: '/qr-avvikelse'
+      path: '/qr-avvikelse'
+      fullPath: '/qr-avvikelse'
+      preLoaderRoute: typeof QrAvvikelseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qr-kundonskemal': {
+      id: '/qr-kundonskemal'
+      path: '/qr-kundonskemal'
+      fullPath: '/qr-kundonskemal'
+      preLoaderRoute: typeof QrKundonskemalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qr-kundonskemal-form': {
+      id: '/qr-kundonskemal-form'
+      path: '/qr-kundonskemal-form'
+      fullPath: '/qr-kundonskemal-form'
+      preLoaderRoute: typeof QrKundonskemalFormRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rapporter': {
+      id: '/rapporter'
+      path: '/rapporter'
+      fullPath: '/rapporter'
+      preLoaderRoute: typeof RapporterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/schema': {
+      id: '/schema'
+      path: '/schema'
+      fullPath: '/schema'
+      preLoaderRoute: typeof SchemaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/testpanel': {
+      id: '/testpanel'
+      path: '/testpanel'
+      fullPath: '/testpanel'
+      preLoaderRoute: typeof TestpanelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/uppgifter': {
+      id: '/uppgifter'
+      path: '/uppgifter'
+      fullPath: '/uppgifter'
+      preLoaderRoute: typeof UppgifterRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
