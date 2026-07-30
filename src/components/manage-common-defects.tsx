@@ -58,7 +58,11 @@ export function ManageCommonDefects({
     } else {
       q = q.is("store_id", null);
     }
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) {
+      console.error("Fel vid hämtning av avvikelser:", error.message);
+      return;
+    }
     if (data) setDefects(data as CommonDefect[]);
   };
 
@@ -72,29 +76,48 @@ export function ManageCommonDefects({
     if (!label) return;
     setSaving(true);
     const maxOrder = defects.length > 0 ? Math.max(...defects.map((d) => d.sort_order)) : -1;
-    const { data } = await supabase
+    
+    const { data, error } = await supabase
       .from("common_defects")
       .insert({ store_id: storeId, label, sort_order: maxOrder + 1, checkpoint_ids: newCheckpointIds })
       .select()
       .maybeSingle();
-    if (data) {
+
+    if (error) {
+      console.error("Fel vid tillägg av avvikelse:", error.message);
+    } else if (data) {
       setDefects((prev) => [...prev, data as CommonDefect]);
       onDefectsChanged?.();
+      setNewLabel("");
+      setNewCheckpointIds([]);
     }
-    setNewLabel("");
-    setNewCheckpointIds([]);
     setSaving(false);
   };
 
   const updateCheckpoints = async (defect: CommonDefect, checkpointIds: string[]) => {
-    await supabase.from("common_defects").update({ checkpoint_ids: checkpointIds }).eq("id", defect.id);
+    const { error } = await supabase
+      .from("common_defects")
+      .update({ checkpoint_ids: checkpointIds })
+      .eq("id", defect.id);
+
+    if (error) {
+      console.error("Fel vid uppdatering av kontrollpunkter:", error.message);
+      return;
+    }
+
     setDefects((prev) => prev.map((d) => d.id === defect.id ? { ...d, checkpoint_ids: checkpointIds } : d));
     onDefectsChanged?.();
   };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    await supabase.from("common_defects").delete().eq("id", deleteTarget.id);
+    const { error } = await supabase.from("common_defects").delete().eq("id", deleteTarget.id);
+    
+    if (error) {
+      console.error("Fel vid radering:", error.message);
+      return;
+    }
+
     setDefects((prev) => prev.filter((d) => d.id !== deleteTarget.id));
     setDeleteTarget(null);
     onDefectsChanged?.();
@@ -115,12 +138,16 @@ export function ManageCommonDefects({
 
   const handleDragEnd = async () => {
     setDragIdx(null);
-    await Promise.all(
-      defects.map((d, i) =>
-        supabase.from("common_defects").update({ sort_order: i }).eq("id", d.id)
-      )
-    );
-    onDefectsChanged?.();
+    const updates = defects.map((d, i) => ({ ...d, sort_order: i }));
+    
+    // Använd upsert för mer effektiv massuppdatering
+    const { error } = await supabase.from("common_defects").upsert(updates);
+    if (error) {
+      console.error("Fel vid omstrukturering av ordning:", error.message);
+      fetchDefects(); // Återställ ordning vid fel
+    } else {
+      onDefectsChanged?.();
+    }
   };
 
   // CSV template download
@@ -182,26 +209,52 @@ export function ManageCommonDefects({
     URL.revokeObjectURL(url);
   };
 
+  // Säkrare CSV-rad-parser för semikolon-separerade filer
+  const parseCsvLine = (text: string): string[] => {
+    const result: string[] = [];
+    let field = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (char === '"') {
+        if (inQuotes && text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ";" && !inQuotes) {
+        result.push(field.trim());
+        field = "";
+      } else {
+        field += char;
+      }
+    }
+    result.push(field.trim());
+    return result;
+  };
+
   // CSV import
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const text = await file.text();
     const lines = text
-      .split("\n")
+      .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l && !l.startsWith("#"));
 
-    // Detect if first non-comment line is a header
     const firstLine = lines[0]?.toLowerCase() ?? "";
     const dataLines = firstLine.startsWith("label") ? lines.slice(1) : lines;
     if (dataLines.length === 0) return;
 
     setSaving(true);
     const maxOrder = defects.length > 0 ? Math.max(...defects.map((d) => d.sort_order)) : -1;
+    
     const inserts = dataLines
       .map((line, i) => {
-        const cols = line.split(";").map((c) => c.trim().replace(/^"|"$/g, "").replace(/""/g, '"'));
+        const cols = parseCsvLine(line);
         const label = cols[0]?.trim();
         if (!label) return null;
         const checkpointIdsRaw = cols[1] ?? "";
@@ -213,8 +266,10 @@ export function ManageCommonDefects({
       .filter((r): r is NonNullable<typeof r> => r !== null);
 
     if (inserts.length > 0) {
-      const { data } = await supabase.from("common_defects").insert(inserts).select();
-      if (data) {
+      const { data, error } = await supabase.from("common_defects").insert(inserts).select();
+      if (error) {
+        console.error("Fel vid import av CSV:", error.message);
+      } else if (data) {
         setDefects((prev) => [...prev, ...(data as CommonDefect[])]);
         onDefectsChanged?.();
       }
@@ -234,7 +289,7 @@ export function ManageCommonDefects({
               <DialogTitle>Vanliga avvikelser</DialogTitle>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {isAdmin
-                  ? "Globala förslag — visas i alla butiker om butiken inte har egna."
+                  ? "Globala förslag — visas i alla butiker om alla saknar egna."
                   : "Butikens egna förslag på vanliga avvikelser."}
               </p>
             </div>
@@ -310,6 +365,7 @@ export function ManageCommonDefects({
                       <button
                         type="button"
                         onClick={() => setExpandedId(isExpanded ? null : d.id)}
+                        aria-label="Visa kopplade kontrollpunkter"
                         className="shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                       >
                         {linkedCps.length > 0 && (
@@ -323,7 +379,8 @@ export function ManageCommonDefects({
                     <button
                       type="button"
                       onClick={() => setDeleteTarget(d)}
-                      className="shrink-0 text-muted-foreground/40 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                      aria-label={`Ta bort ${d.label}`}
+                      className="shrink-0 text-muted-foreground/40 hover:text-destructive transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -338,9 +395,10 @@ export function ManageCommonDefects({
                               key={cp.id}
                               className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary"
                             >
-                              {cp.label}
+                              {cp.zoneName ? `${cp.zoneName} › ${cp.label}` : cp.label}
                               <button
                                 type="button"
+                                aria-label={`Ta bort koppling till ${cp.label}`}
                                 onClick={() => updateCheckpoints(d, (d.checkpoint_ids ?? []).filter((id) => id !== cp.id))}
                               >
                                 <X className="h-2.5 w-2.5" />
@@ -360,7 +418,7 @@ export function ManageCommonDefects({
                               className="rounded-full border border-border/50 px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
                               onClick={() => updateCheckpoints(d, [...(d.checkpoint_ids ?? []), cp.id])}
                             >
-                              + {cp.label}
+                              + {cp.zoneName ? `${cp.zoneName} › ${cp.label}` : cp.label}
                             </button>
                           ))}
                       </div>
@@ -419,7 +477,8 @@ export function ManageCommonDefects({
                         )
                       }
                     >
-                      {newCheckpointIds.includes(cp.id) ? "✓ " : ""}{cp.label}
+                      {newCheckpointIds.includes(cp.id) ? "✓ " : ""}
+                      {cp.zoneName ? `${cp.zoneName} › ${cp.label}` : cp.label}
                     </button>
                   ))}
                 </div>
