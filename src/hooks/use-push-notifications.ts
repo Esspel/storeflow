@@ -12,8 +12,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return Uint8Array.from(rawData, (c) => c.charCodeAt(0));
 }
 
-// The old FCM endpoint format (deprecated June 2024) accepts push requests but
-// silently drops all messages. Subscriptions using it must be replaced.
+// Gamla FCM-endpointen (deprecated sedan juni 2024) släpper meddelanden tyst.
 function isDeprecatedEndpoint(endpoint: string): boolean {
   return endpoint.includes("fcm.googleapis.com/fcm/send/");
 }
@@ -40,8 +39,10 @@ export function usePushNotifications(): PushNotificationState {
     "Notification" in window &&
     !!VAPID_PUBLIC_KEY;
 
-  // On mount: check subscription state and auto-fix deprecated endpoints.
+  // Kontrollera prenumerationsstatus och åtgärda deprecated endpoints vid mount
   useEffect(() => {
+    let isMounted = true;
+
     if (!isSupported || !user) {
       setIsLoading(false);
       return;
@@ -49,29 +50,28 @@ export function usePushNotifications(): PushNotificationState {
 
     setPermissionState(Notification.permission);
 
-    navigator.serviceWorker.ready
-      .then(async (reg) => {
+    const checkSubscription = async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
         const sub = await reg.pushManager.getSubscription();
 
         if (!sub) {
-          setIsSubscribed(false);
+          if (isMounted) setIsSubscribed(false);
           return;
         }
 
-        // If the browser still holds a subscription with the deprecated FCM
-        // endpoint, unsubscribe from it and remove from the database so the
-        // user is prompted to re-subscribe and get a valid V1 endpoint.
+        // 1. Hantera föråldrad FCM-endpoint
         if (isDeprecatedEndpoint(sub.endpoint)) {
           await supabase.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
           await sub.unsubscribe();
-          setIsSubscribed(false);
-          toast.info("Notisprenumerationen behövde förnyas. Aktivera notiser igen i inställningarna.");
+          if (isMounted) {
+            setIsSubscribed(false);
+            toast.info("Notisprenumerationen behövde förnyas. Aktivera notiser igen i inställningarna.");
+          }
           return;
         }
 
-        // Ensure this subscription is recorded in the DB for the current user.
-        // Try upsert first; if it fails (e.g., endpoint owned by another user due
-        // to RLS), re-create the browser subscription to get a fresh endpoint.
+        // 2. Synka prenumerationen mot Supabase för nuvarande användare
         const { error: upsertErr } = await supabase.from("push_subscriptions").upsert(
           {
             user_id: user.id,
@@ -80,40 +80,46 @@ export function usePushNotifications(): PushNotificationState {
             user_agent: navigator.userAgent,
             updated_at: new Date().toISOString(),
           },
-          { onConflict: "endpoint" },
+          { onConflict: "endpoint" }
         );
 
         if (upsertErr) {
-          // Likely unique constraint violation due to another user owning this endpoint.
-          // Unsubscribe and re-subscribe to get a fresh endpoint for this user.
+          // Om unikt villkor fallerar (t.ex. ägs av annan användare på samma enhet), skapa ny
           await sub.unsubscribe();
-          try {
-            const freshSub = await reg.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!),
-            });
-            const { error: insertErr } = await supabase.from("push_subscriptions").insert({
-              user_id: user.id,
-              endpoint: freshSub.endpoint,
-              subscription_json: freshSub.toJSON(),
-              user_agent: navigator.userAgent,
-            });
-            if (insertErr) {
-              console.error("Push subscription re-register failed:", insertErr);
-              setIsSubscribed(false);
-              return;
-            }
-          } catch (resubErr) {
-            console.error("Push re-subscribe failed:", resubErr);
-            setIsSubscribed(false);
+          
+          const freshSub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!),
+          });
+
+          const { error: insertErr } = await supabase.from("push_subscriptions").insert({
+            user_id: user.id,
+            endpoint: freshSub.endpoint,
+            subscription_json: freshSub.toJSON(),
+            user_agent: navigator.userAgent,
+          });
+
+          if (insertErr) {
+            console.error("Registrering av ny push-prenumeration misslyckades:", insertErr);
+            if (isMounted) setIsSubscribed(false);
             return;
           }
         }
 
-        setIsSubscribed(true);
-      })
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
+        if (isMounted) setIsSubscribed(true);
+      } catch (err) {
+        console.error("Fel vid kontroll av push-prenumeration:", err);
+        if (isMounted) setIsSubscribed(false);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    checkSubscription();
+
+    return () => {
+      isMounted = false;
+    };
   }, [isSupported, user]);
 
   const subscribe = useCallback(async () => {
@@ -135,8 +141,7 @@ export function usePushNotifications(): PushNotificationState {
 
       const reg = await navigator.serviceWorker.ready;
 
-      // Unsubscribe from any existing (possibly deprecated) subscription first
-      // so the browser always creates a fresh endpoint.
+      // Rensa eventuell befintlig prenumeration i webbläsaren först för en ren endpoint
       const existing = await reg.pushManager.getSubscription();
       if (existing) {
         await supabase.from("push_subscriptions").delete().eq("endpoint", existing.endpoint);
@@ -156,7 +161,7 @@ export function usePushNotifications(): PushNotificationState {
           user_agent: navigator.userAgent,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "endpoint" },
+        { onConflict: "endpoint" }
       );
 
       if (error) throw error;
@@ -164,7 +169,7 @@ export function usePushNotifications(): PushNotificationState {
       setIsSubscribed(true);
       toast.success("Push-notiser aktiverade!");
     } catch (err) {
-      console.error("Push subscribe failed:", err);
+      console.error("Aktivering av push-notiser misslyckades:", err);
       toast.error("Kunde inte aktivera push-notiser. Försök igen.");
     } finally {
       setIsLoading(false);
@@ -184,7 +189,7 @@ export function usePushNotifications(): PushNotificationState {
       setIsSubscribed(false);
       toast.success("Push-notiser inaktiverade.");
     } catch (err) {
-      console.error("Push unsubscribe failed:", err);
+      console.error("Inaktivering av push-notiser misslyckades:", err);
       toast.error("Kunde inte inaktivera push-notiser.");
     } finally {
       setIsLoading(false);
