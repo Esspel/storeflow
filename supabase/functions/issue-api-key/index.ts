@@ -87,3 +87,41 @@ Deno.serve(async (req: Request) => {
 
   return json({ error: "Okänd action. Använd 'create', 'list' eller 'revoke'." }, 400);
 });
+
+if (body.action === "exchange") {
+  if (!body.api_key) return json({ error: "api_key saknas." }, 400);
+
+  const keyHash = await sha256Hex(body.api_key);
+  const { data: keyRecord, error } = await supabase
+    .from("api_keys")
+    .select("id, store_id, scopes, revoked_at")
+    .eq("key_hash", keyHash)
+    .single();
+
+  if (error || !keyRecord || keyRecord.revoked_at) {
+    return json({ error: "Ogiltig eller återkallad API-nyckel." }, 401);
+  }
+
+  // Uppdatera last_used_at
+  await supabase.from("api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", keyRecord.id);
+
+  // Minta en kortlivad JWT (giltig i 15 minuter)
+  // Använd Supabase JWT-secret för att signera
+  const jwtSecret = Deno.env.get("JWT_SECRET") || "din-tillfälliga-hemlighet";
+  
+  // Här skapar du en signerad JWT (t.ex. med djo/jwt eller jose i Deno)
+  // Payload innehåller scopes, store_id och exp (Date.now() + 15 min)
+  const token = await createJwt({
+    sub: keyRecord.id,
+    store_id: keyRecord.store_id,
+    scopes: keyRecord.scopes,
+    exp: Math.floor(Date.now() / 1000) + (15 * 60), // 15 minuter
+  }, jwtSecret);
+
+  return json({
+    success: true,
+    access_token: token,
+    token_type: "Bearer",
+    expires_in: 900,
+  });
+}
