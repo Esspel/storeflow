@@ -7,13 +7,13 @@
 //
 // Point an MCP client at:
 //   https://<project-ref>.supabase.co/functions/v1/mcp-server
-//   Header: Authorization: Bearer <api_key>   (mint one via issue-api-key)
+//   Header: Authorization: Bearer <api_key | jwt_access_token>
 //
 // Supported methods: initialize, notifications/initialized, tools/list, tools/call, ping
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import { authenticate, serviceRoleClient } from "../_shared/auth.ts";
+import { serviceRoleClient, authenticateRequest } from "../_shared/auth.ts";
 import {
   ScopeError, listTemplates, getTemplate, createTemplate, updateTemplate,
   listTasks, getTask, createTask, updateTask,
@@ -552,11 +552,11 @@ Deno.serve(async (req: Request) => {
     return respond(rpcResult(rpc.id, {}));
   }
 
-  // Everything past this point needs a valid API key
-  const ctx = await authenticate(req, supabase);
+  // Nytt autentiseringsflöde via auth.ts utan manuell supabase-klient
+  const ctx = await authenticateRequest(req);
   if (!ctx) {
     if (isNotification) return new Response(null, { status: 202, headers: corsHeaders });
-    return respond(rpcError(rpc.id, -32001, "Ogiltig eller saknad Authorization: Bearer <api_key>."), 401);
+    return respond(rpcError(rpc.id, -32001, "Ogiltig eller saknad Authorization: Bearer <token>."), 401);
   }
 
   if (rpc.method === "tools/list") {
