@@ -1,12 +1,14 @@
 // Edge Function: issue-api-key
 //
-// Mints, lists, or revokes API keys used by storeflow-api and mcp-server.
+// Mints, lists, revokes API keys, or exchanges them for short-lived JWTs.
+// Used by storeflow-api and mcp-server.
 // Gated by the same IMPORT_WEBHOOK_SECRET used by the two import functions —
 // this is an admin-only operation, not something end users or agents call.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { serviceRoleClient } from "../_shared/auth.ts";
+import { SignJWT } from "npm:jose@^6.2.5";
 
 const ALL_SCOPES = [
   "templates:read", "templates:write",
@@ -39,7 +41,7 @@ Deno.serve(async (req: Request) => {
   if (!expectedSecret) return json({ error: "IMPORT_WEBHOOK_SECRET är inte konfigurerad på servern." }, 500);
   if (req.headers.get("x-import-secret") !== expectedSecret) return json({ error: "Ogiltig eller saknad x-import-secret." }, 401);
 
-  let body: { action?: string; name?: string; store_id?: string | null; scopes?: string[]; key_id?: string };
+  let body: { action?: string; name?: string; store_id?: string | null; scopes?: string[]; key_id?: string; api_key?: string };
   try {
     body = await req.json();
   } catch {
@@ -85,43 +87,46 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  return json({ error: "Okänd action. Använd 'create', 'list' eller 'revoke'." }, 400);
-});
+  if (body.action === "exchange") {
+    if (!body.api_key) return json({ error: "api_key saknas." }, 400);
 
-if (body.action === "exchange") {
-  if (!body.api_key) return json({ error: "api_key saknas." }, 400);
+    const keyHash = await sha256Hex(body.api_key);
+    const { data: keyRecord, error } = await supabase
+      .from("api_keys")
+      .select("id, store_id, scopes, revoked_at")
+      .eq("key_hash", keyHash)
+      .single();
 
-  const keyHash = await sha256Hex(body.api_key);
-  const { data: keyRecord, error } = await supabase
-    .from("api_keys")
-    .select("id, store_id, scopes, revoked_at")
-    .eq("key_hash", keyHash)
-    .single();
+    if (error || !keyRecord || keyRecord.revoked_at) {
+      return json({ error: "Ogiltig eller återkallad API-nyckel." }, 401);
+    }
 
-  if (error || !keyRecord || keyRecord.revoked_at) {
-    return json({ error: "Ogiltig eller återkallad API-nyckel." }, 401);
+    // Uppdatera last_used_at i bakgrunden utan att blockera
+    await supabase.from("api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", keyRecord.id);
+
+    const jwtSecret = Deno.env.get("JWT_SECRET");
+    if (!jwtSecret) {
+      return json({ error: "JWT_SECRET är inte konfigurerad på servern." }, 500);
+    }
+
+    const secretKey = new TextEncoder().encode(jwtSecret);
+    const token = await new SignJWT({
+      store_id: keyRecord.store_id,
+      scopes: keyRecord.scopes,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setSubject(keyRecord.id)
+      .setIssuedAt()
+      .setExpirationTime("15m")
+      .sign(secretKey);
+
+    return json({
+      success: true,
+      access_token: token,
+      token_type: "Bearer",
+      expires_in: 900,
+    });
   }
 
-  // Uppdatera last_used_at
-  await supabase.from("api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", keyRecord.id);
-
-  // Minta en kortlivad JWT (giltig i 15 minuter)
-  // Använd Supabase JWT-secret för att signera
-  const jwtSecret = Deno.env.get("JWT_SECRET") || "din-tillfälliga-hemlighet";
-  
-  // Här skapar du en signerad JWT (t.ex. med djo/jwt eller jose i Deno)
-  // Payload innehåller scopes, store_id och exp (Date.now() + 15 min)
-  const token = await createJwt({
-    sub: keyRecord.id,
-    store_id: keyRecord.store_id,
-    scopes: keyRecord.scopes,
-    exp: Math.floor(Date.now() / 1000) + (15 * 60), // 15 minuter
-  }, jwtSecret);
-
-  return json({
-    success: true,
-    access_token: token,
-    token_type: "Bearer",
-    expires_in: 900,
-  });
-}
+  return json({ error: "Okänd action. Använd 'create', 'list', 'revoke' eller 'exchange'." }, 400);
+});
