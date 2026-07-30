@@ -1,11 +1,11 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+// Edge Function: secure-login
+//
+// Handles app user login with rate limiting, exponential backoff, account lockout,
+// password verification via RPC, and app_sessions token generation.
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { corsHeaders, json } from "../_shared/cors.ts";
+import { serviceRoleClient } from "../_shared/auth.ts";
 
 // Exponential backoff delays per failed attempt (0-indexed, capped at 8s)
 const BACKOFF_MS = [0, 1000, 2000, 4000, 8000, 8000, 8000, 8000, 8000, 8000];
@@ -18,21 +18,23 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { username, password } = await req.json();
-
-    if (!username || !password) {
-      return new Response(JSON.stringify({ error: "Ogiltigt användarnamn eller lösenord." }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    let body: { username?: string; password?: string };
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "Ogiltig JSON i request-body." }, 400);
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const { username, password } = body;
 
-    // 1. Check if account is locked
+    if (!username || !password) {
+      return json({ error: "Ogiltigt användarnamn eller lösenord." }, 400);
+    }
+
+    // 1. Skapa serviceRoleClient via det gemensamma auth-biblioteket
+    const supabase = serviceRoleClient();
+
+    // 2. Check if account is locked
     const { data: lockedUntil } = await supabase.rpc("check_account_locked", {
       p_username: username,
     });
@@ -40,23 +42,19 @@ Deno.serve(async (req: Request) => {
     if (lockedUntil) {
       const unlockAt = new Date(lockedUntil);
       const minutesLeft = Math.ceil((unlockAt.getTime() - Date.now()) / 60000);
-      return new Response(
-        JSON.stringify({
+      return json(
+        {
           error: `Kontot är tillfälligt låst. Försök igen om ${minutesLeft} minut${minutesLeft === 1 ? "" : "er"}.`,
           locked_until: lockedUntil,
-        }),
-        {
-          status: 429,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-            "Retry-After": String(Math.ceil((unlockAt.getTime() - Date.now()) / 1000)),
-          },
         },
+        429,
+        {
+          "Retry-After": String(Math.ceil((unlockAt.getTime() - Date.now()) / 1000)),
+        }
       );
     }
 
-    // 2. Fetch user
+    // 3. Fetch user
     const { data: user, error: userError } = await supabase
       .from("app_users")
       .select("id, username, password_hash, is_active, failed_login_count, locked_until, display_name, role, role_manually_set, employee_group, store_id, active_store_id, must_change_password, last_login, created_at, hierarchy_level, forening_id, distrikt_id")
@@ -69,20 +67,17 @@ Deno.serve(async (req: Request) => {
       await supabase.rpc("record_failed_login", { p_username: username });
       // Small fixed delay for non-existent users
       await new Promise((r) => setTimeout(r, 500));
-      return new Response(JSON.stringify({ error: "Ogiltigt användarnamn eller lösenord." }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Ogiltigt användarnamn eller lösenord." }, 401);
     }
 
-    // 3. Exponential backoff delay based on current failed count
+    // 4. Exponential backoff delay based on current failed count
     const failCount = user.failed_login_count ?? 0;
     const delay = BACKOFF_MS[Math.min(failCount, BACKOFF_MS.length - 1)];
     if (delay > 0) {
       await new Promise((r) => setTimeout(r, delay));
     }
 
-    // 4. Verify password
+    // 5. Verify password
     const { data: verified } = await supabase.rpc("verify_password", {
       plain_password: password,
       hashed_password: user.password_hash,
@@ -95,34 +90,27 @@ Deno.serve(async (req: Request) => {
       const remainingAttempts = MAX_ATTEMPTS - newCount;
 
       if (newCount >= MAX_ATTEMPTS) {
-        return new Response(
-          JSON.stringify({
+        return json(
+          {
             error: `För många misslyckade försök. Kontot är låst i ${LOCKOUT_MINUTES} minuter.`,
             locked_until: new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000).toISOString(),
-          }),
-          {
-            status: 429,
-            headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json",
-              "Retry-After": String(LOCKOUT_MINUTES * 60),
-            },
           },
+          429,
+          {
+            "Retry-After": String(LOCKOUT_MINUTES * 60),
+          }
         );
       }
 
-      return new Response(
-        JSON.stringify({
-          error: `Ogiltigt användarnamn eller lösenord.${remainingAttempts <= 2 ? ` ${remainingAttempts} försök kvar innan kontot låses.` : ""}`,
-        }),
+      return json(
         {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          error: `Ogiltigt användarnamn eller lösenord.${remainingAttempts <= 2 ? ` ${remainingAttempts} försök kvar innan kontot låses.` : ""}`,
         },
+        401
       );
     }
 
-    // 5. Success — reset counter, create session
+    // 6. Success — reset counter, create session
     await supabase.rpc("record_successful_login", { p_username: username });
 
     const token = crypto.randomUUID() + "-" + Date.now();
@@ -157,15 +145,9 @@ Deno.serve(async (req: Request) => {
       distrikt_id: user.distrikt_id ?? null,
     };
 
-    return new Response(JSON.stringify({ user: appUser, token }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ user: appUser, token }, 200);
   } catch (err) {
     console.error("secure-login error:", err);
-    return new Response(JSON.stringify({ error: "Ett fel uppstod. Försök igen." }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: "Ett fel uppstod. Försök igen." }, 500);
   }
 });
