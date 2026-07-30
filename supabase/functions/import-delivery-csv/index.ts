@@ -218,10 +218,15 @@ Deno.serve(async (req: Request) => {
     return json({ error: "csv eller csv_base64 måste anges." }, 400);
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  // Kontrollera Supabase-miljövariabler
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  
+  if (!supabaseUrl || !serviceRoleKey) {
+    return json({ error: "Serverkonfiguration saknas (SUPABASE_URL / SERVICE_ROLE_KEY)." }, 500);
+  }
+  
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   const { data: store } = await supabase.from("stores").select("id").eq("id", store_id).maybeSingle();
   if (!store) return json({ error: `Ingen butik hittades med store_id ${store_id}.` }, 404);
