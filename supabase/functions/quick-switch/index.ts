@@ -1,11 +1,11 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+// Edge Function: quick-switch
+//
+// Allows rapid user switching on shared store terminals via PIN code or barcode scan.
+// Issues a short-lived session (8h) and updates active_store_id.
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { corsHeaders, json } from "../_shared/cors.ts";
+import { serviceRoleClient } from "../_shared/auth.ts";
 
 // Issued quick-switch sessions last 8 hours (a full shift)
 const SESSION_TTL_HOURS = 8;
@@ -16,37 +16,36 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const body = await req.json();
-    const { mode, store_id } = body as {
-      mode: "pin" | "barcode";
+    let body: {
+      mode?: "pin" | "barcode";
       user_id?: string;
       pin?: string;
       barcode?: string;
-      store_id: string;
+      store_id?: string;
     };
 
-    if (!store_id) {
-      return new Response(JSON.stringify({ error: "store_id krävs." }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "Ogiltig JSON i request-body." }, 400);
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const { mode, store_id } = body;
+
+    if (!store_id) {
+      return json({ error: "store_id krävs." }, 400);
+    }
+
+    // Skapa databasklient med service role för autentiserings- och sessionshantering
+    const supabase = serviceRoleClient();
 
     let userId: string | null = null;
     let userData: Record<string, unknown> | null = null;
 
     if (mode === "barcode") {
-      const { barcode } = body as { barcode: string };
+      const { barcode } = body;
       if (!barcode) {
-        return new Response(JSON.stringify({ error: "Streckkod saknas." }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json({ error: "Streckkod saknas." }, 400);
       }
 
       const { data: rows } = await supabase.rpc("lookup_user_by_barcode", {
@@ -55,21 +54,15 @@ Deno.serve(async (req: Request) => {
       });
 
       if (!rows || rows.length === 0) {
-        return new Response(JSON.stringify({ error: "Okänd streckkod. Kontakta din chef." }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json({ error: "Okänd streckkod. Kontakta din chef." }, 401);
       }
 
       userId = rows[0].id;
       userData = rows[0];
     } else if (mode === "pin") {
-      const { user_id, pin } = body as { user_id: string; pin: string };
+      const { user_id, pin } = body;
       if (!user_id || !pin) {
-        return new Response(JSON.stringify({ error: "user_id och pin krävs." }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json({ error: "user_id och pin krävs." }, 400);
       }
 
       const { data: valid } = await supabase.rpc("verify_quick_pin", {
@@ -78,10 +71,7 @@ Deno.serve(async (req: Request) => {
       });
 
       if (!valid) {
-        return new Response(JSON.stringify({ error: "Fel PIN-kod." }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json({ error: "Fel PIN-kod." }, 401);
       }
 
       const { data: user } = await supabase
@@ -92,26 +82,17 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       if (!user) {
-        return new Response(JSON.stringify({ error: "Användaren hittades inte." }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json({ error: "Användaren hittades inte." }, 401);
       }
 
       userId = user.id;
       userData = user;
     } else {
-      return new Response(JSON.stringify({ error: "Ogiltigt mode." }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Ogiltigt mode." }, 400);
     }
 
     if (!userId || !userData) {
-      return new Response(JSON.stringify({ error: "Autentisering misslyckades." }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ error: "Autentisering misslyckades." }, 401);
     }
 
     // Issue a new limited session (8h TTL)
@@ -145,15 +126,9 @@ Deno.serve(async (req: Request) => {
       created_at: userData.created_at,
     };
 
-    return new Response(JSON.stringify({ user: appUser, token }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ user: appUser, token }, 200);
   } catch (err) {
     console.error("quick-switch error:", err);
-    return new Response(JSON.stringify({ error: "Ett fel uppstod. Försök igen." }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: "Ett fel uppstod. Försök igen." }, 500);
   }
 });
