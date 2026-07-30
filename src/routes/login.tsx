@@ -1,6 +1,7 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Eye, EyeOff, KeyRound, Sparkles, Tv } from "lucide-react";
+
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -30,24 +31,32 @@ function LoginPage() {
   const [showNewPw, setShowNewPw] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const result = await login(username, password);
-    setLoading(false);
-    if (result.error) {
-      setError(result.error);
-    } else if (result.mustChangePassword) {
-      setForcePwChange(true);
-    } else {
-      navigate({ to: "/" });
+
+    try {
+      const result = await login(username, password);
+      if (result.error) {
+        setError(result.error);
+      } else if (result.mustChangePassword) {
+        setForcePwChange(true);
+      } else {
+        navigate({ to: "/" });
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("Ett oväntat fel uppstod vid inloggning.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleForceChangePw = async (e: React.FormEvent) => {
+  const handleForceChangePw = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
+
     if (newPw.length < MIN_PW_LENGTH) {
       setError(`Lösenordet måste vara minst ${MIN_PW_LENGTH} tecken.`);
       return;
@@ -61,28 +70,49 @@ function LoginPage() {
       setForcePwChange(false);
       return;
     }
+
     setPwSaving(true);
-    const { data: hash } = await supabase.rpc("hash_password", { plain_password: newPw });
-    const { error: updateErr } = await supabase.from("app_users").update({
-      password_hash: hash,
-      must_change_password: false,
-    }).eq("id", user.id);
+    try {
+      const { data: hash, error: hashErr } = await supabase.rpc("hash_password", {
+        plain_password: newPw,
+      });
 
-    if (updateErr) {
-      setError("Kunde inte spara lösenordet. Försök igen.");
+      if (hashErr || !hash) {
+        setError("Kunde inte generera lösenordshash. Försök igen.");
+        setPwSaving(false);
+        return;
+      }
+
+      const { error: updateErr } = await supabase
+        .from("app_users")
+        .update({
+          password_hash: hash,
+          must_change_password: false,
+        })
+        .eq("id", user.id);
+
+      if (updateErr) {
+        setError("Kunde inte spara lösenordet. Försök igen.");
+        setPwSaving(false);
+        return;
+      }
+
+      const updatedUser = { ...user, must_change_password: false };
+      refreshUser(updatedUser);
+
+      // Show first-time setup for store managers who have never logged in
+      if (updatedUser.hierarchy_level === "chef" && isFirstLogin) {
+        setForcePwChange(false);
+        triggerFirstTimeSetup();
+      }
+
+      navigate({ to: "/" });
+    } catch (err) {
+      console.error("Password update error:", err);
+      setError("Ett fel uppstod när lösenordet skulle sparas.");
+    } finally {
       setPwSaving(false);
-      return;
     }
-    const updatedUser = { ...user, must_change_password: false };
-    refreshUser(updatedUser);
-    setPwSaving(false);
-
-    // Show first-time setup for butikschef who have never logged in
-    if (updatedUser.hierarchy_level === "chef" && isFirstLogin) {
-      setForcePwChange(false);
-      triggerFirstTimeSetup();
-    }
-    navigate({ to: "/" });
   };
 
   if (forcePwChange) {
@@ -98,6 +128,7 @@ function LoginPage() {
               Välj ett nytt lösenord för att fortsätta.
             </p>
           </div>
+
           <form
             onSubmit={handleForceChangePw}
             className="rounded-2xl border border-border/60 bg-card p-8 shadow-[var(--shadow-md)]"
@@ -106,6 +137,7 @@ function LoginPage() {
               <div className="rounded-lg bg-warning/15 px-4 py-3 text-sm text-warning-foreground">
                 Ditt konto kräver att du skapar ett nytt lösenord på minst {MIN_PW_LENGTH} tecken.
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="new-pw">Nytt lösenord</Label>
                 <div className="relative">
@@ -129,9 +161,12 @@ function LoginPage() {
                   </button>
                 </div>
                 {newPw.length > 0 && newPw.length < MIN_PW_LENGTH && (
-                  <p className="text-xs text-destructive">{newPw.length}/{MIN_PW_LENGTH} tecken</p>
+                  <p className="text-xs text-destructive">
+                    {newPw.length}/{MIN_PW_LENGTH} tecken
+                  </p>
                 )}
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="confirm-pw">Bekräfta lösenord</Label>
                 <Input
@@ -147,9 +182,13 @@ function LoginPage() {
                   <p className="text-xs text-destructive">Lösenorden stämmer inte överens.</p>
                 )}
               </div>
+
               {error && (
-                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {error}
+                </p>
               )}
+
               <Button
                 type="submit"
                 className="w-full rounded-full"
