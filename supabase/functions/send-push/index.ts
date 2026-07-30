@@ -1,12 +1,12 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
-import webpush from "npm:web-push@3";
+// Edge Function: send-push
+//
+// Sends Web Push notifications to subscriptions stored in the database.
+// Filters by user_ids or store_id, cleans up stale/deprecated endpoints (FCM legacy, 404, 410).
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
-};
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import webpush from "npm:web-push@3";
+import { corsHeaders, json } from "../_shared/cors.ts";
+import { serviceRoleClient } from "../_shared/auth.ts";
 
 // Old FCM endpoint format deprecated by Google in June 2024.
 // Subscriptions using this format never deliver even though FCM returns 201.
@@ -34,20 +34,26 @@ Deno.serve(async (req: Request) => {
     const vapidSubject = Deno.env.get("VAPID_SUBJECT") ?? "mailto:admin@storeflow.app";
 
     if (!vapidPublicKey || !vapidPrivateKey) {
-      return new Response(
-        JSON.stringify({ error: "VAPID keys not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return json({ error: "VAPID keys not configured" }, 500);
     }
 
     webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    // 1. Skapa serviceRoleClient via det gemensamma auth-biblioteket
+    const supabase = serviceRoleClient();
 
-    const payload: SendPushPayload = await req.json();
+    let payload: SendPushPayload;
+    try {
+      payload = await req.json();
+    } catch {
+      return json({ error: "Ogiltig JSON i request-body." }, 400);
+    }
+
     const { title, body, url = "/", tag = "storeflow", user_ids, store_id } = payload;
+
+    if (!title || !body) {
+      return json({ error: "Titel och body krävs för att skicka push-notis." }, 400);
+    }
 
     // Build query for subscriptions
     let query = supabase.from("push_subscriptions").select("*");
@@ -61,10 +67,7 @@ Deno.serve(async (req: Request) => {
         .eq("store_id", store_id);
       const ids = (storeUsers ?? []).map((r: { user_id: string }) => r.user_id);
       if (ids.length === 0) {
-        return new Response(
-          JSON.stringify({ sent: 0, message: "No users found for store" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        return json({ sent: 0, message: "No users found for store" });
       }
       query = query.in("user_id", ids);
     }
@@ -108,15 +111,9 @@ Deno.serve(async (req: Request) => {
       await supabase.from("push_subscriptions").delete().in("endpoint", staleEndpoints);
     }
 
-    return new Response(
-      JSON.stringify({ sent, skipped, removed: staleEndpoints.length, errors }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return json({ sent, skipped, removed: staleEndpoints.length, errors });
   } catch (err) {
     console.error("send-push error:", err);
-    return new Response(
-      JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return json({ error: String(err) }, 500);
   }
 });
