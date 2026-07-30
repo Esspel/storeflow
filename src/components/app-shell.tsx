@@ -399,6 +399,7 @@ export function AppShell() {
           {/* Mobile Bottom Nav */}
           <nav
             className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-card/95 backdrop-blur-sm pb-safe md:hidden"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
             data-safe-bottom
           >
             {nav
