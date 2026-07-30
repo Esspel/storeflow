@@ -1,14 +1,16 @@
-// Swedish public holidays (röda dagar) computed for any year.
+// Swedish public holidays (röda dagar) & eves computed for any year.
 // Does not require external packages — all logic is self-contained.
 
 export type SwedishHoliday = {
   date: Date;
   name: string;
-  isWeekday: boolean; // true if the holiday falls Mon-Sat (a "weekday red day")
+  isRedDay: boolean; // Strictly legal "röd dag" (Lag 1989:253)
+  isEve: boolean;    // Festive eves (Julafton, Midsommarafton, etc.)
+  isWeekday: boolean; // True if falling Mon–Sat
 };
 
 function easterSunday(year: number): Date {
-  // Gauss's algorithm
+  // Meeus/Jones/Butcher Gregorian Easter algorithm
   const a = year % 19;
   const b = Math.floor(year / 100);
   const c = year % 100;
@@ -48,105 +50,131 @@ function allSaintsDay(year: number): Date {
 
 export function getSwedishHolidays(year: number): SwedishHoliday[] {
   const easter = easterSunday(year);
-  const mid = midsummerEve(year);
+  const midEve = midsummerEve(year);
   const allSaints = allSaintsDay(year);
 
-  const fixed: Array<[Date, string]> = [
-    [new Date(year, 0, 1), "Nyårsdagen"],
-    [new Date(year, 0, 6), "Trettondedag jul"],
-    [new Date(year, 4, 1), "Första maj"],
-    [new Date(year, 5, 6), "Sveriges nationaldag"],
-    [new Date(year, 11, 24), "Julafton"],
-    [new Date(year, 11, 25), "Juldagen"],
-    [new Date(year, 11, 26), "Annandag jul"],
-    [new Date(year, 11, 31), "Nyårsafton"],
+  // [Date, Name, isRedDay, isEve]
+  const list: Array<[Date, string, boolean, boolean]> = [
+    // Fasta datum
+    [new Date(year, 0, 1), "Nyårsdagen", true, false],
+    [new Date(year, 0, 6), "Trettondedag jul", true, false],
+    [new Date(year, 4, 1), "Första maj", true, false],
+    [new Date(year, 5, 6), "Sveriges nationaldag", true, false],
+    [new Date(year, 11, 24), "Julafton", false, true],
+    [new Date(year, 11, 25), "Juldagen", true, false],
+    [new Date(year, 11, 26), "Annandag jul", true, false],
+    [new Date(year, 11, 31), "Nyårsafton", false, true],
+
+    // Rörliga datum baserade på påsk
+    [addDays(easter, -3), "Skärtorsdagen", false, false],
+    [addDays(easter, -2), "Långfredagen", true, false],
+    [addDays(easter, -1), "Påskafton", false, true],
+    [easter, "Påskdagen", true, false],
+    [addDays(easter, 1), "Annandag påsk", true, false],
+    [addDays(easter, 39), "Kristi himmelsfärdsdag", true, false],
+    [addDays(easter, 49), "Pingstdagen", true, false],
+
+    // Övriga rörliga
+    [midEve, "Midsommarafton", false, true],
+    [addDays(midEve, 1), "Midsommardagen", true, false],
+    [allSaints, "Alla helgons dag", true, false],
   ];
 
-  const movable: Array<[Date, string]> = [
-    [addDays(easter, -3), "Skärtorsdagen"],
-    [addDays(easter, -2), "Långfredagen"],
-    [addDays(easter, -1), "Påskafton"],
-    [easter, "Påskdagen"],
-    [addDays(easter, 1), "Annandag påsk"],
-    [addDays(easter, 39), "Kristi himmelsfärdsdag"],
-    [addDays(easter, 49), "Pingstdagen"],
-    [mid, "Midsommarafton"],
-    [addDays(mid, 1), "Midsommardagen"],
-    [allSaints, "Alla helgons dag"],
-  ];
-
-  return [...fixed, ...movable].map(([date, name]) => {
+  return list.map(([date, name, isRedDay, isEve]) => {
     const dow = date.getDay(); // 0=Sun, 6=Sat
-    return { date, name, isWeekday: dow !== 0 };
+    return {
+      date,
+      name,
+      isRedDay,
+      isEve,
+      isWeekday: dow !== 0,
+    };
   });
 }
 
-// Get ISO week number (Mon=start) for a given date
-export function isoWeekNumber(date: Date): number {
+/**
+ * Calculates ISO 8601 week number and ISO week-numbering year.
+ */
+export function getIsoWeekDetails(date: Date): { isoYear: number; isoWeek: number } {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  const isoYear = d.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+  const isoWeek = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return { isoYear, isoWeek };
 }
 
-// Check if a calendar week (year + weekNumber) contains any Swedish holiday
-// Returns the first matching holiday name, or null
-export function getSpecialWeekHoliday(year: number, weekNumber: number): string | null {
-  const holidays = getSwedishHolidays(year);
-  for (const h of holidays) {
-    const wy = h.date.getFullYear();
-    const wn = isoWeekNumber(h.date);
-    // Account for holidays in week 1 of the following year
-    if ((wy === year || wy === year - 1 || wy === year + 1) && wn === weekNumber) {
-      return h.name;
+export function isoWeekNumber(date: Date): number {
+  return getIsoWeekDetails(date).isoWeek;
+}
+
+/**
+ * Check if a calendar week (isoYear + weekNumber) contains any Swedish holiday.
+ * Scans adjacent years to ensure boundary-crossing weeks (Week 1 / Week 52/53) match accurately.
+ */
+export function getSpecialWeekHoliday(targetIsoYear: number, targetWeekNumber: number): string | null {
+  const yearsToScan = [targetIsoYear - 1, targetIsoYear, targetIsoYear + 1];
+
+  for (const y of yearsToScan) {
+    const holidays = getSwedishHolidays(y);
+    for (const h of holidays) {
+      const { isoYear, isoWeek } = getIsoWeekDetails(h.date);
+      if (isoYear === targetIsoYear && isoWeek === targetWeekNumber) {
+        return h.name;
+      }
     }
   }
   return null;
 }
 
-// Parse a Stockholm-local datetime string to UTC ISO string.
-// Input: "2024-03-31T01:30" (Swedish local time, may be ambiguous during DST)
-// Output: "2024-03-31T00:30:00.000Z" (UTC)
+/**
+ * Parse a Stockholm-local datetime string to UTC ISO string.
+ * Input format: "YYYY-MM-DDTHH:mm"
+ */
 export function stockholmToUtc(localDateTimeStr: string): string {
-  // Use Intl to determine UTC offset for the given local time in Stockholm
   const [datePart, timePart] = localDateTimeStr.split("T");
   const [year, month, day] = datePart.split("-").map(Number);
   const [hour, minute] = (timePart ?? "00:00").split(":").map(Number);
 
-  // Create a Date by interpreting the input as UTC, then adjust
   const naiveUtc = new Date(Date.UTC(year, month - 1, day, hour, minute));
 
-  // Find the UTC offset for this moment in Stockholm
   const formatter = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "Europe/Stockholm",
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
     hour12: false,
   });
 
-  // Binary-search the offset (Stockholm is UTC+1 or UTC+2)
+  // Try daylight saving offset (UTC+2) first, then normal time (UTC+1)
   for (const offsetHours of [2, 1]) {
     const candidate = new Date(naiveUtc.getTime() - offsetHours * 3600000);
     const parts = Object.fromEntries(
       formatter.formatToParts(candidate).map((p) => [p.type, p.value])
     );
+
     const candidateLocal = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
-    // Compare with zero-padded input
-    const inputNorm = `${String(year).padStart(4,"0")}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}T${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`;
-    if (candidateLocal === inputNorm) return candidate.toISOString();
+    const inputNorm = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+
+    if (candidateLocal === inputNorm) {
+      return candidate.toISOString();
+    }
   }
 
-  // Fallback: treat as UTC
   return naiveUtc.toISOString();
 }
 
-// Format a UTC ISO string for display in Stockholm timezone
 export function utcToStockholm(utcIsoString: string): Date {
   return new Date(utcIsoString);
 }
 
-export function formatStockholmTime(utcIsoString: string, opts?: Intl.DateTimeFormatOptions): string {
+export function formatStockholmTime(
+  utcIsoString: string,
+  opts?: Intl.DateTimeFormatOptions
+): string {
   return new Date(utcIsoString).toLocaleString("sv-SE", {
     timeZone: "Europe/Stockholm",
     ...opts,
