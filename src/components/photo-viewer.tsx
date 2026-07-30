@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Props {
   images: string[];
@@ -9,177 +10,161 @@ interface Props {
 }
 
 export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
-  const [idx, setIdx] = useState(Math.max(0, Math.min(initialIndex, images.length - 1)));
+  const [idx, setIdx] = useState(() =>
+    Math.max(0, Math.min(initialIndex, images.length - 1))
+  );
   const touchStart = useRef<{ x: number; y: number } | null>(null);
 
-  // Lock body scroll while open
+  // Lås scroll på body när bildvisaren är öppen
   useEffect(() => {
-    const prev = document.body.style.overflow;
+    const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
   }, []);
 
-  // Keyboard navigation + Escape
+  // Tangentbordsnavigering (Escape, Vänster, Höger)
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.stopPropagation(); onClose(); }
-      else if (e.key === "ArrowLeft") setIdx(i => Math.max(0, i - 1));
-      else if (e.key === "ArrowRight") setIdx(i => Math.min(images.length - 1, i + 1));
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      } else if (e.key === "ArrowLeft") {
+        setIdx((i) => Math.max(0, i - 1));
+      } else if (e.key === "ArrowRight") {
+        setIdx((i) => Math.min(images.length - 1, i + 1));
+      }
     };
-    // Use capture so we intercept before Radix can process Escape
-    window.addEventListener("keydown", handler, true);
-    return () => window.removeEventListener("keydown", handler, true);
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [images.length, onClose]);
 
-  const prev = () => setIdx(i => Math.max(0, i - 1));
-  const next = () => setIdx(i => Math.min(images.length - 1, i + 1));
+  const prev = () => setIdx((i) => Math.max(0, i - 1));
+  const next = () => setIdx((i) => Math.min(images.length - 1, i + 1));
 
-  // Touch swipe
+  // Touch & Gesture-hantering för mobila enheter
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   };
+
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (!touchStart.current) return;
     const dx = e.changedTouches[0].clientX - touchStart.current.x;
     const dy = e.changedTouches[0].clientY - touchStart.current.y;
     touchStart.current = null;
-    if (dy > 80 && Math.abs(dx) < Math.abs(dy)) { onClose(); return; }
+
+    // Swipe nedåt för att stänga
+    if (dy > 80 && Math.abs(dx) < Math.abs(dy)) {
+      onClose();
+      return;
+    }
+
+    // Swipe åt sidorna för bildbyte
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
-      if (dx < 0) next(); else prev();
+      if (dx < 0) next();
+      else prev();
     }
   };
 
+  if (!images || images.length === 0) return null;
+
   const content = (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Bildvisare"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 99999,
-        background: "rgba(0,0,0,0.93)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/95 select-none touch-none animate-in fade-in-0 duration-150"
     >
-      {/* Invisible backdrop — clicking here closes. Must be below the image/buttons */}
+      {/* Bakgrundsyta som stänger vid klick */}
       <div
         onClick={onClose}
-        style={{ position: "absolute", inset: 0 }}
-        aria-label="Stäng"
+        className="absolute inset-0 z-0"
+        aria-hidden="true"
       />
 
-      {/* Close button — above the backdrop div */}
+      {/* Stäng-knapp */}
       <button
         type="button"
         onClick={onClose}
-        aria-label="Stäng"
-        style={{
-          position: "absolute",
-          top: 12,
-          right: 12,
-          zIndex: 2,
-          width: 52,
-          height: 52,
-          borderRadius: "50%",
-          background: "rgba(255,255,255,0.15)",
-          border: "2px solid rgba(255,255,255,0.35)",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "white",
-        }}
+        aria-label="Stäng bildvisare"
+        className="absolute top-4 right-4 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-white/15 text-white transition-opacity hover:bg-white/25 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
       >
-        <X style={{ width: 24, height: 24 }} />
+        <X className="h-6 w-6" />
       </button>
 
-      {/* Counter */}
+      {/* Bildräknare */}
       {images.length > 1 && (
-        <div style={{
-          position: "absolute", top: 18, left: "50%", transform: "translateX(-50%)",
-          zIndex: 2, color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: 500,
-          pointerEvents: "none", userSelect: "none",
-        }}>
+        <div className="absolute top-5 left-1/2 z-20 -translate-x-1/2 text-sm font-medium text-white/75 pointer-events-none">
           {idx + 1} / {images.length}
         </div>
       )}
 
-      {/* Image — above backdrop, stops click from reaching backdrop */}
+      {/* Huvudbild */}
       <img
         key={idx}
         src={images[idx]}
-        alt=""
+        alt={`Bild ${idx + 1} av ${images.length}`}
         draggable={false}
-        onClick={e => e.stopPropagation()}
-        style={{
-          position: "relative",
-          zIndex: 1,
-          maxHeight: "85dvh",
-          maxWidth: "calc(100vw - 96px)",
-          objectFit: "contain",
-          borderRadius: 8,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
-          userSelect: "none",
-          display: "block",
-        }}
+        onClick={(e) => e.stopPropagation()}
+        className="relative z-10 max-h-[85dvh] max-w-[calc(100vw-4rem)] rounded-lg object-contain shadow-2xl transition-all duration-200 md:max-w-[calc(100vw-6rem)]"
       />
 
-      {/* Prev / Next */}
+      {/* Navigationsknappar (Föregående / Nästa) */}
       {images.length > 1 && (
         <>
           <button
             type="button"
-            onClick={e => { e.stopPropagation(); prev(); }}
-            disabled={idx === 0}
-            aria-label="Föregående"
-            style={{
-              position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
-              zIndex: 2, width: 48, height: 48, borderRadius: "50%",
-              background: "rgba(255,255,255,0.15)",
-              border: "1.5px solid rgba(255,255,255,0.25)",
-              cursor: idx === 0 ? "default" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: idx === 0 ? "rgba(255,255,255,0.2)" : "white",
-              opacity: idx === 0 ? 0.4 : 1,
+            onClick={(e) => {
+              e.stopPropagation();
+              prev();
             }}
+            disabled={idx === 0}
+            aria-label="Föregående bild"
+            className={cn(
+              "absolute left-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-white/15 text-white transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
+              idx === 0
+                ? "cursor-default opacity-30 text-white/30"
+                : "cursor-pointer hover:bg-white/25"
+            )}
           >
-            <ChevronLeft style={{ width: 22, height: 22 }} />
+            <ChevronLeft className="h-6 w-6" />
           </button>
+
           <button
             type="button"
-            onClick={e => { e.stopPropagation(); next(); }}
-            disabled={idx === images.length - 1}
-            aria-label="Nästa"
-            style={{
-              position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
-              zIndex: 2, width: 48, height: 48, borderRadius: "50%",
-              background: "rgba(255,255,255,0.15)",
-              border: "1.5px solid rgba(255,255,255,0.25)",
-              cursor: idx === images.length - 1 ? "default" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: idx === images.length - 1 ? "rgba(255,255,255,0.2)" : "white",
-              opacity: idx === images.length - 1 ? 0.4 : 1,
+            onClick={(e) => {
+              e.stopPropagation();
+              next();
             }}
+            disabled={idx === images.length - 1}
+            aria-label="Nästa bild"
+            className={cn(
+              "absolute right-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-white/15 text-white transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
+              idx === images.length - 1
+                ? "cursor-default opacity-30 text-white/30"
+                : "cursor-pointer hover:bg-white/25"
+            )}
           >
-            <ChevronRight style={{ width: 22, height: 22 }} />
+            <ChevronRight className="h-6 w-6" />
           </button>
         </>
       )}
 
-      {/* Dot indicators */}
+      {/* Indikatorpunkter (Dots) */}
       {images.length > 1 && (
-        <div style={{
-          position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
-          zIndex: 2, display: "flex", gap: 6, pointerEvents: "none",
-        }}>
+        <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 gap-1.5 pointer-events-none">
           {images.map((_, i) => (
-            <span key={i} style={{
-              width: i === idx ? 20 : 7, height: 7, borderRadius: 4,
-              background: i === idx ? "white" : "rgba(255,255,255,0.4)",
-              display: "inline-block", transition: "width 0.2s",
-            }} />
+            <span
+              key={i}
+              className={cn(
+                "h-2 rounded-full transition-all duration-200",
+                i === idx ? "w-5 bg-white" : "w-2 bg-white/40"
+              )}
+            />
           ))}
         </div>
       )}
