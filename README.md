@@ -1,6 +1,6 @@
 # StoreFlow
 
-Butikshanteringsplattform för Coop byggd med React, Supabase och Tailwind CSS. Mobiloptimerad PWA för daglig användning av butikspersonal och chefer.
+Butikshanteringsplattform byggd med React, Supabase och Tailwind CSS. Mobiloptimerad PWA för daglig användning av butikspersonal och chefer.
 
 ## Stack
 
