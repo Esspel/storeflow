@@ -1,8 +1,30 @@
 import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
-import { ChartBar as BarChart3, Bell, ClipboardList, FileText, FlaskConical, Hop as Home, Circle as HelpCircle, LogOut, MoveHorizontal as MoreHorizontal, Settings, ShoppingCart, TriangleAlert, CalendarDays, UserRound, Trash2, User, Wifi, WifiOff, ArrowLeftRight, Store, X as XIcon, Tv as Tv2, ChartBar as BarChart2 } from "lucide-react";
-import { ROLE_LABELS, HIERARCHY_LABELS } from "@/lib/supabase";
+import {
+  Bell,
+  ClipboardList,
+  FileText,
+  FlaskConical,
+  Hop as Home,
+  Circle as HelpCircle,
+  LogOut,
+  MoreHorizontal,
+  Settings,
+  ShoppingCart,
+  TriangleAlert,
+  CalendarDays,
+  UserRound,
+  Trash2,
+  User,
+  Wifi,
+  WifiOff,
+  ArrowLeftRight,
+  Store,
+  X as XIcon,
+  ChartBar,
+} from "lucide-react";
+import { ROLE_LABELS, HIERARCHY_LABELS, supabase, type Notification, cleanOldNotifications } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
 import { GlobalStoreSelector } from "@/components/global-store-selector";
 import { useEffect, useRef, useState } from "react";
@@ -21,10 +43,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth-context";
-import { supabase, type Notification, cleanOldNotifications } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { getSimulatedDate, setTimeOffsetMs, isSimulationActive } from "@/lib/time-simulation";
-import { supabase as _supabase } from "@/lib/supabase";
 
 // ── SW update banner ────────────────────────────────────────────────────────
 function SwUpdateBanner() {
@@ -34,8 +54,9 @@ function SwUpdateBanner() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
-    const reg = navigator.serviceWorker.getRegistration();
-    reg.then((r) => {
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+    navigator.serviceWorker.getRegistration().then((r) => {
       if (!r) return;
 
       const attachWaiting = (sw: ServiceWorker) => {
@@ -45,7 +66,10 @@ function SwUpdateBanner() {
         });
       };
 
-      if (r.waiting) { attachWaiting(r.waiting); return; }
+      if (r.waiting) {
+        attachWaiting(r.waiting);
+        return;
+      }
 
       r.addEventListener("updatefound", () => {
         const newSw = r.installing;
@@ -53,9 +77,12 @@ function SwUpdateBanner() {
       });
 
       // Poll for updates every 60s so Zebra devices with long sessions catch deploys
-      const poll = setInterval(() => r.update(), 60_000);
-      return () => clearInterval(poll);
+      pollInterval = setInterval(() => r.update(), 60_000);
     });
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -75,9 +102,13 @@ function SwUpdateBanner() {
 
   function applyUpdate(sw: ServiceWorker) {
     sw.postMessage({ type: "SKIP_WAITING" });
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      window.location.reload();
-    }, { once: true });
+    navigator.serviceWorker.addEventListener(
+      "controllerchange",
+      () => {
+        window.location.reload();
+      },
+      { once: true }
+    );
   }
 
   if (!waiting) return null;
@@ -93,7 +124,7 @@ function SwUpdateBanner() {
       </span>
       <button
         onClick={() => applyUpdate(waiting)}
-        className="shrink-0 rounded-full bg-amber-950 px-3 py-1 text-xs font-bold text-amber-50 transition-opacity hover:opacity-80 active:opacity-70"
+        className="shrink-0 rounded-full bg-amber-950 px-3 py-1 text-xs font-bold text-amber-50 transition-opacity hover:opacity-80 active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-950"
       >
         Starta om nu
       </button>
@@ -103,12 +134,10 @@ function SwUpdateBanner() {
 
 // ── Offline snackbar ────────────────────────────────────────────────────────
 function OfflineSnackbar() {
-  // "idle" = never been offline, snackbar never shows
   const [status, setStatus] = useState<"idle" | "offline" | "reconnected">(
-    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "idle",
+    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "idle"
   );
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Track whether we have ever gone offline this session
   const wentOfflineRef = useRef(typeof navigator !== "undefined" && !navigator.onLine);
 
   useEffect(() => {
@@ -118,7 +147,6 @@ function OfflineSnackbar() {
       setStatus("offline");
     };
     const onOnline = () => {
-      // Only show "reconnected" if we actually went offline first
       if (!wentOfflineRef.current) return;
       setStatus("reconnected");
       hideTimerRef.current = setTimeout(() => setStatus("idle"), 2000);
@@ -140,22 +168,22 @@ function OfflineSnackbar() {
       role="status"
       aria-live="polite"
       className={cn(
-        "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium shadow-lg",
+        "fixed bottom-20 left-1/2 z-50 -translate-x-1/2 md:bottom-6",
+        "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium shadow-lg transition-all",
         status === "offline"
           ? "bg-destructive text-destructive-foreground"
-          : "bg-success text-success-foreground",
-        "visible",
+          : "bg-emerald-600 text-white"
       )}
     >
       {status === "offline" ? (
         <>
           <WifiOff className="h-4 w-4 shrink-0" />
-          Du är offline – ändringar sparas lokalt
+          <span>Du är offline – ändringar sparas lokalt</span>
         </>
       ) : (
         <>
           <Wifi className="h-4 w-4 shrink-0" />
-          Ansluten
+          <span>Ansluten</span>
         </>
       )}
     </div>
@@ -164,7 +192,15 @@ function OfflineSnackbar() {
 
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { user, logout, userStores, activeStore, setActiveStore, lockScreenOpen, openLockScreen, closeLockScreen, quickSwitch } = useAuth();
+  const {
+    user,
+    logout,
+    activeStore,
+    lockScreenOpen,
+    openLockScreen,
+    closeLockScreen,
+    quickSwitch,
+  } = useAuth();
   const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -172,7 +208,7 @@ export function AppShell() {
   const [simActive, setSimActive] = useState(() => isSimulationActive());
   const [moreOpen, setMoreOpen] = useState(false);
 
-  // Push subscription maintenance: ensure registration is valid on every session
+  // Push subscription maintenance
   useEffect(() => {
     if (!user) return;
     const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
@@ -189,12 +225,14 @@ export function AppShell() {
         if (isDeprecated) {
           await supabase.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
           await sub.unsubscribe();
-          // Re-subscribe with fresh endpoint
           const padding = "=".repeat((4 - (vapidKey.length % 4)) % 4);
           const base64 = (vapidKey + padding).replace(/-/g, "+").replace(/_/g, "/");
           const rawData = atob(base64);
           const appServerKey = Uint8Array.from(rawData, (c) => c.charCodeAt(0));
-          const freshSub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appServerKey });
+          const freshSub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: appServerKey,
+          });
           await supabase.from("push_subscriptions").insert({
             user_id: user.id,
             endpoint: freshSub.endpoint,
@@ -204,7 +242,6 @@ export function AppShell() {
           return;
         }
 
-        // Ensure subscription exists in DB for this user
         const { data: existing } = await supabase
           .from("push_subscriptions")
           .select("id")
@@ -214,8 +251,14 @@ export function AppShell() {
 
         if (!existing) {
           await supabase.from("push_subscriptions").upsert(
-            { user_id: user.id, endpoint: sub.endpoint, subscription_json: sub.toJSON(), user_agent: navigator.userAgent, updated_at: new Date().toISOString() },
-            { onConflict: "endpoint" },
+            {
+              user_id: user.id,
+              endpoint: sub.endpoint,
+              subscription_json: sub.toJSON(),
+              user_agent: navigator.userAgent,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "endpoint" }
           );
         }
       } catch (err) {
@@ -226,6 +269,7 @@ export function AppShell() {
     maintain();
   }, [user]);
 
+  // Sync simulation time updates
   useEffect(() => {
     const sync = () => setSimActive(isSimulationActive());
     window.addEventListener("sf-time-changed", sync);
@@ -238,7 +282,6 @@ export function AppShell() {
 
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "manager" || isAdmin;
-  const isAboveStore = isAdmin || user?.hierarchy_level === "hk" || user?.hierarchy_level === "forening" || user?.hierarchy_level === "distrikt";
 
   const nav = [
     { to: "/", label: "Översikt", mobileHidden: false, Icon: Home },
@@ -251,24 +294,28 @@ export function AppShell() {
     { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
   ];
 
-
   useEffect(() => {
     if (!user) return;
 
     const fetchNotifications = () => {
+      if (document.hidden) return; // Pausa vid bakgrundsflik
       supabase
         .from("notifications")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(20)
-        .then(({ data }) => { if (data) setNotifications(data as Notification[]); });
+        .then(({ data }) => {
+          if (data) setNotifications(data as Notification[]);
+        });
     };
 
     fetchNotifications();
     cleanOldNotifications(user.id);
     const interval = setInterval(fetchNotifications, 5000);
-    const onVisible = () => { if (document.visibilityState === "visible") fetchNotifications(); };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchNotifications();
+    };
     document.addEventListener("visibilitychange", onVisible);
 
     return () => {
@@ -292,7 +339,6 @@ export function AppShell() {
 
   const isActive = (to: string) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
 
-  // Routes grouped under "Övrigt" in mobile bottom nav
   const moreRoutes = [
     { to: "/avvikelser", label: "Avvikelser", Icon: TriangleAlert },
     { to: "/kundrunda", label: "Kundrunda", Icon: UserRound },
@@ -301,7 +347,7 @@ export function AppShell() {
     { to: "/mallar", label: "Mallar", Icon: ClipboardList },
     { to: "/hjalp", label: "Hjälp", Icon: HelpCircle },
   ];
-  const isMoreActive = moreRoutes.some(r => isActive(r.to));
+  const isMoreActive = moreRoutes.some((r) => isActive(r.to));
 
   const handleLogout = async () => {
     await logout();
@@ -309,7 +355,12 @@ export function AppShell() {
   };
 
   const initials = user?.display_name
-    ? user.display_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    ? user.display_name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
     : "?";
 
   return (
@@ -317,7 +368,7 @@ export function AppShell() {
       <SwUpdateBanner />
       <div className="pt-safe" />
 
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-card">
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-card/95 backdrop-blur-sm">
         <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4 md:h-16 md:gap-4 md:px-8">
           <Link to="/" className="flex shrink-0 items-center gap-2">
             <div className="flex flex-col leading-none">
@@ -326,6 +377,7 @@ export function AppShell() {
             </div>
           </Link>
 
+          {/* Desktop Navigation */}
           <nav className="hidden flex-1 items-center gap-1 md:flex">
             {nav.map((item) => (
               <Link
@@ -333,7 +385,7 @@ export function AppShell() {
                 to={item.to}
                 className={cn(
                   "relative rounded-full px-3.5 py-2 text-sm font-medium text-foreground/70 transition-colors hover:text-primary",
-                  isActive(item.to) && "text-primary",
+                  isActive(item.to) && "text-primary"
                 )}
               >
                 {item.label}
@@ -343,50 +395,57 @@ export function AppShell() {
               </Link>
             ))}
           </nav>
-          {/* Mobile bottom nav — core routes only */}
-          <nav className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-card pb-safe md:hidden" data-safe-bottom>
-            {nav.filter((item) => !item.mobileHidden).map(({ to, label, Icon }) => (
-              <Link
-                key={to}
-                to={to}
-                className={cn(
-                  "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
-                  isActive(to) ? "text-primary" : "text-muted-foreground",
-                )}
-              >
-                <div className={cn(
-                  "flex h-7 w-10 items-center justify-center rounded-full transition-all",
-                  isActive(to) ? "bg-primary/10" : "bg-transparent",
-                )}>
-                  <Icon className="h-4 w-4" />
-                </div>
-                <span className="leading-none">{label}</span>
-              </Link>
-            ))}
-            {/* Övrigt — collapses avvikelser, kundrunda, möten, kundönskemål */}
+
+          {/* Mobile Bottom Nav */}
+          <nav
+            className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-card/95 backdrop-blur-sm pb-safe md:hidden"
+            data-safe-bottom
+          >
+            {nav
+              .filter((item) => !item.mobileHidden)
+              .map(({ to, label, Icon }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  className={cn(
+                    "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
+                    isActive(to) ? "text-primary" : "text-muted-foreground"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "flex h-7 w-10 items-center justify-center rounded-full transition-all",
+                      isActive(to) ? "bg-primary/10" : "bg-transparent"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <span className="leading-none">{label}</span>
+                </Link>
+              ))}
             <button
               onClick={() => setMoreOpen(true)}
               className={cn(
                 "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
-                isMoreActive ? "text-primary" : "text-muted-foreground",
+                isMoreActive ? "text-primary" : "text-muted-foreground"
               )}
             >
-              <div className={cn(
-                "flex h-7 w-10 items-center justify-center rounded-full transition-all",
-                isMoreActive ? "bg-primary/10" : "bg-transparent",
-              )}>
+              <div
+                className={cn(
+                  "flex h-7 w-10 items-center justify-center rounded-full transition-all",
+                  isMoreActive ? "bg-primary/10" : "bg-transparent"
+                )}
+              >
                 <MoreHorizontal className="h-4 w-4" />
               </div>
               <span className="leading-none">Övrigt</span>
             </button>
           </nav>
 
-
           <div className="ml-auto flex items-center gap-1.5 md:gap-2">
-            {/* Global store selector — all users with multiple stores */}
             <GlobalStoreSelector />
 
-            {/* SAP product catalog button */}
+            {/* SAP Catalog Button */}
             {activeStore?.sap_site_id && (
               <a
                 href={`https://mittcoop.coop.se/sortiment/articles?siteId=${activeStore.sap_site_id}`}
@@ -400,8 +459,7 @@ export function AppShell() {
               </a>
             )}
 
-
-            {/* Notifications */}
+            {/* Notifications Popover */}
             <Popover open={notifOpen} onOpenChange={setNotifOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="icon" className="relative rounded-xl border-border/80" aria-label="Notiser">
@@ -429,19 +487,29 @@ export function AppShell() {
                     notifications.map((n) => (
                       <div
                         key={n.id}
-                        className={cn("group border-b border-border/40 px-4 py-3 last:border-0", !n.is_read && "bg-primary-soft/30")}
+                        className={cn(
+                          "group border-b border-border/40 px-4 py-3 last:border-0",
+                          !n.is_read && "bg-primary-soft/30"
+                        )}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <p className={cn("text-sm font-medium leading-snug", !n.is_read && "text-primary")}>{n.title}</p>
-                            {n.body && <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{n.body}</p>}
+                            <p className={cn("text-sm font-medium leading-snug", !n.is_read && "text-primary")}>
+                              {n.title}
+                            </p>
+                            {n.body && (
+                              <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{n.body}</p>
+                            )}
                             <p className="mt-1 text-xs text-muted-foreground/70">
-                              {new Date(n.created_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}
+                              {new Date(n.created_at).toLocaleString("sv-SE", {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              })}
                             </p>
                           </div>
                           <button
                             onClick={() => deleteNotification(n.id)}
-                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 active:opacity-100"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 active:opacity-100"
                             aria-label="Ta bort notis"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -454,7 +522,7 @@ export function AppShell() {
               </PopoverContent>
             </Popover>
 
-            {/* User menu */}
+            {/* User Menu Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" className="rounded-xl border-border/80" aria-label="Konto">
@@ -471,11 +539,8 @@ export function AppShell() {
                       ? (HIERARCHY_LABELS[user.hierarchy_level] ?? ROLE_LABELS[user.role] ?? user.role)
                       : (user?.role ? (ROLE_LABELS[user.role] ?? user.role) : "")}
                   </p>
-                  {activeStore && (
-                    <p className="text-xs text-muted-foreground">{activeStore.name}</p>
-                  )}
+                  {activeStore && <p className="text-xs text-muted-foreground">{activeStore.name}</p>}
                 </div>
-                {/* Store switcher in dropdown — mobile only */}
                 <div className="md:hidden">
                   <DropdownMenuSeparator />
                   <GlobalStoreSelector inline />
@@ -489,7 +554,7 @@ export function AppShell() {
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="md:hidden">
                   <Link to="/rapporter" className="cursor-pointer">
-                    <BarChart3 className="mr-2 h-4 w-4" />
+                    <ChartBar className="mr-2 h-4 w-4" />
                     Rapporter
                   </Link>
                 </DropdownMenuItem>
@@ -514,10 +579,13 @@ export function AppShell() {
                     </Link>
                   </DropdownMenuItem>
                 )}
-                {(isAdmin || user?.hierarchy_level === "hk" || user?.hierarchy_level === "forening" || user?.hierarchy_level === "distrikt") && (
+                {(isAdmin ||
+                  user?.hierarchy_level === "hk" ||
+                  user?.hierarchy_level === "forening" ||
+                  user?.hierarchy_level === "distrikt") && (
                   <DropdownMenuItem asChild>
                     <Link to="/hk-dashboard" className="cursor-pointer">
-                      <BarChart3 className="mr-2 h-4 w-4" />
+                      <ChartBar className="mr-2 h-4 w-4" />
                       Dashboard
                     </Link>
                   </DropdownMenuItem>
@@ -543,27 +611,32 @@ export function AppShell() {
                   Växla användare
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onClick={handleLogout}>
+                <DropdownMenuItem
+                  className="cursor-pointer text-destructive focus:text-destructive"
+                  onClick={handleLogout}
+                >
                   <LogOut className="mr-2 h-4 w-4" />
                   Logga ut
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
           </div>
         </div>
       </header>
 
+      {/* Time simulation bar */}
       {simActive && (
-        <div className="sticky top-14 z-30 flex items-center justify-between gap-3 border-b border-warning/40 bg-warning/10 px-5 py-2 text-xs font-medium text-warning-foreground md:top-16 md:px-8">
+        <div className="sticky top-14 z-30 flex items-center justify-between gap-3 border-b border-amber-500/40 bg-amber-500/10 px-5 py-2 text-xs font-medium text-amber-900 dark:text-amber-200 md:top-16 md:px-8">
           <span>
             Tidssimulering aktiv — simulerad tid:{" "}
-            <strong>{getSimulatedDate().toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}</strong>
+            <strong>
+              {getSimulatedDate().toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}
+            </strong>
           </span>
           <button
-            className="rounded-full border border-warning/40 px-3 py-1 hover:bg-warning/20 transition-colors"
+            className="rounded-full border border-amber-500/40 px-3 py-1 hover:bg-amber-500/20 transition-colors"
             onClick={async () => {
-              await _supabase.from("tasks").delete().not("parent_task_id", "is", null);
+              await supabase.from("tasks").delete().not("parent_task_id", "is", null);
               setTimeOffsetMs(0);
               setSimActive(false);
             }}
@@ -573,6 +646,7 @@ export function AppShell() {
         </div>
       )}
 
+      {/* Main Content Area */}
       <main className="flex-1 pb-24 md:pb-0">
         <ErrorBoundary section="Sida" storeId={activeStore?.id ?? null}>
           <Outlet />
@@ -581,13 +655,13 @@ export function AppShell() {
 
       <div className="pb-safe" />
 
-      {/* Global offline / reconnected snackbar */}
+      {/* Offline Snackbar */}
       <OfflineSnackbar />
 
-      {/* Global keyboard shortcuts (desktop only) */}
+      {/* Global Keyboard Shortcuts */}
       <KeyboardShortcuts />
 
-      {/* Lock screen / quick user switch */}
+      {/* Lock Screen Modal */}
       {lockScreenOpen && user && (
         <LockScreen
           currentUser={user}
@@ -597,17 +671,26 @@ export function AppShell() {
         />
       )}
 
-      {/* Övrigt sheet — rendered outside header to avoid stacking context issues */}
+      {/* Övrigt Mobile Drawer */}
       {moreOpen && (
-        <div className="fixed inset-0 z-[250] md:hidden" onClick={() => setMoreOpen(false)}>
-          <div className="absolute inset-0 bg-black/40" />
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[250] md:hidden"
+          onClick={() => setMoreOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div
-            className="absolute bottom-0 left-0 right-0 rounded-t-3xl border-t border-border/60 bg-card pb-safe shadow-xl"
+            className="absolute bottom-0 left-0 right-0 rounded-t-3xl border-t border-border/60 bg-card pb-safe shadow-xl animate-in slide-in-from-bottom duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
               <span className="text-sm font-semibold text-foreground">Övrigt</span>
-              <button onClick={() => setMoreOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <button
+                onClick={() => setMoreOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground"
+                aria-label="Stäng meny"
+              >
                 <XIcon className="h-4 w-4" />
               </button>
             </div>
@@ -619,7 +702,9 @@ export function AppShell() {
                   onClick={() => setMoreOpen(false)}
                   className={cn(
                     "flex flex-col items-center gap-2 rounded-2xl border border-border/60 px-3 py-4 transition-colors",
-                    isActive(to) ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/30 text-foreground hover:bg-muted/60",
+                    isActive(to)
+                      ? "bg-primary/10 border-primary/30 text-primary"
+                      : "bg-muted/30 text-foreground hover:bg-muted/60"
                   )}
                 >
                   <Icon className="h-6 w-6" />
