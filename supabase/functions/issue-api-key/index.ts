@@ -48,6 +48,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Ogiltig JSON i request-body." }, 400);
   }
 
+  // Skapa databasklient med service role för admin-operationer i api_keys-tabellen
   const supabase = serviceRoleClient();
 
   if (body.action === "list") {
