@@ -4,7 +4,8 @@
 // agents (Power Automate, scripts, the mcp-server function, etc.) — no
 // browser session required.
 //
-// Auth: Authorization: Bearer <api_key>   (mint one via the issue-api-key function)
+// Auth: Authorization: Bearer <api_key | jwt_access_token>
+//       (mint API keys or exchange them for JWTs via the issue-api-key function)
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
@@ -32,7 +33,7 @@ Deno.serve(async (req: Request) => {
 
   const supabase = serviceRoleClient();
   const ctx = await authenticate(req, supabase);
-  if (!ctx) return json({ error: "Ogiltig eller saknad Authorization: Bearer <api_key>." }, 401);
+  if (!ctx) return json({ error: "Ogiltig eller saknad Authorization: Bearer <token>." }, 401);
 
   const url = new URL(req.url);
   const segments = pathAfterFunctionName(req);
