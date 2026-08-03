@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  Copy, ExternalLink, Hash, ImagePlus, Plus, QrCode, ScanLine, Search, ShoppingCart, Store as StoreIcon, Trash2, X,
+  Copy, ExternalLink, Hash, ImagePlus, Link as LinkIcon, Plus, QrCode, ScanLine, Search, ShoppingCart, Store as StoreIcon, Trash2, X,
 } from "lucide-react";
 import { CameraScanner } from "@/components/camera-scanner";
 import { QrDisplay } from "@/components/qr-display";
@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   supabase, type CustomerRequest, type Store as StoreType,
   mittCoopUrlFromStored, decodeArticleNumber,
-  encodeArticleNumber,MITT_COOP_CATEGORIES, MITT_COOP_STATUS_CODES, type ArticleIdType,
+  encodeArticleNumber, parseMittCoopUrl, type ArticleIdType,
   getPublicUrl, uploadAttachment, deleteStorageFiles,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
@@ -66,8 +66,6 @@ const emptyForm = () => ({
   product_name: "",
   article_number: "",
   article_type: "mat-nr" as ArticleIdType,
-  mitt_coop_category_id: null as number | null,
-  mitt_coop_status_code: null as number | null,
   notes: "",
   priority: "normal" as "low" | "normal" | "high",
 });
@@ -86,9 +84,10 @@ function CustomerRequestsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [articleCameraOpen, setArticleCameraOpen] = useState(false);
-  const [articlePrompt, setArticlePrompt] = useState<{ value: string; target: "create" | "edit" } | null>(null);
-  const [categorySearch, setCategorySearch] = useState("");
-  const [editCategorySearch, setEditCategorySearch] = useState("");
+  const [mcUrlInput, setMcUrlInput] = useState("");
+  const [editMcUrlInput, setEditMcUrlInput] = useState("");
+  const [mcUrlSuccess, setMcUrlSuccess] = useState(false);
+  const [editMcUrlSuccess, setEditMcUrlSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CustomerRequest | null>(null);
   const [editTarget, setEditTarget] = useState<CustomerRequest | null>(null);
@@ -96,8 +95,6 @@ function CustomerRequestsPage() {
   const [editInternalNotes, setEditInternalNotes] = useState("");
   const [editArticleNumber, setEditArticleNumber] = useState("");
   const [editArticleType, setEditArticleType] = useState<ArticleIdType>("mat-nr");
-  const [editCategoryId, setEditCategoryId] = useState<number | null>(null);
-  const [editStatusCode, setEditStatusCode] = useState<number | null>(null);
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrRequest, setQrRequest] = useState<CustomerRequest | null>(null);
   const [qrTokenUrl, setQrTokenUrl] = useState("");
@@ -106,6 +103,29 @@ function CustomerRequestsPage() {
   const [storeQrLoading, setStoreQrLoading] = useState(false);
   const [copiedQr, setCopiedQr] = useState(false);
   const [editComment, setEditComment] = useState("");
+
+  const handlePasteMcUrl = (input: string, target: "create" | "edit") => {
+    const parsed = parseMittCoopUrl(input);
+    if (parsed) {
+      if (target === "create") {
+        setForm((prev) => ({
+          ...prev,
+          ...(parsed.product_name ? { product_name: parsed.product_name } : {}),
+          ...(parsed.article_number ? { article_number: parsed.article_number } : {}),
+          ...(parsed.article_type ? { article_type: parsed.article_type } : {}),
+        }));
+        setMcUrlInput("");
+        setMcUrlSuccess(true);
+        setTimeout(() => setMcUrlSuccess(false), 3500);
+      } else {
+        if (parsed.article_number) setEditArticleNumber(parsed.article_number);
+        if (parsed.article_type) setEditArticleType(parsed.article_type);
+        setEditMcUrlInput("");
+        setEditMcUrlSuccess(true);
+        setTimeout(() => setEditMcUrlSuccess(false), 3500);
+      }
+    }
+  };
 
   // Image upload for create/edit
   const [createImages, setCreateImages] = useState<File[]>([]);
@@ -290,8 +310,6 @@ function CustomerRequestsPage() {
       notes: form.notes.trim() || null,
       priority: form.priority,
       requested_by: user?.id,
-      mitt_coop_category_id: form.mitt_coop_category_id,
-      mitt_coop_status_code: form.mitt_coop_status_code,
     }).select("id").maybeSingle();
     if (inserted?.id && createImages.length > 0) {
       await uploadImages(inserted.id, createImages);
@@ -299,6 +317,7 @@ function CustomerRequestsPage() {
     setSaving(false);
     setShowCreate(false);
     setForm(emptyForm());
+    setMcUrlInput("");
     createPreviews.forEach((p) => URL.revokeObjectURL(p));
     setCreateImages([]);
     setCreatePreviews([]);
@@ -318,8 +337,6 @@ function CustomerRequestsPage() {
       article_number: storedArticle,
       internal_notes: editInternalNotes.trim() || null,
       staff_comment: editComment.trim() || null,
-      mitt_coop_category_id: editCategoryId,
-      mitt_coop_status_code: editStatusCode,
     }).eq("id", editTarget.id);
     if (editImages.length > 0) {
       await uploadImages(editTarget.id, editImages);
@@ -330,6 +347,7 @@ function CustomerRequestsPage() {
     setEditPreviews([]);
     setCurrentEditImages([]);
     setEditTarget(null);
+    setEditMcUrlInput("");
     await fetchRequests();
   };
 
@@ -347,21 +365,11 @@ function CustomerRequestsPage() {
     await fetchRequests();
   };
 
-  const handleArticleInput = (value: string, target: "create" | "edit") => {
-    if (!value.trim()) return;
-    setArticlePrompt({ value: value.trim(), target });
-  };
-
   const buildMcUrl = (
     articleNumber: string | null | undefined,
     storeSapSiteId: string | null | undefined,
-    categoryId?: number | null,
-    statusCode?: number | null,
   ): string | null =>
-    mittCoopUrlFromStored(articleNumber, storeSapSiteId, {
-      categoryId: categoryId ?? undefined,
-      statusCode: statusCode ?? undefined,
-    });
+    mittCoopUrlFromStored(articleNumber, storeSapSiteId);
 
   const filtered = requests.filter((r) => {
     if (filterStatus === "active" && (r.status === "fulfilled" || r.status === "declined" || r.status === "not_in_assortment" || r.status === "discontinued")) return false;
@@ -460,7 +468,7 @@ function CustomerRequestsPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((r) => {
             const store = stores.find((s) => s.id === r.store_id) ?? null;
-            const mcUrl = buildMcUrl(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null, r.mitt_coop_category_id, r.mitt_coop_status_code);
+            const mcUrl = buildMcUrl(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null);
             const decodedArticle = decodeArticleNumber(r.article_number);
             const images = requestImagesMap[r.id] || [];
             const staffComment = (r as CustomerRequest & { staff_comment?: string | null }).staff_comment;
@@ -499,16 +507,6 @@ function CustomerRequestsPage() {
                         <span className="font-mono text-xs font-semibold text-foreground">
                           {decodedArticle?.value ?? r.article_number}
                         </span>
-                        {r.mitt_coop_category_id && (
-                          <span className="text-[10px] text-muted-foreground bg-background px-1.5 py-0.5 rounded border border-border/40">
-                            {MITT_COOP_CATEGORIES.find((c) => c.id === r.mitt_coop_category_id)?.label}
-                          </span>
-                        )}
-                        {r.mitt_coop_status_code && (
-                          <span className="text-[10px] text-muted-foreground bg-background px-1.5 py-0.5 rounded border border-border/40">
-                            {MITT_COOP_STATUS_CODES.find((s) => s.code === r.mitt_coop_status_code)?.label}
-                          </span>
-                        )}
                         {mcUrl && (
                           <a
                             href={mcUrl}
@@ -527,7 +525,9 @@ function CustomerRequestsPage() {
                   {/* Customer notes */}
                   {r.notes && (
                     <div className="rounded-xl bg-muted/50 px-3 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-0.5">Kundens kommentar</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600/90 dark:text-amber-400/90 mb-0.5">
+                        Anteckning (visas för kunden)
+                      </p>
                       <p className="text-xs text-muted-foreground leading-relaxed">{r.notes}</p>
                     </div>
                   )}
@@ -588,11 +588,9 @@ function CustomerRequestsPage() {
                           setEditStatus(r.status);
                           setEditArticleNumber(decoded?.value ?? "");
                           setEditArticleType(decoded?.type ?? "mat-nr");
-                          setEditCategoryId(r.mitt_coop_category_id ?? null);
-                          setEditStatusCode(r.mitt_coop_status_code ?? null);
-                          setEditCategorySearch("");
                           setEditInternalNotes(r.internal_notes ?? "");
                           setEditComment((r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "");
+                          setEditMcUrlInput("");
                         }}
                       >
                         Hantera
@@ -630,21 +628,55 @@ function CustomerRequestsPage() {
       )}
 
       {/* Create dialog */}
-      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setForm(emptyForm()); createPreviews.forEach((p) => URL.revokeObjectURL(p)); setCreateImages([]); setCreatePreviews([]); } }}>
+      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setForm(emptyForm()); setMcUrlInput(""); createPreviews.forEach((p) => URL.revokeObjectURL(p)); setCreateImages([]); setCreatePreviews([]); } }}>
         <DialogContent className="w-full max-w-md sm:max-w-md mx-0 sm:mx-auto">
           <DialogHeader>
             <DialogTitle>Registrera kundönskemål</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Mitt Coop URL Paste Section */}
+            <div className="space-y-1.5 rounded-xl border border-primary/20 bg-primary/5 p-3">
+              <Label className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                <LinkIcon className="h-3.5 w-3.5 text-primary" />
+                Klistra in Mitt Coop-sortiment URL
+              </Label>
+              <Input
+                placeholder="https://mittcoop.coop.se/sortiment/..."
+                value={mcUrlInput}
+                onChange={(e) => {
+                  setMcUrlInput(e.target.value);
+                  handlePasteMcUrl(e.target.value, "create");
+                }}
+                className="text-xs bg-background"
+              />
+              {mcUrlSuccess ? (
+                <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                  ✓ Fälten har fyllts i automatiskt från länken!
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Fyller automatiskt i artikelnummer, typ och produktnamn från länken.
+                </p>
+              )}
+            </div>
+
             <div className="space-y-1.5">
               <Label className="text-xs">Produktnamn *</Label>
               <Input
                 placeholder="T.ex. Oatly iKaffe 1L..."
                 value={form.product_name}
-                onChange={(e) => setForm((p) => ({ ...p, product_name: e.target.value }))}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val.includes("mittcoop") || val.startsWith("http://") || val.startsWith("https://")) {
+                    handlePasteMcUrl(val, "create");
+                  } else {
+                    setForm((p) => ({ ...p, product_name: val }));
+                  }
+                }}
                 autoFocus
               />
             </div>
+
             <div className="space-y-1.5">
               <Label className="text-xs flex items-center gap-1.5">
                 <Hash className="h-3 w-3 text-muted-foreground" />
@@ -654,8 +686,14 @@ function CustomerRequestsPage() {
                 <Input
                   placeholder={form.article_type === "mat-nr" ? "T.ex. 1047133" : form.article_type === "ean" ? "T.ex. 7310865003294" : "T.ex. 123456"}
                   value={form.article_number}
-                  onChange={(e) => setForm((p) => ({ ...p, article_number: e.target.value.replace(/\D/g, "") }))}
-                  onBlur={(e) => { if (e.target.value.trim()) handleArticleInput(e.target.value.trim(), "create"); }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val.includes("mittcoop") || val.startsWith("http://") || val.startsWith("https://")) {
+                      handlePasteMcUrl(val, "create");
+                    } else {
+                      setForm((p) => ({ ...p, article_number: val.replace(/\D/g, "") }));
+                    }
+                  }}
                   inputMode="numeric"
                   className="font-mono text-sm"
                 />
@@ -684,65 +722,6 @@ function CustomerRequestsPage() {
               </p>
             </div>
 
-            {/* Mitt Coop category */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">Kategori i Mitt Coop (valfritt)</Label>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                <Input
-                  placeholder="Sök kategori..."
-                  value={categorySearch}
-                  onChange={(e) => setCategorySearch(e.target.value)}
-                  className="pl-8 text-xs h-8"
-                />
-              </div>
-              {form.mitt_coop_category_id && (
-                <div className="flex items-center gap-1.5">
-                  <Badge variant="secondary" className="text-xs font-mono">
-                    {MITT_COOP_CATEGORIES.find(c => c.id === form.mitt_coop_category_id)?.label ?? form.mitt_coop_category_id}
-                  </Badge>
-                  <button type="button" onClick={() => setForm(p => ({ ...p, mitt_coop_category_id: null }))} className="text-muted-foreground hover:text-destructive">
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              )}
-              {categorySearch && (
-                <div className="max-h-36 overflow-y-auto rounded-xl border border-border/60 bg-card shadow-sm">
-                  {MITT_COOP_CATEGORIES.filter(c =>
-                    c.label.toLowerCase().includes(categorySearch.toLowerCase()) ||
-                    String(c.id).includes(categorySearch)
-                  ).slice(0, 20).map(c => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-muted/50 transition-colors"
-                      onClick={() => { setForm(p => ({ ...p, mitt_coop_category_id: c.id })); setCategorySearch(""); }}
-                    >
-                      <span className="font-mono text-muted-foreground">{c.id}</span>
-                      <span>{c.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Mitt Coop status filter */}
-            <div className="space-y-1.5">
-              <Label className="text-xs">Statusfilter i Mitt Coop (valfritt)</Label>
-              <Select
-                value={form.mitt_coop_status_code ? String(form.mitt_coop_status_code) : "none"}
-                onValueChange={(v) => setForm(p => ({ ...p, mitt_coop_status_code: v === "none" ? null : Number(v) }))}
-              >
-                <SelectTrigger className="text-xs h-8"><SelectValue placeholder="Välj status..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Inget filter</SelectItem>
-                  {MITT_COOP_STATUS_CODES.map(s => (
-                    <SelectItem key={s.code} value={String(s.code)}>{s.code.toString().padStart(2, "0")} — {s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-1.5">
               <Label className="text-xs">Prioritet</Label>
               <Select value={form.priority} onValueChange={(v) => setForm((p) => ({ ...p, priority: v as typeof p.priority }))}>
@@ -758,14 +737,22 @@ function CustomerRequestsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Anteckning (valfritt)</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">Anteckning (valfritt)</Label>
+                <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                  Visas på kundens sida
+                </span>
+              </div>
               <Textarea
-                placeholder="Ev. kommentar från kunden eller övrig info..."
+                placeholder="Skriv anteckning (observera att detta visas på kundens sida)..."
                 value={form.notes}
                 onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
                 rows={3}
                 className="resize-none text-sm"
               />
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                Obs: Det du skriver här kommer att visas för kunden på deras statuslänk.
+              </p>
             </div>
 
             {articleCameraOpen && (
@@ -822,7 +809,7 @@ function CustomerRequestsPage() {
 
       {/* Edit Dialog */}
       {editTarget && (
-        <Dialog open onOpenChange={(o) => { if (!o) { setEditTarget(null); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setCurrentEditImages([]); } }}>
+        <Dialog open onOpenChange={(o) => { if (!o) { setEditTarget(null); setEditMcUrlInput(""); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setCurrentEditImages([]); } }}>
           <DialogContent className="w-full max-w-md sm:max-w-md mx-0 sm:mx-auto">
             <DialogHeader>
               <DialogTitle>Hantera önskemål</DialogTitle>
@@ -832,9 +819,37 @@ function CustomerRequestsPage() {
                 <p className="font-medium text-sm">{editTarget.product_name}</p>
                 {editTarget.notes && (
                   <div className="mt-2 border-t border-border/40 pt-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-0.5">Kundens kommentar</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600/90 dark:text-amber-400/90 mb-0.5">
+                      Anteckning (visas för kunden)
+                    </p>
                     <p className="text-xs text-muted-foreground">{editTarget.notes}</p>
                   </div>
+                )}
+              </div>
+
+              {/* Mitt Coop URL Paste Section in Edit */}
+              <div className="space-y-1.5 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                <Label className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                  <LinkIcon className="h-3.5 w-3.5 text-primary" />
+                  Klistra in Mitt Coop-sortiment URL
+                </Label>
+                <Input
+                  placeholder="https://mittcoop.coop.se/sortiment/..."
+                  value={editMcUrlInput}
+                  onChange={(e) => {
+                    setEditMcUrlInput(e.target.value);
+                    handlePasteMcUrl(e.target.value, "edit");
+                  }}
+                  className="text-xs bg-background"
+                />
+                {editMcUrlSuccess ? (
+                  <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                    ✓ Artikelnummer har fyllts i från länken!
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    Fyller automatiskt i artikelnummer och typ från länken.
+                  </p>
                 )}
               </div>
 
@@ -885,8 +900,14 @@ function CustomerRequestsPage() {
                   <Input
                     placeholder={editArticleType === "mat-nr" ? "T.ex. 1047133" : editArticleType === "ean" ? "T.ex. 7310865003294" : "T.ex. 123456"}
                     value={editArticleNumber}
-                    onChange={(e) => setEditArticleNumber(e.target.value.replace(/\D/g, ""))}
-                    onBlur={(e) => { if (e.target.value.trim()) handleArticleInput(e.target.value.trim(), "edit"); }}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val.includes("mittcoop") || val.startsWith("http://") || val.startsWith("https://")) {
+                        handlePasteMcUrl(val, "edit");
+                      } else {
+                        setEditArticleNumber(val.replace(/\D/g, ""));
+                      }
+                    }}
                     inputMode="numeric"
                     className="font-mono text-sm"
                   />
@@ -902,65 +923,6 @@ function CustomerRequestsPage() {
                   </Select>
                 </div>
                 <p className="text-[11px] text-muted-foreground">Syns bara internt — används för direktlänk till Mitt Coop-sortiment.</p>
-              </div>
-
-              {/* Edit: category selector */}
-              <div className="space-y-1.5">
-                <Label className="text-xs">Kategori i Mitt Coop (valfritt)</Label>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                  <Input
-                    placeholder="Sök kategori..."
-                    value={editCategorySearch}
-                    onChange={(e) => setEditCategorySearch(e.target.value)}
-                    className="pl-8 text-xs h-8"
-                  />
-                </div>
-                {editCategoryId && (
-                  <div className="flex items-center gap-1.5">
-                    <Badge variant="secondary" className="text-xs font-mono">
-                      {MITT_COOP_CATEGORIES.find(c => c.id === editCategoryId)?.label ?? editCategoryId}
-                    </Badge>
-                    <button type="button" onClick={() => setEditCategoryId(null)} className="text-muted-foreground hover:text-destructive">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                )}
-                {editCategorySearch && (
-                  <div className="max-h-36 overflow-y-auto rounded-xl border border-border/60 bg-card shadow-sm">
-                    {MITT_COOP_CATEGORIES.filter(c =>
-                      c.label.toLowerCase().includes(editCategorySearch.toLowerCase()) ||
-                      String(c.id).includes(editCategorySearch)
-                    ).slice(0, 20).map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-muted/50 transition-colors"
-                        onClick={() => { setEditCategoryId(c.id); setEditCategorySearch(""); }}
-                      >
-                        <span className="font-mono text-muted-foreground">{c.id}</span>
-                        <span>{c.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Edit: status filter */}
-              <div className="space-y-1.5">
-                <Label className="text-xs">Statusfilter i Mitt Coop (valfritt)</Label>
-                <Select
-                  value={editStatusCode ? String(editStatusCode) : "none"}
-                  onValueChange={(v) => setEditStatusCode(v === "none" ? null : Number(v))}
-                >
-                  <SelectTrigger className="text-xs h-8"><SelectValue placeholder="Välj status..." /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Inget filter</SelectItem>
-                    {MITT_COOP_STATUS_CODES.map(s => (
-                      <SelectItem key={s.code} value={String(s.code)}>{s.code.toString().padStart(2, "0")} — {s.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               <div className="space-y-1.5">
@@ -1005,7 +967,7 @@ function CustomerRequestsPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" className="rounded-full" onClick={() => { setEditTarget(null); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setCurrentEditImages([]); }}>Avbryt</Button>
+              <Button variant="outline" className="rounded-full" onClick={() => { setEditTarget(null); setEditMcUrlInput(""); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setCurrentEditImages([]); }}>Avbryt</Button>
               <Button className="rounded-full" disabled={saving || (editStatus === "declined" && !editComment.trim())} onClick={updateRequest}>
                 {saving ? "Sparar..." : "Spara"}
               </Button>
@@ -1031,39 +993,6 @@ function CustomerRequestsPage() {
             >
               Ta bort
             </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* 3-way article number disambiguation */}
-      <AlertDialog open={!!articlePrompt} onOpenChange={(o) => { if (!o) setArticlePrompt(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Vad är <span className="font-mono">{articlePrompt?.value}</span>?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Välj vilken typ av nummer du angett — det avgör vilken länk som genereras i Mitt Coop-sortiment.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
-            {(["mat-nr", "ean", "bnr"] as ArticleIdType[]).map((t) => (
-              <AlertDialogAction
-                key={t}
-                onClick={() => {
-                  if (articlePrompt) {
-                    if (articlePrompt.target === "create") {
-                      setForm(p => ({ ...p, article_number: articlePrompt.value, article_type: t }));
-                    } else {
-                      setEditArticleNumber(articlePrompt.value);
-                      setEditArticleType(t);
-                    }
-                  }
-                  setArticlePrompt(null);
-                }}
-                className={t === "mat-nr" ? "" : t === "ean" ? "bg-info/90 hover:bg-info" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"}
-              >
-                {t === "mat-nr" ? "Materialnummer" : t === "ean" ? "EAN-streckkod" : "BNR (Beställningsnr)"}
-              </AlertDialogAction>
-            ))}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
