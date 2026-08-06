@@ -151,7 +151,7 @@ function QrKundonskemalPage() {
 
           {request.notes && (
             <div className="mt-3 rounded-xl border border-border/40 bg-muted/30 px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 mb-1">Din kommentar</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 mb-1">Kommentar</p>
               <p className="text-sm text-foreground">{request.notes}</p>
             </div>
           )}
