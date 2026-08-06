@@ -1,5 +1,0 @@
-This project is a customer portal for a SaaS app. The stack is React + Supabase + Tailwind. All database queries should go through the /lib/db module. Use the useAuth hook from /lib/auth.ts for authentication state. Don't add mock data, always connect to real Supabase tables. Offline-First: Implementera logik som sparar ändringar i localStorage om nätverket bryts, och synka mot databasen vid återanslutning.
-
-Media Handling: Optimera bilder som laddas upp i avvikelserapporter direkt i klienten innan de skickas till lagring för att spara bandbredd.
-
-Real-time: Använd WebSockets eller Supabase Realtime för att "Pulstavlan" ska uppdateras direkt när en kollega slutför en uppgift.Arkitektur: Mobile-first design. All funktionalitet måste optimeras för surfplattor och mobiler.
