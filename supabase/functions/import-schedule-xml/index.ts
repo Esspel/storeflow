@@ -2,16 +2,19 @@
 //
 // URL-callable version of the "Schema (XML)" SoftOne GO import in schema.tsx,
 // for automation tools like Power Automate. Bypasses the browser entirely —
-// auth is via a shared secret header, writes go through the service role key,
-// and the interactive employee-mapping step is replaced with automatic
-// matching (existing employee_mappings → name match in store → name match
-// elsewhere ("borrowed") → optionally auto-create a new account).
+// auth is via a rotatable API key or JWT (same as storeflow-api / mcp-server),
+// writes go through the service role key, and the interactive
+// employee-mapping step is replaced with automatic matching (existing
+// employee_mappings → name match in store → name match elsewhere
+// ("borrowed") → optionally auto-create a new account).
 //
 // Call:
 //   POST https://<project-ref>.supabase.co/functions/v1/import-schedule-xml
 //   Headers:
 //     Content-Type: application/json
-//     x-import-secret: <IMPORT_WEBHOOK_SECRET>
+//     Authorization: Bearer <API-nyckel (sf_live_...) eller JWT>
+//       — nyckeln måste ha scope 'schedule:write' och åtkomst till angiven store_id
+//         (skapas/roteras under Inställningar → API-nycklar)
 //   Body (JSON):
 //     {
 //       "store_id": "uuid",                 // required
@@ -27,9 +30,6 @@
 // Response: { success: true, weeks: [...], employees_matched, employees_created, shifts_imported, warnings: [...] }
 //        or { error: "..." } with a 4xx/5xx status.
 //
-// Set the shared secret once via:
-//   supabase secrets set IMPORT_WEBHOOK_SECRET=<a long random string>
-//
 // Known simplifications vs. the in-app import:
 //   - One XML file per call (the in-app "merge multiple files for the same week" pass is not replicated —
 //     call this endpoint once per file; each call still imports every week contained in that one file).
@@ -38,13 +38,13 @@
 //   - No interactive review step: matching is automatic using the rules above.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
 import { DOMParser } from "npm:linkedom@0.18.13";
+import { authenticateRequest, hasScope, canAccessStore, serviceRoleClient } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, x-import-secret",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
 function json(body: unknown, status = 200) {
@@ -460,10 +460,9 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Endast POST stöds." }, 405);
 
-  const expectedSecret = Deno.env.get("IMPORT_WEBHOOK_SECRET");
-  if (!expectedSecret) return json({ error: "IMPORT_WEBHOOK_SECRET är inte konfigurerad på servern." }, 500);
-  const givenSecret = req.headers.get("x-import-secret");
-  if (!givenSecret || givenSecret !== expectedSecret) return json({ error: "Ogiltig eller saknad x-import-secret." }, 401);
+  const ctx = await authenticateRequest(req);
+  if (!ctx) return json({ error: "Ogiltig eller saknad Authorization: Bearer <API-nyckel eller JWT>." }, 401);
+  if (!hasScope(ctx, "schedule:write")) return json({ error: "Nyckeln saknar scope 'schedule:write'." }, 403);
 
   let body: {
     store_id?: string; imported_by_user_id?: string; auto_create_users?: boolean;
@@ -504,6 +503,8 @@ Deno.serve(async (req: Request) => {
   if (!imported_by_user_id) return json({ error: "imported_by_user_id saknas (måste vara ett giltigt app_users.id — t.ex. ditt eget admin-konto eller ett dedikerat automationskonto)." }, 400);
   if (!body.xml && !body.xml_base64) return json({ error: "xml eller xml_base64 måste anges." }, 400);
 
+  if (!canAccessStore(ctx, store_id)) return json({ error: "Nyckeln har inte åtkomst till denna butik." }, 403);
+
   let xmlText: string;
   if (body.xml_base64) {
     xmlText = decodeBase64Content(body.xml_base64);
@@ -518,10 +519,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: "xml eller xml_base64 måste anges." }, 400);
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const supabase = serviceRoleClient();
 
   const { data: store } = await supabase.from("stores").select("id, forening_id, distrikt_id").eq("id", store_id).maybeSingle();
   if (!store) return json({ error: `Ingen butik hittades med store_id ${store_id}.` }, 404);
