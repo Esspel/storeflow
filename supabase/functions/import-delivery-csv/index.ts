@@ -2,14 +2,17 @@
 //
 // URL-callable version of the "Leveransplan (CSV)" import in schema.tsx, for
 // automation tools like Power Automate. Bypasses the normal browser/session
-// flow entirely — auth is via a shared secret header, and writes go through
-// the Supabase service role key.
+// flow entirely — auth is via a rotatable API key or JWT (same as
+// storeflow-api / mcp-server), and writes go through the Supabase service
+// role key.
 //
 // Call:
 //   POST https://<project-ref>.supabase.co/functions/v1/import-delivery-csv
 //   Headers:
 //     Content-Type: application/json
-//     x-import-secret: <IMPORT_WEBHOOK_SECRET>
+//     Authorization: Bearer <API-nyckel (sf_live_...) eller JWT>
+//       — nyckeln måste ha scope 'deliveries:write' och åtkomst till angiven store_id
+//         (skapas/roteras under Inställningar → API-nycklar)
 //   Body (JSON):
 //     {
 //       "store_id": "uuid",              // required
@@ -23,17 +26,14 @@
 //
 // Response: { success: true, plan_id, week_number, year, deliveries_imported, is_special_week, holiday_name }
 //        or { error: "..." } with a 4xx/5xx status.
-//
-// Set the shared secret once via:
-//   supabase secrets set IMPORT_WEBHOOK_SECRET=<a long random string>
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { authenticateRequest, hasScope, canAccessStore, serviceRoleClient } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, x-import-secret",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
 function json(body: unknown, status = 200) {
@@ -183,10 +183,9 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Endast POST stöds." }, 405);
 
-  const expectedSecret = Deno.env.get("IMPORT_WEBHOOK_SECRET");
-  if (!expectedSecret) return json({ error: "IMPORT_WEBHOOK_SECRET är inte konfigurerad på servern." }, 500);
-  const givenSecret = req.headers.get("x-import-secret");
-  if (!givenSecret || givenSecret !== expectedSecret) return json({ error: "Ogiltig eller saknad x-import-secret." }, 401);
+  const ctx = await authenticateRequest(req);
+  if (!ctx) return json({ error: "Ogiltig eller saknad Authorization: Bearer <API-nyckel eller JWT>." }, 401);
+  if (!hasScope(ctx, "deliveries:write")) return json({ error: "Nyckeln saknar scope 'deliveries:write'." }, 403);
 
   let body: {
     store_id?: string; week_number?: number; year?: number;
@@ -204,6 +203,8 @@ Deno.serve(async (req: Request) => {
   if (!year) return json({ error: "year saknas." }, 400);
   if (!body.csv && !body.csv_base64) return json({ error: "csv eller csv_base64 måste anges." }, 400);
 
+  if (!canAccessStore(ctx, store_id)) return json({ error: "Nyckeln har inte åtkomst till denna butik." }, 403);
+
   let csvText: string;
   if (body.csv_base64) {
     csvText = decodeBase64Content(body.csv_base64);
@@ -218,15 +219,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: "csv eller csv_base64 måste anges." }, 400);
   }
 
-  // Kontrollera Supabase-miljövariabler
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  
-  if (!supabaseUrl || !serviceRoleKey) {
-    return json({ error: "Serverkonfiguration saknas (SUPABASE_URL / SERVICE_ROLE_KEY)." }, 500);
-  }
-  
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = serviceRoleClient();
 
   const { data: store } = await supabase.from("stores").select("id").eq("id", store_id).maybeSingle();
   if (!store) return json({ error: `Ingen butik hittades med store_id ${store_id}.` }, 404);
