@@ -41,7 +41,7 @@ Deno.serve(async (req: Request) => {
 
   const supabase = serviceRoleClient();
 
-  // Validate authentication: accepts either x-import-secret OR valid x-session-token
+  // Validate authentication: accepts either x-import-secret OR custom x-session-token
   const expectedSecret = Deno.env.get("IMPORT_WEBHOOK_SECRET");
   const providedSecret = req.headers.get("x-import-secret") ?? "";
   const sessionToken = req.headers.get("x-session-token");
@@ -51,8 +51,19 @@ Deno.serve(async (req: Request) => {
   if (expectedSecret && safeCompare(providedSecret, expectedSecret)) {
     isAuthenticated = true;
   } else if (sessionToken) {
-    const { data: { user }, error } = await supabase.auth.getUser(sessionToken);
-    if (!error && user) isAuthenticated = true;
+    // Slå upp token i er egen sessionstabell i databasen i stället för Supabase Auth
+    const { data: session, error } = await supabase
+      .from("user_sessions")
+      .select("id, user_id, expires_at")
+      .eq("token", sessionToken)
+      .maybeSingle();
+
+    if (!error && session) {
+      const isNotExpired = !session.expires_at || new Date(session.expires_at).getTime() > Date.now();
+      if (isNotExpired) {
+        isAuthenticated = true;
+      }
+    }
   }
 
   if (!isAuthenticated) {
