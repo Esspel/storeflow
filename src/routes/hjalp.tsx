@@ -5,6 +5,7 @@ import {
   LayoutDashboard, ListChecks,
   Package,
   QrCode, Settings, ShoppingCart, Tv as Tv2, UserRound, Users,
+  Terminal,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { useAuth } from "@/lib/auth-context";
@@ -227,6 +228,83 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
 // Keyboard shortcuts — same as keyboard-shortcuts.tsx but displayed here for reference
 const KEYBOARD_SHORTCUTS_ALL: never[] = [];
 
+type CurlExample = {
+  title: string;
+  description: string;
+  scope: string;
+  command: string;
+};
+
+const CURL_EXAMPLES: CurlExample[] = [
+  {
+    title: "Lista uppgifter (storeflow-api)",
+    description: "Hämta öppna uppgifter för en butik via REST-API:t.",
+    scope: "tasks:read",
+    command:
+`curl -X GET \\
+  "https://<project-ref>.supabase.co/functions/v1/storeflow-api/tasks?store_id=<store-uuid>&status=todo" \\
+  -H "Authorization: Bearer sf_live_..."`,
+  },
+  {
+    title: "Skapa avvikelse (storeflow-api)",
+    description: "Rapportera en ny avvikelse programmatiskt.",
+    scope: "deviations:write",
+    command:
+`curl -X POST \\
+  "https://<project-ref>.supabase.co/functions/v1/storeflow-api/deviations" \\
+  -H "Authorization: Bearer sf_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "title": "Trasig kylåpådsdörr",
+    "store_id": "<store-uuid>",
+    "category": "Utrustning",
+    "priority": "Hög"
+  }'`,
+  },
+  {
+    title: "Importera leveransplan (CSV)",
+    description: "Ladda upp en leveransplan för en given vecka, t.ex. från Power Automate.",
+    scope: "deliveries:write",
+    command:
+`curl -X POST \\
+  "https://<project-ref>.supabase.co/functions/v1/import-delivery-csv" \\
+  -H "Authorization: Bearer sf_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "store_id": "<store-uuid>",
+    "week_number": 33,
+    "year": 2026,
+    "csv": "måndag,08:00,söndag,20:00,Kolonial,Coop Logistik"
+  }'`,
+  },
+  {
+    title: "Importera schema (XML från SoftOne GO)",
+    description: "Ladda upp ett personalschema. imported_by_user_id måste vara ett giltigt konto-id.",
+    scope: "schedule:write",
+    command:
+`curl -X POST \\
+  "https://<project-ref>.supabase.co/functions/v1/import-schedule-xml" \\
+  -H "Authorization: Bearer sf_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "store_id": "<store-uuid>",
+    "imported_by_user_id": "<app-user-uuid>",
+    "xml_base64": "<base64-kodad XML-fil>"
+  }'`,
+  },
+  {
+    title: "Lista verktyg (mcp-server)",
+    description: "MCP-servern följer JSON-RPC 2.0 och kan pekas ut direkt i en MCP-klient (t.ex. Claude, Antigravity CLI).",
+    scope: "valfritt scope beroende på verktyg",
+    command:
+`curl -X POST \\
+  "https://<project-ref>.supabase.co/functions/v1/mcp-server" \\
+  -H "Authorization: Bearer sf_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`,
+  },
+];
+
 function FeatureCard({ item }: { item: Feature }) {
   const Icon = item.icon;
   return (
@@ -279,6 +357,7 @@ function FeatureCard({ item }: { item: Feature }) {
 function HjalpPage() {
   const { user } = useAuth();
   const isManager = user?.role === "manager" || user?.role === "admin";
+  const isAdmin = user?.role === "admin";
 
   const visibleGroups = FEATURES.map((group) => ({
     ...group,
@@ -335,6 +414,50 @@ function HjalpPage() {
             </ul>
           </div>
         </section>
+
+        {/* API & Automation — endast admin, som hanterar API-nycklarna */}
+        {isAdmin && (
+          <section>
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              API &amp; Automation
+            </h2>
+            <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)] space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                  <Terminal className="h-4.5 w-4.5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Skapa och rotera API-nycklar under{" "}
+                    <Link to="/installningar" className="font-medium text-foreground underline underline-offset-2">
+                      Inställningar → API-nycklar
+                    </Link>
+                    . Varje nyckel har en egen uppsättning behörigheter (scopes) och är valfritt låst till en
+                    specifik butik. Byt ut <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">&lt;project-ref&gt;</code>{" "}
+                    mot ditt Supabase-projekts referens i exemplen nedan.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {CURL_EXAMPLES.map((ex) => (
+                  <div key={ex.title} className="space-y-1.5">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="text-sm font-medium">{ex.title}</p>
+                      <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        {ex.scope}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{ex.description}</p>
+                    <pre className="overflow-x-auto rounded-xl bg-muted/60 p-3 text-[11px] leading-relaxed">
+                      <code className="font-mono whitespace-pre">{ex.command}</code>
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Support */}
         <section className="rounded-2xl border border-dashed border-border/60 bg-muted/20 px-6 py-5 text-center">
