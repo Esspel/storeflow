@@ -76,12 +76,10 @@ function statusBadge(s: string) {
   return <Badge variant="secondary">Ej påbörjad</Badge>;
 }
 
-// Returns the start-of-day timestamp for a simulated "today" (Stockholm timezone)
 function getSimTodayStartMs(): number {
   return midnightStockholm(new Date(getSimulatedNow())).getTime();
 }
 
-// A task is due soon if its due_date is within today (but not yet past end of today)
 function isDueSoon(due_date: string | null): boolean {
   if (!due_date) return false;
   const now = getSimulatedNow();
@@ -89,13 +87,11 @@ function isDueSoon(due_date: string | null): boolean {
   return diff > 0 && diff < 24 * 60 * 60 * 1000;
 }
 
-// A task is overdue if its due date is before NOW (includes earlier today)
 function isOverdue(due_date: string | null, status: string): boolean {
   if (!due_date || status === "done" || status === "cancelled") return false;
   return new Date(due_date).getTime() < getSimulatedNow();
 }
 
-// Returns effective status considering simulated time
 function effectiveStatus(t: { status: string; due_date: string | null }): string {
   if (isOverdue(t.due_date, t.status) && t.status !== "done" && t.status !== "cancelled") return "late";
   return t.status;
@@ -117,21 +113,16 @@ type TaskFull = Task & {
 
 type FormQuestion = { label: string; question_type: "text" | "yes_no"; is_required: boolean; link_url: string };
 
-// datetime-local input gives "YYYY-MM-DDTHH:mm" in local time.
-// Supabase timestamptz needs a proper UTC ISO string.
-// These two helpers convert between them without double-shifting.
 function localInputToUtcIso(localStr: string): string {
   if (!localStr) return "";
-  // Parse as local time by appending no timezone → Date treats it as local
   const d = new Date(localStr);
   if (isNaN(d.getTime())) return localStr;
-  return d.toISOString(); // UTC ISO
+  return d.toISOString();
 }
 function utcIsoToLocalInput(utcStr: string): string {
   if (!utcStr) return "";
   const d = new Date(utcStr);
   if (isNaN(d.getTime())) return utcStr.slice(0, 16);
-  // Format as YYYY-MM-DDTHH:mm in local time
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
@@ -158,26 +149,17 @@ const emptyForm = (storeId: string) => ({
   questions: [] as FormQuestion[],
   assigneeUserIds: [] as string[],
   assigneeGroupIds: [] as string[],
-  // Event-based task fields
   event_trigger_description: "",
   event_trigger_user_id: "",
-  // Task chain
   depends_on_task_id: "",
-  // Critical flag
   is_critical: false,
 });
 
-
-// Returns true only on genuine touch devices (coarse pointer).
-// Guards against mouse click-and-drag triggering swipe actions on desktop.
 function isTouchDevice(): boolean {
   if (typeof window === "undefined") return false;
   return window.matchMedia("(pointer: coarse)").matches;
 }
 
-// Swipeable card: right-swipe → complete (green hint), left-swipe → open detail (blue hint).
-// Threshold = 35% of screen width to prevent accidental triggers while scrolling.
-// Only active on coarse-pointer (touch) devices.
 function SwipeableCard({
   done,
   onSwipeRight,
@@ -201,7 +183,6 @@ function SwipeableCard({
   const [swiping, setSwiping] = useState(false);
 
   const touch = isTouchDevice();
-  // 35% of screen width as threshold
   const THRESHOLD = typeof window !== "undefined" ? window.innerWidth * 0.35 : 120;
 
   const onPtrDown = (e: React.PointerEvent) => {
@@ -217,9 +198,8 @@ function SwipeableCard({
     if (!touch) return;
     const dx = e.clientX - startX.current;
     const dy = e.clientY - startY.current;
-    // Determine gesture direction on first significant movement
     if (!isHorizontal.current && !swiping) {
-      if (Math.abs(dy) > Math.abs(dx) + 4) return; // vertical — don't intercept
+      if (Math.abs(dy) > Math.abs(dx) + 4) return;
       if (Math.abs(dx) > 8) isHorizontal.current = true;
     }
     if (!isHorizontal.current) return;
@@ -240,13 +220,11 @@ function SwipeableCard({
     if (dx < -THRESHOLD) { onSwipeLeft(); return; }
   };
 
-  // Progress fraction 0–1 toward trigger threshold
   const rightFrac = Math.max(0, Math.min(1, offset / THRESHOLD));
   const leftFrac = Math.max(0, Math.min(1, -offset / THRESHOLD));
 
   return (
     <div className="relative overflow-hidden rounded-xl" data-swipeable>
-      {/* Right hint: green background fades in as you drag right */}
       <div
         data-swipe-hint
         className="absolute inset-0 flex items-center justify-start pl-5 rounded-xl"
@@ -263,7 +241,6 @@ function SwipeableCard({
           : <CheckCircle2 className="h-7 w-7 text-white" style={{ opacity: rightFrac }} />
         }
       </div>
-      {/* Left hint: blue/primary background */}
       <div
         data-swipe-hint
         className="absolute inset-0 flex items-center justify-end pr-5 rounded-xl"
@@ -292,8 +269,6 @@ function SwipeableCard({
   );
 }
 
-// ── AssigneePicker ─────────────────────────────────────────────────────────────
-// Searchable user + group picker used in create/edit task dialogs.
 function AssigneePicker({
   users, groups, selectedUserIds, selectedGroupIds, onToggleUser, onToggleGroup,
 }: {
@@ -369,8 +344,6 @@ function TasksPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showPastTasks, setShowPastTasks] = useState(false);
 
-  // Undo toast: when a swipe-complete fires we show a 4-second window to cancel
-  // before the DB write actually happens.
   const [undoToast, setUndoToast] = useState<{ task: TaskFull; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
   const undoToastRef = useRef(undoToast);
   useEffect(() => { undoToastRef.current = undoToast; }, [undoToast]);
@@ -382,18 +355,13 @@ function TasksPage() {
     }
   };
 
-  // Called by SwipeableCard's onSwipeRight — delays the actual DB write by 4s
   const swipeComplete = (task: TaskFull) => {
-    // Block swipe-complete for unconfirmed event tasks
     if (unconfirmedEventIds.has(task.id)) return;
-    // Block swipe-complete for dependency-blocked tasks
     if (task.depends_on_task_id) {
       const pred = tasks.find(t => t.id === task.depends_on_task_id);
       if (pred && pred.status !== "done") return;
     }
-    // Cancel any prior pending undo first
     dismissUndoToast();
-    // Optimistically reflect the toggle in the UI immediately
     const isDone = task.status === "done";
     const nowIso = getSimulatedDate().toISOString();
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: isDone ? "todo" : "done", completed_at: isDone ? null : nowIso } : t));
@@ -403,6 +371,7 @@ function TasksPage() {
     }, 4000);
     setUndoToast({ task, timeoutId: tid });
   };
+
   const [showCreate, setShowCreate] = useState(false);
   const [taskArticleType, setTaskArticleType] = useState<ArticleIdType>("mat-nr");
   const [taskArticlePrompt, setTaskArticlePrompt] = useState<string | null>(null);
@@ -412,8 +381,6 @@ function TasksPage() {
       const saved = localStorage.getItem(`sf-task-draft-${user?.id ?? ""}`);
       if (saved) {
         const parsed = JSON.parse(saved) as ReturnType<typeof emptyForm>;
-        // Merge with emptyForm defaults so null/missing fields from old drafts
-        // never override the array defaults (e.g. recurrence_days, recurrence_months).
         const base = emptyForm(parsed.store_id ?? "");
         return {
           ...base, ...parsed,
@@ -429,6 +396,7 @@ function TasksPage() {
     } catch {}
     return emptyForm(activeStore?.id ?? "");
   });
+
   const setNewTask = (v: ReturnType<typeof emptyForm> | ((p: ReturnType<typeof emptyForm>) => ReturnType<typeof emptyForm>)) => {
     _setNewTask(prev => {
       const next = typeof v === "function" ? v(prev) : v;
@@ -436,6 +404,7 @@ function TasksPage() {
       return next;
     });
   };
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [createStep, setCreateStep] = useState<1 | 2>(1);
@@ -447,47 +416,34 @@ function TasksPage() {
   const stepPhotoInputRef = useRef<HTMLInputElement>(null);
   const [pendingPhotoStepId, setPendingPhotoStepId] = useState<string | null>(null);
 
-  // Detail modal
   const [detailTask, setDetailTask] = useState<TaskFull | null>(null);
   const [completeError, setCompleteError] = useState("");
   const [answerDraft, setAnswerDraft] = useState<Record<string, string>>({});
-  // Ref so Realtime handler can check draft state without stale closure
   const answerDraftRef = useRef<Record<string, string>>({});
-  // Keep ref in sync with state
   useEffect(() => { answerDraftRef.current = answerDraft; }, [answerDraft]);
-  // Lightbox: we store the task separately so we can hide the Dialog while the
-  // photo is open (Radix's dismiss layer would otherwise eat all pointer events).
+
   const [lightboxTask, setLightboxTask] = useState<TaskFull | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
-  // Delete state
   const [deleteTarget, setDeleteTarget] = useState<TaskFull | null>(null);
   const [deleteScope, setDeleteScope] = useState<"single" | "future" | null>(null);
   const [deleteHasFuture, setDeleteHasFuture] = useState(false);
 
-  // Bulk operations
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [bulkDeleteTasksOpen, setBulkDeleteTasksOpen] = useState(false);
   const [bulkDeleteHasFuture, setBulkDeleteHasFuture] = useState(false);
 
-  // Edit state
   const [editTask, setEditTask] = useState<TaskFull | null>(null);
   const [editForm, setEditForm] = useState<ReturnType<typeof emptyForm> | null>(null);
   const [editSaving, setEditSaving] = useState(false);
-  // 'all_future' = change this + all future instances (default for recurring)
-  // 'single' = change only this specific occurrence (due date change isolated)
   const [editScope, setEditScope] = useState<"all_future" | "single">("all_future");
 
-  // Assignee confirmation banner + popup
   const [assigneeConfirmOpen, setAssigneeConfirmOpen] = useState(false);
   const [assigneeConfirmDismissed, setAssigneeConfirmDismissed] = useState(false);
-  // Per-task override: user has chosen a new assignee in the popup
   const [assigneeOverrides, setAssigneeOverrides] = useState<Record<string, string>>({});
-  // Which tasks are selected for bulk confirm action
   const [confirmSelectedIds, setConfirmSelectedIds] = useState<Set<string>>(new Set());
   const [confirmSaving, setConfirmSaving] = useState(false);
 
-  // Future occurrences manager state
   const [showFutureManager, setShowFutureManager] = useState(false);
   const [futureManagerTask, setFutureManagerTask] = useState<TaskFull | null>(null);
   const [futureOccurrences, setFutureOccurrences] = useState<TaskFull[]>([]);
@@ -497,7 +453,6 @@ function TasksPage() {
   const [futureBulkAssigneeUserIds, setFutureBulkAssigneeUserIds] = useState<string[]>([]);
   const [futureBulkAssigneeGroupIds, setFutureBulkAssigneeGroupIds] = useState<string[]>([]);
 
-  // Tasks with individual assignees that need manager confirmation
   const unconfirmedTasks = React.useMemo(() =>
     isManager
       ? tasks.filter(t =>
@@ -513,11 +468,9 @@ function TasksPage() {
     return d.toISOString().slice(0, 10);
   })();
 
-  // In-flight guard refs — prevent double-submit without triggering re-renders
   const completingRef = useRef<Set<string>>(new Set());
   const savingAnswerRef = useRef<Set<string>>(new Set());
 
-  // Delivery entries for today (used by "Generera från leveransplan")
   type DeliveryEntry = { id: string; delivery_time: string; supplier: string; flow_name: string; delivery_date: string | null };
   const [todayDeliveries, setTodayDeliveries] = useState<DeliveryEntry[]>([]);
   const [modalDeliveries, setModalDeliveries] = useState<DeliveryEntry[]>([]);
@@ -550,7 +503,6 @@ function TasksPage() {
     for (const entryId of Array.from(selectedDeliveryIds)) {
       const entry = todayDeliveries.find(e => e.id === entryId);
       if (!entry) continue;
-      // Skip if a task already exists for this entry on today's date
       const { count } = await supabase.from("tasks")
         .select("id", { count: "exact", head: true })
         .eq("delivery_entry_id", entryId)
@@ -559,7 +511,6 @@ function TasksPage() {
       if ((count ?? 0) > 0) continue;
       const rawTime = (entry.delivery_time ?? "00:00").slice(0, 5);
       const [rh, rm] = rawTime.split(":").map(Number);
-      // Due time = delivery time + 30 min (buffer for delays)
       const dueTotalMin = Math.min((isNaN(rh) ? 0 : rh) * 60 + (isNaN(rm) ? 0 : rm) + 30, 23 * 60 + 59);
       const dueH = Math.floor(dueTotalMin / 60);
       const dueM = dueTotalMin % 60;
@@ -594,18 +545,15 @@ function TasksPage() {
     if (detailTask?.id === task.id) setDetailTask(prev => prev ? { ...prev, event_triggered_at: now } : prev);
   };
 
-  // Confirm assignees for selected tasks (same person or new override)
   const confirmAssignees = async (taskIds: string[]) => {
     setConfirmSaving(true);
     for (const taskId of taskIds) {
       const override = assigneeOverrides[taskId];
       if (override) {
-        // Replace assignees entirely with the chosen user
         await supabase.from("task_assignees").delete().eq("task_id", taskId);
         await supabase.from("task_assignees").insert({ task_id: taskId, user_id: override });
         await supabase.from("tasks").update({ assignee_confirmed: true, assigned_to: override }).eq("id", taskId);
       } else {
-        // Confirm same person
         await supabase.from("tasks").update({ assignee_confirmed: true }).eq("id", taskId);
       }
     }
@@ -646,7 +594,6 @@ function TasksPage() {
     setLoading(false);
   }, [activeStore, userStores]);
 
-  // Fetch current user's group IDs for visibility filtering
   const fetchUserGroups = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase.from("user_group_members").select("group_id").eq("user_id", user.id);
@@ -687,7 +634,6 @@ function TasksPage() {
     setNewTask(emptyForm(activeStore?.id ?? ""));
   }, [activeStore, user]);
 
-  // Auto-show confirmation popup when manager has tasks due tomorrow needing confirmation
   useEffect(() => {
     if (!isManager || assigneeConfirmDismissed) return;
     const tomorrow = getSimulatedDate();
@@ -700,12 +646,10 @@ function TasksPage() {
     );
     if (dueTomorrow.length > 0) {
       setAssigneeConfirmOpen(true);
-      // Pre-select all tasks due tomorrow
       setConfirmSelectedIds(new Set(dueTomorrow.map(t => t.id)));
     }
   }, [tasks, isManager, assigneeConfirmDismissed]);
 
-  // Realtime channel — skip full reload when user has unsaved text drafts open
   useEffect(() => {
     const safeRefresh = () => {
       if (Object.keys(answerDraftRef.current).length > 0) return;
@@ -720,31 +664,16 @@ function TasksPage() {
     return () => { supabase.removeChannel(channel); };
   }, [activeStore, fetchTasks]);
 
-  // --- Recurring task spawning ---
-  //
-  // Strategy: one pass per load that creates ALL missing period children.
-  //
-  // Dedup: each child stores `recurrence_period_start` (a date string YYYY-MM-DD)
-  // set at creation. We read existing children's recurrence_period_start values to
-  // know which periods are already covered — no math reconstruction needed.
-  //
-  // Child due_date = periodStart + (parent.due_date - parent.created_at)
-  // so each child gets the same "window" duration the original task had.
-  //
-  // Children inherit recurrence_rule/recurrence_days so the badge renders.
   const spawnRef = useRef(false);
-  // Track last spawn date so we only run once per calendar day (not on every tasks reload)
   const lastSpawnDateRef = useRef<string | null>(null);
   const dragStepRef = useRef<{ idx: number; startY: number; currentY: number } | null>(null);
   const dragQuestionRef = useRef<{ idx: number; startY: number; currentY: number } | null>(null);
 
-  // Shared helpers used both at creation time and in the load-time spawn pass.
   const midnight = midnightStockholm;
 
   async function copyChildData(childId: string, t: TaskFull) {
-    // Insert questions first so we can remap condition_question_id from parent IDs → child IDs
     const parentQuestions = t.questions ?? [];
-    let qIdMap = new Map<string, string>(); // parent question id → child question id
+    let qIdMap = new Map<string, string>();
     if (parentQuestions.length > 0) {
       const rows = parentQuestions.map(q => ({ task_id: childId, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: q.sort_order, link_url: (q as { link_url?: string | null }).link_url ?? null }));
       const { data: insertedQs } = await supabase.from("task_questions").insert(rows).select("id, sort_order");
@@ -773,8 +702,6 @@ function TasksPage() {
     if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
   }
 
-    // Called immediately after a recurring parent is fully saved so near-term instances are visible right away.
-  // Only spawns up to 30 days ahead to avoid freezing the UI; spawnRecurringTasks handles ongoing catch-up.
   async function spawnChildrenForNewParent(parent: TaskFull) {
     if (!parent.recurrence_rule) return;
     const nowMs = getSimulatedNow();
@@ -783,11 +710,9 @@ function TasksPage() {
       : parent.due_date
         ? midnight(new Date(parent.due_date))
         : midnight(new Date(parent.created_at));
-    // Use full due_date (with time) to preserve the time-of-day in child tasks
     const durationMs = parent.due_date
       ? Math.max(0, new Date(parent.due_date).getTime() - originDate.getTime())
       : 0;
-    // Only spawn 30 days ahead on initial creation to avoid massive task counts
     const maxCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 30); return midnight(d); })();
     const ceilDate = parent.recurrence_end
       ? (() => { const e = midnight(new Date(parent.recurrence_end)); return e < maxCeil ? e : maxCeil; })()
@@ -797,7 +722,6 @@ function TasksPage() {
     const allPeriods: Date[] = [];
     const deletedPeriods = new Set<string>(parent.deleted_periods ?? []);
 
-    // Always include the origin date as the first period so today's instance is created
     const originKey = localDateStr(originDate);
     if (originDate <= ceilDate && !deletedPeriods.has(originKey)) {
       allPsKeys.add(originKey);
@@ -847,7 +771,6 @@ function TasksPage() {
     if (!isManager || spawnRef.current) return;
     const nowMs = getSimulatedNow();
     const todayKey = new Date(nowMs).toISOString().slice(0, 10);
-    // Only run once per calendar day to prevent runaway spawning on each tasks reload
     if (lastSpawnDateRef.current === todayKey) return;
     spawnRef.current = true;
 
@@ -868,15 +791,12 @@ function TasksPage() {
     if (recurringTasks.length === 0) { spawnRef.current = false; return; }
 
     let didSpawn = false;
-
-    // Spawn up to 30 days ahead (rolling window) when no end date is set
     const spawnCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 30); return midnight(d); })();
 
     for (const t of recurringTasks) {
       const originDate: Date = t.recurrence_start
         ? midnight(new Date(t.recurrence_start))
         : t.due_date ? midnight(new Date(t.due_date)) : midnight(new Date(t.created_at));
-      // Use full due_date (with time) to preserve the time-of-day in child tasks
       const durationMs = t.due_date
         ? Math.max(0, new Date(t.due_date).getTime() - originDate.getTime()) : 0;
 
@@ -891,7 +811,6 @@ function TasksPage() {
         effectiveCeil,
       );
 
-      // Also include the origin date itself so today's instance is never missing
       const originKey = localDateStr(originDate);
       const allPsMap = new Map<string, Date>();
       if (originDate <= effectiveCeil) allPsMap.set(originKey, originDate);
@@ -934,21 +853,16 @@ function TasksPage() {
     }
   }, [tasks, spawnRecurringTasks]);
 
-  // When the simulated clock advances, re-fetch and re-spawn so new periods appear
   useEffect(() => {
     const handler = () => {
-      spawnRef.current = false; // allow a fresh spawn run
-      lastSpawnDateRef.current = null; // allow spawning on the new simulated date
+      spawnRef.current = false;
+      lastSpawnDateRef.current = null;
       void fetchTasks();
     };
     window.addEventListener("sf-time-changed", handler);
     return () => window.removeEventListener("sf-time-changed", handler);
   }, [fetchTasks]);
 
-  // Filter tasks by assignee visibility:
-  // - Managers/admins see all tasks
-  // - Employees: if task has no assignees → visible to all; otherwise only if the user
-  //   is directly assigned OR is a member of an assigned group
   const allVisibleTasks = tasks.filter((t) => {
     if (!isEmployee) return true;
     const assignees = t.assignees ?? [];
@@ -959,14 +873,8 @@ function TasksPage() {
     return groupMatch;
   });
 
-  // Unconfirmed event tasks: have event_trigger_description but no event_triggered_at today.
-  // These are hidden from the main task list for EVERYONE until confirmed.
-  // Only managers OR the designated trigger user sees the confirmation panel.
-  // The assignee does NOT see the task at all — confirmed tasks reappear normally.
   const todayStartStr = localDateStr(new Date(getSimulatedNow()));
 
-  // Use all store tasks (not just employee-visible ones) so the trigger user
-  // can always see the confirmation panel, even if they're not the assignee.
   const allUnconfirmedEventTasks = tasks.filter(t => {
     if (!t.event_trigger_description) return false;
     if (!t.event_triggered_at) return true;
@@ -976,12 +884,10 @@ function TasksPage() {
 
   const unconfirmedEventIds = new Set(allUnconfirmedEventTasks.map(t => t.id));
 
-  // Only managers and the trigger user see the confirmation section
   const unconfirmedEventTasks = allUnconfirmedEventTasks.filter(t =>
     isManager || t.event_trigger_user_id === user?.id || !t.event_trigger_user_id
   );
 
-  // Main task list: exclude all unconfirmed event tasks (assignees can't see or act on them)
   const visibleTasks = allVisibleTasks.filter(t => !unconfirmedEventIds.has(t.id));
 
   const applyTemplate = (templateId: string) => {
@@ -996,7 +902,6 @@ function TasksPage() {
       depends_on_template_title?: string;
     };
 
-    // Delivery template: open delivery picker — always show all deliveries, pre-select matching ones
     if (tmplAny.is_delivery_task) {
       const allowedFlows = tmplAny.delivery_flow_name
         ? tmplAny.delivery_flow_name.split("|").map((s: string) => s.trim().toLowerCase()).filter(Boolean)
@@ -1004,7 +909,6 @@ function TasksPage() {
       const allowedSuppliers = (tmpl as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name
         ? ((tmpl as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name ?? "").split("|").map((s: string) => s.trim().toLowerCase()).filter(Boolean)
         : [];
-      // Always show all deliveries; pre-select those matching the template config
       const preSelected = todayDeliveries.filter(d => {
         const flowOk = allowedFlows.length === 0 || allowedFlows.includes(d.flow_name?.toLowerCase() ?? "");
         const suppOk = allowedSuppliers.length === 0 || allowedSuppliers.includes(d.supplier?.toLowerCase() ?? "");
@@ -1028,7 +932,6 @@ function TasksPage() {
     const todayStr = localDateStr(new Date(getSimulatedNow()));
     const timeSlots = (tmpl.time_slots ?? []) as string[];
 
-    // Chain: find a matching predecessor task by title
     const dependsOnTitle = tmplAny.depends_on_template_title;
     if (dependsOnTitle) {
       const predecessor = tasks.find(t =>
@@ -1073,7 +976,6 @@ function TasksPage() {
     }));
   };
 
-  // Mark task as pågående when user interacts
   const markInProgress = async (task: TaskFull) => {
     if (task.status !== "todo" && task.status !== "late") return;
     await supabase.from("tasks").update({ status: "progress" }).eq("id", task.id);
@@ -1081,7 +983,6 @@ function TasksPage() {
     if (detailTask?.id === task.id) setDetailTask(p => p ? { ...p, status: "progress" } : null);
   };
 
-  // Check if a task should auto-complete (all steps done + all questions answered with no blank text fields)
   const shouldAutoComplete = (steps: TaskFull["steps"], questions: TaskFull["questions"]): boolean => {
     const qs = questions ?? [];
     const visibleSteps = (steps ?? []).filter(s => {
@@ -1092,7 +993,6 @@ function TasksPage() {
       return condQ.answer.toLowerCase() === (sa.condition_answer ?? "ja").toLowerCase();
     });
     const allStepsDone = visibleSteps.every(s => s.is_done);
-    // Only require questions that are not used purely as conditions for hidden steps
     const conditionedByHiddenStep = new Set<string>();
     (steps ?? []).forEach(s => {
       const sa = s as typeof s & { condition_question_id?: string | null; condition_answer?: string | null };
@@ -1117,14 +1017,11 @@ function TasksPage() {
     await supabase.from("task_steps").update({ is_done: wasChecking }).eq("id", stepId);
     logAudit(user?.id ?? null, "task.step.toggle", "task_steps", stepId, { task_id: task.id, is_done: wasChecking });
 
-    // Build updated task state for auto-complete check
     const updatedSteps = (task.steps ?? []).map(s => s.id === stepId ? { ...s, is_done: wasChecking } : s);
 
-    // If unchecking while done → auto-reopen
     if (!wasChecking && task.status === "done") {
       await supabase.from("tasks").update({ status: "progress", completed_at: null }).eq("id", task.id);
     }
-    // If all done and no free-text question blank → auto-complete
     else if (wasChecking && shouldAutoComplete(updatedSteps, task.questions)) {
       const hasTextQ = (task.questions ?? []).some(q => q.question_type === "text");
       if (!hasTextQ) {
@@ -1163,11 +1060,9 @@ function TasksPage() {
         q.id === question.id ? { ...q, answer: value, answered_by: user?.id ?? null, answered_at: getSimulatedDate().toISOString() } : q
       );
 
-      // If answer cleared while task is done → auto-reopen
       if (!value?.trim() && task.status === "done") {
         await supabase.from("tasks").update({ status: "progress", completed_at: null }).eq("id", task.id);
       }
-      // If all items now complete and no blank text question → auto-complete
       else if (value?.trim() && shouldAutoComplete(task.steps, updatedQuestions)) {
         const hasTextQ = updatedQuestions.some(q => q.question_type === "text");
         if (!hasTextQ) {
@@ -1187,9 +1082,7 @@ function TasksPage() {
 
   const completeTask = async (task: TaskFull) => {
     if (completingRef.current.has(task.id)) return;
-    // Block completion if event has not been confirmed
     if (unconfirmedEventIds.has(task.id)) return;
-    // Block completion if predecessor task is not done
     if (task.depends_on_task_id) {
       const pred = tasks.find(t => t.id === task.depends_on_task_id);
       if (pred && pred.status !== "done") return;
@@ -1221,7 +1114,6 @@ function TasksPage() {
         task.assignees?.forEach(a => { if (a.user_id && a.user_id !== user?.id) notifyIds.add(a.user_id); });
         notifyUsers([...notifyIds], "task_done", `Uppgift klar: ${task.title}`, `Slutförd av ${user?.display_name}`, "/uppgifter");
 
-        // Auto-resolve any linked kundrunda incident and update the response result
         const { data: krResponse } = await supabase
           .from("kundrunda_responses")
           .select("id, incident_id")
@@ -1277,7 +1169,7 @@ function TasksPage() {
       const { count } = await supabase
         .from("tasks")
         .select("id", { count: "exact", head: true })
-        .eq("parent_task_id", parentId)
+        .or(`id.eq.${parentId},parent_task_id.eq.${parentId}`)
         .gte("recurrence_period_start", today)
         .neq("status", "done");
       setDeleteHasFuture((count ?? 0) > 0);
@@ -1296,29 +1188,21 @@ function TasksPage() {
     const periodStart = t.recurrence_period_start ?? (t.due_date ? t.due_date.slice(0, 10) : null);
 
     if ((t.recurrence_rule || isChild) && scope === "future") {
-      if (periodStart) {
-        const { data: futureRows } = await supabase
-          .from("tasks")
-          .select("id")
-          .or(`parent_task_id.eq.${parentId},id.eq.${parentId}`)
-          .gte("recurrence_period_start", periodStart);
+      const { data: futureRows } = await supabase
+        .from("tasks")
+        .select("id")
+        .or(`parent_task_id.eq.${parentId},id.eq.${parentId}`);
 
-        const targetIds = (futureRows ?? []).map((r: { id: string }) => r.id);
-        if (!targetIds.includes(t.id)) targetIds.push(t.id);
+      const targetIds = (futureRows ?? []).map((r: { id: string }) => r.id);
+      if (!targetIds.includes(t.id)) targetIds.push(t.id);
 
-        if (targetIds.length > 0) {
-          const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", targetIds);
-          deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
-          await supabase.from("tasks").delete().in("id", targetIds);
-          deletedIds.push(...targetIds);
-        }
-
-        const dayBefore = new Date(periodStart);
-        dayBefore.setDate(dayBefore.getDate() - 1);
-        await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
+      if (targetIds.length > 0) {
+        const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", targetIds);
+        deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+        await supabase.from("tasks").delete().in("id", targetIds);
+        deletedIds.push(...targetIds);
       }
     } else {
-      // Single task deletion
       const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", t.id);
       deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
       await supabase.from("tasks").delete().eq("id", t.id);
@@ -1359,39 +1243,23 @@ function TasksPage() {
       const periodStart = task.recurrence_period_start ?? (task.due_date ? task.due_date.slice(0, 10) : null);
 
       if ((task.recurrence_rule || isChild) && recurringScope === "future") {
-        if (periodStart) {
-          const { data: futureRows } = await supabase
-            .from("tasks")
-            .select("id, status, completed_at")
-            .eq("parent_task_id", parentId)
-            .gte("recurrence_period_start", periodStart);
-          const incompleteIds = (futureRows ?? [])
-            .filter((r: { status: string; completed_at: string | null }) => r.status !== "done" && !r.completed_at)
-            .map((r: { id: string }) => r.id);
-          if (incompleteIds.length > 0) {
-            const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", incompleteIds);
-            deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
-            await supabase.from("tasks").delete().in("id", incompleteIds);
-            allDeletedIds.push(...incompleteIds);
-          }
-          if (!isChild && task.status !== "done" && !task.completed_at) {
-            const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", task.id);
-            deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
-            await supabase.from("tasks").delete().eq("id", task.id);
-            allDeletedIds.push(task.id);
-          } else {
-            const dayBefore = new Date(periodStart);
-            dayBefore.setDate(dayBefore.getDate() - 1);
-            await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
-          }
-        }
-      } else if ((task.recurrence_rule || isChild) && recurringScope === "single") {
-        {
-          const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", task.id);
+        const { data: futureRows } = await supabase
+          .from("tasks")
+          .select("id")
+          .or(`parent_task_id.eq.${parentId},id.eq.${parentId}`);
+        const targetIds = (futureRows ?? []).map((r: { id: string }) => r.id);
+        if (targetIds.length > 0) {
+          const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", targetIds);
           deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
-          await supabase.from("tasks").delete().eq("id", task.id);
-          allDeletedIds.push(task.id);
+          await supabase.from("tasks").delete().in("id", targetIds);
+          allDeletedIds.push(...targetIds);
         }
+      } else {
+        const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", task.id);
+        deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+        await supabase.from("tasks").delete().eq("id", task.id);
+        allDeletedIds.push(task.id);
+
         if (isChild && periodStart) {
           const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
           const existing: string[] = (parent?.deleted_periods ?? []) as string[];
@@ -1399,11 +1267,6 @@ function TasksPage() {
             await supabase.from("tasks").update({ deleted_periods: [...existing, periodStart] }).eq("id", parentId);
           }
         }
-      } else {
-        const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", task.id);
-        deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
-        await supabase.from("tasks").delete().eq("id", task.id);
-        allDeletedIds.push(task.id);
       }
     }
 
@@ -1419,7 +1282,6 @@ function TasksPage() {
   const openEdit = async (task: TaskFull) => {
     setEditTask(task);
     setEditScope(task.recurrence_rule || task.parent_task_id ? "all_future" : "single");
-    // For child tasks, fetch parent's recurrence_end so it shows correctly
     let recurrenceEnd = task.recurrence_end ?? "";
     if (task.parent_task_id && !recurrenceEnd) {
       const { data: parent } = await supabase.from("tasks").select("recurrence_end").eq("id", task.parent_task_id).maybeSingle();
@@ -1454,7 +1316,6 @@ function TasksPage() {
     });
   };
 
-  // Fetch all future (not done) occurrences for a recurring parent task
   const fetchFutureOccurrences = async (parentTask: TaskFull) => {
     setFutureOccLoading(true);
     const parentId = parentTask.parent_task_id ?? parentTask.id;
@@ -1486,7 +1347,6 @@ function TasksPage() {
     const updates: Record<string, unknown> = {};
     if (futureBulkContent.trim()) updates.description = futureBulkContent.trim();
     await supabase.from("tasks").update(updates).in("id", ids);
-    // Update assignees
     for (const tid of ids) {
       await supabase.from("task_assignees").delete().eq("task_id", tid);
       const rows: { task_id: string; user_id?: string; group_id?: string }[] = [];
@@ -1554,7 +1414,6 @@ function TasksPage() {
     const isRecurring = !!(editTask.recurrence_rule || editTask.parent_task_id);
     const isChild = !!editTask.parent_task_id;
 
-    // For "single" scope on recurring tasks: only update this instance's due_date + content
     if (isRecurring && editScope === "single") {
       await supabase.from("tasks").update({
         title: editForm.title.trim(),
@@ -1590,8 +1449,6 @@ function TasksPage() {
       return;
     }
 
-    // "all_future" scope (or non-recurring): update this + all future instances
-    // Lock recurrence_start — never allow changing it
     const coreUpdates = {
       title: editForm.title.trim(),
       description: editForm.description.trim(),
@@ -1601,7 +1458,6 @@ function TasksPage() {
       recurrence_rule: editForm.recurrence_rule || null,
       recurrence_days: editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
       recurrence_interval: editForm.recurrence_interval > 1 ? editForm.recurrence_interval : null,
-      // recurrence_start intentionally NOT updated — start date is locked
       recurrence_end: editForm.recurrence_end || null,
       completion_mode: editForm.completion_mode || "manual",
       event_trigger_description: editForm.event_trigger_description?.trim() || null,
@@ -1610,12 +1466,9 @@ function TasksPage() {
       is_critical: editForm.is_critical ?? false,
     };
 
-
-    // IDs of all tasks to update steps/questions/assignees for
     let affectedIds: string[] = [editTask.id];
 
     if (isRecurring && isChild) {
-      // Update this child + all future siblings
       const parentId = editTask.parent_task_id!;
       const periodStart = editTask.recurrence_period_start ?? editTask.due_date?.slice(0, 10);
       if (periodStart) {
@@ -1629,11 +1482,9 @@ function TasksPage() {
           await supabase.from("tasks").update(coreUpdates).in("id", siblingIds);
           affectedIds = siblingIds;
         }
-        // Also update the parent so future spawns inherit the changes
         await supabase.from("tasks").update(coreUpdates).eq("id", parentId);
       }
     } else {
-      // Non-recurring or parent task — update due_date too
       await supabase.from("tasks").update({ ...coreUpdates, due_date: editForm.due_date ? localInputToUtcIso(editForm.due_date) : null }).eq("id", editTask.id);
     }
 
@@ -1643,7 +1494,6 @@ function TasksPage() {
     editForm.assigneeUserIds.forEach(uid => assigneeRows.push({ task_id: "__placeholder", user_id: uid }));
     editForm.assigneeGroupIds.forEach(gid => assigneeRows.push({ task_id: "__placeholder", group_id: gid }));
 
-    // Apply steps, questions, assignees to all affected task IDs
     for (const tid of affectedIds) {
       await supabase.from("task_steps").delete().eq("task_id", tid);
       if (validSteps.length > 0) {
@@ -1689,9 +1539,6 @@ function TasksPage() {
     const validSteps = newTask.steps.filter(s => s.label.trim());
     const validQuestions = newTask.questions.filter(q => q.label.trim());
 
-    // Build a local-midnight ISO string so due_date displays on the correct date
-    // regardless of timezone. new Date("YYYY-MM-DD") parses as UTC midnight which
-    // shows as 02:00 in UTC+2 — instead we set time explicitly in local time.
     const buildDueDate = (dueTime?: string): string | null => {
       if (!newTask.due_date) return null;
       const parts = newTask.due_date.split("-").map(Number);
@@ -1761,7 +1608,6 @@ function TasksPage() {
       return task;
     };
 
-    // When time_slots are set, create one task per slot; otherwise create one task
     const validSlots = newTask.time_slots.map(s => s.trim()).filter(Boolean);
     const slots = validSlots.length > 0 ? validSlots : [newTask.due_date_time?.trim() || ""];
     const createdTasks = [];
@@ -1770,7 +1616,6 @@ function TasksPage() {
       if (t) createdTasks.push(t);
     }
 
-    // Attachments, notifications, audit and recurring spawn on first created task
     const firstTask = createdTasks[0];
     if (firstTask) {
       if (uploadFiles.length > 0) {
@@ -1795,7 +1640,6 @@ function TasksPage() {
 
       if (firstTask.recurrence_rule) {
         spawnRef.current = false;
-        // Spawn recurring children for every time-slot task, not only the first
         for (const ct of createdTasks) {
           const assigneesFull = newTask.assigneeUserIds.map(uid => ({ task_id: ct.id, user_id: uid, group_id: null }));
           newTask.assigneeGroupIds.forEach(gid => assigneesFull.push({ task_id: ct.id, user_id: null as unknown as string, group_id: gid }));
@@ -1832,9 +1676,6 @@ function TasksPage() {
       "SAP-artikel", "Mallpaket", "Händelsevillkor", "Leveransuppgift (ja/nej)", "Leveransflöde",
       "Kedja (beror på mallnamn)", "Malltyp", "Skapningsläge", "Händelse-bekräftare", "Granskningsintervall (månader)",
     ];
-    // Exclude child recurrence instances (parent_task_id set) — they are just spawned
-    // copies of the parent. Export only parent/standalone tasks so importing into
-    // mallar doesn't create one template per occurrence.
     const seenKeys = new Set<string>();
     const exportableTasks = visibleTasks.filter((t) => {
       if (t.parent_task_id !== null) return false;
@@ -1847,8 +1688,6 @@ function TasksPage() {
       headers,
       ...exportableTasks.map((t) => {
         const tAny = t as TaskFull & { due_date_time?: string; recurrence_interval?: number; time_slots?: string[]; sap_article_id?: string; due_date_offset?: number };
-        // Use stored offset when available; for recurring tasks the live due_date
-        // is instance-specific and should not be recalculated as offset.
         const dueDays = tAny.due_date_offset != null
           ? String(tAny.due_date_offset)
           : (t.recurrence_rule ? "" : t.due_date
@@ -1868,8 +1707,8 @@ function TasksPage() {
           t.category ?? "",
           t.description ?? "",
           t.priority ?? "Medel",
-          "", // Status
-          "", // Version
+          "",
+          "",
           t.recurrence_rule ?? "",
           (t.recurrence_days ?? []).join(","),
           (t as TaskFull & { recurrence_months?: number[] }).recurrence_months?.join(",") ?? "",
@@ -1881,26 +1720,25 @@ function TasksPage() {
           tAny.due_date_time ?? "",
           t.recurrence_start ?? "",
           t.recurrence_end ?? "",
-          "", // Ursprungsmall
-          "", // Arvläge
+          "",
+          "",
           stepsStr,
           questionsStr,
           (tAny.time_slots ?? []).join(" | "),
           tAny.sap_article_id ?? "",
-          "", // Mallpaket — tasks don't belong to template packages
+          "",
           (t as TaskFull).event_trigger_description ?? "",
-          (t as TaskFull).delivery_entry_id ? "ja" : "", // Leveransuppgift
-          "", // Leveransflöde — not stored on tasks
-          // Use predecessor task title (not ID) so exported CSV can be imported as templates
+          (t as TaskFull).delivery_entry_id ? "ja" : "",
+          "",
           (() => {
             const predId = (t as TaskFull).depends_on_task_id;
             if (!predId) return "";
             return tasks.find(p => p.id === predId)?.title ?? predId;
           })(),
-          "", // Malltyp
-          "", // Skapningsläge
-          "", // Händelse-bekräftare
-          "", // Granskningsintervall
+          "",
+          "",
+          "",
+          "",
         ];
       }),
     ];
@@ -1915,7 +1753,6 @@ function TasksPage() {
     URL.revokeObjectURL(url);
   };
 
-
   const filters = [
     { value: "today", label: "Idag" },
     { value: "active", label: "Aktiva" },
@@ -1929,17 +1766,10 @@ function TasksPage() {
   const simTodayStart = midnightStockholm(new Date(simNow));
   const simTodayEnd = new Date(simTodayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
 
-  // Build a map: parentId → the child task for TODAY's period
-  // This is used to show one representative row per recurring series
   const recurringParentIds = new Set(
     visibleTasks.filter(t => t.recurrence_rule && !t.parent_task_id).map(t => t.id)
   );
 
-  // For each recurring parent, find the best representative child:
-  // Priority 1: Today's undone instance (due today, not done/cancelled)
-  // Priority 2: Next upcoming undone instance (nearest due_date > today)
-  // Priority 3: Today's done instance (completed today — show in "klara" tab)
-  // Priority 4: Most recently completed instance
   const currentChildByParent = new Map<string, TaskFull>();
   for (const parentId of recurringParentIds) {
     const children = visibleTasks
@@ -1947,45 +1777,34 @@ function TasksPage() {
       .sort((a, b) => {
         const aT = a.due_date ? new Date(a.due_date).getTime() : 0;
         const bT = b.due_date ? new Date(b.due_date).getTime() : 0;
-        return aT - bT; // ascending by due_date
+        return aT - bT;
       });
     if (children.length === 0) continue;
-    // Priority 1: today's undone instance
     const todayUndone = children.find(t =>
       t.due_date && new Date(t.due_date) >= simTodayStart && new Date(t.due_date) <= simTodayEnd &&
       t.status !== "done" && t.status !== "cancelled"
     );
     if (todayUndone) { currentChildByParent.set(parentId, todayUndone); continue; }
-    // Priority 2: most recent overdue undone (due_date strictly before today)
     const overdueUndone = [...children].reverse().find(t =>
       t.due_date && new Date(t.due_date) < simTodayStart &&
       t.status !== "done" && t.status !== "cancelled"
     );
     if (overdueUndone) { currentChildByParent.set(parentId, overdueUndone); continue; }
-    // Priority 3: today's done instance — shows in "klara" section, takes priority over future undone
     const todayDone = children.find(t =>
       t.due_date && new Date(t.due_date) >= simTodayStart && new Date(t.due_date) <= simTodayEnd &&
       t.status === "done"
     );
     if (todayDone) { currentChildByParent.set(parentId, todayDone); continue; }
-    // Priority 4: nearest upcoming undone (due_date strictly after today)
     const nextUndone = children.find(t =>
       t.due_date && new Date(t.due_date) > simTodayEnd &&
       t.status !== "done" && t.status !== "cancelled"
     );
     if (nextUndone) { currentChildByParent.set(parentId, nextUndone); continue; }
-    // Priority 5: most recently completed (last in sorted order that is done)
     const lastDone = [...children].reverse().find(t => t.status === "done");
     if (lastDone) { currentChildByParent.set(parentId, lastDone); continue; }
-    // Fallback: first child
     currentChildByParent.set(parentId, children[0]);
   }
 
-  // IDs of all child tasks that are NOT the current representative — hide these.
-  // EXCEPTION: overdue, not-done occurrences are never grouped away. Each missed
-  // recurring occurrence must show up as its own separate task that has to be
-  // completed (or explicitly deleted) individually, instead of being collapsed
-  // into a single row.
   const hiddenChildIds = new Set<string>();
   for (const t of visibleTasks) {
     if (!t.parent_task_id) continue;
@@ -1997,7 +1816,6 @@ function TasksPage() {
     if (rep && rep.id !== t.id) hiddenChildIds.add(t.id);
   }
 
-  // A task is "past" if it's done or its due_date is before today's start
   const isPast = (t: TaskFull): boolean => {
     if (t.status === "done" || t.status === "cancelled") return true;
     if (!t.due_date) return false;
@@ -2012,34 +1830,25 @@ function TasksPage() {
 
   const filtered = visibleTasks
     .filter((t) => {
-      // Always hide child recurring tasks that aren't the current representative,
-      // EXCEPT children that were done early today — they must still appear in the klara section
       if (hiddenChildIds.has(t.id)) {
         const doneEarlyToday = t.status === "done" && t.completed_at && t.due_date &&
           new Date(t.completed_at) >= simTodayStart &&
           new Date(t.due_date) > simTodayEnd;
         if (!doneEarlyToday) return false;
       }
-      // Always hide recurring parents that have children (they're represented by children)
       if (recurringParentIds.has(t.id) && currentChildByParent.has(t.id)) return false;
 
-      // Search filter
       if (search && !(t.title ?? "").toLowerCase().includes(search.toLowerCase()) && !(t.category ?? "").toLowerCase().includes(search.toLowerCase())) return false;
-      // Category filter
       if (filterCategory && t.category !== filterCategory) return false;
-      // Priority filter
       if (filterPriority && t.priority !== filterPriority) return false;
 
-      // Tab filters
       if (tab === "today") {
-        // Today = tasks due today (or overdue), non-cancelled
         if (t.status === "cancelled") return false;
         const isDueToday = t.due_date
           ? new Date(t.due_date) >= simTodayStart && new Date(t.due_date) <= simTodayEnd
           : false;
         const isOverdueTask = isOverdue(t.due_date, t.status);
         const hasNoDate = !t.due_date;
-        // Also include done tasks that were completed today or were due today
         const isDoneToday = t.status === "done" && t.completed_at
           ? new Date(t.completed_at) >= simTodayStart
           : false;
@@ -2047,14 +1856,12 @@ function TasksPage() {
         return isDueToday || isOverdueTask || isDoneToday || isDoneDueToday || (hasNoDate && t.status !== "done");
       }
       if (tab === "active") {
-        // Active = non-done, non-cancelled, non-past (unless user chose to show past)
         if (t.status === "cancelled") return false;
         if (t.status === "done") return false;
         if (!showPastTasks && isPast(t)) return false;
         return true;
       }
       if (tab === "recurring") {
-        // Show only recurring representative tasks (today's child or parent if no children yet)
         if (!isRecurring(t)) return false;
         return true;
       }
@@ -2067,7 +1874,6 @@ function TasksPage() {
     })
     .sort((a, b) => {
       if (sortBy === "default") {
-        // Default sort: overdue first, then by due_date ascending, then no-date last
         const aStatus = effectiveStatus(a);
         const bStatus = effectiveStatus(b);
         const aLate = aStatus === "late" ? 0 : 1;
@@ -2094,7 +1900,6 @@ function TasksPage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
 
-  // Count past tasks hidden from "active" tab
   const hiddenPastCount = tab === "active" && !showPastTasks
     ? visibleTasks.filter(t => !hiddenChildIds.has(t.id) && !(recurringParentIds.has(t.id) && currentChildByParent.has(t.id)) && isPast(t) && t.status !== "cancelled").length
     : 0;
@@ -2104,13 +1909,11 @@ function TasksPage() {
     setAnswerDraft(
       Object.fromEntries((task.questions ?? []).map(q => [q.id, q.answer ?? ""]))
     );
-    // Auto-mark in progress when opened
     if (task.status === "todo" || task.status === "late") {
       await markInProgress(task);
     }
   };
 
-  // Render a single task card (compact list style used across all views)
   const weekdayShort = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 
   const renderTaskCard = (t: TaskFull, earlyCompletion = false) => {
@@ -2195,20 +1998,17 @@ function TasksPage() {
                   {t.category && t.category !== "Drift" && (
                     <span className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{t.category}</span>
                   )}
-                  {/* Event-based: not yet triggered */}
                   {t.event_trigger_description && !t.event_triggered_at && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
                       <Zap className="h-2.5 w-2.5" />
                       Väntar på händelse
                     </span>
                   )}
-                  {/* Critical task badge */}
                   {(t as TaskFull).is_critical && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-400">
                       Kritisk
                     </span>
                   )}
-                  {/* Task chain: blocked */}
                   {t.depends_on_task_id && (() => {
                     const pred = tasks.find(p => p.id === t.depends_on_task_id);
                     if (pred && pred.status !== "done") return (
@@ -2219,7 +2019,6 @@ function TasksPage() {
                     );
                     return null;
                   })()}
-                  {/* Delivery task */}
                   {t.delivery_entry_id && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-400">
                       <Truck className="h-2.5 w-2.5" />
@@ -2292,17 +2091,15 @@ function TasksPage() {
     );
 
     const noDateTasks = filtered.filter(t => !t.due_date && t.status !== "done");
-    // Completed tasks: those with status done. For recurring tasks completed before their due_date, flag them.
     const doneTodayTasks = filtered.filter(t => t.status === "done");
     
-    // Detect early completion: done on a calendar day strictly before the due date's calendar day
     const isEarlyCompletion = (t: TaskFull): boolean => {
       if (t.status !== "done" || !t.due_date || !t.completed_at) return false;
       const completedDay = midnight(new Date(t.completed_at));
       const dueDay = midnight(new Date(t.due_date));
       return completedDay < dueDay;
     };
-    const totalToday = filtered.length; // includes done tasks for accurate ratio
+    const totalToday = filtered.length;
     const doneCount = doneTodayTasks.length;
     const progressPct = totalToday > 0 ? Math.round((doneCount / totalToday) * 100) : 0;
     const todayLabel = new Date(simNow).toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" });
@@ -2358,7 +2155,6 @@ function TasksPage() {
           </div>
         )}
 
-        {/* Händelser som väntar bekräftelse — only visible to managers or the trigger user */}
         {unconfirmedEventTasks.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-0.5">
@@ -2462,7 +2258,6 @@ function TasksPage() {
         )}
       </div>
 
-      {/* Assignee confirmation banner — yellow, shown to managers when tasks need re-confirmation */}
       {isManager && unconfirmedTasks.length > 0 && !assigneeConfirmDismissed && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -2512,7 +2307,7 @@ function TasksPage() {
                 for (const t of recurringIds) {
                   const parentId = t.parent_task_id ?? t.id;
                   const { count } = await supabase.from("tasks").select("id", { count: "exact", head: true })
-                    .eq("parent_task_id", parentId).gte("recurrence_period_start", today).neq("status", "done");
+                    .or(`id.eq.${parentId},parent_task_id.eq.${parentId}`).gte("recurrence_period_start", today).neq("status", "done");
                   if ((count ?? 0) > 0) { hasFuture = true; break; }
                 }
                 setBulkDeleteHasFuture(hasFuture);
@@ -2527,7 +2322,6 @@ function TasksPage() {
         </div>
       )}
 
-      {/* Tabs + search */}
       <div className="mb-5 space-y-3">
         <div className="overflow-x-auto pb-0.5 -mx-1 px-1">
           <Tabs value={tab} onValueChange={(v) => { setTab(v); setShowPastTasks(false); }}>
@@ -2570,7 +2364,6 @@ function TasksPage() {
               <Input placeholder="Sök uppgifter..." value={search} onChange={(e) => setSearch(e.target.value)}
                 className="h-9 rounded-full pl-9 text-sm w-full" />
             </div>
-            {/* Category filter */}
             {[...new Set(tasks.map(t => t.category).filter(Boolean))].length > 0 && (
               <Select value={filterCategory || "__all"} onValueChange={(v) => setFilterCategory(v === "__all" ? "" : v)}>
                 <SelectTrigger className="h-9 w-auto min-w-[110px] rounded-full text-xs gap-1.5">
@@ -2584,7 +2377,6 @@ function TasksPage() {
                 </SelectContent>
               </Select>
             )}
-            {/* Priority filter */}
             <Select value={filterPriority || "__all"} onValueChange={(v) => setFilterPriority(v === "__all" ? "" : v)}>
               <SelectTrigger className="h-9 w-auto min-w-[110px] rounded-full text-xs gap-1.5">
                 <SelectValue placeholder="Prioritet" />
@@ -2640,7 +2432,6 @@ function TasksPage() {
         )}
       </div>
 
-      {/* Content */}
       {loading ? (
         <div className="space-y-2">
           {[1,2,3,4].map(i => (
@@ -2703,7 +2494,6 @@ function TasksPage() {
         </div>
       )}
 
-      {/* Undo toast */}
       {undoToast && (
         <div className="fixed bottom-44 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
           <div className="flex items-center gap-3 rounded-full border border-border/60 bg-card px-5 py-3 shadow-[var(--shadow-lg)]">
@@ -2722,7 +2512,6 @@ function TasksPage() {
         </div>
       )}
 
-      {/* Mobile FAB — new task */}
       {isManager && (
         <button
           className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
@@ -2733,7 +2522,6 @@ function TasksPage() {
         </button>
       )}
 
-      {/* DETAIL MODAL */}
       {detailTask && (
         <Dialog open={!!detailTask && !lightboxTask} onOpenChange={(o) => { if (!o) { setDetailTask(null); setAnswerDraft({}); setCompleteError(""); } }}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto pb-16">
@@ -2756,7 +2544,6 @@ function TasksPage() {
                 <p className="text-sm text-muted-foreground">{detailTask.description}</p>
               )}
 
-              {/* SAP product catalog deep link */}
               {(() => {
                 const url = mittCoopUrl(detailTask.sap_article_id, detailTask.store?.sap_site_id);
                 if (!url) return null;
@@ -2774,7 +2561,6 @@ function TasksPage() {
                 );
               })()}
 
-              {/* Meta row */}
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 {detailTask.due_date && (
                   <span className={cn("inline-flex items-center gap-1", isOverdue(detailTask.due_date, detailTask.status) && "text-destructive font-medium")}>
@@ -2793,7 +2579,6 @@ function TasksPage() {
                 )}
               </div>
 
-              {/* Event trigger panel */}
               {detailTask.event_trigger_description && (
                 <div className={cn(
                   "rounded-xl border p-3 space-y-2",
@@ -2825,7 +2610,6 @@ function TasksPage() {
                 </div>
               )}
 
-              {/* Task chain: blocked notice */}
               {detailTask.depends_on_task_id && (() => {
                 const pred = tasks.find(p => p.id === detailTask.depends_on_task_id);
                 if (!pred || pred.status === "done") return null;
@@ -2840,20 +2624,16 @@ function TasksPage() {
                 );
               })()}
 
-              {/* Checkpoints */}
               {detailTask.steps && detailTask.steps.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Checkpoints</p>
                   {detailTask.steps.map((step) => {
                     const chainBlocked = isBlockedByChain(detailTask);
-                    // Conditional visibility: hide step if condition question has been answered but answer doesn't match
                     const stepAny = step as typeof step & { condition_question_id?: string | null; condition_answer?: string | null };
                     if (stepAny.condition_question_id) {
                       const condQ = detailTask.questions?.find(q => q.id === stepAny.condition_question_id);
                       if (condQ) {
-                        // If not yet answered, hide the step
                         if (!condQ.answer) return null;
-                        // If answered, check if it matches the required condition_answer
                         if (condQ.answer.toLowerCase() !== (stepAny.condition_answer ?? "ja").toLowerCase()) return null;
                       }
                     }
@@ -2901,7 +2681,6 @@ function TasksPage() {
                 </div>
               )}
 
-              {/* Questions */}
               {detailTask.questions && detailTask.questions.length > 0 && (
                 <div className={cn("space-y-4", isBlockedByChain(detailTask) && "pointer-events-none opacity-50")}>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Frågor</p>
@@ -2984,7 +2763,6 @@ function TasksPage() {
                 </div>
               )}
 
-              {/* Images */}
               {detailTask.images && detailTask.images.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Bilder</p>
@@ -3010,7 +2788,6 @@ function TasksPage() {
                 </div>
               )}
 
-              {/* Upload image */}
               <div>
                 <input
                   ref={detailFileInputRef}
@@ -3048,7 +2825,6 @@ function TasksPage() {
                 </Button>
               </div>
 
-              {/* Actions */}
               <div className="flex flex-col gap-2 border-t border-border/60 pt-4">
                 {completeError && (
                   <p className="text-xs text-destructive">{completeError}</p>
@@ -3117,7 +2893,6 @@ function TasksPage() {
         </Dialog>
       )}
 
-      {/* RECURRENCE SETUP POPUP — appears first when creating a task */}
       <Dialog open={showRecurrenceSetup} onOpenChange={(o) => { if (!o) setShowRecurrenceSetup(false); }}>
         <DialogContent className="max-w-sm p-0 gap-0 overflow-hidden">
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
@@ -3236,15 +3011,12 @@ function TasksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* CREATE DIALOG — two-panel on desktop, single-column on mobile */}
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setSaveError(""); setUploadFiles([]); setCreateStep(1); } }}>
         <DialogContent className="sm:max-h-[92vh] sm:max-w-4xl overflow-hidden p-0 gap-0">
-          {/* Header bar */}
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <ListChecks className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-sm font-medium text-muted-foreground hidden sm:block">Ny uppgift</span>
             {newTask.title && <span className="text-sm font-semibold text-foreground truncate max-w-[140px] sm:max-w-xs">{newTask.title}</span>}
-            {/* Mobile step indicator */}
             <div className="flex items-center gap-1 sm:hidden ml-auto">
               <span className={cn("h-2 w-2 rounded-full transition-colors", createStep === 1 ? "bg-primary" : "bg-muted-foreground/30")} />
               <span className={cn("h-2 w-2 rounded-full transition-colors", createStep === 2 ? "bg-primary" : "bg-muted-foreground/30")} />
@@ -3254,7 +3026,6 @@ function TasksPage() {
                 <span className="text-xs text-destructive max-w-[120px] sm:max-w-none truncate sm:truncate-none">{saveError}</span>
               )}
               <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hidden sm:flex" onClick={() => setShowCreate(false)}>Avbryt</Button>
-              {/* Mobile: Next/Create button */}
               <div className="flex gap-1.5 sm:hidden">
                 {createStep === 1 ? (
                   <Button size="sm" className="rounded-full text-xs" onClick={() => setCreateStep(2)} disabled={!newTask.title.trim()}>
@@ -3271,21 +3042,16 @@ function TasksPage() {
                   </>
                 )}
               </div>
-              {/* Desktop: always show create */}
               <Button size="sm" className="rounded-full gap-1.5 bg-primary text-primary-foreground text-xs hidden sm:flex" onClick={createTask} disabled={saving || !newTask.title.trim()}>
                 {saving ? "Sparar..." : "Skapa"}
               </Button>
             </div>
           </div>
 
-          {/* Body: stacked on mobile (step-gated), side-by-side on desktop */}
           <div className="flex flex-col sm:flex-row overflow-y-auto sm:overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
 
-            {/* CONTENT column — always visible on desktop, step 1 on mobile */}
             <div className={cn("flex-1 sm:overflow-y-auto p-5 space-y-5 sm:p-6 sm:space-y-6 pb-16 min-w-0", createStep === 2 && "hidden sm:block")}>
 
-              {/* Template picker — only regular templates, not base templates */}
-              {/* Template picker — only regular/both templates, not base or batch_only */}
               {templates.filter(t => {
                 const tAny = t as ChecklistTemplate & { template_type?: string; template_mode?: string };
                 return tAny.template_type !== "base" && tAny.template_mode !== "batch_only";
@@ -3308,7 +3074,6 @@ function TasksPage() {
                 </div>
               )}
 
-              {/* Title */}
               <div>
                 <input
                   placeholder="Uppgiftens titel..."
@@ -3318,7 +3083,6 @@ function TasksPage() {
                 />
               </div>
 
-              {/* Description */}
               <div>
                 <Textarea
                   placeholder="Lägg till en beskrivning eller instruktioner..."
@@ -3329,7 +3093,6 @@ function TasksPage() {
                 />
               </div>
 
-              {/* Checkpoints */}
               <div className="space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Checkpoints</p>
                 <div className="space-y-1.5">
@@ -3412,7 +3175,6 @@ function TasksPage() {
                 </button>
               </div>
 
-              {/* Questions */}
               <div className="space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Frågor</p>
                 <div className="space-y-2">
@@ -3506,7 +3268,6 @@ function TasksPage() {
                 </button>
               </div>
 
-              {/* Images */}
               <div className="space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Bilder</p>
                 <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
@@ -3534,13 +3295,10 @@ function TasksPage() {
               </div>
             </div>
 
-            {/* PROPERTIES sidebar — hidden on mobile step 1, visible on mobile step 2, always visible on desktop */}
             <div className={cn("w-full sm:w-72 shrink-0 overflow-y-auto border-t sm:border-t-0 sm:border-l border-border/60 bg-muted/30", createStep === 1 && "hidden sm:block")}>
 
-              {/* Property rows */}
               <div className="divide-y divide-border/50">
 
-                {/* Kategori */}
                 <div className="flex items-center gap-3 px-4 py-3">
                   <FileText className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                   <span className="w-24 shrink-0 text-xs text-muted-foreground">Kategori</span>
@@ -3554,7 +3312,6 @@ function TasksPage() {
                   </Select>
                 </div>
 
-                {/* Prioritet */}
                 <div className="flex items-center gap-3 px-4 py-3">
                   <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                   <span className="w-24 shrink-0 text-xs text-muted-foreground">Prioritet</span>
@@ -3568,7 +3325,6 @@ function TasksPage() {
                   </Select>
                 </div>
 
-                {/* Förfallodatum — hidden when recurrence is set; locked for delivery tasks */}
                 {!newTask.recurrence_rule && (
                   newTask.delivery_entry_id ? (
                     <div className="flex items-start gap-3 px-4 py-3 opacity-60">
@@ -3594,7 +3350,6 @@ function TasksPage() {
                   )
                 )}
 
-                {/* Förfallotid / Tidsluckor — locked for delivery tasks */}
                 <div className="flex items-start gap-3 px-4 py-3">
                   <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60 opacity-0" />
                   <div className="flex flex-col gap-1.5 min-w-0 flex-1">
@@ -3603,11 +3358,11 @@ function TasksPage() {
                         <span className="text-xs text-muted-foreground">Förfallotid</span>
                         <p className="text-xs text-muted-foreground/70 italic mt-0.5">Bestäms av leveransschemat — {newTask.due_date_time || "beräknas vid skapande"}</p>
                       </div>
-                    ) : newTask.time_slots.length > 0 ? (
+                    ) : newTask.time_slots.filter(Boolean).length > 0 ? (
                       <>
                         <span className="text-xs text-muted-foreground">Tidsluckor (förfallotider)</span>
                         <div className="flex flex-wrap gap-1">
-                          {newTask.time_slots.map((slot, i) => (
+                          {newTask.time_slots.filter(Boolean).map((slot, i) => (
                             <span key={i} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                               {slot}
                               <button type="button" onClick={() => setNewTask(p => ({ ...p, time_slots: p.time_slots.filter((_, idx) => idx !== i) }))}><X className="h-3 w-3" /></button>
@@ -3647,7 +3402,11 @@ function TasksPage() {
                           <button
                             type="button"
                             className="rounded-full border border-dashed border-border/60 px-2 py-0.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary"
-                            onClick={() => setNewTask(p => ({ ...p, time_slots: p.due_date_time ? [p.due_date_time] : [""], due_date_time: "" }))}
+                            onClick={() => setNewTask(p => ({
+                              ...p,
+                              time_slots: p.due_date_time.trim() ? [p.due_date_time.trim()] : p.time_slots,
+                              due_date_time: ""
+                            }))}
                           >+ Fler tidsluckor</button>
                         </div>
                         <input
@@ -3661,7 +3420,6 @@ function TasksPage() {
                   </div>
                 </div>
 
-                {/* SAP artikel-ID */}
                 <div className="px-4 py-3 min-w-0 space-y-1">
                   <div className="flex items-center gap-2">
                     <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
@@ -3709,7 +3467,6 @@ function TasksPage() {
                   })()}
                 </div>
 
-                {/* Butik */}
                 <div className="flex items-center gap-3 px-4 py-3">
                   <ListChecks className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                   <span className="w-24 shrink-0 text-xs text-muted-foreground">Butik</span>
@@ -3724,7 +3481,6 @@ function TasksPage() {
                   </Select>
                 </div>
 
-                {/* Återkommande */}
                 <div className="px-4 py-3 space-y-2">
                   <div className="flex items-center gap-3">
                     <Repeat className="h-4 w-4 shrink-0 text-muted-foreground/60" />
@@ -3839,7 +3595,6 @@ function TasksPage() {
                   )}
                 </div>
 
-                {/* Tilldela — sök + grupper + personer */}
                 {(storeUsers.length > 0 || groups.length > 0) && (
                   <AssigneePicker
                     users={storeUsers}
@@ -3857,7 +3612,6 @@ function TasksPage() {
                   />
                 )}
 
-                {/* Händelsebaserad uppgift */}
                 <div className="px-4 py-3 space-y-1.5">
                   <div className="flex items-center gap-2">
                     <Zap className="h-4 w-4 shrink-0 text-amber-500" />
@@ -3889,7 +3643,6 @@ function TasksPage() {
                   )}
                 </div>
 
-                {/* Uppgiftskedja — beror på */}
                 <div className="px-4 py-3 space-y-1.5">
                   <div className="flex items-center gap-2">
                     <Link2 className="h-4 w-4 shrink-0 text-muted-foreground/60" />
@@ -3914,15 +3667,12 @@ function TasksPage() {
                   )}
                 </div>
 
-                {/* Kritisk uppgift — removed from UI, handled via template settings */}
-
               </div>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* DELETE DIALOG */}
       {deleteTarget && !deleteScope && (
         <AlertDialog open onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
           <AlertDialogContent>
@@ -3980,7 +3730,6 @@ function TasksPage() {
         </AlertDialog>
       )}
 
-      {/* BULK DELETE TASKS */}
       <AlertDialog open={bulkDeleteTasksOpen} onOpenChange={setBulkDeleteTasksOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -4020,7 +3769,6 @@ function TasksPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* EDIT DIALOG */}
       {editTask && editForm && (
         <Dialog open onOpenChange={(o) => { if (!o) { setEditTask(null); setEditForm(null); } }}>
           <DialogContent className="sm:max-h-[92vh] sm:max-w-4xl overflow-hidden p-0 gap-0">
@@ -4046,13 +3794,12 @@ function TasksPage() {
                 )}
               </div>
             </div>
-            {/* Recurring edit warning banner */}
             {(editTask.recurrence_rule || editTask.parent_task_id) && (
               <div className="mx-4 mt-2 mb-0 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5">
                 <AlertTriangle className="h-4 w-4 shrink-0 text-warning-foreground mt-0.5" />
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-warning-foreground">Återkommande uppgift</p>
-                  <p className="text-[11px] text-warning-foreground/80 mt-0.5">Forandringar av en upprepande uppgift forändrar alla framtida också. Välj "Redigera endast denna" för att bara påverka denna förekomst.</p>
+                  <p className="text-[11px] text-warning-foreground/80 mt-0.5">Förändringar av en upprepande uppgift förändrar alla framtida också. Välj "Redigera endast denna" för att bara påverka denna förekomst.</p>
                 </div>
               </div>
             )}
@@ -4238,7 +3985,6 @@ function TasksPage() {
                       </div>
                     </div>
                   )}
-                  {/* Future occurrences manager button — only for recurring parent tasks (not child occurrences) */}
                   {editTask.recurrence_rule && !editTask.parent_task_id && isManager && (
                     <div className="px-4 py-3">
                       <Button
@@ -4263,7 +4009,6 @@ function TasksPage() {
                     />
                   )}
 
-                  {/* Händelsebaserad uppgift */}
                   <div className="px-4 py-3 space-y-1.5">
                     <div className="flex items-center gap-2">
                       <Zap className="h-4 w-4 shrink-0 text-amber-500" />
@@ -4295,7 +4040,6 @@ function TasksPage() {
                     )}
                   </div>
 
-                  {/* Uppgiftskedja — beror på */}
                   <div className="px-4 py-3 space-y-1.5">
                     <div className="flex items-center gap-2">
                       <Link2 className="h-4 w-4 shrink-0 text-muted-foreground/60" />
@@ -4327,7 +4071,6 @@ function TasksPage() {
         </Dialog>
       )}
 
-      {/* FUTURE OCCURRENCES MANAGER DIALOG */}
       {showFutureManager && futureManagerTask && (
         <Dialog open onOpenChange={(o) => { if (!o) { setShowFutureManager(false); setSelectedFutureIds(new Set()); } }}>
           <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
@@ -4346,7 +4089,6 @@ function TasksPage() {
               </button>
             </div>
 
-            {/* Bulk action bar when items selected */}
             {selectedFutureIds.size > 0 && (
               <div className="border-b border-border/60 bg-primary/5 px-4 py-3 space-y-3">
                 <div className="flex items-center gap-2">
@@ -4466,9 +4208,6 @@ function TasksPage() {
         </Dialog>
       )}
 
-      {/* Photo viewer — rendered when lightboxTask is set.
-          The Dialog is hidden (open=false) while this is shown so Radix's
-          dismiss layer cannot intercept pointer events on the overlay. */}
       {lightboxTask && (
         <PhotoViewer
           images={lightboxTask.images?.map(img => getPublicUrl(img.storage_path)).filter(Boolean) ?? []}
@@ -4477,7 +4216,6 @@ function TasksPage() {
         />
       )}
 
-      {/* DELIVERY TASKS MODAL */}
       <Dialog open={showDeliveryModal} onOpenChange={setShowDeliveryModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -4528,7 +4266,6 @@ function TasksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ASSIGNEE CONFIRMATION DIALOG */}
       <Dialog open={assigneeConfirmOpen} onOpenChange={(o) => { if (!o) { setAssigneeConfirmOpen(false); setAssigneeConfirmDismissed(true); } }}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
@@ -4541,7 +4278,6 @@ function TasksPage() {
             </p>
           </DialogHeader>
 
-          {/* Bulk toolbar */}
           <div className="flex items-center justify-between gap-3 py-2 border-b">
             <div className="flex items-center gap-2">
               <Checkbox
@@ -4570,7 +4306,6 @@ function TasksPage() {
             )}
           </div>
 
-          {/* Task list */}
           <div className="flex-1 overflow-y-auto space-y-2 py-2">
             {unconfirmedTasks.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">Inga uppgifter att bekräfta.</p>
@@ -4609,7 +4344,6 @@ function TasksPage() {
                           </span>
                         )}
                       </div>
-                      {/* Current assignee(s) */}
                       <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                         <span className="text-[11px] text-muted-foreground">Tilldelad:</span>
                         {overrideUser ? (
@@ -4627,7 +4361,6 @@ function TasksPage() {
                           <span className="text-[11px] text-muted-foreground italic">Ingen tilldelad</span>
                         )}
                       </div>
-                      {/* Change assignee picker */}
                       <div className="mt-2">
                         <Select
                           value={overrideUserId ?? "__same__"}
@@ -4689,7 +4422,6 @@ function TasksPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Article type disambiguation */}
       <AlertDialog open={!!taskArticlePrompt} onOpenChange={(o) => { if (!o) setTaskArticlePrompt(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
