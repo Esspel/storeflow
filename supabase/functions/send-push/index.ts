@@ -51,9 +51,16 @@ Deno.serve(async (req: Request) => {
 
     const { title, body, url = "/", tag = "storeflow", user_ids, store_id } = payload;
 
-    if (!title || !body) {
-      return json({ error: "Titel och body krävs för att skicka push-notis." }, 400);
+    if (!title) {
+      return json({ error: "Titel krävs för att skicka push-notis." }, 400);
     }
+
+    // Tom body är tillåten — använd titeln som body så att OS-notisen inte blir tom.
+    const bodyText = (body ?? "").trim() ? body : title;
+
+    // Endast relativa sökvägar tillåts — förhindrar att en notis kan navigera
+    // användaren till en extern sida när den klickas.
+    const safeUrl = typeof url === "string" && url.startsWith("/") && !url.startsWith("//") ? url : "/";
 
     // Build query for subscriptions
     let query = supabase.from("push_subscriptions").select("*");
@@ -75,7 +82,7 @@ Deno.serve(async (req: Request) => {
     const { data: subscriptions, error } = await query;
     if (error) throw error;
 
-    const pushPayload = JSON.stringify({ title, body, url, tag });
+    const pushPayload = JSON.stringify({ title, body: bodyText, url: safeUrl, tag });
     const staleEndpoints: string[] = [];
     const errors: string[] = [];
     let sent = 0;

@@ -242,7 +242,7 @@ const CURL_EXAMPLES: CurlExample[] = [
     scope: "tasks:read",
     command:
 `curl -X GET \\
-  "https://<project-ref>.supabase.co/functions/v1/storeflow-api/tasks?store_id=<store-uuid>&status=todo" \\
+  "https://zjongicwgixyvysqpawj.supabase.co/functions/v1/storeflow-api/tasks?store_id=<store-uuid>&status=todo" \\
   -H "Authorization: Bearer sf_live_..."`,
   },
   {
@@ -251,7 +251,7 @@ const CURL_EXAMPLES: CurlExample[] = [
     scope: "deviations:write",
     command:
 `curl -X POST \\
-  "https://<project-ref>.supabase.co/functions/v1/storeflow-api/deviations" \\
+  "https://zjongicwgixyvysqpawj.supabase.co/functions/v1/storeflow-api/deviations" \\
   -H "Authorization: Bearer sf_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -267,7 +267,7 @@ const CURL_EXAMPLES: CurlExample[] = [
     scope: "deliveries:write",
     command:
 `curl -X POST \\
-  "https://<project-ref>.supabase.co/functions/v1/import-delivery-csv" \\
+  "https://zjongicwgixyvysqpawj.supabase.co/functions/v1/import-delivery-csv" \\
   -H "Authorization: Bearer sf_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -283,7 +283,7 @@ const CURL_EXAMPLES: CurlExample[] = [
     scope: "schedule:write",
     command:
 `curl -X POST \\
-  "https://<project-ref>.supabase.co/functions/v1/import-schedule-xml" \\
+  "https://zjongicwgixyvysqpawj.supabase.co/functions/v1/import-schedule-xml" \\
   -H "Authorization: Bearer sf_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -298,7 +298,7 @@ const CURL_EXAMPLES: CurlExample[] = [
     scope: "valfritt scope beroende på verktyg",
     command:
 `curl -X POST \\
-  "https://<project-ref>.supabase.co/functions/v1/mcp-server" \\
+  "https://zjongicwgixyvysqpawj.supabase.co/functions/v1/mcp-server" \\
   -H "Authorization: Bearer sf_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`,
@@ -433,8 +433,14 @@ function HjalpPage() {
                       Inställningar → API-nycklar
                     </Link>
                     . Varje nyckel har en egen uppsättning behörigheter (scopes) och är valfritt låst till en
-                    specifik butik. Byt ut <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">&lt;project-ref&gt;</code>{" "}
-                    mot ditt Supabase-projekts referens i exemplen nedan.
+                    specifik butik. Exemplen nedan pekar mot projektets API-URL
+                    (<code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">zjongicwgixyvysqpawj.supabase.co</code>).
+                    Ditt butiks-ID (<code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">&lt;store-uuid&gt;</code>)
+                    och användar-ID finns att kopiera under{" "}
+                    <Link to="/installningar" className="font-medium text-foreground underline underline-offset-2">
+                      Inställningar
+                    </Link>
+                    .
                   </p>
                 </div>
               </div>

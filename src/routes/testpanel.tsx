@@ -1,13 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Bell, ListChecks, TriangleAlert, FileText, CircleCheck as CheckCircle2, Circle as XCircle, Clock, Database, RefreshCw, Trash2, ChevronDown, ChevronUp, Image as ImageIcon, Wifi, WifiOff, Shield, Users, CalendarDays, Bug, FlaskConical, TriangleAlert as AlertTriangle, FileSearch, Upload } from "lucide-react";
+import { Bell, BellRing, ListChecks, TriangleAlert, FileText, CircleCheck as CheckCircle2, Circle as XCircle, Clock, Database, RefreshCw, Trash2, ChevronDown, ChevronUp, Image as ImageIcon, Wifi, WifiOff, Shield, Users, CalendarDays, Bug, FlaskConical, TriangleAlert as AlertTriangle, FileSearch, Upload } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase, createNotification, logAudit, type AuditLog, deleteStorageFiles, compressImage } from "@/lib/supabase";
+import { supabase, createNotification, notifyUsers, logAudit, type AuditLog, deleteStorageFiles, compressImage } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { getTimeOffsetMs, setTimeOffsetMs, getSimulatedDate } from "@/lib/time-simulation";
@@ -190,6 +190,169 @@ function TestPanel() {
     createNotification(user!.id, "test", customMsg.trim(), "", "/testpanel");
     addResult(true, `Anpassad notis skickad: "${customMsg}"`);
     setCustomMsg("");
+    setRunning(false);
+  }
+
+  // ---- Push / OS-notiser ----
+  async function checkPushStatus() {
+    setRunning(true);
+    const vapidConfigured = !!import.meta.env.VITE_VAPID_PUBLIC_KEY;
+    const swSupported = "serviceWorker" in navigator;
+    const pushSupported = "PushManager" in window;
+    const notifSupported = "Notification" in window;
+    const permission = notifSupported ? Notification.permission : "n/a";
+
+    addResult(true, `VAPID-nyckel (klient): ${vapidConfigured ? "konfigurerad" : "SAKNAS — krävs för att aktivera push"}`);
+    addResult(true, `Stöd: Service Worker ${swSupported ? "JA" : "nej"}, PushManager ${pushSupported ? "JA" : "nej"}, Notification ${notifSupported ? "JA" : "nej"}`);
+    addResult(true, `Notisbehörighet: ${permission}`);
+
+    if (swSupported && pushSupported) {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          addResult(true, `Prenumererad i denna webbläsare: JA — endpoint: ${sub.endpoint.slice(0, 70)}…`);
+        } else {
+          addResult(false, "Prenumererad i denna webbläsare: NEJ — aktivera notiser i Inställningar.");
+        }
+      } catch (e) {
+        addResult(false, `Kunde inte läsa push-prenumeration: ${String(e)}`);
+      }
+    }
+
+    const { count } = await supabase
+      .from("push_subscriptions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user!.id);
+    addResult(true, `Push-prenumerationer i databasen för dig: ${count ?? 0}`);
+    setRunning(false);
+  }
+
+  async function sendTestOsPush() {
+    setRunning(true);
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`;
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          user_ids: [user!.id],
+          title: "[TEST] OS-notis",
+          body: "Detta är en riktig OS-push via send-push edge-funktionen.",
+          url: "/testpanel",
+          tag: `test-os-${Date.now()}`,
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        addResult(false, `OS-push misslyckades (HTTP ${res.status}): ${json?.error ?? "okänt fel"}`);
+      } else {
+        const errors = json?.errors ?? [];
+        addResult(
+          (json?.sent ?? 0) > 0,
+          `OS-push: ${json?.sent ?? 0} skickad(e), ${json?.skipped ?? 0} hoppade, ${errors.length} fel. ${errors.slice(0, 2).join(" | ")}`,
+        );
+      }
+    } catch (e) {
+      addResult(false, `OS-push nätverksfel: ${String(e)}`);
+    }
+    setRunning(false);
+  }
+
+  async function sendStorePush() {
+    if (!activeStore) { addResult(false, "Välj en aktiv butik först."); return; }
+    setRunning(true);
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`;
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          store_id: activeStore.id,
+          title: "[TEST] Store-push",
+          body: `Push till ${activeStore.name} från testpanelen.`,
+          url: "/testpanel",
+          tag: `test-store-${Date.now()}`,
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        addResult(false, `Store-push misslyckades (HTTP ${res.status}): ${json?.error ?? "okänt fel"}`);
+      } else {
+        addResult(
+          (json?.sent ?? 0) > 0,
+          `Store-push: ${json?.sent ?? 0} skickad(e), ${json?.skipped ?? 0} hoppade, ${(json?.errors ?? []).length} fel.`,
+        );
+      }
+    } catch (e) {
+      addResult(false, `Store-push nätverksfel: ${String(e)}`);
+    }
+    setRunning(false);
+  }
+
+  async function unregisterPushSubscription() {
+    setRunning(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        addResult(true, "Ingen aktiv push-prenumeration i denna webbläsare.");
+        setRunning(false);
+        return;
+      }
+      const { error } = await supabase.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+      await sub.unsubscribe();
+      if (error) addResult(false, `Webbläsare avprenumererad men DB-radering misslyckades: ${error.message}`);
+      else addResult(true, "Push-prenumeration avregistrerad (webbläsare + databas).");
+    } catch (e) {
+      addResult(false, `Avregistrering misslyckades: ${String(e)}`);
+    }
+    setRunning(false);
+  }
+
+  async function sendNotificationToStore() {
+    if (!activeStore) { addResult(false, "Välj en aktiv butik först."); return; }
+    setRunning(true);
+    const { data: storeUsers, error } = await supabase
+      .from("user_stores")
+      .select("user_id")
+      .eq("store_id", activeStore.id);
+    if (error) { addResult(false, `Kunde inte hämta butiksanvändare: ${error.message}`); setRunning(false); return; }
+    const userIds = (storeUsers ?? []).map(r => r.user_id).filter(Boolean);
+    if (userIds.length === 0) {
+      addResult(false, "Inga användare kopplade till aktiv butik.");
+      setRunning(false);
+      return;
+    }
+    notifyUsers(userIds, "test", `[TEST] Notis: ${activeStore.name}`, "Skickad till alla i butiken via testpanelen", "/testpanel");
+    addResult(true, `Notis + push skickad till ${userIds.length} användare i ${activeStore.name}.`);
+    await loadStats();
+    setRunning(false);
+  }
+
+  async function listMyNotifications() {
+    setRunning(true);
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("id, title, body, type, is_read, created_at")
+      .eq("user_id", user!.id)
+      .order("created_at", { ascending: false })
+      .limit(5);
+    if (error) { addResult(false, `Hämtning misslyckades: ${error.message}`); setRunning(false); return; }
+    if ((data ?? []).length === 0) {
+      addResult(true, "Inga notiser för dig.");
+    } else {
+      (data ?? []).forEach(n => addResult(
+        true,
+        `${n.is_read ? "✓" : "●"} ${new Date(n.created_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })} — ${n.title}${n.body ? `: ${n.body}` : ""}`,
+      ));
+    }
     setRunning(false);
   }
 
@@ -923,6 +1086,8 @@ function TestPanel() {
           <div className="space-y-2">
             <ActionBtn label="Skicka testnotis" onClick={testNotification} disabled={running} variant="default" />
             <ActionBtn label="Skicka 5 bulk-notiser" onClick={testBulkNotifications} disabled={running} />
+            <ActionBtn label={`Skicka notis till alla i ${activeStore?.name ?? "aktiv butik"}`} onClick={sendNotificationToStore} disabled={running || !activeStore} />
+            <ActionBtn label="Visa mina 5 senaste notiser" onClick={listMyNotifications} disabled={running} />
             <ActionBtn label="Rensa mina notiser" onClick={clearMyNotifications} disabled={running} danger />
             <ActionBtn label="Radera alla lästa notiser (alla användare)" onClick={clearReadNotificationsAllUsers} disabled={running} danger />
             <ActionBtn label="Radera ALLA notiser (alla användare)" onClick={clearAllNotificationsAllUsers} disabled={running} danger />
@@ -933,6 +1098,19 @@ function TestPanel() {
               <Input placeholder="Notis-text..." value={customMsg} onChange={(e) => setCustomMsg(e.target.value)} className="h-8 text-sm" />
               <Button size="sm" variant="outline" className="shrink-0 rounded-full" onClick={sendCustomNotification} disabled={running || !customMsg.trim()}>Skicka</Button>
             </div>
+          </div>
+        </Section>
+
+        {/* Push & OS-notiser */}
+        <Section icon={BellRing} title="Push & OS-notiser" span2>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Diagnostisera och testa riktiga OS-push-notiser via send-push edge-funktionen.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <ActionBtn label="Visa push-status (diagnostik)" onClick={checkPushStatus} disabled={running} variant="default" />
+            <ActionBtn label="Skicka OS-testnotis (till mig)" onClick={sendTestOsPush} disabled={running} />
+            <ActionBtn label={`Skicka push till ${activeStore?.name ?? "aktiv butik"}`} onClick={sendStorePush} disabled={running || !activeStore} />
+            <ActionBtn label="Avregistrera denna enhets push" onClick={unregisterPushSubscription} disabled={running} danger />
           </div>
         </Section>
 

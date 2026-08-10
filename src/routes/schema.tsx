@@ -27,6 +27,7 @@ import { generatePassword, usernameFromName } from "@/lib/text-utils";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { copyChildAssociations, dueFromPeriodStart, localDateStr, midnightStockholm } from "@/lib/task-utils";
+import { exportTextAsCSV, parseCSVLine } from "@/lib/csv";
 import { toast } from "sonner";
 import { getSpecialWeekHoliday, stockholmToUtc } from "@/lib/swedish-holidays";
 import { getYear } from "date-fns";
@@ -657,17 +658,8 @@ function parseCsvDelivery(text: string): ParsedDelivery[] {
   // Strip BOM and split lines
   const lines = text.replace(/^\uFEFF/, "").split(/[\r\n]+/).filter(Boolean);
   for (const line of lines) {
-    // Parse CSV fields (quoted or unquoted)
-    const fields: string[] = [];
-    let cur = "";
-    let inQuote = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') { inQuote = !inQuote; }
-      else if (ch === "," && !inQuote) { fields.push(cur.trim()); cur = ""; }
-      else { cur += ch; }
-    }
-    fields.push(cur.trim());
+    // Parse CSV fields via den delade quote-medvetna parsern (komma-avgr\u00E4nsad)
+    const fields = parseCSVLine(line, ",").map((f) => f.trim());
     if (fields.length < 6) continue;
     const [deliveryDay, deliveryTime, orderDay, stopTime, flowName, supplier] = fields;
     if (!dayNames.has(deliveryDay.toLowerCase())) continue;
@@ -1046,13 +1038,7 @@ function SchemaPage() {
       });
     });
     const csv = [header, ...rows].join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `schema-v${activeImport.week_number}-${activeImport.year}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportTextAsCSV(csv, `schema-v${activeImport.week_number}-${activeImport.year}.csv`);
   }
 
   async function deleteScheduleImport(imp: ImportRow) {

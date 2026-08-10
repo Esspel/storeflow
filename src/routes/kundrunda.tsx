@@ -26,6 +26,7 @@ import {
   type KundrundaResponse, type KundrundaResponseImage,
   type CommonDefect, type AppUser,
   logAudit, createNotification, mittCoopUrl, mittCoopSearchUrl, uploadAttachment, getPublicUrl,
+  deleteStorageFiles,
   type ArticleIdType,
 } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -33,6 +34,7 @@ import { useAuth } from "@/lib/auth-context";
 import { GdprImageReminder } from "@/components/gdpr-image-reminder";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
 import { cn, sanitizeCsvCell } from "@/lib/utils";
+import { exportTextAsCSV, parseCSVLine } from "@/lib/csv";
 import { haptic } from "@/lib/haptic";
 
 export const Route = createFileRoute("/kundrunda")({
@@ -127,13 +129,7 @@ function exportTemplateCsv(zones: ZoneWithCheckpoints[]): void {
     }
   }
   const content = KUNDRUNDA_CSV_INSTRUCTIONS + dataRows.join("\n");
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `kundrunda-mall-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  exportTextAsCSV(content, `kundrunda-mall-${new Date().toISOString().slice(0, 10)}.csv`);
 }
 
 function exportSessionsCsv(sessions: KundrundaSession[]): void {
@@ -146,27 +142,21 @@ function exportSessionsCsv(sessions: KundrundaSession[]): void {
     const status = s.status === "completed" ? "Slutförd" : "Pågående";
     rows.push([escape(date), escape(conductor), String(s.total_score), String(s.max_score), `${pct}%`, status].join(","));
   }
-  const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `kundrunda-historik-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  exportTextAsCSV(rows.join("\n"), `kundrunda-historik-${new Date().toISOString().slice(0, 10)}.csv`);
 }
 
 type ParsedCsvRow = { zoneName: string; checkpointLabel: string; description: string };
 
 function parseTemplateCsv(text: string): ParsedCsvRow[] {
-  // Skip comment lines and blank lines
-  const lines = text.split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"));
+  // Skip comment lines and blank lines (BOM tas bort av den delade parsern)
+  const lines = text.replace(/^\ufeff/, "").split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"));
   if (lines.length < 2) return [];
+  const clean = (s: string) => s.replace(/^"|"$/g, "").replace(/""/g, '"').trim();
   const rows: ParsedCsvRow[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+    const cols = parseCSVLine(lines[i], ",").map(clean);
     if (cols.length < 2) continue;
-    const clean = (s: string) => s.replace(/^"|"$/g, "").replace(/""/g, '"').trim();
-    rows.push({ zoneName: clean(cols[0] ?? ""), checkpointLabel: clean(cols[1] ?? ""), description: clean(cols[2] ?? "") });
+    rows.push({ zoneName: cols[0] ?? "", checkpointLabel: cols[1] ?? "", description: cols[2] ?? "" });
   }
   return rows.filter((r) => r.zoneName && r.checkpointLabel);
 }
@@ -737,7 +727,8 @@ function KundrundaPage() {
     }
   };
 
-  const deleteRefPhoto = async (checkpointId: string, imgId: string) => {
+  const deleteRefPhoto = async (checkpointId: string, imgId: string, storagePath: string) => {
+    deleteStorageFiles([storagePath]);
     await supabase.from("kundrunda_checkpoint_images").delete().eq("id", imgId);
     setCheckpointRefImages(p => ({ ...p, [checkpointId]: (p[checkpointId] ?? []).filter(i => i.id !== imgId) }));
   };
@@ -788,6 +779,13 @@ function KundrundaPage() {
         } catch {}
       }
     } catch {}
+    // Radera först filerna i storage, sedan DB-raderna (annars blir bilderna föräldralösa)
+    const { data: sessionImages } = await supabase
+      .from("kundrunda_response_images")
+      .select("storage_path")
+      .eq("session_id", target.id);
+    deleteStorageFiles((sessionImages ?? []).map((r: { storage_path: string }) => r.storage_path));
+
     await supabase.from("kundrunda_response_images").delete().eq("session_id", target.id);
     await supabase.from("kundrunda_responses").delete().eq("session_id", target.id);
     await supabase.from("kundrunda_sessions").delete().eq("id", target.id);
@@ -799,6 +797,16 @@ function KundrundaPage() {
     if (selectedSessionIds.size === 0) return;
     setBulkDeleting(true);
     const ids = Array.from(selectedSessionIds);
+    // Samla alla bildsökvägar i förväg och radera filerna i storage
+    const allPaths: string[] = [];
+    for (const id of ids) {
+      const { data: sessionImages } = await supabase
+        .from("kundrunda_response_images")
+        .select("storage_path")
+        .eq("session_id", id);
+      (sessionImages ?? []).forEach((r: { storage_path: string }) => allPaths.push(r.storage_path));
+    }
+    deleteStorageFiles(allPaths);
     for (const id of ids) {
       await supabase.from("kundrunda_response_images").delete().eq("session_id", id);
       await supabase.from("kundrunda_responses").delete().eq("session_id", id);
@@ -834,6 +842,12 @@ function KundrundaPage() {
 
   const deleteZone = async () => {
     if (!deleteZoneTarget) return;
+    // Radera referensbilder i storage innan checkpoints raderas (cascade tar hand om DB-raderna)
+    deleteStorageFiles(
+      (deleteZoneTarget.checkpoints ?? [])
+        .flatMap(cp => (cp.images ?? []).map(img => img.storage_path))
+        .filter(Boolean),
+    );
     await supabase.from("kundrunda_checkpoints").delete().eq("zone_id", deleteZoneTarget.id);
     await supabase.from("kundrunda_zones").delete().eq("id", deleteZoneTarget.id);
     setDeleteZoneTarget(null);
@@ -866,6 +880,10 @@ function KundrundaPage() {
 
   const deleteCheckpoint = async () => {
     if (!deleteCheckpointTarget) return;
+    // Radera referensbilder i storage innan checkpointen raderas (cascade tar hand om DB-raderna)
+    deleteStorageFiles(
+      (deleteCheckpointTarget.checkpoint.images ?? []).map(img => img.storage_path).filter(Boolean),
+    );
     await supabase.from("kundrunda_checkpoint_images").delete().eq("checkpoint_id", deleteCheckpointTarget.checkpoint.id);
     await supabase.from("kundrunda_checkpoints").delete().eq("id", deleteCheckpointTarget.checkpoint.id);
     setDeleteCheckpointTarget(null);
@@ -968,6 +986,10 @@ function KundrundaPage() {
 
       // Replace mode: delete all existing zones in this scope first
       if (shouldReplace && targetZones.length > 0) {
+        // Radera referensbilderna i storage innan zonerna raderas (cascade tar hand om DB-raderna)
+        deleteStorageFiles(
+          targetZones.flatMap(z => (z.checkpoints ?? []).flatMap(cp => (cp.images ?? []).map(img => img.storage_path))).filter(Boolean),
+        );
         for (const z of targetZones) {
           await supabase.from("kundrunda_checkpoints").delete().eq("zone_id", z.id);
         }
@@ -1658,7 +1680,7 @@ function KundrundaPage() {
                         {refs.map((img) => (
                           <div key={img.id} className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60">
                             <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
-                            <button className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteRefPhoto(cp.id, img.id)}>
+                            <button className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteRefPhoto(cp.id, img.id, img.storage_path)}>
                               <X className="h-4 w-4 text-white" />
                             </button>
                           </div>

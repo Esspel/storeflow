@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
+import { exportTextAsCSV } from "@/lib/csv";
 
 type ExportResult = {
   user: Record<string, unknown>;
@@ -143,13 +144,7 @@ export function GdprExport() {
     addSection("Kundrunda-svar", result.kundrunda_responses);
     addSection("Aktivitetslogg", result.audit_entries);
 
-    const blob = new Blob([sections.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `gdpr-export-${(result.user.username as string) ?? "user"}-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportTextAsCSV(sections.join("\n"), `gdpr-export-${(result.user.username as string) ?? "user"}-${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
   const totalRecords = result

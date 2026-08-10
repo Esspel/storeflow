@@ -12,6 +12,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
+import { CopyableId } from "@/components/copyable-id";
 
 export const Route = createFileRoute("/")({
   component: HubPage,
@@ -35,7 +36,10 @@ function HubPage() {
             Vad ska du göra idag?
           </h1>
           {activeStore && (
-            <p className="mt-2 text-sm text-muted-foreground">{activeStore.name}</p>
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              {activeStore.name}
+              <CopyableId id={activeStore.id} prefix="butiks" />
+            </p>
           )}
         </div>
 

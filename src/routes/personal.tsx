@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ensureHttps } from "@/lib/utils";
+import { exportTextAsCSV } from "@/lib/csv";
 import {
   Dialog,
   DialogContent,
@@ -379,10 +380,7 @@ function AccountsPage() {
   function downloadUserCsvTemplate() {
     const row = ["anna.svensson", "Anna Svensson", "Hemlig!1234567", "chef", "Kassa", "", "1234"];
     const csv = USER_CSV_INSTRUCTIONS + USER_CSV_HEADERS.join(";") + "\n" + row.map(v => `"${v}"`).join(";");
-    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "anvandare-mall.csv"; a.click();
-    URL.revokeObjectURL(url);
+    exportTextAsCSV(csv, "anvandare-mall.csv");
   }
 
   function exportUsersCsv() {
@@ -396,10 +394,7 @@ function AccountsPage() {
       stores.filter(s => u.assignedStoreIds.includes(s.id)).map(s => s.butiks_nr ?? "").filter(Boolean).join(","),
     ])];
     const csv = USER_CSV_INSTRUCTIONS + rows.map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
-    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `anvandare-export-${new Date().toISOString().slice(0,10)}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    exportTextAsCSV(csv, `anvandare-export-${new Date().toISOString().slice(0,10)}.csv`);
   }
 
   async function importUsersCsv(file: File) {
@@ -1323,8 +1318,7 @@ function AccountsPage() {
                     const headers = ["ID", "Titel", "Kategori", "Prioritet", "Status", "Förfallodatum", "Skapad", "Slutförd"];
                     const rows = data.map(t => [t.id, t.title, t.category ?? "", t.priority ?? "", t.status, t.due_date ?? "", t.created_at, t.completed_at ?? ""].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";"));
                     const csv = "\ufeff" + [headers.join(";"), ...rows].join("\n");
-                    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a"); a.href = url; a.download = `uppgifter-${activeStore.name}-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+                    exportTextAsCSV(csv, `uppgifter-${activeStore.name}-${new Date().toISOString().slice(0, 10)}.csv`);
                   }}>
                     <Download className="h-4 w-4" /> Uppgifter CSV
                   </Button>
@@ -1337,8 +1331,7 @@ function AccountsPage() {
                     const headers = ["ID", "Titel", "Kategori", "Prioritet", "Status", "Beskrivning", "Skapad"];
                     const rows = (data as Record<string, unknown>[]).map(t => [t.id, t.title, t.category ?? "", t.priority ?? "", t.status, (t.description ?? ""), t.created_at].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";"));
                     const csv = "\ufeff" + [headers.join(";"), ...rows].join("\n");
-                    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a"); a.href = url; a.download = `avvikelser-${activeStore.name}-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+                    exportTextAsCSV(csv, `avvikelser-${activeStore.name}-${new Date().toISOString().slice(0, 10)}.csv`);
                   }}>
                     <Download className="h-4 w-4" /> Avvikelser CSV
                   </Button>
@@ -1351,8 +1344,7 @@ function AccountsPage() {
                     const headers = ["ID", "Produkt", "Materialnummer", "Prioritet", "Status", "Kommentar", "Skapad"];
                     const rows = (data as Record<string, unknown>[]).map(t => [t.id, t.product_name, t.article_number ?? "", t.priority ?? "", t.status, t.staff_comment ?? "", t.created_at].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";"));
                     const csv = "\ufeff" + [headers.join(";"), ...rows].join("\n");
-                    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a"); a.href = url; a.download = `kundonskemal-${activeStore.name}-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+                    exportTextAsCSV(csv, `kundonskemal-${activeStore.name}-${new Date().toISOString().slice(0, 10)}.csv`);
                   }}>
                     <Download className="h-4 w-4" /> Kundönskemål CSV
                   </Button>

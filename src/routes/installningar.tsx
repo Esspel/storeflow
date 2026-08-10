@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { PushNotificationSetup } from "@/components/push-notification-setup";
 import { ApiKeysManager } from "@/components/api-keys-manager";
+import { CopyableId } from "@/components/copyable-id";
 
 const APP_VERSION = "2.4.1";
 
@@ -303,11 +304,40 @@ function SettingsPage() {
               <Label>Hierarkinivå</Label>
               <Input value={HIERARCHY_LABELS[user?.hierarchy_level ?? "anvandare"] ?? (user?.hierarchy_level ?? "")} disabled className="bg-muted/40" />
             </div>
+            <div className="space-y-1.5">
+              <Label>Användar-ID</Label>
+              <div className="flex items-center gap-2">
+                <CopyableId id={user?.id} prefix="användar" />
+                <span className="text-xs text-muted-foreground">Tryck för att kopiera</span>
+              </div>
+            </div>
             <div className="flex items-center gap-3">
               <Button onClick={saveDisplayName} disabled={nameSaving} className="rounded-full">
                 {nameSaving ? "Sparar..." : "Spara ändringar"}
               </Button>
               {nameSuccess && <span className="text-sm text-success">Sparat!</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+              <Hash className="h-4 w-4" />
+            </div>
+            <h2 className="font-semibold">Butik</h2>
+          </div>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Aktiv butik</Label>
+              <Input value={activeStore?.name ?? "Ingen aktiv butik"} disabled className="bg-muted/40" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Butiks-ID</Label>
+              <div className="flex items-center gap-2">
+                <CopyableId id={activeStore?.id} prefix="butiks" />
+                <span className="text-xs text-muted-foreground">Tryck för att kopiera</span>
+              </div>
             </div>
           </div>
         </div>

@@ -26,6 +26,7 @@ import { ImportDialog, type ImportDialogResult } from "@/components/import-dialo
 import { cn, ensureHttps, sanitizeCsvCell } from "@/lib/utils";
 import { getSimulatedDate, getSimulatedNow } from "@/lib/time-simulation";
 import { spawnChildrenForParent, getRecurrenceHorizonDays } from "@/lib/task-utils";
+import { exportTextAsCSV, parseCSVLine } from "@/lib/csv";
 import { toast } from "sonner";
 
 const RECURRENCE_OPTIONS = [
@@ -678,7 +679,31 @@ function MallarPage() {
     const items = (snap.items ?? []).filter((it: ChecklistTemplateItem) => it.label.trim());
     if (items.length > 0) {
       await supabase.from("checklist_template_items").insert(
-        items.map((it: ChecklistTemplateItem, idx: number) => ({ template_id: versionHistoryTarget.id, label: it.label, requires_photo: it.requires_photo, sort_order: idx }))
+        items.map((it: ChecklistTemplateItem, idx: number) => ({
+          template_id: versionHistoryTarget.id,
+          label: it.label,
+          requires_photo: it.requires_photo,
+          link_url: it.link_url ?? null,
+          condition_question_id: it.condition_question_id ?? null,
+          condition_answer: it.condition_answer ?? null,
+          sort_order: idx,
+        }))
+      );
+    }
+
+    // Restore questions
+    await supabase.from("checklist_template_questions").delete().eq("template_id", versionHistoryTarget.id);
+    const questions = (snap.questions ?? []).filter((q: ChecklistTemplateQuestion) => q.label.trim());
+    if (questions.length > 0) {
+      await supabase.from("checklist_template_questions").insert(
+        questions.map((q: ChecklistTemplateQuestion, idx: number) => ({
+          template_id: versionHistoryTarget.id,
+          label: q.label,
+          question_type: q.question_type ?? "text",
+          is_required: q.is_required,
+          link_url: q.link_url ?? null,
+          sort_order: idx,
+        }))
       );
     }
 
@@ -1799,7 +1824,7 @@ function MallarPage() {
     ];
     const csv = CSV_TEMPLATE_INSTRUCTIONS
       + [headers, exampleA, exampleB].map((r) => r.map((v) => `"${sanitizeCsvCell(String(v).replace(/"/g, '""'))}"`).join(";")).join("\n");
-    triggerDownload(csv, "mall-import-template.csv");
+    exportTextAsCSV(csv, "mall-import-template.csv");
   };
 
   const exportCSV = () => {
@@ -1874,31 +1899,8 @@ function MallarPage() {
     ];
     const instructions = `# Exporterat från StoreFlow ${new Date().toLocaleDateString("sv-SE")} — kan importeras direkt\n` + CSV_TEMPLATE_INSTRUCTIONS;
     const csv = instructions + rows.map((r) => r.map((v) => `"${sanitizeCsvCell(String(v ?? "").replace(/"/g, '""'))}"`).join(";")).join("\n");
-    triggerDownload("\ufeff" + csv, `mallar-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
+    exportTextAsCSV(csv, `mallar-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
   };
-
-  function triggerDownload(content: string, filename: string) {
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function parseRow(line: string): string[] {
-    const cols: string[] = [];
-    let cur = ""; let inQuote = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuote && line[i + 1] === '"') { cur += '"'; i++; }
-        else inQuote = !inQuote;
-      } else if (ch === ";" && !inQuote) { cols.push(cur); cur = ""; }
-      else { cur += ch; }
-    }
-    cols.push(cur);
-    return cols;
-  }
 
   const importCSV = async (result: ImportDialogResult) => {
     setImporting(true);
@@ -1945,7 +1947,7 @@ function MallarPage() {
       }
     }
 
-    const rows = lines.slice(1).map(parseRow);
+    const rows = lines.slice(1).map((l) => parseCSVLine(l, ";"));
     // Track delivery templates for post-import supplier mapping
     const importedDeliveryTemplates: { id: string; title: string }[] = [];
     // Local cache keyed by lowercase name so multiple rows with the same package
@@ -3651,7 +3653,7 @@ function MallarPage() {
       <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setError(""); }}>
         <DialogContent className="max-h-[92dvh] w-full sm:max-w-4xl sm:max-h-[92vh] overflow-hidden p-0 gap-0">
           <DialogTitle className="sr-only">{createScope === "hk" ? "Ny HK-mall" : createScope === "forening" ? "Ny föreningsmall" : "Ny butiksmall"}</DialogTitle>
-          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <GripVertical className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground">
               {createScope === "hk" ? "Ny HK-mall" : createScope === "forening" ? "Ny föreningsmall" : "Ny butiksmall"}
@@ -3673,7 +3675,7 @@ function MallarPage() {
       <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
         <DialogContent className="max-h-[92dvh] w-full sm:max-w-4xl sm:max-h-[92vh] overflow-hidden p-0 gap-0">
           <DialogTitle className="sr-only">Redigera mall{editTarget ? `: ${editTarget.title}` : ""}</DialogTitle>
-          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <GripVertical className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground">Redigera mall</span>
             <div className="ml-auto flex items-center gap-2">
@@ -3787,9 +3789,9 @@ function MallarPage() {
 
       {/* VERSION HISTORY DIALOG */}
       <Dialog open={!!versionHistoryTarget} onOpenChange={(o) => !o && setVersionHistoryTarget(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogContent hideCloseButton className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogTitle className="sr-only">Versionshistorik</DialogTitle>
-          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <History className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Versionshistorik</span>
             <span className="text-sm text-muted-foreground truncate flex-1">{versionHistoryTarget?.title}</span>
@@ -3810,9 +3812,11 @@ function MallarPage() {
             ) : (
               <div className="space-y-3">
                 {versions.map((v, vIdx) => {
+                  type SnapItem = { label: string; requires_photo?: boolean; link_url?: string | null; condition_question_id?: string | null; condition_answer?: string | null };
+                  type SnapQuestion = { label: string; question_type?: string; is_required?: boolean; link_url?: string | null };
                   type SnapType = {
                     title?: string; description?: string; category?: string;
-                    items?: { label: string }[]; questions?: { label: string; is_required?: boolean }[];
+                    items?: SnapItem[]; questions?: SnapQuestion[];
                     priority?: string; status?: string;
                     template_type?: string; template_mode?: string; is_critical?: boolean;
                     recurrence_rule?: string; recurrence_days?: number[]; recurrence_interval?: number;
@@ -3822,6 +3826,7 @@ function MallarPage() {
                     is_delivery_task?: boolean; delivery_flow_name?: string;
                     delivery_supplier_name?: string; delivery_entry_keys?: string;
                     event_trigger_description?: string;
+                    event_trigger_user_id?: string;
                     depends_on_template_title?: string;
                     review_interval_months?: number;
                   };
@@ -3851,25 +3856,48 @@ function MallarPage() {
                     if (snap.delivery_flow_name !== prev.delivery_flow_name) diffs.push(`Flöde: ${prev.delivery_flow_name || "–"} → ${snap.delivery_flow_name || "–"}`);
                     if (snap.delivery_entry_keys !== prev.delivery_entry_keys) diffs.push(`Leveransnyckel ändrad`);
                     if (snap.event_trigger_description !== prev.event_trigger_description) diffs.push(`Händelseutlösare: ${prev.event_trigger_description || "–"} → ${snap.event_trigger_description || "–"}`);
+                    if (snap.event_trigger_user_id !== prev.event_trigger_user_id) diffs.push(`Händelseutlösare (användare): ${prev.event_trigger_user_id || "Ingen"} → ${snap.event_trigger_user_id || "Ingen"}`);
                     if (snap.depends_on_template_title !== prev.depends_on_template_title) diffs.push(`Beroende av: ${prev.depends_on_template_title || "Ingen"} → ${snap.depends_on_template_title || "Ingen"}`);
                     if (snap.review_interval_months !== prev.review_interval_months) diffs.push(`Granskningsintervall: ${prev.review_interval_months ?? "–"} mån → ${snap.review_interval_months ?? "–"} mån`);
                     // Detailed step diff
-                    const prevLabels = (prev.items ?? []).map(it => it.label);
-                    const snapLabels = (snap.items ?? []).map(it => it.label);
+                    const prevItems = prev.items ?? [];
+                    const snapItems = snap.items ?? [];
+                    const prevLabels = prevItems.map(it => it.label);
+                    const snapLabels = snapItems.map(it => it.label);
                     const addedSteps = snapLabels.filter(l => !prevLabels.includes(l));
                     const removedSteps = prevLabels.filter(l => !snapLabels.includes(l));
                     addedSteps.forEach(l => diffs.push(`+ Steg: "${l}"`));
                     removedSteps.forEach(l => diffs.push(`- Steg: "${l}"`));
-                    if (addedSteps.length === 0 && removedSteps.length === 0 && prevLabels.length !== snapLabels.length) {
-                      diffs.push(`Steg omordnade: ${prevLabels.length} → ${snapLabels.length}`);
+                    if (addedSteps.length === 0 && removedSteps.length === 0 && prevLabels.join("|") !== snapLabels.join("|")) {
+                      diffs.push("Steg omordnade");
                     }
+                    snapItems.forEach(it => {
+                      const prevIt = prevItems[prevLabels.indexOf(it.label)];
+                      if (!prevIt) return;
+                      if ((prevIt.requires_photo ?? false) !== (it.requires_photo ?? false)) diffs.push(`Steg "${it.label}": foto ${it.requires_photo ? "krävs" : "krävs ej"}`);
+                      if ((prevIt.link_url ?? null) !== (it.link_url ?? null)) diffs.push(`Steg "${it.label}": länk ${it.link_url ? `"${it.link_url}"` : "borttagen"}`);
+                      if ((prevIt.condition_question_id ?? null) !== (it.condition_question_id ?? null)) diffs.push(`Steg "${it.label}": villkor ändrat`);
+                      if ((prevIt.condition_answer ?? null) !== (it.condition_answer ?? null)) diffs.push(`Steg "${it.label}": villkorssvar ändrat`);
+                    });
                     // Detailed question diff
-                    const prevQLabels = (prev.questions ?? []).map(q => q.label);
-                    const snapQLabels = (snap.questions ?? []).map(q => q.label);
+                    const prevQs = prev.questions ?? [];
+                    const snapQs = snap.questions ?? [];
+                    const prevQLabels = prevQs.map(q => q.label);
+                    const snapQLabels = snapQs.map(q => q.label);
                     const addedQs = snapQLabels.filter(l => !prevQLabels.includes(l));
                     const removedQs = prevQLabels.filter(l => !snapQLabels.includes(l));
                     addedQs.forEach(l => diffs.push(`+ Fråga: "${l}"`));
                     removedQs.forEach(l => diffs.push(`- Fråga: "${l}"`));
+                    if (addedQs.length === 0 && removedQs.length === 0 && prevQLabels.join("|") !== snapQLabels.join("|")) {
+                      diffs.push("Frågor omordnade");
+                    }
+                    snapQs.forEach(q => {
+                      const prevQ = prevQs[prevQLabels.indexOf(q.label)];
+                      if (!prevQ) return;
+                      if ((prevQ.question_type ?? "text") !== (q.question_type ?? "text")) diffs.push(`Fråga "${q.label}": typ ${prevQ.question_type ?? "text"} → ${q.question_type ?? "text"}`);
+                      if ((prevQ.is_required ?? false) !== (q.is_required ?? false)) diffs.push(`Fråga "${q.label}": obligatorisk ${q.is_required ? "ja" : "nej"}`);
+                      if ((prevQ.link_url ?? null) !== (q.link_url ?? null)) diffs.push(`Fråga "${q.label}": länk ${q.link_url ? `"${q.link_url}"` : "borttagen"}`);
+                    });
                   }
                   return (
                     <div key={v.id} className="rounded-xl border border-border/60 bg-card p-3 space-y-2">
@@ -4006,9 +4034,9 @@ function MallarPage() {
 
       {/* TEMPLATE PREVIEW DIALOG */}
       <Dialog open={!!previewTarget} onOpenChange={(o) => !o && setPreviewTarget(null)}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogContent hideCloseButton className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogTitle className="sr-only">Förhandsgranska mall</DialogTitle>
-          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <Eye className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Förhandsgranska mall</span>
             <span className="text-sm text-foreground font-semibold truncate flex-1">{previewTarget?.title}</span>
@@ -4021,7 +4049,7 @@ function MallarPage() {
             </button>
           </div>
           {previewTarget && (
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-10">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 pb-8">
               {/* Meta badges */}
               <div className="flex flex-wrap gap-2">
                 {previewTarget.category && <Badge variant="secondary">{previewTarget.category}</Badge>}
@@ -4130,7 +4158,7 @@ function MallarPage() {
       <Dialog open={bulkCreateOpen} onOpenChange={(o) => !o && setBulkCreateOpen(false)}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogTitle className="sr-only">Skapa uppgifter från mallar</DialogTitle>
-          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <ListChecks className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Skapa uppgifter från {bulkTaskConfigs.length} mallar</span>
             <span className="text-xs text-muted-foreground">
@@ -4572,9 +4600,9 @@ function MallarPage() {
 
       {/* TEMPLATE PACKAGES PANEL */}
       <Dialog open={showPackagesPanel} onOpenChange={(o) => { if (!o) { setShowPackagesPanel(false); setEditPackageTarget(null); setPackageForm({ name: "", description: "" }); setPackageTemplateIds([]); } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogContent hideCloseButton className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogTitle className="sr-only">Mallpaket</DialogTitle>
-          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <Layers className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Mallpaket</span>
             <span className="text-xs text-muted-foreground ml-1">— gruppera mallar och skapa alla uppgifter på en gång</span>
@@ -4586,7 +4614,7 @@ function MallarPage() {
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-5 space-y-6 pb-10">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6 pb-8">
             {/* Create / Edit form — only admins and HK users can manage packages */}
             {(isAdmin || isHK) && (
             <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
@@ -4764,7 +4792,7 @@ function MallarPage() {
       <Dialog open={deliveryMappingOpen} onOpenChange={(o) => { if (!o) setDeliveryMappingOpen(false); }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogTitle className="sr-only">Koppla leveranser till mallar</DialogTitle>
-          <div className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5">
+          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <Truck className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Koppla leveranser till mallar</span>
           </div>

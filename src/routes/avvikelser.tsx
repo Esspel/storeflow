@@ -33,6 +33,7 @@ import {
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import { exportCSV as downloadCSVRows } from "@/lib/csv";
 import { GdprImageReminder } from "@/components/gdpr-image-reminder";
 
 export const Route = createFileRoute("/avvikelser")({
@@ -423,6 +424,8 @@ function IssuesPage() {
 
   const deleteIncident = async () => {
     if (!deleteTarget) return;
+    // Radera även själva filerna i storage, annars blir de kvar som föräldralösa
+    deleteStorageFiles((deleteTarget.images ?? []).map((img) => img.storage_path).filter(Boolean));
     await supabase.from("incident_comments").delete().eq("incident_id", deleteTarget.id);
     await supabase.from("incident_images").delete().eq("incident_id", deleteTarget.id);
     await supabase.from("incidents").delete().eq("id", deleteTarget.id);
@@ -497,14 +500,7 @@ function IssuesPage() {
         new Date(i.created_at).toLocaleDateString("sv-SE"),
       ]),
     ];
-    const csv = rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
-    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `avvikelser-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCSVRows(rows, `avvikelser-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
   };
 
   return (

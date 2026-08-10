@@ -89,6 +89,8 @@ function TaskCarousel({ tasks }: { tasks: LiveTask[] }) {
   const [animDir, setAnimDir] = useState<"left" | "right" | null>(null);
   const [visible, setVisible] = useState(true);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pageRef = useRef(0);
+  pageRef.current = page;
   const totalPages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE));
 
   const goTo = useCallback((next: number, dir: "left" | "right") => {
@@ -104,11 +106,8 @@ function TaskCarousel({ tasks }: { tasks: LiveTask[] }) {
   useEffect(() => {
     if (totalPages <= 1) return;
     const id = setInterval(() => {
-      setPage((p) => {
-        const next = (p + 1) % totalPages;
-        goTo(next, "left");
-        return p;
-      });
+      const next = (pageRef.current + 1) % totalPages;
+      goTo(next, "left");
     }, 8000);
     return () => clearInterval(id);
   }, [totalPages, goTo]);

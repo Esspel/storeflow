@@ -31,6 +31,7 @@ import {
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn, ensureHttps, sanitizeCsvCell, parseTimeInput } from "@/lib/utils";
+import { exportTextAsCSV } from "@/lib/csv";
 import { getSimulatedNow, getSimulatedDate } from "@/lib/time-simulation";
 import { copyChildAssociations, midnightStockholm, localDateStr, buildPeriodStarts, dueFromPeriodStart, getRecurrenceHorizonDays, RECURRENCE_HORIZON_KEY } from "@/lib/task-utils";
 
@@ -588,7 +589,8 @@ function TasksPage() {
     let q = supabase
       .from("tasks")
       .select("*, store:stores(*), steps:task_steps(*), questions:task_questions(*), assignees:task_assignees(*, user:app_users(id,display_name,username), group:user_groups(id,name)), images:task_images(*)")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(1000);
 
     if (activeStore) {
       q = q.eq("store_id", activeStore.id);
@@ -1735,13 +1737,7 @@ function TasksPage() {
     ];
     const instructions = `# Exporterat ${new Date().toLocaleDateString("sv-SE")} — kan importeras direkt som mallar\n`;
     const csv = instructions + rows.map((r) => r.map((v) => `"${sanitizeCsvCell(String(v ?? "").replace(/"/g, '""'))}"`).join(";")).join("\n");
-    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `uppgifter-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportTextAsCSV(csv, `uppgifter-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
   };
 
   const filters = [
@@ -4084,7 +4080,7 @@ function TasksPage() {
 
       {showFutureManager && futureManagerTask && (
         <Dialog open onOpenChange={(o) => { if (!o) { setShowFutureManager(false); setSelectedFutureIds(new Set()); } }}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
+          <DialogContent hideCloseButton className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
             <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
               <CalendarDays className="h-4 w-4 text-primary shrink-0" />
               <div className="min-w-0 flex-1">

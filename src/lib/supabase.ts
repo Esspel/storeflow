@@ -256,8 +256,6 @@ export type ChecklistTemplate = {
   inherit_mode?: "copy" | "variant" | null;
   hidden_step_ids?: string[] | null;
   overridden_steps?: Array<{ parent_step_id: string; label: string; requires_photo: boolean }> | null;
-  // Process
-  process_id?: string | null;
   created_at: string;
   updated_at: string;
   items?: ChecklistTemplateItem[];
@@ -290,31 +288,6 @@ export type TemplatePackageItem = {
   package_id: string;
   template_id: string;
   sort_order: number;
-};
-
-export type Process = {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  store_id: string | null;
-  hierarchy_scope: string;
-  forening_id: string | null;
-  is_global: boolean;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-  store?: Store;
-  templates?: ProcessTemplate[];
-};
-
-export type ProcessTemplate = {
-  id: string;
-  process_id: string;
-  template_id: string;
-  sort_order: number;
-  label: string;
-  template?: ChecklistTemplate;
 };
 
 export type ChecklistTemplateItem = {

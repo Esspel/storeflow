@@ -25,7 +25,6 @@ import { Route as LicensRouteImport } from './routes/licens'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as PersonalRouteImport } from './routes/personal'
-import { Route as ProcesserRouteImport } from './routes/processer'
 import { Route as PulstavlaRouteImport } from './routes/pulstavla'
 import { Route as QrAvvikelseRouteImport } from './routes/qr-avvikelse'
 import { Route as QrKundonskemalRouteImport } from './routes/qr-kundonskemal'
@@ -115,11 +114,6 @@ const PersonalRoute = PersonalRouteImport.update({
   path: '/personal',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ProcesserRoute = ProcesserRouteImport.update({
-  id: '/processer',
-  path: '/processer',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const PulstavlaRoute = PulstavlaRouteImport.update({
   id: '/pulstavla',
   path: '/pulstavla',
@@ -178,7 +172,6 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
-  '/processer': typeof ProcesserRoute
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
@@ -205,7 +198,6 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
-  '/processer': typeof ProcesserRoute
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
@@ -233,7 +225,6 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
-  '/processer': typeof ProcesserRoute
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
@@ -262,7 +253,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/mallar'
     | '/personal'
-    | '/processer'
     | '/pulstavla'
     | '/qr-avvikelse'
     | '/qr-kundonskemal'
@@ -289,7 +279,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/mallar'
     | '/personal'
-    | '/processer'
     | '/pulstavla'
     | '/qr-avvikelse'
     | '/qr-kundonskemal'
@@ -316,7 +305,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/mallar'
     | '/personal'
-    | '/processer'
     | '/pulstavla'
     | '/qr-avvikelse'
     | '/qr-kundonskemal'
@@ -344,7 +332,6 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MallarRoute: typeof MallarRoute
   PersonalRoute: typeof PersonalRoute
-  ProcesserRoute: typeof ProcesserRoute
   PulstavlaRoute: typeof PulstavlaRoute
   QrAvvikelseRoute: typeof QrAvvikelseRoute
   QrKundonskemalRoute: typeof QrKundonskemalRoute
@@ -469,13 +456,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PersonalRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/processer': {
-      id: '/processer'
-      path: '/processer'
-      fullPath: '/processer'
-      preLoaderRoute: typeof ProcesserRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/pulstavla': {
       id: '/pulstavla'
       path: '/pulstavla'
@@ -552,7 +532,6 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MallarRoute: MallarRoute,
   PersonalRoute: PersonalRoute,
-  ProcesserRoute: ProcesserRoute,
   PulstavlaRoute: PulstavlaRoute,
   QrAvvikelseRoute: QrAvvikelseRoute,
   QrKundonskemalRoute: QrKundonskemalRoute,

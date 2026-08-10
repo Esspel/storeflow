@@ -27,7 +27,8 @@ import {
 import { ROLE_LABELS, HIERARCHY_LABELS, supabase, type Notification, cleanOldNotifications } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
 import { GlobalStoreSelector } from "@/components/global-store-selector";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -294,25 +295,25 @@ export function AppShell() {
     { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
   ];
 
+  const fetchNotifications = useCallback(() => {
+    if (!user || document.hidden) return; // Pausa vid bakgrundsflik
+    supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .then(({ data }) => {
+        if (data) setNotifications(data as Notification[]);
+      });
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
 
-    const fetchNotifications = () => {
-      if (document.hidden) return; // Pausa vid bakgrundsflik
-      supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(20)
-        .then(({ data }) => {
-          if (data) setNotifications(data as Notification[]);
-        });
-    };
-
     fetchNotifications();
     cleanOldNotifications(user.id);
-    const interval = setInterval(fetchNotifications, 5000);
+    const interval = setInterval(fetchNotifications, 30_000);
     const onVisible = () => {
       if (document.visibilityState === "visible") fetchNotifications();
     };
@@ -322,7 +323,23 @@ export function AppShell() {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [user]);
+  }, [user, fetchNotifications]);
+
+  // Uppdatera klockan direkt + visa toast när en OS-push anländer med appen i förgrunden
+  useEffect(() => {
+    if (!user || !("serviceWorker" in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as
+        | { type?: string; payload?: { title?: string; body?: string } }
+        | null;
+      if (!data || data.type !== "PUSH_RECEIVED") return;
+      const title = data.payload?.title;
+      if (title) toast(title, { description: data.payload?.body });
+      fetchNotifications();
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [user, fetchNotifications]);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase, type CommonDefect } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { parseCSVLine, exportTextAsCSV } from "@/lib/csv";
 
 export type CheckpointOption = { id: string; label: string; zoneName?: string };
 
@@ -177,13 +178,7 @@ export function ManageCommonDefects({
       .filter((r): r is string => r !== null)
       .join("\n");
 
-    const blob = new Blob(["\ufeff" + rows], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "vanliga_avvikelser_mall.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    exportTextAsCSV(rows, "vanliga_avvikelser_mall.csv");
   };
 
   // CSV export (current data)
@@ -200,39 +195,7 @@ export function ManageCommonDefects({
       }),
     ].join("\n");
 
-    const blob = new Blob(["\ufeff" + rows], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "vanliga_avvikelser.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Säkrare CSV-rad-parser för semikolon-separerade filer
-  const parseCsvLine = (text: string): string[] => {
-    const result: string[] = [];
-    let field = "";
-    let inQuotes = false;
-
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
-      if (char === '"') {
-        if (inQuotes && text[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (char === ";" && !inQuotes) {
-        result.push(field.trim());
-        field = "";
-      } else {
-        field += char;
-      }
-    }
-    result.push(field.trim());
-    return result;
+    exportTextAsCSV(rows, "vanliga_avvikelser.csv");
   };
 
   // CSV import
@@ -254,7 +217,7 @@ export function ManageCommonDefects({
     
     const inserts = dataLines
       .map((line, i) => {
-        const cols = parseCsvLine(line);
+        const cols = parseCSVLine(line, ";").map((f) => f.trim());
         const label = cols[0]?.trim();
         if (!label) return null;
         const checkpointIdsRaw = cols[1] ?? "";

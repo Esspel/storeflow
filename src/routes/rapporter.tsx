@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase, type Task, type Incident } from "@/lib/supabase";
 import { dedupRecurringSeries } from "@/lib/task-utils";
+import { exportCSV } from "@/lib/csv";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
@@ -159,7 +160,7 @@ function ReportsPage() {
         new Date(t.created_at).toLocaleDateString("sv-SE"),
       ]),
     ];
-    downloadCSV(rows, `uppgifter-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
+    exportCSV(rows, `uppgifter-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
   function exportIncidentsCSV() {
@@ -170,7 +171,7 @@ function ReportsPage() {
         new Date(i.created_at).toLocaleDateString("sv-SE"),
       ]),
     ];
-    downloadCSV(rows, `avvikelser-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
+    exportCSV(rows, `avvikelser-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
   function exportKundrunCSV() {
@@ -184,18 +185,7 @@ function ReportsPage() {
         s.zone_defects,
       ]),
     ];
-    downloadCSV(rows, `kundrunda-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
-  }
-
-  function downloadCSV(rows: (string | number)[][], filename: string) {
-    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
-    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportCSV(rows, `kundrunda-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
   if (user && user.role === "employee") {
