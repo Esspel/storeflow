@@ -1539,22 +1539,27 @@ function TasksPage() {
     const validSteps = newTask.steps.filter(s => s.label.trim());
     const validQuestions = newTask.questions.filter(q => q.label.trim());
 
-    const buildDueDate = (dueTime?: string): string | null => {
-      if (!newTask.due_date) return null;
-      const parts = newTask.due_date.split("-").map(Number);
-      if (parts.length < 3 || parts.some(isNaN)) return null;
-      const [y, mo, d] = parts;
-      const dt = new Date(y, mo - 1, d, 0, 0, 0, 0);
-      if (dueTime && dueTime.trim()) {
-        const timeParts = dueTime.trim().split(":").map(Number);
-        const h = timeParts[0] ?? 0;
-        const m = timeParts[1] ?? 0;
-        dt.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
-      } else {
-        dt.setHours(23, 59, 59, 999);
-      }
-      return isNaN(dt.getTime()) ? null : dt.toISOString();
-    };
+   const buildDueDate = (dueTime?: string): string | null => {
+    if (!newTask.due_date) return null;
+    const parts = newTask.due_date.split("-").map(Number);
+    if (parts.length < 3 || parts.some(isNaN)) return null;
+    const [y, mo, d] = parts;
+  
+    // Hämta timmar och minuter från antingen tidsluckan, due_date_time, eller använd standard
+    let h = 23;
+    let m = 59;
+    
+    const targetTime = dueTime && dueTime.trim() ? dueTime.trim() : newTask.due_date_time;
+    if (targetTime && targetTime.includes(":")) {
+      const timeParts = targetTime.split(":").map(Number);
+      if (!isNaN(timeParts[0])) h = timeParts[0];
+      if (!isNaN(timeParts[1])) m = timeParts[1];
+    }
+  
+    // Skapa ett rent datum i lokal tid för att undvika att UTC-konvertering flyttar dygnet fel
+    const dt = new Date(y, mo - 1, d, h, m, 0, 0);
+    return isNaN(dt.getTime()) ? null : dt.toISOString();
+  };
 
     const insertSingleTask = async (dueTime: string) => {
       const cleanTime = dueTime.trim() || undefined;
