@@ -41,19 +41,19 @@ Deno.serve(async (req: Request) => {
 
   const supabase = serviceRoleClient();
 
-  // Validate authentication: accepts either x-import-secret OR custom x-session-token
+  // 1. Validera autentisering via x-import-secret eller x-session-token i app_sessions
   const expectedSecret = Deno.env.get("IMPORT_WEBHOOK_SECRET");
   const providedSecret = req.headers.get("x-import-secret") ?? "";
   const sessionToken = req.headers.get("x-session-token");
 
   let isAuthenticated = false;
+  let currentUserId: string | null = null;
 
   if (expectedSecret && safeCompare(providedSecret, expectedSecret)) {
     isAuthenticated = true;
   } else if (sessionToken) {
-    // Slå upp token i er egen sessionstabell i databasen i stället för Supabase Auth
     const { data: session, error } = await supabase
-      .from("user_sessions")
+      .from("app_sessions")
       .select("id, user_id, expires_at")
       .eq("token", sessionToken)
       .maybeSingle();
@@ -62,6 +62,7 @@ Deno.serve(async (req: Request) => {
       const isNotExpired = !session.expires_at || new Date(session.expires_at).getTime() > Date.now();
       if (isNotExpired) {
         isAuthenticated = true;
+        currentUserId = session.user_id;
       }
     }
   }
@@ -78,6 +79,7 @@ Deno.serve(async (req: Request) => {
     key_id?: string;
     api_key?: string;
     expires_at?: string | null;
+    user_id?: string;
   };
 
   try {
@@ -124,6 +126,7 @@ Deno.serve(async (req: Request) => {
       store_id: body.store_id ?? null,
       scopes,
       expires_at: body.expires_at ?? null,
+      created_by: currentUserId ?? body.user_id ?? null,
     }).select("id, key_prefix").single();
 
     if (error || !created) return json({ error: error?.message ?? "Kunde inte skapa nyckel." }, 500);
@@ -140,7 +143,6 @@ Deno.serve(async (req: Request) => {
   if (body.action === "rotate") {
     if (!body.key_id) return json({ error: "key_id saknas." }, 400);
 
-    // 1. Fetch original key details
     const { data: oldKey, error: fetchErr } = await supabase
       .from("api_keys")
       .select("*")
@@ -150,7 +152,6 @@ Deno.serve(async (req: Request) => {
     if (fetchErr || !oldKey) return json({ error: "Nyckeln hittades inte." }, 404);
     if (oldKey.revoked_at) return json({ error: "Kan inte rotera en återkallad nyckel." }, 400);
 
-    // 2. Revoke existing key
     const { error: revokeErr } = await supabase
       .from("api_keys")
       .update({ revoked_at: new Date().toISOString() })
@@ -158,7 +159,6 @@ Deno.serve(async (req: Request) => {
 
     if (revokeErr) return json({ error: revokeErr.message }, 500);
 
-    // 3. Create new replacement key with identical properties
     const rawKey = generateApiKey();
     const keyHash = await sha256Hex(rawKey);
 
@@ -170,6 +170,7 @@ Deno.serve(async (req: Request) => {
       scopes: oldKey.scopes,
       expires_at: oldKey.expires_at,
       rotated_from_id: oldKey.id,
+      created_by: currentUserId ?? oldKey.created_by ?? null,
     }).select("id, key_prefix").single();
 
     if (createErr || !newKey) return json({ error: createErr?.message ?? "Kunde inte rotera nyckeln." }, 500);
@@ -226,5 +227,5 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  return json({ error: "Okänd action. Använd 'create', 'list', 'revoke', 'rotate' eller 'exchange'." }, 400);
+  return json({ error: "Okänd action." }, 400);
 });
