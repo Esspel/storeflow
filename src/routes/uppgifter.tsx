@@ -32,7 +32,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { cn, ensureHttps, sanitizeCsvCell, parseTimeInput } from "@/lib/utils";
 import { getSimulatedNow, getSimulatedDate } from "@/lib/time-simulation";
-import { dedupRecurringSeries, midnightStockholm, localDateStr, buildPeriodStarts, dueFromPeriodStart } from "@/lib/task-utils";
+import { dedupRecurringSeries, midnightStockholm, localDateStr, buildPeriodStarts, dueFromPeriodStart, getRecurrenceHorizonDays, RECURRENCE_HORIZON_KEY } from "@/lib/task-utils";
 
 export const Route = createFileRoute("/uppgifter")({
   component: TasksPage,
@@ -343,6 +343,13 @@ function TasksPage() {
   const [sortBy, setSortBy] = useState<"default" | "due_date" | "priority" | "assignee" | "title">("default");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showPastTasks, setShowPastTasks] = useState(false);
+  const [horizonDays, setHorizonDays] = useState<number>(() => getRecurrenceHorizonDays());
+  const horizonRef = useRef(horizonDays);
+  horizonRef.current = horizonDays;
+
+  useEffect(() => {
+    try { localStorage.setItem(RECURRENCE_HORIZON_KEY, String(horizonDays)); } catch {}
+  }, [horizonDays]);
 
   const [undoToast, setUndoToast] = useState<{ task: TaskFull; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
   const undoToastRef = useRef(undoToast);
@@ -710,10 +717,7 @@ function TasksPage() {
       : parent.due_date
         ? midnight(new Date(parent.due_date))
         : midnight(new Date(parent.created_at));
-    const durationMs = parent.due_date
-      ? Math.max(0, new Date(parent.due_date).getTime() - originDate.getTime())
-      : 0;
-    const maxCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 30); return midnight(d); })();
+    const maxCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + horizonRef.current); return midnight(d); })();
     const ceilDate = parent.recurrence_end
       ? (() => { const e = midnight(new Date(parent.recurrence_end)); return e < maxCeil ? e : maxCeil; })()
       : maxCeil;
@@ -743,9 +747,7 @@ function TasksPage() {
 
     for (const ps of allPeriods) {
       const psKey = localDateStr(ps);
-      const childDue = parent.due_date
-        ? new Date(ps.getTime() + durationMs)
-        : dueFromPeriodStart(ps, (parent as TaskFull & { due_date_time?: string }).due_date_time);
+      const childDue = dueFromPeriodStart(ps, (parent as TaskFull & { due_date_time?: string }).due_date_time);
       const { data: child } = await supabase.from("tasks").insert({
         title: parent.title,
         description: parent.description,
@@ -769,11 +771,11 @@ function TasksPage() {
     }
   }
 
-  const spawnRecurringTasks = useCallback(async (taskList: TaskFull[]) => {
+  const spawnRecurringTasks = useCallback(async (taskList: TaskFull[], force = false) => {
     if (!isManager || spawnRef.current) return;
     const nowMs = getSimulatedNow();
     const todayKey = new Date(nowMs).toISOString().slice(0, 10);
-    if (lastSpawnDateRef.current === todayKey) return;
+    if (!force && lastSpawnDateRef.current === todayKey) return;
     spawnRef.current = true;
 
     const simToday = new Date(nowMs);
@@ -793,14 +795,12 @@ function TasksPage() {
     if (recurringTasks.length === 0) { spawnRef.current = false; return; }
 
     let didSpawn = false;
-    const spawnCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 30); return midnight(d); })();
+    const spawnCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + horizonRef.current); return midnight(d); })();
 
     for (const t of recurringTasks) {
       const originDate: Date = t.recurrence_start
         ? midnight(new Date(t.recurrence_start))
         : t.due_date ? midnight(new Date(t.due_date)) : midnight(new Date(t.created_at));
-      const durationMs = t.due_date
-        ? Math.max(0, new Date(t.due_date).getTime() - originDate.getTime()) : 0;
 
       const effectiveCeil = t.recurrence_end
         ? (() => { const e = midnight(new Date(t.recurrence_end)); return e < spawnCeil ? e : spawnCeil; })()
@@ -825,9 +825,7 @@ function TasksPage() {
         const psKey = localDateStr(ps);
         if (covered.has(psKey)) continue;
         if (deletedPeriods.has(psKey)) continue;
-        const childDue = t.due_date
-          ? new Date(ps.getTime() + durationMs)
-          : dueFromPeriodStart(ps, (t as TaskFull & { due_date_time?: string }).due_date_time);
+        const childDue = dueFromPeriodStart(ps, (t as TaskFull & { due_date_time?: string }).due_date_time);
         const { data: child } = await supabase.from("tasks").insert({
           title: t.title, description: t.description, category: t.category, priority: t.priority,
           store_id: t.store_id, due_date: childDue ? childDue.toISOString() : null,
@@ -856,6 +854,13 @@ function TasksPage() {
       void spawnRecurringTasks(tasks);
     }
   }, [tasks, spawnRecurringTasks]);
+
+  const commitHorizon = (n: number) => {
+    horizonRef.current = n;
+    setHorizonDays(n);
+    // Re-spawna med nya horisonten så att framtida barn genereras ända fram dit
+    if (tasks.length > 0) void spawnRecurringTasks(tasks, true);
+  };
 
   useEffect(() => {
     const handler = () => {
@@ -2436,6 +2441,26 @@ function TasksPage() {
               >
                 {selectedTaskIds.size === filtered.length && filtered.length > 0 ? "Avmarkera alla" : "Markera alla"}
               </Button>
+            )}
+            {isManager && (
+              <div className="flex items-center gap-2 shrink-0 rounded-full border border-border/60 bg-card px-3 py-1.5"
+                title="Hur långt framåt återkommande uppgifter genereras">
+                <Repeat className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <input
+                  type="range"
+                  min={0}
+                  max={90}
+                  step={1}
+                  value={horizonDays}
+                  onChange={(e) => setHorizonDays(Number(e.currentTarget.value))}
+                  onPointerUp={(e) => commitHorizon(Number(e.currentTarget.value))}
+                  onKeyUp={(e) => commitHorizon(Number(e.currentTarget.value))}
+                  className="w-24 cursor-pointer accent-primary"
+                />
+                <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap min-w-14 text-right">
+                  {horizonDays === 0 ? "Inga" : `${horizonDays}d`} framåt
+                </span>
+              </div>
             )}
           </div>
         )}

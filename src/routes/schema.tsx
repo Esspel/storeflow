@@ -26,6 +26,7 @@ import { supabase, type AppUser, type Task } from "@/lib/supabase";
 import { generatePassword, usernameFromName } from "@/lib/text-utils";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import { dueFromPeriodStart } from "@/lib/task-utils";
 import { toast } from "sonner";
 import { getSpecialWeekHoliday, stockholmToUtc, formatStockholmTime, isoWeekNumber } from "@/lib/swedish-holidays";
 import { getYear } from "date-fns";
@@ -908,7 +909,7 @@ function SchemaPage() {
       if (isAdmin) {
         const { data: parents } = await supabase
           .from("tasks")
-          .select("id, title, recurrence_rule, recurrence_days, recurrence_start, recurrence_end, recurrence_period_start, parent_task_id, due_date, created_at, status, store_id, assigned_to, created_by")
+          .select("id, title, recurrence_rule, recurrence_days, recurrence_start, recurrence_end, recurrence_period_start, parent_task_id, due_date, due_date_time, created_at, status, store_id, assigned_to, created_by")
           .eq("store_id", storeId!)
           .not("recurrence_rule", "is", null)
           .is("parent_task_id", null);
@@ -933,7 +934,6 @@ function SchemaPage() {
           for (const t of parents as Task[]) {
             if (!t.recurrence_rule) continue;
             const originDate = t.recurrence_start ? midnight(new Date(t.recurrence_start)) : t.due_date ? midnight(new Date(t.due_date)) : midnight(new Date(t.created_at));
-            const durationMs = t.due_date ? Math.max(0, midnight(new Date(t.due_date)).getTime() - originDate.getTime()) : 0;
             const weekStart = new Date(queryStart);
 
             const periodStarts = buildPeriodStartsSimple(originDate, t.recurrence_rule, t.recurrence_days ?? null, t.recurrence_start ? new Date(t.recurrence_start) : null, t.recurrence_end ? new Date(t.recurrence_end) : null, weekCeil, weekStart);
@@ -941,10 +941,11 @@ function SchemaPage() {
             for (const ps of periodStarts) {
               const psKey = localDS(ps);
               if (covered.has(psKey)) continue;
-              const childDue = t.due_date ? new Date(ps.getTime() + durationMs) : null;
+              const childDue = dueFromPeriodStart(ps, (t as Task & { due_date_time?: string }).due_date_time);
               await supabase.from("tasks").insert({
                 title: t.title, description: (t as Task & { description?: string }).description, category: t.category, priority: t.priority,
                 store_id: t.store_id, due_date: childDue ? childDue.toISOString() : null,
+                due_date_time: (t as Task & { due_date_time?: string }).due_date_time ?? null,
                 recurrence_rule: t.recurrence_rule, recurrence_days: t.recurrence_days,
                 recurrence_period_start: psKey, parent_task_id: t.id,
                 created_by: t.created_by, assigned_to: t.assigned_to, status: "todo",

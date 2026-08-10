@@ -46,6 +46,21 @@ export function localDateStr(d: Date): string {
 
 const MAX_SPAWN_INSTANCES = 90;
 
+// --- Händelsehorisont: hur långt framåt återkommande uppgifter genereras ---
+export const RECURRENCE_HORIZON_KEY = "sf-recurrence-horizon";
+export const DEFAULT_RECURRENCE_HORIZON_DAYS = 30;
+export const MAX_RECURRENCE_HORIZON_DAYS = 90;
+
+export function getRecurrenceHorizonDays(): number {
+  try {
+    const n = parseInt(localStorage.getItem(RECURRENCE_HORIZON_KEY) ?? "", 10);
+    if (isNaN(n)) return DEFAULT_RECURRENCE_HORIZON_DAYS;
+    return Math.min(MAX_RECURRENCE_HORIZON_DAYS, Math.max(0, n));
+  } catch {
+    return DEFAULT_RECURRENCE_HORIZON_DAYS;
+  }
+}
+
 export function buildPeriodStarts(
   originDue: Date,
   rule: string,
@@ -148,6 +163,7 @@ export type SpawnableParent = {
 export async function spawnChildrenForParent(
   parent: SpawnableParent,
   nowMs: number,
+  horizonDays: number = DEFAULT_RECURRENCE_HORIZON_DAYS,
 ): Promise<void> {
   if (!parent.recurrence_rule) return;
 
@@ -157,11 +173,7 @@ export async function spawnChildrenForParent(
       ? midnightStockholm(new Date(parent.due_date))
       : midnightStockholm(new Date(parent.created_at));
 
-  const durationMs = parent.due_date
-    ? Math.max(0, new Date(parent.due_date).getTime() - originDate.getTime())
-    : 0;
-
-  const maxCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + 30); return midnightStockholm(d); })();
+  const maxCeil = (() => { const d = new Date(nowMs); d.setDate(d.getDate() + horizonDays); return midnightStockholm(d); })();
   const ceilDate = parent.recurrence_end
     ? (() => { const e = midnightStockholm(new Date(parent.recurrence_end)); return e < maxCeil ? e : maxCeil; })()
     : maxCeil;
@@ -187,9 +199,7 @@ export async function spawnChildrenForParent(
 
   for (const ps of allPeriods) {
     const psKey = localDateStr(ps);
-    const childDue = parent.due_date
-      ? new Date(ps.getTime() + durationMs)
-      : dueFromPeriodStart(ps, parent.due_date_time);
+    const childDue = dueFromPeriodStart(ps, parent.due_date_time);
     const { data: child } = await supabase.from("tasks").insert({
       title: parent.title,
       description: parent.description,

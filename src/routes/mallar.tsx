@@ -25,7 +25,7 @@ import { useAuth } from "@/lib/auth-context";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
 import { cn, ensureHttps, sanitizeCsvCell } from "@/lib/utils";
 import { getSimulatedDate, getSimulatedNow } from "@/lib/time-simulation";
-import { spawnChildrenForParent } from "@/lib/task-utils";
+import { spawnChildrenForParent, getRecurrenceHorizonDays } from "@/lib/task-utils";
 import { toast } from "sonner";
 
 const RECURRENCE_OPTIONS = [
@@ -1432,7 +1432,7 @@ function MallarPage() {
               ...cfg.assigneeUserIds.map(uid => ({ user_id: uid, group_id: null })),
               ...cfg.assigneeGroupIds.map(gid => ({ user_id: null, group_id: gid })),
             ],
-          }, getSimulatedNow());
+          }, getSimulatedNow(), getRecurrenceHorizonDays());
         }
       };
 
