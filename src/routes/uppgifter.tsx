@@ -1299,85 +1299,50 @@ function TasksPage() {
       if (periodStart) {
         const { data: futureRows } = await supabase
           .from("tasks")
-          .select("id, status, completed_at")
-          .eq("parent_task_id", parentId)
+          .select("id")
+          .or(`parent_task_id.eq.${parentId},id.eq.${parentId}`)
           .gte("recurrence_period_start", periodStart);
 
-        const incompleteIds = (futureRows ?? [])
-          .filter((r: { status: string; completed_at: string | null }) => r.status !== "done" && !r.completed_at)
-          .map((r: { id: string }) => r.id);
+        const targetIds = (futureRows ?? []).map((r: { id: string }) => r.id);
+        if (!targetIds.includes(t.id)) targetIds.push(t.id);
 
-        if (incompleteIds.length > 0) {
-          const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", incompleteIds);
+        if (targetIds.length > 0) {
+          const { data: imgRows } = await supabase.from("task_images").select("storage_path").in("task_id", targetIds);
           deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
-          await supabase.from("tasks").delete().in("id", incompleteIds);
-          deletedIds.push(...incompleteIds);
+          await supabase.from("tasks").delete().in("id", targetIds);
+          deletedIds.push(...targetIds);
         }
 
-        if (!isChild && t.status !== "done" && !t.completed_at) {
-          // Also delete the parent itself when deleting "this and future"
-          const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", t.id);
-          deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
-          await supabase.from("tasks").delete().eq("id", t.id);
-          deletedIds.push(t.id);
-        } else {
-          // Parent survives (either it's a child instance being deleted, or the
-          // parent itself was already done/completed). Cap recurrence_end so the
-          // spawner won't recreate the periods we just purged.
-          const dayBefore = new Date(periodStart);
-          dayBefore.setDate(dayBefore.getDate() - 1);
-          await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
-        }
+        const dayBefore = new Date(periodStart);
+        dayBefore.setDate(dayBefore.getDate() - 1);
+        await supabase.from("tasks").update({ recurrence_end: localDateStr(dayBefore) }).eq("id", parentId);
       }
-    } else if ((t.recurrence_rule || isChild) && scope === "single") {
-      // Always delete the specific instance the user picked, regardless of its
-      // status. (Previously this was guarded by "not done", which meant clicking
-      // delete on a completed occurrence silently did nothing.)
-      {
-        const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", t.id);
-        deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
-        await supabase.from("tasks").delete().eq("id", t.id);
-        deletedIds.push(t.id);
-      }
+    } else {
+      // Single task deletion
+      const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", t.id);
+      deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
+      await supabase.from("tasks").delete().eq("id", t.id);
+      deletedIds.push(t.id);
+
       if (isChild && periodStart) {
-        // Mark this period as skipped on the parent so spawn doesn't recreate it
         const { data: parent } = await supabase.from("tasks").select("deleted_periods").eq("id", parentId).maybeSingle();
         const existing: string[] = (parent?.deleted_periods ?? []) as string[];
         if (!existing.includes(periodStart)) {
           await supabase.from("tasks").update({ deleted_periods: [...existing, periodStart] }).eq("id", parentId);
         }
       }
-    } else {
-      // Same fix as above: delete regardless of status.
-      {
-        const { data: imgRows } = await supabase.from("task_images").select("storage_path").eq("task_id", t.id);
-        deleteStorageFiles((imgRows ?? []).map((r: { storage_path: string }) => r.storage_path));
-        await supabase.from("tasks").delete().eq("id", t.id);
-        deletedIds.push(t.id);
-      }
     }
 
-    // RLS can silently block a delete (0 rows affected, no thrown error) e.g. when
-    // the task belongs to a store that isn't the user's currently active store.
-    // Verify the click actually removed something instead of failing silently.
-    const { data: stillExists } = await supabase.from("tasks").select("id").eq("id", t.id).maybeSingle();
-    if (stillExists) {
-      toast.error("Kunde inte ta bort uppgiften. Den kan tillhöra en annan butik än din aktiva — byt butik och försök igen.");
-      setDeleteTarget(null);
-      setDeleteScope(null);
-      await fetchTasks();
-      return;
-    }
-
-    // Clear depends_on_task_id on any tasks that referenced the deleted task(s)
     if (deletedIds.length > 0) {
       await supabase.from("tasks").update({ depends_on_task_id: null }).in("depends_on_task_id", deletedIds);
     }
 
     logAudit(user?.id ?? null, "task.delete", "tasks", t.id, { title: t.title, scope });
+    setTasks(prev => prev.filter(taskItem => !deletedIds.includes(taskItem.id)));
     setDeleteTarget(null);
     setDeleteScope(null);
     setDetailTask(null);
+    toast.success("Uppgiften har raderats");
     await fetchTasks();
   };
 
@@ -1733,11 +1698,13 @@ function TasksPage() {
       if (parts.length < 3 || parts.some(isNaN)) return null;
       const [y, mo, d] = parts;
       const dt = new Date(y, mo - 1, d, 0, 0, 0, 0);
-      if (dueTime) {
-        const timeParts = dueTime.split(":").map(Number);
+      if (dueTime && dueTime.trim()) {
+        const timeParts = dueTime.trim().split(":").map(Number);
         const h = timeParts[0] ?? 0;
         const m = timeParts[1] ?? 0;
         dt.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+      } else {
+        dt.setHours(23, 59, 59, 999);
       }
       return isNaN(dt.getTime()) ? null : dt.toISOString();
     };
@@ -1795,7 +1762,8 @@ function TasksPage() {
     };
 
     // When time_slots are set, create one task per slot; otherwise create one task
-    const slots = newTask.time_slots.length > 0 ? newTask.time_slots : [newTask.due_date_time || ""];
+    const validSlots = newTask.time_slots.map(s => s.trim()).filter(Boolean);
+    const slots = validSlots.length > 0 ? validSlots : [newTask.due_date_time?.trim() || ""];
     const createdTasks = [];
     for (const slot of slots) {
       const t = await insertSingleTask(slot);
