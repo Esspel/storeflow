@@ -32,7 +32,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { cn, ensureHttps, sanitizeCsvCell, parseTimeInput } from "@/lib/utils";
 import { getSimulatedNow, getSimulatedDate } from "@/lib/time-simulation";
-import { dedupRecurringSeries, midnightStockholm, localDateStr, buildPeriodStarts } from "@/lib/task-utils";
+import { dedupRecurringSeries, midnightStockholm, localDateStr, buildPeriodStarts, dueFromPeriodStart } from "@/lib/task-utils";
 
 export const Route = createFileRoute("/uppgifter")({
   component: TasksPage,
@@ -743,7 +743,9 @@ function TasksPage() {
 
     for (const ps of allPeriods) {
       const psKey = localDateStr(ps);
-      const childDue = parent.due_date ? new Date(ps.getTime() + durationMs) : null;
+      const childDue = parent.due_date
+        ? new Date(ps.getTime() + durationMs)
+        : dueFromPeriodStart(ps, (parent as TaskFull & { due_date_time?: string }).due_date_time);
       const { data: child } = await supabase.from("tasks").insert({
         title: parent.title,
         description: parent.description,
@@ -823,7 +825,9 @@ function TasksPage() {
         const psKey = localDateStr(ps);
         if (covered.has(psKey)) continue;
         if (deletedPeriods.has(psKey)) continue;
-        const childDue = t.due_date ? new Date(ps.getTime() + durationMs) : null;
+        const childDue = t.due_date
+          ? new Date(ps.getTime() + durationMs)
+          : dueFromPeriodStart(ps, (t as TaskFull & { due_date_time?: string }).due_date_time);
         const { data: child } = await supabase.from("tasks").insert({
           title: t.title, description: t.description, category: t.category, priority: t.priority,
           store_id: t.store_id, due_date: childDue ? childDue.toISOString() : null,
