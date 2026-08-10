@@ -26,9 +26,9 @@ import { supabase, type AppUser, type Task } from "@/lib/supabase";
 import { generatePassword, usernameFromName } from "@/lib/text-utils";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
-import { dueFromPeriodStart } from "@/lib/task-utils";
+import { copyChildAssociations, dueFromPeriodStart, localDateStr, midnightStockholm } from "@/lib/task-utils";
 import { toast } from "sonner";
-import { getSpecialWeekHoliday, stockholmToUtc, formatStockholmTime, isoWeekNumber } from "@/lib/swedish-holidays";
+import { getSpecialWeekHoliday, stockholmToUtc } from "@/lib/swedish-holidays";
 import { getYear } from "date-fns";
 
 function SchemaRoute() {
@@ -909,16 +909,39 @@ function SchemaPage() {
       if (isAdmin) {
         const { data: parents } = await supabase
           .from("tasks")
-          .select("id, title, recurrence_rule, recurrence_days, recurrence_start, recurrence_end, recurrence_period_start, parent_task_id, due_date, due_date_time, created_at, status, store_id, assigned_to, created_by")
+          .select("id, title, description, category, priority, recurrence_rule, recurrence_days, recurrence_start, recurrence_end, recurrence_period_start, parent_task_id, due_date, due_date_time, created_at, status, store_id, assigned_to, created_by, deleted_periods")
           .eq("store_id", storeId!)
           .not("recurrence_rule", "is", null)
           .is("parent_task_id", null);
 
         if (parents && parents.length > 0) {
+          const parentIds = parents.map((p: Task) => p.id);
           const { data: existingChildren } = await supabase
             .from("tasks")
             .select("parent_task_id, recurrence_period_start")
-            .in("parent_task_id", parents.map((p: Task) => p.id));
+            .in("parent_task_id", parentIds);
+
+          // Load steps/questions/assignees once so spawned children get the full checklist
+          const [stepsRes, questionsRes, assigneesRes] = await Promise.all([
+            supabase.from("task_steps").select("task_id, label, sort_order, requires_photo, link_url, condition_question_id, condition_answer").in("task_id", parentIds),
+            supabase.from("task_questions").select("id, task_id, label, question_type, is_required, sort_order, link_url").in("task_id", parentIds),
+            supabase.from("task_assignees").select("task_id, user_id, group_id").in("task_id", parentIds),
+          ]);
+          const stepsByParent = new Map<string, { label: string; sort_order: number; requires_photo: boolean; link_url: string | null; condition_question_id: string | null; condition_answer: string | null }[]>();
+          for (const s of (stepsRes.data ?? []) as { task_id: string; label: string; sort_order: number; requires_photo: boolean; link_url: string | null; condition_question_id: string | null; condition_answer: string | null }[]) {
+            if (!stepsByParent.has(s.task_id)) stepsByParent.set(s.task_id, []);
+            stepsByParent.get(s.task_id)!.push({ label: s.label, sort_order: s.sort_order, requires_photo: s.requires_photo, link_url: s.link_url, condition_question_id: s.condition_question_id, condition_answer: s.condition_answer });
+          }
+          const questionsByParent = new Map<string, { id: string; label: string; question_type: string | null; is_required: boolean; sort_order: number; link_url: string | null }[]>();
+          for (const q of (questionsRes.data ?? []) as { id: string; task_id: string; label: string; question_type: string | null; is_required: boolean; sort_order: number; link_url: string | null }[]) {
+            if (!questionsByParent.has(q.task_id)) questionsByParent.set(q.task_id, []);
+            questionsByParent.get(q.task_id)!.push({ id: q.id, label: q.label, question_type: q.question_type, is_required: q.is_required, sort_order: q.sort_order, link_url: q.link_url });
+          }
+          const assigneesByParent = new Map<string, { user_id: string | null; group_id: string | null }[]>();
+          for (const a of (assigneesRes.data ?? []) as { task_id: string; user_id: string | null; group_id: string | null }[]) {
+            if (!assigneesByParent.has(a.task_id)) assigneesByParent.set(a.task_id, []);
+            assigneesByParent.get(a.task_id)!.push({ user_id: a.user_id, group_id: a.group_id });
+          }
 
           const coveredByParent = new Map<string, Set<string>>();
           for (const c of (existingChildren ?? []) as { parent_task_id: string; recurrence_period_start: string | null }[]) {
@@ -928,28 +951,34 @@ function SchemaPage() {
           }
 
           const weekCeil = new Date(queryEnd);
-          const midnight = (d: Date) => { const n = new Date(d); n.setHours(0,0,0,0); return n; };
-          const localDS = (d: Date) => { const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,"0"); const day=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${day}`; };
+          const weekStartLocal = new Date(queryStart);
 
           for (const t of parents as Task[]) {
             if (!t.recurrence_rule) continue;
-            const originDate = t.recurrence_start ? midnight(new Date(t.recurrence_start)) : t.due_date ? midnight(new Date(t.due_date)) : midnight(new Date(t.created_at));
-            const weekStart = new Date(queryStart);
+            const originDate = t.recurrence_start ? midnightStockholm(new Date(t.recurrence_start)) : t.due_date ? midnightStockholm(new Date(t.due_date)) : midnightStockholm(new Date(t.created_at));
 
-            const periodStarts = buildPeriodStartsSimple(originDate, t.recurrence_rule, t.recurrence_days ?? null, t.recurrence_start ? new Date(t.recurrence_start) : null, t.recurrence_end ? new Date(t.recurrence_end) : null, weekCeil, weekStart);
+            const periodStarts = buildPeriodStartsSimple(originDate, t.recurrence_rule, t.recurrence_days ?? null, t.recurrence_start ? new Date(t.recurrence_start) : null, t.recurrence_end ? new Date(t.recurrence_end) : null, weekCeil, weekStartLocal);
             const covered = coveredByParent.get(t.id) ?? new Set<string>();
+            const deletedPeriods = new Set<string>(t.deleted_periods ?? []);
             for (const ps of periodStarts) {
-              const psKey = localDS(ps);
-              if (covered.has(psKey)) continue;
+              const psKey = localDateStr(ps);
+              if (covered.has(psKey) || deletedPeriods.has(psKey)) continue;
               const childDue = dueFromPeriodStart(ps, (t as Task & { due_date_time?: string }).due_date_time);
-              await supabase.from("tasks").insert({
-                title: t.title, description: (t as Task & { description?: string }).description, category: t.category, priority: t.priority,
+              const { data: child } = await supabase.from("tasks").insert({
+                title: t.title, description: t.description, category: t.category, priority: t.priority,
                 store_id: t.store_id, due_date: childDue ? childDue.toISOString() : null,
                 due_date_time: (t as Task & { due_date_time?: string }).due_date_time ?? null,
                 recurrence_rule: t.recurrence_rule, recurrence_days: t.recurrence_days,
                 recurrence_period_start: psKey, parent_task_id: t.id,
                 created_by: t.created_by, assigned_to: t.assigned_to, status: "todo",
-              });
+              }).select("id").maybeSingle();
+              if (child?.id) {
+                await copyChildAssociations(child.id, {
+                  steps: stepsByParent.get(t.id),
+                  questions: questionsByParent.get(t.id),
+                  assignees: assigneesByParent.get(t.id),
+                });
+              }
               covered.add(psKey);
             }
           }
@@ -3163,8 +3192,11 @@ function buildPeriodStartsSimple(
     if (rule === "daily") n.setDate(n.getDate() + 1);
     else if (rule === "every_other_day") n.setDate(n.getDate() + 2);
     else if (rule === "weekly") n.setDate(n.getDate() + 7);
+    else if (rule === "biweekly") n.setDate(n.getDate() + 14);
     else if (rule === "monthly") { const od = originDue.getDate(); n.setMonth(n.getMonth() + 1); const dim = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate(); n.setDate(Math.min(od, dim)); }
+    else if (rule === "quarterly") n.setMonth(n.getMonth() + 3);
     else if (rule === "yearly") n.setFullYear(n.getFullYear() + 1);
+    else n.setDate(n.getDate() + 1);
     n.setHours(0,0,0,0);
     return n;
   };
@@ -3181,10 +3213,6 @@ function getISOWeek(date: Date): number {
   d.setDate(d.getDate() + 4 - (d.getDay() || 7));
   const yearStart = new Date(d.getFullYear(), 0, 1);
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
-
-function getCurrentISOWeek(): number {
-  return getISOWeek(new Date());
 }
 
 function getWeekStartDate(week: number, year: number): string {

@@ -167,10 +167,6 @@ export function stockholmToUtc(localDateTimeStr: string): string {
   return naiveUtc.toISOString();
 }
 
-export function utcToStockholm(utcIsoString: string): Date {
-  return new Date(utcIsoString);
-}
-
 export function formatStockholmTime(
   utcIsoString: string,
   opts?: Intl.DateTimeFormatOptions

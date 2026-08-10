@@ -160,6 +160,52 @@ export type SpawnableParent = {
   assignees?: { user_id?: string | null; group_id?: string | null }[];
 };
 
+/**
+ * Kopierar en förälders frågor, steg och tilldelningar till ett barn.
+ * Frågor skapas först eftersom stegens condition_question_id måste mappas
+ * till de nya fråge-id:n.
+ */
+export async function copyChildAssociations(
+  childId: string,
+  parent: Pick<SpawnableParent, "steps" | "questions" | "assignees">,
+): Promise<void> {
+  const parentQuestions = parent.questions ?? [];
+  const qIdMap = new Map<string, string>();
+  if (parentQuestions.length > 0) {
+    const { data: insertedQs } = await supabase.from("task_questions").insert(
+      parentQuestions.map(q => ({
+        task_id: childId,
+        label: q.label,
+        question_type: q.question_type ?? "text",
+        is_required: q.is_required,
+        sort_order: q.sort_order,
+        link_url: q.link_url ?? null,
+      }))
+    ).select("id, sort_order");
+    if (insertedQs) {
+      insertedQs.forEach((iq: { id: string; sort_order: number }) => {
+        const pq = parentQuestions.find(q => q.sort_order === iq.sort_order);
+        if (pq?.id) qIdMap.set(pq.id, iq.id);
+      });
+    }
+  }
+
+  const steps = (parent.steps ?? []).map(s => ({
+    task_id: childId,
+    label: s.label,
+    sort_order: s.sort_order,
+    requires_photo: s.requires_photo,
+    is_done: false,
+    link_url: s.link_url ?? null,
+    condition_question_id: s.condition_question_id ? (qIdMap.get(s.condition_question_id) ?? null) : null,
+    condition_answer: s.condition_answer ?? null,
+  }));
+  if (steps.length > 0) await supabase.from("task_steps").insert(steps);
+
+  const assignees = (parent.assignees ?? []).map(a => ({ task_id: childId, user_id: a.user_id ?? null, group_id: a.group_id ?? null }));
+  if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
+}
+
 export async function spawnChildrenForParent(
   parent: SpawnableParent,
   nowMs: number,
@@ -219,42 +265,8 @@ export async function spawnChildrenForParent(
 
     if (!child?.id) continue;
 
-    // Copy questions (needed for condition_question_id remapping in steps)
-    const parentQuestions = parent.questions ?? [];
-    const qIdMap = new Map<string, string>();
-    if (parentQuestions.length > 0) {
-      const { data: insertedQs } = await supabase.from("task_questions").insert(
-        parentQuestions.map(q => ({
-          task_id: child.id,
-          label: q.label,
-          question_type: q.question_type ?? "text",
-          is_required: q.is_required,
-          sort_order: q.sort_order,
-          link_url: q.link_url ?? null,
-        }))
-      ).select("id, sort_order");
-      if (insertedQs) {
-        insertedQs.forEach((iq: { id: string; sort_order: number }) => {
-          const pq = parentQuestions.find(q => q.sort_order === iq.sort_order);
-          if (pq?.id) qIdMap.set(pq.id, iq.id);
-        });
-      }
-    }
-
-    const steps = (parent.steps ?? []).map(s => ({
-      task_id: child.id,
-      label: s.label,
-      sort_order: s.sort_order,
-      requires_photo: s.requires_photo,
-      is_done: false,
-      link_url: s.link_url ?? null,
-      condition_question_id: s.condition_question_id ? (qIdMap.get(s.condition_question_id) ?? null) : null,
-      condition_answer: s.condition_answer ?? null,
-    }));
-    if (steps.length > 0) await supabase.from("task_steps").insert(steps);
-
-    const assignees = (parent.assignees ?? []).map(a => ({ task_id: child.id, user_id: a.user_id ?? null, group_id: a.group_id ?? null }));
-    if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
+    // Copy steps, questions and assignees to the child (questions first for condition remapping)
+    await copyChildAssociations(child.id, parent);
   }
 
   if (allPeriods.length > 0) {

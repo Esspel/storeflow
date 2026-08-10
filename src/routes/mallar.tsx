@@ -980,16 +980,13 @@ function MallarPage() {
         // 0=Mon…6=Sun (our convention) → JS getDay(): 0=Sun,1=Mon…6=Sat
         const todayJs = today.getDay();
         const todayConv = todayJs === 0 ? 6 : todayJs - 1; // convert to Mon=0
-        let found = false;
         for (let i = 0; i <= 7; i++) {
           if (days.includes((todayConv + i) % 7)) {
             base = new Date(today);
             base.setDate(today.getDate() + i);
-            found = true;
             break;
           }
         }
-        if (!found) { base = new Date(today); base.setDate(today.getDate() + 1); }
       }
     } else if (rule === "monthly" || rule === "quarterly") {
       const tAny = tmpl as ChecklistTemplate & { recurrence_month_day?: number };

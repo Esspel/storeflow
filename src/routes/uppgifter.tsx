@@ -32,7 +32,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { cn, ensureHttps, sanitizeCsvCell, parseTimeInput } from "@/lib/utils";
 import { getSimulatedNow, getSimulatedDate } from "@/lib/time-simulation";
-import { dedupRecurringSeries, midnightStockholm, localDateStr, buildPeriodStarts, dueFromPeriodStart, getRecurrenceHorizonDays, RECURRENCE_HORIZON_KEY } from "@/lib/task-utils";
+import { copyChildAssociations, midnightStockholm, localDateStr, buildPeriodStarts, dueFromPeriodStart, getRecurrenceHorizonDays, RECURRENCE_HORIZON_KEY } from "@/lib/task-utils";
 
 export const Route = createFileRoute("/uppgifter")({
   component: TasksPage,
@@ -679,34 +679,14 @@ function TasksPage() {
   const midnight = midnightStockholm;
 
   async function copyChildData(childId: string, t: TaskFull) {
-    const parentQuestions = t.questions ?? [];
-    let qIdMap = new Map<string, string>();
-    if (parentQuestions.length > 0) {
-      const rows = parentQuestions.map(q => ({ task_id: childId, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: q.sort_order, link_url: (q as { link_url?: string | null }).link_url ?? null }));
-      const { data: insertedQs } = await supabase.from("task_questions").insert(rows).select("id, sort_order");
-      if (insertedQs) {
-        insertedQs.forEach((iq: { id: string; sort_order: number }) => {
-          const pq = parentQuestions.find(q => q.sort_order === iq.sort_order);
-          if (pq?.id) qIdMap.set(pq.id, iq.id);
-        });
-      }
-    }
-    const steps = (t.steps ?? []).map(s => ({
-      task_id: childId,
-      label: s.label,
-      sort_order: s.sort_order,
-      requires_photo: s.requires_photo,
-      is_done: false,
-      link_url: (s as { link_url?: string | null }).link_url ?? null,
-      condition_question_id: s.condition_question_id ? (qIdMap.get(s.condition_question_id) ?? null) : null,
-      condition_answer: s.condition_answer ?? null,
-    }));
-    if (steps.length > 0) await supabase.from("task_steps").insert(steps);
+    await copyChildAssociations(childId, {
+      steps: t.steps,
+      questions: t.questions,
+      assignees: t.assignees,
+    });
     if ((t.images ?? []).length > 0) {
       await supabase.from("task_images").insert(t.images!.map(img => ({ task_id: childId, storage_path: img.storage_path, uploaded_by: img.uploaded_by })));
     }
-    const assignees = (t.assignees ?? []).map(a => ({ task_id: childId, user_id: a.user_id, group_id: a.group_id }));
-    if (assignees.length > 0) await supabase.from("task_assignees").insert(assignees);
   }
 
   async function spawnChildrenForNewParent(parent: TaskFull) {
@@ -774,12 +754,9 @@ function TasksPage() {
   const spawnRecurringTasks = useCallback(async (taskList: TaskFull[], force = false) => {
     if (!isManager || spawnRef.current) return;
     const nowMs = getSimulatedNow();
-    const todayKey = new Date(nowMs).toISOString().slice(0, 10);
+    const todayKey = localDateStr(new Date(nowMs));
     if (!force && lastSpawnDateRef.current === todayKey) return;
     spawnRef.current = true;
-
-    const simToday = new Date(nowMs);
-    simToday.setHours(0, 0, 0, 0);
 
     const coveredByParent = new Map<string, Set<string>>();
     for (const t of taskList) {
