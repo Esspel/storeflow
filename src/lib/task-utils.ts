@@ -103,6 +103,25 @@ export function buildPeriodStarts(
   return results;
 }
 
+/**
+ * Beräknar due_date för en återkommande förekomst vars förälder inte har ett
+ * eget due_date (fältet används inte för upprepande uppgifter). För sådana
+ * uppgifter ska due_date beräknas från periodstarten och due_date_time.
+ */
+export function dueFromPeriodStart(
+  periodStart: Date,
+  dueDateTime: string | null | undefined,
+): Date {
+  const d = new Date(periodStart.getTime());
+  if (dueDateTime && dueDateTime.includes(":")) {
+    const [h, m] = dueDateTime.split(":").map(Number);
+    d.setHours(isNaN(h) ? 23 : h, isNaN(m) ? 59 : m, 0, 0);
+  } else {
+    d.setHours(23, 59, 0, 0);
+  }
+  return d;
+}
+
 // Minimal shape needed to spawn children — matches what bulkCreateTasks knows after inserting
 export type SpawnableParent = {
   id: string;
@@ -168,7 +187,9 @@ export async function spawnChildrenForParent(
 
   for (const ps of allPeriods) {
     const psKey = localDateStr(ps);
-    const childDue = parent.due_date ? new Date(ps.getTime() + durationMs) : null;
+    const childDue = parent.due_date
+      ? new Date(ps.getTime() + durationMs)
+      : dueFromPeriodStart(ps, parent.due_date_time);
     const { data: child } = await supabase.from("tasks").insert({
       title: parent.title,
       description: parent.description,
