@@ -85,7 +85,7 @@ function keyStatus(key: ApiKeyRow): { label: string; variant: "default" | "secon
 }
 
 export function ApiKeysManager() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
 
   const [keys, setKeys] = useState<ApiKeyRow[]>([]);
   const [stores, setStores] = useState<StoreOption[]>([]);
@@ -128,24 +128,30 @@ export function ApiKeysManager() {
   );
 
   const loadKeys = useCallback(async () => {
+    if (!user?.id) return;
     setLoading(true);
     setError("");
     try {
-      const data = await callEdge({ action: "list" });
+      const data = await callEdge({ action: "list", user_id: user.id });
       setKeys(data.keys ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kunde inte hämta API-nycklar.");
     } finally {
       setLoading(false);
     }
-  }, [callEdge]);
+  }, [callEdge, user?.id]);
 
   useEffect(() => {
-    loadKeys();
+    if (user?.id) {
+      loadKeys();
+    } else {
+      setLoading(false);
+    }
+
     supabase.from("stores").select("id, name").order("name").then(({ data }) => {
       setStores((data ?? []) as StoreOption[]);
     });
-  }, [loadKeys]);
+  }, [loadKeys, user?.id]);
 
   const storeName = (id: string | null) => {
     if (!id) return "Alla butiker";
@@ -175,6 +181,7 @@ export function ApiKeysManager() {
     try {
       const data = await callEdge({
         action: "create",
+        user_id: user?.id,
         name: formName.trim(),
         store_id: formStoreId === "all" ? null : formStoreId,
         scopes,
@@ -194,7 +201,7 @@ export function ApiKeysManager() {
     if (!revokeTarget) return;
     setRevoking(true);
     try {
-      await callEdge({ action: "revoke", key_id: revokeTarget.id });
+      await callEdge({ action: "revoke", key_id: revokeTarget.id, user_id: user?.id });
       setRevokeTarget(null);
       await loadKeys();
     } catch (err) {
@@ -208,7 +215,7 @@ export function ApiKeysManager() {
     if (!rotateTarget) return;
     setRotating(true);
     try {
-      const data = await callEdge({ action: "rotate", key_id: rotateTarget.id });
+      const data = await callEdge({ action: "rotate", key_id: rotateTarget.id, user_id: user?.id });
       setIssuedKey({ key: data.api_key, label: `${rotateTarget.name} (roterad)` });
       setRotateTarget(null);
       await loadKeys();
