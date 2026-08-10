@@ -11,6 +11,7 @@ import { supabase, logAudit, HIERARCHY_LABELS } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { PushNotificationSetup } from "@/components/push-notification-setup";
+import { ApiKeysManager } from "@/components/api-keys-manager";
 
 const APP_VERSION = "2.4.1";
 
@@ -544,6 +545,8 @@ function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {user?.role === "admin" && <ApiKeysManager />}
 
         <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="mb-4 flex items-center gap-3">
