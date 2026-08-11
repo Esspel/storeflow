@@ -4,14 +4,8 @@ import { Button } from "@/components/ui/button";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 
 export function PushNotificationSetup() {
-  const {
-    isSupported,
-    isSubscribed,
-    isLoading,
-    permissionState,
-    subscribe,
-    unsubscribe,
-  } = usePushNotifications();
+  const { isSupported, isSubscribed, isLoading, permissionState, subscribe, unsubscribe } =
+    usePushNotifications();
 
   // Om webbläsaren/enheten saknar stöd för Push API
   if (!isSupported) return null;
@@ -24,9 +18,7 @@ export function PushNotificationSetup() {
         className="flex items-center gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
       >
         <BellOff className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-        <span>
-          Notiser är blockerade. Ändra i webbläsarens inställningar för att aktivera.
-        </span>
+        <span>Notiser är blockerade. Ändra i webbläsarens inställningar för att aktivera.</span>
       </div>
     );
   }
@@ -38,25 +30,30 @@ export function PushNotificationSetup() {
       onClick={isSubscribed ? unsubscribe : subscribe}
       disabled={isLoading}
       aria-busy={isLoading}
-      aria-label={
-        isSubscribed ? "Inaktivera push-notiser" : "Aktivera push-notiser"
-      }
-      className="gap-2 transition-all"
+      aria-label={isSubscribed ? "Inaktivera push-notiser" : "Aktivera push-notiser"}
+      className="gap-2 transition-colors"
     >
       {isLoading ? (
-        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin motion-reduce:animate-none" />
       ) : isSubscribed ? (
         <BellOff className="h-4 w-4 shrink-0 text-muted-foreground" />
       ) : (
         <Bell className="h-4 w-4 shrink-0" />
       )}
-      
+
       <span>
-        {isLoading
-          ? "Uppdaterar..."
-          : isSubscribed
-            ? "Notiser aktiverade"
-            : "Aktivera notiser"}
+        {isLoading ? (
+          <>
+            Uppdaterar
+            <span className="sr-only" aria-busy="true">
+              Laddar…
+            </span>
+          </>
+        ) : isSubscribed ? (
+          "Notiser aktiverade"
+        ) : (
+          "Aktivera notiser"
+        )}
       </span>
     </Button>
   );

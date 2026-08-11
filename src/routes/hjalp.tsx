@@ -1,10 +1,20 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  TriangleAlert as AlertTriangle, ChartBar as BarChart2, CalendarDays,
-  CircleCheck as CheckCircle2, ChevronRight, ClipboardList,
-  LayoutDashboard, ListChecks,
+  TriangleAlert as AlertTriangle,
+  ChartBar as BarChart2,
+  CalendarDays,
+  CircleCheck as CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  LayoutDashboard,
+  ListChecks,
   Package,
-  QrCode, Settings, ShoppingCart, Tv as Tv2, UserRound, Users,
+  QrCode,
+  Settings,
+  ShoppingCart,
+  Tv as Tv2,
+  UserRound,
+  Users,
   Terminal,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
@@ -40,7 +50,8 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
       },
       {
         title: "Uppgifter",
-        description: "Skapa, tilldela och slutför uppgifter. Stöd för återkommande uppgifter, checklistor med foton och multi-tilldelning.",
+        description:
+          "Skapa, tilldela och slutför uppgifter. Stöd för återkommande uppgifter, checklistor med foton och multi-tilldelning.",
         icon: ListChecks,
         path: "/uppgifter",
         access: "all",
@@ -53,7 +64,8 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
       },
       {
         title: "Schema",
-        description: "Importera personalschema via XML från SoftOne GO. Visa skift per dag och medarbetare.",
+        description:
+          "Importera personalschema via XML från SoftOne GO. Visa skift per dag och medarbetare.",
         icon: CalendarDays,
         path: "/schema",
         access: "all",
@@ -65,7 +77,8 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
       },
       {
         title: "Avvikelser",
-        description: "Rapportera och följ upp avvikelser. Kategorier, prioriteter, bilder och kommentarer.",
+        description:
+          "Rapportera och följ upp avvikelser. Kategorier, prioriteter, bilder och kommentarer.",
         icon: AlertTriangle,
         path: "/avvikelser",
         access: "all",
@@ -90,7 +103,8 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
       },
       {
         title: "Kundrunda",
-        description: "Genomför strukturerade butiksronder med checkpoints, zonpoäng och avvikelseregistrering.",
+        description:
+          "Genomför strukturerade butiksronder med checkpoints, zonpoäng och avvikelseregistrering.",
         icon: UserRound,
         path: "/kundrunda",
         access: "all",
@@ -103,14 +117,16 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
     items: [
       {
         title: "Rapporter",
-        description: "Statistik över uppgiftsefterlevnad, avvikelser och kundrundaresultat. CSV-export.",
+        description:
+          "Statistik över uppgiftsefterlevnad, avvikelser och kundrundaresultat. CSV-export.",
         icon: BarChart2,
         path: "/rapporter",
         access: "manager",
       },
       {
         title: "Mallar",
-        description: "Bygg checklistmallar som återanvänds för att skapa uppgifter. Sök, filtrera på kategori/prioritet och exportera i importbart CSV-format.",
+        description:
+          "Bygg checklistmallar som återanvänds för att skapa uppgifter. Sök, filtrera på kategori/prioritet och exportera i importbart CSV-format.",
         icon: ClipboardList,
         path: "/mallar",
         access: "manager",
@@ -135,7 +151,8 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
       },
       {
         title: "Medarbetarbelastning",
-        description: "Vy över hur många uppgifter varje medarbetare har tilldelade innevarande vecka.",
+        description:
+          "Vy över hur många uppgifter varje medarbetare har tilldelade innevarande vecka.",
         icon: BarChart2,
         path: "/belastning",
         access: "manager",
@@ -144,7 +161,6 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
           "Staplar är relativa — den med flest uppgifter fyller hela bredden",
         ],
       },
-
     ],
   },
   {
@@ -153,7 +169,8 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
     items: [
       {
         title: "Pulstavla (TV-vy)",
-        description: "En helskärmsvy för butiksmonitor/TV som visar dagens uppgifter och öppna avvikelser i realtid.",
+        description:
+          "En helskärmsvy för butiksmonitor/TV som visar dagens uppgifter och öppna avvikelser i realtid.",
         icon: Tv2,
         path: "/pulstavla",
         access: "all",
@@ -167,7 +184,8 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
       },
       {
         title: "QR-avvikelse",
-        description: "Publik sida (ingen inloggning krävs) för snabbregistrering av avvikelse via QR-kod.",
+        description:
+          "Publik sida (ingen inloggning krävs) för snabbregistrering av avvikelse via QR-kod.",
         icon: QrCode,
         access: "manager",
         steps: [
@@ -209,7 +227,8 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
     items: [
       {
         title: "Inställningar",
-        description: "Profilinformation, lösenordsbyte, PIN, streckkod, push-notiser och Pulstavla PIN.",
+        description:
+          "Profilinformation, lösenordsbyte, PIN, streckkod, push-notiser och Pulstavla PIN.",
         icon: Settings,
         path: "/installningar",
         access: "all",
@@ -240,8 +259,7 @@ const CURL_EXAMPLES: CurlExample[] = [
     title: "Lista uppgifter (storeflow-api)",
     description: "Hämta öppna uppgifter för en butik via REST-API:t.",
     scope: "tasks:read",
-    command:
-`curl -X GET \\
+    command: `curl -X GET \\
   "https://zjongicwgixyvysqpawj.supabase.co/functions/v1/storeflow-api/tasks?store_id=<store-uuid>&status=todo" \\
   -H "Authorization: Bearer sf_live_..."`,
   },
@@ -249,8 +267,7 @@ const CURL_EXAMPLES: CurlExample[] = [
     title: "Skapa avvikelse (storeflow-api)",
     description: "Rapportera en ny avvikelse programmatiskt.",
     scope: "deviations:write",
-    command:
-`curl -X POST \\
+    command: `curl -X POST \\
   "https://zjongicwgixyvysqpawj.supabase.co/functions/v1/storeflow-api/deviations" \\
   -H "Authorization: Bearer sf_live_..." \\
   -H "Content-Type: application/json" \\
@@ -265,8 +282,7 @@ const CURL_EXAMPLES: CurlExample[] = [
     title: "Importera leveransplan (CSV)",
     description: "Ladda upp en leveransplan för en given vecka, t.ex. från Power Automate.",
     scope: "deliveries:write",
-    command:
-`curl -X POST \\
+    command: `curl -X POST \\
   "https://zjongicwgixyvysqpawj.supabase.co/functions/v1/import-delivery-csv" \\
   -H "Authorization: Bearer sf_live_..." \\
   -H "Content-Type: application/json" \\
@@ -279,10 +295,10 @@ const CURL_EXAMPLES: CurlExample[] = [
   },
   {
     title: "Importera schema (XML från SoftOne GO)",
-    description: "Ladda upp ett personalschema. imported_by_user_id måste vara ett giltigt konto-id.",
+    description:
+      "Ladda upp ett personalschema. imported_by_user_id måste vara ett giltigt konto-id.",
     scope: "schedule:write",
-    command:
-`curl -X POST \\
+    command: `curl -X POST \\
   "https://zjongicwgixyvysqpawj.supabase.co/functions/v1/import-schedule-xml" \\
   -H "Authorization: Bearer sf_live_..." \\
   -H "Content-Type: application/json" \\
@@ -294,10 +310,10 @@ const CURL_EXAMPLES: CurlExample[] = [
   },
   {
     title: "Lista verktyg (mcp-server)",
-    description: "MCP-servern följer JSON-RPC 2.0 och kan pekas ut direkt i en MCP-klient (t.ex. Claude, Antigravity CLI).",
+    description:
+      "MCP-servern följer JSON-RPC 2.0 och kan pekas ut direkt i en MCP-klient (t.ex. Claude, Antigravity CLI).",
     scope: "valfritt scope beroende på verktyg",
-    command:
-`curl -X POST \\
+    command: `curl -X POST \\
   "https://zjongicwgixyvysqpawj.supabase.co/functions/v1/mcp-server" \\
   -H "Authorization: Bearer sf_live_..." \\
   -H "Content-Type: application/json" \\
@@ -346,7 +362,8 @@ function FeatureCard({ item }: { item: Feature }) {
       {item.tip && (
         <div className="ml-12 mt-3 rounded-xl border border-info/20 bg-info/5 px-3 py-2">
           <p className="text-xs text-info leading-relaxed">
-            <span className="font-semibold">Tips: </span>{item.tip}
+            <span className="font-semibold">Tips: </span>
+            {item.tip}
           </p>
         </div>
       )}
@@ -369,10 +386,7 @@ function HjalpPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-10">
-      <PageHeader
-        title="Hjälp & Manual"
-        description="Hur alla funktioner i StoreFlow fungerar."
-      />
+      <PageHeader title="Hjälp & Manual" description="Hur alla funktioner i StoreFlow fungerar." />
 
       <div className="space-y-10">
         {/* Feature sections */}
@@ -396,21 +410,46 @@ function HjalpPage() {
           </h2>
           <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)] space-y-3">
             <p className="text-sm text-muted-foreground leading-relaxed">
-              StoreFlow stödjer export och import av data i CSV-format för att garantera dataportabilitet enligt GDPR.
+              StoreFlow stödjer export och import av data i CSV-format för att garantera
+              dataportabilitet enligt GDPR.
             </p>
             <ul className="space-y-2">
               {[
-                { label: "Mallar", desc: "Exportera och importera checklistmallar (Mallar → Exportera / Importera CSV). Exporterat format kan importeras direkt.", show: true },
-                { label: "Uppgifter", desc: "Exportera uppgifter som CSV (Uppgifter → Exportera). Importera nya uppgifter via CSV-mall.", show: true },
-                { label: "Avvikelser", desc: "Exportera alla avvikelser som CSV (Avvikelser → Exportera CSV).", show: true },
-                { label: "Schema", desc: "Importera personalschema via XML-fil från SoftOne GO (Schema → Importera).", show: true },
-                { label: "Personuppgifter", desc: "Administratörer kan exportera personuppgifter via GDPR-export i Inställningar.", show: isManager },
-              ].filter(i => i.show).map((item) => (
-                <li key={item.label} className="flex gap-3 text-sm">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-success" />
-                  <span><span className="font-medium">{item.label}:</span> {item.desc}</span>
-                </li>
-              ))}
+                {
+                  label: "Mallar",
+                  desc: "Exportera och importera checklistmallar (Mallar → Exportera / Importera CSV). Exporterat format kan importeras direkt.",
+                  show: true,
+                },
+                {
+                  label: "Uppgifter",
+                  desc: "Exportera uppgifter som CSV (Uppgifter → Exportera). Importera nya uppgifter via CSV-mall.",
+                  show: true,
+                },
+                {
+                  label: "Avvikelser",
+                  desc: "Exportera alla avvikelser som CSV (Avvikelser → Exportera CSV).",
+                  show: true,
+                },
+                {
+                  label: "Schema",
+                  desc: "Importera personalschema via XML-fil från SoftOne GO (Schema → Importera).",
+                  show: true,
+                },
+                {
+                  label: "Personuppgifter",
+                  desc: "Administratörer kan exportera personuppgifter via GDPR-export i Inställningar.",
+                  show: isManager,
+                },
+              ]
+                .filter((i) => i.show)
+                .map((item) => (
+                  <li key={item.label} className="flex gap-3 text-sm">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-success" />
+                    <span>
+                      <span className="font-medium">{item.label}:</span> {item.desc}
+                    </span>
+                  </li>
+                ))}
             </ul>
           </div>
         </section>
@@ -429,15 +468,26 @@ function HjalpPage() {
                 <div>
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     Skapa och rotera API-nycklar under{" "}
-                    <Link to="/installningar" className="font-medium text-foreground underline underline-offset-2">
+                    <Link
+                      to="/installningar"
+                      className="font-medium text-foreground underline underline-offset-2"
+                    >
                       Inställningar → API-nycklar
                     </Link>
-                    . Varje nyckel har en egen uppsättning behörigheter (scopes) och är valfritt låst till en
-                    specifik butik. Exemplen nedan pekar mot projektets API-URL
-                    (<code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">zjongicwgixyvysqpawj.supabase.co</code>).
-                    Ditt butiks-ID (<code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">&lt;store-uuid&gt;</code>)
-                    och användar-ID finns att kopiera under{" "}
-                    <Link to="/installningar" className="font-medium text-foreground underline underline-offset-2">
+                    . Varje nyckel har en egen uppsättning behörigheter (scopes) och är valfritt
+                    låst till en specifik butik. Exemplen nedan pekar mot projektets API-URL (
+                    <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+                      zjongicwgixyvysqpawj.supabase.co
+                    </code>
+                    ). Ditt butiks-ID (
+                    <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+                      &lt;store-uuid&gt;
+                    </code>
+                    ) och användar-ID finns att kopiera under{" "}
+                    <Link
+                      to="/installningar"
+                      className="font-medium text-foreground underline underline-offset-2"
+                    >
                       Inställningar
                     </Link>
                     .

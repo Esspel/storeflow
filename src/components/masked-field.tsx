@@ -21,9 +21,7 @@ export function MaskedField({ value, masked, label, className = "" }: Props) {
   return (
     <span className={`inline-flex items-center gap-1.5 ${className}`}>
       {label && <span className="text-muted-foreground">{label}: </span>}
-      <span className="font-mono text-sm">
-        {revealed ? value : masked}
-      </span>
+      <span className="font-mono text-sm">{revealed ? value : masked}</span>
       <Button
         variant="ghost"
         size="icon"

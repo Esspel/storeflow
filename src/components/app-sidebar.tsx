@@ -62,8 +62,7 @@ export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { user } = useAuth();
 
-  const isActive = (path: string) =>
-    path === "/" ? pathname === "/" : pathname.startsWith(path);
+  const isActive = (path: string) => (path === "/" ? pathname === "/" : pathname.startsWith(path));
 
   const hierarchyLevel = user?.hierarchy_level;
   const isAdmin = user?.role === "admin";
@@ -87,26 +86,27 @@ export function AppSidebar() {
   );
 
   const displayName = user?.display_name?.trim() || "Användare";
-  const initials = displayName
-    .split(" ")
-    .filter(Boolean)
-    .map((p) => p[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase() || "?";
+  const initials =
+    displayName
+      .split(" ")
+      .filter(Boolean)
+      .map((p) => p[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "?";
 
   const roleLabel =
     hierarchyLevel === "hk"
       ? "Huvudkontor"
       : hierarchyLevel === "forening"
-      ? "Förening"
-      : hierarchyLevel === "distrikt"
-      ? "Distrikt"
-      : hierarchyLevel === "chef"
-      ? "Butikschef"
-      : isAdmin
-      ? "Admin"
-      : "Medarbetare";
+        ? "Förening"
+        : hierarchyLevel === "distrikt"
+          ? "Distrikt"
+          : hierarchyLevel === "chef"
+            ? "Butikschef"
+            : isAdmin
+              ? "Admin"
+              : "Medarbetare";
 
   return (
     <Sidebar collapsible="icon">

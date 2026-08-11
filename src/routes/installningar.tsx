@@ -1,6 +1,23 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Eye, EyeOff, KeyRound, User, Hash, Bell, ArrowLeftRight, Delete, ScanBarcode, Bug, Download, Wifi, WifiOff, HardDrive, RefreshCw, Shield } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  KeyRound,
+  User,
+  Hash,
+  Bell,
+  ArrowLeftRight,
+  Delete,
+  ScanBarcode,
+  Bug,
+  Download,
+  Wifi,
+  WifiOff,
+  HardDrive,
+  RefreshCw,
+  Shield,
+} from "lucide-react";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 
 import { PageHeader } from "@/components/page-header";
@@ -92,6 +109,7 @@ function SettingsPage() {
 
   const clearPin = async () => {
     if (!user) return;
+    if (!window.confirm("Ta bort din PIN-kod? Du kan inte längre logga in med PIN.")) return;
     await supabase.from("app_users").update({ quick_pin_hash: null }).eq("id", user.id);
     logAudit(user.id, "user.clear_quick_pin", "app_users", user.id, {});
     setHasPin(false);
@@ -126,6 +144,7 @@ function SettingsPage() {
 
   const clearBarcode = async () => {
     if (!user) return;
+    if (!window.confirm("Ta bort din streckkod?")) return;
     await supabase.from("app_users").update({ barcode_id: null }).eq("id", user.id);
     logAudit(user.id, "user.clear_barcode", "app_users", user.id, {});
     setBarcodeId("");
@@ -149,7 +168,9 @@ function SettingsPage() {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [diagOnline, setDiagOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [diagOnline, setDiagOnline] = useState(
+    typeof navigator !== "undefined" ? navigator.onLine : true,
+  );
   const [diagIdbUsage, setDiagIdbUsage] = useState("–");
   const [diagLastError, setDiagLastError] = useState("–");
   const [diagLocalDrafts, setDiagLocalDrafts] = useState(0);
@@ -163,13 +184,21 @@ function SettingsPage() {
         const est = await navigator.storage.estimate();
         const used = est.usage ?? 0;
         const quota = est.quota ?? 0;
-        setDiagIdbUsage(`${(used / 1024 / 1024).toFixed(2)} MB / ${(quota / 1024 / 1024).toFixed(0)} MB`);
+        setDiagIdbUsage(
+          `${(used / 1024 / 1024).toFixed(2)} MB / ${(quota / 1024 / 1024).toFixed(0)} MB`,
+        );
       }
-    } catch { setDiagIdbUsage("Ej tillgängligt"); }
+    } catch {
+      setDiagIdbUsage("Ej tillgängligt");
+    }
     try {
-      const draftKeys = Object.keys(localStorage).filter((k) => k.startsWith("sf_draft_") || k.startsWith("sf_queue_"));
+      const draftKeys = Object.keys(localStorage).filter(
+        (k) => k.startsWith("sf_draft_") || k.startsWith("sf_queue_"),
+      );
       setDiagLocalDrafts(draftKeys.length);
-    } catch { setDiagLocalDrafts(0); }
+    } catch {
+      setDiagLocalDrafts(0);
+    }
     try {
       const { data } = await supabase
         .from("system_errors")
@@ -178,12 +207,17 @@ function SettingsPage() {
         .limit(1)
         .maybeSingle();
       if (data) {
-        const ts = new Date(data.created_at).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
+        const ts = new Date(data.created_at).toLocaleString("sv-SE", {
+          dateStyle: "short",
+          timeStyle: "short",
+        });
         setDiagLastError(`${ts}: ${(data.error_message as string).slice(0, 120)}`);
       } else {
         setDiagLastError("Inga registrerade fel");
       }
-    } catch { setDiagLastError("Kunde inte hämta"); }
+    } catch {
+      setDiagLastError("Kunde inte hämta");
+    }
     setDiagRefreshing(false);
   }, []);
 
@@ -244,8 +278,14 @@ function SettingsPage() {
     setPwError("");
     setPwSuccess(false);
     if (!user) return;
-    if (newPw !== confirmPw) { setPwError("Lösenorden stämmer inte överens."); return; }
-    if (newPw.length < 12) { setPwError("Lösenordet måste vara minst 12 tecken."); return; }
+    if (newPw !== confirmPw) {
+      setPwError("Lösenorden stämmer inte överens.");
+      return;
+    }
+    if (newPw.length < 12) {
+      setPwError("Lösenordet måste vara minst 12 tecken.");
+      return;
+    }
 
     setPwSaving(true);
 
@@ -280,7 +320,10 @@ function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 md:px-8 md:py-10">
-      <PageHeader title="Inställningar" description="Hantera ditt konto och personliga inställningar." />
+      <PageHeader
+        title="Inställningar"
+        description="Hantera ditt konto och personliga inställningar."
+      />
 
       <div className="space-y-6">
         <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
@@ -292,17 +335,31 @@ function SettingsPage() {
           </div>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Användarnamn</Label>
-              <Input value={user?.username ?? ""} disabled className="bg-muted/40" />
+              <Label htmlFor="username">Användarnamn</Label>
+              <Input id="username" value={user?.username ?? ""} disabled className="bg-muted/40" />
               <p className="text-xs text-muted-foreground">Användarnamn kan inte ändras.</p>
             </div>
             <div className="space-y-1.5">
-              <Label>Visningsnamn</Label>
-              <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Ditt namn" />
+              <Label htmlFor="display-name">Visningsnamn</Label>
+              <Input
+                id="display-name"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Ditt namn"
+              />
             </div>
             <div className="space-y-1.5">
-              <Label>Hierarkinivå</Label>
-              <Input value={HIERARCHY_LABELS[user?.hierarchy_level ?? "anvandare"] ?? (user?.hierarchy_level ?? "")} disabled className="bg-muted/40" />
+              <Label htmlFor="hierarchy">Hierarkinivå</Label>
+              <Input
+                id="hierarchy"
+                value={
+                  HIERARCHY_LABELS[user?.hierarchy_level ?? "anvandare"] ??
+                  user?.hierarchy_level ??
+                  ""
+                }
+                disabled
+                className="bg-muted/40"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Användar-ID</Label>
@@ -313,9 +370,18 @@ function SettingsPage() {
             </div>
             <div className="flex items-center gap-3">
               <Button onClick={saveDisplayName} disabled={nameSaving} className="rounded-full">
-                {nameSaving ? "Sparar..." : "Spara ändringar"}
+                {nameSaving ? "Sparar…" : "Spara ändringar"}
+                {nameSaving && (
+                  <span className="sr-only" aria-busy="true">
+                    Laddar…
+                  </span>
+                )}
               </Button>
-              {nameSuccess && <span className="text-sm text-success">Sparat!</span>}
+              {nameSuccess && (
+                <span role="status" className="text-sm text-success">
+                  Sparat!
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -329,8 +395,13 @@ function SettingsPage() {
           </div>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Aktiv butik</Label>
-              <Input value={activeStore?.name ?? "Ingen aktiv butik"} disabled className="bg-muted/40" />
+              <Label htmlFor="active-store">Aktiv butik</Label>
+              <Input
+                id="active-store"
+                value={activeStore?.name ?? "Ingen aktiv butik"}
+                disabled
+                className="bg-muted/40"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Butiks-ID</Label>
@@ -349,7 +420,9 @@ function SettingsPage() {
             </div>
             <div>
               <h2 className="font-semibold">Push-notiser</h2>
-              <p className="text-xs text-muted-foreground">Få aviseringar direkt på enheten när uppgifter tilldelas eller deadlines nalkas.</p>
+              <p className="text-xs text-muted-foreground">
+                Få aviseringar direkt på enheten när uppgifter tilldelas eller deadlines nalkas.
+              </p>
             </div>
           </div>
           <PushNotificationSetup />
@@ -372,21 +445,35 @@ function SettingsPage() {
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <ScanBarcode className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Passerkortets streckkod</span>
+                <label htmlFor="barcode-id" className="text-sm font-medium">
+                  Passerkortets streckkod
+                </label>
               </div>
               <p className="text-xs text-muted-foreground">
-                Scanna ditt passerkort med Zebra-skannern i fältet nedan, eller skriv in streckkodsvärdet manuellt.
+                Scanna ditt passerkort med Zebra-skannern i fältet nedan, eller skriv in
+                streckkodsvärdet manuellt.
               </p>
               <div className="flex gap-2">
                 <Input
+                  id="barcode-id"
                   value={barcodeId}
-                  onChange={(e) => { setBarcodeId(e.target.value); setBarcodeError(""); }}
+                  onChange={(e) => {
+                    setBarcodeId(e.target.value);
+                    setBarcodeError("");
+                  }}
                   placeholder="Scanna kort eller ange ID manuellt"
                   className="flex-1 font-mono text-sm"
                   autoComplete="off"
-                  onKeyDown={(e) => { if (e.key === "Enter") saveBarcode(); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveBarcode();
+                  }}
                 />
-                <BarcodeScanButton onScan={(code) => { setBarcodeId(code); setBarcodeError(""); }} />
+                <BarcodeScanButton
+                  onScan={(code) => {
+                    setBarcodeId(code);
+                    setBarcodeError("");
+                  }}
+                />
                 {barcodeId.trim() && (
                   <Button
                     variant="outline"
@@ -399,7 +486,12 @@ function SettingsPage() {
                 )}
               </div>
               {barcodeError && (
-                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{barcodeError}</p>
+                <p
+                  role="alert"
+                  className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                >
+                  {barcodeError}
+                </p>
               )}
               <div className="flex items-center gap-3">
                 <Button
@@ -408,9 +500,18 @@ function SettingsPage() {
                   size="sm"
                   className="rounded-full"
                 >
-                  {barcodeSaving ? "Sparar..." : "Spara streckkod"}
+                  {barcodeSaving ? "Sparar…" : "Spara streckkod"}
+                  {barcodeSaving && (
+                    <span className="sr-only" aria-busy="true">
+                      Laddar…
+                    </span>
+                  )}
                 </Button>
-                {barcodeSuccess && <span className="text-sm text-success">Sparat!</span>}
+                {barcodeSuccess && (
+                  <span role="status" className="text-sm text-success">
+                    Sparat!
+                  </span>
+                )}
               </div>
             </div>
 
@@ -423,22 +524,23 @@ function SettingsPage() {
                   <span className="text-sm font-medium">4-siffrig PIN-kod</span>
                 </div>
                 {hasPin && (
-                  <button
-                    onClick={clearPin}
-                    className="text-xs text-destructive hover:underline"
-                  >
+                  <button onClick={clearPin} className="text-xs text-destructive hover:underline">
                     Ta bort PIN
                   </button>
                 )}
               </div>
 
               {hasPin && pinStep === "enter" && newPin.length === 0 && (
-                <p className="text-xs text-muted-foreground">Du har en aktiv PIN. Ange nedan för att byta.</p>
+                <p className="text-xs text-muted-foreground">
+                  Du har en aktiv PIN. Ange nedan för att byta.
+                </p>
               )}
 
               <p className="text-sm text-muted-foreground">
                 {pinStep === "enter"
-                  ? (hasPin ? "Ange ny PIN-kod:" : "Välj en 4-siffrig PIN:")
+                  ? hasPin
+                    ? "Ange ny PIN-kod:"
+                    : "Välj en 4-siffrig PIN:"
                   : "Bekräfta PIN-koden:"}
               </p>
 
@@ -449,8 +551,10 @@ function SettingsPage() {
                     <div
                       key={i}
                       className={cn(
-                        "h-4 w-4 rounded-full border-2 transition-all duration-100",
-                        active.length > i ? "border-primary bg-primary scale-110" : "border-border bg-transparent",
+                        "h-4 w-4 rounded-full border-2 transition-all duration-100 motion-reduce:transition-none",
+                        active.length > i
+                          ? "border-primary bg-primary scale-110"
+                          : "border-border bg-transparent",
                       )}
                     />
                   );
@@ -458,41 +562,57 @@ function SettingsPage() {
               </div>
 
               {pinError && (
-                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">{pinError}</p>
+                <p
+                  role="alert"
+                  className="rounded-lg bg-destructive/10 px-3 py-2 text-center text-sm text-destructive"
+                >
+                  {pinError}
+                </p>
               )}
               {pinSuccess && (
-                <p className="rounded-lg bg-success/10 px-3 py-2 text-center text-sm text-success-foreground">PIN sparad!</p>
+                <p
+                  role="status"
+                  className="rounded-lg bg-success/10 px-3 py-2 text-center text-sm text-success-foreground"
+                >
+                  PIN sparad!
+                </p>
               )}
 
               <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
-                {["1","2","3","4","5","6","7","8","9"].map((d) => (
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
                   <button
                     key={d}
                     onClick={() => handlePinDigit(d)}
-                    className="flex h-14 items-center justify-center rounded-xl border border-border/60 bg-card text-xl font-semibold transition-all active:scale-95 hover:bg-accent"
+                    className="flex h-14 items-center justify-center rounded-xl border border-border/60 bg-card text-xl font-semibold transition-all active:scale-95 hover:bg-accent motion-reduce:transition-none"
                   >
                     {d}
                   </button>
                 ))}
                 <button
-                  onClick={() => { setNewPin(""); setConfirmPin(""); setPinStep("enter"); setPinError(""); }}
-                  className="flex h-14 items-center justify-center rounded-xl text-xs text-muted-foreground transition-all active:scale-95 hover:bg-muted"
+                  onClick={() => {
+                    setNewPin("");
+                    setConfirmPin("");
+                    setPinStep("enter");
+                    setPinError("");
+                  }}
+                  className="flex h-14 items-center justify-center rounded-xl text-xs text-muted-foreground transition-all active:scale-95 hover:bg-muted motion-reduce:transition-none"
                 >
                   Rensa
                 </button>
                 <button
                   onClick={() => handlePinDigit("0")}
-                  className="flex h-14 items-center justify-center rounded-xl border border-border/60 bg-card text-xl font-semibold transition-all active:scale-95 hover:bg-accent"
+                  className="flex h-14 items-center justify-center rounded-xl border border-border/60 bg-card text-xl font-semibold transition-all active:scale-95 hover:bg-accent motion-reduce:transition-none"
                 >
                   0
                 </button>
                 <button
                   onClick={() => {
-                    if (pinStep === "enter") setNewPin(p => p.slice(0, -1));
-                    else setConfirmPin(p => p.slice(0, -1));
+                    if (pinStep === "enter") setNewPin((p) => p.slice(0, -1));
+                    else setConfirmPin((p) => p.slice(0, -1));
                     setPinError("");
                   }}
-                  className="flex h-14 items-center justify-center rounded-xl text-muted-foreground transition-all active:scale-95 hover:bg-muted"
+                  className="flex h-14 items-center justify-center rounded-xl text-muted-foreground transition-all active:scale-95 hover:bg-muted motion-reduce:transition-none"
+                  aria-label="Radera siffra"
                 >
                   <Delete className="h-4 w-4" />
                 </button>
@@ -501,7 +621,12 @@ function SettingsPage() {
               {pinStep === "confirm" && confirmPin.length === 4 && confirmPin === newPin && (
                 <div className="flex justify-center">
                   <Button onClick={savePin} disabled={pinSaving} className="rounded-full">
-                    {pinSaving ? "Sparar..." : "Spara PIN-kod"}
+                    {pinSaving ? "Sparar…" : "Spara PIN-kod"}
+                    {pinSaving && (
+                      <span className="sr-only" aria-busy="true">
+                        Laddar…
+                      </span>
+                    )}
                   </Button>
                 </div>
               )}
@@ -518,9 +643,10 @@ function SettingsPage() {
           </div>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Nuvarande lösenord</Label>
+              <Label htmlFor="current-pw">Nuvarande lösenord</Label>
               <div className="relative">
                 <Input
+                  id="current-pw"
                   type={showCurrentPw ? "text" : "password"}
                   value={currentPw}
                   onChange={(e) => setCurrentPw(e.target.value)}
@@ -531,15 +657,18 @@ function SettingsPage() {
                   type="button"
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setShowCurrentPw((v) => !v)}
+                  aria-label={showCurrentPw ? "Dölj lösenord" : "Visa lösenord"}
+                  aria-pressed={showCurrentPw}
                 >
                   {showCurrentPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Nytt lösenord</Label>
+              <Label htmlFor="new-pw">Nytt lösenord</Label>
               <div className="relative">
                 <Input
+                  id="new-pw"
                   type={showNewPw ? "text" : "password"}
                   value={newPw}
                   onChange={(e) => setNewPw(e.target.value)}
@@ -550,14 +679,17 @@ function SettingsPage() {
                   type="button"
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setShowNewPw((v) => !v)}
+                  aria-label={showNewPw ? "Dölj lösenord" : "Visa lösenord"}
+                  aria-pressed={showNewPw}
                 >
                   {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Bekräfta nytt lösenord</Label>
+              <Label htmlFor="confirm-pw">Bekräfta nytt lösenord</Label>
               <Input
+                id="confirm-pw"
                 type="password"
                 value={confirmPw}
                 onChange={(e) => setConfirmPw(e.target.value)}
@@ -565,13 +697,31 @@ function SettingsPage() {
               />
             </div>
             {pwError && (
-              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{pwError}</p>
+              <p
+                role="alert"
+                className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
+                {pwError}
+              </p>
             )}
             <div className="flex items-center gap-3">
-              <Button onClick={changePassword} disabled={pwSaving || !currentPw || !newPw || !confirmPw} className="rounded-full">
-                {pwSaving ? "Byter lösenord..." : "Byt lösenord"}
+              <Button
+                onClick={changePassword}
+                disabled={pwSaving || !currentPw || !newPw || !confirmPw}
+                className="rounded-full"
+              >
+                {pwSaving ? "Byter lösenord…" : "Byt lösenord"}
+                {pwSaving && (
+                  <span className="sr-only" aria-busy="true">
+                    Laddar…
+                  </span>
+                )}
               </Button>
-              {pwSuccess && <span className="text-sm text-success">Lösenord bytt!</span>}
+              {pwSuccess && (
+                <span role="status" className="text-sm text-success">
+                  Lösenord bytt!
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -585,20 +735,44 @@ function SettingsPage() {
             </div>
             <div>
               <h2 className="font-semibold">Min data (GDPR)</h2>
-              <p className="text-xs text-muted-foreground">Exportera dina personuppgifter som lagras i systemet. Artikel 20 — rätt till dataportabilitet.</p>
+              <p className="text-xs text-muted-foreground">
+                Exportera dina personuppgifter som lagras i systemet. Artikel 20 — rätt till
+                dataportabilitet.
+              </p>
             </div>
           </div>
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Du kan ladda ned alla uppgifter som är kopplade till ditt konto: profil, tilldelade uppgifter, slutförda uppgifter, svar på frågor och avvikelserapporter.</p>
+            <p className="text-sm text-muted-foreground">
+              Du kan ladda ned alla uppgifter som är kopplade till ditt konto: profil, tilldelade
+              uppgifter, slutförda uppgifter, svar på frågor och avvikelserapporter.
+            </p>
             <Button
               variant="outline"
               className="rounded-full gap-2"
               onClick={async () => {
                 if (!user) return;
                 const [profileRes, tasksRes, incidentsRes] = await Promise.all([
-                  supabase.from("app_users").select("id, username, display_name, role, employee_group, created_at, last_login").eq("id", user.id).maybeSingle(),
-                  supabase.from("tasks").select("id, title, category, priority, status, due_date, created_at, completed_at").or(`created_by.eq.${user.id}`).order("created_at", { ascending: false }).limit(500),
-                  supabase.from("incidents").select("id, title, category, priority, status, created_at").eq("reported_by", user.id).order("created_at", { ascending: false }).limit(500),
+                  supabase
+                    .from("app_users")
+                    .select(
+                      "id, username, display_name, role, employee_group, created_at, last_login",
+                    )
+                    .eq("id", user.id)
+                    .maybeSingle(),
+                  supabase
+                    .from("tasks")
+                    .select(
+                      "id, title, category, priority, status, due_date, created_at, completed_at",
+                    )
+                    .or(`created_by.eq.${user.id}`)
+                    .order("created_at", { ascending: false })
+                    .limit(500),
+                  supabase
+                    .from("incidents")
+                    .select("id, title, category, priority, status, created_at")
+                    .eq("reported_by", user.id)
+                    .order("created_at", { ascending: false })
+                    .limit(500),
                 ]);
                 const data = {
                   exported_at: new Date().toISOString(),
@@ -606,7 +780,9 @@ function SettingsPage() {
                   tasks: tasksRes.data ?? [],
                   incidents: incidentsRes.data ?? [],
                 };
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+                const blob = new Blob([JSON.stringify(data, null, 2)], {
+                  type: "application/json;charset=utf-8",
+                });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
@@ -629,7 +805,9 @@ function SettingsPage() {
                 </div>
                 <div>
                   <h2 className="font-semibold">Diagnostik</h2>
-                  <p className="text-xs text-muted-foreground">Realtidsstatus för Helpdesk-support.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Realtidsstatus för Helpdesk-support.
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -639,7 +817,12 @@ function SettingsPage() {
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted"
                   aria-label="Uppdatera diagnostik"
                 >
-                  <RefreshCw className={cn("h-4 w-4", diagRefreshing && "animate-spin")} />
+                  <RefreshCw
+                    className={cn(
+                      "h-4 w-4",
+                      diagRefreshing && "animate-spin motion-reduce:animate-none",
+                    )}
+                  />
                 </button>
                 <button
                   onClick={() => setShowDiagnostics(false)}
@@ -653,12 +836,19 @@ function SettingsPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  {diagOnline
-                    ? <Wifi className="h-4 w-4 text-success" />
-                    : <WifiOff className="h-4 w-4 text-destructive" />}
+                  {diagOnline ? (
+                    <Wifi className="h-4 w-4 text-success" />
+                  ) : (
+                    <WifiOff className="h-4 w-4 text-destructive" />
+                  )}
                   Nätverksstatus
                 </div>
-                <span className={cn("text-sm font-semibold", diagOnline ? "text-success" : "text-destructive")}>
+                <span
+                  className={cn(
+                    "text-sm font-semibold",
+                    diagOnline ? "text-success" : "text-destructive",
+                  )}
+                >
                   {diagOnline ? "Online" : "Offline"}
                 </span>
               </div>
@@ -673,7 +863,12 @@ function SettingsPage() {
 
               <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
                 <span className="text-sm font-medium">Lokala utkast (kö)</span>
-                <span className={cn("text-sm font-semibold tabular-nums", diagLocalDrafts > 0 ? "text-warning-foreground" : "text-muted-foreground")}>
+                <span
+                  className={cn(
+                    "text-sm font-semibold tabular-nums",
+                    diagLocalDrafts > 0 ? "text-warning-foreground" : "text-muted-foreground",
+                  )}
+                >
                   {diagLocalDrafts} poster
                 </span>
               </div>
@@ -708,7 +903,9 @@ function SettingsPage() {
             >
               v{APP_VERSION}
               {versionTapCount > 0 && versionTapCount < 7 && (
-                <span className="ml-2 text-muted-foreground/60">({7 - versionTapCount} tryck kvar)</span>
+                <span className="ml-2 tabular-nums text-muted-foreground/60">
+                  ({7 - versionTapCount} tryck kvar)
+                </span>
               )}
             </button>
           </div>
@@ -717,19 +914,29 @@ function SettingsPage() {
         <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <h2 className="mb-3 font-semibold">Juridisk information</h2>
           <nav className="space-y-1">
-            {([
-              ["/integritetspolicy", "Integritetspolicy"],
-              ["/gdpr", "GDPR-information"],
-              ["/anvandningsvillkor", "Användarvillkor"],
-              ["/licens", "Licens (GNU GPL v3.0)"],
-            ] as const).map(([to, label]) => (
+            {(
+              [
+                ["/integritetspolicy", "Integritetspolicy"],
+                ["/gdpr", "GDPR-information"],
+                ["/anvandningsvillkor", "Användarvillkor"],
+                ["/licens", "Licens (GNU GPL v3.0)"],
+              ] as const
+            ).map(([to, label]) => (
               <Link
                 key={to}
                 to={to}
                 className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 {label}
-                <svg className="h-4 w-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+                <svg
+                  className="h-4 w-4 opacity-50"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
               </Link>
             ))}
           </nav>

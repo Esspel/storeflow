@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
-import { 
-  Store, 
-  Users, 
-  ClipboardList, 
-  ChartBar as BarChart2, 
-  ShieldCheck, 
-  ChevronRight, 
+import {
+  Store,
+  Users,
+  ClipboardList,
+  ChartBar as BarChart2,
+  ShieldCheck,
+  ChevronRight,
   ChevronLeft,
-  CircleCheck as CheckCircle2, 
-  Building2 
+  CircleCheck as CheckCircle2,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
@@ -133,7 +133,7 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
-      <div 
+      <div
         className="w-full max-w-lg"
         role="region"
         aria-roledescription="carousel"
@@ -147,12 +147,15 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
               {user?.display_name ?? user?.username}
             </span>
             {effectiveStore && (
-              <> · <span className="text-foreground/90">{effectiveStore.name}</span></>
+              <>
+                {" "}
+                · <span className="text-foreground/90">{effectiveStore.name}</span>
+              </>
             )}
           </p>
 
           {/* Stegindikatorer (Progressbar) */}
-          <div 
+          <div
             className="mt-3 flex items-center gap-1.5"
             role="progressbar"
             aria-valuenow={currentStep + 1}
@@ -202,7 +205,10 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
             <ul className="space-y-3">
               {step.details.map((detail, i) => (
                 <li key={i} className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  <CheckCircle2
+                    className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+                    aria-hidden="true"
+                  />
                   <span className="text-sm text-foreground/80 leading-normal">{detail}</span>
                 </li>
               ))}
@@ -221,10 +227,7 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
               {isFirst ? "Hoppa över" : "Tillbaka"}
             </Button>
 
-            <Button
-              onClick={handleNext}
-              className="gap-2 rounded-full px-6 shadow-sm"
-            >
+            <Button onClick={handleNext} className="gap-2 rounded-full px-6 shadow-sm">
               {isLast ? "Kom igång" : "Nästa"}
               {!isLast && <ChevronRight className="h-4 w-4" />}
             </Button>

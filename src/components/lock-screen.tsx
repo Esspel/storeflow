@@ -6,7 +6,7 @@ import { useBarcodeContext } from "@/lib/barcode-context";
 import { supabase, type AppUser } from "@/lib/supabase";
 
 const CameraScanner = React.lazy(() =>
-  import("@/components/camera-scanner").then((m) => ({ default: m.CameraScanner }))
+  import("@/components/camera-scanner").then((m) => ({ default: m.CameraScanner })),
 );
 
 const QUICK_SWITCH_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/quick-switch`;
@@ -49,7 +49,12 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
   // Hidden input that captures DataWedge / barcode scanner input regardless of focus state
   const hiddenInputRef = useRef<HTMLInputElement>(null);
   const hiddenInputLastKeyTime = useRef<number>(0);
-  const submitSwitchRef = useRef<((opts: { mode: "pin"; userId: string; pin: string } | { mode: "barcode"; barcode: string }) => void) | null>(null);
+  const submitSwitchRef = useRef<
+    | ((
+        opts: { mode: "pin"; userId: string; pin: string } | { mode: "barcode"; barcode: string },
+      ) => void)
+    | null
+  >(null);
 
   // Keep the hidden input focused whenever the lock screen is visible and no modal/input has focus
   const refocusHiddenInput = useCallback(() => {
@@ -58,7 +63,9 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
       active &&
       active !== document.body &&
       active !== hiddenInputRef.current &&
-      (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || (active as HTMLElement).isContentEditable)
+      (active.tagName === "INPUT" ||
+        active.tagName === "TEXTAREA" ||
+        (active as HTMLElement).isContentEditable)
     ) {
       return; // Don't steal focus from real inputs
     }
@@ -104,84 +111,102 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
   pinRef.current = pin;
 
   useEffect(() => {
-  // Avbryt direkt om vi saknar storeId eller användare
-  if (!activeStoreId || !currentUser?.id) return;
+    // Avbryt direkt om vi saknar storeId eller användare
+    if (!activeStoreId || !currentUser?.id) return;
 
-  let isMounted = true;
-  setLoadingUsers(true);
+    let isMounted = true;
+    setLoadingUsers(true);
 
-  supabase
-    .from("user_stores")
-    .select("user:app_users(id, display_name, role, quick_pin_hash, barcode_id)")
-    .eq("store_id", activeStoreId)
-    .then(({ data }) => {
-      if (!isMounted) return; // Förhindra state-uppdatering om komponenten hinner avmonteras
+    supabase
+      .from("user_stores")
+      .select("user:app_users(id, display_name, role, quick_pin_hash, barcode_id)")
+      .eq("store_id", activeStoreId)
+      .then(({ data }) => {
+        if (!isMounted) return; // Förhindra state-uppdatering om komponenten hinner avmonteras
 
-      const users = (data ?? [])
-        .map((r: { user: unknown }) => r.user as { id: string; display_name: string; role: string; quick_pin_hash: string | null; barcode_id: string | null })
-        .filter(Boolean)
-        .filter((u) => u.id !== currentUser.id)
-        .map((u) => ({
-          id: u.id,
-          display_name: u.display_name,
-          role: u.role,
-          has_pin: !!u.quick_pin_hash,
-          has_barcode: !!u.barcode_id,
-        }));
+        const users = (data ?? [])
+          .map(
+            (r: { user: unknown }) =>
+              r.user as {
+                id: string;
+                display_name: string;
+                role: string;
+                quick_pin_hash: string | null;
+                barcode_id: string | null;
+              },
+          )
+          .filter(Boolean)
+          .filter((u) => u.id !== currentUser.id)
+          .map((u) => ({
+            id: u.id,
+            display_name: u.display_name,
+            role: u.role,
+            has_pin: !!u.quick_pin_hash,
+            has_barcode: !!u.barcode_id,
+          }));
 
-      setStoreUsers(users);
-      setLoadingUsers(false);
-    });
-
-  return () => {
-    isMounted = false;
-  };
-}, [activeStoreId, currentUser?.id]);
-
-  const submitSwitch = useCallback(async (opts: { mode: "pin"; userId: string; pin: string } | { mode: "barcode"; barcode: string }) => {
-    if (!activeStoreId) return;
-    setLoading(true);
-    setError("");
-
-    try {
-      const body = opts.mode === "pin"
-        ? { mode: "pin", user_id: opts.userId, pin: opts.pin, store_id: activeStoreId }
-        : { mode: "barcode", barcode: opts.barcode, store_id: activeStoreId };
-
-      const res = await fetch(QUICK_SWITCH_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${ANON_KEY}` },
-        body: JSON.stringify(body),
+        setStoreUsers(users);
+        setLoadingUsers(false);
       });
 
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        setError(data.error ?? "Autentisering misslyckades.");
-        setPin("");
-        setLoading(false);
-        return;
-      }
+    return () => {
+      isMounted = false;
+    };
+  }, [activeStoreId, currentUser?.id]);
 
-      onUnlock(data.user as AppUser, data.token);
-    } catch {
-      setError("Kan inte ansluta. Kontrollera nätverket.");
-      setLoading(false);
-    }
-  }, [activeStoreId, onUnlock]);
+  const submitSwitch = useCallback(
+    async (
+      opts: { mode: "pin"; userId: string; pin: string } | { mode: "barcode"; barcode: string },
+    ) => {
+      if (!activeStoreId) return;
+      setLoading(true);
+      setError("");
+
+      try {
+        const body =
+          opts.mode === "pin"
+            ? { mode: "pin", user_id: opts.userId, pin: opts.pin, store_id: activeStoreId }
+            : { mode: "barcode", barcode: opts.barcode, store_id: activeStoreId };
+
+        const res = await fetch(QUICK_SWITCH_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${ANON_KEY}` },
+          body: JSON.stringify(body),
+        });
+
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          setError(data.error ?? "Autentisering misslyckades.");
+          setPin("");
+          setLoading(false);
+          return;
+        }
+
+        onUnlock(data.user as AppUser, data.token);
+      } catch {
+        setError("Kan inte ansluta. Kontrollera nätverket.");
+        setLoading(false);
+      }
+    },
+    [activeStoreId, onUnlock],
+  );
   submitSwitchRef.current = submitSwitch;
 
   const loadingRef = useRef(loading);
   loadingRef.current = loading;
 
   useBarcodeScanner({
-    onScan: useCallback((code: string) => {
-      if (scannerTestRef.current) {
-        setLastScanned(code);
-        return;
-      }
-      if (loadingRef.current) return;
-      submitSwitch({ mode: "barcode", barcode: code });
-    }, [submitSwitch]),
+    onScan: useCallback(
+      (code: string) => {
+        if (scannerTestRef.current) {
+          setLastScanned(code);
+          return;
+        }
+        if (loadingRef.current) return;
+        submitSwitch({ mode: "barcode", barcode: code });
+      },
+      [submitSwitch],
+    ),
     acceptAlpha: true,
   });
 
@@ -201,9 +226,18 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
   };
 
   const initials = (name: string) =>
-    name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+    name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
 
-  const roleLabel: Record<string, string> = { admin: "Admin", manager: "Chef", employee: "Anställd" };
+  const roleLabel: Record<string, string> = {
+    admin: "Admin",
+    manager: "Chef",
+    employee: "Anställd",
+  };
 
   const pinUsers = storeUsers.filter((u) => u.has_pin);
   const filteredPinUsers = userSearch.trim()
@@ -243,7 +277,6 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
 
       {/* Body */}
       <div className="w-full max-w-sm px-6">
-
         {mode === "choose" && (
           <div className="space-y-5">
             <div className="text-center">
@@ -255,14 +288,18 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
               <p className="text-sm text-muted-foreground">Inloggad som</p>
               <p className="font-semibold">{currentUser.display_name}</p>
               <p className="mt-4 text-base font-semibold">Vem tar över enheten?</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Scanna ditt kort eller välj ditt namn för PIN</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Scanna ditt kort eller välj ditt namn för PIN
+              </p>
             </div>
 
             {/* Barcode scan options */}
             {!activeStoreId ? (
               <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-center">
                 <p className="text-sm text-warning-foreground font-medium">Ingen butik vald</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">Välj en butik i toppmenyn för att kunna skanna</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Välj en butik i toppmenyn för att kunna skanna
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -275,7 +312,10 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                         <p className="text-sm font-medium text-primary">Skannertestläge aktivt</p>
                       </div>
                       <button
-                        onClick={() => { setScannerTestActive(false); setLastScanned(null); }}
+                        onClick={() => {
+                          setScannerTestActive(false);
+                          setLastScanned(null);
+                        }}
                         className="text-xs text-muted-foreground hover:text-foreground"
                       >
                         Avsluta test
@@ -289,7 +329,9 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                         <Check className="h-4 w-4 text-success shrink-0" />
                         <div>
                           <p className="text-xs font-medium text-success">Skanning lyckades!</p>
-                          <p className="text-[11px] text-muted-foreground font-mono break-all">{lastScanned}</p>
+                          <p className="text-[11px] text-muted-foreground font-mono break-all">
+                            {lastScanned}
+                          </p>
                         </div>
                       </div>
                     ) : (
@@ -304,10 +346,15 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                     <ScanBarcode className="h-5 w-5 shrink-0 text-primary" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">Scanna passerkort</p>
-                      <p className="text-xs text-muted-foreground">Rikta Zebra-skannern mot streckkoden</p>
+                      <p className="text-xs text-muted-foreground">
+                        Rikta Zebra-skannern mot streckkoden
+                      </p>
                     </div>
                     <button
-                      onClick={() => { setScannerTestActive(true); setLastScanned(null); }}
+                      onClick={() => {
+                        setScannerTestActive(true);
+                        setLastScanned(null);
+                      }}
                       className="text-[11px] text-muted-foreground hover:text-primary border border-border/60 rounded-full px-2 py-0.5 transition-colors shrink-0"
                     >
                       Testa
@@ -321,7 +368,9 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                   <Camera className="h-5 w-5 shrink-0 text-primary" />
                   <div className="text-left">
                     <p className="text-sm font-medium">Scanna med kamera</p>
-                    <p className="text-xs text-muted-foreground">Öppna kameran och scanna streckkod</p>
+                    <p className="text-xs text-muted-foreground">
+                      Öppna kameran och scanna streckkod
+                    </p>
                   </div>
                 </button>
               </div>
@@ -336,7 +385,9 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
               </div>
             ) : pinUsers.length > 0 ? (
               <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Logga in med PIN</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Logga in med PIN
+                </p>
                 {/* Search for users */}
                 {pinUsers.length >= 5 && (
                   <div className="relative">
@@ -349,7 +400,10 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                       className="w-full h-9 rounded-xl border border-border/60 bg-card pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground/50 focus:border-primary/50"
                     />
                     {userSearch && (
-                      <button onClick={() => setUserSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                      <button
+                        onClick={() => setUserSearch("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                      >
                         <X className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
                     )}
@@ -357,12 +411,20 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                 )}
                 <div className="space-y-1.5 max-h-52 overflow-y-auto">
                   {filteredPinUsers.length === 0 ? (
-                    <p className="py-3 text-center text-xs text-muted-foreground">Ingen person matchar sökningen.</p>
+                    <p className="py-3 text-center text-xs text-muted-foreground">
+                      Ingen person matchar sökningen.
+                    </p>
                   ) : (
                     filteredPinUsers.map((u) => (
                       <button
                         key={u.id}
-                        onClick={() => { setSelectedUser(u); setMode("pin"); setPin(""); setError(""); setUserSearch(""); }}
+                        onClick={() => {
+                          setSelectedUser(u);
+                          setMode("pin");
+                          setPin("");
+                          setError("");
+                          setUserSearch("");
+                        }}
                         className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 text-left transition-colors hover:bg-accent active:scale-[0.98]"
                       >
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary">
@@ -370,7 +432,9 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                         </div>
                         <div>
                           <p className="text-sm font-medium">{u.display_name}</p>
-                          <p className="text-xs text-muted-foreground">{roleLabel[u.role] ?? u.role}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {roleLabel[u.role] ?? u.role}
+                          </p>
                         </div>
                       </button>
                     ))
@@ -411,12 +475,14 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
             </div>
 
             {error && (
-              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">{error}</p>
+              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">
+                {error}
+              </p>
             )}
 
             {/* PIN pad */}
             <div className="grid grid-cols-3 gap-3">
-              {["1","2","3","4","5","6","7","8","9"].map((d) => (
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
                 <button
                   key={d}
                   onClick={() => handlePinDigit(d)}
@@ -427,7 +493,11 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                 </button>
               ))}
               <button
-                onClick={() => { setMode("choose"); setPin(""); setError(""); }}
+                onClick={() => {
+                  setMode("choose");
+                  setPin("");
+                  setError("");
+                }}
                 disabled={loading}
                 className="flex h-16 items-center justify-center rounded-2xl text-xs text-muted-foreground transition-all active:scale-95 hover:bg-muted disabled:opacity-50"
               >

@@ -155,13 +155,14 @@ function LoginPage() {
                     type="button"
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     onClick={() => setShowNewPw((v) => !v)}
-                    tabIndex={-1}
+                    aria-label={showNewPw ? "Dölj lösenord" : "Visa lösenord"}
+                    aria-pressed={showNewPw}
                   >
                     {showNewPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
                 {newPw.length > 0 && newPw.length < MIN_PW_LENGTH && (
-                  <p className="text-xs text-destructive">
+                  <p className="text-xs tabular-nums text-destructive" aria-live="polite">
                     {newPw.length}/{MIN_PW_LENGTH} tecken
                   </p>
                 )}
@@ -179,12 +180,18 @@ function LoginPage() {
                   autoComplete="new-password"
                 />
                 {newPwConfirm.length > 0 && newPw !== newPwConfirm && (
-                  <p className="text-xs text-destructive">Lösenorden stämmer inte överens.</p>
+                  <p className="text-xs text-destructive" aria-live="polite">
+                    Lösenorden stämmer inte överens.
+                  </p>
                 )}
               </div>
 
               {error && (
-                <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <p
+                  role="alert"
+                  aria-live="polite"
+                  className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                >
                   {error}
                 </p>
               )}
@@ -194,7 +201,12 @@ function LoginPage() {
                 className="w-full rounded-full"
                 disabled={pwSaving || newPw.length < MIN_PW_LENGTH || newPw !== newPwConfirm}
               >
-                {pwSaving ? "Sparar..." : "Sätt nytt lösenord"}
+                {pwSaving ? "Sparar…" : "Sätt nytt lösenord"}
+                {pwSaving && (
+                  <span className="sr-only" aria-busy="true">
+                    Laddar…
+                  </span>
+                )}
               </Button>
             </div>
           </form>
@@ -252,7 +264,8 @@ function LoginPage() {
                   type="button"
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setShowPassword((v) => !v)}
-                  tabIndex={-1}
+                  aria-label={showPassword ? "Dölj lösenord" : "Visa lösenord"}
+                  aria-pressed={showPassword}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -260,13 +273,22 @@ function LoginPage() {
             </div>
 
             {error && (
-              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <p
+                role="alert"
+                aria-live="polite"
+                className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
                 {error}
               </p>
             )}
 
             <Button type="submit" className="w-full rounded-full" disabled={loading}>
-              {loading ? "Loggar in..." : "Logga in"}
+              {loading ? "Loggar in…" : "Logga in"}
+              {loading && (
+                <span className="sr-only" aria-busy="true">
+                  Laddar…
+                </span>
+              )}
             </Button>
           </div>
         </form>

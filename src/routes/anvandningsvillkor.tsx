@@ -9,7 +9,10 @@ export const Route = createFileRoute("/anvandningsvillkor")({
 function TosPage() {
   return (
     <div className="mx-auto max-w-3xl px-5 py-8 md:px-8 md:py-12">
-      <Link to="/installningar" className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+      <Link
+        to="/installningar"
+        className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
         <ChevronLeft className="h-4 w-4" /> Tillbaka till Inställningar
       </Link>
 
@@ -17,13 +20,12 @@ function TosPage() {
       <p className="mb-8 text-sm text-muted-foreground">Senast uppdaterad: Juni 2026</p>
 
       <div className="space-y-8 text-sm text-muted-foreground leading-relaxed">
-
         <section>
           <h2 className="text-lg font-semibold text-foreground mb-3">1. Godkännande av villkor</h2>
           <p>
-            Genom att logga in och använda StoreFlow godkänner du dessa användarvillkor.
-            Om du inte godkänner villkoren ska du inte använda systemet. Kontakta din
-            administratör om du har frågor.
+            Genom att logga in och använda StoreFlow godkänner du dessa användarvillkor. Om du inte
+            godkänner villkoren ska du inte använda systemet. Kontakta din administratör om du har
+            frågor.
           </p>
         </section>
 
@@ -70,53 +72,58 @@ function TosPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-foreground mb-3">6. Tillgänglighet och underhåll</h2>
+          <h2 className="text-lg font-semibold text-foreground mb-3">
+            6. Tillgänglighet och underhåll
+          </h2>
           <p>
-            Vi strävar efter hög tillgänglighet men kan inte garantera att systemet alltid
-            är tillgängligt. Planerat underhåll meddelas i förväg när möjligt. Vi reserverar
-            oss för avbrott vid uppdateringar eller driftstörningar.
+            Vi strävar efter hög tillgänglighet men kan inte garantera att systemet alltid är
+            tillgängligt. Planerat underhåll meddelas i förväg när möjligt. Vi reserverar oss för
+            avbrott vid uppdateringar eller driftstörningar.
           </p>
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-foreground mb-3">7. Immateriella rättigheter</h2>
+          <h2 className="text-lg font-semibold text-foreground mb-3">
+            7. Immateriella rättigheter
+          </h2>
           <p>
-            StoreFlow och dess källkod licensieras under GNU General Public License v3.0.
-            Se{" "}
-            <Link to="/licens" className="text-primary underline underline-offset-2 hover:no-underline">
+            StoreFlow och dess källkod licensieras under GNU General Public License v3.0. Se{" "}
+            <Link
+              to="/licens"
+              className="text-primary underline underline-offset-2 hover:no-underline"
+            >
               Licens
-            </Link>
-            {" "}för fullständig information. Innehåll som ditt företag registrerar i systemet
-            ägs av din organisation.
+            </Link>{" "}
+            för fullständig information. Innehåll som ditt företag registrerar i systemet ägs av din
+            organisation.
           </p>
         </section>
 
         <section>
           <h2 className="text-lg font-semibold text-foreground mb-3">8. Ansvarsbegränsning</h2>
           <p>
-            StoreFlow tillhandahålls i befintligt skick utan garantier om lämplighet för
-            specifika ändamål. Vi ansvarar inte för direkta, indirekta eller följdskador
-            som uppstår till följd av din användning av systemet.
+            StoreFlow tillhandahålls i befintligt skick utan garantier om lämplighet för specifika
+            ändamål. Vi ansvarar inte för direkta, indirekta eller följdskador som uppstår till
+            följd av din användning av systemet.
           </p>
         </section>
 
         <section>
           <h2 className="text-lg font-semibold text-foreground mb-3">9. Ändringar av villkoren</h2>
           <p>
-            Dessa villkor kan uppdateras. Fortsatt användning av systemet efter att
-            uppdaterade villkor publicerats innebär att du godkänner de nya villkoren.
-            Datum för senaste uppdatering visas längst upp på denna sida.
+            Dessa villkor kan uppdateras. Fortsatt användning av systemet efter att uppdaterade
+            villkor publicerats innebär att du godkänner de nya villkoren. Datum för senaste
+            uppdatering visas längst upp på denna sida.
           </p>
         </section>
 
         <section>
           <h2 className="text-lg font-semibold text-foreground mb-3">10. Tillämplig lag</h2>
           <p>
-            Dessa villkor tolkas och tillämpas i enlighet med svensk lag. Tvister ska
-            i första hand lösas i samförstånd.
+            Dessa villkor tolkas och tillämpas i enlighet med svensk lag. Tvister ska i första hand
+            lösas i samförstånd.
           </p>
         </section>
-
       </div>
     </div>
   );

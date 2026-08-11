@@ -6,14 +6,29 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
 } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
@@ -34,11 +49,14 @@ const SCOPE_GROUPS: ScopeGroup[] = [
   { label: "Produktsök", read: "products:search", write: null },
 ];
 
-const SCOPE_LABELS: Record<string, string> = SCOPE_GROUPS.reduce((acc, g) => {
-  acc[g.read] = `${g.label} (läs)`;
-  if (g.write) acc[g.write] = `${g.label} (skriv)`;
-  return acc;
-}, {} as Record<string, string>);
+const SCOPE_LABELS: Record<string, string> = SCOPE_GROUPS.reduce(
+  (acc, g) => {
+    acc[g.read] = `${g.label} (läs)`;
+    if (g.write) acc[g.write] = `${g.label} (skriv)`;
+    return acc;
+  },
+  {} as Record<string, string>,
+);
 
 type ApiKeyRow = {
   id: string;
@@ -78,9 +96,13 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" });
 }
 
-function keyStatus(key: ApiKeyRow): { label: string; variant: "default" | "secondary" | "destructive" | "outline" } {
+function keyStatus(key: ApiKeyRow): {
+  label: string;
+  variant: "default" | "secondary" | "destructive" | "outline";
+} {
   if (key.revoked_at) return { label: "Återkallad", variant: "destructive" };
-  if (key.expires_at && new Date(key.expires_at).getTime() < Date.now()) return { label: "Utgången", variant: "secondary" };
+  if (key.expires_at && new Date(key.expires_at).getTime() < Date.now())
+    return { label: "Utgången", variant: "secondary" };
   return { label: "Aktiv", variant: "default" };
 }
 
@@ -148,9 +170,13 @@ export function ApiKeysManager() {
       setLoading(false);
     }
 
-    supabase.from("stores").select("id, name").order("name").then(({ data }) => {
-      setStores((data ?? []) as StoreOption[]);
-    });
+    supabase
+      .from("stores")
+      .select("id, name")
+      .order("name")
+      .then(({ data }) => {
+        setStores((data ?? []) as StoreOption[]);
+      });
   }, [loadKeys, user?.id]);
 
   const storeName = (id: string | null) => {
@@ -173,9 +199,17 @@ export function ApiKeysManager() {
 
   const submitCreate = async () => {
     setFormError("");
-    if (!formName.trim()) { setFormError("Ange ett namn för nyckeln."); return; }
-    const scopes = Object.entries(formScopes).filter(([, v]) => v).map(([k]) => k);
-    if (scopes.length === 0) { setFormError("Välj minst en behörighet."); return; }
+    if (!formName.trim()) {
+      setFormError("Ange ett namn för nyckeln.");
+      return;
+    }
+    const scopes = Object.entries(formScopes)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (scopes.length === 0) {
+      setFormError("Välj minst en behörighet.");
+      return;
+    }
 
     setCreating(true);
     try {
@@ -257,16 +291,25 @@ export function ApiKeysManager() {
       </div>
 
       {error && (
-        <p className="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+        <p
+          role="alert"
+          className="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {error}
+        </p>
       )}
 
       {loading ? (
         <div className="flex items-center justify-center py-10 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
+          <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" />
+          <span className="sr-only" aria-busy="true">
+            Laddar…
+          </span>
         </div>
       ) : keys.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
-          Inga API-nycklar ännu. Skapa en för att låsa upp automation via storeflow-api eller MCP-servern.
+          Inga API-nycklar ännu. Skapa en för att låsa upp automation via storeflow-api eller
+          MCP-servern.
         </p>
       ) : (
         <div className="space-y-3">
@@ -278,9 +321,13 @@ export function ApiKeysManager() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-sm">{key.name}</span>
-                      <Badge variant={status.variant} className="rounded-full">{status.label}</Badge>
+                      <Badge variant={status.variant} className="rounded-full">
+                        {status.label}
+                      </Badge>
                     </div>
-                    <p className="mt-0.5 font-mono text-xs text-muted-foreground">{key.key_prefix}…</p>
+                    <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                      {key.key_prefix}…
+                    </p>
                   </div>
                   <div className="flex gap-2 shrink-0">
                     {!key.revoked_at && (
@@ -321,7 +368,9 @@ export function ApiKeysManager() {
                   </div>
                   <div>
                     <p className="text-muted-foreground">Utgår</p>
-                    <p className="font-medium">{key.expires_at ? formatDate(key.expires_at) : "Aldrig"}</p>
+                    <p className="font-medium">
+                      {key.expires_at ? formatDate(key.expires_at) : "Aldrig"}
+                    </p>
                   </div>
                 </div>
 
@@ -350,8 +399,9 @@ export function ApiKeysManager() {
 
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Namn</Label>
+              <Label htmlFor="api-key-name">Namn</Label>
               <Input
+                id="api-key-name"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder="T.ex. Power Automate – leveransimport"
@@ -361,13 +411,15 @@ export function ApiKeysManager() {
             <div className="space-y-1.5">
               <Label>Butik</Label>
               <Select value={formStoreId} onValueChange={setFormStoreId}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Butik">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Alla butiker</SelectItem>
                   {stores.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -376,12 +428,14 @@ export function ApiKeysManager() {
             <div className="space-y-1.5">
               <Label>Giltighetstid</Label>
               <Select value={formExpiry} onValueChange={setFormExpiry}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Giltighetstid">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {EXPIRY_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -396,6 +450,7 @@ export function ApiKeysManager() {
                     <div className="flex items-center gap-4">
                       <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Checkbox
+                          aria-label={`${g.label} – Läs`}
                           checked={!!formScopes[g.read]}
                           onCheckedChange={() => toggleScope(g.read)}
                         />
@@ -404,6 +459,7 @@ export function ApiKeysManager() {
                       {g.write && (
                         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Checkbox
+                            aria-label={`${g.label} – Skriv`}
                             checked={!!formScopes[g.write]}
                             onCheckedChange={() => toggleScope(g.write!)}
                           />
@@ -417,7 +473,12 @@ export function ApiKeysManager() {
             </div>
 
             {formError && (
-              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{formError}</p>
+              <p
+                role="alert"
+                className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
+                {formError}
+              </p>
             )}
           </div>
 
@@ -426,19 +487,35 @@ export function ApiKeysManager() {
               Avbryt
             </Button>
             <Button className="rounded-full" onClick={submitCreate} disabled={creating}>
-              {creating ? "Skapar..." : "Skapa nyckel"}
+              {creating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+                  Skapar
+                  <span className="sr-only" aria-busy="true">
+                    Laddar…
+                  </span>
+                </>
+              ) : (
+                "Skapa nyckel"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Visa nyskapad/roterad nyckel */}
-      <Dialog open={!!issuedKey} onOpenChange={(open) => { if (!open) setIssuedKey(null); }}>
+      <Dialog
+        open={!!issuedKey}
+        onOpenChange={(open) => {
+          if (!open) setIssuedKey(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Nyckel skapad</DialogTitle>
             <DialogDescription>
-              Kopiera nyckeln för <span className="font-medium">{issuedKey?.label}</span> nu — den visas aldrig igen.
+              Kopiera nyckeln för <span className="font-medium">{issuedKey?.label}</span> nu — den
+              visas aldrig igen.
             </DialogDescription>
           </DialogHeader>
 
@@ -456,19 +533,26 @@ export function ApiKeysManager() {
           </div>
 
           <DialogFooter>
-            <Button className="rounded-full" onClick={() => setIssuedKey(null)}>Klar</Button>
+            <Button className="rounded-full" onClick={() => setIssuedKey(null)}>
+              Klar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Återkalla-bekräftelse */}
-      <AlertDialog open={!!revokeTarget} onOpenChange={(open) => { if (!open) setRevokeTarget(null); }}>
+      <AlertDialog
+        open={!!revokeTarget}
+        onOpenChange={(open) => {
+          if (!open) setRevokeTarget(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Återkalla nyckeln "{revokeTarget?.name}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              Alla anrop som använder denna nyckel slutar fungera omedelbart. Detta går inte att ångra —
-              skapa en ny nyckel om åtkomsten behövs igen.
+              Alla anrop som använder denna nyckel slutar fungera omedelbart. Detta går inte att
+              ångra — skapa en ny nyckel om åtkomsten behövs igen.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -476,31 +560,63 @@ export function ApiKeysManager() {
             <AlertDialogAction
               className={cn("bg-destructive text-destructive-foreground hover:bg-destructive/90")}
               disabled={revoking}
-              onClick={(e) => { e.preventDefault(); confirmRevoke(); }}
+              onClick={(e) => {
+                e.preventDefault();
+                confirmRevoke();
+              }}
             >
-              {revoking ? "Återkallar..." : "Återkalla nyckel"}
+              {revoking ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+                  Återkallar
+                  <span className="sr-only" aria-busy="true">
+                    Laddar…
+                  </span>
+                </>
+              ) : (
+                "Återkalla nyckel"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Rotera-bekräftelse */}
-      <AlertDialog open={!!rotateTarget} onOpenChange={(open) => { if (!open) setRotateTarget(null); }}>
+      <AlertDialog
+        open={!!rotateTarget}
+        onOpenChange={(open) => {
+          if (!open) setRotateTarget(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Rotera nyckeln "{rotateTarget?.name}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              En ny nyckel skapas med samma namn, butik och behörigheter. Den gamla nyckeln återkallas
-              omedelbart — uppdatera alla integrationer som använder den innan du fortsätter.
+              En ny nyckel skapas med samma namn, butik och behörigheter. Den gamla nyckeln
+              återkallas omedelbart — uppdatera alla integrationer som använder den innan du
+              fortsätter.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={rotating}>Avbryt</AlertDialogCancel>
             <AlertDialogAction
               disabled={rotating}
-              onClick={(e) => { e.preventDefault(); confirmRotate(); }}
+              onClick={(e) => {
+                e.preventDefault();
+                confirmRotate();
+              }}
             >
-              {rotating ? "Roterar..." : "Rotera nyckel"}
+              {rotating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+                  Roterar
+                  <span className="sr-only" aria-busy="true">
+                    Laddar…
+                  </span>
+                </>
+              ) : (
+                "Rotera nyckel"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

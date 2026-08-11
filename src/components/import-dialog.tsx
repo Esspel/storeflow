@@ -1,9 +1,15 @@
 import { useRef, useState } from "react";
-import { Upload, X, FileText, ChevronDown } from "lucide-react";
+import { Upload, X, FileText, ChevronDown, Loader as Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 export type ImportOption = {
@@ -36,8 +42,15 @@ type Props = {
 };
 
 export function ImportDialog({
-  open, onClose, onImport, title, description, accept = ".csv",
-  options = [], importLabel = "Importera", loading = false,
+  open,
+  onClose,
+  onImport,
+  title,
+  description,
+  accept = ".csv",
+  options = [],
+  importLabel = "Importera",
+  loading = false,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -46,7 +59,8 @@ export function ImportDialog({
     const defaults: Record<string, string | boolean> = {};
     for (const o of options) {
       if (o.type === "section-header") continue;
-      defaults[o.key] = o.defaultValue ?? (o.type === "checkbox" ? false : (o.options?.[0]?.value ?? ""));
+      defaults[o.key] =
+        o.defaultValue ?? (o.type === "checkbox" ? false : (o.options?.[0]?.value ?? ""));
     }
     return defaults;
   });
@@ -108,10 +122,15 @@ export function ImportDialog({
           <div
             className={cn(
               "relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-colors cursor-pointer",
-              dragging ? "border-primary bg-primary/5" : "border-border/60 bg-muted/20 hover:border-primary/40 hover:bg-muted/40",
-              selectedFile && "border-primary/50 bg-primary/5"
+              dragging
+                ? "border-primary bg-primary/5"
+                : "border-border/60 bg-muted/20 hover:border-primary/40 hover:bg-muted/40",
+              selectedFile && "border-primary/50 bg-primary/5",
             )}
-            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
             onDragLeave={() => setDragging(false)}
             onDrop={handleDrop}
             onClick={() => !selectedFile && fileInputRef.current?.click()}
@@ -120,8 +139,13 @@ export function ImportDialog({
               ref={fileInputRef}
               type="file"
               accept={accept}
+              aria-label="Välj fil att importera"
               className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
+                e.target.value = "";
+              }}
             />
             {selectedFile ? (
               <div className="flex items-center gap-3">
@@ -129,11 +153,18 @@ export function ImportDialog({
                   <FileText className="h-5 w-5 text-primary" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-medium text-foreground truncate max-w-[220px]">{selectedFile.name}</p>
-                  <p className="text-xs text-muted-foreground">{(selectedFile.size / 1024).toFixed(1)} KB</p>
+                  <p className="text-sm font-medium text-foreground truncate max-w-[220px]">
+                    {selectedFile.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {(selectedFile.size / 1024).toFixed(1)} KB
+                  </p>
                 </div>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedFile(null);
+                  }}
                   className="ml-2 rounded-full p-1 text-muted-foreground hover:text-destructive transition-colors"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -150,7 +181,9 @@ export function ImportDialog({
                 <p className="mt-1 text-xs text-muted-foreground">
                   eller <span className="text-primary font-medium">klicka för att välja</span>
                 </p>
-                <p className="mt-1.5 text-[10px] text-muted-foreground/60">{accept.toUpperCase().replace(/\./g, "").replace(/,/g, ", ")} accepteras</p>
+                <p className="mt-1.5 text-[10px] text-muted-foreground/60">
+                  {accept.toUpperCase().replace(/\./g, "").replace(/,/g, ", ")} accepteras
+                </p>
               </>
             )}
           </div>
@@ -163,7 +196,10 @@ export function ImportDialog({
 
                 if (opt.type === "section-header") {
                   return (
-                    <p key={opt.key} className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 pt-1 first:pt-0">
+                    <p
+                      key={opt.key}
+                      className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 pt-1 first:pt-0"
+                    >
                       {opt.label}
                     </p>
                   );
@@ -173,12 +209,15 @@ export function ImportDialog({
                   return (
                     <label key={opt.key} className="flex cursor-pointer items-start gap-3">
                       <Checkbox
+                        aria-label={opt.label}
                         checked={!!optionValues[opt.key]}
                         onCheckedChange={(v) => setOption(opt.key, !!v)}
                         className="mt-0.5 h-4 w-4 shrink-0"
                       />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium leading-none text-foreground">{opt.label}</p>
+                        <p className="text-sm font-medium leading-none text-foreground">
+                          {opt.label}
+                        </p>
                         {opt.description && (
                           <p className="mt-0.5 text-xs text-muted-foreground">{opt.description}</p>
                         )}
@@ -201,12 +240,17 @@ export function ImportDialog({
                           value={String(optionValues[opt.key] ?? opt.options[0]?.value ?? "")}
                           onValueChange={(v) => setOption(opt.key, v)}
                         >
-                          <SelectTrigger className="h-8 w-44 shrink-0 text-xs">
+                          <SelectTrigger
+                            aria-label={opt.label}
+                            className="h-8 w-44 shrink-0 text-xs"
+                          >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             {opt.options.map((o) => (
-                              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -231,8 +275,20 @@ export function ImportDialog({
               disabled={!selectedFile || loading}
               onClick={handleImport}
             >
-              <Upload className="h-3.5 w-3.5" />
-              {loading ? "Importerar..." : importLabel}
+              {loading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+                  Importerar
+                  <span className="sr-only" aria-busy="true">
+                    Laddar…
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Upload className="h-3.5 w-3.5" />
+                  {importLabel}
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -281,7 +337,10 @@ export function ImportButton({
       <ImportDialog
         open={open}
         onClose={() => setOpen(false)}
-        onImport={(result) => { onImport(result); setOpen(false); }}
+        onImport={(result) => {
+          onImport(result);
+          setOpen(false);
+        }}
         title={title}
         description={description}
         accept={accept}

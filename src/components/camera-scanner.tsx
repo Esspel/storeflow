@@ -25,8 +25,19 @@ declare global {
 }
 
 const NATIVE_FORMATS = [
-  "ean_13", "ean_8", "code_128", "code_39", "code_93",
-  "qr_code", "upc_a", "upc_e", "itf", "data_matrix", "aztec", "pdf417", "codabar",
+  "ean_13",
+  "ean_8",
+  "code_128",
+  "code_39",
+  "code_93",
+  "qr_code",
+  "upc_a",
+  "upc_e",
+  "itf",
+  "data_matrix",
+  "aztec",
+  "pdf417",
+  "codabar",
 ];
 
 export function CameraScanner({ onScan, onClose }: Props) {
@@ -62,7 +73,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
       onScan(code);
       onClose();
     },
-    [onScan, onClose, stopStream]
+    [onScan, onClose, stopStream],
   );
 
   // Initiera kamera och detektor
@@ -98,7 +109,8 @@ export function CameraScanner({ onScan, onClose }: Props) {
         // Kontrollera stöd för Native BarcodeDetector
         if (window.BarcodeDetector) {
           try {
-            const supportedFormats = (await window.BarcodeDetector.getSupportedFormats?.()) ?? NATIVE_FORMATS;
+            const supportedFormats =
+              (await window.BarcodeDetector.getSupportedFormats?.()) ?? NATIVE_FORMATS;
             const formats = NATIVE_FORMATS.filter((f) => supportedFormats.includes(f));
             detectorRef.current = new window.BarcodeDetector({
               formats: formats.length > 0 ? formats : NATIVE_FORMATS,
@@ -174,7 +186,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
     hints.set(HINT_TRY_HARDER, true);
 
     const reader = new BrowserMultiFormatOneDReader(hints);
-    
+
     if (!canvasRef.current) {
       canvasRef.current = document.createElement("canvas");
     }
@@ -231,7 +243,9 @@ export function CameraScanner({ onScan, onClose }: Props) {
     if (!track) return;
     const next = !torchOn;
     try {
-      await (track as MediaStreamTrack & { applyConstraints(c: object): Promise<void> }).applyConstraints({
+      await (
+        track as MediaStreamTrack & { applyConstraints(c: object): Promise<void> }
+      ).applyConstraints({
         advanced: [{ torch: next } as MediaTrackConstraintSet],
       });
       setTorchOn(next);
@@ -266,10 +280,34 @@ export function CameraScanner({ onScan, onClose }: Props) {
         />
         {/* Hörnmarkeringar */}
         {[
-          { top: "22%", left: "8%", borderTop: "3px solid white", borderLeft: "3px solid white", borderRadius: "18px 0 0 0" },
-          { top: "22%", right: "8%", borderTop: "3px solid white", borderRight: "3px solid white", borderRadius: "0 18px 0 0" },
-          { bottom: "36%", left: "8%", borderBottom: "3px solid white", borderLeft: "3px solid white", borderRadius: "0 0 0 18px" },
-          { bottom: "36%", right: "8%", borderBottom: "3px solid white", borderRight: "3px solid white", borderRadius: "0 0 18px 0" },
+          {
+            top: "22%",
+            left: "8%",
+            borderTop: "3px solid white",
+            borderLeft: "3px solid white",
+            borderRadius: "18px 0 0 0",
+          },
+          {
+            top: "22%",
+            right: "8%",
+            borderTop: "3px solid white",
+            borderRight: "3px solid white",
+            borderRadius: "0 18px 0 0",
+          },
+          {
+            bottom: "36%",
+            left: "8%",
+            borderBottom: "3px solid white",
+            borderLeft: "3px solid white",
+            borderRadius: "0 0 0 18px",
+          },
+          {
+            bottom: "36%",
+            right: "8%",
+            borderBottom: "3px solid white",
+            borderRight: "3px solid white",
+            borderRadius: "0 0 18px 0",
+          },
         ].map((style, i) => (
           <div key={i} className="absolute h-8 w-8" style={style} />
         ))}
@@ -293,7 +331,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
             onClick={toggleTorch}
             className={cn(
               "flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-md transition-all active:scale-95",
-              torchOn ? "bg-yellow-400 text-black" : "bg-white/10 text-white"
+              torchOn ? "bg-yellow-400 text-black" : "bg-white/10 text-white",
             )}
             aria-label="Tänd/släck ficklampa"
           >

@@ -16,6 +16,8 @@ export function QrDisplay({ url, size = 200 }: { url: string; size?: number }) {
   return (
     <canvas
       ref={canvasRef}
+      role="img"
+      aria-label="QR-kod"
       className="rounded-xl"
       style={{ width: size, height: size }}
     />

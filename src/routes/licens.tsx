@@ -9,7 +9,10 @@ export const Route = createFileRoute("/licens")({
 function LicensePage() {
   return (
     <div className="mx-auto max-w-3xl px-5 py-8 md:px-8 md:py-12">
-      <Link to="/installningar" className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+      <Link
+        to="/installningar"
+        className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
         <ChevronLeft className="h-4 w-4" /> Tillbaka till Inställningar
       </Link>
 
@@ -17,24 +20,31 @@ function LicensePage() {
       <p className="mb-8 text-sm text-muted-foreground">GNU General Public License v3.0</p>
 
       <div className="space-y-6 text-sm text-muted-foreground leading-relaxed">
-
         <div className="rounded-xl border border-border/60 bg-muted/30 p-5">
           <p className="font-mono text-xs text-foreground">
-            StoreFlow — Butiksdriftssystem<br />
-            Copyright (C) 2026 Eric Söderström<br /><br />
-            This program is free software: you can redistribute it and/or modify<br />
-            it under the terms of the GNU General Public License as published by<br />
-            the Free Software Foundation, either version 3 of the License, or<br />
+            StoreFlow — Butiksdriftssystem
+            <br />
+            Copyright (C) 2026 Eric Söderström
+            <br />
+            <br />
+            This program is free software: you can redistribute it and/or modify
+            <br />
+            it under the terms of the GNU General Public License as published by
+            <br />
+            the Free Software Foundation, either version 3 of the License, or
+            <br />
             (at your option) any later version.
           </p>
         </div>
 
         <section>
-          <h2 className="text-lg font-semibold text-foreground mb-3">GNU General Public License version 3</h2>
+          <h2 className="text-lg font-semibold text-foreground mb-3">
+            GNU General Public License version 3
+          </h2>
           <p>
             StoreFlow är fri programvara; du kan använda det, modifiera det och vidaredistribuera
-            det under villkoren i GNU General Public License version 3 (GPL-3.0), publicerad av
-            Free Software Foundation.
+            det under villkoren i GNU General Public License version 3 (GPL-3.0), publicerad av Free
+            Software Foundation.
           </p>
         </section>
 
@@ -61,9 +71,9 @@ function LicensePage() {
         <section>
           <h2 className="text-base font-semibold text-foreground mb-2">Garanti</h2>
           <p>
-            Programmet levereras UTAN GARANTI, varken uttryckt eller underförstådd.
-            Se GPL-3.0 för fullständiga villkor. Du ansvarar själv för alla risker
-            förknippade med programmets kvalitet och prestanda.
+            Programmet levereras UTAN GARANTI, varken uttryckt eller underförstådd. Se GPL-3.0 för
+            fullständiga villkor. Du ansvarar själv för alla risker förknippade med programmets
+            kvalitet och prestanda.
           </p>
         </section>
 
@@ -108,7 +118,6 @@ function LicensePage() {
             ))}
           </div>
         </section>
-
       </div>
     </div>
   );

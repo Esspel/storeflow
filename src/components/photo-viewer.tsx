@@ -10,10 +10,10 @@ interface Props {
 }
 
 export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
-  const [idx, setIdx] = useState(() =>
-    Math.max(0, Math.min(initialIndex, images.length - 1))
-  );
+  const [idx, setIdx] = useState(() => Math.max(0, Math.min(initialIndex, images.length - 1)));
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   // Lås scroll på body när bildvisaren är öppen
   useEffect(() => {
@@ -21,6 +21,15 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
+  // Flytta fokus in i dialogen när den öppnas och återställ till utlösaren när den stängs
+  useEffect(() => {
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    return () => {
+      previouslyFocusedRef.current?.focus?.();
     };
   }, []);
 
@@ -75,16 +84,14 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
       role="dialog"
       aria-modal="true"
       aria-label="Bildvisare"
+      ref={dialogRef}
+      tabIndex={-1}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/95 select-none touch-none animate-in fade-in-0 duration-150"
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/95 select-none touch-none outline-none animate-in fade-in-0 duration-150 motion-reduce:animate-none"
     >
       {/* Bakgrundsyta som stänger vid klick */}
-      <div
-        onClick={onClose}
-        className="absolute inset-0 z-0"
-        aria-hidden="true"
-      />
+      <div onClick={onClose} className="absolute inset-0 z-0" aria-hidden="true" />
 
       {/* Stäng-knapp */}
       <button
@@ -128,7 +135,7 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
               "absolute left-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-white/15 text-white transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
               idx === 0
                 ? "cursor-default opacity-30 text-white/30"
-                : "cursor-pointer hover:bg-white/25"
+                : "cursor-pointer hover:bg-white/25",
             )}
           >
             <ChevronLeft className="h-6 w-6" />
@@ -146,7 +153,7 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
               "absolute right-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-white/15 text-white transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
               idx === images.length - 1
                 ? "cursor-default opacity-30 text-white/30"
-                : "cursor-pointer hover:bg-white/25"
+                : "cursor-pointer hover:bg-white/25",
             )}
           >
             <ChevronRight className="h-6 w-6" />
@@ -162,7 +169,7 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
               key={i}
               className={cn(
                 "h-2 rounded-full transition-all duration-200",
-                i === idx ? "w-5 bg-white" : "w-2 bg-white/40"
+                i === idx ? "w-5 bg-white" : "w-2 bg-white/40",
               )}
             />
           ))}

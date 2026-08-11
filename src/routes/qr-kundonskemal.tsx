@@ -1,7 +1,16 @@
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
-import { TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Clock, Package, ShoppingCart, Circle as XCircle, Ban, ArchiveX } from "lucide-react";
+import {
+  TriangleAlert as AlertTriangle,
+  CircleCheck as CheckCircle2,
+  Clock,
+  Package,
+  ShoppingCart,
+  Circle as XCircle,
+  Ban,
+  ArchiveX,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +25,10 @@ export const Route = createFileRoute("/qr-kundonskemal")({
   component: QrKundonskemalPage,
 });
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; color: string; icon: React.ComponentType<{ className?: string }> }
+> = {
   open: { label: "Inkommit", color: "text-muted-foreground", icon: Clock },
   ordered: { label: "Beställd", color: "text-info", icon: ShoppingCart },
   fulfilled: { label: "Uppfylld", color: "text-success", icon: CheckCircle2 },
@@ -44,7 +56,11 @@ function QrKundonskemalPage() {
   } | null>(null);
 
   useEffect(() => {
-    if (!token) { setInvalid(true); setResolving(false); return; }
+    if (!token) {
+      setInvalid(true);
+      setResolving(false);
+      return;
+    }
 
     supabase
       .from("qr_tokens")
@@ -53,18 +69,32 @@ function QrKundonskemalPage() {
       .eq("token_type", "customer_request_status")
       .maybeSingle()
       .then(async ({ data: tokenRow }) => {
-        if (!tokenRow) { setInvalid(true); setResolving(false); return; }
+        if (!tokenRow) {
+          setInvalid(true);
+          setResolving(false);
+          return;
+        }
 
         const meta = (tokenRow.meta ?? {}) as { request_id?: string };
-        if (!meta.request_id) { setInvalid(true); setResolving(false); return; }
+        if (!meta.request_id) {
+          setInvalid(true);
+          setResolving(false);
+          return;
+        }
 
         const { data: req } = await supabase
           .from("customer_requests")
-          .select("id,product_name,article_number,notes,staff_comment,status,priority,created_at,store:stores(name)")
+          .select(
+            "id,product_name,article_number,notes,staff_comment,status,priority,created_at,store:stores(name)",
+          )
           .eq("id", meta.request_id)
           .maybeSingle();
 
-        if (!req) { setInvalid(true); setResolving(false); return; }
+        if (!req) {
+          setInvalid(true);
+          setResolving(false);
+          return;
+        }
 
         setRequest({
           id: req.id,
@@ -139,34 +169,45 @@ function QrKundonskemalPage() {
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-foreground">{request.product_name}</p>
             </div>
-            <div className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1", {
-              "bg-success/10": request.status === "fulfilled",
-              "bg-info/10": request.status === "ordered",
-              "bg-muted": request.status === "open" || isDetour,
-            })}>
+            <div
+              className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1", {
+                "bg-success/10": request.status === "fulfilled",
+                "bg-info/10": request.status === "ordered",
+                "bg-muted": request.status === "open" || isDetour,
+              })}
+            >
               <StatusIcon className={cn("h-3.5 w-3.5", statusCfg.color)} />
-              <span className={cn("text-xs font-semibold", statusCfg.color)}>{statusCfg.label}</span>
+              <span className={cn("text-xs font-semibold", statusCfg.color)}>
+                {statusCfg.label}
+              </span>
             </div>
           </div>
 
           {request.notes && (
             <div className="mt-3 rounded-xl border border-border/40 bg-muted/30 px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 mb-1">Kommentar</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 mb-1">
+                Kommentar
+              </p>
               <p className="text-sm text-foreground">{request.notes}</p>
             </div>
           )}
 
           {request.staff_comment && (
             <div className="mt-3 rounded-xl border border-border/60 bg-primary/5 px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-primary/70 mb-1">Meddelande från butiken</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-primary/70 mb-1">
+                Meddelande från butiken
+              </p>
               <p className="text-sm text-foreground">{request.staff_comment}</p>
             </div>
           )}
 
           <div className="mt-3 border-t border-border/40 pt-3">
             <p className="text-xs text-muted-foreground">
-              Registrerat {new Date(request.created_at).toLocaleDateString("sv-SE", {
-                year: "numeric", month: "long", day: "numeric",
+              Registrerat{" "}
+              {new Date(request.created_at).toLocaleDateString("sv-SE", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
               })}
             </p>
           </div>
@@ -195,11 +236,21 @@ function QrKundonskemalPage() {
                         {isCompleted ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
                       </div>
                       {i < steps.length - 1 && (
-                        <div className={cn("my-1 w-0.5 flex-1 min-h-[1.5rem]", isCompleted ? "bg-success/40" : "bg-border/60")} />
+                        <div
+                          className={cn(
+                            "my-1 w-0.5 flex-1 min-h-[1.5rem]",
+                            isCompleted ? "bg-success/40" : "bg-border/60",
+                          )}
+                        />
                       )}
                     </div>
                     <div className="pb-4 pt-1">
-                      <p className={cn("text-sm font-medium", isCompleted ? "text-foreground" : "text-muted-foreground")}>
+                      <p
+                        className={cn(
+                          "text-sm font-medium",
+                          isCompleted ? "text-foreground" : "text-muted-foreground",
+                        )}
+                      >
                         {step.label}
                       </p>
                       {isCurrent && (
@@ -218,7 +269,8 @@ function QrKundonskemalPage() {
                 <XCircle className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
                 <p className="text-sm font-medium text-foreground">Önskemål avböjt</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Tyvärr kan vi inte ta in den här produkten. Se meddelande från butiken ovan eller kontakta personalen för mer information.
+                  Tyvärr kan vi inte ta in den här produkten. Se meddelande från butiken ovan eller
+                  kontakta personalen för mer information.
                 </p>
               </>
             )}
@@ -227,7 +279,8 @@ function QrKundonskemalPage() {
                 <Ban className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
                 <p className="text-sm font-medium text-foreground">Finns ej i sortiment</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Denna produkt ingår för närvarande inte i vårt leverantörssortiment och kan inte beställas in.
+                  Denna produkt ingår för närvarande inte i vårt leverantörssortiment och kan inte
+                  beställas in.
                 </p>
               </>
             )}
@@ -236,7 +289,8 @@ function QrKundonskemalPage() {
                 <ArchiveX className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
                 <p className="text-sm font-medium text-foreground">Produkten har utgått</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Denna produkt har utgått ur tillverkarens eller leverantörens sortiment och går tyvärr inte längre att få tag på.
+                  Denna produkt har utgått ur tillverkarens eller leverantörens sortiment och går
+                  tyvärr inte längre att få tag på.
                 </p>
               </>
             )}

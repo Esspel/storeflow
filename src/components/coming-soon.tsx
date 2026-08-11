@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Construction } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,13 @@ export function ComingSoon({
   description: string;
   features: string[];
 }) {
+  const [notified, setNotified] = useState(false);
+
+  const handleNotify = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setNotified(true);
+  };
+
   return (
     <div className="mx-auto max-w-3xl px-5 py-12 md:px-8 md:py-16">
       <div className="overflow-hidden rounded-3xl border border-border/60 bg-card p-10 shadow-[var(--shadow-md)]">
@@ -34,9 +42,20 @@ export function ComingSoon({
           ))}
         </div>
 
-        <div className="mt-8 flex gap-2">
-          <Button className="rounded-full">Notifiera mig</Button>
-          <Button variant="outline" className="rounded-full">Begär tidig åtkomst</Button>
+        <div className="mt-8">
+          <div className="flex gap-2">
+            <Button className="rounded-full" onClick={handleNotify}>
+              Notifiera mig
+            </Button>
+            <Button variant="outline" className="rounded-full" onClick={handleNotify}>
+              Begär tidig åtkomst
+            </Button>
+          </div>
+          {notified && (
+            <p role="status" className="mt-3 text-sm text-success">
+              Tack! Vi kontaktar dig när funktionen är tillgänglig.
+            </p>
+          )}
         </div>
       </div>
     </div>

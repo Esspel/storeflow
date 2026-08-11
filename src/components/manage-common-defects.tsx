@@ -2,12 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Download, GripVertical, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -77,10 +72,15 @@ export function ManageCommonDefects({
     if (!label) return;
     setSaving(true);
     const maxOrder = defects.length > 0 ? Math.max(...defects.map((d) => d.sort_order)) : -1;
-    
+
     const { data, error } = await supabase
       .from("common_defects")
-      .insert({ store_id: storeId, label, sort_order: maxOrder + 1, checkpoint_ids: newCheckpointIds })
+      .insert({
+        store_id: storeId,
+        label,
+        sort_order: maxOrder + 1,
+        checkpoint_ids: newCheckpointIds,
+      })
       .select()
       .maybeSingle();
 
@@ -106,14 +106,16 @@ export function ManageCommonDefects({
       return;
     }
 
-    setDefects((prev) => prev.map((d) => d.id === defect.id ? { ...d, checkpoint_ids: checkpointIds } : d));
+    setDefects((prev) =>
+      prev.map((d) => (d.id === defect.id ? { ...d, checkpoint_ids: checkpointIds } : d)),
+    );
     onDefectsChanged?.();
   };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     const { error } = await supabase.from("common_defects").delete().eq("id", deleteTarget.id);
-    
+
     if (error) {
       console.error("Fel vid radering:", error.message);
       return;
@@ -140,7 +142,7 @@ export function ManageCommonDefects({
   const handleDragEnd = async () => {
     setDragIdx(null);
     const updates = defects.map((d, i) => ({ ...d, sort_order: i }));
-    
+
     // Använd upsert för mer effektiv massuppdatering
     const { error } = await supabase.from("common_defects").upsert(updates);
     if (error) {
@@ -189,9 +191,7 @@ export function ManageCommonDefects({
       header,
       ...defects.map((d) => {
         const label = `"${d.label.replace(/"/g, '""')}"`;
-        return hasCheckpoints
-          ? `${label};"${(d.checkpoint_ids ?? []).join(",")}"`
-          : label;
+        return hasCheckpoints ? `${label};"${(d.checkpoint_ids ?? []).join(",")}"` : label;
       }),
     ].join("\n");
 
@@ -214,7 +214,7 @@ export function ManageCommonDefects({
 
     setSaving(true);
     const maxOrder = defects.length > 0 ? Math.max(...defects.map((d) => d.sort_order)) : -1;
-    
+
     const inserts = dataLines
       .map((line, i) => {
         const cols = parseCSVLine(line, ";").map((f) => f.trim());
@@ -222,7 +222,10 @@ export function ManageCommonDefects({
         if (!label) return null;
         const checkpointIdsRaw = cols[1] ?? "";
         const cpIds = checkpointIdsRaw
-          ? checkpointIdsRaw.split(",").map((s) => s.trim()).filter(Boolean)
+          ? checkpointIdsRaw
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
           : [];
         return { store_id: storeId, label, sort_order: maxOrder + 1 + i, checkpoint_ids: cpIds };
       })
@@ -292,6 +295,7 @@ export function ManageCommonDefects({
                 ref={fileInputRef}
                 type="file"
                 accept=".csv,text/csv"
+                aria-label="Importera CSV-fil"
                 className="hidden"
                 onChange={handleImportFile}
               />
@@ -318,7 +322,7 @@ export function ManageCommonDefects({
                   onDragEnd={handleDragEnd}
                   className={cn(
                     "rounded-xl border border-border/60 bg-card transition-colors",
-                    dragIdx === idx && "opacity-50 bg-muted"
+                    dragIdx === idx && "opacity-50 bg-muted",
                   )}
                 >
                   <div className="flex items-center gap-2 px-3 py-2.5 group">
@@ -328,29 +332,43 @@ export function ManageCommonDefects({
                       <button
                         type="button"
                         onClick={() => setExpandedId(isExpanded ? null : d.id)}
-                        aria-label="Visa kopplade kontrollpunkter"
+                        aria-expanded={isExpanded}
+                        aria-controls={`defect-checkpoints-${d.id}`}
+                        aria-label={
+                          isExpanded
+                            ? "Dölj kopplade kontrollpunkter"
+                            : "Visa kopplade kontrollpunkter"
+                        }
                         className="shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                       >
                         {linkedCps.length > 0 && (
-                          <span className="rounded-full bg-primary/10 px-1.5 text-[10px] text-primary font-medium">
+                          <span className="rounded-full bg-primary/10 px-1.5 text-[10px] text-primary font-medium tabular-nums">
                             {linkedCps.length}
                           </span>
                         )}
-                        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isExpanded && "rotate-180")} />
+                        <ChevronDown
+                          className={cn(
+                            "h-3.5 w-3.5 transition-transform",
+                            isExpanded && "rotate-180",
+                          )}
+                        />
                       </button>
                     )}
                     <button
                       type="button"
                       onClick={() => setDeleteTarget(d)}
                       aria-label={`Ta bort ${d.label}`}
-                      className="shrink-0 text-muted-foreground/40 hover:text-destructive transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                      className="shrink-0 text-muted-foreground/40 hover:text-destructive transition-colors opacity-100 sm:opacity-60 sm:group-hover:opacity-100"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
 
                   {hasCheckpoints && isExpanded && (
-                    <div className="px-3 pb-3 space-y-2 border-t border-border/40 pt-2">
+                    <div
+                      id={`defect-checkpoints-${d.id}`}
+                      className="px-3 pb-3 space-y-2 border-t border-border/40 pt-2"
+                    >
                       {linkedCps.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {linkedCps.map((cp) => (
@@ -362,7 +380,12 @@ export function ManageCommonDefects({
                               <button
                                 type="button"
                                 aria-label={`Ta bort koppling till ${cp.label}`}
-                                onClick={() => updateCheckpoints(d, (d.checkpoint_ids ?? []).filter((id) => id !== cp.id))}
+                                onClick={() =>
+                                  updateCheckpoints(
+                                    d,
+                                    (d.checkpoint_ids ?? []).filter((id) => id !== cp.id),
+                                  )
+                                }
                               >
                                 <X className="h-2.5 w-2.5" />
                               </button>
@@ -378,8 +401,11 @@ export function ManageCommonDefects({
                             <button
                               key={cp.id}
                               type="button"
+                              aria-label={`Koppla till ${cp.zoneName ? `${cp.zoneName} › ${cp.label}` : cp.label}`}
                               className="rounded-full border border-border/50 px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
-                              onClick={() => updateCheckpoints(d, [...(d.checkpoint_ids ?? []), cp.id])}
+                              onClick={() =>
+                                updateCheckpoints(d, [...(d.checkpoint_ids ?? []), cp.id])
+                              }
                             >
                               + {cp.zoneName ? `${cp.zoneName} › ${cp.label}` : cp.label}
                             </button>
@@ -424,26 +450,35 @@ export function ManageCommonDefects({
                   Koppla till kontrollpunkter (valfritt):
                 </p>
                 <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
-                  {checkpoints.map((cp) => (
-                    <button
-                      key={cp.id}
-                      type="button"
-                      className={cn(
-                        "rounded-full border px-2 py-0.5 text-[11px] transition-colors",
-                        newCheckpointIds.includes(cp.id)
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border/50 text-muted-foreground hover:border-primary/40 hover:text-primary"
-                      )}
-                      onClick={() =>
-                        setNewCheckpointIds((prev) =>
-                          prev.includes(cp.id) ? prev.filter((id) => id !== cp.id) : [...prev, cp.id]
-                        )
-                      }
-                    >
-                      {newCheckpointIds.includes(cp.id) ? "✓ " : ""}
-                      {cp.zoneName ? `${cp.zoneName} › ${cp.label}` : cp.label}
-                    </button>
-                  ))}
+                  {checkpoints.map((cp) => {
+                    const isSelected = newCheckpointIds.includes(cp.id);
+                    const cpLabel = cp.zoneName ? `${cp.zoneName} › ${cp.label}` : cp.label;
+                    return (
+                      <button
+                        key={cp.id}
+                        type="button"
+                        role="switch"
+                        aria-checked={isSelected}
+                        aria-label={isSelected ? `Avmarkera ${cpLabel}` : `Markera ${cpLabel}`}
+                        className={cn(
+                          "rounded-full border px-2 py-0.5 text-[11px] transition-colors",
+                          isSelected
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border/50 text-muted-foreground hover:border-primary/40 hover:text-primary",
+                        )}
+                        onClick={() =>
+                          setNewCheckpointIds((prev) =>
+                            prev.includes(cp.id)
+                              ? prev.filter((id) => id !== cp.id)
+                              : [...prev, cp.id],
+                          )
+                        }
+                      >
+                        {isSelected ? "✓ " : ""}
+                        {cpLabel}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -451,7 +486,12 @@ export function ManageCommonDefects({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => {
+          if (!o) setDeleteTarget(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort avvikelse?</AlertDialogTitle>

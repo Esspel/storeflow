@@ -1,9 +1,29 @@
 import { useState, useRef } from "react";
-import { FileUp, UserCheck, UserX, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2 } from "lucide-react";
+import {
+  FileUp,
+  UserCheck,
+  UserX,
+  CircleAlert as AlertCircle,
+  CircleCheck as CheckCircle2,
+  Loader as Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase, type Store } from "@/lib/supabase";
 import { usernameFromName, generatePassword } from "@/lib/text-utils";
 
@@ -44,13 +64,22 @@ type Props = {
   onImported: () => void;
 };
 
-export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUsernames, onImported }: Props) {
+export function XmlImportModal({
+  open,
+  onOpenChange,
+  storeId,
+  stores,
+  existingUsernames,
+  onImported,
+}: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [parsed, setParsed] = useState<ParsedEmployee[]>([]);
   const [fileName, setFileName] = useState("");
   const [parseError, setParseError] = useState("");
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ created: number; skipped: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ created: number; skipped: number } | null>(
+    null,
+  );
 
   // Hierarchy assignment
   const [foreningar, setForeningar] = useState<Forening[]>([]);
@@ -61,9 +90,15 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
   // Load foreningar and distrikt when dialog opens
   const handleOpenChange = (o: boolean) => {
     if (o && foreningar.length === 0) {
-      supabase.from("foreningar").select("id, name").order("name")
+      supabase
+        .from("foreningar")
+        .select("id, name")
+        .order("name")
         .then(({ data }) => setForeningar((data ?? []) as Forening[]));
-      supabase.from("distrikt").select("id, namn, forening_id").order("namn")
+      supabase
+        .from("distrikt")
+        .select("id, namn, forening_id")
+        .order("namn")
         .then(({ data }) => setDistriktList((data ?? []) as Distrikt[]));
     }
     if (!o) reset();
@@ -89,21 +124,31 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
           try {
             const buf = await file.arrayBuffer();
             xmlText = new TextDecoder("windows-1252").decode(buf);
-          } catch { /* keep utf-8 result */ }
+          } catch {
+            /* keep utf-8 result */
+          }
         }
         const doc = new DOMParser().parseFromString(xmlText, "text/xml");
         const parseErr = doc.querySelector("parsererror");
-        if (parseErr) { setParseError("Ogiltig XML-fil. Kontrollera filformatet."); return; }
+        if (parseErr) {
+          setParseError("Ogiltig XML-fil. Kontrollera filformatet.");
+          return;
+        }
 
         const recordTags = ["Employee", "Anstallda", "Person", "Staff", "Worker"];
         let records: Element[] = [];
         for (const tag of recordTags) {
           const found = Array.from(doc.querySelectorAll(tag));
-          if (found.length > 0) { records = found; break; }
+          if (found.length > 0) {
+            records = found;
+            break;
+          }
         }
 
         if (records.length === 0) {
-          setParseError("Hittade inga personposter i XML-filen. Kontrollera att taggnamnen matchar (Employee, Person, Anstallda).");
+          setParseError(
+            "Hittade inga personposter i XML-filen. Kontrollera att taggnamnen matchar (Employee, Person, Anstallda).",
+          );
           return;
         }
 
@@ -116,10 +161,19 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
             const department = getXmlField(el, FIELD_MAP.department);
             const email = getXmlField(el, FIELD_MAP.email);
             let username = usernameFromName(name);
-            if (seen.has(username)) username = `${username}.${employeeNumber || Math.floor(Math.random() * 999)}`;
+            if (seen.has(username))
+              username = `${username}.${employeeNumber || Math.floor(Math.random() * 999)}`;
             seen.add(username);
             const exists = existingUsernames.includes(username);
-            return { name, employeeNumber, department, email, username, password: generatePassword(16), exists };
+            return {
+              name,
+              employeeNumber,
+              department,
+              email,
+              username,
+              password: generatePassword(16),
+              exists,
+            };
           })
           .filter((e): e is ParsedEmployee => e !== null);
 
@@ -139,11 +193,17 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
     async function ensureAllGroup(): Promise<string | null> {
       if (!storeId) return null;
       let { data: g } = await supabase
-        .from("user_groups").select("id")
-        .eq("store_id", storeId).eq("name", "Alla medarbetare").maybeSingle();
+        .from("user_groups")
+        .select("id")
+        .eq("store_id", storeId)
+        .eq("name", "Alla medarbetare")
+        .maybeSingle();
       if (!g) {
-        const { data: c } = await supabase.from("user_groups")
-          .insert({ name: "Alla medarbetare", store_id: storeId }).select("id").maybeSingle();
+        const { data: c } = await supabase
+          .from("user_groups")
+          .insert({ name: "Alla medarbetare", store_id: storeId })
+          .select("id")
+          .maybeSingle();
         g = c;
       }
       return g?.id ?? null;
@@ -154,35 +214,57 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
     async function linkHierarchy(userId: string) {
       // Link to forening if selected
       if (selectedForeningId) {
-        await supabase.from("user_foreningar").upsert(
-          { user_id: userId, forening_id: selectedForeningId, is_primary: true },
-          { onConflict: "user_id,forening_id" }
-        );
+        await supabase
+          .from("user_foreningar")
+          .upsert(
+            { user_id: userId, forening_id: selectedForeningId, is_primary: true },
+            { onConflict: "user_id,forening_id" },
+          );
         // Also set forening_id on app_users as primary
-        await supabase.from("app_users").update({ forening_id: selectedForeningId }).eq("id", userId);
+        await supabase
+          .from("app_users")
+          .update({ forening_id: selectedForeningId })
+          .eq("id", userId);
       }
       // Link to distrikt if selected
       if (selectedDistriktId) {
-        await supabase.from("user_distrikt").upsert(
-          { user_id: userId, distrikt_id: selectedDistriktId, is_primary: true },
-          { onConflict: "user_id,distrikt_id" }
-        );
-        await supabase.from("app_users").update({ distrikt_id: selectedDistriktId }).eq("id", userId);
+        await supabase
+          .from("user_distrikt")
+          .upsert(
+            { user_id: userId, distrikt_id: selectedDistriktId, is_primary: true },
+            { onConflict: "user_id,distrikt_id" },
+          );
+        await supabase
+          .from("app_users")
+          .update({ distrikt_id: selectedDistriktId })
+          .eq("id", userId);
       }
     }
 
     async function linkToStore(userId: string) {
       if (!storeId) return;
-      const { data: existing } = await supabase.from("user_stores").select("id")
-        .eq("user_id", userId).eq("store_id", storeId).maybeSingle();
+      const { data: existing } = await supabase
+        .from("user_stores")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("store_id", storeId)
+        .maybeSingle();
       if (!existing) {
-        await supabase.from("user_stores").insert({ user_id: userId, store_id: storeId, is_primary: false });
+        await supabase
+          .from("user_stores")
+          .insert({ user_id: userId, store_id: storeId, is_primary: false });
       }
       if (allGroupId) {
-        const { data: member } = await supabase.from("user_group_members").select("id")
-          .eq("group_id", allGroupId).eq("user_id", userId).maybeSingle();
+        const { data: member } = await supabase
+          .from("user_group_members")
+          .select("id")
+          .eq("group_id", allGroupId)
+          .eq("user_id", userId)
+          .maybeSingle();
         if (!member) {
-          await supabase.from("user_group_members").insert({ group_id: allGroupId, user_id: userId });
+          await supabase
+            .from("user_group_members")
+            .insert({ group_id: allGroupId, user_id: userId });
         }
       }
       await linkHierarchy(userId);
@@ -190,36 +272,53 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
 
     for (const emp of toCreate) {
       try {
-        const { data: hash } = await supabase.rpc("hash_password", { plain_password: emp.password });
-        const { data: newUser } = await supabase.from("app_users").insert({
-          username: emp.username,
-          display_name: emp.name,
-          password_hash: hash,
-          role: "employee",
-          employee_group: emp.department || "Alla medarbetare",
-          store_id: storeId || null,
-          must_change_password: true,
-          forening_id: selectedForeningId || null,
-          distrikt_id: selectedDistriktId || null,
-        }).select("id").maybeSingle();
+        const { data: hash } = await supabase.rpc("hash_password", {
+          plain_password: emp.password,
+        });
+        const { data: newUser } = await supabase
+          .from("app_users")
+          .insert({
+            username: emp.username,
+            display_name: emp.name,
+            password_hash: hash,
+            role: "employee",
+            employee_group: emp.department || "Alla medarbetare",
+            store_id: storeId || null,
+            must_change_password: true,
+            forening_id: selectedForeningId || null,
+            distrikt_id: selectedDistriktId || null,
+          })
+          .select("id")
+          .maybeSingle();
 
         if (newUser?.id && storeId) {
-          await supabase.from("user_stores").insert({ user_id: newUser.id, store_id: storeId, is_primary: true });
+          await supabase
+            .from("user_stores")
+            .insert({ user_id: newUser.id, store_id: storeId, is_primary: true });
           if (allGroupId) {
-            await supabase.from("user_group_members").insert({ group_id: allGroupId, user_id: newUser.id });
+            await supabase
+              .from("user_group_members")
+              .insert({ group_id: allGroupId, user_id: newUser.id });
           }
           await linkHierarchy(newUser.id);
         }
         created++;
-      } catch { /* continue */ }
+      } catch {
+        /* continue */
+      }
     }
 
     for (const emp of toSkip) {
       try {
-        const { data: existingUser } = await supabase.from("app_users").select("id")
-          .eq("username", emp.username).maybeSingle();
+        const { data: existingUser } = await supabase
+          .from("app_users")
+          .select("id")
+          .eq("username", emp.username)
+          .maybeSingle();
         if (existingUser?.id) await linkToStore(existingUser.id);
-      } catch { /* continue */ }
+      } catch {
+        /* continue */
+      }
     }
 
     setImportResult({ created, skipped: toSkip.length });
@@ -237,7 +336,7 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
 
   const storeName = stores.find((s) => s.id === storeId)?.name ?? "";
   const filteredDistrikt = selectedForeningId
-    ? distriktList.filter(d => d.forening_id === selectedForeningId)
+    ? distriktList.filter((d) => d.forening_id === selectedForeningId)
     : distriktList;
 
   return (
@@ -258,21 +357,26 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
                 <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-success" />
                 <p className="text-lg font-semibold">{importResult.created} konton skapades</p>
                 {importResult.skipped > 0 && (
-                  <p className="mt-1 text-sm text-muted-foreground">{importResult.skipped} befintliga användare kopplades till butiken</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {importResult.skipped} befintliga användare kopplades till butiken
+                  </p>
                 )}
                 {selectedForeningId && (
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Kopplades till förening: {foreningar.find(f => f.id === selectedForeningId)?.name}
+                    Kopplades till förening:{" "}
+                    {foreningar.find((f) => f.id === selectedForeningId)?.name}
                   </p>
                 )}
                 {selectedDistriktId && (
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Kopplades till distrikt: {distriktList.find(d => d.id === selectedDistriktId)?.namn}
+                    Kopplades till distrikt:{" "}
+                    {distriktList.find((d) => d.id === selectedDistriktId)?.namn}
                   </p>
                 )}
               </div>
               <p className="text-sm text-muted-foreground text-center">
-                Alla nya konton har ett slumpmässigt 16-teckens lösenord och kräver lösenordsbyte vid första inlogg.
+                Alla nya konton har ett slumpmässigt 16-teckens lösenord och kräver lösenordsbyte
+                vid första inlogg.
               </p>
             </div>
           ) : (
@@ -285,35 +389,70 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
                 <FileUp className="mb-3 h-8 w-8 text-muted-foreground/60" />
                 <p className="font-medium">{fileName || "Välj SoftOne GO XML-fil"}</p>
                 <p className="mt-1 text-sm text-muted-foreground">Klicka för att bläddra</p>
-                <input ref={fileRef} type="file" accept=".xml,text/xml" className="hidden" onChange={handleFileChange} />
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".xml,text/xml"
+                  aria-label="Välj SoftOne GO XML-fil"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
               </div>
 
               {/* Hierarchy assignment */}
               <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
                 <p className="text-sm font-medium">Koppla till hierarki (valfritt)</p>
-                <p className="text-xs text-muted-foreground">Alla importerade användare kopplas till valda förening och/eller distrikt. De kan tillhöra flera i efterhand via personalhanteringen.</p>
+                <p className="text-xs text-muted-foreground">
+                  Alla importerade användare kopplas till valda förening och/eller distrikt. De kan
+                  tillhöra flera i efterhand via personalhanteringen.
+                </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Förening</label>
-                    <Select value={selectedForeningId || "__none"} onValueChange={(v) => { setSelectedForeningId(v === "__none" ? "" : v); setSelectedDistriktId(""); }}>
-                      <SelectTrigger className="h-8 text-xs">
+                    <Label htmlFor="xml-forening">Förening</Label>
+                    <Select
+                      value={selectedForeningId || "__none"}
+                      onValueChange={(v) => {
+                        setSelectedForeningId(v === "__none" ? "" : v);
+                        setSelectedDistriktId("");
+                      }}
+                    >
+                      <SelectTrigger
+                        id="xml-forening"
+                        aria-label="Förening"
+                        className="h-8 text-xs"
+                      >
                         <SelectValue placeholder="Ingen" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">Ingen koppling</SelectItem>
-                        {foreningar.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                        {foreningar.map((f) => (
+                          <SelectItem key={f.id} value={f.id}>
+                            {f.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Distrikt</label>
-                    <Select value={selectedDistriktId || "__none"} onValueChange={(v) => setSelectedDistriktId(v === "__none" ? "" : v)}>
-                      <SelectTrigger className="h-8 text-xs">
+                    <Label htmlFor="xml-distrikt">Distrikt</Label>
+                    <Select
+                      value={selectedDistriktId || "__none"}
+                      onValueChange={(v) => setSelectedDistriktId(v === "__none" ? "" : v)}
+                    >
+                      <SelectTrigger
+                        id="xml-distrikt"
+                        aria-label="Distrikt"
+                        className="h-8 text-xs"
+                      >
                         <SelectValue placeholder="Ingen" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">Ingen koppling</SelectItem>
-                        {filteredDistrikt.map(d => <SelectItem key={d.id} value={d.id}>{d.namn}</SelectItem>)}
+                        {filteredDistrikt.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>
+                            {d.namn}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -321,7 +460,10 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
               </div>
 
               {parseError && (
-                <div className="flex items-start gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                >
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   {parseError}
                 </div>
@@ -344,24 +486,40 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
 
                   {toCreate.length > 0 && (
                     <div>
-                      <p className="mb-2 text-sm font-medium text-foreground">Dessa konton skapas:</p>
+                      <p className="mb-2 text-sm font-medium text-foreground">
+                        Dessa konton skapas:
+                      </p>
                       <div className="overflow-hidden rounded-xl border border-border/60">
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b border-border/60 bg-muted/40">
-                              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Namn</th>
-                              <th className="hidden px-4 py-2.5 text-left text-xs font-medium text-muted-foreground sm:table-cell">Användarnamn</th>
-                              <th className="hidden px-4 py-2.5 text-left text-xs font-medium text-muted-foreground md:table-cell">Avdelning</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Anst.nr</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                                Namn
+                              </th>
+                              <th className="hidden px-4 py-2.5 text-left text-xs font-medium text-muted-foreground sm:table-cell">
+                                Användarnamn
+                              </th>
+                              <th className="hidden px-4 py-2.5 text-left text-xs font-medium text-muted-foreground md:table-cell">
+                                Avdelning
+                              </th>
+                              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+                                Anst.nr
+                              </th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border/60">
                             {toCreate.map((emp, i) => (
                               <tr key={i} className="hover:bg-muted/20">
                                 <td className="px-4 py-2.5 font-medium">{emp.name}</td>
-                                <td className="hidden px-4 py-2.5 font-mono text-xs text-muted-foreground sm:table-cell">{emp.username}</td>
-                                <td className="hidden px-4 py-2.5 text-muted-foreground md:table-cell">{emp.department || "—"}</td>
-                                <td className="px-4 py-2.5 text-muted-foreground">{emp.employeeNumber || "—"}</td>
+                                <td className="hidden px-4 py-2.5 font-mono text-xs text-muted-foreground sm:table-cell">
+                                  {emp.username}
+                                </td>
+                                <td className="hidden px-4 py-2.5 text-muted-foreground md:table-cell">
+                                  {emp.department || "—"}
+                                </td>
+                                <td className="px-4 py-2.5 text-muted-foreground">
+                                  {emp.employeeNumber || "—"}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -372,14 +530,18 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
 
                   {toSkip.length > 0 && (
                     <div>
-                      <p className="mb-2 text-sm font-medium text-muted-foreground">Dessa finns redan och kopplas till butiken:</p>
+                      <p className="mb-2 text-sm font-medium text-muted-foreground">
+                        Dessa finns redan och kopplas till butiken:
+                      </p>
                       <div className="overflow-hidden rounded-xl border border-border/40 opacity-60">
                         <table className="w-full text-sm">
                           <tbody className="divide-y divide-border/40">
                             {toSkip.map((emp, i) => (
                               <tr key={i}>
                                 <td className="px-4 py-2 text-muted-foreground">{emp.name}</td>
-                                <td className="hidden px-4 py-2 font-mono text-xs text-muted-foreground sm:table-cell">{emp.username}</td>
+                                <td className="hidden px-4 py-2 font-mono text-xs text-muted-foreground sm:table-cell">
+                                  {emp.username}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -394,12 +556,28 @@ export function XmlImportModal({ open, onOpenChange, storeId, stores, existingUs
         </div>
 
         <DialogFooter className="border-t border-border/60 px-6 py-4">
-          <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              reset();
+              onOpenChange(false);
+            }}
+          >
             {importResult ? "Stäng" : "Avbryt"}
           </Button>
           {!importResult && toCreate.length > 0 && (
             <Button onClick={runImport} disabled={importing}>
-              {importing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Importerar...</> : `Skapa ${toCreate.length} konton`}
+              {importing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
+                  Importerar
+                  <span className="sr-only" aria-busy="true">
+                    Laddar…
+                  </span>
+                </>
+              ) : (
+                `Skapa ${toCreate.length} konton`
+              )}
             </Button>
           )}
         </DialogFooter>

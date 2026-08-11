@@ -26,7 +26,6 @@ function HubPage() {
   return (
     <div className="min-h-full" style={{ background: "oklch(0.94 0.04 145)" }}>
       <div className="mx-auto w-full max-w-[1400px] px-5 py-10 md:px-8 md:py-14">
-
         {/* Hero heading */}
         <div className="mb-8 md:mb-10">
           {firstName && (
@@ -44,24 +43,74 @@ function HubPage() {
         </div>
 
         {/* Quick nav cards */}
-        <div className={cn(
-          "grid grid-cols-2 gap-3 sm:grid-cols-3",
-          isManager ? "lg:grid-cols-6" : "lg:grid-cols-5"
-        )}>
-          <QuickCard to="/uppgifter" icon={ListChecks} title="Uppgifter" desc="Rutiner och checklistor" tone="blue" />
-          <QuickCard to="/avvikelser" icon={AlertTriangle} title="Avvikelser" desc="Rapportera ärenden" tone="amber" />
-          <QuickCard to="/schema" icon={CalendarDays} title="Schema" desc="Skiftöversikt" tone="green" />
-          <QuickCard to="/kundrunda" icon={UserRound} title="Kundrunda" desc="Butikskontroll" tone="teal" />
-          <QuickCard to="/kundonskemal" icon={ShoppingCart} title="Kundönskemål" desc="Produktförfrågningar" tone="rose" />
-          {isManager && <QuickCard to="/rapporter" icon={BarChart3} title="Rapporter" desc="KPI:er och insikter" tone="green" />}
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-3 sm:grid-cols-3",
+            isManager ? "lg:grid-cols-6" : "lg:grid-cols-5",
+          )}
+        >
+          <QuickCard
+            to="/uppgifter"
+            icon={ListChecks}
+            title="Uppgifter"
+            desc="Rutiner och checklistor"
+            tone="blue"
+          />
+          <QuickCard
+            to="/avvikelser"
+            icon={AlertTriangle}
+            title="Avvikelser"
+            desc="Rapportera ärenden"
+            tone="amber"
+          />
+          <QuickCard
+            to="/schema"
+            icon={CalendarDays}
+            title="Schema"
+            desc="Skiftöversikt"
+            tone="green"
+          />
+          <QuickCard
+            to="/kundrunda"
+            icon={UserRound}
+            title="Kundrunda"
+            desc="Butikskontroll"
+            tone="teal"
+          />
+          <QuickCard
+            to="/kundonskemal"
+            icon={ShoppingCart}
+            title="Kundönskemål"
+            desc="Produktförfrågningar"
+            tone="rose"
+          />
+          {isManager && (
+            <QuickCard
+              to="/rapporter"
+              icon={BarChart3}
+              title="Rapporter"
+              desc="KPI:er och insikter"
+              tone="green"
+            />
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function QuickCard({ to, icon: Icon, title, desc, tone }: {
-  to: string; icon: LucideIcon; title: string; desc: string; tone: "blue" | "amber" | "green" | "teal" | "slate" | "rose";
+function QuickCard({
+  to,
+  icon: Icon,
+  title,
+  desc,
+  tone,
+}: {
+  to: string;
+  icon: LucideIcon;
+  title: string;
+  desc: string;
+  tone: "blue" | "amber" | "green" | "teal" | "slate" | "rose";
 }) {
   const colors = {
     blue: "bg-info/10 text-info",
@@ -76,7 +125,9 @@ function QuickCard({ to, icon: Icon, title, desc, tone }: {
       to={to}
       className="group flex items-center gap-3 rounded-2xl border border-border/60 bg-white p-3.5 shadow-[var(--shadow-sm)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] overflow-hidden"
     >
-      <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", colors[tone])}>
+      <div
+        className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", colors[tone])}
+      >
         <Icon className="h-4.5 w-4.5" />
       </div>
       <div className="min-w-0 flex-1 overflow-hidden">

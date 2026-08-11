@@ -1,6 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ChartBar as BarChart2, CircleCheck as CheckCircle2, Clock, RefreshCw, TriangleAlert as AlertTriangle, Users } from "lucide-react";
+import {
+  ChartBar as BarChart2,
+  CircleCheck as CheckCircle2,
+  Clock,
+  RefreshCw,
+  TriangleAlert as AlertTriangle,
+  Users,
+} from "lucide-react";
 import { supabase, type AppUser } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { PageHeader, StatCard } from "@/components/page-header";
@@ -42,10 +49,22 @@ function getWeekNumber(d: Date) {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
-function LoadBar({ todo, progress, done, late, total }: { todo: number; progress: number; done: number; late: number; total: number }) {
+function LoadBar({
+  todo,
+  progress,
+  done,
+  late,
+  total,
+}: {
+  todo: number;
+  progress: number;
+  done: number;
+  late: number;
+  total: number;
+}) {
   if (total === 0) return <div className="h-2 w-full rounded-full bg-muted" />;
   const donePct = (done / total) * 100;
   const progPct = (progress / total) * 100;
@@ -53,10 +72,10 @@ function LoadBar({ todo, progress, done, late, total }: { todo: number; progress
   const todoPct = (todo / total) * 100;
   return (
     <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
-      <div className="bg-success transition-all" style={{ width: `${donePct}%` }} />
-      <div className="bg-info transition-all" style={{ width: `${progPct}%` }} />
-      <div className="bg-destructive transition-all" style={{ width: `${latePct}%` }} />
-      <div className="bg-muted-foreground/30 transition-all" style={{ width: `${todoPct}%` }} />
+      <div className="bg-success transition-[width]" style={{ width: `${donePct}%` }} />
+      <div className="bg-info transition-[width]" style={{ width: `${progPct}%` }} />
+      <div className="bg-destructive transition-[width]" style={{ width: `${latePct}%` }} />
+      <div className="bg-muted-foreground/30 transition-[width]" style={{ width: `${todoPct}%` }} />
     </div>
   );
 }
@@ -67,11 +86,20 @@ function BelastningPage() {
   const isManager = user?.role === "manager" || isAdmin;
 
   const [loads, setLoads] = useState<UserLoad[]>([]);
-  const [unassigned, setUnassigned] = useState({ todo: 0, progress: 0, done: 0, late: 0, total: 0 });
+  const [unassigned, setUnassigned] = useState({
+    todo: 0,
+    progress: 0,
+    done: 0,
+    late: 0,
+    total: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!activeStore) { setLoading(false); return; }
+    if (!activeStore) {
+      setLoading(false);
+      return;
+    }
     fetchData();
   }, [activeStore]);
 
@@ -115,7 +143,10 @@ function BelastningPage() {
     }
 
     // Build map: userId → { todo, progress, done, late }
-    const userMap = new Map<string, { todo: number; progress: number; done: number; late: number }>();
+    const userMap = new Map<
+      string,
+      { todo: number; progress: number; done: number; late: number }
+    >();
     const init = () => ({ todo: 0, progress: 0, done: 0, late: 0 });
 
     for (const t of tasks ?? []) {
@@ -123,15 +154,19 @@ function BelastningPage() {
       if (t.assigned_to) {
         if (!userMap.has(t.assigned_to)) userMap.set(t.assigned_to, init());
         const entry = userMap.get(t.assigned_to)!;
-        (entry as Record<string, number>)[t.status as string] = ((entry as Record<string, number>)[t.status as string] ?? 0) + 1;
+        (entry as Record<string, number>)[t.status as string] =
+          ((entry as Record<string, number>)[t.status as string] ?? 0) + 1;
       }
       // Multi-assign
-      const extras = assigneeRows.filter((a) => a.task_id === t.id && a.user_id && a.user_id !== t.assigned_to);
+      const extras = assigneeRows.filter(
+        (a) => a.task_id === t.id && a.user_id && a.user_id !== t.assigned_to,
+      );
       for (const a of extras) {
         const uid = a.user_id!;
         if (!userMap.has(uid)) userMap.set(uid, init());
         const entry = userMap.get(uid)!;
-        (entry as Record<string, number>)[t.status as string] = ((entry as Record<string, number>)[t.status as string] ?? 0) + 1;
+        (entry as Record<string, number>)[t.status as string] =
+          ((entry as Record<string, number>)[t.status as string] ?? 0) + 1;
       }
     }
 
@@ -141,7 +176,8 @@ function BelastningPage() {
     );
     const unasgn = init();
     for (const t of unassignedTasks) {
-      (unasgn as Record<string, number>)[t.status as string] = ((unasgn as Record<string, number>)[t.status as string] ?? 0) + 1;
+      (unasgn as Record<string, number>)[t.status as string] =
+        ((unasgn as Record<string, number>)[t.status as string] ?? 0) + 1;
     }
     setUnassigned({
       ...unasgn,
@@ -174,7 +210,9 @@ function BelastningPage() {
           <div>
             <Users className="mx-auto mb-3 h-12 w-12 text-muted-foreground/40" />
             <p className="font-medium text-foreground">Åtkomst nekad</p>
-            <p className="mt-1 text-sm text-muted-foreground">Endast chefer och admins kan se denna vy.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Endast chefer och admins kan se denna vy.
+            </p>
           </div>
         </div>
       </div>
@@ -191,8 +229,16 @@ function BelastningPage() {
         title="Medarbetarbelastning"
         description={weekLabel()}
         actions={
-          <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={fetchData} disabled={loading}>
-            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full gap-1.5"
+            onClick={fetchData}
+            disabled={loading}
+          >
+            <RefreshCw
+              className={cn("h-3.5 w-3.5 motion-reduce:animate-none", loading && "animate-spin")}
+            />
             Uppdatera
           </Button>
         }
@@ -211,23 +257,40 @@ function BelastningPage() {
       <div>
         {/* Legend */}
         <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-full bg-success" /><span>Klar</span></div>
-          <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-full bg-info" /><span>Pågår</span></div>
-          <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-full bg-destructive" /><span>Sen</span></div>
-          <div className="flex items-center gap-1.5"><div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/30" /><span>Att göra</span></div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-success" />
+            <span>Klar</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-info" />
+            <span>Pågår</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-destructive" />
+            <span>Sen</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/30" />
+            <span>Att göra</span>
+          </div>
         </div>
 
         {loading ? (
           <div className="space-y-3">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted" />
+              <div
+                key={i}
+                className="h-20 animate-pulse motion-reduce:animate-none rounded-2xl bg-muted"
+              />
             ))}
           </div>
         ) : loads.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-24 text-center">
             <BarChart2 className="mb-3 h-12 w-12 text-muted-foreground/40" />
             <p className="font-medium text-foreground">Inga uppgifter denna vecka</p>
-            <p className="mt-1 text-sm text-muted-foreground">Inga uppgifter med förfallodatum i veckan hittades.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Inga uppgifter med förfallodatum i veckan hittades.
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -245,8 +308,16 @@ function BelastningPage() {
                         {load.user.display_name.charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-foreground">{load.user.display_name}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{load.user.role === "admin" ? "Admin" : load.user.role === "manager" ? "Chef" : "Anställd"}</p>
+                        <p className="truncate font-medium text-foreground">
+                          {load.user.display_name}
+                        </p>
+                        <p className="text-xs text-muted-foreground capitalize">
+                          {load.user.role === "admin"
+                            ? "Admin"
+                            : load.user.role === "manager"
+                              ? "Chef"
+                              : "Anställd"}
+                        </p>
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
@@ -271,34 +342,38 @@ function BelastningPage() {
                   {/* Counts */}
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                     {load.done > 0 && (
-                      <span className="flex items-center gap-1 text-success">
-                        <CheckCircle2 className="h-3 w-3" />{load.done} klara
+                      <span className="flex items-center gap-1 text-success tabular-nums">
+                        <CheckCircle2 className="h-3 w-3" />
+                        {load.done} klara
                       </span>
                     )}
                     {load.progress > 0 && (
-                      <span className="flex items-center gap-1 text-info">
-                        <Clock className="h-3 w-3" />{load.progress} pågår
+                      <span className="flex items-center gap-1 text-info tabular-nums">
+                        <Clock className="h-3 w-3" />
+                        {load.progress} pågår
                       </span>
                     )}
                     {load.late > 0 && (
-                      <span className="flex items-center gap-1 text-destructive">
-                        <AlertTriangle className="h-3 w-3" />{load.late} sena
+                      <span className="flex items-center gap-1 text-destructive tabular-nums">
+                        <AlertTriangle className="h-3 w-3" />
+                        {load.late} sena
                       </span>
                     )}
-                    {load.todo > 0 && (
-                      <span>{load.todo} att göra</span>
-                    )}
-                    {load.total === 0 && (
-                      <span className="italic">Inga uppgifter denna vecka</span>
-                    )}
+                    {load.todo > 0 && <span className="tabular-nums">{load.todo} att göra</span>}
+                    {load.total === 0 && <span className="italic">Inga uppgifter denna vecka</span>}
                   </div>
 
                   {load.total > 0 && (
                     <div className="mt-2 flex items-center justify-between">
                       <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
-                        <div className="h-full rounded-full bg-success transition-all" style={{ width: `${completionPct}%` }} />
+                        <div
+                          className="h-full rounded-full bg-success transition-[width]"
+                          style={{ width: `${completionPct}%` }}
+                        />
                       </div>
-                      <span className="ml-3 shrink-0 text-xs font-medium text-muted-foreground">{completionPct}% klar</span>
+                      <span className="ml-3 shrink-0 text-xs font-medium text-muted-foreground tabular-nums">
+                        {completionPct}% klar
+                      </span>
                     </div>
                   )}
                 </div>
@@ -318,7 +393,9 @@ function BelastningPage() {
                       <p className="text-xs text-muted-foreground">Uppgifter utan ansvarig</p>
                     </div>
                   </div>
-                  <p className="text-xl font-bold tabular-nums text-muted-foreground">{unassigned.total}</p>
+                  <p className="text-xl font-bold tabular-nums text-muted-foreground">
+                    {unassigned.total}
+                  </p>
                 </div>
                 <LoadBar {...unassigned} />
               </div>

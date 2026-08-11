@@ -1,26 +1,86 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, useMemo, Fragment } from "react";
-import { Plus, Trash2, ChevronDown, ChevronUp, Download, GripVertical, Upload, X, Repeat, Clock, TriangleAlert as AlertTriangle, Pencil, Store as StoreIcon, Building2, Eye, EyeOff, Search, History, GitBranch, Copy, Layers, CircleCheck as CheckCircle, ListChecks, CalendarClock, Users, ExternalLink, Hash, Zap, Truck, Link2 } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  GripVertical,
+  Upload,
+  X,
+  Repeat,
+  Clock,
+  TriangleAlert as AlertTriangle,
+  Pencil,
+  Store as StoreIcon,
+  Building2,
+  Eye,
+  EyeOff,
+  Search,
+  History,
+  GitBranch,
+  Copy,
+  Layers,
+  CircleCheck as CheckCircle,
+  ListChecks,
+  CalendarClock,
+  Users,
+  ExternalLink,
+  Hash,
+  Zap,
+  Truck,
+  Link2,
+} from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import {
-  supabase, type ChecklistTemplate, type ChecklistTemplateItem,
-  type ChecklistTemplateQuestion, type Store, type Forening,
-  type TemplateVersion, type TemplatePackage, type TemplatePackageItem, type AppUser, type UserGroup, logAudit, mittCoopUrl, mittCoopSearchUrl,
+  supabase,
+  type ChecklistTemplate,
+  type ChecklistTemplateItem,
+  type ChecklistTemplateQuestion,
+  type Store,
+  type Forening,
+  type TemplateVersion,
+  type TemplatePackage,
+  type TemplatePackageItem,
+  type AppUser,
+  type UserGroup,
+  logAudit,
+  mittCoopUrl,
+  mittCoopSearchUrl,
   type ArticleIdType,
 } from "@/lib/supabase";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
 import { cn, ensureHttps, sanitizeCsvCell } from "@/lib/utils";
@@ -41,7 +101,20 @@ const RECURRENCE_OPTIONS = [
   { value: "custom", label: "Anpassat intervall" },
 ];
 const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
-const MONTHS_SV = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
+const MONTHS_SV = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "Maj",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Okt",
+  "Nov",
+  "Dec",
+];
 const QUARTER_MONTHS = [
   { q: "Q1", months: [0, 1, 2] },
   { q: "Q2", months: [3, 4, 5] },
@@ -137,9 +210,17 @@ const CSV_TEMPLATE_INSTRUCTIONS = `# INSTRUKTIONER (dessa rader ignoreras vid im
 
 const TEMPLATE_STATUS_OPTIONS = [
   { value: "active", label: "Aktiv", cls: "bg-success/15 text-success border-success/30" },
-  { value: "review", label: "Under granskning", cls: "bg-warning/15 text-warning-foreground border-warning/30" },
+  {
+    value: "review",
+    label: "Under granskning",
+    cls: "bg-warning/15 text-warning-foreground border-warning/30",
+  },
   { value: "deprecated", label: "Utfasad", cls: "bg-muted text-muted-foreground border-border" },
-  { value: "archived", label: "Arkiverad", cls: "bg-muted/50 text-muted-foreground/60 border-border/50" },
+  {
+    value: "archived",
+    label: "Arkiverad",
+    cls: "bg-muted/50 text-muted-foreground/60 border-border/50",
+  },
 ];
 
 type TemplateWithMeta = ChecklistTemplate & {
@@ -182,22 +263,48 @@ type FormState = {
   delivery_supplier_name: string;
   delivery_entry_keys: string;
   depends_on_template_title: string;
-  items: { id?: string; label: string; requires_photo: boolean; link_url?: string; condition_question_id?: string; condition_answer?: string }[];
-  questions: { id?: string; label: string; question_type: "text" | "yes_no"; is_required: boolean; link_url?: string }[];
+  items: {
+    id?: string;
+    label: string;
+    requires_photo: boolean;
+    link_url?: string;
+    condition_question_id?: string;
+    condition_answer?: string;
+  }[];
+  questions: {
+    id?: string;
+    label: string;
+    question_type: "text" | "yes_no";
+    is_required: boolean;
+    link_url?: string;
+  }[];
 };
 
 const emptyForm = (): FormState => ({
-  title: "", description: "", category: "", priority: "Medel",
+  title: "",
+  description: "",
+  category: "",
+  priority: "Medel",
   status: "active",
   template_type: "regular",
   template_mode: "both",
   is_critical: false,
   review_interval_months: 24,
-  recurrence_rule: "", recurrence_days: [], recurrence_interval: 1,
-  recurrence_months: [], recurrence_month_day: 1,
-  recurrence_start: "", recurrence_end: "",
-  due_date_offset: "", due_date_time: "", sap_article_id: "", time_slots: [],
-  storeIds: [], isGlobal: false, isLocked: false, foreningId: "",
+  recurrence_rule: "",
+  recurrence_days: [],
+  recurrence_interval: 1,
+  recurrence_months: [],
+  recurrence_month_day: 1,
+  recurrence_start: "",
+  recurrence_end: "",
+  due_date_offset: "",
+  due_date_time: "",
+  sap_article_id: "",
+  time_slots: [],
+  storeIds: [],
+  isGlobal: false,
+  isLocked: false,
+  foreningId: "",
   changeSummary: "",
   event_trigger_description: "",
   event_trigger_user_id: "",
@@ -217,9 +324,20 @@ function parseEntryKeys(str: string): string[] {
   return str ? (str.match(/[^|]+\|\|[^|]+\|\|[^|]+/g) ?? []) : [];
 }
 
-type DeliveryEntry = { id: string; supplier: string; flow_name: string; delivery_time: string; delivery_day: string; delivery_date: string | null };
+type DeliveryEntry = {
+  id: string;
+  supplier: string;
+  flow_name: string;
+  delivery_time: string;
+  delivery_day: string;
+  delivery_date: string | null;
+};
 
-function DeliveryPicker({ entries, selectedKeys: selectedKeysStr, onChange }: {
+function DeliveryPicker({
+  entries,
+  selectedKeys: selectedKeysStr,
+  onChange,
+}: {
   entries: DeliveryEntry[];
   selectedKeys: string;
   onChange: (keys: string, supplierName: string, flowName: string) => void;
@@ -240,31 +358,40 @@ function DeliveryPicker({ entries, selectedKeys: selectedKeysStr, onChange }: {
   const entryKey = (e: DeliveryEntry) =>
     `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`;
   const syncAndEmit = (next: Set<string>) => {
-    const matched = entries.filter(e => next.has(entryKey(e)));
-    const supplierName = [...new Set(matched.map(e => e.supplier?.trim() ?? "").filter(Boolean))].join("|");
-    const flowName = [...new Set(matched.map(e => e.flow_name?.trim() ?? "").filter(Boolean))].join("|");
+    const matched = entries.filter((e) => next.has(entryKey(e)));
+    const supplierName = [
+      ...new Set(matched.map((e) => e.supplier?.trim() ?? "").filter(Boolean)),
+    ].join("|");
+    const flowName = [
+      ...new Set(matched.map((e) => e.flow_name?.trim() ?? "").filter(Boolean)),
+    ].join("|");
     onChange([...next].join("|"), supplierName, flowName);
   };
   const toggleEntry = (e: DeliveryEntry) => {
     const k = entryKey(e);
     const next = new Set(selectedKeys);
-    if (next.has(k)) next.delete(k); else next.add(k);
+    if (next.has(k)) next.delete(k);
+    else next.add(k);
     syncAndEmit(next);
   };
   const toggleDay = (dayEntries: DeliveryEntry[]) => {
     const dayKeys = dayEntries.map(entryKey);
-    const allSel = dayKeys.every(k => selectedKeys.has(k));
+    const allSel = dayKeys.every((k) => selectedKeys.has(k));
     const next = new Set(selectedKeys);
-    if (allSel) { dayKeys.forEach(k => next.delete(k)); } else { dayKeys.forEach(k => next.add(k)); }
+    if (allSel) {
+      dayKeys.forEach((k) => next.delete(k));
+    } else {
+      dayKeys.forEach((k) => next.add(k));
+    }
     syncAndEmit(next);
   };
   return (
     <div className="space-y-1.5 rounded-lg border border-border/50 p-2 max-h-56 overflow-y-auto">
-      {sortedDays.map(dayName => {
+      {sortedDays.map((dayName) => {
         const dayEntries = byDay[dayName];
         const dayKeys = dayEntries.map(entryKey);
-        const allDaySelected = dayKeys.every(k => selectedKeys.has(k));
-        const someDaySelected = dayKeys.some(k => selectedKeys.has(k));
+        const allDaySelected = dayKeys.every((k) => selectedKeys.has(k));
+        const someDaySelected = dayKeys.some((k) => selectedKeys.has(k));
         return (
           <div key={dayName} className="space-y-0.5">
             <div
@@ -275,13 +402,15 @@ function DeliveryPicker({ entries, selectedKeys: selectedKeysStr, onChange }: {
                 checked={allDaySelected}
                 data-state={someDaySelected && !allDaySelected ? "indeterminate" : undefined}
                 onCheckedChange={() => toggleDay(dayEntries)}
-                onClick={e => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
                 className="h-3.5 w-3.5"
               />
               <span className="text-xs font-semibold flex-1">{dayName}</span>
-              <span className="text-[10px] text-muted-foreground">{dayEntries.length} leverans{dayEntries.length !== 1 ? "er" : ""}</span>
+              <span className="text-[10px] text-muted-foreground">
+                {dayEntries.length} leverans{dayEntries.length !== 1 ? "er" : ""}
+              </span>
             </div>
-            {dayEntries.map(entry => {
+            {dayEntries.map((entry) => {
               const checked = selectedKeys.has(entryKey(entry));
               return (
                 <div
@@ -292,15 +421,19 @@ function DeliveryPicker({ entries, selectedKeys: selectedKeysStr, onChange }: {
                   <Checkbox
                     checked={checked}
                     onCheckedChange={() => toggleEntry(entry)}
-                    onClick={e => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
                     className="h-3.5 w-3.5"
                   />
                   <div className="flex-1 min-w-0">
                     <span className="text-xs">{entry.supplier}</span>
-                    <span className="text-[10px] text-muted-foreground ml-1.5">{entry.flow_name}</span>
+                    <span className="text-[10px] text-muted-foreground ml-1.5">
+                      {entry.flow_name}
+                    </span>
                   </div>
                   {entry.delivery_time && (
-                    <span className="text-[11px] font-medium text-foreground/70 tabular-nums shrink-0">{entry.delivery_time}</span>
+                    <span className="text-[11px] font-medium text-foreground/70 tabular-nums shrink-0">
+                      {entry.delivery_time}
+                    </span>
                   )}
                 </div>
               );
@@ -379,12 +512,18 @@ function MallarPage() {
   const [allUsers, setAllUsers] = useState<AppUser[]>([]);
   const [allGroups, setAllGroups] = useState<UserGroup[]>([]);
   // Scheduled users per date: date → Map<userId, { start: string; end: string }[]>
-  const [scheduledUsersByDate, setScheduledUsersByDate] = useState<Record<string, Map<string, { start: string; end: string }[]>>>({});
+  const [scheduledUsersByDate, setScheduledUsersByDate] = useState<
+    Record<string, Map<string, { start: string; end: string }[]>>
+  >({});
   // Per-template search query for assignee/bekraftare lists
-  const [bulkUserSearch, setBulkUserSearch] = useState<Record<string, string>>({});  // Per-template "show all users" toggle
-  const [showAllUsersForTemplate, setShowAllUsersForTemplate] = useState<Record<string, boolean>>({});
+  const [bulkUserSearch, setBulkUserSearch] = useState<Record<string, string>>({}); // Per-template "show all users" toggle
+  const [showAllUsersForTemplate, setShowAllUsersForTemplate] = useState<Record<string, boolean>>(
+    {},
+  );
   // Templates that already have tasks created (subsequent batch)
-  const [templatesWithExistingTasks, setTemplatesWithExistingTasks] = useState<Set<string>>(new Set());
+  const [templatesWithExistingTasks, setTemplatesWithExistingTasks] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Template preview
   const [previewTarget, setPreviewTarget] = useState<TemplateWithMeta | null>(null);
@@ -399,7 +538,10 @@ function MallarPage() {
   const [activatePackageTarget, setActivatePackageTarget] = useState<TemplatePackage | null>(null);
 
   // Merge: when a parent HK/forening template has been updated after a local variant was created
-  const [mergeTarget, setMergeTarget] = useState<{ variant: TemplateWithMeta; parent: TemplateWithMeta } | null>(null);
+  const [mergeTarget, setMergeTarget] = useState<{
+    variant: TemplateWithMeta;
+    parent: TemplateWithMeta;
+  } | null>(null);
   const [merging, setMerging] = useState(false);
 
   // 24-month review system
@@ -412,12 +554,22 @@ function MallarPage() {
   const [deliveryMappingOpen, setDeliveryMappingOpen] = useState(false);
   const [deliveryMappingItems, setDeliveryMappingItems] = useState<DeliveryMappingItem[]>([]);
   // Template config picker: unique supplier+flow combos across all plans
-  const [deliverySuppliers, setDeliverySuppliers] = useState<{ id: string; supplier: string; flow_name: string; delivery_time: string }[]>([]);
+  const [deliverySuppliers, setDeliverySuppliers] = useState<
+    { id: string; supplier: string; flow_name: string; delivery_time: string }[]
+  >([]);
   // Batch create picker: full entries from current plan with day + time
-  const [deliveryWeekEntries, setDeliveryWeekEntries] = useState<{ id: string; supplier: string; flow_name: string; delivery_time: string; delivery_day: string; delivery_date: string | null }[]>([]);
+  const [deliveryWeekEntries, setDeliveryWeekEntries] = useState<
+    {
+      id: string;
+      supplier: string;
+      flow_name: string;
+      delivery_time: string;
+      delivery_day: string;
+      delivery_date: string | null;
+    }[]
+  >([]);
   const [deliveryMappingSaving, setDeliveryMappingSaving] = useState(false);
   const [deliveryFlowNames, setDeliveryFlowNames] = useState<string[]>([]);
-
 
   // View filter: "all" | "hk" | "forening" | "store"
   const [viewFilter, setViewFilter] = useState<"all" | "hk" | "forening" | "store">("all");
@@ -425,27 +577,39 @@ function MallarPage() {
   const [filterCategory, setFilterCategory] = useState("");
   const [filterPriority, setFilterPriority] = useState("");
 
-  useEffect(() => { load(); }, [user, activeStore]);
+  useEffect(() => {
+    load();
+  }, [user, activeStore]);
 
   // When editing a template that has supplier/flow config but no entry keys (old format),
   // backfill delivery_entry_keys from the current week's entries so the picker shows correctly.
   useEffect(() => {
     if (!editTarget || deliveryWeekEntries.length === 0) return;
-    setEditForm(prev => {
+    setEditForm((prev) => {
       if (!prev.is_delivery_task) return prev;
       if (prev.delivery_entry_keys) return prev; // already has keys
       if (!prev.delivery_supplier_name && !prev.delivery_flow_name) return prev;
-      const tmplFlows = prev.delivery_flow_name.split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
-      const tmplSuppliers = prev.delivery_supplier_name.split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
-      const matchedEntries = deliveryWeekEntries.filter(e => {
-        const flowOk = tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
-        const suppOk = tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
+      const tmplFlows = prev.delivery_flow_name
+        .split("|")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const tmplSuppliers = prev.delivery_supplier_name
+        .split("|")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const matchedEntries = deliveryWeekEntries.filter((e) => {
+        const flowOk =
+          tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
+        const suppOk =
+          tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
         return flowOk && suppOk;
       });
       if (matchedEntries.length === 0) return prev;
       return {
         ...prev,
-        delivery_entry_keys: matchedEntries.map(e => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`).join("|"),
+        delivery_entry_keys: matchedEntries
+          .map((e) => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`)
+          .join("|"),
       };
     });
   }, [editTarget, deliveryWeekEntries]);
@@ -453,29 +617,49 @@ function MallarPage() {
   // Same backfill for the create form when delivery_entry_keys is empty but supplier/flow are set.
   useEffect(() => {
     if (deliveryWeekEntries.length === 0) return;
-    setForm(prev => {
+    setForm((prev) => {
       if (!prev.is_delivery_task) return prev;
       if (prev.delivery_entry_keys) return prev;
       if (!prev.delivery_supplier_name && !prev.delivery_flow_name) return prev;
-      const tmplFlows = prev.delivery_flow_name.split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
-      const tmplSuppliers = prev.delivery_supplier_name.split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
-      const matchedEntries = deliveryWeekEntries.filter(e => {
-        const flowOk = tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
-        const suppOk = tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
+      const tmplFlows = prev.delivery_flow_name
+        .split("|")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const tmplSuppliers = prev.delivery_supplier_name
+        .split("|")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const matchedEntries = deliveryWeekEntries.filter((e) => {
+        const flowOk =
+          tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
+        const suppOk =
+          tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
         return flowOk && suppOk;
       });
       if (matchedEntries.length === 0) return prev;
       return {
         ...prev,
-        delivery_entry_keys: matchedEntries.map(e => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`).join("|"),
+        delivery_entry_keys: matchedEntries
+          .map((e) => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`)
+          .join("|"),
       };
     });
   }, [deliveryWeekEntries]);
 
   async function load() {
     setLoading(true);
-    const [templatesRes, storesRes, tsRes, foreningarRes, hiddenRes, usersRes, groupsRes, packagesRes] = await Promise.all([
-      supabase.from("checklist_templates")
+    const [
+      templatesRes,
+      storesRes,
+      tsRes,
+      foreningarRes,
+      hiddenRes,
+      usersRes,
+      groupsRes,
+      packagesRes,
+    ] = await Promise.all([
+      supabase
+        .from("checklist_templates")
         .select("*, items:checklist_template_items(*), questions:checklist_template_questions(*)")
         .order("created_at", { ascending: false }),
       supabase.from("stores").select("*").order("name"),
@@ -508,7 +692,10 @@ function MallarPage() {
       // HK-scope templates (is_global=true or hierarchy_scope='hk')
       if (scope === "hk" || t.is_global) {
         // Check if hidden by user's förening
-        if (userForeningId && hidden.some((h) => h.template_id === t.id && h.forening_id === userForeningId)) {
+        if (
+          userForeningId &&
+          hidden.some((h) => h.template_id === t.id && h.forening_id === userForeningId)
+        ) {
           // Still show to forening users so they can manage the hide list
           return isForening || isAdmin;
         }
@@ -556,12 +743,23 @@ function MallarPage() {
     const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
     if (storeId) {
       const { data: planRows } = await supabase
-        .from("delivery_plans").select("id").eq("store_id", storeId).order("imported_at", { ascending: false });
+        .from("delivery_plans")
+        .select("id")
+        .eq("store_id", storeId)
+        .order("imported_at", { ascending: false });
       const planIds = (planRows ?? []).map((p: { id: string }) => p.id);
       if (planIds.length > 0) {
         // Load ALL entries from ALL plans with full day+time info
         // Plans are ordered newest first — so when deduplicating, first match = most recent schedule
-        type EntryRow = { id: string; supplier: string; flow_name: string; delivery_time: string; delivery_day: string; delivery_date: string | null; plan_id: string };
+        type EntryRow = {
+          id: string;
+          supplier: string;
+          flow_name: string;
+          delivery_time: string;
+          delivery_day: string;
+          delivery_date: string | null;
+          plan_id: string;
+        };
         const { data: allRows } = await supabase
           .from("delivery_entries")
           .select("id, supplier, flow_name, delivery_time, delivery_day, delivery_date, plan_id")
@@ -569,14 +767,14 @@ function MallarPage() {
 
         // Sort by plan recency (planIds is sorted newest first)
         const planOrder = new Map(planIds.map((id, i) => [id, i]));
-        const sorted = [...(allRows ?? []) as EntryRow[]].sort((a, b) =>
-          (planOrder.get(a.plan_id) ?? 99) - (planOrder.get(b.plan_id) ?? 99)
+        const sorted = [...((allRows ?? []) as EntryRow[])].sort(
+          (a, b) => (planOrder.get(a.plan_id) ?? 99) - (planOrder.get(b.plan_id) ?? 99),
         );
 
         // deliveryWeekEntries: one entry per unique (day+time+supplier+flow) — newest plan wins
         // This is the COMPLETE weekly delivery schedule (day + time are key info)
         const scheduleSeen = new Set<string>();
-        const schedule = sorted.filter(e => {
+        const schedule = sorted.filter((e) => {
           const key = `${e.delivery_day}||${e.delivery_time}||${e.supplier}||${e.flow_name}`;
           if (scheduleSeen.has(key)) return false;
           scheduleSeen.add(key);
@@ -591,14 +789,14 @@ function MallarPage() {
 
         // deliverySuppliers: one entry per unique (supplier+flow) combo — for template config picker
         const comboSeen = new Set<string>();
-        const combos = schedule.filter(e => {
+        const combos = schedule.filter((e) => {
           const key = `${e.supplier}||${e.flow_name}`;
           if (comboSeen.has(key)) return false;
           comboSeen.add(key);
           return true;
         }) as { id: string; supplier: string; flow_name: string; delivery_time: string }[];
         setDeliverySuppliers(combos);
-        setDeliveryFlowNames([...new Set(combos.map(r => r.flow_name).filter(Boolean))]);
+        setDeliveryFlowNames([...new Set(combos.map((r) => r.flow_name).filter(Boolean))]);
       }
     }
 
@@ -635,47 +833,62 @@ function MallarPage() {
   async function restoreVersion(ver: TemplateVersion) {
     if (!versionHistoryTarget) return;
     const snap = ver.snapshot as TemplateWithMeta & {
-      template_type?: string; template_mode?: string; is_critical?: boolean;
-      recurrence_start?: string; recurrence_end?: string; recurrence_interval?: number;
-      sap_article_id?: string; time_slots?: string[];
-      is_delivery_task?: boolean; delivery_flow_name?: string;
-      delivery_supplier_name?: string; delivery_entry_keys?: string;
-      event_trigger_description?: string; event_trigger_user_id?: string;
-      depends_on_template_title?: string; review_interval_months?: number;
+      template_type?: string;
+      template_mode?: string;
+      is_critical?: boolean;
+      recurrence_start?: string;
+      recurrence_end?: string;
+      recurrence_interval?: number;
+      sap_article_id?: string;
+      time_slots?: string[];
+      is_delivery_task?: boolean;
+      delivery_flow_name?: string;
+      delivery_supplier_name?: string;
+      delivery_entry_keys?: string;
+      event_trigger_description?: string;
+      event_trigger_user_id?: string;
+      depends_on_template_title?: string;
+      review_interval_months?: number;
     };
     const newVersion = (versionHistoryTarget.version ?? 1) + 1;
-    await supabase.from("checklist_templates").update({
-      title: snap.title,
-      description: snap.description ?? "",
-      category: snap.category ?? "",
-      priority: snap.priority ?? "Medel",
-      status: snap.status ?? "active",
-      template_type: snap.template_type ?? "regular",
-      template_mode: snap.template_mode ?? "both",
-      is_critical: snap.is_critical ?? false,
-      recurrence_rule: snap.recurrence_rule ?? null,
-      recurrence_days: snap.recurrence_days ?? null,
-      recurrence_interval: snap.recurrence_interval ?? null,
-      recurrence_start: snap.recurrence_start ?? null,
-      recurrence_end: snap.recurrence_end ?? null,
-      due_date_offset: snap.due_date_offset ?? null,
-      due_date_time: snap.due_date_time ?? null,
-      sap_article_id: snap.sap_article_id ?? null,
-      time_slots: snap.time_slots ?? null,
-      is_delivery_task: snap.is_delivery_task ?? false,
-      delivery_flow_name: snap.delivery_flow_name ?? null,
-      delivery_supplier_name: snap.delivery_supplier_name ?? null,
-      delivery_entry_keys: snap.delivery_entry_keys ?? null,
-      event_trigger_description: snap.event_trigger_description ?? null,
-      event_trigger_user_id: snap.event_trigger_user_id ?? null,
-      depends_on_template_title: snap.depends_on_template_title ?? null,
-      review_interval_months: snap.review_interval_months ?? null,
-      version: newVersion,
-      updated_by: user?.id ?? null,
-    }).eq("id", versionHistoryTarget.id);
+    await supabase
+      .from("checklist_templates")
+      .update({
+        title: snap.title,
+        description: snap.description ?? "",
+        category: snap.category ?? "",
+        priority: snap.priority ?? "Medel",
+        status: snap.status ?? "active",
+        template_type: snap.template_type ?? "regular",
+        template_mode: snap.template_mode ?? "both",
+        is_critical: snap.is_critical ?? false,
+        recurrence_rule: snap.recurrence_rule ?? null,
+        recurrence_days: snap.recurrence_days ?? null,
+        recurrence_interval: snap.recurrence_interval ?? null,
+        recurrence_start: snap.recurrence_start ?? null,
+        recurrence_end: snap.recurrence_end ?? null,
+        due_date_offset: snap.due_date_offset ?? null,
+        due_date_time: snap.due_date_time ?? null,
+        sap_article_id: snap.sap_article_id ?? null,
+        time_slots: snap.time_slots ?? null,
+        is_delivery_task: snap.is_delivery_task ?? false,
+        delivery_flow_name: snap.delivery_flow_name ?? null,
+        delivery_supplier_name: snap.delivery_supplier_name ?? null,
+        delivery_entry_keys: snap.delivery_entry_keys ?? null,
+        event_trigger_description: snap.event_trigger_description ?? null,
+        event_trigger_user_id: snap.event_trigger_user_id ?? null,
+        depends_on_template_title: snap.depends_on_template_title ?? null,
+        review_interval_months: snap.review_interval_months ?? null,
+        version: newVersion,
+        updated_by: user?.id ?? null,
+      })
+      .eq("id", versionHistoryTarget.id);
 
     // Restore steps
-    await supabase.from("checklist_template_items").delete().eq("template_id", versionHistoryTarget.id);
+    await supabase
+      .from("checklist_template_items")
+      .delete()
+      .eq("template_id", versionHistoryTarget.id);
     const items = (snap.items ?? []).filter((it: ChecklistTemplateItem) => it.label.trim());
     if (items.length > 0) {
       await supabase.from("checklist_template_items").insert(
@@ -687,13 +900,18 @@ function MallarPage() {
           condition_question_id: it.condition_question_id ?? null,
           condition_answer: it.condition_answer ?? null,
           sort_order: idx,
-        }))
+        })),
       );
     }
 
     // Restore questions
-    await supabase.from("checklist_template_questions").delete().eq("template_id", versionHistoryTarget.id);
-    const questions = (snap.questions ?? []).filter((q: ChecklistTemplateQuestion) => q.label.trim());
+    await supabase
+      .from("checklist_template_questions")
+      .delete()
+      .eq("template_id", versionHistoryTarget.id);
+    const questions = (snap.questions ?? []).filter((q: ChecklistTemplateQuestion) =>
+      q.label.trim(),
+    );
     if (questions.length > 0) {
       await supabase.from("checklist_template_questions").insert(
         questions.map((q: ChecklistTemplateQuestion, idx: number) => ({
@@ -703,7 +921,7 @@ function MallarPage() {
           is_required: q.is_required,
           link_url: q.link_url ?? null,
           sort_order: idx,
-        }))
+        })),
       );
     }
 
@@ -713,7 +931,9 @@ function MallarPage() {
       snap,
       `Återställd till version ${ver.version}`,
     );
-    logAudit(user?.id ?? null, "template.restore", "checklist_templates", versionHistoryTarget.id, { restored_version: ver.version });
+    logAudit(user?.id ?? null, "template.restore", "checklist_templates", versionHistoryTarget.id, {
+      restored_version: ver.version,
+    });
     setRestoreConfirm(null);
     setVersionHistoryTarget(null);
     await load();
@@ -721,40 +941,54 @@ function MallarPage() {
 
   async function createInheritedTemplate(source: TemplateWithMeta, mode: "copy" | "variant") {
     const isVariant = mode === "variant";
-    const { data: tmpl } = await supabase.from("checklist_templates").insert({
-      title: `${source.title} (${isVariant ? "variant" : "kopia"})`,
-      description: source.description ?? "",
-      category: source.category ?? "",
-      priority: source.priority ?? "Medel",
-      status: "active",
-      recurrence_rule: source.recurrence_rule ?? null,
-      recurrence_days: source.recurrence_days ?? null,
-      recurrence_interval: source.recurrence_interval ?? null,
-      due_date_offset: source.due_date_offset ?? null,
-      due_date_time: source.due_date_time ?? null,
-      created_by: user?.id ?? null,
-      hierarchy_scope: source.hierarchy_scope ?? "store",
-      is_global: source.is_global,
-      parent_template_id: isVariant ? source.id : null,
-      inherit_mode: isVariant ? "variant" : "copy",
-      version: 1,
-    }).select("id").maybeSingle();
+    const { data: tmpl } = await supabase
+      .from("checklist_templates")
+      .insert({
+        title: `${source.title} (${isVariant ? "variant" : "kopia"})`,
+        description: source.description ?? "",
+        category: source.category ?? "",
+        priority: source.priority ?? "Medel",
+        status: "active",
+        recurrence_rule: source.recurrence_rule ?? null,
+        recurrence_days: source.recurrence_days ?? null,
+        recurrence_interval: source.recurrence_interval ?? null,
+        due_date_offset: source.due_date_offset ?? null,
+        due_date_time: source.due_date_time ?? null,
+        created_by: user?.id ?? null,
+        hierarchy_scope: source.hierarchy_scope ?? "store",
+        is_global: source.is_global,
+        parent_template_id: isVariant ? source.id : null,
+        inherit_mode: isVariant ? "variant" : "copy",
+        version: 1,
+      })
+      .select("id")
+      .maybeSingle();
 
     if (!tmpl?.id) return;
 
-    const validItems = (source.items ?? []).filter(it => it.label.trim());
+    const validItems = (source.items ?? []).filter((it) => it.label.trim());
     if (validItems.length > 0) {
-      await supabase.from("checklist_template_items").insert(
-        validItems.map((it, idx) => ({ template_id: tmpl.id, label: it.label, requires_photo: it.requires_photo, sort_order: idx }))
-      );
+      await supabase
+        .from("checklist_template_items")
+        .insert(
+          validItems.map((it, idx) => ({
+            template_id: tmpl.id,
+            label: it.label,
+            requires_photo: it.requires_photo,
+            sort_order: idx,
+          })),
+        );
     }
 
     if (source.storeIds.length > 0) {
-      const storeRows = source.storeIds.map(sid => ({ template_id: tmpl.id, store_id: sid }));
+      const storeRows = source.storeIds.map((sid) => ({ template_id: tmpl.id, store_id: sid }));
       await supabase.from("template_stores").insert(storeRows);
     }
 
-    logAudit(user?.id ?? null, `template.${mode}`, "checklist_templates", tmpl.id, { source_id: source.id, mode });
+    logAudit(user?.id ?? null, `template.${mode}`, "checklist_templates", tmpl.id, {
+      source_id: source.id,
+      mode,
+    });
     setInheritTarget(null);
     await load();
   }
@@ -767,16 +1001,44 @@ function MallarPage() {
     if (!packageForm.name.trim()) return;
     const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
     if (editPackageTarget) {
-      await supabase.from("template_packages").update({ name: packageForm.name.trim(), description: packageForm.description.trim() }).eq("id", editPackageTarget.id);
+      await supabase
+        .from("template_packages")
+        .update({ name: packageForm.name.trim(), description: packageForm.description.trim() })
+        .eq("id", editPackageTarget.id);
       await supabase.from("template_package_items").delete().eq("package_id", editPackageTarget.id);
       if (packageTemplateIds.length > 0) {
-        await supabase.from("template_package_items").insert(packageTemplateIds.map((tid, idx) => ({ package_id: editPackageTarget.id, template_id: tid, sort_order: idx })));
+        await supabase
+          .from("template_package_items")
+          .insert(
+            packageTemplateIds.map((tid, idx) => ({
+              package_id: editPackageTarget.id,
+              template_id: tid,
+              sort_order: idx,
+            })),
+          );
       }
       setEditPackageTarget(null);
     } else {
-      const { data: pkg } = await supabase.from("template_packages").insert({ name: packageForm.name.trim(), description: packageForm.description.trim(), store_id: storeId, created_by: user?.id ?? null }).select("id").maybeSingle();
+      const { data: pkg } = await supabase
+        .from("template_packages")
+        .insert({
+          name: packageForm.name.trim(),
+          description: packageForm.description.trim(),
+          store_id: storeId,
+          created_by: user?.id ?? null,
+        })
+        .select("id")
+        .maybeSingle();
       if (pkg?.id && packageTemplateIds.length > 0) {
-        await supabase.from("template_package_items").insert(packageTemplateIds.map((tid, idx) => ({ package_id: pkg.id, template_id: tid, sort_order: idx })));
+        await supabase
+          .from("template_package_items")
+          .insert(
+            packageTemplateIds.map((tid, idx) => ({
+              package_id: pkg.id,
+              template_id: tid,
+              sort_order: idx,
+            })),
+          );
       }
     }
     setPackageForm({ name: "", description: "" });
@@ -792,7 +1054,7 @@ function MallarPage() {
   function openEditPackage(pkg: TemplatePackage) {
     setEditPackageTarget(pkg);
     setPackageForm({ name: pkg.name, description: pkg.description ?? "" });
-    setPackageTemplateIds((pkg.items ?? []).map(it => it.template_id));
+    setPackageTemplateIds((pkg.items ?? []).map((it) => it.template_id));
     setShowPackagesPanel(true);
   }
 
@@ -806,27 +1068,45 @@ function MallarPage() {
     }
     setReviewSaving(true);
     const now = getSimulatedDate().toISOString();
-    const intervalMonths = (reviewTarget as ChecklistTemplate & { review_interval_months?: number }).review_interval_months ?? 24;
-    const nextReview = (() => { const d = getSimulatedDate(); d.setMonth(d.getMonth() + intervalMonths); return d.toISOString(); })();
+    const intervalMonths =
+      (reviewTarget as ChecklistTemplate & { review_interval_months?: number })
+        .review_interval_months ?? 24;
+    const nextReview = (() => {
+      const d = getSimulatedDate();
+      d.setMonth(d.getMonth() + intervalMonths);
+      return d.toISOString();
+    })();
     if (action === "continue") {
-      await supabase.from("checklist_templates").update({
-        last_reviewed_at: now,
-        next_review_at: nextReview,
-      }).eq("id", reviewTarget.id);
+      await supabase
+        .from("checklist_templates")
+        .update({
+          last_reviewed_at: now,
+          next_review_at: nextReview,
+        })
+        .eq("id", reviewTarget.id);
     } else if (action === "set_end_date" && reviewEndDate) {
-      await supabase.from("checklist_templates").update({
-        recurrence_end: reviewEndDate,
-        last_reviewed_at: now,
-        next_review_at: null,
-      }).eq("id", reviewTarget.id);
+      await supabase
+        .from("checklist_templates")
+        .update({
+          recurrence_end: reviewEndDate,
+          last_reviewed_at: now,
+          next_review_at: null,
+        })
+        .eq("id", reviewTarget.id);
     } else if (action === "archive") {
-      await supabase.from("checklist_templates").update({
-        status: "archived",
-        last_reviewed_at: now,
-        next_review_at: null,
-      }).eq("id", reviewTarget.id);
+      await supabase
+        .from("checklist_templates")
+        .update({
+          status: "archived",
+          last_reviewed_at: now,
+          next_review_at: null,
+        })
+        .eq("id", reviewTarget.id);
     }
-    logAudit(user?.id ?? null, "template.review", "checklist_templates", reviewTarget.id, { action, review_date: now });
+    logAudit(user?.id ?? null, "template.review", "checklist_templates", reviewTarget.id, {
+      action,
+      review_date: now,
+    });
     setReviewTarget(null);
     setReviewEndDate("");
     setReviewSaving(false);
@@ -836,7 +1116,9 @@ function MallarPage() {
   function openCreate(scope: "store" | "hk" | "forening") {
     setCreateScope(scope);
     const f = emptyForm();
-    if (scope === "hk") { f.isGlobal = true; }
+    if (scope === "hk") {
+      f.isGlobal = true;
+    }
     if (scope === "forening") {
       f.foreningId = user?.forening_id ?? "";
     }
@@ -847,88 +1129,142 @@ function MallarPage() {
 
   async function createTemplate() {
     setError("");
-    if (!form.title.trim()) { setError("Titel är obligatorisk."); return; }
+    if (!form.title.trim()) {
+      setError("Titel är obligatorisk.");
+      return;
+    }
     if (createScope === "forening" && !form.foreningId) {
       setError("Välj en förening.");
       return;
     }
     setSaving(true);
 
-    const { data: tmpl } = await supabase.from("checklist_templates").insert({
-      title: form.title.trim(),
-      description: form.description.trim(),
-      category: form.category.trim(),
-      priority: form.priority,
-      status: form.status,
-      version: 1,
-      owner_id: user?.id ?? null,
-      recurrence_rule: form.recurrence_rule || null,
-      recurrence_days: (form.recurrence_rule === "weekly" || form.recurrence_rule === "biweekly") && form.recurrence_days.length > 0 ? form.recurrence_days : null,
-      recurrence_interval: form.recurrence_interval > 1 ? form.recurrence_interval : null,
-      recurrence_start: form.recurrence_start || null,
-      recurrence_end: form.recurrence_end || null,
-      due_date_offset: form.due_date_offset !== "" ? (parseInt(form.due_date_offset, 10) || null) : null,
-      due_date_time: form.due_date_time || null,
-      sap_article_id: form.sap_article_id?.trim() || null,
-      is_global: createScope === "hk",
-      locked_by_admin: form.isLocked,
-      hierarchy_scope: createScope,
-      forening_id: createScope === "forening" ? form.foreningId : null,
-      template_type: form.template_type,
-      template_mode: form.template_mode,
-      is_critical: form.is_critical,
-      event_trigger_description: form.event_trigger_description?.trim() || null,
-      event_trigger_user_id: form.event_trigger_user_id || null,
-      is_delivery_task: form.is_delivery_task,
-      delivery_flow_name: form.delivery_flow_name?.trim() || null,
-      delivery_supplier_name: form.delivery_supplier_name?.trim() || null,
-      delivery_entry_keys: form.delivery_entry_keys?.trim() || null,
-      depends_on_template_title: form.depends_on_template_title?.trim() || null,
-      review_interval_months: form.review_interval_months > 0 ? form.review_interval_months : null,
-      // Set next_review_at for recurring base templates without a near end date
-      next_review_at: (form.template_type === "base" && form.recurrence_rule && !form.recurrence_end)
-        ? (() => { const d = getSimulatedDate(); d.setMonth(d.getMonth() + (form.review_interval_months || 24)); return d.toISOString(); })()
-        : null,
-    }).select("id").maybeSingle();
+    const { data: tmpl } = await supabase
+      .from("checklist_templates")
+      .insert({
+        title: form.title.trim(),
+        description: form.description.trim(),
+        category: form.category.trim(),
+        priority: form.priority,
+        status: form.status,
+        version: 1,
+        owner_id: user?.id ?? null,
+        recurrence_rule: form.recurrence_rule || null,
+        recurrence_days:
+          (form.recurrence_rule === "weekly" || form.recurrence_rule === "biweekly") &&
+          form.recurrence_days.length > 0
+            ? form.recurrence_days
+            : null,
+        recurrence_interval: form.recurrence_interval > 1 ? form.recurrence_interval : null,
+        recurrence_start: form.recurrence_start || null,
+        recurrence_end: form.recurrence_end || null,
+        due_date_offset:
+          form.due_date_offset !== "" ? parseInt(form.due_date_offset, 10) || null : null,
+        due_date_time: form.due_date_time || null,
+        sap_article_id: form.sap_article_id?.trim() || null,
+        is_global: createScope === "hk",
+        locked_by_admin: form.isLocked,
+        hierarchy_scope: createScope,
+        forening_id: createScope === "forening" ? form.foreningId : null,
+        template_type: form.template_type,
+        template_mode: form.template_mode,
+        is_critical: form.is_critical,
+        event_trigger_description: form.event_trigger_description?.trim() || null,
+        event_trigger_user_id: form.event_trigger_user_id || null,
+        is_delivery_task: form.is_delivery_task,
+        delivery_flow_name: form.delivery_flow_name?.trim() || null,
+        delivery_supplier_name: form.delivery_supplier_name?.trim() || null,
+        delivery_entry_keys: form.delivery_entry_keys?.trim() || null,
+        depends_on_template_title: form.depends_on_template_title?.trim() || null,
+        review_interval_months:
+          form.review_interval_months > 0 ? form.review_interval_months : null,
+        // Set next_review_at for recurring base templates without a near end date
+        next_review_at:
+          form.template_type === "base" && form.recurrence_rule && !form.recurrence_end
+            ? (() => {
+                const d = getSimulatedDate();
+                d.setMonth(d.getMonth() + (form.review_interval_months || 24));
+                return d.toISOString();
+              })()
+            : null,
+      })
+      .select("id")
+      .maybeSingle();
 
-    if (!tmpl?.id) { setSaving(false); return; }
+    if (!tmpl?.id) {
+      setSaving(false);
+      return;
+    }
 
     const validItems = form.items.filter((it) => it.label.trim());
     if (validItems.length > 0) {
-      await supabase.from("checklist_template_items").insert(
-        validItems.map((it, idx) => ({ template_id: tmpl.id, label: it.label.trim(), requires_photo: it.requires_photo, link_url: it.link_url || null, sort_order: idx, condition_question_id: it.condition_question_id ?? null, condition_answer: it.condition_answer ?? null }))
-      );
+      await supabase
+        .from("checklist_template_items")
+        .insert(
+          validItems.map((it, idx) => ({
+            template_id: tmpl.id,
+            label: it.label.trim(),
+            requires_photo: it.requires_photo,
+            link_url: it.link_url || null,
+            sort_order: idx,
+            condition_question_id: it.condition_question_id ?? null,
+            condition_answer: it.condition_answer ?? null,
+          })),
+        );
     }
 
     if (createScope === "store") {
-      const storeList = form.storeIds.length > 0 ? form.storeIds : activeStore ? [activeStore.id] : [];
+      const storeList =
+        form.storeIds.length > 0 ? form.storeIds : activeStore ? [activeStore.id] : [];
       if (storeList.length > 0) {
-        await supabase.from("template_stores").insert(storeList.map((sid) => ({ template_id: tmpl.id, store_id: sid })));
+        await supabase
+          .from("template_stores")
+          .insert(storeList.map((sid) => ({ template_id: tmpl.id, store_id: sid })));
       }
     }
 
     const validQuestions = form.questions.filter((q) => q.label.trim());
     if (validQuestions.length > 0) {
-      await supabase.from("checklist_template_questions").insert(
-        validQuestions.map((q, idx) => ({ template_id: tmpl.id, label: q.label.trim(), question_type: q.question_type ?? "text", is_required: q.is_required, link_url: q.link_url || null, sort_order: idx }))
-      );
+      await supabase
+        .from("checklist_template_questions")
+        .insert(
+          validQuestions.map((q, idx) => ({
+            template_id: tmpl.id,
+            label: q.label.trim(),
+            question_type: q.question_type ?? "text",
+            is_required: q.is_required,
+            link_url: q.link_url || null,
+            sort_order: idx,
+          })),
+        );
     }
 
-    logAudit(user?.id ?? null, "template.create", "checklist_templates", tmpl.id, { title: form.title, scope: createScope });
+    logAudit(user?.id ?? null, "template.create", "checklist_templates", tmpl.id, {
+      title: form.title,
+      scope: createScope,
+    });
     // Save initial version snapshot
     await saveVersionSnapshot(
       tmpl.id,
       1,
       {
-        title: form.title, description: form.description, category: form.category,
-        priority: form.priority, status: form.status,
-        template_type: form.template_type, template_mode: form.template_mode,
+        title: form.title,
+        description: form.description,
+        category: form.category,
+        priority: form.priority,
+        status: form.status,
+        template_type: form.template_type,
+        template_mode: form.template_mode,
         is_critical: form.is_critical,
-        recurrence_rule: form.recurrence_rule, recurrence_days: form.recurrence_days,
+        recurrence_rule: form.recurrence_rule,
+        recurrence_days: form.recurrence_days,
         recurrence_interval: form.recurrence_interval,
-        recurrence_start: form.recurrence_start, recurrence_end: form.recurrence_end,
-        due_date_offset: form.due_date_offset, due_date_time: form.due_date_time,
-        sap_article_id: form.sap_article_id, time_slots: form.time_slots,
+        recurrence_start: form.recurrence_start,
+        recurrence_end: form.recurrence_end,
+        due_date_offset: form.due_date_offset,
+        due_date_time: form.due_date_time,
+        sap_article_id: form.sap_article_id,
+        time_slots: form.time_slots,
         is_delivery_task: form.is_delivery_task,
         delivery_flow_name: form.delivery_flow_name,
         delivery_supplier_name: form.delivery_supplier_name,
@@ -937,7 +1273,8 @@ function MallarPage() {
         event_trigger_user_id: form.event_trigger_user_id,
         depends_on_template_title: form.depends_on_template_title,
         review_interval_months: form.review_interval_months,
-        items: validItems, questions: validQuestions,
+        items: validItems,
+        questions: validQuestions,
       },
       form.changeSummary || "Initial version",
     );
@@ -949,7 +1286,9 @@ function MallarPage() {
   async function deleteTemplate() {
     if (!deleteTarget) return;
     await supabase.from("checklist_templates").delete().eq("id", deleteTarget.id);
-    logAudit(user?.id ?? null, "template.delete", "checklist_templates", deleteTarget.id, { title: deleteTarget.title });
+    logAudit(user?.id ?? null, "template.delete", "checklist_templates", deleteTarget.id, {
+      title: deleteTarget.title,
+    });
     setDeleteTarget(null);
     await load();
   }
@@ -957,7 +1296,9 @@ function MallarPage() {
   async function bulkDeleteTemplates() {
     const ids = [...selectedTemplateIds];
     await supabase.from("checklist_templates").delete().in("id", ids);
-    ids.forEach(id => logAudit(user?.id ?? null, "template.delete", "checklist_templates", id, { bulk: true }));
+    ids.forEach((id) =>
+      logAudit(user?.id ?? null, "template.delete", "checklist_templates", id, { bulk: true }),
+    );
     setSelectedTemplateIds(new Set());
     setBulkDeleteTemplatesOpen(false);
     await load();
@@ -975,8 +1316,13 @@ function MallarPage() {
   // If today IS that day, returns today.
   function nextWeekdayDate(dayName: string): string {
     const dayMap: Record<string, number> = {
-      "Söndag": 0, "Måndag": 1, "Tisdag": 2, "Onsdag": 3,
-      "Torsdag": 4, "Fredag": 5, "Lördag": 6,
+      Söndag: 0,
+      Måndag: 1,
+      Tisdag: 2,
+      Onsdag: 3,
+      Torsdag: 4,
+      Fredag: 5,
+      Lördag: 6,
     };
     const target = dayMap[dayName];
     const now = getSimulatedDate();
@@ -994,7 +1340,8 @@ function MallarPage() {
     const rule = tmpl.recurrence_rule;
     if (!rule) return null;
     const now = getSimulatedDate();
-    const today = new Date(now); today.setHours(0, 0, 0, 0);
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
     let base = new Date(today);
 
     if (rule === "daily" || rule === "every_other_day") {
@@ -1020,14 +1367,19 @@ function MallarPage() {
       // If target day already passed this month (strictly before today), move to next month
       if (base < today) base.setMonth(base.getMonth() + 1);
     } else if (rule === "yearly") {
-      const tAny = tmpl as ChecklistTemplate & { recurrence_months?: number[]; recurrence_month_day?: number };
+      const tAny = tmpl as ChecklistTemplate & {
+        recurrence_months?: number[];
+        recurrence_month_day?: number;
+      };
       const months = tAny.recurrence_months ?? [];
       const targetDay = tAny.recurrence_month_day ?? 1;
       if (months.length > 0) {
         const curMonth = today.getMonth() + 1; // 1-based
         const curDay = today.getDate();
         // Find next month >= current where targetDay hasn't passed
-        const nextMonth = months.find(m => m > curMonth || (m === curMonth && targetDay >= curDay));
+        const nextMonth = months.find(
+          (m) => m > curMonth || (m === curMonth && targetDay >= curDay),
+        );
         if (nextMonth != null) {
           base = new Date(today.getFullYear(), nextMonth - 1, targetDay);
         } else {
@@ -1050,32 +1402,55 @@ function MallarPage() {
   async function openBulkCreate(overrideTemplateIds?: string[]) {
     const ids = overrideTemplateIds ?? [...selectedTemplateIds];
     const configs = ids.map((id) => {
-      const tmpl = templates.find(t => t.id === id);
+      const tmpl = templates.find((t) => t.id === id);
       if (!tmpl) return null;
-      const tmplAny = tmpl as ChecklistTemplate & { event_trigger_user_id?: string; delivery_flow_name?: string; delivery_supplier_name?: string };
+      const tmplAny = tmpl as ChecklistTemplate & {
+        event_trigger_user_id?: string;
+        delivery_flow_name?: string;
+        delivery_supplier_name?: string;
+      };
 
       // Pre-select delivery entries matching the template's stored config
       // If delivery_entry_keys is set, use day+supplier+flow key matching (precise)
       // Otherwise fall back to supplier+flow matching (backwards compat)
       let preselectedDeliveryIds: string[] = [];
-      if ((tmplAny as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task && deliveryWeekEntries.length > 0) {
-        const tmplEntryKeys = parseEntryKeys((tmplAny as ChecklistTemplate & { delivery_entry_keys?: string }).delivery_entry_keys ?? "");
+      if (
+        (tmplAny as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task &&
+        deliveryWeekEntries.length > 0
+      ) {
+        const tmplEntryKeys = parseEntryKeys(
+          (tmplAny as ChecklistTemplate & { delivery_entry_keys?: string }).delivery_entry_keys ??
+            "",
+        );
         if (tmplEntryKeys.length > 0) {
           // Precise per-day matching using stored keys
           preselectedDeliveryIds = deliveryWeekEntries
-            .filter(e => tmplEntryKeys.includes(`${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`))
-            .map(e => e.id);
+            .filter((e) =>
+              tmplEntryKeys.includes(
+                `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`,
+              ),
+            )
+            .map((e) => e.id);
         } else {
           // Legacy: match by supplier+flow across all days
-          const tmplFlows = (tmplAny.delivery_flow_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
-          const tmplSuppliers = (tmplAny.delivery_supplier_name ?? "").split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
+          const tmplFlows = (tmplAny.delivery_flow_name ?? "")
+            .split("|")
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean);
+          const tmplSuppliers = (tmplAny.delivery_supplier_name ?? "")
+            .split("|")
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean);
           preselectedDeliveryIds = deliveryWeekEntries
-            .filter(e => {
-              const flowMatch = tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
-              const suppMatch = tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
+            .filter((e) => {
+              const flowMatch =
+                tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
+              const suppMatch =
+                tmplSuppliers.length === 0 ||
+                tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
               return flowMatch && suppMatch;
             })
-            .map(e => e.id);
+            .map((e) => e.id);
         }
       }
 
@@ -1098,21 +1473,24 @@ function MallarPage() {
         const today = new Date();
         const dateFrom = today.toISOString().slice(0, 10);
         const dateTo = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 90)
-          .toISOString().slice(0, 10);
+          .toISOString()
+          .slice(0, 10);
 
         const { data: allImports } = await supabase
           .from("schedule_imports")
           .select("id")
           .eq("store_id", storeIdForSchedule);
-        const importIds = (allImports ?? []).map(i => i.id);
+        const importIds = (allImports ?? []).map((i) => i.id);
 
         if (importIds.length > 0) {
           const [{ data: emps }, { data: shifts }, { data: mappings }] = await Promise.all([
-            supabase.from("schedule_employees")
+            supabase
+              .from("schedule_employees")
               .select("id, employee_nr")
               .in("import_id", importIds)
               .limit(2000),
-            supabase.from("schedule_shifts")
+            supabase
+              .from("schedule_shifts")
               .select("schedule_employee_id, day_date, start_time, stop_time")
               .in("import_id", importIds)
               .eq("is_absence_day", false)
@@ -1121,23 +1499,24 @@ function MallarPage() {
               .gte("day_date", dateFrom)
               .lte("day_date", dateTo)
               .limit(5000),
-            supabase.from("employee_mappings")
+            supabase
+              .from("employee_mappings")
               .select("employee_nr, app_user_id")
               .eq("store_id", storeIdForSchedule),
           ]);
 
           const nrToUserId = new Map<string, string>();
-          for (const m of (mappings ?? [])) {
+          for (const m of mappings ?? []) {
             if (m.app_user_id) nrToUserId.set(m.employee_nr, m.app_user_id);
           }
           const empIdToUserId = new Map<string, string>();
-          for (const e of (emps ?? [])) {
+          for (const e of emps ?? []) {
             const uid = nrToUserId.get(e.employee_nr);
             if (uid) empIdToUserId.set(e.id, uid);
           }
 
           const byDate: Record<string, Map<string, { start: string; end: string }[]>> = {};
-          for (const s of (shifts ?? [])) {
+          for (const s of shifts ?? []) {
             if (!s.day_date || !s.start_time) continue;
             const uid = empIdToUserId.get(s.schedule_employee_id);
             if (!uid) continue;
@@ -1156,8 +1535,8 @@ function MallarPage() {
     }
 
     // Check which templates already have tasks (subsequent batch detection)
-    const selectedIds = [...selectedTemplateIds].filter(id => {
-      const t = templates.find(x => x.id === id);
+    const selectedIds = [...selectedTemplateIds].filter((id) => {
+      const t = templates.find((x) => x.id === id);
       return t && !!(t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task;
     });
     if (selectedIds.length > 0 && storeIdForSchedule) {
@@ -1167,12 +1546,12 @@ function MallarPage() {
           .select("title")
           .eq("store_id", storeIdForSchedule)
           .not("delivery_entry_id", "is", null);
-        const existingTitleSet = new Set((existingTitles ?? []).map(t => t.title?.toLowerCase()));
+        const existingTitleSet = new Set((existingTitles ?? []).map((t) => t.title?.toLowerCase()));
         const withExisting = new Set(
-          selectedIds.filter(id => {
-            const t = templates.find(x => x.id === id);
+          selectedIds.filter((id) => {
+            const t = templates.find((x) => x.id === id);
             return t && existingTitleSet.has(t.title?.toLowerCase());
-          })
+          }),
         );
         setTemplatesWithExistingTasks(withExisting);
       } catch {
@@ -1190,290 +1569,377 @@ function MallarPage() {
     const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
     const skippedDueToDependency: string[] = [];
     try {
+      // Pre-fetch existing tasks to resolve depends_on_template_title
+      const { data: existingTasks } = await supabase
+        .from("tasks")
+        .select("id, title, status")
+        .eq("store_id", storeId ?? "")
+        .neq("status", "done")
+        .limit(500);
+      const existingTaskList = existingTasks ?? [];
 
-    // Pre-fetch existing tasks to resolve depends_on_template_title
-    const { data: existingTasks } = await supabase
-      .from("tasks")
-      .select("id, title, status")
-      .eq("store_id", storeId ?? "")
-      .neq("status", "done")
-      .limit(500);
-    const existingTaskList = existingTasks ?? [];
+      // Track tasks created in this batch: title (lowercase) → task id
+      const createdInBatch = new Map<string, string>();
 
-    // Track tasks created in this batch: title (lowercase) → task id
-    const createdInBatch = new Map<string, string>();
-
-    // Sort configs: tasks with no dependency come first, then those whose dependency
-    // is either already existing or created earlier in the same batch run
-    const getDependsTitle = (cfg: BulkTaskConfig) => {
-      const tmpl = templates.find(t => t.id === cfg.templateId);
-      return ((tmpl as ChecklistTemplate & { depends_on_template_title?: string })?.depends_on_template_title ?? "").toLowerCase().trim();
-    };
-    const sortedConfigs = [...bulkTaskConfigs].sort((a, b) => {
-      const aDep = getDependsTitle(a);
-      const bDep = getDependsTitle(b);
-      if (!aDep && bDep) return -1;
-      if (aDep && !bDep) return 1;
-      return 0;
-    });
-
-    for (const cfg of sortedConfigs) {
-      const tmpl = templates.find(t => t.id === cfg.templateId);
-      if (!tmpl) continue;
-
-      const validItems = (tmpl.items ?? []).filter(it => it.label.trim());
-      const validQuestions = (tmpl.questions ?? []).filter(q => q.label.trim());
-      const assigneeRows = (taskId: string) => {
-        const rows: { task_id: string; user_id?: string; group_id?: string }[] = [];
-        cfg.assigneeUserIds.forEach(uid => rows.push({ task_id: taskId, user_id: uid }));
-        cfg.assigneeGroupIds.forEach(gid => rows.push({ task_id: taskId, group_id: gid }));
-        return rows;
+      // Sort configs: tasks with no dependency come first, then those whose dependency
+      // is either already existing or created earlier in the same batch run
+      const getDependsTitle = (cfg: BulkTaskConfig) => {
+        const tmpl = templates.find((t) => t.id === cfg.templateId);
+        return (
+          (tmpl as ChecklistTemplate & { depends_on_template_title?: string })
+            ?.depends_on_template_title ?? ""
+        )
+          .toLowerCase()
+          .trim();
       };
-      const tmplAny = tmpl as ChecklistTemplate & {
-        recurrence_months?: number[]; recurrence_month_day?: number;
-        recurrence_start?: string; recurrence_end?: string;
-        event_trigger_description?: string; is_critical?: boolean;
-        template_mode?: string; time_slots?: string[];
-      };
+      const sortedConfigs = [...bulkTaskConfigs].sort((a, b) => {
+        const aDep = getDependsTitle(a);
+        const bDep = getDependsTitle(b);
+        if (!aDep && bDep) return -1;
+        if (aDep && !bDep) return 1;
+        return 0;
+      });
 
-      // Leveransmallar: skapa en uppgift per vald leverans
-      if ((tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task) {
-        if (cfg.selectedDeliveryIds.length === 0) continue;
+      for (const cfg of sortedConfigs) {
+        const tmpl = templates.find((t) => t.id === cfg.templateId);
+        if (!tmpl) continue;
 
-        // Fetch all existing delivery tasks for this store to avoid duplicates.
-        // Match on exact title + date (date part only via gte/lt range).
-        const { data: existingDeliveryTasks } = await supabase
-          .from("tasks")
-          .select("due_date, title")
-          .eq("store_id", storeId ?? "")
-          .not("delivery_entry_id", "is", null);
+        const validItems = (tmpl.items ?? []).filter((it) => it.label.trim());
+        const validQuestions = (tmpl.questions ?? []).filter((q) => q.label.trim());
+        const assigneeRows = (taskId: string) => {
+          const rows: { task_id: string; user_id?: string; group_id?: string }[] = [];
+          cfg.assigneeUserIds.forEach((uid) => rows.push({ task_id: taskId, user_id: uid }));
+          cfg.assigneeGroupIds.forEach((gid) => rows.push({ task_id: taskId, group_id: gid }));
+          return rows;
+        };
+        const tmplAny = tmpl as ChecklistTemplate & {
+          recurrence_months?: number[];
+          recurrence_month_day?: number;
+          recurrence_start?: string;
+          recurrence_end?: string;
+          event_trigger_description?: string;
+          is_critical?: boolean;
+          template_mode?: string;
+          time_slots?: string[];
+        };
 
-        // Track titles created in this batch run to avoid intra-batch duplicates
-        const createdThisBatch = new Set<string>();
+        // Leveransmallar: skapa en uppgift per vald leverans
+        if ((tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task) {
+          if (cfg.selectedDeliveryIds.length === 0) continue;
 
-        for (const deliveryId of cfg.selectedDeliveryIds) {
-          // Look up in deliveryWeekEntries first (has day+date), fall back to deliverySuppliers
-          const delivery = deliveryWeekEntries.find(e => e.id === deliveryId) ?? deliverySuppliers.find(s => s.id === deliveryId) as (typeof deliveryWeekEntries[0]) | undefined;
-          const rawTime = delivery?.delivery_time ?? "";
-          // Due time = delivery time + 30 min (buffer for delays)
-          const dueTime = rawTime ? addMinutesToTime(rawTime, 30) : "";
-          // Calculate due date: use next occurrence of the delivery's weekday from today
-          const deliveryDay = (delivery as { delivery_day?: string } | undefined)?.delivery_day ?? "";
-          const dueDateStr = deliveryDay ? nextWeekdayDate(deliveryDay) : getSimulatedDate().toISOString().slice(0, 10);
+          // Fetch all existing delivery tasks for this store to avoid duplicates.
+          // Match on exact title + date (date part only via gte/lt range).
+          const { data: existingDeliveryTasks } = await supabase
+            .from("tasks")
+            .select("due_date, title")
+            .eq("store_id", storeId ?? "")
+            .not("delivery_entry_id", "is", null);
 
-          // Build the exact title we will insert — use for precise dedup
-          const taskTitle = delivery
-            ? `${tmpl.title} — ${delivery.supplier} (${deliveryDay || delivery.delivery_time})`
-            : tmpl.title;
+          // Track titles created in this batch run to avoid intra-batch duplicates
+          const createdThisBatch = new Set<string>();
 
-          const batchKey = `${taskTitle}||${dueDateStr}`;
+          for (const deliveryId of cfg.selectedDeliveryIds) {
+            // Look up in deliveryWeekEntries first (has day+date), fall back to deliverySuppliers
+            const delivery =
+              deliveryWeekEntries.find((e) => e.id === deliveryId) ??
+              (deliverySuppliers.find((s) => s.id === deliveryId) as
+                (typeof deliveryWeekEntries)[0] | undefined);
+            const rawTime = delivery?.delivery_time ?? "";
+            // Due time = delivery time + 30 min (buffer for delays)
+            const dueTime = rawTime ? addMinutesToTime(rawTime, 30) : "";
+            // Calculate due date: use next occurrence of the delivery's weekday from today
+            const deliveryDay =
+              (delivery as { delivery_day?: string } | undefined)?.delivery_day ?? "";
+            const dueDateStr = deliveryDay
+              ? nextWeekdayDate(deliveryDay)
+              : getSimulatedDate().toISOString().slice(0, 10);
 
-          // Skip if already created in this batch run
-          if (createdThisBatch.has(batchKey)) continue;
+            // Build the exact title we will insert — use for precise dedup
+            const taskTitle = delivery
+              ? `${tmpl.title} — ${delivery.supplier} (${deliveryDay || delivery.delivery_time})`
+              : tmpl.title;
 
-          // Skip if a task with the same title already exists on the same date
-          const alreadyExists = (existingDeliveryTasks ?? []).some(t => {
-            const existingDate = t.due_date ? t.due_date.slice(0, 10) : "";
-            return existingDate === dueDateStr && t.title === taskTitle;
-          });
-          if (alreadyExists) continue;
+            const batchKey = `${taskTitle}||${dueDateStr}`;
 
-          createdThisBatch.add(batchKey);
+            // Skip if already created in this batch run
+            if (createdThisBatch.has(batchKey)) continue;
 
-          const { data: task } = await supabase.from("tasks").insert({
-            title: taskTitle,
-            description: tmpl.description ?? "",
-            category: tmpl.category ?? "",
-            priority: tmpl.priority ?? "Medel",
-            store_id: storeId,
-            due_date: (() => {
-              const d = new Date(dueDateStr + "T00:00:00");
-              if (dueTime) { const [h, m] = dueTime.split(":").map(Number); d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0); }
-              return d.toISOString();
-            })(),
-            due_date_time: dueTime || null,
-            delivery_entry_id: deliveryId,
-            event_trigger_description: tmplAny.event_trigger_description ?? null,
-            event_trigger_user_id: cfg.eventTriggerUserId || null,
-            is_critical: tmplAny.is_critical ?? false,
-            created_by: user?.id ?? null,
-            assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
-            status: "todo",
-            assignee_confirmed: cfg.assigneeUserIds.length > 0 && cfg.assigneeGroupIds.length === 0 && (existingDeliveryTasks ?? []).length > 0 ? false : null,
-          }).select("id").maybeSingle();
-          if (!task?.id) continue;
+            // Skip if a task with the same title already exists on the same date
+            const alreadyExists = (existingDeliveryTasks ?? []).some((t) => {
+              const existingDate = t.due_date ? t.due_date.slice(0, 10) : "";
+              return existingDate === dueDateStr && t.title === taskTitle;
+            });
+            if (alreadyExists) continue;
+
+            createdThisBatch.add(batchKey);
+
+            const { data: task } = await supabase
+              .from("tasks")
+              .insert({
+                title: taskTitle,
+                description: tmpl.description ?? "",
+                category: tmpl.category ?? "",
+                priority: tmpl.priority ?? "Medel",
+                store_id: storeId,
+                due_date: (() => {
+                  const d = new Date(dueDateStr + "T00:00:00");
+                  if (dueTime) {
+                    const [h, m] = dueTime.split(":").map(Number);
+                    d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+                  }
+                  return d.toISOString();
+                })(),
+                due_date_time: dueTime || null,
+                delivery_entry_id: deliveryId,
+                event_trigger_description: tmplAny.event_trigger_description ?? null,
+                event_trigger_user_id: cfg.eventTriggerUserId || null,
+                is_critical: tmplAny.is_critical ?? false,
+                created_by: user?.id ?? null,
+                assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
+                status: "todo",
+                assignee_confirmed:
+                  cfg.assigneeUserIds.length > 0 &&
+                  cfg.assigneeGroupIds.length === 0 &&
+                  (existingDeliveryTasks ?? []).length > 0
+                    ? false
+                    : null,
+              })
+              .select("id")
+              .maybeSingle();
+            if (!task?.id) continue;
+            if (validQuestions.length > 0) {
+              await supabase
+                .from("task_questions")
+                .insert(
+                  validQuestions.map((q, i) => ({
+                    task_id: task.id,
+                    label: q.label,
+                    question_type: q.question_type ?? "text",
+                    is_required: q.is_required,
+                    sort_order: i,
+                  })),
+                );
+            }
+            if (validItems.length > 0) {
+              await supabase
+                .from("task_steps")
+                .insert(
+                  validItems.map((it, i) => ({
+                    task_id: task.id,
+                    label: it.label,
+                    sort_order: i,
+                    requires_photo: it.requires_photo,
+                    link_url:
+                      (it as ChecklistTemplateItem & { link_url?: string }).link_url || null,
+                  })),
+                );
+            }
+            const aRows = assigneeRows(task.id);
+            if (aRows.length > 0) await supabase.from("task_assignees").insert(aRows);
+            logAudit(user?.id ?? null, "task.create", "tasks", task.id, {
+              title: tmpl.title,
+              from_template: tmpl.id,
+              delivery_entry_id: deliveryId,
+            });
+            createdInBatch.set(tmpl.title.toLowerCase(), task.id);
+          }
+          continue;
+        }
+
+        // Manuell-only-mallar skapas inte i batch
+        if (tmplAny.template_mode === "manual_only") continue;
+
+        // Resolve dependency: check existing tasks first, then within-batch created tasks
+        const dependsOnTitle = (tmpl as ChecklistTemplate & { depends_on_template_title?: string })
+          .depends_on_template_title;
+        let dependsOnTaskId: string | null = null;
+        if (dependsOnTitle) {
+          const key = dependsOnTitle.toLowerCase();
+          dependsOnTaskId =
+            createdInBatch.get(key) ??
+            existingTaskList.find((t) => (t.title ?? "").toLowerCase() === key)?.id ??
+            null;
+          // Dependency not satisfied — skip this template entirely
+          if (!dependsOnTaskId) {
+            skippedDueToDependency.push(tmpl.title);
+            continue;
+          }
+        }
+
+        const timeSlots: string[] = tmplAny.time_slots ?? [];
+        const templatePriority = tmpl.priority ?? "Medel";
+        const smartDate = calcNextDueDate(tmpl);
+
+        const insertTask = async (dueTime: string) => {
+          let dueIso: string | null = null;
+          if (smartDate) {
+            const d = new Date(smartDate.iso);
+            if (dueTime) {
+              const [h, m] = dueTime.split(":").map(Number);
+              d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+            }
+            dueIso = isNaN(d.getTime()) ? null : d.toISOString();
+          } else if (tmpl.due_date_offset != null) {
+            const d = getSimulatedDate();
+            d.setDate(d.getDate() + tmpl.due_date_offset);
+            if (dueTime) {
+              const [h, m] = dueTime.split(":").map(Number);
+              d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+            }
+            dueIso = d.toISOString();
+          }
+
+          const { data: task } = await supabase
+            .from("tasks")
+            .insert({
+              title: tmpl.title,
+              description: tmpl.description ?? "",
+              category: tmpl.category ?? "",
+              priority: templatePriority,
+              store_id: storeId,
+              due_date: dueIso,
+              due_date_time: dueTime || null,
+              recurrence_rule: tmpl.recurrence_rule ?? null,
+              recurrence_days: tmpl.recurrence_days ?? null,
+              recurrence_interval: tmpl.recurrence_interval ?? null,
+              recurrence_months: tmplAny.recurrence_months ?? null,
+              recurrence_month_day: tmplAny.recurrence_month_day ?? null,
+              recurrence_start: tmplAny.recurrence_start ?? null,
+              recurrence_end: tmplAny.recurrence_end ?? null,
+              event_trigger_description: tmplAny.event_trigger_description ?? null,
+              event_trigger_user_id: cfg.eventTriggerUserId || null,
+              depends_on_task_id: dependsOnTaskId,
+              is_critical: tmplAny.is_critical ?? false,
+              created_by: user?.id ?? null,
+              assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
+              status: "todo",
+              assignee_confirmed:
+                cfg.assigneeUserIds.length > 0 &&
+                cfg.assigneeGroupIds.length === 0 &&
+                existingTaskList.some(
+                  (t) => (t.title ?? "").toLowerCase() === tmpl.title.toLowerCase(),
+                )
+                  ? false
+                  : null,
+            })
+            .select("id, created_at")
+            .maybeSingle();
+
+          if (!task?.id) return;
+
+          // Register in batch map so later dependencies can resolve to this task
+          createdInBatch.set(tmpl.title.toLowerCase(), task.id);
+
+          let questionIdMap = new Map<string, string>();
           if (validQuestions.length > 0) {
-            await supabase.from("task_questions").insert(
-              validQuestions.map((q, i) => ({ task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: i }))
-            );
+            const { data: insertedQs } = await supabase
+              .from("task_questions")
+              .insert(
+                validQuestions.map((q, idx) => ({
+                  task_id: task.id,
+                  label: q.label,
+                  question_type: q.question_type ?? "text",
+                  is_required: q.is_required,
+                  sort_order: idx,
+                })),
+              )
+              .select("id, sort_order");
+            if (insertedQs) {
+              insertedQs.forEach((iq: { id: string; sort_order: number }) => {
+                const tmplQ = validQuestions[iq.sort_order];
+                if (tmplQ?.id) questionIdMap.set(tmplQ.id, iq.id);
+              });
+            }
           }
           if (validItems.length > 0) {
             await supabase.from("task_steps").insert(
-              validItems.map((it, i) => ({ task_id: task.id, label: it.label, sort_order: i, requires_photo: it.requires_photo, link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url || null }))
+              validItems.map((it, idx) => ({
+                task_id: task.id,
+                label: it.label,
+                sort_order: idx,
+                requires_photo: it.requires_photo,
+                link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url || null,
+                condition_question_id: it.condition_question_id
+                  ? (questionIdMap.get(it.condition_question_id) ?? null)
+                  : null,
+                condition_answer: it.condition_answer ?? null,
+              })),
             );
           }
           const aRows = assigneeRows(task.id);
           if (aRows.length > 0) await supabase.from("task_assignees").insert(aRows);
-          logAudit(user?.id ?? null, "task.create", "tasks", task.id, { title: tmpl.title, from_template: tmpl.id, delivery_entry_id: deliveryId });
-          createdInBatch.set(tmpl.title.toLowerCase(), task.id);
-        }
-        continue;
-      }
+          logAudit(user?.id ?? null, "task.create", "tasks", task.id, {
+            title: tmpl.title,
+            from_template: tmpl.id,
+          });
 
-      // Manuell-only-mallar skapas inte i batch
-      if (tmplAny.template_mode === "manual_only") continue;
-
-      // Resolve dependency: check existing tasks first, then within-batch created tasks
-      const dependsOnTitle = (tmpl as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title;
-      let dependsOnTaskId: string | null = null;
-      if (dependsOnTitle) {
-        const key = dependsOnTitle.toLowerCase();
-        dependsOnTaskId =
-          createdInBatch.get(key) ??
-          existingTaskList.find(t => (t.title ?? "").toLowerCase() === key)?.id ??
-          null;
-        // Dependency not satisfied — skip this template entirely
-        if (!dependsOnTaskId) {
-          skippedDueToDependency.push(tmpl.title);
-          continue;
-        }
-      }
-
-      const timeSlots: string[] = tmplAny.time_slots ?? [];
-      const templatePriority = tmpl.priority ?? "Medel";
-      const smartDate = calcNextDueDate(tmpl);
-
-      const insertTask = async (dueTime: string) => {
-        let dueIso: string | null = null;
-        if (smartDate) {
-          const d = new Date(smartDate.iso);
-          if (dueTime) {
-            const [h, m] = dueTime.split(":").map(Number);
-            d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+          // Spawna barninstanser direkt om mallen är återkommande
+          if (tmpl.recurrence_rule) {
+            await spawnChildrenForParent(
+              {
+                id: task.id,
+                title: tmpl.title,
+                description: tmpl.description ?? "",
+                category: tmpl.category ?? "",
+                priority: templatePriority,
+                store_id: storeId,
+                due_date: dueIso,
+                due_date_time: dueTime || null,
+                recurrence_rule: tmpl.recurrence_rule,
+                recurrence_days: tmpl.recurrence_days ?? null,
+                recurrence_start: tmplAny.recurrence_start ?? null,
+                recurrence_end: tmplAny.recurrence_end ?? null,
+                created_by: user?.id ?? null,
+                assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
+                created_at: task.created_at ?? new Date().toISOString(),
+                steps: validItems.map((it, idx) => ({
+                  label: it.label,
+                  sort_order: idx,
+                  requires_photo: it.requires_photo,
+                  link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url || null,
+                  condition_question_id: it.condition_question_id
+                    ? (questionIdMap.get(it.condition_question_id) ?? null)
+                    : null,
+                  condition_answer: it.condition_answer ?? null,
+                })),
+                questions: validQuestions.map((q, idx) => ({
+                  id: [...questionIdMap.entries()].find(([tmplId]) => tmplId === q.id)?.[1] ?? "",
+                  label: q.label,
+                  question_type: q.question_type ?? "text",
+                  is_required: q.is_required,
+                  sort_order: idx,
+                })),
+                assignees: [
+                  ...cfg.assigneeUserIds.map((uid) => ({ user_id: uid, group_id: null })),
+                  ...cfg.assigneeGroupIds.map((gid) => ({ user_id: null, group_id: gid })),
+                ],
+              },
+              getSimulatedNow(),
+              getRecurrenceHorizonDays(),
+            );
           }
-          dueIso = isNaN(d.getTime()) ? null : d.toISOString();
-        } else if (tmpl.due_date_offset != null) {
-          const d = getSimulatedDate();
-          d.setDate(d.getDate() + tmpl.due_date_offset);
-          if (dueTime) {
-            const [h, m] = dueTime.split(":").map(Number);
-            d.setHours(isNaN(h) ? 0 : h, isNaN(m) ? 0 : m, 0, 0);
+        };
+
+        // Time slots → one task per slot; otherwise one task using template's due_date_time
+        if (timeSlots.length > 0) {
+          for (const slot of timeSlots) {
+            await insertTask(slot);
           }
-          dueIso = d.toISOString();
-        }
-
-        const { data: task } = await supabase.from("tasks").insert({
-          title: tmpl.title,
-          description: tmpl.description ?? "",
-          category: tmpl.category ?? "",
-          priority: templatePriority,
-          store_id: storeId,
-          due_date: dueIso,
-          due_date_time: dueTime || null,
-          recurrence_rule: tmpl.recurrence_rule ?? null,
-          recurrence_days: tmpl.recurrence_days ?? null,
-          recurrence_interval: tmpl.recurrence_interval ?? null,
-          recurrence_months: tmplAny.recurrence_months ?? null,
-          recurrence_month_day: tmplAny.recurrence_month_day ?? null,
-          recurrence_start: tmplAny.recurrence_start ?? null,
-          recurrence_end: tmplAny.recurrence_end ?? null,
-          event_trigger_description: tmplAny.event_trigger_description ?? null,
-          event_trigger_user_id: cfg.eventTriggerUserId || null,
-          depends_on_task_id: dependsOnTaskId,
-          is_critical: tmplAny.is_critical ?? false,
-          created_by: user?.id ?? null,
-          assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
-          status: "todo",
-          assignee_confirmed: cfg.assigneeUserIds.length > 0 && cfg.assigneeGroupIds.length === 0 && existingTaskList.some(t => (t.title ?? "").toLowerCase() === tmpl.title.toLowerCase()) ? false : null,
-        }).select("id, created_at").maybeSingle();
-
-        if (!task?.id) return;
-
-        // Register in batch map so later dependencies can resolve to this task
-        createdInBatch.set(tmpl.title.toLowerCase(), task.id);
-
-        let questionIdMap = new Map<string, string>();
-        if (validQuestions.length > 0) {
-          const { data: insertedQs } = await supabase.from("task_questions").insert(
-            validQuestions.map((q, idx) => ({ task_id: task.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: idx }))
-          ).select("id, sort_order");
-          if (insertedQs) {
-            insertedQs.forEach((iq: { id: string; sort_order: number }) => {
-              const tmplQ = validQuestions[iq.sort_order];
-              if (tmplQ?.id) questionIdMap.set(tmplQ.id, iq.id);
-            });
-          }
-        }
-        if (validItems.length > 0) {
-          await supabase.from("task_steps").insert(
-            validItems.map((it, idx) => ({
-              task_id: task.id,
-              label: it.label,
-              sort_order: idx,
-              requires_photo: it.requires_photo,
-              link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url || null,
-              condition_question_id: it.condition_question_id ? (questionIdMap.get(it.condition_question_id) ?? null) : null,
-              condition_answer: it.condition_answer ?? null,
-            }))
+        } else {
+          await insertTask(
+            (tmpl as ChecklistTemplate & { due_date_time?: string }).due_date_time ?? "",
           );
         }
-        const aRows = assigneeRows(task.id);
-        if (aRows.length > 0) await supabase.from("task_assignees").insert(aRows);
-        logAudit(user?.id ?? null, "task.create", "tasks", task.id, { title: tmpl.title, from_template: tmpl.id });
-
-        // Spawna barninstanser direkt om mallen är återkommande
-        if (tmpl.recurrence_rule) {
-          await spawnChildrenForParent({
-            id: task.id,
-            title: tmpl.title,
-            description: tmpl.description ?? "",
-            category: tmpl.category ?? "",
-            priority: templatePriority,
-            store_id: storeId,
-            due_date: dueIso,
-            due_date_time: dueTime || null,
-            recurrence_rule: tmpl.recurrence_rule,
-            recurrence_days: tmpl.recurrence_days ?? null,
-            recurrence_start: tmplAny.recurrence_start ?? null,
-            recurrence_end: tmplAny.recurrence_end ?? null,
-            created_by: user?.id ?? null,
-            assigned_to: cfg.assigneeUserIds[0] ?? user?.id ?? null,
-            created_at: task.created_at ?? new Date().toISOString(),
-            steps: validItems.map((it, idx) => ({
-              label: it.label, sort_order: idx, requires_photo: it.requires_photo,
-              link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url || null,
-              condition_question_id: it.condition_question_id ? (questionIdMap.get(it.condition_question_id) ?? null) : null,
-              condition_answer: it.condition_answer ?? null,
-            })),
-            questions: validQuestions.map((q, idx) => ({
-              id: [...questionIdMap.entries()].find(([tmplId]) => tmplId === q.id)?.[1] ?? "",
-              label: q.label, question_type: q.question_type ?? "text",
-              is_required: q.is_required, sort_order: idx,
-            })),
-            assignees: [
-              ...cfg.assigneeUserIds.map(uid => ({ user_id: uid, group_id: null })),
-              ...cfg.assigneeGroupIds.map(gid => ({ user_id: null, group_id: gid })),
-            ],
-          }, getSimulatedNow(), getRecurrenceHorizonDays());
-        }
-      };
-
-      // Time slots → one task per slot; otherwise one task using template's due_date_time
-      if (timeSlots.length > 0) {
-        for (const slot of timeSlots) {
-          await insertTask(slot);
-        }
-      } else {
-        await insertTask((tmpl as ChecklistTemplate & { due_date_time?: string }).due_date_time ?? "");
       }
-    }
 
-    setBulkCreating(false);
-    setBulkCreateOpen(false);
-    setSelectedTemplateIds(new Set());
-    if (skippedDueToDependency.length > 0) {
-      toast.warning(`${skippedDueToDependency.length} mall${skippedDueToDependency.length !== 1 ? "ar" : ""} hoppades över: ${skippedDueToDependency.join(", ")}. Beroende uppgift saknades — skapa beroendets mall i samma batch.`);
-    }
+      setBulkCreating(false);
+      setBulkCreateOpen(false);
+      setSelectedTemplateIds(new Set());
+      if (skippedDueToDependency.length > 0) {
+        toast.warning(
+          `${skippedDueToDependency.length} mall${skippedDueToDependency.length !== 1 ? "ar" : ""} hoppades över: ${skippedDueToDependency.join(", ")}. Beroende uppgift saknades — skapa beroendets mall i samma batch.`,
+        );
+      }
     } catch (err) {
       console.error("bulkCreateTasks failed:", err);
       toast.error("Något gick fel vid skapandet av uppgifter. Försök igen.");
@@ -1491,10 +1957,14 @@ function MallarPage() {
       status: (t.status as FormState["status"]) ?? "active",
       recurrence_rule: t.recurrence_rule ?? "",
       recurrence_days: t.recurrence_days ?? [],
-      recurrence_interval: (t as ChecklistTemplate & { recurrence_interval?: number }).recurrence_interval ?? 1,
-      recurrence_months: (t as ChecklistTemplate & { recurrence_months?: number[] }).recurrence_months ?? [],
-      recurrence_month_day: (t as ChecklistTemplate & { recurrence_month_day?: number }).recurrence_month_day ?? 1,
-      recurrence_start: (t as ChecklistTemplate & { recurrence_start?: string }).recurrence_start ?? "",
+      recurrence_interval:
+        (t as ChecklistTemplate & { recurrence_interval?: number }).recurrence_interval ?? 1,
+      recurrence_months:
+        (t as ChecklistTemplate & { recurrence_months?: number[] }).recurrence_months ?? [],
+      recurrence_month_day:
+        (t as ChecklistTemplate & { recurrence_month_day?: number }).recurrence_month_day ?? 1,
+      recurrence_start:
+        (t as ChecklistTemplate & { recurrence_start?: string }).recurrence_start ?? "",
       recurrence_end: (t as ChecklistTemplate & { recurrence_end?: string }).recurrence_end ?? "",
       due_date_offset: t.due_date_offset != null ? String(t.due_date_offset) : "",
       due_date_time: t.due_date_time ?? "",
@@ -1505,19 +1975,52 @@ function MallarPage() {
       isLocked: t.locked_by_admin ?? false,
       foreningId: t.forening_id ?? "",
       changeSummary: "",
-      template_type: ((t as ChecklistTemplate & { template_type?: string }).template_type ?? "regular") as "regular" | "base",
-      template_mode: ((t as ChecklistTemplate & { template_mode?: string }).template_mode ?? "both") as "batch_only" | "manual_only" | "both",
+      template_type: ((t as ChecklistTemplate & { template_type?: string }).template_type ??
+        "regular") as "regular" | "base",
+      template_mode: ((t as ChecklistTemplate & { template_mode?: string }).template_mode ??
+        "both") as "batch_only" | "manual_only" | "both",
       is_critical: (t as ChecklistTemplate & { is_critical?: boolean }).is_critical ?? false,
-      review_interval_months: (t as ChecklistTemplate & { review_interval_months?: number }).review_interval_months ?? 24,
-      event_trigger_description: (t as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description ?? "",
-      event_trigger_user_id: (t as ChecklistTemplate & { event_trigger_user_id?: string }).event_trigger_user_id ?? "",
-      is_delivery_task: (t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task ?? false,
-      delivery_flow_name: (t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "",
-      delivery_supplier_name: (t as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name ?? "",
-      delivery_entry_keys: (t as ChecklistTemplate & { delivery_entry_keys?: string }).delivery_entry_keys ?? "",
-      depends_on_template_title: (t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title ?? "",
-      items: (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ id: it.id, label: it.label, requires_photo: it.requires_photo, link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url ?? "", condition_question_id: (it as ChecklistTemplateItem & { condition_question_id?: string }).condition_question_id ?? undefined, condition_answer: (it as ChecklistTemplateItem & { condition_answer?: string }).condition_answer ?? undefined })),
-      questions: (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q) => ({ id: q.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, link_url: (q as ChecklistTemplateQuestion & { link_url?: string }).link_url ?? "" })),
+      review_interval_months:
+        (t as ChecklistTemplate & { review_interval_months?: number }).review_interval_months ?? 24,
+      event_trigger_description:
+        (t as ChecklistTemplate & { event_trigger_description?: string })
+          .event_trigger_description ?? "",
+      event_trigger_user_id:
+        (t as ChecklistTemplate & { event_trigger_user_id?: string }).event_trigger_user_id ?? "",
+      is_delivery_task:
+        (t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task ?? false,
+      delivery_flow_name:
+        (t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "",
+      delivery_supplier_name:
+        (t as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name ?? "",
+      delivery_entry_keys:
+        (t as ChecklistTemplate & { delivery_entry_keys?: string }).delivery_entry_keys ?? "",
+      depends_on_template_title:
+        (t as ChecklistTemplate & { depends_on_template_title?: string })
+          .depends_on_template_title ?? "",
+      items: (t.items ?? [])
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((it) => ({
+          id: it.id,
+          label: it.label,
+          requires_photo: it.requires_photo,
+          link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url ?? "",
+          condition_question_id:
+            (it as ChecklistTemplateItem & { condition_question_id?: string })
+              .condition_question_id ?? undefined,
+          condition_answer:
+            (it as ChecklistTemplateItem & { condition_answer?: string }).condition_answer ??
+            undefined,
+        })),
+      questions: (t.questions ?? [])
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((q) => ({
+          id: q.id,
+          label: q.label,
+          question_type: q.question_type ?? "text",
+          is_required: q.is_required,
+          link_url: (q as ChecklistTemplateQuestion & { link_url?: string }).link_url ?? "",
+        })),
     });
     setError("");
   }
@@ -1525,89 +2028,145 @@ function MallarPage() {
   async function saveEdit() {
     if (!editTarget) return;
     setError("");
-    if (!editForm.title.trim()) { setError("Titel är obligatorisk."); return; }
+    if (!editForm.title.trim()) {
+      setError("Titel är obligatorisk.");
+      return;
+    }
     const scope = editTarget.hierarchy_scope ?? "store";
     setSaving(true);
 
-    await supabase.from("checklist_templates").update({
-      title: editForm.title.trim(),
-      description: editForm.description.trim(),
-      category: editForm.category.trim(),
-      priority: editForm.priority,
-      status: editForm.status,
-      version: (editTarget.version ?? 1) + 1,
-      updated_by: user?.id ?? null,
-      recurrence_rule: editForm.recurrence_rule || null,
-      recurrence_days: (editForm.recurrence_rule === "weekly" || editForm.recurrence_rule === "biweekly") && editForm.recurrence_days.length > 0 ? editForm.recurrence_days : null,
-      recurrence_interval: editForm.recurrence_interval > 1 ? editForm.recurrence_interval : null,
-      recurrence_start: editForm.recurrence_start || null,
-      recurrence_end: editForm.recurrence_end || null,
-      due_date_offset: editForm.due_date_offset !== "" ? (parseInt(editForm.due_date_offset, 10) || null) : null,
-      due_date_time: editForm.due_date_time || null,
-      sap_article_id: editForm.sap_article_id?.trim() || null,
-      time_slots: editForm.time_slots.length > 0 ? editForm.time_slots : null,
-      is_global: editForm.isGlobal,
-      locked_by_admin: editForm.isLocked,
-      template_type: editForm.template_type,
-      template_mode: editForm.template_mode,
-      is_critical: editForm.is_critical,
-      event_trigger_description: editForm.event_trigger_description?.trim() || null,
-      event_trigger_user_id: editForm.event_trigger_user_id || null,
-      is_delivery_task: editForm.is_delivery_task,
-      delivery_flow_name: editForm.delivery_flow_name?.trim() || null,
-      delivery_supplier_name: editForm.delivery_supplier_name?.trim() || null,
-      delivery_entry_keys: editForm.delivery_entry_keys?.trim() || null,
-      depends_on_template_title: editForm.depends_on_template_title?.trim() || null,
-      review_interval_months: editForm.review_interval_months > 0 ? editForm.review_interval_months : null,
-      // Ensure next_review_at is set if this becomes a recurring base template
-      ...((editForm.template_type === "base" && editForm.recurrence_rule && !editForm.recurrence_end &&
-          !(editTarget as ChecklistTemplate & { next_review_at?: string }).next_review_at)
-        ? { next_review_at: (() => { const d = getSimulatedDate(); d.setMonth(d.getMonth() + (editForm.review_interval_months || 24)); return d.toISOString(); })() }
-        : {}),
-    }).eq("id", editTarget.id);
+    await supabase
+      .from("checklist_templates")
+      .update({
+        title: editForm.title.trim(),
+        description: editForm.description.trim(),
+        category: editForm.category.trim(),
+        priority: editForm.priority,
+        status: editForm.status,
+        version: (editTarget.version ?? 1) + 1,
+        updated_by: user?.id ?? null,
+        recurrence_rule: editForm.recurrence_rule || null,
+        recurrence_days:
+          (editForm.recurrence_rule === "weekly" || editForm.recurrence_rule === "biweekly") &&
+          editForm.recurrence_days.length > 0
+            ? editForm.recurrence_days
+            : null,
+        recurrence_interval: editForm.recurrence_interval > 1 ? editForm.recurrence_interval : null,
+        recurrence_start: editForm.recurrence_start || null,
+        recurrence_end: editForm.recurrence_end || null,
+        due_date_offset:
+          editForm.due_date_offset !== "" ? parseInt(editForm.due_date_offset, 10) || null : null,
+        due_date_time: editForm.due_date_time || null,
+        sap_article_id: editForm.sap_article_id?.trim() || null,
+        time_slots: editForm.time_slots.length > 0 ? editForm.time_slots : null,
+        is_global: editForm.isGlobal,
+        locked_by_admin: editForm.isLocked,
+        template_type: editForm.template_type,
+        template_mode: editForm.template_mode,
+        is_critical: editForm.is_critical,
+        event_trigger_description: editForm.event_trigger_description?.trim() || null,
+        event_trigger_user_id: editForm.event_trigger_user_id || null,
+        is_delivery_task: editForm.is_delivery_task,
+        delivery_flow_name: editForm.delivery_flow_name?.trim() || null,
+        delivery_supplier_name: editForm.delivery_supplier_name?.trim() || null,
+        delivery_entry_keys: editForm.delivery_entry_keys?.trim() || null,
+        depends_on_template_title: editForm.depends_on_template_title?.trim() || null,
+        review_interval_months:
+          editForm.review_interval_months > 0 ? editForm.review_interval_months : null,
+        // Ensure next_review_at is set if this becomes a recurring base template
+        ...(editForm.template_type === "base" &&
+        editForm.recurrence_rule &&
+        !editForm.recurrence_end &&
+        !(editTarget as ChecklistTemplate & { next_review_at?: string }).next_review_at
+          ? {
+              next_review_at: (() => {
+                const d = getSimulatedDate();
+                d.setMonth(d.getMonth() + (editForm.review_interval_months || 24));
+                return d.toISOString();
+              })(),
+            }
+          : {}),
+      })
+      .eq("id", editTarget.id);
 
     await supabase.from("checklist_template_items").delete().eq("template_id", editTarget.id);
     const validItems = editForm.items.filter((it) => it.label.trim());
     if (validItems.length > 0) {
-      await supabase.from("checklist_template_items").insert(
-        validItems.map((it, idx) => ({ template_id: editTarget.id, label: it.label.trim(), requires_photo: it.requires_photo, link_url: it.link_url || null, sort_order: idx, condition_question_id: it.condition_question_id ?? null, condition_answer: it.condition_answer ?? null }))
-      );
+      await supabase
+        .from("checklist_template_items")
+        .insert(
+          validItems.map((it, idx) => ({
+            template_id: editTarget.id,
+            label: it.label.trim(),
+            requires_photo: it.requires_photo,
+            link_url: it.link_url || null,
+            sort_order: idx,
+            condition_question_id: it.condition_question_id ?? null,
+            condition_answer: it.condition_answer ?? null,
+          })),
+        );
     }
 
     await supabase.from("checklist_template_questions").delete().eq("template_id", editTarget.id);
     const validQuestions = editForm.questions.filter((q) => q.label.trim());
     if (validQuestions.length > 0) {
-      await supabase.from("checklist_template_questions").insert(
-        validQuestions.map((q, idx) => ({ template_id: editTarget.id, label: q.label.trim(), question_type: q.question_type, is_required: q.is_required, link_url: q.link_url || null, sort_order: idx }))
-      );
+      await supabase
+        .from("checklist_template_questions")
+        .insert(
+          validQuestions.map((q, idx) => ({
+            template_id: editTarget.id,
+            label: q.label.trim(),
+            question_type: q.question_type,
+            is_required: q.is_required,
+            link_url: q.link_url || null,
+            sort_order: idx,
+          })),
+        );
     }
 
     await supabase.from("template_stores").delete().eq("template_id", editTarget.id);
     if (!editForm.isGlobal && scope === "store") {
-      const storeList = editForm.storeIds.length > 0 ? editForm.storeIds : activeStore ? [activeStore.id] : editTarget.storeIds;
+      const storeList =
+        editForm.storeIds.length > 0
+          ? editForm.storeIds
+          : activeStore
+            ? [activeStore.id]
+            : editTarget.storeIds;
       if (storeList.length > 0) {
-        await supabase.from("template_stores").insert(storeList.map((sid) => ({ template_id: editTarget.id, store_id: sid })));
+        await supabase
+          .from("template_stores")
+          .insert(storeList.map((sid) => ({ template_id: editTarget.id, store_id: sid })));
       }
     }
 
-    logAudit(user?.id ?? null, "template.edit", "checklist_templates", editTarget.id, { title: editForm.title });
+    logAudit(user?.id ?? null, "template.edit", "checklist_templates", editTarget.id, {
+      title: editForm.title,
+    });
     // Save version snapshot after edit
     const newVersion = (editTarget.version ?? 1) + 1;
-    const validItemsEdit = editForm.items.filter(it => it.label.trim());
-    const validQuestionsEdit = editForm.questions.filter(q => q.label.trim());
+    const validItemsEdit = editForm.items.filter((it) => it.label.trim());
+    const validQuestionsEdit = editForm.questions.filter((q) => q.label.trim());
     await saveVersionSnapshot(
       editTarget.id,
       newVersion,
       {
-        title: editForm.title, description: editForm.description, category: editForm.category,
-        priority: editForm.priority, status: editForm.status,
-        template_type: editForm.template_type, template_mode: editForm.template_mode,
+        title: editForm.title,
+        description: editForm.description,
+        category: editForm.category,
+        priority: editForm.priority,
+        status: editForm.status,
+        template_type: editForm.template_type,
+        template_mode: editForm.template_mode,
         is_critical: editForm.is_critical,
-        recurrence_rule: editForm.recurrence_rule, recurrence_days: editForm.recurrence_days,
+        recurrence_rule: editForm.recurrence_rule,
+        recurrence_days: editForm.recurrence_days,
         recurrence_interval: editForm.recurrence_interval,
-        recurrence_start: editForm.recurrence_start, recurrence_end: editForm.recurrence_end,
-        due_date_offset: editForm.due_date_offset, due_date_time: editForm.due_date_time,
-        sap_article_id: editForm.sap_article_id, time_slots: editForm.time_slots,
+        recurrence_start: editForm.recurrence_start,
+        recurrence_end: editForm.recurrence_end,
+        due_date_offset: editForm.due_date_offset,
+        due_date_time: editForm.due_date_time,
+        sap_article_id: editForm.sap_article_id,
+        time_slots: editForm.time_slots,
         is_delivery_task: editForm.is_delivery_task,
         delivery_flow_name: editForm.delivery_flow_name,
         delivery_supplier_name: editForm.delivery_supplier_name,
@@ -1616,7 +2175,8 @@ function MallarPage() {
         event_trigger_user_id: editForm.event_trigger_user_id,
         depends_on_template_title: editForm.depends_on_template_title,
         review_interval_months: editForm.review_interval_months,
-        items: validItemsEdit, questions: validQuestionsEdit,
+        items: validItemsEdit,
+        questions: validQuestionsEdit,
       },
       editForm.changeSummary || "Redigerat",
     );
@@ -1627,9 +2187,12 @@ function MallarPage() {
 
   async function toggleHideHKTemplate(t: TemplateWithMeta) {
     if (!user?.forening_id) return;
-    const alreadyHidden = hiddenEntries.some((h) => h.template_id === t.id && h.forening_id === user.forening_id);
+    const alreadyHidden = hiddenEntries.some(
+      (h) => h.template_id === t.id && h.forening_id === user.forening_id,
+    );
     if (alreadyHidden) {
-      await supabase.from("forening_hidden_templates")
+      await supabase
+        .from("forening_hidden_templates")
         .delete()
         .eq("template_id", t.id)
         .eq("forening_id", user.forening_id);
@@ -1665,47 +2228,68 @@ function MallarPage() {
   // When a manager tries to "edit" a HK/Forening template, we auto-create a local variant and open that
   async function createLocalVariantAndEdit(source: TemplateWithMeta) {
     const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
-    const { data: tmpl, error: insertErr } = await supabase.from("checklist_templates").insert({
-      title: source.title,
-      description: source.description ?? "",
-      category: source.category ?? "",
-      priority: source.priority ?? "Medel",
-      status: "active",
-      recurrence_rule: source.recurrence_rule ?? null,
-      recurrence_days: source.recurrence_days ?? null,
-      recurrence_interval: source.recurrence_interval ?? null,
-      due_date_offset: source.due_date_offset ?? null,
-      due_date_time: source.due_date_time ?? null,
-      time_slots: (source as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? null,
-      created_by: user?.id ?? null,
-      hierarchy_scope: "store",
-      is_global: false,
-      parent_template_id: source.id,
-      inherit_mode: "variant",
-      version: 1,
-    }).select("id").maybeSingle();
+    const { data: tmpl, error: insertErr } = await supabase
+      .from("checklist_templates")
+      .insert({
+        title: source.title,
+        description: source.description ?? "",
+        category: source.category ?? "",
+        priority: source.priority ?? "Medel",
+        status: "active",
+        recurrence_rule: source.recurrence_rule ?? null,
+        recurrence_days: source.recurrence_days ?? null,
+        recurrence_interval: source.recurrence_interval ?? null,
+        due_date_offset: source.due_date_offset ?? null,
+        due_date_time: source.due_date_time ?? null,
+        time_slots: (source as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? null,
+        created_by: user?.id ?? null,
+        hierarchy_scope: "store",
+        is_global: false,
+        parent_template_id: source.id,
+        inherit_mode: "variant",
+        version: 1,
+      })
+      .select("id")
+      .maybeSingle();
     if (insertErr || !tmpl?.id) {
       setError(insertErr?.message ?? "Kunde inte skapa lokal variant. Kontrollera behörigheter.");
       return;
     }
 
-    const validItems = (source.items ?? []).filter(it => it.label.trim());
+    const validItems = (source.items ?? []).filter((it) => it.label.trim());
     if (validItems.length > 0) {
-      await supabase.from("checklist_template_items").insert(
-        validItems.map((it, idx) => ({ template_id: tmpl.id, label: it.label, requires_photo: it.requires_photo, sort_order: idx }))
-      );
+      await supabase
+        .from("checklist_template_items")
+        .insert(
+          validItems.map((it, idx) => ({
+            template_id: tmpl.id,
+            label: it.label,
+            requires_photo: it.requires_photo,
+            sort_order: idx,
+          })),
+        );
     }
-    const validQuestions = (source.questions ?? []).filter(q => q.label.trim());
+    const validQuestions = (source.questions ?? []).filter((q) => q.label.trim());
     if (validQuestions.length > 0) {
-      await supabase.from("checklist_template_questions").insert(
-        validQuestions.map((q, idx) => ({ template_id: tmpl.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: idx }))
-      );
+      await supabase
+        .from("checklist_template_questions")
+        .insert(
+          validQuestions.map((q, idx) => ({
+            template_id: tmpl.id,
+            label: q.label,
+            question_type: q.question_type ?? "text",
+            is_required: q.is_required,
+            sort_order: idx,
+          })),
+        );
     }
     if (storeId) {
       await supabase.from("template_stores").insert({ template_id: tmpl.id, store_id: storeId });
     }
 
-    logAudit(user?.id ?? null, "template.variant.auto", "checklist_templates", tmpl.id, { source_id: source.id });
+    logAudit(user?.id ?? null, "template.variant.auto", "checklist_templates", tmpl.id, {
+      source_id: source.id,
+    });
 
     // Fetch the newly created variant with all its relations and open it for editing
     const { data: fresh } = await supabase
@@ -1720,8 +2304,10 @@ function MallarPage() {
         : [];
       const withMeta = {
         ...(fresh as ChecklistTemplate),
-        storeIds: storeAssignments.map(a => a.store_id),
-        questions: (fresh as ChecklistTemplate & { questions?: ChecklistTemplateQuestion[] }).questions ?? [],
+        storeIds: storeAssignments.map((a) => a.store_id),
+        questions:
+          (fresh as ChecklistTemplate & { questions?: ChecklistTemplateQuestion[] }).questions ??
+          [],
         items: (fresh as ChecklistTemplate & { items?: ChecklistTemplateItem[] }).items ?? [],
       } as TemplateWithMeta;
       openEdit(withMeta);
@@ -1732,37 +2318,57 @@ function MallarPage() {
   async function mergeFromParent(variant: TemplateWithMeta, parent: TemplateWithMeta) {
     setMerging(true);
     // Update variant metadata to match parent (title, description, category, priority, recurrence)
-    await supabase.from("checklist_templates").update({
-      title: parent.title,
-      description: parent.description ?? "",
-      category: parent.category ?? "",
-      priority: parent.priority ?? "Medel",
-      recurrence_rule: parent.recurrence_rule ?? null,
-      recurrence_days: parent.recurrence_days ?? null,
-      recurrence_interval: parent.recurrence_interval ?? null,
-      due_date_offset: parent.due_date_offset ?? null,
-      due_date_time: parent.due_date_time ?? null,
-    }).eq("id", variant.id);
+    await supabase
+      .from("checklist_templates")
+      .update({
+        title: parent.title,
+        description: parent.description ?? "",
+        category: parent.category ?? "",
+        priority: parent.priority ?? "Medel",
+        recurrence_rule: parent.recurrence_rule ?? null,
+        recurrence_days: parent.recurrence_days ?? null,
+        recurrence_interval: parent.recurrence_interval ?? null,
+        due_date_offset: parent.due_date_offset ?? null,
+        due_date_time: parent.due_date_time ?? null,
+      })
+      .eq("id", variant.id);
 
     // Replace checklist items with parent's items
     await supabase.from("checklist_template_items").delete().eq("template_id", variant.id);
     const validItems = (parent.items ?? []).filter((it) => it.label.trim());
     if (validItems.length > 0) {
-      await supabase.from("checklist_template_items").insert(
-        validItems.map((it, idx) => ({ template_id: variant.id, label: it.label, requires_photo: it.requires_photo, sort_order: idx }))
-      );
+      await supabase
+        .from("checklist_template_items")
+        .insert(
+          validItems.map((it, idx) => ({
+            template_id: variant.id,
+            label: it.label,
+            requires_photo: it.requires_photo,
+            sort_order: idx,
+          })),
+        );
     }
 
     // Replace questions with parent's questions
     await supabase.from("checklist_template_questions").delete().eq("template_id", variant.id);
     const validQuestions = (parent.questions ?? []).filter((q) => q.label.trim());
     if (validQuestions.length > 0) {
-      await supabase.from("checklist_template_questions").insert(
-        validQuestions.map((q, idx) => ({ template_id: variant.id, label: q.label, question_type: q.question_type ?? "text", is_required: q.is_required, sort_order: idx }))
-      );
+      await supabase
+        .from("checklist_template_questions")
+        .insert(
+          validQuestions.map((q, idx) => ({
+            template_id: variant.id,
+            label: q.label,
+            question_type: q.question_type ?? "text",
+            is_required: q.is_required,
+            sort_order: idx,
+          })),
+        );
     }
 
-    logAudit(user?.id ?? null, "template.variant.merge", "checklist_templates", variant.id, { parent_id: parent.id });
+    logAudit(user?.id ?? null, "template.variant.merge", "checklist_templates", variant.id, {
+      parent_id: parent.id,
+    });
     setMerging(false);
     setMergeTarget(null);
     await load();
@@ -1773,20 +2379,58 @@ function MallarPage() {
   // CSV: download blank import template with instructions
   const downloadBlankTemplate = () => {
     const headers = [
-      "Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version",
-      "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
-      "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
-      "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
-      "SAP-artikel", "Mallpaket", "Händelsevillkor", "Leveransuppgift (ja/nej)", "Leveransflöde",
-      "Kedja (beror på mallnamn)", "Malltyp", "Skapningsläge", "Händelse-bekräftare",
-      "Granskningsintervall (månader)", "Kritisk (ja/nej)", "Leveransföretag",
+      "Titel",
+      "Kategori",
+      "Beskrivning",
+      "Prioritet",
+      "Status",
+      "Version",
+      "Återkommande",
+      "Veckodagar",
+      "Månader",
+      "Månadsdag",
+      "Intervall",
+      "Förfaller om (dagar)",
+      "Förfallotid (HH:MM)",
+      "Startdatum",
+      "Slutdatum",
+      "Ursprungsmall",
+      "Arvläge",
+      "Steg (detaljer)",
+      "Frågor",
+      "Tidsluckor (HH:MM)",
+      "SAP-artikel",
+      "Mallpaket",
+      "Händelsevillkor",
+      "Leveransuppgift (ja/nej)",
+      "Leveransflöde",
+      "Kedja (beror på mallnamn)",
+      "Malltyp",
+      "Skapningsläge",
+      "Händelse-bekräftare",
+      "Granskningsintervall (månader)",
+      "Kritisk (ja/nej)",
+      "Leveransföretag",
     ];
     const today = getSimulatedDate().toISOString().slice(0, 10);
     const exampleA = [
-      "Daglig öppningskontroll", "Drift", "Genomförs varje morgon vid öppning", "Hög", "active", "",
-      "weekly", "0,1,2,3,4", "", "", "1",
-      "0", "07:00", today, "2026-12-31",
-      "", "",
+      "Daglig öppningskontroll",
+      "Drift",
+      "Genomförs varje morgon vid öppning",
+      "Hög",
+      "active",
+      "",
+      "weekly",
+      "0,1,2,3,4",
+      "",
+      "",
+      "1",
+      "0",
+      "07:00",
+      today,
+      "2026-12-31",
+      "",
+      "",
       "1. Lås upp entré | 2. Kontrollera temperatur kyl [foto] | 3. Rapportera avvikelse [om:Temperaturavvikelse?=ja]",
       "1. Temperaturavvikelse? [obligatorisk] [ja_nej] | 2. Notering",
       "",
@@ -1803,10 +2447,23 @@ function MallarPage() {
       "", // Leveransföretag
     ];
     const exampleB = [
-      "Varumottagning Färskt", "Drift", "Tas emot vid leverans", "Medel", "active", "",
-      "", "", "", "", "",
-      "0", "", today, "",
-      "", "",
+      "Varumottagning Färskt",
+      "Drift",
+      "Tas emot vid leverans",
+      "Medel",
+      "active",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "0",
+      "",
+      today,
+      "",
+      "",
+      "",
       "1. Kontrollera följesedel | 2. Kontrollera temperatur [foto] | 3. Signera kvitto",
       "",
       "",
@@ -1822,42 +2479,81 @@ function MallarPage() {
       "", // Kritisk
       "Eskilstuna Coop logistik AB", // Leveransföretag — kopplar till specifikt företag
     ];
-    const csv = CSV_TEMPLATE_INSTRUCTIONS
-      + [headers, exampleA, exampleB].map((r) => r.map((v) => `"${sanitizeCsvCell(String(v).replace(/"/g, '""'))}"`).join(";")).join("\n");
+    const csv =
+      CSV_TEMPLATE_INSTRUCTIONS +
+      [headers, exampleA, exampleB]
+        .map((r) => r.map((v) => `"${sanitizeCsvCell(String(v).replace(/"/g, '""'))}"`).join(";"))
+        .join("\n");
     exportTextAsCSV(csv, "mall-import-template.csv");
   };
 
   const exportCSV = () => {
     // Export in identical format to import template so exported files can be re-imported directly
     const headers = [
-      "Titel", "Kategori", "Beskrivning", "Prioritet", "Status", "Version",
-      "Återkommande", "Veckodagar", "Månader", "Månadsdag", "Intervall",
-      "Förfaller om (dagar)", "Förfallotid (HH:MM)", "Startdatum", "Slutdatum",
-      "Ursprungsmall", "Arvläge", "Steg (detaljer)", "Frågor", "Tidsluckor (HH:MM)",
-      "SAP-artikel", "Mallpaket", "Händelsevillkor", "Leveransuppgift (ja/nej)", "Leveransflöde", "Kedja (beror på mallnamn)",
-      "Malltyp", "Skapningsläge", "Händelse-bekräftare", "Granskningsintervall (månader)", "Kritisk (ja/nej)", "Leveransföretag",
+      "Titel",
+      "Kategori",
+      "Beskrivning",
+      "Prioritet",
+      "Status",
+      "Version",
+      "Återkommande",
+      "Veckodagar",
+      "Månader",
+      "Månadsdag",
+      "Intervall",
+      "Förfaller om (dagar)",
+      "Förfallotid (HH:MM)",
+      "Startdatum",
+      "Slutdatum",
+      "Ursprungsmall",
+      "Arvläge",
+      "Steg (detaljer)",
+      "Frågor",
+      "Tidsluckor (HH:MM)",
+      "SAP-artikel",
+      "Mallpaket",
+      "Händelsevillkor",
+      "Leveransuppgift (ja/nej)",
+      "Leveransflöde",
+      "Kedja (beror på mallnamn)",
+      "Malltyp",
+      "Skapningsläge",
+      "Händelse-bekräftare",
+      "Granskningsintervall (månader)",
+      "Kritisk (ja/nej)",
+      "Leveransföretag",
     ];
     const rows = [
       headers,
       ...templates.map((t) => {
         const sortedQuestions = (t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order);
-        const stepsStr = (t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((it, idx) => {
-          let s = `${idx + 1}. ${it.label}`;
-          if (it.requires_photo) s += " [foto]";
-          if ((it as ChecklistTemplateItem & { link_url?: string }).link_url) s += ` [url:${(it as ChecklistTemplateItem & { link_url?: string }).link_url}]`;
-          if (it.condition_question_id) {
-            const condQ = sortedQuestions.find(q => q.id === it.condition_question_id);
-            if (condQ) s += ` [om:${condQ.label}=${it.condition_answer ?? "ja"}]`;
-          }
-          return s;
-        }).join(" | ");
-        const questionsStr = sortedQuestions.map((q, idx) =>
-          `${idx + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}${(q as ChecklistTemplateQuestion & { link_url?: string }).link_url ? ` [url:${(q as ChecklistTemplateQuestion & { link_url?: string }).link_url}]` : ""}`
-        ).join(" | ");
+        const stepsStr = (t.items ?? [])
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((it, idx) => {
+            let s = `${idx + 1}. ${it.label}`;
+            if (it.requires_photo) s += " [foto]";
+            if ((it as ChecklistTemplateItem & { link_url?: string }).link_url)
+              s += ` [url:${(it as ChecklistTemplateItem & { link_url?: string }).link_url}]`;
+            if (it.condition_question_id) {
+              const condQ = sortedQuestions.find((q) => q.id === it.condition_question_id);
+              if (condQ) s += ` [om:${condQ.label}=${it.condition_answer ?? "ja"}]`;
+            }
+            return s;
+          })
+          .join(" | ");
+        const questionsStr = sortedQuestions
+          .map(
+            (q, idx) =>
+              `${idx + 1}. ${q.label}${q.is_required ? " [obligatorisk]" : ""}${q.question_type === "yes_no" ? " [ja_nej]" : ""}${(q as ChecklistTemplateQuestion & { link_url?: string }).link_url ? ` [url:${(q as ChecklistTemplateQuestion & { link_url?: string }).link_url}]` : ""}`,
+          )
+          .join(" | ");
         const tAny = t as ChecklistTemplate & {
-          recurrence_start?: string; recurrence_end?: string;
-          recurrence_months?: number[]; recurrence_month_day?: number;
-          time_slots?: string[]; sap_article_id?: string;
+          recurrence_start?: string;
+          recurrence_end?: string;
+          recurrence_months?: number[];
+          recurrence_month_day?: number;
+          time_slots?: string[];
+          sap_article_id?: string;
         };
         return [
           t.title,
@@ -1881,25 +2577,48 @@ function MallarPage() {
           questionsStr,
           tAny.time_slots?.join(" | ") ?? "",
           tAny.sap_article_id ?? "",
-          packages.filter(pkg => (pkg.items ?? []).some(item => item.template_id === t.id)).map(pkg => pkg.name).join(" | "),
-          (t as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description ?? "",
+          packages
+            .filter((pkg) => (pkg.items ?? []).some((item) => item.template_id === t.id))
+            .map((pkg) => pkg.name)
+            .join(" | "),
+          (t as ChecklistTemplate & { event_trigger_description?: string })
+            .event_trigger_description ?? "",
           (t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task ? "ja" : "",
           (t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "",
-          (t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title ?? "",
-          ((t as ChecklistTemplate & { template_type?: string }).template_type === "base") ? "grundmall" : "regular",
+          (t as ChecklistTemplate & { depends_on_template_title?: string })
+            .depends_on_template_title ?? "",
+          (t as ChecklistTemplate & { template_type?: string }).template_type === "base"
+            ? "grundmall"
+            : "regular",
           (t as ChecklistTemplate & { template_mode?: string }).template_mode ?? "both",
           (t as ChecklistTemplate & { event_trigger_user_id?: string }).event_trigger_user_id ?? "",
-          (t as ChecklistTemplate & { review_interval_months?: number }).review_interval_months != null
-            ? String((t as ChecklistTemplate & { review_interval_months?: number }).review_interval_months)
+          (t as ChecklistTemplate & { review_interval_months?: number }).review_interval_months !=
+          null
+            ? String(
+                (t as ChecklistTemplate & { review_interval_months?: number })
+                  .review_interval_months,
+              )
             : "",
           (t as ChecklistTemplate & { is_critical?: boolean }).is_critical ? "ja" : "",
-          (t as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name ?? "",
+          (t as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name ??
+            "",
         ];
       }),
     ];
-    const instructions = `# Exporterat från StoreFlow ${new Date().toLocaleDateString("sv-SE")} — kan importeras direkt\n` + CSV_TEMPLATE_INSTRUCTIONS;
-    const csv = instructions + rows.map((r) => r.map((v) => `"${sanitizeCsvCell(String(v ?? "").replace(/"/g, '""'))}"`).join(";")).join("\n");
-    exportTextAsCSV(csv, `mallar-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`);
+    const instructions =
+      `# Exporterat från StoreFlow ${new Date().toLocaleDateString("sv-SE")} — kan importeras direkt\n` +
+      CSV_TEMPLATE_INSTRUCTIONS;
+    const csv =
+      instructions +
+      rows
+        .map((r) =>
+          r.map((v) => `"${sanitizeCsvCell(String(v ?? "").replace(/"/g, '""'))}"`).join(";"),
+        )
+        .join("\n");
+    exportTextAsCSV(
+      csv,
+      `mallar-${activeStore?.name ?? "export"}-${new Date().toISOString().slice(0, 10)}.csv`,
+    );
   };
 
   const importCSV = async (result: ImportDialogResult) => {
@@ -1908,7 +2627,10 @@ function MallarPage() {
     const text = await result.file.text();
     const cleaned = text.startsWith("\ufeff") ? text.slice(1) : text;
     const lines = cleaned.split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"));
-    if (lines.length < 2) { setImporting(false); return; }
+    if (lines.length < 2) {
+      setImporting(false);
+      return;
+    }
 
     const importScope = isAdmin
       ? String(result.options.scope ?? "store")
@@ -1920,8 +2642,10 @@ function MallarPage() {
     // then user's own forening_id, then look up from user_foreningar.
     let resolvedForeningId: string | null = null;
     if (importScope === "forening") {
-      const selectedForeningId = result.options.foreningId && result.options.foreningId !== "__none"
-        ? String(result.options.foreningId) : null;
+      const selectedForeningId =
+        result.options.foreningId && result.options.foreningId !== "__none"
+          ? String(result.options.foreningId)
+          : null;
       if (selectedForeningId) {
         resolvedForeningId = selectedForeningId;
       } else {
@@ -1953,7 +2677,7 @@ function MallarPage() {
     // Local cache keyed by lowercase name so multiple rows with the same package
     // name reuse the same package record instead of creating duplicates.
     const pkgCache = new Map<string, TemplatePackage>(
-      packages.map(p => [p.name.toLowerCase(), p])
+      packages.map((p) => [p.name.toLowerCase(), p]),
     );
     for (let cols of rows) {
       // Backwards-compat: old 30-col format lacked SAP-artikel at col 20.
@@ -1969,33 +2693,67 @@ function MallarPage() {
       // 21:Mallpaket 22:Händelsevillkor 23:Leveransuppgift 24:Leveransflöde 25:Kedja
       // 26:Malltyp 27:Skapningsläge 28:Händelse-bekräftare 29:Granskningsintervall 30:Kritisk 31:Leveransföretag
       const [
-        title, category, description, priority, statusRaw, ,
-        recurrence, weekdaysRaw, monthsRaw, monthDayRaw, intervalRaw,
-        dueDays, dueTime, startDate, endDate,
-        parentTemplateId, inheritModeRaw, stepsRaw, questionsRaw, timeSlotsRaw,
-        sapArticleIdRaw, packageNameRaw, eventTriggerRaw, deliveryTaskRaw, deliveryFlowRaw, chainTitleRaw,
-        templateTypeRaw, templateModeRaw, eventTriggerUserIdRaw, reviewIntervalRaw, isCriticalRaw,
+        title,
+        category,
+        description,
+        priority,
+        statusRaw,
+        ,
+        recurrence,
+        weekdaysRaw,
+        monthsRaw,
+        monthDayRaw,
+        intervalRaw,
+        dueDays,
+        dueTime,
+        startDate,
+        endDate,
+        parentTemplateId,
+        inheritModeRaw,
+        stepsRaw,
+        questionsRaw,
+        timeSlotsRaw,
+        sapArticleIdRaw,
+        packageNameRaw,
+        eventTriggerRaw,
+        deliveryTaskRaw,
+        deliveryFlowRaw,
+        chainTitleRaw,
+        templateTypeRaw,
+        templateModeRaw,
+        eventTriggerUserIdRaw,
+        reviewIntervalRaw,
+        isCriticalRaw,
         deliverySupplierRaw,
       ] = cols;
       if (!title?.trim()) continue;
 
       const recurrenceRule = (recurrence ?? "").trim() || null;
       const recurrenceDays = weekdaysRaw?.trim()
-        ? weekdaysRaw.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 0 && n <= 6)
+        ? weekdaysRaw
+            .split(",")
+            .map((s) => parseInt(s.trim()))
+            .filter((n) => !isNaN(n) && n >= 0 && n <= 6)
         : null;
       const recurrenceMonths = monthsRaw?.trim()
-        ? monthsRaw.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n >= 1 && n <= 12)
+        ? monthsRaw
+            .split(",")
+            .map((s) => parseInt(s.trim()))
+            .filter((n) => !isNaN(n) && n >= 1 && n <= 12)
         : null;
-      const recurrenceMonthDay = monthDayRaw?.trim() ? (parseInt(monthDayRaw.trim()) || null) : null;
-      const recurrenceInterval = intervalRaw?.trim() ? (parseInt(intervalRaw.trim()) || null) : null;
-      const templateStatus = (["active", "review", "deprecated", "archived"].includes((statusRaw ?? "").trim()))
+      const recurrenceMonthDay = monthDayRaw?.trim() ? parseInt(monthDayRaw.trim()) || null : null;
+      const recurrenceInterval = intervalRaw?.trim() ? parseInt(intervalRaw.trim()) || null : null;
+      const templateStatus = ["active", "review", "deprecated", "archived"].includes(
+        (statusRaw ?? "").trim(),
+      )
         ? (statusRaw!.trim() as "active" | "review" | "deprecated" | "archived")
         : "active";
-      const inferredInheritMode = (inheritModeRaw?.trim() === "variant" || inheritModeRaw?.trim() === "copy")
-        ? inheritModeRaw.trim() as "copy" | "variant"
-        : null;
+      const inferredInheritMode =
+        inheritModeRaw?.trim() === "variant" || inheritModeRaw?.trim() === "copy"
+          ? (inheritModeRaw.trim() as "copy" | "variant")
+          : null;
 
-      const isDeliveryTask = (deliveryTaskRaw?.trim().toLowerCase() === "ja") || false;
+      const isDeliveryTask = deliveryTaskRaw?.trim().toLowerCase() === "ja" || false;
       // Leveransmallar och mallar med explicit "grundmall" i CSV sätts till "base"
       const csvTemplateType = templateTypeRaw?.trim().toLowerCase();
       const inferredTemplateType: "regular" | "base" =
@@ -2004,48 +2762,62 @@ function MallarPage() {
           : "regular";
       const csvTemplateMode = templateModeRaw?.trim().toLowerCase();
       const inferredTemplateMode: "batch_only" | "manual_only" | "both" =
-        csvTemplateMode === "batch_only" ? "batch_only"
-        : csvTemplateMode === "manual_only" ? "manual_only"
-        : "both";
-      const reviewIntervalMonths = reviewIntervalRaw?.trim() ? (parseInt(reviewIntervalRaw.trim()) || null) : null;
+        csvTemplateMode === "batch_only"
+          ? "batch_only"
+          : csvTemplateMode === "manual_only"
+            ? "manual_only"
+            : "both";
+      const reviewIntervalMonths = reviewIntervalRaw?.trim()
+        ? parseInt(reviewIntervalRaw.trim()) || null
+        : null;
 
-      const { data: tmpl } = await supabase.from("checklist_templates").insert({
-        title: title.trim(),
-        category: (category ?? "").trim(),
-        description: (description ?? "").trim(),
-        priority: (priority ?? "Medel").trim() || "Medel",
-        status: templateStatus,
-        version: 1,
-        template_type: inferredTemplateType,
-        template_mode: inferredTemplateMode,
-        recurrence_rule: recurrenceRule,
-        recurrence_days: recurrenceDays && recurrenceDays.length > 0 ? recurrenceDays : null,
-        recurrence_months: recurrenceMonths && recurrenceMonths.length > 0 ? recurrenceMonths : null,
-        recurrence_month_day: recurrenceMonthDay && !isNaN(recurrenceMonthDay) ? recurrenceMonthDay : null,
-        recurrence_interval: recurrenceInterval && recurrenceInterval > 1 ? recurrenceInterval : null,
-        recurrence_start: startDate?.trim() || null,
-        recurrence_end: endDate?.trim() || null,
-        due_date_offset: dueDays?.trim() ? (parseInt(dueDays.trim(), 10) || null) : null,
-        due_date_time: dueTime?.trim() || null,
-        parent_template_id: parentTemplateId?.trim() || null,
-        inherit_mode: inferredInheritMode,
-        created_by: user?.id ?? null,
-        hierarchy_scope: importScope,
-        is_global: importScope === "hk",
-        time_slots: timeSlotsRaw?.trim()
-          ? timeSlotsRaw.split("|").map(s => s.trim()).filter(Boolean)
-          : null,
-        sap_article_id: sapArticleIdRaw?.trim() || null,
-        forening_id: importScope === "forening" ? resolvedForeningId : null,
-        event_trigger_description: eventTriggerRaw?.trim() || null,
-        event_trigger_user_id: eventTriggerUserIdRaw?.trim() || null,
-        is_delivery_task: isDeliveryTask,
-        delivery_flow_name: deliveryFlowRaw?.trim() || null,
-        delivery_supplier_name: deliverySupplierRaw?.trim() || null,
-        depends_on_template_title: chainTitleRaw?.trim() || null,
-        review_interval_months: reviewIntervalMonths,
-        is_critical: isCriticalRaw?.trim().toLowerCase() === "ja",
-      }).select("id").maybeSingle();
+      const { data: tmpl } = await supabase
+        .from("checklist_templates")
+        .insert({
+          title: title.trim(),
+          category: (category ?? "").trim(),
+          description: (description ?? "").trim(),
+          priority: (priority ?? "Medel").trim() || "Medel",
+          status: templateStatus,
+          version: 1,
+          template_type: inferredTemplateType,
+          template_mode: inferredTemplateMode,
+          recurrence_rule: recurrenceRule,
+          recurrence_days: recurrenceDays && recurrenceDays.length > 0 ? recurrenceDays : null,
+          recurrence_months:
+            recurrenceMonths && recurrenceMonths.length > 0 ? recurrenceMonths : null,
+          recurrence_month_day:
+            recurrenceMonthDay && !isNaN(recurrenceMonthDay) ? recurrenceMonthDay : null,
+          recurrence_interval:
+            recurrenceInterval && recurrenceInterval > 1 ? recurrenceInterval : null,
+          recurrence_start: startDate?.trim() || null,
+          recurrence_end: endDate?.trim() || null,
+          due_date_offset: dueDays?.trim() ? parseInt(dueDays.trim(), 10) || null : null,
+          due_date_time: dueTime?.trim() || null,
+          parent_template_id: parentTemplateId?.trim() || null,
+          inherit_mode: inferredInheritMode,
+          created_by: user?.id ?? null,
+          hierarchy_scope: importScope,
+          is_global: importScope === "hk",
+          time_slots: timeSlotsRaw?.trim()
+            ? timeSlotsRaw
+                .split("|")
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : null,
+          sap_article_id: sapArticleIdRaw?.trim() || null,
+          forening_id: importScope === "forening" ? resolvedForeningId : null,
+          event_trigger_description: eventTriggerRaw?.trim() || null,
+          event_trigger_user_id: eventTriggerUserIdRaw?.trim() || null,
+          is_delivery_task: isDeliveryTask,
+          delivery_flow_name: deliveryFlowRaw?.trim() || null,
+          delivery_supplier_name: deliverySupplierRaw?.trim() || null,
+          depends_on_template_title: chainTitleRaw?.trim() || null,
+          review_interval_months: reviewIntervalMonths,
+          is_critical: isCriticalRaw?.trim().toLowerCase() === "ja",
+        })
+        .select("id")
+        .maybeSingle();
 
       if (!tmpl?.id) continue;
 
@@ -2055,61 +2827,100 @@ function MallarPage() {
       }
 
       if (stepsRaw?.trim()) {
-        const items = stepsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => {
-          const condMatch = part.match(/\[om:([^\]=]+)=([^\]]+)\]/i);
-          const urlMatch = part.match(/\[url:([^\]]+)\]/i);
-          const cleanLabel = part
-            .replace(/^\d+\.\s*/, "")
-            .replace(/\s*\[foto\]/i, "")
-            .replace(/\s*\[url:[^\]]+\]/i, "")
-            .replace(/\s*\[om:[^\]]+\]/i, "")
-            .trim();
-          return {
-            template_id: tmpl.id,
-            label: cleanLabel,
-            requires_photo: /\[foto\]/i.test(part),
-            link_url: urlMatch ? urlMatch[1].trim() : null,
-            condition_question_label: condMatch ? condMatch[1].trim() : null,
-            condition_answer: condMatch ? condMatch[2].trim() : null,
-            sort_order: idx,
-          };
-        });
+        const items = stepsRaw
+          .split("|")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((part, idx) => {
+            const condMatch = part.match(/\[om:([^\]=]+)=([^\]]+)\]/i);
+            const urlMatch = part.match(/\[url:([^\]]+)\]/i);
+            const cleanLabel = part
+              .replace(/^\d+\.\s*/, "")
+              .replace(/\s*\[foto\]/i, "")
+              .replace(/\s*\[url:[^\]]+\]/i, "")
+              .replace(/\s*\[om:[^\]]+\]/i, "")
+              .trim();
+            return {
+              template_id: tmpl.id,
+              label: cleanLabel,
+              requires_photo: /\[foto\]/i.test(part),
+              link_url: urlMatch ? urlMatch[1].trim() : null,
+              condition_question_label: condMatch ? condMatch[1].trim() : null,
+              condition_answer: condMatch ? condMatch[2].trim() : null,
+              sort_order: idx,
+            };
+          });
         if (items.length > 0) {
           // Insert items first without condition_question_id (resolve after questions are inserted)
-          const insertedItems = await supabase.from("checklist_template_items").insert(
-            items.map(({ condition_question_label: _cql, ...rest }) => rest)
-          ).select("id, sort_order");
+          const insertedItems = await supabase
+            .from("checklist_template_items")
+            .insert(items.map(({ condition_question_label: _cql, ...rest }) => rest))
+            .select("id, sort_order");
           // condition_question_id resolution done after questions insert below
           if (insertedItems.data) {
-            (tmpl as typeof tmpl & { _pendingConditions?: { itemSortOrder: number; questionLabel: string; answer: string }[] })._pendingConditions =
-              items
-                .filter(it => it.condition_question_label)
-                .map(it => ({ itemSortOrder: it.sort_order, questionLabel: it.condition_question_label!, answer: it.condition_answer! }));
+            (
+              tmpl as typeof tmpl & {
+                _pendingConditions?: {
+                  itemSortOrder: number;
+                  questionLabel: string;
+                  answer: string;
+                }[];
+              }
+            )._pendingConditions = items
+              .filter((it) => it.condition_question_label)
+              .map((it) => ({
+                itemSortOrder: it.sort_order,
+                questionLabel: it.condition_question_label!,
+                answer: it.condition_answer!,
+              }));
           }
         }
       }
 
       if (questionsRaw?.trim()) {
-        const questions = questionsRaw.split("|").map((s) => s.trim()).filter(Boolean).map((part, idx) => {
-          const urlMatch = part.match(/\[url:([^\]]+)\]/i);
-          return {
-            template_id: tmpl.id,
-            label: part.replace(/^\d+\.\s*/, "").replace(/\s*\[obligatorisk\]/i, "").replace(/\s*\[ja_nej\]/i, "").replace(/\s*\[url:[^\]]+\]/i, "").trim(),
-            question_type: /\[ja_nej\]/i.test(part) ? "yes_no" : "text",
-            is_required: /\[obligatorisk\]/i.test(part),
-            link_url: urlMatch ? urlMatch[1].trim() : null,
-            sort_order: idx,
-          };
-        });
+        const questions = questionsRaw
+          .split("|")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((part, idx) => {
+            const urlMatch = part.match(/\[url:([^\]]+)\]/i);
+            return {
+              template_id: tmpl.id,
+              label: part
+                .replace(/^\d+\.\s*/, "")
+                .replace(/\s*\[obligatorisk\]/i, "")
+                .replace(/\s*\[ja_nej\]/i, "")
+                .replace(/\s*\[url:[^\]]+\]/i, "")
+                .trim(),
+              question_type: /\[ja_nej\]/i.test(part) ? "yes_no" : "text",
+              is_required: /\[obligatorisk\]/i.test(part),
+              link_url: urlMatch ? urlMatch[1].trim() : null,
+              sort_order: idx,
+            };
+          });
         if (questions.length > 0) {
-          const { data: insertedQs } = await supabase.from("checklist_template_questions").insert(questions).select("id, label, sort_order");
+          const { data: insertedQs } = await supabase
+            .from("checklist_template_questions")
+            .insert(questions)
+            .select("id, label, sort_order");
           // Resolve condition_question_id for items that have pending conditions
-          const pending = (tmpl as typeof tmpl & { _pendingConditions?: { itemSortOrder: number; questionLabel: string; answer: string }[] })._pendingConditions;
+          const pending = (
+            tmpl as typeof tmpl & {
+              _pendingConditions?: {
+                itemSortOrder: number;
+                questionLabel: string;
+                answer: string;
+              }[];
+            }
+          )._pendingConditions;
           if (pending?.length && insertedQs?.length) {
             for (const cond of pending) {
-              const matchedQ = insertedQs.find(q => (q.label ?? "").toLowerCase() === cond.questionLabel.toLowerCase());
+              const matchedQ = insertedQs.find(
+                (q) => (q.label ?? "").toLowerCase() === cond.questionLabel.toLowerCase(),
+              );
               if (!matchedQ) continue;
-              await supabase.from("checklist_template_items")
+              await supabase
+                .from("checklist_template_items")
                 .update({ condition_question_id: matchedQ.id, condition_answer: cond.answer })
                 .eq("template_id", tmpl.id)
                 .eq("sort_order", cond.itemSortOrder);
@@ -2120,7 +2931,9 @@ function MallarPage() {
 
       // Assign to active store for store-scope templates
       if (importScope === "store" && activeStore) {
-        await supabase.from("template_stores").insert({ template_id: tmpl.id, store_id: activeStore.id });
+        await supabase
+          .from("template_stores")
+          .insert({ template_id: tmpl.id, store_id: activeStore.id });
       }
 
       // Assign to package if specified
@@ -2130,8 +2943,14 @@ function MallarPage() {
         const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
         let pkg = pkgCache.get(pkgKey);
         if (!pkg) {
-          const { data: newPkg } = await supabase.from("template_packages")
-            .insert({ name: pkgName, description: "", store_id: storeId, created_by: user?.id ?? null })
+          const { data: newPkg } = await supabase
+            .from("template_packages")
+            .insert({
+              name: pkgName,
+              description: "",
+              store_id: storeId,
+              created_by: user?.id ?? null,
+            })
             .select("id, name, description, store_id, created_by, created_at")
             .maybeSingle();
           if (newPkg) {
@@ -2151,7 +2970,10 @@ function MallarPage() {
         }
       }
 
-      logAudit(user?.id ?? null, "template.import", "checklist_templates", tmpl.id, { title: title.trim(), scope: importScope });
+      logAudit(user?.id ?? null, "template.import", "checklist_templates", tmpl.id, {
+        title: title.trim(),
+        scope: importScope,
+      });
     }
 
     await load();
@@ -2161,20 +2983,44 @@ function MallarPage() {
     if (importedDeliveryTemplates.length > 0) {
       const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
       if (storeId && deliveryWeekEntries.length > 0) {
-        setDeliveryMappingItems(importedDeliveryTemplates.map(t => ({ templateId: t.id, templateTitle: t.title, entryKeys: [] })));
+        setDeliveryMappingItems(
+          importedDeliveryTemplates.map((t) => ({
+            templateId: t.id,
+            templateTitle: t.title,
+            entryKeys: [],
+          })),
+        );
         setDeliveryMappingOpen(true);
       } else if (storeId) {
         // Fallback: fetch entries if deliveryWeekEntries not loaded yet
         const { data: entries } = await supabase
           .from("delivery_entries")
           .select("id, supplier, flow_name, delivery_time, delivery_day")
-          .eq("plan_id",
-            (await supabase.from("delivery_plans").select("id").eq("store_id", storeId).order("imported_at", { ascending: false }).limit(1).maybeSingle()).data?.id ?? ""
+          .eq(
+            "plan_id",
+            (
+              await supabase
+                .from("delivery_plans")
+                .select("id")
+                .eq("store_id", storeId)
+                .order("imported_at", { ascending: false })
+                .limit(1)
+                .maybeSingle()
+            ).data?.id ?? "",
           )
-          .order("delivery_day").order("delivery_time");
+          .order("delivery_day")
+          .order("delivery_time");
         if (entries && entries.length > 0) {
-          setDeliveryWeekEntries(prev => prev.length > 0 ? prev : (entries as typeof deliveryWeekEntries));
-          setDeliveryMappingItems(importedDeliveryTemplates.map(t => ({ templateId: t.id, templateTitle: t.title, entryKeys: [] })));
+          setDeliveryWeekEntries((prev) =>
+            prev.length > 0 ? prev : (entries as typeof deliveryWeekEntries),
+          );
+          setDeliveryMappingItems(
+            importedDeliveryTemplates.map((t) => ({
+              templateId: t.id,
+              templateTitle: t.title,
+              entryKeys: [],
+            })),
+          );
           setDeliveryMappingOpen(true);
         }
       }
@@ -2185,12 +3031,15 @@ function MallarPage() {
     setDeliveryMappingSaving(true);
     for (const item of deliveryMappingItems) {
       if (!item.entryKeys.length) continue;
-      const matched = deliveryWeekEntries.filter(e =>
-        item.entryKeys.includes(`${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`)
+      const matched = deliveryWeekEntries.filter((e) =>
+        item.entryKeys.includes(`${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`),
       );
-      const supplierNames = [...new Set(matched.map(e => e.supplier?.trim() ?? "").filter(Boolean))];
-      const flowNames = [...new Set(matched.map(e => e.flow_name?.trim() ?? "").filter(Boolean))];
-      await supabase.from("checklist_templates")
+      const supplierNames = [
+        ...new Set(matched.map((e) => e.supplier?.trim() ?? "").filter(Boolean)),
+      ];
+      const flowNames = [...new Set(matched.map((e) => e.flow_name?.trim() ?? "").filter(Boolean))];
+      await supabase
+        .from("checklist_templates")
         .update({
           delivery_supplier_name: supplierNames.join("|") || null,
           delivery_flow_name: flowNames.join("|") || null,
@@ -2205,9 +3054,9 @@ function MallarPage() {
   };
 
   // Unique categories from loaded templates
-  const allCategories = useMemo(() =>
-    [...new Set(templates.map((t) => t.category).filter(Boolean) as string[])].sort(),
-    [templates]
+  const allCategories = useMemo(
+    () => [...new Set(templates.map((t) => t.category).filter(Boolean) as string[])].sort(),
+    [templates],
   );
 
   // Apply search + category + priority filters
@@ -2216,7 +3065,13 @@ function MallarPage() {
     return templates.filter((t) => {
       if (filterCategory && t.category !== filterCategory) return false;
       if (filterPriority && t.priority !== filterPriority) return false;
-      if (q && !(t.title ?? "").toLowerCase().includes(q) && !(t.category ?? "").toLowerCase().includes(q) && !(t.description ?? "").toLowerCase().includes(q)) return false;
+      if (
+        q &&
+        !(t.title ?? "").toLowerCase().includes(q) &&
+        !(t.category ?? "").toLowerCase().includes(q) &&
+        !(t.description ?? "").toLowerCase().includes(q)
+      )
+        return false;
       return true;
     });
   }, [templates, search, filterCategory, filterPriority]);
@@ -2224,8 +3079,13 @@ function MallarPage() {
   // Templates grouped for display
   // Local variants (inherit_mode='variant', parent_template_id set) are nested under their parent — exclude from store group
   const variantTemplateIds = useMemo(
-    () => new Set(filteredTemplates.filter((t) => t.inherit_mode === "variant" && t.parent_template_id).map((t) => t.id)),
-    [filteredTemplates]
+    () =>
+      new Set(
+        filteredTemplates
+          .filter((t) => t.inherit_mode === "variant" && t.parent_template_id)
+          .map((t) => t.id),
+      ),
+    [filteredTemplates],
   );
   // Map from parent id → local variants owned by the current store
   const variantsByParent = useMemo(() => {
@@ -2240,43 +3100,72 @@ function MallarPage() {
     return map;
   }, [filteredTemplates]);
 
-  const hkTemplates = filteredTemplates.filter((t) => t.hierarchy_scope === "hk" || (t.is_global && !t.hierarchy_scope));
+  const hkTemplates = filteredTemplates.filter(
+    (t) => t.hierarchy_scope === "hk" || (t.is_global && !t.hierarchy_scope),
+  );
   const foreningTemplates = filteredTemplates.filter((t) => t.hierarchy_scope === "forening");
   // Exclude variants that have a visible parent — they'll be nested under the parent
   const parentIdsInView = useMemo(() => {
     const ids = new Set<string>();
     for (const t of filteredTemplates) {
-      if (t.hierarchy_scope === "hk" || t.is_global || t.hierarchy_scope === "forening") ids.add(t.id);
+      if (t.hierarchy_scope === "hk" || t.is_global || t.hierarchy_scope === "forening")
+        ids.add(t.id);
     }
     return ids;
   }, [filteredTemplates]);
   const storeTemplates = filteredTemplates.filter((t) => {
     if (t.hierarchy_scope && t.hierarchy_scope !== "store") return false;
     // Hide variants whose parent is visible in hk/forening groups (they render inline)
-    if (t.inherit_mode === "variant" && t.parent_template_id && parentIdsInView.has(t.parent_template_id)) return false;
+    if (
+      t.inherit_mode === "variant" &&
+      t.parent_template_id &&
+      parentIdsInView.has(t.parent_template_id)
+    )
+      return false;
     return true;
   });
 
-  const visibleGroups: { label: string; badge: string; badgeClass: string; items: TemplateWithMeta[] }[] = [];
+  const visibleGroups: {
+    label: string;
+    badge: string;
+    badgeClass: string;
+    items: TemplateWithMeta[];
+  }[] = [];
   if (viewFilter === "all" || viewFilter === "hk") {
     if (hkTemplates.length > 0 || viewFilter === "hk") {
-      visibleGroups.push({ label: "HK-mallar", badge: "HK", badgeClass: "border-blue-300 text-blue-600", items: hkTemplates });
+      visibleGroups.push({
+        label: "HK-mallar",
+        badge: "HK",
+        badgeClass: "border-blue-300 text-blue-600",
+        items: hkTemplates,
+      });
     }
   }
   if (viewFilter === "all" || viewFilter === "forening") {
     if (foreningTemplates.length > 0 || viewFilter === "forening") {
-      visibleGroups.push({ label: "Föreningsmallar", badge: "Förening", badgeClass: "border-teal-300 text-teal-600", items: foreningTemplates });
+      visibleGroups.push({
+        label: "Föreningsmallar",
+        badge: "Förening",
+        badgeClass: "border-teal-300 text-teal-600",
+        items: foreningTemplates,
+      });
     }
   }
   if (viewFilter === "all" || viewFilter === "store") {
     if (storeTemplates.length > 0 || viewFilter === "store") {
-      visibleGroups.push({ label: "Butiksmallar", badge: "Butik", badgeClass: "border-border text-muted-foreground", items: storeTemplates });
+      visibleGroups.push({
+        label: "Butiksmallar",
+        badge: "Butik",
+        badgeClass: "border-border text-muted-foreground",
+        items: storeTemplates,
+      });
     }
   }
 
   const getTemplateBadge = (t: TemplateWithMeta) => {
     const scope = t.hierarchy_scope ?? "store";
-    if (scope === "hk" || t.is_global) return { label: "HK-mall", cls: "border-blue-300 text-blue-600" };
+    if (scope === "hk" || t.is_global)
+      return { label: "HK-mall", cls: "border-blue-300 text-blue-600" };
     if (scope === "forening") {
       const f = allForeningar.find((x) => x.id === t.forening_id);
       return { label: `${f?.name ?? "Förening"}-mall`, cls: "border-teal-300 text-teal-600" };
@@ -2285,18 +3174,21 @@ function MallarPage() {
   };
 
   const getStatusBadge = (t: TemplateWithMeta) => {
-    const opt = TEMPLATE_STATUS_OPTIONS.find(o => o.value === (t.status ?? "active"));
+    const opt = TEMPLATE_STATUS_OPTIONS.find((o) => o.value === (t.status ?? "active"));
     return opt ?? TEMPLATE_STATUS_OPTIONS[0];
   };
 
   const isHiddenForMyForening = (t: TemplateWithMeta) =>
-    !!(user?.forening_id && hiddenEntries.some((h) => h.template_id === t.id && h.forening_id === user.forening_id));
+    !!(
+      user?.forening_id &&
+      hiddenEntries.some((h) => h.template_id === t.id && h.forening_id === user.forening_id)
+    );
 
   // Shared form panels rendered for both create and edit dialogs
   function renderFormContent(
     f: FormState,
     setF: React.Dispatch<React.SetStateAction<FormState>>,
-    scope: "store" | "hk" | "forening"
+    scope: "store" | "hk" | "forening",
   ) {
     return (
       <div className="flex overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
@@ -2318,19 +3210,27 @@ function MallarPage() {
 
           {/* Steg */}
           <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Steg</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Steg
+            </p>
             <div className="space-y-1.5">
               {f.items.map((item, idx) => {
-                const yesNoQuestions = f.questions.filter(q => q.question_type === "yes_no" && q.label.trim());
+                const yesNoQuestions = f.questions.filter(
+                  (q) => q.question_type === "yes_no" && q.label.trim(),
+                );
                 return (
-                  <div key={idx} className="rounded-lg border border-border/50 bg-muted/20 transition-colors hover:bg-muted/40">
+                  <div
+                    key={idx}
+                    className="rounded-lg border border-border/50 bg-muted/20 transition-colors hover:bg-muted/40"
+                  >
                     <div className="group flex items-center gap-2 px-3 py-2">
                       <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/30" />
                       <Input
                         placeholder={`Steg ${idx + 1}`}
                         value={item.label}
                         onChange={(e) => {
-                          const items = [...f.items]; items[idx] = { ...items[idx], label: e.target.value };
+                          const items = [...f.items];
+                          items[idx] = { ...items[idx], label: e.target.value };
                           setF((p) => ({ ...p, items }));
                         }}
                         className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0"
@@ -2339,7 +3239,8 @@ function MallarPage() {
                         <Checkbox
                           checked={item.requires_photo}
                           onCheckedChange={(v) => {
-                            const items = [...f.items]; items[idx] = { ...items[idx], requires_photo: !!v };
+                            const items = [...f.items];
+                            items[idx] = { ...items[idx], requires_photo: !!v };
                             setF((p) => ({ ...p, items }));
                           }}
                           className="h-3 w-3"
@@ -2350,24 +3251,37 @@ function MallarPage() {
                         placeholder="URL"
                         value={item.link_url ?? ""}
                         onChange={(e) => {
-                          const items = [...f.items]; items[idx] = { ...items[idx], link_url: e.target.value };
+                          const items = [...f.items];
+                          items[idx] = { ...items[idx], link_url: e.target.value };
                           setF((p) => ({ ...p, items }));
                         }}
                         onBlur={(e) => {
                           const v = ensureHttps(e.target.value);
-                          if (v !== (item.link_url ?? "")) { const items = [...f.items]; items[idx] = { ...items[idx], link_url: v }; setF((p) => ({ ...p, items })); }
+                          if (v !== (item.link_url ?? "")) {
+                            const items = [...f.items];
+                            items[idx] = { ...items[idx], link_url: v };
+                            setF((p) => ({ ...p, items }));
+                          }
                         }}
                         className="w-24 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40"
                       />
                       {item.link_url && (
-                        <a href={item.link_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="shrink-0 text-primary hover:text-primary/70">
+                        <a
+                          href={item.link_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="shrink-0 text-primary hover:text-primary/70"
+                        >
                           <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                       )}
                       <button
                         type="button"
                         className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => setF((p) => ({ ...p, items: p.items.filter((_, i) => i !== idx) }))}
+                        onClick={() =>
+                          setF((p) => ({ ...p, items: p.items.filter((_, i) => i !== idx) }))
+                        }
                         disabled={f.items.length === 1}
                       >
                         <X className="h-3.5 w-3.5 text-muted-foreground/60" />
@@ -2381,7 +3295,12 @@ function MallarPage() {
                           value={item.condition_question_id ?? "__none"}
                           onValueChange={(v) => {
                             const items = [...f.items];
-                            items[idx] = { ...items[idx], condition_question_id: v === "__none" ? undefined : v, condition_answer: v === "__none" ? undefined : (items[idx].condition_answer ?? "ja") };
+                            items[idx] = {
+                              ...items[idx],
+                              condition_question_id: v === "__none" ? undefined : v,
+                              condition_answer:
+                                v === "__none" ? undefined : (items[idx].condition_answer ?? "ja"),
+                            };
                             setF((p) => ({ ...p, items }));
                           }}
                         >
@@ -2391,7 +3310,9 @@ function MallarPage() {
                           <SelectContent>
                             <SelectItem value="__none">Alltid (ingen villkor)</SelectItem>
                             {yesNoQuestions.map((q, qi) => (
-                              <SelectItem key={qi} value={q.id ?? `q-${qi}`}>{q.label}</SelectItem>
+                              <SelectItem key={qi} value={q.id ?? `q-${qi}`}>
+                                {q.label}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -2422,7 +3343,12 @@ function MallarPage() {
             <button
               type="button"
               className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-              onClick={() => setF((p) => ({ ...p, items: [...p.items, { label: "", requires_photo: false, link_url: "" }] }))}
+              onClick={() =>
+                setF((p) => ({
+                  ...p,
+                  items: [...p.items, { label: "", requires_photo: false, link_url: "" }],
+                }))
+              }
             >
               <Plus className="h-3.5 w-3.5" /> Lägg till steg
             </button>
@@ -2430,21 +3356,32 @@ function MallarPage() {
 
           {/* Frågor */}
           <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Frågor</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Frågor
+            </p>
             <div className="space-y-2">
               {f.questions.map((q, idx) => (
-                <div key={idx} className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2">
+                <div
+                  key={idx}
+                  className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2"
+                >
                   <div className="flex items-center gap-2">
                     <Input
                       placeholder={`Fråga ${idx + 1}`}
                       value={q.label}
                       onChange={(e) => {
-                        const qs = [...f.questions]; qs[idx] = { ...qs[idx], label: e.target.value };
+                        const qs = [...f.questions];
+                        qs[idx] = { ...qs[idx], label: e.target.value };
                         setF((p) => ({ ...p, questions: qs }));
                       }}
                       className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0"
                     />
-                    <button type="button" onClick={() => setF((p) => ({ ...p, questions: p.questions.filter((_, i) => i !== idx) }))}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setF((p) => ({ ...p, questions: p.questions.filter((_, i) => i !== idx) }))
+                      }
+                    >
                       <X className="h-3.5 w-3.5 text-muted-foreground/50" />
                     </button>
                   </div>
@@ -2453,12 +3390,28 @@ function MallarPage() {
                     <Input
                       placeholder="URL (valfri länk)"
                       value={q.link_url ?? ""}
-                      onChange={(e) => { const qs = [...f.questions]; qs[idx] = { ...qs[idx], link_url: e.target.value }; setF((p) => ({ ...p, questions: qs })); }}
-                      onBlur={(e) => { const v = ensureHttps(e.target.value); if (v !== (q.link_url ?? "")) { const qs = [...f.questions]; qs[idx] = { ...qs[idx], link_url: v }; setF((p) => ({ ...p, questions: qs })); } }}
+                      onChange={(e) => {
+                        const qs = [...f.questions];
+                        qs[idx] = { ...qs[idx], link_url: e.target.value };
+                        setF((p) => ({ ...p, questions: qs }));
+                      }}
+                      onBlur={(e) => {
+                        const v = ensureHttps(e.target.value);
+                        if (v !== (q.link_url ?? "")) {
+                          const qs = [...f.questions];
+                          qs[idx] = { ...qs[idx], link_url: v };
+                          setF((p) => ({ ...p, questions: qs }));
+                        }
+                      }}
                       className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-muted-foreground/40"
                     />
                     {q.link_url && (
-                      <a href={q.link_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary hover:text-primary/70">
+                      <a
+                        href={q.link_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 text-primary hover:text-primary/70"
+                      >
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
                     )}
@@ -2466,10 +3419,21 @@ function MallarPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex gap-1">
                       {(["text", "yes_no"] as const).map((type) => (
-                        <button key={type} type="button"
-                          className={cn("rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
-                            (q.question_type ?? "text") === type ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
-                          onClick={() => { const qs = [...f.questions]; qs[idx] = { ...qs[idx], question_type: type }; setF((p) => ({ ...p, questions: qs })); }}>
+                        <button
+                          key={type}
+                          type="button"
+                          className={cn(
+                            "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+                            (q.question_type ?? "text") === type
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "border-border/60 text-muted-foreground hover:border-primary/50",
+                          )}
+                          onClick={() => {
+                            const qs = [...f.questions];
+                            qs[idx] = { ...qs[idx], question_type: type };
+                            setF((p) => ({ ...p, questions: qs }));
+                          }}
+                        >
                           {type === "text" ? "Text" : "Ja/Nej"}
                         </button>
                       ))}
@@ -2477,7 +3441,11 @@ function MallarPage() {
                     <label className="flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer">
                       <Checkbox
                         checked={q.is_required}
-                        onCheckedChange={(v) => { const qs = [...f.questions]; qs[idx] = { ...qs[idx], is_required: !!v }; setF((p) => ({ ...p, questions: qs })); }}
+                        onCheckedChange={(v) => {
+                          const qs = [...f.questions];
+                          qs[idx] = { ...qs[idx], is_required: !!v };
+                          setF((p) => ({ ...p, questions: qs }));
+                        }}
                         className="h-3 w-3"
                       />
                       Obligatorisk
@@ -2489,7 +3457,15 @@ function MallarPage() {
             <button
               type="button"
               className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-              onClick={() => setF((p) => ({ ...p, questions: [...p.questions, { label: "", question_type: "text", is_required: false, link_url: "" }] }))}
+              onClick={() =>
+                setF((p) => ({
+                  ...p,
+                  questions: [
+                    ...p.questions,
+                    { label: "", question_type: "text", is_required: false, link_url: "" },
+                  ],
+                }))
+              }
             >
               <Plus className="h-3.5 w-3.5" /> Lägg till fråga
             </button>
@@ -2499,7 +3475,6 @@ function MallarPage() {
         {/* RIGHT: Properties sidebar */}
         <div className="w-64 shrink-0 overflow-y-auto border-l border-border/60 bg-muted/30">
           <div className="divide-y divide-border/50 pb-16">
-
             {/* Malltyp */}
             <div className="px-4 py-3 space-y-2">
               <span className="text-xs font-medium text-muted-foreground">Malltyp</span>
@@ -2514,7 +3489,7 @@ function MallarPage() {
                         ? type === "base"
                           ? "bg-amber-500 text-white border-amber-500"
                           : "bg-primary text-primary-foreground border-primary"
-                        : "border-border/60 text-muted-foreground hover:border-primary/40"
+                        : "border-border/60 text-muted-foreground hover:border-primary/40",
                     )}
                     onClick={() => setF((p) => ({ ...p, template_type: type }))}
                   >
@@ -2536,7 +3511,12 @@ function MallarPage() {
               </div>
               <div className="flex flex-col gap-1 min-w-0 flex-1">
                 <span className="text-xs text-muted-foreground">Kategori</span>
-                <Input placeholder="t.ex. Rengöring" value={f.category} onChange={(e) => setF((p) => ({ ...p, category: e.target.value }))} className="h-7 border border-border/60 text-xs" />
+                <Input
+                  placeholder="t.ex. Rengöring"
+                  value={f.category}
+                  onChange={(e) => setF((p) => ({ ...p, category: e.target.value }))}
+                  className="h-7 border border-border/60 text-xs"
+                />
               </div>
             </div>
 
@@ -2544,9 +3524,20 @@ function MallarPage() {
             <div className="flex items-center gap-3 px-4 py-3">
               <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
               <span className="w-20 shrink-0 text-xs text-muted-foreground">Prioritet</span>
-              <Select value={f.priority} onValueChange={(v) => setF((p) => ({ ...p, priority: v }))}>
-                <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs font-medium shadow-none focus:ring-0 justify-end"><SelectValue /></SelectTrigger>
-                <SelectContent>{["Låg", "Medel", "Hög", "Kritisk"].map((pr) => <SelectItem key={pr} value={pr}>{pr}</SelectItem>)}</SelectContent>
+              <Select
+                value={f.priority}
+                onValueChange={(v) => setF((p) => ({ ...p, priority: v }))}
+              >
+                <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs font-medium shadow-none focus:ring-0 justify-end">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["Låg", "Medel", "Hög", "Kritisk"].map((pr) => (
+                    <SelectItem key={pr} value={pr}>
+                      {pr}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
 
@@ -2554,10 +3545,19 @@ function MallarPage() {
             <div className="flex items-center gap-3 px-4 py-3">
               <CheckCircle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
               <span className="w-20 shrink-0 text-xs text-muted-foreground">Status</span>
-              <Select value={f.status} onValueChange={(v) => setF((p) => ({ ...p, status: v as FormState["status"] }))}>
-                <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs font-medium shadow-none focus:ring-0 justify-end"><SelectValue /></SelectTrigger>
+              <Select
+                value={f.status}
+                onValueChange={(v) => setF((p) => ({ ...p, status: v as FormState["status"] }))}
+              >
+                <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs font-medium shadow-none focus:ring-0 justify-end">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  {TEMPLATE_STATUS_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  {TEMPLATE_STATUS_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -2568,7 +3568,9 @@ function MallarPage() {
                 <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 <div className="flex flex-col gap-1 flex-1 min-w-0">
                   <span className="text-xs text-muted-foreground">Förfaller om (dagar)</span>
-                  <span className="text-xs text-muted-foreground/60 italic">Bestäms av leveransschemat</span>
+                  <span className="text-xs text-muted-foreground/60 italic">
+                    Bestäms av leveransschemat
+                  </span>
                 </div>
               </div>
             ) : (
@@ -2576,7 +3578,14 @@ function MallarPage() {
                 <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 <div className="flex flex-col gap-1 flex-1 min-w-0">
                   <span className="text-xs text-muted-foreground">Förfaller om (dagar)</span>
-                  <Input type="number" min={0} placeholder="t.ex. 1" value={f.due_date_offset} onChange={(e) => setF((p) => ({ ...p, due_date_offset: e.target.value }))} className="h-7 border border-border/60 text-xs" />
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="t.ex. 1"
+                    value={f.due_date_offset}
+                    onChange={(e) => setF((p) => ({ ...p, due_date_offset: e.target.value }))}
+                    className="h-7 border border-border/60 text-xs"
+                  />
                 </div>
               </div>
             )}
@@ -2587,7 +3596,9 @@ function MallarPage() {
                 <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 <div className="flex flex-col gap-1 flex-1 min-w-0">
                   <span className="text-xs text-muted-foreground">Förfallotid (HH:MM)</span>
-                  <span className="text-xs text-muted-foreground/60 italic">Bestäms av leveransschemat</span>
+                  <span className="text-xs text-muted-foreground/60 italic">
+                    Bestäms av leveransschemat
+                  </span>
                 </div>
               </div>
             ) : (
@@ -2595,7 +3606,12 @@ function MallarPage() {
                 <Clock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 <div className="flex flex-col gap-1 flex-1 min-w-0">
                   <span className="text-xs text-muted-foreground">Förfallotid (HH:MM)</span>
-                  <Input type="time" value={f.due_date_time} onChange={(e) => setF((p) => ({ ...p, due_date_time: e.target.value }))} className="h-7 border border-border/60 text-xs" />
+                  <Input
+                    type="time"
+                    value={f.due_date_time}
+                    onChange={(e) => setF((p) => ({ ...p, due_date_time: e.target.value }))}
+                    className="h-7 border border-border/60 text-xs"
+                  />
                 </div>
               </div>
             )}
@@ -2605,14 +3621,24 @@ function MallarPage() {
               <div className="flex items-center gap-2">
                 <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 <span className="text-xs text-muted-foreground shrink-0">
-                  {mallArticleType === "ean" ? "EAN" : mallArticleType === "bnr" ? "BNR" : "Materialnummer"}
+                  {mallArticleType === "ean"
+                    ? "EAN"
+                    : mallArticleType === "bnr"
+                      ? "BNR"
+                      : "Materialnummer"}
                 </span>
                 <div className="flex flex-1 items-center gap-1 min-w-0">
                   <input
                     value={f.sap_article_id}
-                    onChange={(e) => setF((p) => ({ ...p, sap_article_id: e.target.value.replace(/\D/g, "") }))}
-                    onBlur={(e) => { if (e.target.value.trim()) setMallArticlePrompt(e.target.value.trim()); }}
-                    placeholder={mallArticleType === "ean" ? "t.ex. 7310865003294" : "t.ex. 1047133"}
+                    onChange={(e) =>
+                      setF((p) => ({ ...p, sap_article_id: e.target.value.replace(/\D/g, "") }))
+                    }
+                    onBlur={(e) => {
+                      if (e.target.value.trim()) setMallArticlePrompt(e.target.value.trim());
+                    }}
+                    placeholder={
+                      mallArticleType === "ean" ? "t.ex. 7310865003294" : "t.ex. 1047133"
+                    }
                     inputMode="numeric"
                     pattern="[0-9]*"
                     autoCorrect="off"
@@ -2630,30 +3656,46 @@ function MallarPage() {
                     <option value="bnr">BNR</option>
                   </select>
                   {f.sap_article_id && (
-                    <button type="button" onClick={() => setF((p) => ({ ...p, sap_article_id: "" }))} className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/60 hover:text-destructive shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setF((p) => ({ ...p, sap_article_id: "" }))}
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/60 hover:text-destructive shrink-0"
+                    >
                       <X className="h-3 w-3" />
                     </button>
                   )}
                 </div>
               </div>
-              {f.sap_article_id && (() => {
-                const url = mallArticleType === "mat-nr"
-                  ? (mittCoopUrl(f.sap_article_id, activeStore?.sap_site_id ?? null) ?? `https://mittcoop.coop.se/sortiment/articles/${f.sap_article_id.trim()}`)
-                  : mittCoopSearchUrl(f.sap_article_id, activeStore?.sap_site_id ?? null);
-                return url ? (
-                  <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
-                    <ExternalLink className="h-3 w-3" />
-                    Öppna i Mitt Coop-sortiment
-                  </a>
-                ) : null;
-              })()}
+              {f.sap_article_id &&
+                (() => {
+                  const url =
+                    mallArticleType === "mat-nr"
+                      ? (mittCoopUrl(f.sap_article_id, activeStore?.sap_site_id ?? null) ??
+                        `https://mittcoop.coop.se/sortiment/articles/${f.sap_article_id.trim()}`)
+                      : mittCoopSearchUrl(f.sap_article_id, activeStore?.sap_site_id ?? null);
+                  return url ? (
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Öppna i Mitt Coop-sortiment
+                    </a>
+                  ) : null;
+                })()}
             </div>
             <div className="px-4 py-3 space-y-2">
               <div className="flex items-center gap-2">
                 <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                <span className="text-xs text-muted-foreground flex-1">Tidsluckor (fleruppgifter)</span>
+                <span className="text-xs text-muted-foreground flex-1">
+                  Tidsluckor (fleruppgifter)
+                </span>
               </div>
-              <p className="text-[11px] text-muted-foreground/70 pl-6">Genererar en separat uppgift för varje tid per period.</p>
+              <p className="text-[11px] text-muted-foreground/70 pl-6">
+                Genererar en separat uppgift för varje tid per period.
+              </p>
               <div className="space-y-1.5 pl-6">
                 {(f.time_slots ?? []).map((slot, idx) => (
                   <div key={idx} className="flex items-center gap-1.5">
@@ -2667,7 +3709,15 @@ function MallarPage() {
                       }}
                       className="h-7 flex-1 border border-border/60 text-xs"
                     />
-                    <button type="button" onClick={() => setF((p) => ({ ...p, time_slots: (p.time_slots ?? []).filter((_, i) => i !== idx) }))}>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setF((p) => ({
+                          ...p,
+                          time_slots: (p.time_slots ?? []).filter((_, i) => i !== idx),
+                        }))
+                      }
+                    >
                       <X className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-destructive" />
                     </button>
                   </div>
@@ -2675,7 +3725,9 @@ function MallarPage() {
                 <button
                   type="button"
                   className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
-                  onClick={() => setF((p) => ({ ...p, time_slots: [...(p.time_slots ?? []), "08:00"] }))}
+                  onClick={() =>
+                    setF((p) => ({ ...p, time_slots: [...(p.time_slots ?? []), "08:00"] }))
+                  }
                 >
                   <Plus className="h-3 w-3" /> Lägg till tid
                 </button>
@@ -2688,11 +3740,33 @@ function MallarPage() {
                 <Repeat className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 <span className="w-20 shrink-0 text-xs text-muted-foreground">Återkommande</span>
                 {f.is_delivery_task ? (
-                  <span className="flex-1 text-xs text-right text-muted-foreground/60 italic">Bestäms av leveransschemat</span>
+                  <span className="flex-1 text-xs text-right text-muted-foreground/60 italic">
+                    Bestäms av leveransschemat
+                  </span>
                 ) : (
-                  <Select value={f.recurrence_rule || "__none"} onValueChange={(v) => setF((p) => ({ ...p, recurrence_rule: v === "__none" ? "" : v, recurrence_interval: 1 }))}>
-                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end"><SelectValue placeholder="Ingen" /></SelectTrigger>
-                    <SelectContent>{RECURRENCE_OPTIONS.map((o) => <SelectItem key={o.value === "" ? "__none" : o.value} value={o.value === "" ? "__none" : o.value}>{o.label}</SelectItem>)}</SelectContent>
+                  <Select
+                    value={f.recurrence_rule || "__none"}
+                    onValueChange={(v) =>
+                      setF((p) => ({
+                        ...p,
+                        recurrence_rule: v === "__none" ? "" : v,
+                        recurrence_interval: 1,
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="flex-1 h-7 border-0 bg-transparent p-0 text-xs shadow-none focus:ring-0 justify-end">
+                      <SelectValue placeholder="Ingen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RECURRENCE_OPTIONS.map((o) => (
+                        <SelectItem
+                          key={o.value === "" ? "__none" : o.value}
+                          value={o.value === "" ? "__none" : o.value}
+                        >
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                 )}
               </div>
@@ -2700,9 +3774,16 @@ function MallarPage() {
                 <div className="flex items-center gap-2 pl-7">
                   <span className="text-[11px] text-muted-foreground">Var</span>
                   <input
-                    type="number" min={1} max={365}
+                    type="number"
+                    min={1}
+                    max={365}
                     value={f.recurrence_interval}
-                    onChange={(e) => setF((p) => ({ ...p, recurrence_interval: Math.max(1, parseInt(e.target.value) || 1) }))}
+                    onChange={(e) =>
+                      setF((p) => ({
+                        ...p,
+                        recurrence_interval: Math.max(1, parseInt(e.target.value) || 1),
+                      }))
+                    }
                     className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
                   />
                   <span className="text-[11px] text-muted-foreground">dag(ar)</span>
@@ -2712,19 +3793,30 @@ function MallarPage() {
                 <div className="pl-7 space-y-1.5">
                   <div className="flex flex-wrap gap-1">
                     {WEEKDAYS.map((day, idx) => (
-                      <button key={idx} type="button"
-                        className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
-                          f.recurrence_days.includes(idx) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                      <button
+                        key={idx}
+                        type="button"
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                          f.recurrence_days.includes(idx)
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "border-border/60 text-muted-foreground hover:border-primary/50",
+                        )}
                         onClick={() => {
-                          const days = f.recurrence_days.includes(idx) ? f.recurrence_days.filter((d) => d !== idx) : [...f.recurrence_days, idx];
+                          const days = f.recurrence_days.includes(idx)
+                            ? f.recurrence_days.filter((d) => d !== idx)
+                            : [...f.recurrence_days, idx];
                           setF((p) => ({ ...p, recurrence_days: days }));
-                        }}>
+                        }}
+                      >
                         {day}
                       </button>
                     ))}
                   </div>
                   {f.recurrence_rule === "biweekly" && (
-                    <p className="text-[11px] text-muted-foreground">Upprepas varannan vecka på valda dagar.</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Upprepas varannan vecka på valda dagar.
+                    </p>
                   )}
                 </div>
               )}
@@ -2732,9 +3824,19 @@ function MallarPage() {
                 <div className="flex items-center gap-2 pl-7">
                   <span className="text-[11px] text-muted-foreground">Dag i månaden</span>
                   <input
-                    type="number" min={1} max={31}
+                    type="number"
+                    min={1}
+                    max={31}
                     value={f.recurrence_month_day}
-                    onChange={(e) => setF((p) => ({ ...p, recurrence_month_day: Math.min(31, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                    onChange={(e) =>
+                      setF((p) => ({
+                        ...p,
+                        recurrence_month_day: Math.min(
+                          31,
+                          Math.max(1, parseInt(e.target.value) || 1),
+                        ),
+                      }))
+                    }
                     className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
                   />
                 </div>
@@ -2745,15 +3847,26 @@ function MallarPage() {
                   <div className="space-y-1">
                     {QUARTER_MONTHS.map(({ q, months }) => (
                       <div key={q} className="flex items-center gap-1">
-                        <span className="text-[11px] font-medium text-muted-foreground w-6">{q}</span>
-                        {months.map(m => (
-                          <button key={m} type="button"
-                            className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
-                              f.recurrence_months.includes(m) ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50")}
+                        <span className="text-[11px] font-medium text-muted-foreground w-6">
+                          {q}
+                        </span>
+                        {months.map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                              f.recurrence_months.includes(m)
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "border-border/60 text-muted-foreground hover:border-primary/50",
+                            )}
                             onClick={() => {
-                              const ms = f.recurrence_months.includes(m) ? f.recurrence_months.filter(x => x !== m) : [...f.recurrence_months, m];
+                              const ms = f.recurrence_months.includes(m)
+                                ? f.recurrence_months.filter((x) => x !== m)
+                                : [...f.recurrence_months, m];
                               setF((p) => ({ ...p, recurrence_months: ms }));
-                            }}>
+                            }}
+                          >
                             {MONTHS_SV[m]}
                           </button>
                         ))}
@@ -2763,9 +3876,19 @@ function MallarPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] text-muted-foreground">Dag i månaden</span>
                     <input
-                      type="number" min={1} max={31}
+                      type="number"
+                      min={1}
+                      max={31}
                       value={f.recurrence_month_day}
-                      onChange={(e) => setF((p) => ({ ...p, recurrence_month_day: Math.min(31, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                      onChange={(e) =>
+                        setF((p) => ({
+                          ...p,
+                          recurrence_month_day: Math.min(
+                            31,
+                            Math.max(1, parseInt(e.target.value) || 1),
+                          ),
+                        }))
+                      }
                       className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
                     />
                   </div>
@@ -2779,11 +3902,22 @@ function MallarPage() {
             {scope === "forening" && isAdmin && (
               <div className="px-4 py-3 space-y-1">
                 <span className="text-xs text-muted-foreground">Publicera till förening</span>
-                <Select value={f.foreningId || "__none"} onValueChange={(v) => setF((p) => ({ ...p, foreningId: v === "__none" ? "" : v }))}>
-                  <SelectTrigger className="h-7 border border-border/60 text-xs"><SelectValue placeholder="Välj förening" /></SelectTrigger>
+                <Select
+                  value={f.foreningId || "__none"}
+                  onValueChange={(v) =>
+                    setF((p) => ({ ...p, foreningId: v === "__none" ? "" : v }))
+                  }
+                >
+                  <SelectTrigger className="h-7 border border-border/60 text-xs">
+                    <SelectValue placeholder="Välj förening" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none">Välj förening</SelectItem>
-                    {allForeningar.map((f2) => <SelectItem key={f2.id} value={f2.id}>{f2.name}</SelectItem>)}
+                    {allForeningar.map((f2) => (
+                      <SelectItem key={f2.id} value={f2.id}>
+                        {f2.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -2796,7 +3930,10 @@ function MallarPage() {
                   <span className="text-xs font-medium text-muted-foreground">Låst</span>
                   <p className="text-[10px] text-muted-foreground/60">Chefer kan inte redigera</p>
                 </div>
-                <Switch checked={f.isLocked} onCheckedChange={(v) => setF((p) => ({ ...p, isLocked: v }))} />
+                <Switch
+                  checked={f.isLocked}
+                  onCheckedChange={(v) => setF((p) => ({ ...p, isLocked: v }))}
+                />
               </div>
             )}
 
@@ -2807,116 +3944,180 @@ function MallarPage() {
                   <span className="text-xs font-medium text-muted-foreground">Kritisk rutin</span>
                   <p className="text-[10px] text-muted-foreground/60">Stoppas aldrig automatiskt</p>
                 </div>
-                <Switch checked={f.is_critical} onCheckedChange={(v) => setF((p) => ({ ...p, is_critical: v }))} />
+                <Switch
+                  checked={f.is_critical}
+                  onCheckedChange={(v) => setF((p) => ({ ...p, is_critical: v }))}
+                />
               </div>
             )}
 
             {/* Händelsevillkor — only for store-scope templates */}
-            {scope === "store" && <div className="px-4 py-3 space-y-1">
-              <div className="flex items-center gap-2">
-                <Zap className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                <span className="text-xs text-muted-foreground">Händelsevillkor</span>
-              </div>
-              <p className="text-[11px] text-muted-foreground/60 pl-6">Uppgiften döljs tills händelsen bekräftas.</p>
-              <Input
-                placeholder="t.ex. Truck lossat"
-                value={f.event_trigger_description}
-                onChange={(e) => setF((p) => ({ ...p, event_trigger_description: e.target.value }))}
-                className="h-7 border border-border/60 text-xs"
-              />
-              {f.event_trigger_description && (
-                <div className="pl-0 space-y-1 pt-1">
-                  <span className="text-[11px] text-muted-foreground/70">Bekräftas av</span>
-                  <Select
-                    value={f.event_trigger_user_id || "__any"}
-                    onValueChange={(v) => setF((p) => ({ ...p, event_trigger_user_id: v === "__any" ? "" : v }))}
-                  >
-                    <SelectTrigger className="h-7 text-xs border-border/60">
-                      <SelectValue placeholder="Vem som helst" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__any">Vem som helst</SelectItem>
-                      {allUsers.filter(u => !activeStore || u.store_id === activeStore.id).map((u) => (
-                        <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            {scope === "store" && (
+              <div className="px-4 py-3 space-y-1">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                  <span className="text-xs text-muted-foreground">Händelsevillkor</span>
                 </div>
-              )}
-            </div>}
+                <p className="text-[11px] text-muted-foreground/60 pl-6">
+                  Uppgiften döljs tills händelsen bekräftas.
+                </p>
+                <Input
+                  placeholder="t.ex. Truck lossat"
+                  value={f.event_trigger_description}
+                  onChange={(e) =>
+                    setF((p) => ({ ...p, event_trigger_description: e.target.value }))
+                  }
+                  className="h-7 border border-border/60 text-xs"
+                />
+                {f.event_trigger_description && (
+                  <div className="pl-0 space-y-1 pt-1">
+                    <span className="text-[11px] text-muted-foreground/70">Bekräftas av</span>
+                    <Select
+                      value={f.event_trigger_user_id || "__any"}
+                      onValueChange={(v) =>
+                        setF((p) => ({ ...p, event_trigger_user_id: v === "__any" ? "" : v }))
+                      }
+                    >
+                      <SelectTrigger className="h-7 text-xs border-border/60">
+                        <SelectValue placeholder="Vem som helst" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__any">Vem som helst</SelectItem>
+                        {allUsers
+                          .filter((u) => !activeStore || u.store_id === activeStore.id)
+                          .map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.display_name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Leveransuppgift — only for store-scope templates */}
-            {scope === "store" && <div className="px-4 py-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Truck className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="text-xs text-muted-foreground">Leveransuppgift</span>
-                </div>
-                <Switch
-                  checked={f.is_delivery_task}
-                  onCheckedChange={(v) => setF((p) => ({ ...p, is_delivery_task: v }))}
-                />
-              </div>
-              {f.is_delivery_task && (
-                <div className="pl-6 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-muted-foreground">Koppla till leveranser</span>
-                    {deliveryWeekEntries.length > 1 && (
-                      <button
-                        type="button"
-                        className="text-[11px] text-primary hover:underline"
-                        onClick={() => {
-                          const allKeys = deliveryWeekEntries.map(e => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`);
-                          const currentKeys = new Set(parseEntryKeys(f.delivery_entry_keys ?? ""));
-                          const allSelected = allKeys.every(k => currentKeys.has(k));
-                          if (allSelected) {
-                            setF(p => ({ ...p, delivery_entry_keys: "", delivery_supplier_name: "", delivery_flow_name: "" }));
-                          } else {
-                            const allSupp = [...new Set(deliveryWeekEntries.map(e => e.supplier?.trim() ?? "").filter(Boolean))];
-                            const allFlow = [...new Set(deliveryWeekEntries.map(e => e.flow_name?.trim() ?? "").filter(Boolean))];
-                            setF(p => ({ ...p, delivery_entry_keys: allKeys.join("|"), delivery_supplier_name: allSupp.join("|"), delivery_flow_name: allFlow.join("|") }));
-                          }
-                        }}
-                      >
-                        {(() => {
-                          const currentKeys = new Set(parseEntryKeys(f.delivery_entry_keys ?? ""));
-                          return deliveryWeekEntries.every(e => currentKeys.has(`${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`))
-                            ? "Avmarkera alla" : "Välj alla";
-                        })()}
-                      </button>
-                    )}
+            {scope === "store" && (
+              <div className="px-4 py-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Truck className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                    <span className="text-xs text-muted-foreground">Leveransuppgift</span>
                   </div>
-                  {deliveryWeekEntries.length > 0 ? (
-                    <DeliveryPicker
-                      entries={deliveryWeekEntries}
-                      selectedKeys={f.delivery_entry_keys ?? ""}
-                      onChange={(keys, supplierName, flowName) =>
-                        setF(p => ({ ...p, delivery_entry_keys: keys, delivery_supplier_name: supplierName, delivery_flow_name: flowName }))
-                      }
-                    />
-                  ) : (
-                    <div className="space-y-1">
-                      <Input
-                        placeholder="t.ex. Färskt"
-                        value={f.delivery_flow_name}
-                        onChange={(e) => setF((p) => ({ ...p, delivery_flow_name: e.target.value }))}
-                        className="h-7 border border-border/60 text-xs"
-                      />
-                      <p className="text-[10px] text-muted-foreground/60">Inga leveranser i aktiv plan — ange flödesnamn manuellt</p>
-                    </div>
-                  )}
-                  {f.delivery_entry_keys && (() => {
-                    const cnt = parseEntryKeys(f.delivery_entry_keys).length;
-                    if (cnt === 0) return null;
-                    return (
-                      <p className="text-[10px] text-muted-foreground/60">
-                        {cnt} specifik{cnt !== 1 ? "a" : ""} leverans{cnt !== 1 ? "er" : ""} vald{cnt !== 1 ? "a" : ""}
-                      </p>
-                    );
-                  })()}
+                  <Switch
+                    checked={f.is_delivery_task}
+                    onCheckedChange={(v) => setF((p) => ({ ...p, is_delivery_task: v }))}
+                  />
                 </div>
-              )}
-            </div>}
+                {f.is_delivery_task && (
+                  <div className="pl-6 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Koppla till leveranser
+                      </span>
+                      {deliveryWeekEntries.length > 1 && (
+                        <button
+                          type="button"
+                          className="text-[11px] text-primary hover:underline"
+                          onClick={() => {
+                            const allKeys = deliveryWeekEntries.map(
+                              (e) =>
+                                `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`,
+                            );
+                            const currentKeys = new Set(
+                              parseEntryKeys(f.delivery_entry_keys ?? ""),
+                            );
+                            const allSelected = allKeys.every((k) => currentKeys.has(k));
+                            if (allSelected) {
+                              setF((p) => ({
+                                ...p,
+                                delivery_entry_keys: "",
+                                delivery_supplier_name: "",
+                                delivery_flow_name: "",
+                              }));
+                            } else {
+                              const allSupp = [
+                                ...new Set(
+                                  deliveryWeekEntries
+                                    .map((e) => e.supplier?.trim() ?? "")
+                                    .filter(Boolean),
+                                ),
+                              ];
+                              const allFlow = [
+                                ...new Set(
+                                  deliveryWeekEntries
+                                    .map((e) => e.flow_name?.trim() ?? "")
+                                    .filter(Boolean),
+                                ),
+                              ];
+                              setF((p) => ({
+                                ...p,
+                                delivery_entry_keys: allKeys.join("|"),
+                                delivery_supplier_name: allSupp.join("|"),
+                                delivery_flow_name: allFlow.join("|"),
+                              }));
+                            }
+                          }}
+                        >
+                          {(() => {
+                            const currentKeys = new Set(
+                              parseEntryKeys(f.delivery_entry_keys ?? ""),
+                            );
+                            return deliveryWeekEntries.every((e) =>
+                              currentKeys.has(
+                                `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`,
+                              ),
+                            )
+                              ? "Avmarkera alla"
+                              : "Välj alla";
+                          })()}
+                        </button>
+                      )}
+                    </div>
+                    {deliveryWeekEntries.length > 0 ? (
+                      <DeliveryPicker
+                        entries={deliveryWeekEntries}
+                        selectedKeys={f.delivery_entry_keys ?? ""}
+                        onChange={(keys, supplierName, flowName) =>
+                          setF((p) => ({
+                            ...p,
+                            delivery_entry_keys: keys,
+                            delivery_supplier_name: supplierName,
+                            delivery_flow_name: flowName,
+                          }))
+                        }
+                      />
+                    ) : (
+                      <div className="space-y-1">
+                        <Input
+                          placeholder="t.ex. Färskt"
+                          value={f.delivery_flow_name}
+                          onChange={(e) =>
+                            setF((p) => ({ ...p, delivery_flow_name: e.target.value }))
+                          }
+                          className="h-7 border border-border/60 text-xs"
+                        />
+                        <p className="text-[10px] text-muted-foreground/60">
+                          Inga leveranser i aktiv plan — ange flödesnamn manuellt
+                        </p>
+                      </div>
+                    )}
+                    {f.delivery_entry_keys &&
+                      (() => {
+                        const cnt = parseEntryKeys(f.delivery_entry_keys).length;
+                        if (cnt === 0) return null;
+                        return (
+                          <p className="text-[10px] text-muted-foreground/60">
+                            {cnt} specifik{cnt !== 1 ? "a" : ""} leverans{cnt !== 1 ? "er" : ""}{" "}
+                            vald{cnt !== 1 ? "a" : ""}
+                          </p>
+                        );
+                      })()}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Kedja / Beror på */}
             <div className="px-4 py-3 space-y-1">
@@ -2924,11 +4125,15 @@ function MallarPage() {
                 <Link2 className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                 <span className="text-xs text-muted-foreground">Beror på mall</span>
               </div>
-              <p className="text-[11px] text-muted-foreground/60 pl-6">Uppgiften blockeras tills föregångarmallen är klar.</p>
+              <p className="text-[11px] text-muted-foreground/60 pl-6">
+                Uppgiften blockeras tills föregångarmallen är klar.
+              </p>
               <div className="pl-0 space-y-1">
                 <Select
                   value={f.depends_on_template_title || "__none__"}
-                  onValueChange={(v) => setF((p) => ({ ...p, depends_on_template_title: v === "__none__" ? "" : v }))}
+                  onValueChange={(v) =>
+                    setF((p) => ({ ...p, depends_on_template_title: v === "__none__" ? "" : v }))
+                  }
                 >
                   <SelectTrigger className="h-7 border border-border/60 text-xs">
                     <SelectValue placeholder="Ingen beroende" />
@@ -2936,17 +4141,19 @@ function MallarPage() {
                   <SelectContent>
                     <SelectItem value="__none__">Ingen beroende</SelectItem>
                     {templates
-                      .filter(t => t.title.trim() && t.title !== f.title)
+                      .filter((t) => t.title.trim() && t.title !== f.title)
                       .sort((a, b) => a.title.localeCompare(b.title, "sv"))
-                      .map(t => (
-                        <SelectItem key={t.id} value={t.title}>{t.title}</SelectItem>
-                      ))
-                    }
+                      .map((t) => (
+                        <SelectItem key={t.id} value={t.title}>
+                          {t.title}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
                 {f.depends_on_template_title && (
                   <p className="text-[10px] text-blue-600 pl-1">
-                    Kräver att "{f.depends_on_template_title}" skapas i samma batch eller redan existerar.
+                    Kräver att "{f.depends_on_template_title}" skapas i samma batch eller redan
+                    existerar.
                   </p>
                 )}
               </div>
@@ -2957,17 +4164,26 @@ function MallarPage() {
               <div className="px-4 py-3 space-y-1">
                 <div className="flex items-center gap-2">
                   <CalendarClock className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="text-xs text-muted-foreground">Granskningsintervall (månader)</span>
+                  <span className="text-xs text-muted-foreground">
+                    Granskningsintervall (månader)
+                  </span>
                 </div>
                 <Input
                   type="number"
                   min={1}
                   max={60}
                   value={f.review_interval_months}
-                  onChange={(e) => setF((p) => ({ ...p, review_interval_months: Math.max(1, parseInt(e.target.value) || 24) }))}
+                  onChange={(e) =>
+                    setF((p) => ({
+                      ...p,
+                      review_interval_months: Math.max(1, parseInt(e.target.value) || 24),
+                    }))
+                  }
                   className="h-7 border border-border/60 text-xs"
                 />
-                <p className="text-[11px] text-muted-foreground/60">Chef aviseras när granskningstiden löpt ut.</p>
+                <p className="text-[11px] text-muted-foreground/60">
+                  Chef aviseras när granskningstiden löpt ut.
+                </p>
               </div>
             )}
           </div>
@@ -2993,47 +4209,68 @@ function MallarPage() {
               loading={importing}
               importLabel="Importera mallar"
               options={[
-                ...(isAdmin ? [{
-                  key: "scope",
-                  type: "select" as const,
-                  label: "Malltyp",
-                  description: "Välj om mallarna ska skapas som HK-, förenings- eller butiksmallar",
-                  options: [
-                    { value: "store", label: "Butiksmall (aktiv butik)" },
-                    { value: "hk", label: "HK-mall (global)" },
-                    { value: "forening", label: "Föreningsmall" },
-                  ],
-                  defaultValue: "store",
-                }, {
-                  key: "foreningId",
-                  type: "select" as const,
-                  label: "Förening",
-                  description: "Vilken förening ska föreningsmallar publiceras till",
-                  options: [{ value: "__none", label: "Välj förening..." }, ...allForeningar.map(f => ({ value: f.id, label: f.name }))],
-                  defaultValue: "__none",
-                  showWhen: { key: "scope", value: "forening" },
-                }] : isForening ? [{
-                  key: "scope",
-                  type: "select" as const,
-                  label: "Malltyp",
-                  options: [
-                    { value: "forening", label: "Föreningsmall" },
-                    { value: "store", label: "Butiksmall" },
-                  ],
-                  defaultValue: "forening",
-                }, {
-                  key: "foreningId",
-                  type: "select" as const,
-                  label: "Förening",
-                  description: "Vilken förening ska mallarna publiceras till",
-                  options: [{ value: "__none", label: "Välj förening..." }, ...allForeningar.map(f => ({ value: f.id, label: f.name }))],
-                  defaultValue: user?.forening_id ?? "__none",
-                  showWhen: { key: "scope", value: "forening" },
-                }] : []),
+                ...(isAdmin
+                  ? [
+                      {
+                        key: "scope",
+                        type: "select" as const,
+                        label: "Malltyp",
+                        description:
+                          "Välj om mallarna ska skapas som HK-, förenings- eller butiksmallar",
+                        options: [
+                          { value: "store", label: "Butiksmall (aktiv butik)" },
+                          { value: "hk", label: "HK-mall (global)" },
+                          { value: "forening", label: "Föreningsmall" },
+                        ],
+                        defaultValue: "store",
+                      },
+                      {
+                        key: "foreningId",
+                        type: "select" as const,
+                        label: "Förening",
+                        description: "Vilken förening ska föreningsmallar publiceras till",
+                        options: [
+                          { value: "__none", label: "Välj förening..." },
+                          ...allForeningar.map((f) => ({ value: f.id, label: f.name })),
+                        ],
+                        defaultValue: "__none",
+                        showWhen: { key: "scope", value: "forening" },
+                      },
+                    ]
+                  : isForening
+                    ? [
+                        {
+                          key: "scope",
+                          type: "select" as const,
+                          label: "Malltyp",
+                          options: [
+                            { value: "forening", label: "Föreningsmall" },
+                            { value: "store", label: "Butiksmall" },
+                          ],
+                          defaultValue: "forening",
+                        },
+                        {
+                          key: "foreningId",
+                          type: "select" as const,
+                          label: "Förening",
+                          description: "Vilken förening ska mallarna publiceras till",
+                          options: [
+                            { value: "__none", label: "Välj förening..." },
+                            ...allForeningar.map((f) => ({ value: f.id, label: f.name })),
+                          ],
+                          defaultValue: user?.forening_id ?? "__none",
+                          showWhen: { key: "scope", value: "forening" },
+                        },
+                      ]
+                    : []),
               ]}
             />
             {isManager && (
-              <Button variant="outline" className="hidden sm:flex rounded-full" onClick={downloadBlankTemplate}>
+              <Button
+                variant="outline"
+                className="hidden sm:flex rounded-full"
+                onClick={downloadBlankTemplate}
+              >
                 <Download className="mr-2 h-4 w-4" /> CSV-mall
               </Button>
             )}
@@ -3043,22 +4280,39 @@ function MallarPage() {
               </Button>
             )}
             {isManager && (
-              <Button variant="outline" className="hidden sm:flex rounded-full" disabled={importing} onClick={() => setShowImportDialog(true)}>
+              <Button
+                variant="outline"
+                className="hidden sm:flex rounded-full"
+                disabled={importing}
+                onClick={() => setShowImportDialog(true)}
+              >
                 <Upload className="mr-2 h-4 w-4" /> {importing ? "Importerar..." : "Importera CSV"}
               </Button>
             )}
             {isManager && (
-              <Button variant="outline" className="hidden sm:flex rounded-full" onClick={() => setShowPackagesPanel(true)}>
+              <Button
+                variant="outline"
+                className="hidden sm:flex rounded-full"
+                onClick={() => setShowPackagesPanel(true)}
+              >
                 <Layers className="mr-2 h-4 w-4" /> Mallpaket
               </Button>
             )}
             {canCreateHK && (
-              <Button variant="outline" className="hidden sm:flex rounded-full border-blue-300 text-blue-600 hover:bg-blue-50" onClick={() => openCreate("hk")}>
+              <Button
+                variant="outline"
+                className="hidden sm:flex rounded-full border-blue-300 text-blue-600 hover:bg-blue-50"
+                onClick={() => openCreate("hk")}
+              >
                 <Plus className="mr-2 h-4 w-4" /> Ny HK-mall
               </Button>
             )}
             {canCreateForening && (
-              <Button variant="outline" className="hidden sm:flex rounded-full border-teal-300 text-teal-600 hover:bg-teal-50" onClick={() => openCreate("forening")}>
+              <Button
+                variant="outline"
+                className="hidden sm:flex rounded-full border-teal-300 text-teal-600 hover:bg-teal-50"
+                onClick={() => openCreate("forening")}
+              >
                 <Building2 className="mr-2 h-4 w-4" /> Ny föreningsmall
               </Button>
             )}
@@ -3074,16 +4328,35 @@ function MallarPage() {
       {/* Bulk action bar */}
       {selectedTemplateIds.size > 0 && isManager && (
         <div className="mt-4 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5">
-          <span className="text-sm font-medium text-foreground">{selectedTemplateIds.size} mallar markerade</span>
+          <span className="text-sm font-medium text-foreground">
+            {selectedTemplateIds.size} mallar markerade
+          </span>
           <div className="ml-auto flex gap-2">
-            <Button variant="ghost" size="sm" className="rounded-full h-8 text-xs" onClick={() => setSelectedTemplateIds(new Set())}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-full h-8 text-xs"
+              onClick={() => setSelectedTemplateIds(new Set())}
+            >
               Avmarkera alla
             </Button>
-            <Button size="sm" className="rounded-full h-8 gap-1.5 text-xs bg-primary text-primary-foreground" onClick={() => openBulkCreate()}>
+            <Button
+              size="sm"
+              className="rounded-full h-8 gap-1.5 text-xs bg-primary text-primary-foreground"
+              onClick={() => openBulkCreate()}
+            >
               <ListChecks className="h-3.5 w-3.5" /> Skapa uppgifter
             </Button>
-            {[...selectedTemplateIds].every((id) => { const t = templates.find((x) => x.id === id); return t ? canDelete(t) : false; }) && (
-              <Button variant="destructive" size="sm" className="rounded-full h-8 gap-1.5 text-xs" onClick={() => setBulkDeleteTemplatesOpen(true)}>
+            {[...selectedTemplateIds].every((id) => {
+              const t = templates.find((x) => x.id === id);
+              return t ? canDelete(t) : false;
+            }) && (
+              <Button
+                variant="destructive"
+                size="sm"
+                className="rounded-full h-8 gap-1.5 text-xs"
+                onClick={() => setBulkDeleteTemplatesOpen(true)}
+              >
                 <Trash2 className="h-3.5 w-3.5" /> Ta bort markerade
               </Button>
             )}
@@ -3105,7 +4378,9 @@ function MallarPage() {
               onClick={() => setViewFilter(key as typeof viewFilter)}
               className={cn(
                 "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                viewFilter === key ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                viewFilter === key
+                  ? "bg-background shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               {label}
@@ -3123,7 +4398,10 @@ function MallarPage() {
             className="h-8 w-full rounded-lg border border-border/60 bg-background pl-8 pr-3 text-xs outline-none placeholder:text-muted-foreground/50 focus:border-primary/40"
           />
           {search && (
-            <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2">
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2"
+            >
               <X className="h-3 w-3 text-muted-foreground" />
             </button>
           )}
@@ -3131,32 +4409,50 @@ function MallarPage() {
 
         {/* Category filter */}
         {allCategories.length > 0 && (
-          <Select value={filterCategory || "__all"} onValueChange={(v) => setFilterCategory(v === "__all" ? "" : v)}>
+          <Select
+            value={filterCategory || "__all"}
+            onValueChange={(v) => setFilterCategory(v === "__all" ? "" : v)}
+          >
             <SelectTrigger className="h-8 w-36 text-xs rounded-lg">
               <SelectValue placeholder="Kategori" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all">Alla kategorier</SelectItem>
-              {allCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              {allCategories.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         )}
 
         {/* Priority filter */}
-        <Select value={filterPriority || "__all"} onValueChange={(v) => setFilterPriority(v === "__all" ? "" : v)}>
+        <Select
+          value={filterPriority || "__all"}
+          onValueChange={(v) => setFilterPriority(v === "__all" ? "" : v)}
+        >
           <SelectTrigger className="h-8 w-32 text-xs rounded-lg">
             <SelectValue placeholder="Prioritet" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all">Alla prioriteter</SelectItem>
-            {["Låg", "Medel", "Hög", "Kritisk"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+            {["Låg", "Medel", "Hög", "Kritisk"].map((p) => (
+              <SelectItem key={p} value={p}>
+                {p}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
         {/* Clear filters */}
         {(search || filterCategory || filterPriority) && (
           <button
-            onClick={() => { setSearch(""); setFilterCategory(""); setFilterPriority(""); }}
+            onClick={() => {
+              setSearch("");
+              setFilterCategory("");
+              setFilterPriority("");
+            }}
             className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="h-3 w-3" /> Rensa filter
@@ -3170,18 +4466,24 @@ function MallarPage() {
               if (selectedTemplateIds.size === filteredTemplates.length) {
                 setSelectedTemplateIds(new Set());
               } else {
-                setSelectedTemplateIds(new Set(filteredTemplates.map(t => t.id)));
+                setSelectedTemplateIds(new Set(filteredTemplates.map((t) => t.id)));
               }
             }}
             className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
           >
-            {selectedTemplateIds.size === filteredTemplates.length && filteredTemplates.length > 0 ? "Avmarkera alla" : "Markera alla"}
+            {selectedTemplateIds.size === filteredTemplates.length && filteredTemplates.length > 0
+              ? "Avmarkera alla"
+              : "Markera alla"}
           </button>
         )}
       </div>
 
       {loading ? (
-        <div className="mt-6 space-y-3">{[1, 2, 3].map((i) => <div key={i} className="h-20 animate-pulse rounded-2xl bg-card" />)}</div>
+        <div className="mt-6 space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-20 animate-pulse rounded-2xl bg-card" />
+          ))}
+        </div>
       ) : filteredTemplates.length === 0 && templates.length === 0 ? (
         <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
           <p className="text-sm font-medium text-muted-foreground">Inga mallar ännu</p>
@@ -3194,103 +4496,170 @@ function MallarPage() {
       ) : filteredTemplates.length === 0 ? (
         <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-12 text-center">
           <p className="text-sm font-medium text-muted-foreground">Inga mallar matchar sökningen</p>
-          <button onClick={() => { setSearch(""); setFilterCategory(""); setFilterPriority(""); }} className="mt-3 text-xs text-primary hover:underline">Rensa filter</button>
+          <button
+            onClick={() => {
+              setSearch("");
+              setFilterCategory("");
+              setFilterPriority("");
+            }}
+            className="mt-3 text-xs text-primary hover:underline"
+          >
+            Rensa filter
+          </button>
         </div>
       ) : (
         <div className="mt-6 space-y-8">
           {/* 24-month review banners — shown to managers for overdue/due-soon recurring base templates */}
-          {isManager && (() => {
-            const now = getSimulatedDate();
-            const warningThreshold = new Date(now); warningThreshold.setMonth(warningThreshold.getMonth() + 3);
-            const overdueTemplates = templates.filter(t => {
-              const nextReview = (t as ChecklistTemplate & { next_review_at?: string }).next_review_at;
-              return nextReview && new Date(nextReview) <= warningThreshold && t.status !== "archived";
-            });
-            if (overdueTemplates.length === 0) return null;
-            const isOverdue = (t: TemplateWithMeta) => {
-              const nr = (t as ChecklistTemplate & { next_review_at?: string }).next_review_at;
-              return nr && new Date(nr) <= now;
-            };
-            return (
-              <div className="space-y-2">
-                {overdueTemplates.map(t => {
-                  const overdue = isOverdue(t);
-                  const nr = (t as ChecklistTemplate & { next_review_at?: string }).next_review_at!;
-                  const monthsLeft = Math.ceil((new Date(nr).getTime() - now.getTime()) / (1000 * 60 * 60 * 24 * 30));
-                  return (
-                    <div key={t.id} className={cn(
-                      "flex items-center justify-between gap-3 rounded-xl border px-4 py-3",
-                      overdue
-                        ? "border-destructive/30 bg-destructive/5"
-                        : "border-amber-200 bg-amber-50/60"
-                    )}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <AlertTriangle className={cn("h-4 w-4 shrink-0", overdue ? "text-destructive" : "text-amber-600")} />
-                        <div className="min-w-0">
-                          <p className={cn("text-sm font-medium truncate", overdue ? "text-destructive" : "text-amber-800")}>
-                            {overdue ? "Granskning försenad" : `Granskning om ${monthsLeft} månad${monthsLeft !== 1 ? "er" : ""}`}
-                            <span className="ml-1.5 font-normal opacity-80">— {t.title}</span>
-                          </p>
-                          <p className={cn("text-xs", overdue ? "text-destructive/70" : "text-amber-700/70")}>
-                            Mallen har kört sedan skapandet. Bekräfta att rutinen fortfarande behövs.
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant={overdue ? "destructive" : "outline"}
-                        className={cn("shrink-0 rounded-full h-7 text-xs", !overdue && "border-amber-400 text-amber-800 hover:bg-amber-100")}
-                        onClick={() => setReviewTarget(t)}
+          {isManager &&
+            (() => {
+              const now = getSimulatedDate();
+              const warningThreshold = new Date(now);
+              warningThreshold.setMonth(warningThreshold.getMonth() + 3);
+              const overdueTemplates = templates.filter((t) => {
+                const nextReview = (t as ChecklistTemplate & { next_review_at?: string })
+                  .next_review_at;
+                return (
+                  nextReview && new Date(nextReview) <= warningThreshold && t.status !== "archived"
+                );
+              });
+              if (overdueTemplates.length === 0) return null;
+              const isOverdue = (t: TemplateWithMeta) => {
+                const nr = (t as ChecklistTemplate & { next_review_at?: string }).next_review_at;
+                return nr && new Date(nr) <= now;
+              };
+              return (
+                <div className="space-y-2">
+                  {overdueTemplates.map((t) => {
+                    const overdue = isOverdue(t);
+                    const nr = (t as ChecklistTemplate & { next_review_at?: string })
+                      .next_review_at!;
+                    const monthsLeft = Math.ceil(
+                      (new Date(nr).getTime() - now.getTime()) / (1000 * 60 * 60 * 24 * 30),
+                    );
+                    return (
+                      <div
+                        key={t.id}
+                        className={cn(
+                          "flex items-center justify-between gap-3 rounded-xl border px-4 py-3",
+                          overdue
+                            ? "border-destructive/30 bg-destructive/5"
+                            : "border-amber-200 bg-amber-50/60",
+                        )}
                       >
-                        Granska
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <AlertTriangle
+                            className={cn(
+                              "h-4 w-4 shrink-0",
+                              overdue ? "text-destructive" : "text-amber-600",
+                            )}
+                          />
+                          <div className="min-w-0">
+                            <p
+                              className={cn(
+                                "text-sm font-medium truncate",
+                                overdue ? "text-destructive" : "text-amber-800",
+                              )}
+                            >
+                              {overdue
+                                ? "Granskning försenad"
+                                : `Granskning om ${monthsLeft} månad${monthsLeft !== 1 ? "er" : ""}`}
+                              <span className="ml-1.5 font-normal opacity-80">— {t.title}</span>
+                            </p>
+                            <p
+                              className={cn(
+                                "text-xs",
+                                overdue ? "text-destructive/70" : "text-amber-700/70",
+                              )}
+                            >
+                              Mallen har kört sedan skapandet. Bekräfta att rutinen fortfarande
+                              behövs.
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant={overdue ? "destructive" : "outline"}
+                          className={cn(
+                            "shrink-0 rounded-full h-7 text-xs",
+                            !overdue && "border-amber-400 text-amber-800 hover:bg-amber-100",
+                          )}
+                          onClick={() => setReviewTarget(t)}
+                        >
+                          Granska
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
           {/* Template packages section — hidden by default, toggled via button */}
           {packages.length > 0 && isManager && (
             <div>
               <div className="mb-3 flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-foreground">Mallpaket</h2>
-                <Badge variant="outline" className="text-xs border-amber-300 text-amber-600">Paket</Badge>
+                <Badge variant="outline" className="text-xs border-amber-300 text-amber-600">
+                  Paket
+                </Badge>
                 <button
-                  onClick={() => setShowPackagesInline(v => !v)}
+                  onClick={() => setShowPackagesInline((v) => !v)}
                   className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {showPackagesInline ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  {showPackagesInline ? (
+                    <ChevronUp className="h-3 w-3" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" />
+                  )}
                   {showPackagesInline ? "Dölj" : `Visa (${packages.length})`}
                 </button>
-                <Button variant="ghost" size="sm" className="ml-auto text-xs text-muted-foreground h-7 rounded-full" onClick={() => setShowPackagesPanel(true)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto text-xs text-muted-foreground h-7 rounded-full"
+                  onClick={() => setShowPackagesPanel(true)}
+                >
                   <Layers className="h-3.5 w-3.5 mr-1" /> Hantera
                 </Button>
               </div>
               {showPackagesInline && (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {packages.map(pkg => {
-                    const pkgTemplates = (pkg.items ?? []).map(it => templates.find(t => t.id === it.template_id)).filter(Boolean) as TemplateWithMeta[];
+                  {packages.map((pkg) => {
+                    const pkgTemplates = (pkg.items ?? [])
+                      .map((it) => templates.find((t) => t.id === it.template_id))
+                      .filter(Boolean) as TemplateWithMeta[];
                     return (
-                      <div key={pkg.id} className="rounded-2xl border border-amber-200/60 bg-card p-4 space-y-2">
+                      <div
+                        key={pkg.id}
+                        className="rounded-2xl border border-amber-200/60 bg-card p-4 space-y-2"
+                      >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className="font-medium text-sm">{pkg.name}</p>
-                            {pkg.description && <p className="text-xs text-muted-foreground">{pkg.description}</p>}
-                            <p className="text-xs text-muted-foreground mt-0.5">{pkgTemplates.length} mallar</p>
+                            {pkg.description && (
+                              <p className="text-xs text-muted-foreground">{pkg.description}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {pkgTemplates.length} mallar
+                            </p>
                           </div>
                           <Button
-                            size="sm" variant="outline"
+                            size="sm"
+                            variant="outline"
                             className="shrink-0 rounded-full h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
-                            onClick={() => { setActivatePackageTarget(pkg); openBulkCreate(pkgTemplates.map(t => t.id)); }}
+                            onClick={() => {
+                              setActivatePackageTarget(pkg);
+                              openBulkCreate(pkgTemplates.map((t) => t.id));
+                            }}
                           >
                             <ListChecks className="h-3 w-3 mr-1" /> Aktivera
                           </Button>
                         </div>
                         <div className="flex flex-wrap gap-1">
-                          {pkgTemplates.map(t => (
-                            <Badge key={t.id} variant="secondary" className="text-xs">{t.title}</Badge>
+                          {pkgTemplates.map((t) => (
+                            <Badge key={t.id} variant="secondary" className="text-xs">
+                              {t.title}
+                            </Badge>
                           ))}
                         </div>
                       </div>
@@ -3304,7 +4673,9 @@ function MallarPage() {
             <div key={group.label}>
               <div className="mb-3 flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-foreground">{group.label}</h2>
-                <Badge variant="outline" className={cn("text-xs", group.badgeClass)}>{group.badge}</Badge>
+                <Badge variant="outline" className={cn("text-xs", group.badgeClass)}>
+                  {group.badge}
+                </Badge>
                 <span className="text-xs text-muted-foreground">{group.items.length} mallar</span>
               </div>
               {group.items.length === 0 ? (
@@ -3317,328 +4688,585 @@ function MallarPage() {
                     const nestedVariants = variantsByParent.get(t.id) ?? [];
                     return (
                       <div key={t.id}>
-                      <div
-                        className={cn(
-                          "overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]",
-                          isHidden && "opacity-60"
-                        )}
-                      >
-                        <div className="flex w-full items-center justify-between hover:bg-muted/20">
-                          {isManager && (
-                            <div className="pl-4 shrink-0" onClick={(e) => e.stopPropagation()}>
-                              <Checkbox
-                                checked={selectedTemplateIds.has(t.id)}
-                                onCheckedChange={(checked) => {
-                                  const next = new Set(selectedTemplateIds);
-                                  if (checked) next.add(t.id); else next.delete(t.id);
-                                  setSelectedTemplateIds(next);
-                                }}
-                              />
-                            </div>
+                        <div
+                          className={cn(
+                            "overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]",
+                            isHidden && "opacity-60",
                           )}
-                          <button
-                            className="flex flex-1 items-center gap-3 px-5 py-4 text-left"
-                            onClick={() => setExpanded(expanded === t.id ? null : t.id)}
-                          >
-                            {expanded === t.id ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                            <div>
-                              <p className="font-medium">
-                                {t.title}
-                                {isHidden && <span className="ml-2 text-xs text-muted-foreground">(dold för din förening)</span>}
-                                {t.parent_template_id && (
-                                  <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-muted-foreground/70">
-                                    <GitBranch className="h-3 w-3" />
-                                    {t.inherit_mode === "variant" ? "Variant" : "Kopia"}
+                        >
+                          <div className="flex w-full items-center justify-between hover:bg-muted/20">
+                            {isManager && (
+                              <div className="pl-4 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <Checkbox
+                                  checked={selectedTemplateIds.has(t.id)}
+                                  onCheckedChange={(checked) => {
+                                    const next = new Set(selectedTemplateIds);
+                                    if (checked) next.add(t.id);
+                                    else next.delete(t.id);
+                                    setSelectedTemplateIds(next);
+                                  }}
+                                />
+                              </div>
+                            )}
+                            <button
+                              className="flex flex-1 items-center gap-3 px-5 py-4 text-left"
+                              onClick={() => setExpanded(expanded === t.id ? null : t.id)}
+                            >
+                              {expanded === t.id ? (
+                                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              )}
+                              <div>
+                                <p className="font-medium">
+                                  {t.title}
+                                  {isHidden && (
+                                    <span className="ml-2 text-xs text-muted-foreground">
+                                      (dold för din förening)
+                                    </span>
+                                  )}
+                                  {t.parent_template_id && (
+                                    <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-muted-foreground/70">
+                                      <GitBranch className="h-3 w-3" />
+                                      {t.inherit_mode === "variant" ? "Variant" : "Kopia"}
+                                    </span>
+                                  )}
+                                </p>
+                                <div className="mt-0.5 flex items-center gap-2 flex-wrap">
+                                  {t.category && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {t.category}
+                                    </Badge>
+                                  )}
+                                  {(t as ChecklistTemplate & { template_type?: string })
+                                    .template_type === "base" && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs border-amber-400 text-amber-700 bg-amber-50"
+                                    >
+                                      Grundmall
+                                    </Badge>
+                                  )}
+                                  {(t as ChecklistTemplate & { is_critical?: boolean })
+                                    .is_critical && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs border-red-300 text-red-600"
+                                    >
+                                      Kritisk
+                                    </Badge>
+                                  )}
+                                  {scopeBadge && (
+                                    <Badge
+                                      variant="outline"
+                                      className={cn("text-xs", scopeBadge.cls)}
+                                    >
+                                      {scopeBadge.label}
+                                    </Badge>
+                                  )}
+                                  {(() => {
+                                    const sb = getStatusBadge(t);
+                                    return sb.value !== "active" ? (
+                                      <Badge
+                                        variant="outline"
+                                        className={cn("text-xs border", sb.cls)}
+                                      >
+                                        {sb.label}
+                                      </Badge>
+                                    ) : null;
+                                  })()}
+                                  {t.locked_by_admin && !t.is_global && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs border-amber-300 text-amber-600"
+                                    >
+                                      Skrivskyddad
+                                    </Badge>
+                                  )}
+                                  <span className="text-xs text-muted-foreground">
+                                    {t.items?.length ?? 0} steg
+                                  </span>
+                                  {(t.questions?.length ?? 0) > 0 && (
+                                    <span className="text-xs text-muted-foreground">
+                                      {t.questions?.length} frågor
+                                    </span>
+                                  )}
+                                  {(t.version ?? 1) > 1 && (
+                                    <span className="text-xs text-muted-foreground/60">
+                                      v{t.version}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+
+                            <div className="mr-3 flex items-center gap-1">
+                              {/* Preview */}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-foreground"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewTarget(t);
+                                }}
+                                title="Förhandsgranska"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                              {/* Förening can toggle hide/show HK templates */}
+                              {isForening && (t.hierarchy_scope === "hk" || t.is_global) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className={cn(
+                                    "rounded-full",
+                                    isHidden
+                                      ? "text-amber-500 hover:text-amber-600"
+                                      : "text-muted-foreground hover:text-foreground",
+                                  )}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleHideHKTemplate(t);
+                                  }}
+                                  title={
+                                    isHidden
+                                      ? "Visa HK-mall för din förening"
+                                      : "Dölj HK-mall för din förening"
+                                  }
+                                >
+                                  {isHidden ? (
+                                    <EyeOff className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <Eye className="h-3.5 w-3.5" />
+                                  )}
+                                </Button>
+                              )}
+                              {/* Version history */}
+                              {isManager && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-foreground"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void loadVersionHistory(t);
+                                  }}
+                                  title="Versionshistorik"
+                                >
+                                  <History className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              {/* For HK/Forening templates: non-admin managers get a pencil that auto-creates a local store variant */}
+                              {isManager &&
+                                !isAdmin &&
+                                !canEdit(t) &&
+                                (t.hierarchy_scope === "hk" ||
+                                  t.hierarchy_scope === "forening") && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-primary"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void createLocalVariantAndEdit(t);
+                                    }}
+                                    aria-label="Redigera (skapar lokal variant)"
+                                    title="Redigera — skapar lokal variant för din butik"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              {canEdit(t) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEdit(t);
+                                  }}
+                                  aria-label="Redigera"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              {canDelete(t) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteTarget(t);
+                                  }}
+                                  aria-label="Ta bort"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          {expanded === t.id && (
+                            <div className="border-t border-border/60 px-5 py-4 space-y-3">
+                              {t.description && (
+                                <p className="text-sm text-muted-foreground">{t.description}</p>
+                              )}
+                              {/* Special type indicators */}
+                              <div className="flex flex-wrap gap-2">
+                                {(t as ChecklistTemplate & { is_delivery_task?: boolean })
+                                  .is_delivery_task && (
+                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700">
+                                    <Truck className="h-3 w-3" />
+                                    Leveransuppgift
+                                    {(t as ChecklistTemplate & { delivery_supplier_name?: string })
+                                      .delivery_supplier_name && (
+                                      <span className="opacity-70">
+                                        —{" "}
+                                        {
+                                          (
+                                            t as ChecklistTemplate & {
+                                              delivery_supplier_name?: string;
+                                            }
+                                          ).delivery_supplier_name
+                                        }
+                                      </span>
+                                    )}
+                                    {!(t as ChecklistTemplate & { delivery_supplier_name?: string })
+                                      .delivery_supplier_name &&
+                                      (t as ChecklistTemplate & { delivery_flow_name?: string })
+                                        .delivery_flow_name && (
+                                        <span className="opacity-70">
+                                          —{" "}
+                                          {
+                                            (
+                                              t as ChecklistTemplate & {
+                                                delivery_flow_name?: string;
+                                              }
+                                            ).delivery_flow_name
+                                          }
+                                        </span>
+                                      )}
                                   </span>
                                 )}
-                              </p>
-                              <div className="mt-0.5 flex items-center gap-2 flex-wrap">
-                                {t.category && <Badge variant="secondary" className="text-xs">{t.category}</Badge>}
-                                {(t as ChecklistTemplate & { template_type?: string }).template_type === "base" && (
-                                  <Badge variant="outline" className="text-xs border-amber-400 text-amber-700 bg-amber-50">Grundmall</Badge>
+                                {(t as ChecklistTemplate & { event_trigger_description?: string })
+                                  .event_trigger_description && (
+                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
+                                    <Zap className="h-3 w-3" />
+                                    {
+                                      (
+                                        t as ChecklistTemplate & {
+                                          event_trigger_description?: string;
+                                        }
+                                      ).event_trigger_description
+                                    }
+                                  </span>
                                 )}
-                                {(t as ChecklistTemplate & { is_critical?: boolean }).is_critical && (
-                                  <Badge variant="outline" className="text-xs border-red-300 text-red-600">Kritisk</Badge>
+                                {(t as ChecklistTemplate & { depends_on_template_title?: string })
+                                  .depends_on_template_title && (
+                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                                    <Link2 className="h-3 w-3" />
+                                    Beror på:{" "}
+                                    {
+                                      (
+                                        t as ChecklistTemplate & {
+                                          depends_on_template_title?: string;
+                                        }
+                                      ).depends_on_template_title
+                                    }
+                                  </span>
                                 )}
-                                {scopeBadge && (
-                                  <Badge variant="outline" className={cn("text-xs", scopeBadge.cls)}>{scopeBadge.label}</Badge>
+                                {(
+                                  (t as ChecklistTemplate & { time_slots?: string[] }).time_slots ??
+                                  []
+                                ).length > 0 && (
+                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                                    <Clock className="h-3 w-3" />
+                                    {(
+                                      (t as ChecklistTemplate & { time_slots?: string[] })
+                                        .time_slots ?? []
+                                    ).join(", ")}
+                                  </span>
                                 )}
-                                {(() => { const sb = getStatusBadge(t); return sb.value !== "active" ? <Badge variant="outline" className={cn("text-xs border", sb.cls)}>{sb.label}</Badge> : null; })()}
-                                {t.locked_by_admin && !t.is_global && (
-                                  <Badge variant="outline" className="text-xs border-amber-300 text-amber-600">Skrivskyddad</Badge>
-                                )}
-                                <span className="text-xs text-muted-foreground">{t.items?.length ?? 0} steg</span>
-                                {(t.questions?.length ?? 0) > 0 && <span className="text-xs text-muted-foreground">{t.questions?.length} frågor</span>}
-                                {(t.version ?? 1) > 1 && <span className="text-xs text-muted-foreground/60">v{t.version}</span>}
                               </div>
+                              {(t as ChecklistTemplate & { sap_article_id?: string | null })
+                                .sap_article_id &&
+                                (() => {
+                                  const url = mittCoopUrl(
+                                    (t as ChecklistTemplate & { sap_article_id?: string | null })
+                                      .sap_article_id!,
+                                    activeStore?.sap_site_id ?? null,
+                                  );
+                                  return url ? (
+                                    <a
+                                      href={url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary-soft px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 w-fit"
+                                    >
+                                      <Hash className="h-3 w-3" />
+                                      {
+                                        (
+                                          t as ChecklistTemplate & {
+                                            sap_article_id?: string | null;
+                                          }
+                                        ).sap_article_id
+                                      }
+                                      <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground font-mono">
+                                      Materialnummer:{" "}
+                                      {
+                                        (
+                                          t as ChecklistTemplate & {
+                                            sap_article_id?: string | null;
+                                          }
+                                        ).sap_article_id
+                                      }
+                                    </p>
+                                  );
+                                })()}
+                              {(t.items?.length ?? 0) > 0 && (
+                                <div>
+                                  <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                    Checkpoints
+                                  </p>
+                                  <ol className="space-y-2">
+                                    {(t.items ?? [])
+                                      .sort((a, b) => a.sort_order - b.sort_order)
+                                      .map((item: ChecklistTemplateItem, idx: number) => (
+                                        <li
+                                          key={item.id}
+                                          className="flex items-center gap-2.5 text-sm"
+                                        >
+                                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                                            {idx + 1}
+                                          </span>
+                                          <span className="flex-1">{item.label}</span>
+                                          {item.requires_photo && (
+                                            <Badge variant="secondary" className="text-xs">
+                                              Foto krävs
+                                            </Badge>
+                                          )}
+                                          {(item as ChecklistTemplateItem & { link_url?: string })
+                                            .link_url && (
+                                            <a
+                                              href={
+                                                (
+                                                  item as ChecklistTemplateItem & {
+                                                    link_url?: string;
+                                                  }
+                                                ).link_url
+                                              }
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors"
+                                            >
+                                              <ExternalLink className="h-3 w-3" />
+                                              Länk
+                                            </a>
+                                          )}
+                                        </li>
+                                      ))}
+                                  </ol>
+                                </div>
+                              )}
+                              {(t.questions?.length ?? 0) > 0 && (
+                                <div>
+                                  <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                    Frågor
+                                  </p>
+                                  <ol className="space-y-2">
+                                    {(t.questions ?? [])
+                                      .sort((a, b) => a.sort_order - b.sort_order)
+                                      .map((q: ChecklistTemplateQuestion, idx: number) => (
+                                        <li
+                                          key={q.id}
+                                          className="flex items-center gap-2.5 text-sm"
+                                        >
+                                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                                            {idx + 1}
+                                          </span>
+                                          <span>{q.label}</span>
+                                          {q.question_type === "yes_no" && (
+                                            <Badge variant="secondary" className="text-xs">
+                                              Ja/Nej
+                                            </Badge>
+                                          )}
+                                          {q.is_required && (
+                                            <Badge
+                                              variant="secondary"
+                                              className="text-xs text-destructive"
+                                            >
+                                              Obligatorisk
+                                            </Badge>
+                                          )}
+                                        </li>
+                                      ))}
+                                  </ol>
+                                </div>
+                              )}
+                              {t.storeIds.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  <span className="text-xs text-muted-foreground">
+                                    Tilldelade butiker:
+                                  </span>
+                                  {t.storeIds.map((sid) => {
+                                    const s = allStores.find((st) => st.id === sid);
+                                    return s ? (
+                                      <Badge key={sid} variant="outline" className="text-xs">
+                                        {s.name}
+                                      </Badge>
+                                    ) : null;
+                                  })}
+                                </div>
+                              )}
                             </div>
-                          </button>
-
-                          <div className="mr-3 flex items-center gap-1">
-                            {/* Preview */}
-                            <Button
-                              variant="ghost" size="icon"
-                              className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-foreground"
-                              onClick={(e) => { e.stopPropagation(); setPreviewTarget(t); }}
-                              title="Förhandsgranska"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                            </Button>
-                            {/* Förening can toggle hide/show HK templates */}
-                            {isForening && (t.hierarchy_scope === "hk" || t.is_global) && (
-                              <Button
-                                variant="ghost" size="icon"
-                                className={cn("rounded-full", isHidden ? "text-amber-500 hover:text-amber-600" : "text-muted-foreground hover:text-foreground")}
-                                onClick={(e) => { e.stopPropagation(); toggleHideHKTemplate(t); }}
-                                title={isHidden ? "Visa HK-mall för din förening" : "Dölj HK-mall för din förening"}
-                              >
-                                {isHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                              </Button>
-                            )}
-                            {/* Version history */}
-                            {isManager && (
-                              <Button
-                                variant="ghost" size="icon"
-                                className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-foreground"
-                                onClick={(e) => { e.stopPropagation(); void loadVersionHistory(t); }}
-                                title="Versionshistorik"
-                              >
-                                <History className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            {/* For HK/Forening templates: non-admin managers get a pencil that auto-creates a local store variant */}
-                            {isManager && !isAdmin && !canEdit(t) && (t.hierarchy_scope === "hk" || t.hierarchy_scope === "forening") && (
-                              <Button
-                                variant="ghost" size="icon"
-                                className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-primary"
-                                onClick={(e) => { e.stopPropagation(); void createLocalVariantAndEdit(t); }}
-                                aria-label="Redigera (skapar lokal variant)"
-                                title="Redigera — skapar lokal variant för din butik"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            {canEdit(t) && (
-                              <Button
-                                variant="ghost" size="icon"
-                                className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-primary"
-                                onClick={(e) => { e.stopPropagation(); openEdit(t); }}
-                                aria-label="Redigera"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            {canDelete(t) && (
-                              <Button
-                                variant="ghost" size="icon"
-                                className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-destructive"
-                                onClick={(e) => { e.stopPropagation(); setDeleteTarget(t); }}
-                                aria-label="Ta bort"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                          </div>
+                          )}
                         </div>
 
-                        {expanded === t.id && (
-                          <div className="border-t border-border/60 px-5 py-4 space-y-3">
-                            {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
-                            {/* Special type indicators */}
-                            <div className="flex flex-wrap gap-2">
-                              {(t as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task && (
-                                <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700">
-                                  <Truck className="h-3 w-3" />
-                                  Leveransuppgift
-                                  {(t as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name && (
-                                    <span className="opacity-70">— {(t as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name}</span>
+                        {/* Nested local variants for this parent */}
+                        {nestedVariants.map((v) => {
+                          const isStale = v.created_at < t.updated_at;
+                          return (
+                            <div key={v.id} className="ml-6 mt-1.5">
+                              {/* Stale variant banner */}
+                              {isStale && (
+                                <div className="mb-1.5 flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+                                  <span className="flex items-center gap-1.5">
+                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                    Den centrala mallen har uppdaterats sedan din lokala variant
+                                    skapades.
+                                  </span>
+                                  <button
+                                    className="ml-3 shrink-0 font-medium underline underline-offset-2 hover:no-underline"
+                                    onClick={() => setMergeTarget({ variant: v, parent: t })}
+                                  >
+                                    Granska &amp; synka
+                                  </button>
+                                </div>
+                              )}
+                              <div className="overflow-hidden rounded-2xl border border-border/40 bg-card/80 shadow-[var(--shadow-sm)]">
+                                <div className="flex w-full items-center justify-between hover:bg-muted/20">
+                                  {isManager && (
+                                    <div
+                                      className="pl-4 shrink-0"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <Checkbox
+                                        checked={selectedTemplateIds.has(v.id)}
+                                        onCheckedChange={(checked) => {
+                                          const next = new Set(selectedTemplateIds);
+                                          if (checked) next.add(v.id);
+                                          else next.delete(v.id);
+                                          setSelectedTemplateIds(next);
+                                        }}
+                                      />
+                                    </div>
                                   )}
-                                  {!(t as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name && (t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name && (
-                                    <span className="opacity-70">— {(t as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name}</span>
-                                  )}
-                                </span>
-                              )}
-                              {(t as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description && (
-                                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
-                                  <Zap className="h-3 w-3" />
-                                  {(t as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description}
-                                </span>
-                              )}
-                              {(t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title && (
-                                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                                  <Link2 className="h-3 w-3" />
-                                  Beror på: {(t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title}
-                                </span>
-                              )}
-                              {((t as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? []).length > 0 && (
-                                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-                                  <Clock className="h-3 w-3" />
-                                  {((t as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? []).join(", ")}
-                                </span>
-                              )}
-                            </div>
-                            {(t as ChecklistTemplate & { sap_article_id?: string | null }).sap_article_id && (() => {
-                              const url = mittCoopUrl((t as ChecklistTemplate & { sap_article_id?: string | null }).sap_article_id!, activeStore?.sap_site_id ?? null);
-                              return url ? (
-                                <a href={url} target="_blank" rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary-soft px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 w-fit">
-                                  <Hash className="h-3 w-3" />
-                                  {(t as ChecklistTemplate & { sap_article_id?: string | null }).sap_article_id}
-                                  <ExternalLink className="h-3 w-3" />
-                                </a>
-                              ) : (
-                                <p className="text-xs text-muted-foreground font-mono">
-                                  Materialnummer: {(t as ChecklistTemplate & { sap_article_id?: string | null }).sap_article_id}
-                                </p>
-                              );
-                            })()}
-                            {(t.items?.length ?? 0) > 0 && (
-                              <div>
-                                <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">Checkpoints</p>
-                                <ol className="space-y-2">
-                                  {(t.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((item: ChecklistTemplateItem, idx: number) => (
-                                    <li key={item.id} className="flex items-center gap-2.5 text-sm">
-                                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">{idx + 1}</span>
-                                      <span className="flex-1">{item.label}</span>
-                                      {item.requires_photo && <Badge variant="secondary" className="text-xs">Foto krävs</Badge>}
-                                      {(item as ChecklistTemplateItem & { link_url?: string }).link_url && (
-                                        <a href={(item as ChecklistTemplateItem & { link_url?: string }).link_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors">
-                                          <ExternalLink className="h-3 w-3" />Länk
-                                        </a>
-                                      )}
-                                    </li>
-                                  ))}
-                                </ol>
-                              </div>
-                            )}
-                            {(t.questions?.length ?? 0) > 0 && (
-                              <div>
-                                <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">Frågor</p>
-                                <ol className="space-y-2">
-                                  {(t.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q: ChecklistTemplateQuestion, idx: number) => (
-                                    <li key={q.id} className="flex items-center gap-2.5 text-sm">
-                                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">{idx + 1}</span>
-                                      <span>{q.label}</span>
-                                      {q.question_type === "yes_no" && <Badge variant="secondary" className="text-xs">Ja/Nej</Badge>}
-                                      {q.is_required && <Badge variant="secondary" className="text-xs text-destructive">Obligatorisk</Badge>}
-                                    </li>
-                                  ))}
-                                </ol>
-                              </div>
-                            )}
-                            {t.storeIds.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5">
-                                <span className="text-xs text-muted-foreground">Tilldelade butiker:</span>
-                                {t.storeIds.map((sid) => {
-                                  const s = allStores.find((st) => st.id === sid);
-                                  return s ? <Badge key={sid} variant="outline" className="text-xs">{s.name}</Badge> : null;
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Nested local variants for this parent */}
-                      {nestedVariants.map((v) => {
-                        const isStale = v.created_at < t.updated_at;
-                        return (
-                          <div key={v.id} className="ml-6 mt-1.5">
-                            {/* Stale variant banner */}
-                            {isStale && (
-                              <div className="mb-1.5 flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
-                                <span className="flex items-center gap-1.5">
-                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                                  Den centrala mallen har uppdaterats sedan din lokala variant skapades.
-                                </span>
-                                <button
-                                  className="ml-3 shrink-0 font-medium underline underline-offset-2 hover:no-underline"
-                                  onClick={() => setMergeTarget({ variant: v, parent: t })}
-                                >
-                                  Granska &amp; synka
-                                </button>
-                              </div>
-                            )}
-                            <div className="overflow-hidden rounded-2xl border border-border/40 bg-card/80 shadow-[var(--shadow-sm)]">
-                              <div className="flex w-full items-center justify-between hover:bg-muted/20">
-                                {isManager && (
-                                  <div className="pl-4 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                    <Checkbox
-                                      checked={selectedTemplateIds.has(v.id)}
-                                      onCheckedChange={(checked) => {
-                                        const next = new Set(selectedTemplateIds);
-                                        if (checked) next.add(v.id); else next.delete(v.id);
-                                        setSelectedTemplateIds(next);
-                                      }}
-                                    />
+                                  <button
+                                    className="flex flex-1 items-center gap-3 px-5 py-3.5 text-left"
+                                    onClick={() => setExpanded(expanded === v.id ? null : v.id)}
+                                  >
+                                    {expanded === v.id ? (
+                                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                                    ) : (
+                                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                    )}
+                                    <div>
+                                      <p className="font-medium text-sm">
+                                        {v.title}
+                                        <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-primary/70">
+                                          <GitBranch className="h-3 w-3" />
+                                          Lokal variant
+                                        </span>
+                                      </p>
+                                      <div className="mt-0.5 flex items-center gap-2 flex-wrap">
+                                        {v.category && (
+                                          <Badge variant="secondary" className="text-xs">
+                                            {v.category}
+                                          </Badge>
+                                        )}
+                                        <span className="text-xs text-muted-foreground">
+                                          {v.items?.length ?? 0} steg
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </button>
+                                  <div className="mr-3 flex items-center gap-1">
+                                    {canEdit(v) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-primary"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openEdit(v);
+                                        }}
+                                        aria-label="Redigera lokal variant"
+                                        title="Redigera lokal variant"
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
+                                    {canDelete(v) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-destructive"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setDeleteTarget(v);
+                                        }}
+                                        aria-label="Ta bort lokal variant"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                                {expanded === v.id && (
+                                  <div className="border-t border-border/60 px-5 py-4 space-y-3">
+                                    {v.description && (
+                                      <p className="text-sm text-muted-foreground">
+                                        {v.description}
+                                      </p>
+                                    )}
+                                    {(v.items?.length ?? 0) > 0 && (
+                                      <div>
+                                        <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                          Checkpoints
+                                        </p>
+                                        <ol className="space-y-2">
+                                          {(v.items ?? [])
+                                            .sort((a, b) => a.sort_order - b.sort_order)
+                                            .map((item: ChecklistTemplateItem, idx: number) => (
+                                              <li
+                                                key={item.id}
+                                                className="flex items-center gap-2.5 text-sm"
+                                              >
+                                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                                                  {idx + 1}
+                                                </span>
+                                                <span>{item.label}</span>
+                                                {item.requires_photo && (
+                                                  <Badge variant="secondary" className="text-xs">
+                                                    Foto krävs
+                                                  </Badge>
+                                                )}
+                                              </li>
+                                            ))}
+                                        </ol>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
-                                <button
-                                  className="flex flex-1 items-center gap-3 px-5 py-3.5 text-left"
-                                  onClick={() => setExpanded(expanded === v.id ? null : v.id)}
-                                >
-                                  {expanded === v.id ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                                  <div>
-                                    <p className="font-medium text-sm">
-                                      {v.title}
-                                      <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-primary/70">
-                                        <GitBranch className="h-3 w-3" />
-                                        Lokal variant
-                                      </span>
-                                    </p>
-                                    <div className="mt-0.5 flex items-center gap-2 flex-wrap">
-                                      {v.category && <Badge variant="secondary" className="text-xs">{v.category}</Badge>}
-                                      <span className="text-xs text-muted-foreground">{v.items?.length ?? 0} steg</span>
-                                    </div>
-                                  </div>
-                                </button>
-                                <div className="mr-3 flex items-center gap-1">
-                                  {canEdit(v) && (
-                                    <Button
-                                      variant="ghost" size="icon"
-                                      className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-primary"
-                                      onClick={(e) => { e.stopPropagation(); openEdit(v); }}
-                                      aria-label="Redigera lokal variant"
-                                      title="Redigera lokal variant"
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </Button>
-                                  )}
-                                  {canDelete(v) && (
-                                    <Button
-                                      variant="ghost" size="icon"
-                                      className="hidden sm:inline-flex rounded-full text-muted-foreground hover:text-destructive"
-                                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(v); }}
-                                      aria-label="Ta bort lokal variant"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  )}
-                                </div>
                               </div>
-                              {expanded === v.id && (
-                                <div className="border-t border-border/60 px-5 py-4 space-y-3">
-                                  {v.description && <p className="text-sm text-muted-foreground">{v.description}</p>}
-                                  {(v.items?.length ?? 0) > 0 && (
-                                    <div>
-                                      <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">Checkpoints</p>
-                                      <ol className="space-y-2">
-                                        {(v.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((item: ChecklistTemplateItem, idx: number) => (
-                                          <li key={item.id} className="flex items-center gap-2.5 text-sm">
-                                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">{idx + 1}</span>
-                                            <span>{item.label}</span>
-                                            {item.requires_photo && <Badge variant="secondary" className="text-xs">Foto krävs</Badge>}
-                                          </li>
-                                        ))}
-                                      </ol>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
                       </div>
                     );
                   })}
@@ -3650,18 +5278,45 @@ function MallarPage() {
       )}
 
       {/* CREATE DIALOG */}
-      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setError(""); }}>
+      <Dialog
+        open={showCreate}
+        onOpenChange={(o) => {
+          setShowCreate(o);
+          if (!o) setError("");
+        }}
+      >
         <DialogContent className="max-h-[92dvh] w-full sm:max-w-4xl sm:max-h-[92vh] overflow-hidden p-0 gap-0">
-          <DialogTitle className="sr-only">{createScope === "hk" ? "Ny HK-mall" : createScope === "forening" ? "Ny föreningsmall" : "Ny butiksmall"}</DialogTitle>
+          <DialogTitle className="sr-only">
+            {createScope === "hk"
+              ? "Ny HK-mall"
+              : createScope === "forening"
+                ? "Ny föreningsmall"
+                : "Ny butiksmall"}
+          </DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <GripVertical className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground">
-              {createScope === "hk" ? "Ny HK-mall" : createScope === "forening" ? "Ny föreningsmall" : "Ny butiksmall"}
+              {createScope === "hk"
+                ? "Ny HK-mall"
+                : createScope === "forening"
+                  ? "Ny föreningsmall"
+                  : "Ny butiksmall"}
             </span>
-            {form.title && <span className="text-sm font-semibold text-foreground truncate max-w-xs">{form.title}</span>}
+            {form.title && (
+              <span className="text-sm font-semibold text-foreground truncate max-w-xs">
+                {form.title}
+              </span>
+            )}
             <div className="ml-auto flex items-center gap-2">
               {error && <span className="text-xs text-destructive">{error}</span>}
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setShowCreate(false)}>Avbryt</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground"
+                onClick={() => setShowCreate(false)}
+              >
+                Avbryt
+              </Button>
               <Button size="sm" className="rounded-full" onClick={createTemplate} disabled={saving}>
                 {saving ? "Sparar..." : "Spara mall"}
               </Button>
@@ -3672,21 +5327,40 @@ function MallarPage() {
       </Dialog>
 
       {/* EDIT DIALOG */}
-      <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
+      <Dialog
+        open={!!editTarget}
+        onOpenChange={(o) => {
+          if (!o) setEditTarget(null);
+        }}
+      >
         <DialogContent className="max-h-[92dvh] w-full sm:max-w-4xl sm:max-h-[92vh] overflow-hidden p-0 gap-0">
-          <DialogTitle className="sr-only">Redigera mall{editTarget ? `: ${editTarget.title}` : ""}</DialogTitle>
+          <DialogTitle className="sr-only">
+            Redigera mall{editTarget ? `: ${editTarget.title}` : ""}
+          </DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <GripVertical className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground">Redigera mall</span>
             <div className="ml-auto flex items-center gap-2">
               {error && <span className="text-xs text-destructive">{error}</span>}
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setEditTarget(null)}>Avbryt</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground"
+                onClick={() => setEditTarget(null)}
+              >
+                Avbryt
+              </Button>
               <Button size="sm" className="rounded-full" onClick={saveEdit} disabled={saving}>
                 {saving ? "Sparar..." : "Spara ändringar"}
               </Button>
             </div>
           </div>
-          {editTarget && renderFormContent(editForm, setEditForm, (editTarget.hierarchy_scope as "store" | "hk" | "forening") ?? "store")}
+          {editTarget &&
+            renderFormContent(
+              editForm,
+              setEditForm,
+              (editTarget.hierarchy_scope as "store" | "hk" | "forening") ?? "store",
+            )}
         </DialogContent>
       </Dialog>
 
@@ -3696,16 +5370,20 @@ function MallarPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Skicka till alla butiker</AlertDialogTitle>
             <AlertDialogDescription>
-              Denna mall blir synlig i <strong>{allStores.length} butiker</strong>. Vill du fortsätta?
+              Denna mall blir synlig i <strong>{allStores.length} butiker</strong>. Vill du
+              fortsätta?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction onClick={() => {
-              if (broadcastConfirm === "create") setForm((p) => ({ ...p, storeIds: allStores.map((s) => s.id) }));
-              else setEditForm((p) => ({ ...p, storeIds: allStores.map((s) => s.id) }));
-              setBroadcastConfirm(null);
-            }}>
+            <AlertDialogAction
+              onClick={() => {
+                if (broadcastConfirm === "create")
+                  setForm((p) => ({ ...p, storeIds: allStores.map((s) => s.id) }));
+                else setEditForm((p) => ({ ...p, storeIds: allStores.map((s) => s.id) }));
+                setBroadcastConfirm(null);
+              }}
+            >
               Skicka till alla
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -3723,7 +5401,10 @@ function MallarPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={bulkDeleteTemplates}>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={bulkDeleteTemplates}
+            >
               Ta bort alla
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -3741,23 +5422,36 @@ function MallarPage() {
           </AlertDialogHeader>
           {(() => {
             if (!deleteTarget) return null;
-            const dependents = templates.filter(t =>
-              ((t as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title ?? "").toLowerCase() === deleteTarget.title.toLowerCase()
+            const dependents = templates.filter(
+              (t) =>
+                (
+                  (t as ChecklistTemplate & { depends_on_template_title?: string })
+                    .depends_on_template_title ?? ""
+                ).toLowerCase() === deleteTarget.title.toLowerCase(),
             );
             if (dependents.length === 0) return null;
             return (
               <div className="mx-6 -mt-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 space-y-1">
-                <p className="text-sm font-medium text-destructive">Varning: Följande mallar beror på den här:</p>
+                <p className="text-sm font-medium text-destructive">
+                  Varning: Följande mallar beror på den här:
+                </p>
                 <ul className="text-sm text-destructive/80 list-disc pl-4">
-                  {dependents.map(d => <li key={d.id}>{d.title}</li>)}
+                  {dependents.map((d) => (
+                    <li key={d.id}>{d.title}</li>
+                  ))}
                 </ul>
-                <p className="text-xs text-destructive/70">Ta bort eller uppdatera dessa mallar först.</p>
+                <p className="text-xs text-destructive/70">
+                  Ta bort eller uppdatera dessa mallar först.
+                </p>
               </div>
             );
           })()}
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteTemplate}>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={deleteTemplate}
+            >
               Ta bort
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -3770,16 +5464,25 @@ function MallarPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Synka med central mall</AlertDialogTitle>
             <AlertDialogDescription>
-              Den centrala mallen <strong>{mergeTarget?.parent.title}</strong> har uppdaterats sedan din lokala variant skapades. Vill du ersätta din variants innehåll (titel, beskrivning, checkpoints och frågor) med den senaste versionen från den centrala mallen?
-              <br /><br />
-              <span className="text-amber-600 dark:text-amber-400 font-medium">Dina egna ändringar i varianten skrivs över.</span> Butikstilldelning och historik bevaras.
+              Den centrala mallen <strong>{mergeTarget?.parent.title}</strong> har uppdaterats sedan
+              din lokala variant skapades. Vill du ersätta din variants innehåll (titel,
+              beskrivning, checkpoints och frågor) med den senaste versionen från den centrala
+              mallen?
+              <br />
+              <br />
+              <span className="text-amber-600 dark:text-amber-400 font-medium">
+                Dina egna ändringar i varianten skrivs över.
+              </span>{" "}
+              Butikstilldelning och historik bevaras.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={merging}>Avbryt</AlertDialogCancel>
             <AlertDialogAction
               disabled={merging}
-              onClick={() => mergeTarget && void mergeFromParent(mergeTarget.variant, mergeTarget.parent)}
+              onClick={() =>
+                mergeTarget && void mergeFromParent(mergeTarget.variant, mergeTarget.parent)
+              }
             >
               {merging ? "Synkar..." : "Synka nu"}
             </AlertDialogAction>
@@ -3788,14 +5491,24 @@ function MallarPage() {
       </AlertDialog>
 
       {/* VERSION HISTORY DIALOG */}
-      <Dialog open={!!versionHistoryTarget} onOpenChange={(o) => !o && setVersionHistoryTarget(null)}>
-        <DialogContent hideCloseButton className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col p-0 gap-0">
+      <Dialog
+        open={!!versionHistoryTarget}
+        onOpenChange={(o) => !o && setVersionHistoryTarget(null)}
+      >
+        <DialogContent
+          hideCloseButton
+          className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col p-0 gap-0"
+        >
           <DialogTitle className="sr-only">Versionshistorik</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <History className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Versionshistorik</span>
-            <span className="text-sm text-muted-foreground truncate flex-1">{versionHistoryTarget?.title}</span>
-            <span className="text-xs text-muted-foreground whitespace-nowrap">v{versionHistoryTarget?.version ?? 1}</span>
+            <span className="text-sm text-muted-foreground truncate flex-1">
+              {versionHistoryTarget?.title}
+            </span>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              v{versionHistoryTarget?.version ?? 1}
+            </span>
             <button
               onClick={() => setVersionHistoryTarget(null)}
               className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 transition-colors"
@@ -3806,114 +5519,245 @@ function MallarPage() {
           </div>
           <div className="flex-1 overflow-y-auto p-4 pb-8">
             {loadingVersions ? (
-              <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />)}</div>
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
+                ))}
+              </div>
             ) : versions.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">Ingen versionshistorik tillgänglig än.</p>
+              <p className="text-sm text-muted-foreground text-center py-8">
+                Ingen versionshistorik tillgänglig än.
+              </p>
             ) : (
               <div className="space-y-3">
                 {versions.map((v, vIdx) => {
-                  type SnapItem = { label: string; requires_photo?: boolean; link_url?: string | null; condition_question_id?: string | null; condition_answer?: string | null };
-                  type SnapQuestion = { label: string; question_type?: string; is_required?: boolean; link_url?: string | null };
+                  type SnapItem = {
+                    label: string;
+                    requires_photo?: boolean;
+                    link_url?: string | null;
+                    condition_question_id?: string | null;
+                    condition_answer?: string | null;
+                  };
+                  type SnapQuestion = {
+                    label: string;
+                    question_type?: string;
+                    is_required?: boolean;
+                    link_url?: string | null;
+                  };
                   type SnapType = {
-                    title?: string; description?: string; category?: string;
-                    items?: SnapItem[]; questions?: SnapQuestion[];
-                    priority?: string; status?: string;
-                    template_type?: string; template_mode?: string; is_critical?: boolean;
-                    recurrence_rule?: string; recurrence_days?: number[]; recurrence_interval?: number;
-                    recurrence_start?: string; recurrence_end?: string;
-                    due_date_offset?: string | number; due_date_time?: string;
-                    sap_article_id?: string; time_slots?: string[];
-                    is_delivery_task?: boolean; delivery_flow_name?: string;
-                    delivery_supplier_name?: string; delivery_entry_keys?: string;
+                    title?: string;
+                    description?: string;
+                    category?: string;
+                    items?: SnapItem[];
+                    questions?: SnapQuestion[];
+                    priority?: string;
+                    status?: string;
+                    template_type?: string;
+                    template_mode?: string;
+                    is_critical?: boolean;
+                    recurrence_rule?: string;
+                    recurrence_days?: number[];
+                    recurrence_interval?: number;
+                    recurrence_start?: string;
+                    recurrence_end?: string;
+                    due_date_offset?: string | number;
+                    due_date_time?: string;
+                    sap_article_id?: string;
+                    time_slots?: string[];
+                    is_delivery_task?: boolean;
+                    delivery_flow_name?: string;
+                    delivery_supplier_name?: string;
+                    delivery_entry_keys?: string;
                     event_trigger_description?: string;
                     event_trigger_user_id?: string;
                     depends_on_template_title?: string;
                     review_interval_months?: number;
                   };
                   const snap = v.snapshot as SnapType;
-                  const prev = vIdx < versions.length - 1 ? versions[vIdx + 1].snapshot as SnapType : null;
+                  const prev =
+                    vIdx < versions.length - 1 ? (versions[vIdx + 1].snapshot as SnapType) : null;
                   const diffs: string[] = [];
                   if (prev) {
-                    if (snap.title !== prev.title) diffs.push(`Titel: "${prev.title}" → "${snap.title}"`);
+                    if (snap.title !== prev.title)
+                      diffs.push(`Titel: "${prev.title}" → "${snap.title}"`);
                     if (snap.description !== prev.description) diffs.push("Beskrivning ändrad");
-                    if (snap.category !== prev.category) diffs.push(`Kategori: ${prev.category || "–"} → ${snap.category || "–"}`);
-                    if (snap.priority !== prev.priority) diffs.push(`Prioritet: ${prev.priority ?? "–"} → ${snap.priority ?? "–"}`);
-                    if (snap.status !== prev.status) diffs.push(`Status: ${prev.status ?? "–"} → ${snap.status ?? "–"}`);
-                    if (snap.template_type !== prev.template_type) diffs.push(`Malltyp: ${prev.template_type ?? "–"} → ${snap.template_type ?? "–"}`);
-                    if (snap.template_mode !== prev.template_mode) diffs.push(`Läge: ${prev.template_mode ?? "–"} → ${snap.template_mode ?? "–"}`);
-                    if (snap.is_critical !== prev.is_critical) diffs.push(`Kritisk: ${prev.is_critical ? "Ja" : "Nej"} → ${snap.is_critical ? "Ja" : "Nej"}`);
-                    if (snap.recurrence_rule !== prev.recurrence_rule) diffs.push(`Upprepning: ${prev.recurrence_rule || "Ingen"} → ${snap.recurrence_rule || "Ingen"}`);
-                    if (JSON.stringify(snap.recurrence_days) !== JSON.stringify(prev.recurrence_days)) diffs.push(`Upprepningsdagar ändrade`);
-                    if (snap.recurrence_interval !== prev.recurrence_interval) diffs.push(`Upprepningsintervall: ${prev.recurrence_interval ?? 1} → ${snap.recurrence_interval ?? 1}`);
-                    if (snap.recurrence_start !== prev.recurrence_start) diffs.push(`Startdatum: ${prev.recurrence_start || "–"} → ${snap.recurrence_start || "–"}`);
-                    if (snap.recurrence_end !== prev.recurrence_end) diffs.push(`Slutdatum: ${prev.recurrence_end || "–"} → ${snap.recurrence_end || "–"}`);
-                    if (String(snap.due_date_offset ?? "") !== String(prev.due_date_offset ?? "")) diffs.push(`Förfallsoffset: ${prev.due_date_offset || "–"} → ${snap.due_date_offset || "–"}`);
-                    if (snap.due_date_time !== prev.due_date_time) diffs.push(`Förfallotid: ${prev.due_date_time || "–"} → ${snap.due_date_time || "–"}`);
-                    if (snap.sap_article_id !== prev.sap_article_id) diffs.push(`SAP-artikel: ${prev.sap_article_id || "–"} → ${snap.sap_article_id || "–"}`);
-                    if (JSON.stringify(snap.time_slots) !== JSON.stringify(prev.time_slots)) diffs.push(`Tidsluckor ändrade`);
-                    if (snap.is_delivery_task !== prev.is_delivery_task) diffs.push(`Leveransmall: ${prev.is_delivery_task ? "Ja" : "Nej"} → ${snap.is_delivery_task ? "Ja" : "Nej"}`);
-                    if (snap.delivery_supplier_name !== prev.delivery_supplier_name) diffs.push(`Leverantör: ${prev.delivery_supplier_name || "–"} → ${snap.delivery_supplier_name || "–"}`);
-                    if (snap.delivery_flow_name !== prev.delivery_flow_name) diffs.push(`Flöde: ${prev.delivery_flow_name || "–"} → ${snap.delivery_flow_name || "–"}`);
-                    if (snap.delivery_entry_keys !== prev.delivery_entry_keys) diffs.push(`Leveransnyckel ändrad`);
-                    if (snap.event_trigger_description !== prev.event_trigger_description) diffs.push(`Händelseutlösare: ${prev.event_trigger_description || "–"} → ${snap.event_trigger_description || "–"}`);
-                    if (snap.event_trigger_user_id !== prev.event_trigger_user_id) diffs.push(`Händelseutlösare (användare): ${prev.event_trigger_user_id || "Ingen"} → ${snap.event_trigger_user_id || "Ingen"}`);
-                    if (snap.depends_on_template_title !== prev.depends_on_template_title) diffs.push(`Beroende av: ${prev.depends_on_template_title || "Ingen"} → ${snap.depends_on_template_title || "Ingen"}`);
-                    if (snap.review_interval_months !== prev.review_interval_months) diffs.push(`Granskningsintervall: ${prev.review_interval_months ?? "–"} mån → ${snap.review_interval_months ?? "–"} mån`);
+                    if (snap.category !== prev.category)
+                      diffs.push(`Kategori: ${prev.category || "–"} → ${snap.category || "–"}`);
+                    if (snap.priority !== prev.priority)
+                      diffs.push(`Prioritet: ${prev.priority ?? "–"} → ${snap.priority ?? "–"}`);
+                    if (snap.status !== prev.status)
+                      diffs.push(`Status: ${prev.status ?? "–"} → ${snap.status ?? "–"}`);
+                    if (snap.template_type !== prev.template_type)
+                      diffs.push(
+                        `Malltyp: ${prev.template_type ?? "–"} → ${snap.template_type ?? "–"}`,
+                      );
+                    if (snap.template_mode !== prev.template_mode)
+                      diffs.push(
+                        `Läge: ${prev.template_mode ?? "–"} → ${snap.template_mode ?? "–"}`,
+                      );
+                    if (snap.is_critical !== prev.is_critical)
+                      diffs.push(
+                        `Kritisk: ${prev.is_critical ? "Ja" : "Nej"} → ${snap.is_critical ? "Ja" : "Nej"}`,
+                      );
+                    if (snap.recurrence_rule !== prev.recurrence_rule)
+                      diffs.push(
+                        `Upprepning: ${prev.recurrence_rule || "Ingen"} → ${snap.recurrence_rule || "Ingen"}`,
+                      );
+                    if (
+                      JSON.stringify(snap.recurrence_days) !== JSON.stringify(prev.recurrence_days)
+                    )
+                      diffs.push(`Upprepningsdagar ändrade`);
+                    if (snap.recurrence_interval !== prev.recurrence_interval)
+                      diffs.push(
+                        `Upprepningsintervall: ${prev.recurrence_interval ?? 1} → ${snap.recurrence_interval ?? 1}`,
+                      );
+                    if (snap.recurrence_start !== prev.recurrence_start)
+                      diffs.push(
+                        `Startdatum: ${prev.recurrence_start || "–"} → ${snap.recurrence_start || "–"}`,
+                      );
+                    if (snap.recurrence_end !== prev.recurrence_end)
+                      diffs.push(
+                        `Slutdatum: ${prev.recurrence_end || "–"} → ${snap.recurrence_end || "–"}`,
+                      );
+                    if (String(snap.due_date_offset ?? "") !== String(prev.due_date_offset ?? ""))
+                      diffs.push(
+                        `Förfallsoffset: ${prev.due_date_offset || "–"} → ${snap.due_date_offset || "–"}`,
+                      );
+                    if (snap.due_date_time !== prev.due_date_time)
+                      diffs.push(
+                        `Förfallotid: ${prev.due_date_time || "–"} → ${snap.due_date_time || "–"}`,
+                      );
+                    if (snap.sap_article_id !== prev.sap_article_id)
+                      diffs.push(
+                        `SAP-artikel: ${prev.sap_article_id || "–"} → ${snap.sap_article_id || "–"}`,
+                      );
+                    if (JSON.stringify(snap.time_slots) !== JSON.stringify(prev.time_slots))
+                      diffs.push(`Tidsluckor ändrade`);
+                    if (snap.is_delivery_task !== prev.is_delivery_task)
+                      diffs.push(
+                        `Leveransmall: ${prev.is_delivery_task ? "Ja" : "Nej"} → ${snap.is_delivery_task ? "Ja" : "Nej"}`,
+                      );
+                    if (snap.delivery_supplier_name !== prev.delivery_supplier_name)
+                      diffs.push(
+                        `Leverantör: ${prev.delivery_supplier_name || "–"} → ${snap.delivery_supplier_name || "–"}`,
+                      );
+                    if (snap.delivery_flow_name !== prev.delivery_flow_name)
+                      diffs.push(
+                        `Flöde: ${prev.delivery_flow_name || "–"} → ${snap.delivery_flow_name || "–"}`,
+                      );
+                    if (snap.delivery_entry_keys !== prev.delivery_entry_keys)
+                      diffs.push(`Leveransnyckel ändrad`);
+                    if (snap.event_trigger_description !== prev.event_trigger_description)
+                      diffs.push(
+                        `Händelseutlösare: ${prev.event_trigger_description || "–"} → ${snap.event_trigger_description || "–"}`,
+                      );
+                    if (snap.event_trigger_user_id !== prev.event_trigger_user_id)
+                      diffs.push(
+                        `Händelseutlösare (användare): ${prev.event_trigger_user_id || "Ingen"} → ${snap.event_trigger_user_id || "Ingen"}`,
+                      );
+                    if (snap.depends_on_template_title !== prev.depends_on_template_title)
+                      diffs.push(
+                        `Beroende av: ${prev.depends_on_template_title || "Ingen"} → ${snap.depends_on_template_title || "Ingen"}`,
+                      );
+                    if (snap.review_interval_months !== prev.review_interval_months)
+                      diffs.push(
+                        `Granskningsintervall: ${prev.review_interval_months ?? "–"} mån → ${snap.review_interval_months ?? "–"} mån`,
+                      );
                     // Detailed step diff
                     const prevItems = prev.items ?? [];
                     const snapItems = snap.items ?? [];
-                    const prevLabels = prevItems.map(it => it.label);
-                    const snapLabels = snapItems.map(it => it.label);
-                    const addedSteps = snapLabels.filter(l => !prevLabels.includes(l));
-                    const removedSteps = prevLabels.filter(l => !snapLabels.includes(l));
-                    addedSteps.forEach(l => diffs.push(`+ Steg: "${l}"`));
-                    removedSteps.forEach(l => diffs.push(`- Steg: "${l}"`));
-                    if (addedSteps.length === 0 && removedSteps.length === 0 && prevLabels.join("|") !== snapLabels.join("|")) {
+                    const prevLabels = prevItems.map((it) => it.label);
+                    const snapLabels = snapItems.map((it) => it.label);
+                    const addedSteps = snapLabels.filter((l) => !prevLabels.includes(l));
+                    const removedSteps = prevLabels.filter((l) => !snapLabels.includes(l));
+                    addedSteps.forEach((l) => diffs.push(`+ Steg: "${l}"`));
+                    removedSteps.forEach((l) => diffs.push(`- Steg: "${l}"`));
+                    if (
+                      addedSteps.length === 0 &&
+                      removedSteps.length === 0 &&
+                      prevLabels.join("|") !== snapLabels.join("|")
+                    ) {
                       diffs.push("Steg omordnade");
                     }
-                    snapItems.forEach(it => {
+                    snapItems.forEach((it) => {
                       const prevIt = prevItems[prevLabels.indexOf(it.label)];
                       if (!prevIt) return;
-                      if ((prevIt.requires_photo ?? false) !== (it.requires_photo ?? false)) diffs.push(`Steg "${it.label}": foto ${it.requires_photo ? "krävs" : "krävs ej"}`);
-                      if ((prevIt.link_url ?? null) !== (it.link_url ?? null)) diffs.push(`Steg "${it.label}": länk ${it.link_url ? `"${it.link_url}"` : "borttagen"}`);
-                      if ((prevIt.condition_question_id ?? null) !== (it.condition_question_id ?? null)) diffs.push(`Steg "${it.label}": villkor ändrat`);
-                      if ((prevIt.condition_answer ?? null) !== (it.condition_answer ?? null)) diffs.push(`Steg "${it.label}": villkorssvar ändrat`);
+                      if ((prevIt.requires_photo ?? false) !== (it.requires_photo ?? false))
+                        diffs.push(
+                          `Steg "${it.label}": foto ${it.requires_photo ? "krävs" : "krävs ej"}`,
+                        );
+                      if ((prevIt.link_url ?? null) !== (it.link_url ?? null))
+                        diffs.push(
+                          `Steg "${it.label}": länk ${it.link_url ? `"${it.link_url}"` : "borttagen"}`,
+                        );
+                      if (
+                        (prevIt.condition_question_id ?? null) !==
+                        (it.condition_question_id ?? null)
+                      )
+                        diffs.push(`Steg "${it.label}": villkor ändrat`);
+                      if ((prevIt.condition_answer ?? null) !== (it.condition_answer ?? null))
+                        diffs.push(`Steg "${it.label}": villkorssvar ändrat`);
                     });
                     // Detailed question diff
                     const prevQs = prev.questions ?? [];
                     const snapQs = snap.questions ?? [];
-                    const prevQLabels = prevQs.map(q => q.label);
-                    const snapQLabels = snapQs.map(q => q.label);
-                    const addedQs = snapQLabels.filter(l => !prevQLabels.includes(l));
-                    const removedQs = prevQLabels.filter(l => !snapQLabels.includes(l));
-                    addedQs.forEach(l => diffs.push(`+ Fråga: "${l}"`));
-                    removedQs.forEach(l => diffs.push(`- Fråga: "${l}"`));
-                    if (addedQs.length === 0 && removedQs.length === 0 && prevQLabels.join("|") !== snapQLabels.join("|")) {
+                    const prevQLabels = prevQs.map((q) => q.label);
+                    const snapQLabels = snapQs.map((q) => q.label);
+                    const addedQs = snapQLabels.filter((l) => !prevQLabels.includes(l));
+                    const removedQs = prevQLabels.filter((l) => !snapQLabels.includes(l));
+                    addedQs.forEach((l) => diffs.push(`+ Fråga: "${l}"`));
+                    removedQs.forEach((l) => diffs.push(`- Fråga: "${l}"`));
+                    if (
+                      addedQs.length === 0 &&
+                      removedQs.length === 0 &&
+                      prevQLabels.join("|") !== snapQLabels.join("|")
+                    ) {
                       diffs.push("Frågor omordnade");
                     }
-                    snapQs.forEach(q => {
+                    snapQs.forEach((q) => {
                       const prevQ = prevQs[prevQLabels.indexOf(q.label)];
                       if (!prevQ) return;
-                      if ((prevQ.question_type ?? "text") !== (q.question_type ?? "text")) diffs.push(`Fråga "${q.label}": typ ${prevQ.question_type ?? "text"} → ${q.question_type ?? "text"}`);
-                      if ((prevQ.is_required ?? false) !== (q.is_required ?? false)) diffs.push(`Fråga "${q.label}": obligatorisk ${q.is_required ? "ja" : "nej"}`);
-                      if ((prevQ.link_url ?? null) !== (q.link_url ?? null)) diffs.push(`Fråga "${q.label}": länk ${q.link_url ? `"${q.link_url}"` : "borttagen"}`);
+                      if ((prevQ.question_type ?? "text") !== (q.question_type ?? "text"))
+                        diffs.push(
+                          `Fråga "${q.label}": typ ${prevQ.question_type ?? "text"} → ${q.question_type ?? "text"}`,
+                        );
+                      if ((prevQ.is_required ?? false) !== (q.is_required ?? false))
+                        diffs.push(
+                          `Fråga "${q.label}": obligatorisk ${q.is_required ? "ja" : "nej"}`,
+                        );
+                      if ((prevQ.link_url ?? null) !== (q.link_url ?? null))
+                        diffs.push(
+                          `Fråga "${q.label}": länk ${q.link_url ? `"${q.link_url}"` : "borttagen"}`,
+                        );
                     });
                   }
                   return (
-                    <div key={v.id} className="rounded-xl border border-border/60 bg-card p-3 space-y-2">
+                    <div
+                      key={v.id}
+                      className="rounded-xl border border-border/60 bg-card p-3 space-y-2"
+                    >
                       <div className="flex items-start gap-3">
-                        <div className={cn(
-                          "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                          v.version === (versionHistoryTarget?.version ?? 1) ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
-                        )}>
+                        <div
+                          className={cn(
+                            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                            v.version === (versionHistoryTarget?.version ?? 1)
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-primary/10 text-primary",
+                          )}
+                        >
                           v{v.version}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-foreground">{v.change_summary || "Sparad"}</p>
-                          <p className="text-[11px] text-muted-foreground">{new Date(v.saved_at).toLocaleString("sv-SE")}</p>
+                          <p className="text-xs font-medium text-foreground">
+                            {v.change_summary || "Sparad"}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {new Date(v.saved_at).toLocaleString("sv-SE")}
+                          </p>
                           {snap.title && (
                             <p className="text-[11px] text-muted-foreground mt-0.5">
-                              "{snap.title}" — {snap.items?.length ?? 0} steg, {snap.questions?.length ?? 0} frågor
+                              "{snap.title}" — {snap.items?.length ?? 0} steg,{" "}
+                              {snap.questions?.length ?? 0} frågor
                               {snap.recurrence_rule ? `, ${snap.recurrence_rule}` : ""}
                               {snap.is_delivery_task ? ", leveransmall" : ""}
                               {snap.is_critical ? ", kritisk" : ""}
@@ -3921,7 +5765,12 @@ function MallarPage() {
                           )}
                         </div>
                         {isManager && v.version !== (versionHistoryTarget?.version ?? 1) && (
-                          <Button variant="outline" size="sm" className="rounded-full h-7 text-xs shrink-0" onClick={() => setRestoreConfirm(v)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full h-7 text-xs shrink-0"
+                            onClick={() => setRestoreConfirm(v)}
+                          >
                             Återställ
                           </Button>
                         )}
@@ -3938,24 +5787,30 @@ function MallarPage() {
                                   "flex items-start gap-2 px-3 py-1.5 text-xs font-mono border-b border-border/20 last:border-0",
                                   isAdded && "bg-success/8 text-success-foreground",
                                   isRemoved && "bg-destructive/8 text-destructive",
-                                  !isAdded && !isRemoved && "text-foreground/70"
+                                  !isAdded && !isRemoved && "text-foreground/70",
                                 )}
                               >
-                                <span className={cn(
-                                  "shrink-0 w-3 font-bold",
-                                  isAdded && "text-success",
-                                  isRemoved && "text-destructive",
-                                  !isAdded && !isRemoved && "text-muted-foreground"
-                                )}>
+                                <span
+                                  className={cn(
+                                    "shrink-0 w-3 font-bold",
+                                    isAdded && "text-success",
+                                    isRemoved && "text-destructive",
+                                    !isAdded && !isRemoved && "text-muted-foreground",
+                                  )}
+                                >
                                   {isAdded ? "+" : isRemoved ? "−" : "·"}
                                 </span>
-                                <span className="break-words min-w-0">{isAdded ? d.slice(2) : isRemoved ? d.slice(2) : d}</span>
+                                <span className="break-words min-w-0">
+                                  {isAdded ? d.slice(2) : isRemoved ? d.slice(2) : d}
+                                </span>
                               </div>
                             );
                           })}
                         </div>
                       ) : (
-                        <p className="text-xs text-muted-foreground italic">Inga spårade ändringar</p>
+                        <p className="text-xs text-muted-foreground italic">
+                          Inga spårade ändringar
+                        </p>
                       )}
                     </div>
                   );
@@ -3972,12 +5827,15 @@ function MallarPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Återställ version {restoreConfirm?.version}</AlertDialogTitle>
             <AlertDialogDescription>
-              En ny version skapas med innehållet från version {restoreConfirm?.version}. Nuvarande version bevaras i historiken.
+              En ny version skapas med innehållet från version {restoreConfirm?.version}. Nuvarande
+              version bevaras i historiken.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction onClick={() => restoreConfirm && void restoreVersion(restoreConfirm)}>
+            <AlertDialogAction
+              onClick={() => restoreConfirm && void restoreVersion(restoreConfirm)}
+            >
               Återställ
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -3989,13 +5847,17 @@ function MallarPage() {
         <DialogContent className="max-w-md">
           <div className="space-y-4 p-4">
             <h2 className="text-base font-semibold">Kopiera mall: {inheritTarget?.title}</h2>
-            <p className="text-sm text-muted-foreground">Välj hur du vill använda den här mallen som utgångspunkt:</p>
+            <p className="text-sm text-muted-foreground">
+              Välj hur du vill använda den här mallen som utgångspunkt:
+            </p>
 
             <div className="space-y-2">
               <button
                 className={cn(
                   "w-full rounded-xl border p-3 text-left transition-colors",
-                  inheritMode === "copy" ? "border-primary bg-primary/5" : "border-border/60 hover:border-primary/40"
+                  inheritMode === "copy"
+                    ? "border-primary bg-primary/5"
+                    : "border-border/60 hover:border-primary/40",
                 )}
                 onClick={() => setInheritMode("copy")}
               >
@@ -4003,13 +5865,17 @@ function MallarPage() {
                   <Copy className="h-4 w-4 text-primary" />
                   <span className="text-sm font-medium">Kopiera mall</span>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">Fristående kopia — ändringar i originalet påverkar inte kopian.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Fristående kopia — ändringar i originalet påverkar inte kopian.
+                </p>
               </button>
 
               <button
                 className={cn(
                   "w-full rounded-xl border p-3 text-left transition-colors",
-                  inheritMode === "variant" ? "border-primary bg-primary/5" : "border-border/60 hover:border-primary/40"
+                  inheritMode === "variant"
+                    ? "border-primary bg-primary/5"
+                    : "border-border/60 hover:border-primary/40",
                 )}
                 onClick={() => setInheritMode("variant")}
               >
@@ -4017,13 +5883,22 @@ function MallarPage() {
                   <GitBranch className="h-4 w-4 text-primary" />
                   <span className="text-sm font-medium">Skapa lokal variant</span>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">Behåller koppling — du kan lägga till steg, dölja steg och skriva över beskrivningar.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Behåller koppling — du kan lägga till steg, dölja steg och skriva över
+                  beskrivningar.
+                </p>
               </button>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="ghost" onClick={() => setInheritTarget(null)}>Avbryt</Button>
-              <Button onClick={() => inheritTarget && void createInheritedTemplate(inheritTarget, inheritMode)}>
+              <Button variant="ghost" onClick={() => setInheritTarget(null)}>
+                Avbryt
+              </Button>
+              <Button
+                onClick={() =>
+                  inheritTarget && void createInheritedTemplate(inheritTarget, inheritMode)
+                }
+              >
                 <Layers className="mr-2 h-4 w-4" />
                 {inheritMode === "copy" ? "Skapa kopia" : "Skapa variant"}
               </Button>
@@ -4034,12 +5909,17 @@ function MallarPage() {
 
       {/* TEMPLATE PREVIEW DIALOG */}
       <Dialog open={!!previewTarget} onOpenChange={(o) => !o && setPreviewTarget(null)}>
-        <DialogContent hideCloseButton className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogContent
+          hideCloseButton
+          className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0"
+        >
           <DialogTitle className="sr-only">Förhandsgranska mall</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <Eye className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Förhandsgranska mall</span>
-            <span className="text-sm text-foreground font-semibold truncate flex-1">{previewTarget?.title}</span>
+            <span className="text-sm text-foreground font-semibold truncate flex-1">
+              {previewTarget?.title}
+            </span>
             <button
               onClick={() => setPreviewTarget(null)}
               className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 transition-colors"
@@ -4052,15 +5932,36 @@ function MallarPage() {
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 pb-8">
               {/* Meta badges */}
               <div className="flex flex-wrap gap-2">
-                {previewTarget.category && <Badge variant="secondary">{previewTarget.category}</Badge>}
-                <Badge variant="outline" className={cn("text-xs", (TEMPLATE_STATUS_OPTIONS.find(o => o.value === (previewTarget.status ?? "active")) ?? TEMPLATE_STATUS_OPTIONS[0]).cls)}>
-                  {(TEMPLATE_STATUS_OPTIONS.find(o => o.value === (previewTarget.status ?? "active")) ?? TEMPLATE_STATUS_OPTIONS[0]).label}
+                {previewTarget.category && (
+                  <Badge variant="secondary">{previewTarget.category}</Badge>
+                )}
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-xs",
+                    (
+                      TEMPLATE_STATUS_OPTIONS.find(
+                        (o) => o.value === (previewTarget.status ?? "active"),
+                      ) ?? TEMPLATE_STATUS_OPTIONS[0]
+                    ).cls,
+                  )}
+                >
+                  {
+                    (
+                      TEMPLATE_STATUS_OPTIONS.find(
+                        (o) => o.value === (previewTarget.status ?? "active"),
+                      ) ?? TEMPLATE_STATUS_OPTIONS[0]
+                    ).label
+                  }
                 </Badge>
-                {previewTarget.priority && <Badge variant="outline">{previewTarget.priority}</Badge>}
+                {previewTarget.priority && (
+                  <Badge variant="outline">{previewTarget.priority}</Badge>
+                )}
                 {previewTarget.recurrence_rule && (
                   <Badge variant="outline" className="gap-1">
                     <Repeat className="h-3 w-3" />
-                    {RECURRENCE_OPTIONS.find(o => o.value === previewTarget.recurrence_rule)?.label ?? previewTarget.recurrence_rule}
+                    {RECURRENCE_OPTIONS.find((o) => o.value === previewTarget.recurrence_rule)
+                      ?.label ?? previewTarget.recurrence_rule}
                   </Badge>
                 )}
                 {previewTarget.due_date_time && (
@@ -4069,7 +5970,8 @@ function MallarPage() {
                   </Badge>
                 )}
                 {(() => {
-                  const ts = (previewTarget as ChecklistTemplate & { time_slots?: string[] }).time_slots;
+                  const ts = (previewTarget as ChecklistTemplate & { time_slots?: string[] })
+                    .time_slots;
                   return ts && ts.length > 0 ? (
                     <Badge variant="outline" className="gap-1">
                       <CalendarClock className="h-3 w-3" /> {ts.length} tidsluckor
@@ -4079,26 +5981,49 @@ function MallarPage() {
               </div>
 
               {previewTarget.description && (
-                <p className="text-sm text-muted-foreground leading-relaxed">{previewTarget.description}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {previewTarget.description}
+                </p>
               )}
 
               {/* Steps */}
               {(previewTarget.items?.length ?? 0) > 0 && (
                 <div>
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Steg ({previewTarget.items?.length})</p>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Steg ({previewTarget.items?.length})
+                  </p>
                   <ol className="space-y-2">
-                    {(previewTarget.items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((item: ChecklistTemplateItem, idx: number) => (
-                      <li key={item.id} className="flex items-center gap-3 rounded-xl border border-border/50 bg-muted/20 px-3 py-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">{idx + 1}</span>
-                        <span className="flex-1 text-sm">{item.label}</span>
-                        {item.requires_photo && <Badge variant="secondary" className="text-xs">Foto krävs</Badge>}
-                        {(item as ChecklistTemplateItem & { link_url?: string }).link_url && (
-                          <a href={(item as ChecklistTemplateItem & { link_url?: string }).link_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors">
-                            <ExternalLink className="h-3 w-3" />Länk
-                          </a>
-                        )}
-                      </li>
-                    ))}
+                    {(previewTarget.items ?? [])
+                      .sort((a, b) => a.sort_order - b.sort_order)
+                      .map((item: ChecklistTemplateItem, idx: number) => (
+                        <li
+                          key={item.id}
+                          className="flex items-center gap-3 rounded-xl border border-border/50 bg-muted/20 px-3 py-2.5"
+                        >
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                            {idx + 1}
+                          </span>
+                          <span className="flex-1 text-sm">{item.label}</span>
+                          {item.requires_photo && (
+                            <Badge variant="secondary" className="text-xs">
+                              Foto krävs
+                            </Badge>
+                          )}
+                          {(item as ChecklistTemplateItem & { link_url?: string }).link_url && (
+                            <a
+                              href={
+                                (item as ChecklistTemplateItem & { link_url?: string }).link_url
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Länk
+                            </a>
+                          )}
+                        </li>
+                      ))}
                   </ol>
                 </div>
               )}
@@ -4106,35 +6031,63 @@ function MallarPage() {
               {/* Questions */}
               {(previewTarget.questions?.length ?? 0) > 0 && (
                 <div>
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Frågor ({previewTarget.questions?.length})</p>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Frågor ({previewTarget.questions?.length})
+                  </p>
                   <ol className="space-y-2">
-                    {(previewTarget.questions ?? []).sort((a, b) => a.sort_order - b.sort_order).map((q: ChecklistTemplateQuestion, idx: number) => (
-                      <li key={q.id} className="flex items-center gap-3 rounded-xl border border-border/50 bg-muted/20 px-3 py-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">{idx + 1}</span>
-                        <span className="flex-1 text-sm">{q.label}</span>
-                        {q.question_type === "yes_no" && <Badge variant="secondary" className="text-xs">Ja/Nej</Badge>}
-                        {q.is_required && <Badge variant="outline" className="text-xs text-destructive border-destructive/30">Obligatorisk</Badge>}
-                      </li>
-                    ))}
+                    {(previewTarget.questions ?? [])
+                      .sort((a, b) => a.sort_order - b.sort_order)
+                      .map((q: ChecklistTemplateQuestion, idx: number) => (
+                        <li
+                          key={q.id}
+                          className="flex items-center gap-3 rounded-xl border border-border/50 bg-muted/20 px-3 py-2.5"
+                        >
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                            {idx + 1}
+                          </span>
+                          <span className="flex-1 text-sm">{q.label}</span>
+                          {q.question_type === "yes_no" && (
+                            <Badge variant="secondary" className="text-xs">
+                              Ja/Nej
+                            </Badge>
+                          )}
+                          {q.is_required && (
+                            <Badge
+                              variant="outline"
+                              className="text-xs text-destructive border-destructive/30"
+                            >
+                              Obligatorisk
+                            </Badge>
+                          )}
+                        </li>
+                      ))}
                   </ol>
                 </div>
               )}
 
               {/* Time slots */}
               {(() => {
-                const ts = (previewTarget as ChecklistTemplate & { time_slots?: string[] }).time_slots;
+                const ts = (previewTarget as ChecklistTemplate & { time_slots?: string[] })
+                  .time_slots;
                 return ts && ts.length > 0 ? (
                   <div>
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tidsluckor</p>
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Tidsluckor
+                    </p>
                     <div className="flex flex-wrap gap-2">
                       {ts.map((slot, i) => (
-                        <div key={i} className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-3 py-1.5 text-sm">
+                        <div
+                          key={i}
+                          className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-3 py-1.5 text-sm"
+                        >
                           <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                           {slot}
                         </div>
                       ))}
                     </div>
-                    <p className="mt-2 text-xs text-muted-foreground">En uppgift skapas per tidslucka och period.</p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      En uppgift skapas per tidslucka och period.
+                    </p>
                   </div>
                 ) : null;
               })()}
@@ -4144,7 +6097,9 @@ function MallarPage() {
                 <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
                   <div className="flex items-center gap-2 text-sm">
                     <GitBranch className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{previewTarget.inherit_mode === "variant" ? "Lokal variant" : "Kopia"}</span>
+                    <span className="font-medium">
+                      {previewTarget.inherit_mode === "variant" ? "Lokal variant" : "Kopia"}
+                    </span>
                     <span className="text-muted-foreground">av en överordnad mall</span>
                   </div>
                 </div>
@@ -4160,40 +6115,73 @@ function MallarPage() {
           <DialogTitle className="sr-only">Skapa uppgifter från mallar</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <ListChecks className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Skapa uppgifter från {bulkTaskConfigs.length} mallar</span>
+            <span className="text-sm font-medium">
+              Skapa uppgifter från {bulkTaskConfigs.length} mallar
+            </span>
             <span className="text-xs text-muted-foreground">
-              ({bulkTaskConfigs.reduce((sum, cfg) => {
-                const tmpl = templates.find(t => t.id === cfg.templateId);
+              (
+              {bulkTaskConfigs.reduce((sum, cfg) => {
+                const tmpl = templates.find((t) => t.id === cfg.templateId);
                 if (!tmpl) return sum + 1;
-                const isDeliveryTmpl = !!(tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task;
+                const isDeliveryTmpl = !!(
+                  tmpl as ChecklistTemplate & { is_delivery_task?: boolean }
+                ).is_delivery_task;
                 if (isDeliveryTmpl) return sum + Math.max(1, cfg.selectedDeliveryIds.length);
-                const slots = (tmpl as ChecklistTemplate & { time_slots?: string[] })?.time_slots ?? [];
+                const slots =
+                  (tmpl as ChecklistTemplate & { time_slots?: string[] })?.time_slots ?? [];
                 return sum + Math.max(1, slots.length);
-              }, 0)} uppgifter totalt)
+              }, 0)}{" "}
+              uppgifter totalt)
             </span>
             <div className="ml-auto flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setBulkCreateOpen(false)}>Avbryt</Button>
-              <Button size="sm" className="rounded-full" onClick={bulkCreateTasks} disabled={bulkCreating}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground"
+                onClick={() => setBulkCreateOpen(false)}
+              >
+                Avbryt
+              </Button>
+              <Button
+                size="sm"
+                className="rounded-full"
+                onClick={bulkCreateTasks}
+                disabled={bulkCreating}
+              >
                 {bulkCreating ? "Skapar..." : `Skapa uppgifter`}
               </Button>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-5 space-y-4 pb-8">
-            <p className="text-sm text-muted-foreground">Förfallodatum, tid och prioritet hämtas direkt från mallen. Välj vem som ska tilldelas varje uppgift.</p>
+            <p className="text-sm text-muted-foreground">
+              Förfallodatum, tid och prioritet hämtas direkt från mallen. Välj vem som ska tilldelas
+              varje uppgift.
+            </p>
             {bulkTaskConfigs.map((cfg, idx) => {
-              const tmpl = templates.find(t => t.id === cfg.templateId);
+              const tmpl = templates.find((t) => t.id === cfg.templateId);
               if (!tmpl) return null;
-              const isDeliveryTmpl = !!(tmpl as ChecklistTemplate & { is_delivery_task?: boolean }).is_delivery_task;
-              const timeSlots = (tmpl as ChecklistTemplate & { time_slots?: string[] })?.time_slots ?? [];
+              const isDeliveryTmpl = !!(tmpl as ChecklistTemplate & { is_delivery_task?: boolean })
+                .is_delivery_task;
+              const timeSlots =
+                (tmpl as ChecklistTemplate & { time_slots?: string[] })?.time_slots ?? [];
               const taskCount = Math.max(1, timeSlots.length);
-              const storeUsers = allUsers.filter(u => !activeStore || u.store_id === activeStore.id);
-              const storeGroups = allGroups.filter(g => !activeStore || g.store_id === activeStore.id);
+              const storeUsers = allUsers.filter(
+                (u) => !activeStore || u.store_id === activeStore.id,
+              );
+              const storeGroups = allGroups.filter(
+                (g) => !activeStore || g.store_id === activeStore.id,
+              );
               const smartDate = calcNextDueDate(tmpl);
 
               // Compute set of users scheduled and working at the task time
               const swedishDayToJs: Record<string, number> = {
-                "Söndag": 0, "Måndag": 1, "Tisdag": 2, "Onsdag": 3,
-                "Torsdag": 4, "Fredag": 5, "Lördag": 6,
+                Söndag: 0,
+                Måndag: 1,
+                Tisdag: 2,
+                Onsdag: 3,
+                Torsdag: 4,
+                Fredag: 5,
+                Lördag: 6,
               };
 
               // Returns true if timeStr "HH:MM" falls within any of the user's shifts on the given date key
@@ -4215,7 +6203,7 @@ function MallarPage() {
               const scheduledOnDays = new Set<string>();
               if (isDeliveryTmpl) {
                 for (const deliveryId of cfg.selectedDeliveryIds) {
-                  const entry = deliveryWeekEntries.find(e => e.id === deliveryId);
+                  const entry = deliveryWeekEntries.find((e) => e.id === deliveryId);
                   if (!entry) continue;
                   const deliveryTime = entry.delivery_time ?? "";
                   const exactDate = entry.delivery_date ?? "";
@@ -4239,42 +6227,78 @@ function MallarPage() {
               const showAll = showAllUsersForTemplate[cfg.templateId] ?? false;
               const userSearchQ = (bulkUserSearch[cfg.templateId] ?? "").toLowerCase();
               // Sort: scheduled workers first, then others. "Visa alla" expands to include non-scheduled.
-              const scheduledUsers = storeUsers.filter(u => scheduledOnDays.has(u.id));
-              const unscheduledUsers = storeUsers.filter(u => !scheduledOnDays.has(u.id));
-              const allSortedUsers = hasScheduleData && scheduledOnDays.size > 0
-                ? [...scheduledUsers, ...unscheduledUsers]
-                : storeUsers;
-              const visibleUsers = (hasScheduleData && scheduledOnDays.size > 0 && !showAll
-                ? scheduledUsers
-                : allSortedUsers
-              ).filter(u => !userSearchQ || u.display_name.toLowerCase().includes(userSearchQ));
+              const scheduledUsers = storeUsers.filter((u) => scheduledOnDays.has(u.id));
+              const unscheduledUsers = storeUsers.filter((u) => !scheduledOnDays.has(u.id));
+              const allSortedUsers =
+                hasScheduleData && scheduledOnDays.size > 0
+                  ? [...scheduledUsers, ...unscheduledUsers]
+                  : storeUsers;
+              const visibleUsers = (
+                hasScheduleData && scheduledOnDays.size > 0 && !showAll
+                  ? scheduledUsers
+                  : allSortedUsers
+              ).filter((u) => !userSearchQ || u.display_name.toLowerCase().includes(userSearchQ));
               return (
-                <div key={cfg.templateId} className={cn("rounded-2xl border bg-card p-4 space-y-4", isDeliveryTmpl ? "border-amber-300/60 bg-amber-50/30" : "border-border/60")}>
+                <div
+                  key={cfg.templateId}
+                  className={cn(
+                    "rounded-2xl border bg-card p-4 space-y-4",
+                    isDeliveryTmpl ? "border-amber-300/60 bg-amber-50/30" : "border-border/60",
+                  )}
+                >
                   <div className="flex items-start gap-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{idx + 1}</div>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                      {idx + 1}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">{tmpl.title}</p>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {tmpl.category && <Badge variant="secondary" className="text-xs">{tmpl.category}</Badge>}
-                        <Badge variant="outline" className="text-xs">{tmpl.priority ?? "Medel"}</Badge>
-                        <span className="text-xs text-muted-foreground">{tmpl.items?.length ?? 0} steg</span>
-                        {taskCount > 1 && <Badge className="text-xs bg-primary/10 text-primary border-0">{taskCount} uppgifter (tidsluckor)</Badge>}
-                        {isDeliveryTmpl && <Badge variant="outline" className="text-xs border-amber-400 text-amber-700 bg-amber-50"><Truck className="h-3 w-3 mr-1" />Leveransmall</Badge>}
+                        {tmpl.category && (
+                          <Badge variant="secondary" className="text-xs">
+                            {tmpl.category}
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-xs">
+                          {tmpl.priority ?? "Medel"}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {tmpl.items?.length ?? 0} steg
+                        </span>
+                        {taskCount > 1 && (
+                          <Badge className="text-xs bg-primary/10 text-primary border-0">
+                            {taskCount} uppgifter (tidsluckor)
+                          </Badge>
+                        )}
+                        {isDeliveryTmpl && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs border-amber-400 text-amber-700 bg-amber-50"
+                          >
+                            <Truck className="h-3 w-3 mr-1" />
+                            Leveransmall
+                          </Badge>
+                        )}
                         {(() => {
-                          const depTitle = (tmpl as ChecklistTemplate & { depends_on_template_title?: string }).depends_on_template_title;
+                          const depTitle = (
+                            tmpl as ChecklistTemplate & { depends_on_template_title?: string }
+                          ).depends_on_template_title;
                           if (!depTitle) return null;
-                          const inBatch = bulkTaskConfigs.some(c => {
-                            const t = templates.find(x => x.id === c.templateId);
+                          const inBatch = bulkTaskConfigs.some((c) => {
+                            const t = templates.find((x) => x.id === c.templateId);
                             return t && t.title.toLowerCase() === depTitle.toLowerCase();
                           });
                           // Check if a matching task already exists (we can't query here, but show "okänd" if not in batch)
                           const status = inBatch ? "batch" : "extern";
                           return (
-                            <Badge variant="outline" className={cn(
-                              "text-xs gap-1",
-                              status === "batch" ? "border-green-400 text-green-700 bg-green-50" :
-                              "border-orange-400 text-orange-700 bg-orange-50"
-                            )}>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-xs gap-1",
+                                status === "batch"
+                                  ? "border-green-400 text-green-700 bg-green-50"
+                                  : "border-orange-400 text-orange-700 bg-orange-50",
+                              )}
+                            >
                               <Link2 className="h-3 w-3" />
                               Beror på: {depTitle}
                               {status === "batch" ? " (i batch)" : " — måste finnas i batch!"}
@@ -4288,13 +6312,15 @@ function MallarPage() {
                           {tmpl.recurrence_rule && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5">
                               <Repeat className="h-3 w-3" />
-                              {RECURRENCE_OPTIONS.find(r => r.value === tmpl.recurrence_rule)?.label ?? tmpl.recurrence_rule}
+                              {RECURRENCE_OPTIONS.find((r) => r.value === tmpl.recurrence_rule)
+                                ?.label ?? tmpl.recurrence_rule}
                             </span>
                           )}
                           {smartDate && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5">
                               <Clock className="h-3 w-3" />
-                              Nästa: {smartDate.iso}{smartDate.time ? ` kl ${smartDate.time}` : ""}
+                              Nästa: {smartDate.iso}
+                              {smartDate.time ? ` kl ${smartDate.time}` : ""}
                             </span>
                           )}
                           {timeSlots.length > 0 && (
@@ -4315,150 +6341,245 @@ function MallarPage() {
                       <div>
                         <p className="text-xs font-medium text-amber-800">Uppgifter finns redan</p>
                         <p className="text-[11px] text-amber-700 mt-0.5">
-                          Kontrollera vem som jobbar dagen innan uppgiften ska göras och justera tilldelningen nedan om det behövs.
+                          Kontrollera vem som jobbar dagen innan uppgiften ska göras och justera
+                          tilldelningen nedan om det behövs.
                         </p>
                       </div>
                     </div>
                   )}
 
                   {/* Delivery template: pick specific deliveries from the current week's plan */}
-                  {isDeliveryTmpl && (() => {
-                    const tmplEntryKeys = ((tmpl as ChecklistTemplate & { delivery_entry_keys?: string }).delivery_entry_keys ?? "")
-                      .split("|").map(s => s.trim()).filter(s => s.includes("||"));
-                    const tmplFlows = ((tmpl as ChecklistTemplate & { delivery_flow_name?: string }).delivery_flow_name ?? "")
-                      .split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
-                    const tmplSuppliers = ((tmpl as ChecklistTemplate & { delivery_supplier_name?: string }).delivery_supplier_name ?? "")
-                      .split("|").map(s => s.trim().toLowerCase()).filter(Boolean);
+                  {isDeliveryTmpl &&
+                    (() => {
+                      const tmplEntryKeys = (
+                        (tmpl as ChecklistTemplate & { delivery_entry_keys?: string })
+                          .delivery_entry_keys ?? ""
+                      )
+                        .split("|")
+                        .map((s) => s.trim())
+                        .filter((s) => s.includes("||"));
+                      const tmplFlows = (
+                        (tmpl as ChecklistTemplate & { delivery_flow_name?: string })
+                          .delivery_flow_name ?? ""
+                      )
+                        .split("|")
+                        .map((s) => s.trim().toLowerCase())
+                        .filter(Boolean);
+                      const tmplSuppliers = (
+                        (tmpl as ChecklistTemplate & { delivery_supplier_name?: string })
+                          .delivery_supplier_name ?? ""
+                      )
+                        .split("|")
+                        .map((s) => s.trim().toLowerCase())
+                        .filter(Boolean);
 
-                    // An entry is "suggested" (pre-checked) if it matches the template config:
-                    // prefer precise key match, fall back to supplier+flow
-                    const isSuggested = (e: { delivery_day: string; supplier: string; flow_name: string }) => {
-                      if (tmplEntryKeys.length > 0) {
-                        return tmplEntryKeys.includes(`${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`);
-                      }
-                      const flowOk = tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
-                      const suppOk = tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
-                      return flowOk && suppOk;
-                    };
-                    const hasSuggestions = tmplEntryKeys.length > 0 || tmplFlows.length > 0 || tmplSuppliers.length > 0;
+                      // An entry is "suggested" (pre-checked) if it matches the template config:
+                      // prefer precise key match, fall back to supplier+flow
+                      const isSuggested = (e: {
+                        delivery_day: string;
+                        supplier: string;
+                        flow_name: string;
+                      }) => {
+                        if (tmplEntryKeys.length > 0) {
+                          return tmplEntryKeys.includes(
+                            `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`,
+                          );
+                        }
+                        const flowOk =
+                          tmplFlows.length === 0 ||
+                          tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
+                        const suppOk =
+                          tmplSuppliers.length === 0 ||
+                          tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
+                        return flowOk && suppOk;
+                      };
+                      const hasSuggestions =
+                        tmplEntryKeys.length > 0 ||
+                        tmplFlows.length > 0 ||
+                        tmplSuppliers.length > 0;
 
-                    // Group by delivery_day — day and time are key info for deliveries
-                    const dayOrder = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
-                    const byDay = deliveryWeekEntries.reduce<Record<string, typeof deliveryWeekEntries>>((acc, e) => {
-                      const k = e.delivery_day || "Okänd dag";
-                      if (!acc[k]) acc[k] = [];
-                      acc[k].push(e);
-                      return acc;
-                    }, {});
-                    const sortedDays = Object.keys(byDay).sort((a, b) => {
-                      const ai = dayOrder.indexOf(a);
-                      const bi = dayOrder.indexOf(b);
-                      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-                    });
+                      // Group by delivery_day — day and time are key info for deliveries
+                      const dayOrder = [
+                        "Måndag",
+                        "Tisdag",
+                        "Onsdag",
+                        "Torsdag",
+                        "Fredag",
+                        "Lördag",
+                        "Söndag",
+                      ];
+                      const byDay = deliveryWeekEntries.reduce<
+                        Record<string, typeof deliveryWeekEntries>
+                      >((acc, e) => {
+                        const k = e.delivery_day || "Okänd dag";
+                        if (!acc[k]) acc[k] = [];
+                        acc[k].push(e);
+                        return acc;
+                      }, {});
+                      const sortedDays = Object.keys(byDay).sort((a, b) => {
+                        const ai = dayOrder.indexOf(a);
+                        const bi = dayOrder.indexOf(b);
+                        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+                      });
 
-                    return (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                            <label className="text-xs font-medium text-muted-foreground">Välj leveranser (veckans plan)</label>
-                            {hasSuggestions && (
-                              <span className="text-[10px] text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">Förvalda markerade</span>
+                      return (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+                              <label className="text-xs font-medium text-muted-foreground">
+                                Välj leveranser (veckans plan)
+                              </label>
+                              {hasSuggestions && (
+                                <span className="text-[10px] text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">
+                                  Förvalda markerade
+                                </span>
+                              )}
+                            </div>
+                            {deliveryWeekEntries.length > 1 && (
+                              <button
+                                type="button"
+                                className="text-[11px] text-primary hover:underline"
+                                onClick={() => {
+                                  const allIds = deliveryWeekEntries.map((s) => s.id);
+                                  const allSelected = allIds.every((id) =>
+                                    cfg.selectedDeliveryIds.includes(id),
+                                  );
+                                  const ids = allSelected ? [] : allIds;
+                                  setBulkTaskConfigs((prev) =>
+                                    prev.map((c, i) =>
+                                      i === idx ? { ...c, selectedDeliveryIds: ids } : c,
+                                    ),
+                                  );
+                                }}
+                              >
+                                {deliveryWeekEntries.every((s) =>
+                                  cfg.selectedDeliveryIds.includes(s.id),
+                                )
+                                  ? "Avmarkera alla"
+                                  : "Välj alla"}
+                              </button>
                             )}
                           </div>
-                          {deliveryWeekEntries.length > 1 && (
-                            <button
-                              type="button"
-                              className="text-[11px] text-primary hover:underline"
-                              onClick={() => {
-                                const allIds = deliveryWeekEntries.map(s => s.id);
-                                const allSelected = allIds.every(id => cfg.selectedDeliveryIds.includes(id));
-                                const ids = allSelected ? [] : allIds;
-                                setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, selectedDeliveryIds: ids } : c));
-                              }}
-                            >
-                              {deliveryWeekEntries.every(s => cfg.selectedDeliveryIds.includes(s.id)) ? "Avmarkera alla" : "Välj alla"}
-                            </button>
+                          {deliveryWeekEntries.length === 0 ? (
+                            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                              Ingen aktiv leveransplan hittades. Importera en leveransplan under
+                              Inställningar.
+                            </p>
+                          ) : (
+                            <div className="space-y-1.5 max-h-56 overflow-y-auto rounded-lg border border-border/50 p-2">
+                              {sortedDays.map((dayName) => {
+                                const entries = byDay[dayName];
+                                const dayIds = entries.map((e) => e.id);
+                                const allDaySelected = dayIds.every((id) =>
+                                  cfg.selectedDeliveryIds.includes(id),
+                                );
+                                const someDaySelected = dayIds.some((id) =>
+                                  cfg.selectedDeliveryIds.includes(id),
+                                );
+                                return (
+                                  <div key={dayName} className="space-y-0.5">
+                                    <label className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 bg-muted/30 hover:bg-muted/50">
+                                      <Checkbox
+                                        checked={allDaySelected}
+                                        data-state={
+                                          someDaySelected && !allDaySelected
+                                            ? "indeterminate"
+                                            : undefined
+                                        }
+                                        onCheckedChange={() => {
+                                          const ids = allDaySelected
+                                            ? cfg.selectedDeliveryIds.filter(
+                                                (id) => !dayIds.includes(id),
+                                              )
+                                            : [...new Set([...cfg.selectedDeliveryIds, ...dayIds])];
+                                          setBulkTaskConfigs((prev) =>
+                                            prev.map((c, i) =>
+                                              i === idx ? { ...c, selectedDeliveryIds: ids } : c,
+                                            ),
+                                          );
+                                        }}
+                                        className="h-3.5 w-3.5"
+                                      />
+                                      <span className="text-xs font-semibold flex-1">
+                                        {dayName}
+                                      </span>
+                                      <span className="text-[10px] text-muted-foreground">
+                                        {entries.length} leverans{entries.length !== 1 ? "er" : ""}
+                                      </span>
+                                    </label>
+                                    {entries.map((e) => {
+                                      const suggested = isSuggested(e);
+                                      return (
+                                        <label
+                                          key={e.id}
+                                          className={cn(
+                                            "flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 pl-6 hover:bg-muted/50",
+                                            suggested && hasSuggestions && "bg-blue-50/50",
+                                          )}
+                                        >
+                                          <Checkbox
+                                            checked={cfg.selectedDeliveryIds.includes(e.id)}
+                                            onCheckedChange={(checked) => {
+                                              const ids = checked
+                                                ? [...cfg.selectedDeliveryIds, e.id]
+                                                : cfg.selectedDeliveryIds.filter(
+                                                    (id) => id !== e.id,
+                                                  );
+                                              setBulkTaskConfigs((prev) =>
+                                                prev.map((c, i) =>
+                                                  i === idx
+                                                    ? { ...c, selectedDeliveryIds: ids }
+                                                    : c,
+                                                ),
+                                              );
+                                            }}
+                                            className="h-3.5 w-3.5"
+                                          />
+                                          <div className="flex-1 min-w-0">
+                                            <span className="text-xs">{e.supplier}</span>
+                                            <span className="text-[10px] text-muted-foreground ml-1.5">
+                                              {e.flow_name}
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                            {e.delivery_time && (
+                                              <span className="text-[11px] font-medium text-foreground/70 tabular-nums">
+                                                {e.delivery_time}
+                                              </span>
+                                            )}
+                                            {suggested && hasSuggestions && (
+                                              <span className="text-[10px] text-blue-600">●</span>
+                                            )}
+                                          </div>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {cfg.selectedDeliveryIds.length > 0 && (
+                            <p className="text-[11px] text-muted-foreground">
+                              {cfg.selectedDeliveryIds.length} leverans
+                              {cfg.selectedDeliveryIds.length !== 1 ? "er" : ""} valda — skapar{" "}
+                              {cfg.selectedDeliveryIds.length} uppgift
+                              {cfg.selectedDeliveryIds.length !== 1 ? "er" : ""}
+                            </p>
                           )}
                         </div>
-                        {deliveryWeekEntries.length === 0 ? (
-                          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                            Ingen aktiv leveransplan hittades. Importera en leveransplan under Inställningar.
-                          </p>
-                        ) : (
-                          <div className="space-y-1.5 max-h-56 overflow-y-auto rounded-lg border border-border/50 p-2">
-                            {sortedDays.map(dayName => {
-                              const entries = byDay[dayName];
-                              const dayIds = entries.map(e => e.id);
-                              const allDaySelected = dayIds.every(id => cfg.selectedDeliveryIds.includes(id));
-                              const someDaySelected = dayIds.some(id => cfg.selectedDeliveryIds.includes(id));
-                              return (
-                                <div key={dayName} className="space-y-0.5">
-                                  <label className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 bg-muted/30 hover:bg-muted/50">
-                                    <Checkbox
-                                      checked={allDaySelected}
-                                      data-state={someDaySelected && !allDaySelected ? "indeterminate" : undefined}
-                                      onCheckedChange={() => {
-                                        const ids = allDaySelected
-                                          ? cfg.selectedDeliveryIds.filter(id => !dayIds.includes(id))
-                                          : [...new Set([...cfg.selectedDeliveryIds, ...dayIds])];
-                                        setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, selectedDeliveryIds: ids } : c));
-                                      }}
-                                      className="h-3.5 w-3.5"
-                                    />
-                                    <span className="text-xs font-semibold flex-1">{dayName}</span>
-                                    <span className="text-[10px] text-muted-foreground">{entries.length} leverans{entries.length !== 1 ? "er" : ""}</span>
-                                  </label>
-                                  {entries.map(e => {
-                                    const suggested = isSuggested(e);
-                                    return (
-                                      <label key={e.id} className={cn(
-                                        "flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 pl-6 hover:bg-muted/50",
-                                        suggested && hasSuggestions && "bg-blue-50/50"
-                                      )}>
-                                        <Checkbox
-                                          checked={cfg.selectedDeliveryIds.includes(e.id)}
-                                          onCheckedChange={(checked) => {
-                                            const ids = checked
-                                              ? [...cfg.selectedDeliveryIds, e.id]
-                                              : cfg.selectedDeliveryIds.filter(id => id !== e.id);
-                                            setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, selectedDeliveryIds: ids } : c));
-                                          }}
-                                          className="h-3.5 w-3.5"
-                                        />
-                                        <div className="flex-1 min-w-0">
-                                          <span className="text-xs">{e.supplier}</span>
-                                          <span className="text-[10px] text-muted-foreground ml-1.5">{e.flow_name}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 shrink-0">
-                                          {e.delivery_time && (
-                                            <span className="text-[11px] font-medium text-foreground/70 tabular-nums">{e.delivery_time}</span>
-                                          )}
-                                          {suggested && hasSuggestions && (
-                                            <span className="text-[10px] text-blue-600">●</span>
-                                          )}
-                                        </div>
-                                      </label>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                        {cfg.selectedDeliveryIds.length > 0 && (
-                          <p className="text-[11px] text-muted-foreground">{cfg.selectedDeliveryIds.length} leverans{cfg.selectedDeliveryIds.length !== 1 ? "er" : ""} valda — skapar {cfg.selectedDeliveryIds.length} uppgift{cfg.selectedDeliveryIds.length !== 1 ? "er" : ""}</p>
-                        )}
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
 
                   {/* Assignees */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                        <label className="text-xs font-medium text-muted-foreground">Tilldelad</label>
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Tilldelad
+                        </label>
                         {hasScheduleData && scheduledOnDays.size > 0 && !showAll && (
                           <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                             {visibleUsers.length} inplanerade
@@ -4469,7 +6590,12 @@ function MallarPage() {
                         <button
                           type="button"
                           className="text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
-                          onClick={() => setShowAllUsersForTemplate(prev => ({ ...prev, [cfg.templateId]: !showAll }))}
+                          onClick={() =>
+                            setShowAllUsersForTemplate((prev) => ({
+                              ...prev,
+                              [cfg.templateId]: !showAll,
+                            }))
+                          }
                         >
                           {showAll ? "Visa inplanerade" : `Visa alla (${storeUsers.length})`}
                         </button>
@@ -4482,44 +6608,63 @@ function MallarPage() {
                           type="text"
                           placeholder="Sök användare..."
                           value={bulkUserSearch[cfg.templateId] ?? ""}
-                          onChange={e => setBulkUserSearch(prev => ({ ...prev, [cfg.templateId]: e.target.value }))}
+                          onChange={(e) =>
+                            setBulkUserSearch((prev) => ({
+                              ...prev,
+                              [cfg.templateId]: e.target.value,
+                            }))
+                          }
                           className="mb-1.5 w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
                         />
                         <div className="space-y-0.5 max-h-36 overflow-y-auto rounded-lg border border-border/50 p-2">
                           {visibleUsers.length === 0 ? (
                             <p className="text-xs text-muted-foreground py-1">Inga användare</p>
-                          ) : visibleUsers.map((u, uIdx) => {
-                            const isScheduled = scheduledOnDays.has(u.id);
-                            const showSeparator = showAll && hasScheduleData && scheduledOnDays.size > 0
-                              && uIdx === scheduledUsers.length && unscheduledUsers.length > 0;
-                            return (
-                              <Fragment key={u.id}>
-                                {showSeparator && (
-                                  <div className="flex items-center gap-1.5 py-1">
-                                    <div className="flex-1 h-px bg-border/60" />
-                                    <span className="text-[9px] text-muted-foreground/60 uppercase tracking-wide">Ej inplanerade</span>
-                                    <div className="flex-1 h-px bg-border/60" />
-                                  </div>
-                                )}
-                                <label className={cn(
-                                  "flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50",
-                                  !isScheduled && showAll && "opacity-50"
-                                )}>
-                                  <Checkbox
-                                    checked={cfg.assigneeUserIds.includes(u.id)}
-                                    onCheckedChange={(checked) => {
-                                      const ids = checked
-                                        ? [...cfg.assigneeUserIds, u.id]
-                                        : cfg.assigneeUserIds.filter(id => id !== u.id);
-                                      setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, assigneeUserIds: ids } : c));
-                                    }}
-                                    className="h-3.5 w-3.5"
-                                  />
-                                  <span className="text-xs">{u.display_name}</span>
-                                </label>
-                              </Fragment>
-                            );
-                          })}
+                          ) : (
+                            visibleUsers.map((u, uIdx) => {
+                              const isScheduled = scheduledOnDays.has(u.id);
+                              const showSeparator =
+                                showAll &&
+                                hasScheduleData &&
+                                scheduledOnDays.size > 0 &&
+                                uIdx === scheduledUsers.length &&
+                                unscheduledUsers.length > 0;
+                              return (
+                                <Fragment key={u.id}>
+                                  {showSeparator && (
+                                    <div className="flex items-center gap-1.5 py-1">
+                                      <div className="flex-1 h-px bg-border/60" />
+                                      <span className="text-[9px] text-muted-foreground/60 uppercase tracking-wide">
+                                        Ej inplanerade
+                                      </span>
+                                      <div className="flex-1 h-px bg-border/60" />
+                                    </div>
+                                  )}
+                                  <label
+                                    className={cn(
+                                      "flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50",
+                                      !isScheduled && showAll && "opacity-50",
+                                    )}
+                                  >
+                                    <Checkbox
+                                      checked={cfg.assigneeUserIds.includes(u.id)}
+                                      onCheckedChange={(checked) => {
+                                        const ids = checked
+                                          ? [...cfg.assigneeUserIds, u.id]
+                                          : cfg.assigneeUserIds.filter((id) => id !== u.id);
+                                        setBulkTaskConfigs((prev) =>
+                                          prev.map((c, i) =>
+                                            i === idx ? { ...c, assigneeUserIds: ids } : c,
+                                          ),
+                                        );
+                                      }}
+                                      className="h-3.5 w-3.5"
+                                    />
+                                    <span className="text-xs">{u.display_name}</span>
+                                  </label>
+                                </Fragment>
+                              );
+                            })
+                          )}
                         </div>
                       </div>
                       <div>
@@ -4527,67 +6672,111 @@ function MallarPage() {
                         <div className="space-y-0.5 max-h-28 overflow-y-auto rounded-lg border border-border/50 p-2">
                           {storeGroups.length === 0 ? (
                             <p className="text-xs text-muted-foreground py-1">Inga grupper</p>
-                          ) : storeGroups.map(g => (
-                            <label key={g.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
-                              <Checkbox
-                                checked={cfg.assigneeGroupIds.includes(g.id)}
-                                onCheckedChange={(checked) => {
-                                  const ids = checked
-                                    ? [...cfg.assigneeGroupIds, g.id]
-                                    : cfg.assigneeGroupIds.filter(id => id !== g.id);
-                                  setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, assigneeGroupIds: ids } : c));
-                                }}
-                                className="h-3.5 w-3.5"
-                              />
-                              <span className="text-xs">{g.name}</span>
-                            </label>
-                          ))}
+                          ) : (
+                            storeGroups.map((g) => (
+                              <label
+                                key={g.id}
+                                className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50"
+                              >
+                                <Checkbox
+                                  checked={cfg.assigneeGroupIds.includes(g.id)}
+                                  onCheckedChange={(checked) => {
+                                    const ids = checked
+                                      ? [...cfg.assigneeGroupIds, g.id]
+                                      : cfg.assigneeGroupIds.filter((id) => id !== g.id);
+                                    setBulkTaskConfigs((prev) =>
+                                      prev.map((c, i) =>
+                                        i === idx ? { ...c, assigneeGroupIds: ids } : c,
+                                      ),
+                                    );
+                                  }}
+                                  className="h-3.5 w-3.5"
+                                />
+                                <span className="text-xs">{g.name}</span>
+                              </label>
+                            ))
+                          )}
                         </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Händelsevillkor bekräftare — only when template has event trigger */}
-                  {(tmpl as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description && (
+                  {(tmpl as ChecklistTemplate & { event_trigger_description?: string })
+                    .event_trigger_description && (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <Zap className="h-3.5 w-3.5 text-amber-500" />
                         <label className="text-xs font-medium text-muted-foreground">
-                          Bekräftare för: <span className="text-foreground font-semibold">{(tmpl as ChecklistTemplate & { event_trigger_description?: string }).event_trigger_description}</span>
+                          Bekräftare för:{" "}
+                          <span className="text-foreground font-semibold">
+                            {
+                              (tmpl as ChecklistTemplate & { event_trigger_description?: string })
+                                .event_trigger_description
+                            }
+                          </span>
                         </label>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">Välj vem som ska bekräfta att händelsen inträffat innan uppgiften visas.</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Välj vem som ska bekräfta att händelsen inträffat innan uppgiften visas.
+                      </p>
                       <input
                         type="text"
                         placeholder="Sök bekräftare..."
-                        value={(bulkUserSearch[cfg.templateId + "_confirm"] ?? "")}
-                        onChange={e => setBulkUserSearch(prev => ({ ...prev, [cfg.templateId + "_confirm"]: e.target.value }))}
+                        value={bulkUserSearch[cfg.templateId + "_confirm"] ?? ""}
+                        onChange={(e) =>
+                          setBulkUserSearch((prev) => ({
+                            ...prev,
+                            [cfg.templateId + "_confirm"]: e.target.value,
+                          }))
+                        }
                         className="w-full rounded-md border border-amber-200 bg-background px-2 py-1 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-amber-400/40"
                       />
                       <div className="space-y-0.5 max-h-28 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50/30 p-2">
                         <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
                           <Checkbox
                             checked={cfg.eventTriggerUserId === ""}
-                            onCheckedChange={() => setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, eventTriggerUserId: "" } : c))}
+                            onCheckedChange={() =>
+                              setBulkTaskConfigs((prev) =>
+                                prev.map((c, i) =>
+                                  i === idx ? { ...c, eventTriggerUserId: "" } : c,
+                                ),
+                              )
+                            }
                             className="h-3.5 w-3.5"
                           />
-                          <span className="text-xs text-muted-foreground italic">Ingen specifik bekräftare</span>
+                          <span className="text-xs text-muted-foreground italic">
+                            Ingen specifik bekräftare
+                          </span>
                         </label>
-                        {storeUsers.filter(u => {
-                          const q = (bulkUserSearch[cfg.templateId + "_confirm"] ?? "").toLowerCase();
-                          return !q || u.display_name.toLowerCase().includes(q);
-                        }).map(u => (
-                          <label key={u.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
-                            <Checkbox
-                              checked={cfg.eventTriggerUserId === u.id}
-                              onCheckedChange={(checked) => {
-                                setBulkTaskConfigs(prev => prev.map((c, i) => i === idx ? { ...c, eventTriggerUserId: checked ? u.id : "" } : c));
-                              }}
-                              className="h-3.5 w-3.5"
-                            />
-                            <span className="text-xs">{u.display_name}</span>
-                          </label>
-                        ))}
+                        {storeUsers
+                          .filter((u) => {
+                            const q = (
+                              bulkUserSearch[cfg.templateId + "_confirm"] ?? ""
+                            ).toLowerCase();
+                            return !q || u.display_name.toLowerCase().includes(q);
+                          })
+                          .map((u) => (
+                            <label
+                              key={u.id}
+                              className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50"
+                            >
+                              <Checkbox
+                                checked={cfg.eventTriggerUserId === u.id}
+                                onCheckedChange={(checked) => {
+                                  setBulkTaskConfigs((prev) =>
+                                    prev.map((c, i) =>
+                                      i === idx
+                                        ? { ...c, eventTriggerUserId: checked ? u.id : "" }
+                                        : c,
+                                    ),
+                                  );
+                                }}
+                                className="h-3.5 w-3.5"
+                              />
+                              <span className="text-xs">{u.display_name}</span>
+                            </label>
+                          ))}
                       </div>
                     </div>
                   )}
@@ -4599,13 +6788,28 @@ function MallarPage() {
       </Dialog>
 
       {/* TEMPLATE PACKAGES PANEL */}
-      <Dialog open={showPackagesPanel} onOpenChange={(o) => { if (!o) { setShowPackagesPanel(false); setEditPackageTarget(null); setPackageForm({ name: "", description: "" }); setPackageTemplateIds([]); } }}>
-        <DialogContent hideCloseButton className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+      <Dialog
+        open={showPackagesPanel}
+        onOpenChange={(o) => {
+          if (!o) {
+            setShowPackagesPanel(false);
+            setEditPackageTarget(null);
+            setPackageForm({ name: "", description: "" });
+            setPackageTemplateIds([]);
+          }
+        }}
+      >
+        <DialogContent
+          hideCloseButton
+          className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0"
+        >
           <DialogTitle className="sr-only">Mallpaket</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <Layers className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Mallpaket</span>
-            <span className="text-xs text-muted-foreground ml-1">— gruppera mallar och skapa alla uppgifter på en gång</span>
+            <span className="text-xs text-muted-foreground ml-1">
+              — gruppera mallar och skapa alla uppgifter på en gång
+            </span>
             <button
               onClick={() => setShowPackagesPanel(false)}
               className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 transition-colors"
@@ -4617,88 +6821,141 @@ function MallarPage() {
           <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6 pb-8">
             {/* Create / Edit form — only admins and HK users can manage packages */}
             {(isAdmin || isHK) && (
-            <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
-              <h3 className="text-sm font-semibold">{editPackageTarget ? "Redigera paket" : "Skapa nytt paket"}</h3>
-              <Input
-                placeholder="Paketnamn"
-                value={packageForm.name}
-                onChange={(e) => setPackageForm(p => ({ ...p, name: e.target.value }))}
-                className="h-8 text-sm"
-              />
-              <Input
-                placeholder="Beskrivning (valfritt)"
-                value={packageForm.description}
-                onChange={(e) => setPackageForm(p => ({ ...p, description: e.target.value }))}
-                className="h-8 text-sm"
-              />
-              <div>
-                <p className="text-xs text-muted-foreground mb-2">Välj mallar att inkludera:</p>
-                <div className="space-y-1 max-h-48 overflow-y-auto rounded-lg border border-border/50 p-2">
-                  {templates.map(t => (
-                    <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 hover:bg-muted/50">
-                      <Checkbox
-                        checked={packageTemplateIds.includes(t.id)}
-                        onCheckedChange={(checked) => {
-                          setPackageTemplateIds(prev => checked ? [...prev, t.id] : prev.filter(id => id !== t.id));
-                        }}
-                        className="h-3.5 w-3.5"
-                      />
-                      <span className="text-xs flex-1">{t.title}</span>
-                      {t.category && <Badge variant="secondary" className="text-[10px]">{t.category}</Badge>}
-                    </label>
-                  ))}
+              <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
+                <h3 className="text-sm font-semibold">
+                  {editPackageTarget ? "Redigera paket" : "Skapa nytt paket"}
+                </h3>
+                <Input
+                  placeholder="Paketnamn"
+                  value={packageForm.name}
+                  onChange={(e) => setPackageForm((p) => ({ ...p, name: e.target.value }))}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  placeholder="Beskrivning (valfritt)"
+                  value={packageForm.description}
+                  onChange={(e) => setPackageForm((p) => ({ ...p, description: e.target.value }))}
+                  className="h-8 text-sm"
+                />
+                <div>
+                  <p className="text-xs text-muted-foreground mb-2">Välj mallar att inkludera:</p>
+                  <div className="space-y-1 max-h-48 overflow-y-auto rounded-lg border border-border/50 p-2">
+                    {templates.map((t) => (
+                      <label
+                        key={t.id}
+                        className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 hover:bg-muted/50"
+                      >
+                        <Checkbox
+                          checked={packageTemplateIds.includes(t.id)}
+                          onCheckedChange={(checked) => {
+                            setPackageTemplateIds((prev) =>
+                              checked ? [...prev, t.id] : prev.filter((id) => id !== t.id),
+                            );
+                          }}
+                          className="h-3.5 w-3.5"
+                        />
+                        <span className="text-xs flex-1">{t.title}</span>
+                        {t.category && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            {t.category}
+                          </Badge>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  {editPackageTarget && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => {
+                        setEditPackageTarget(null);
+                        setPackageForm({ name: "", description: "" });
+                        setPackageTemplateIds([]);
+                      }}
+                    >
+                      Avbryt
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    className="rounded-full text-xs"
+                    onClick={savePackage}
+                    disabled={!packageForm.name.trim() || packageTemplateIds.length === 0}
+                  >
+                    {editPackageTarget
+                      ? "Spara ändringar"
+                      : `Skapa paket (${packageTemplateIds.length} mallar)`}
+                  </Button>
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
-                {editPackageTarget && (
-                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setEditPackageTarget(null); setPackageForm({ name: "", description: "" }); setPackageTemplateIds([]); }}>
-                    Avbryt
-                  </Button>
-                )}
-                <Button size="sm" className="rounded-full text-xs" onClick={savePackage} disabled={!packageForm.name.trim() || packageTemplateIds.length === 0}>
-                  {editPackageTarget ? "Spara ändringar" : `Skapa paket (${packageTemplateIds.length} mallar)`}
-                </Button>
-              </div>
-            </div>
-            )} {/* end isAdmin || isHK create form */}
-
+            )}{" "}
+            {/* end isAdmin || isHK create form */}
             {/* Existing packages */}
             {packages.length > 0 && (
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-muted-foreground">Sparade paket</h3>
-                {packages.map(pkg => {
-                  const pkgTemplates = (pkg.items ?? []).map(it => templates.find(t => t.id === it.template_id)).filter(Boolean) as TemplateWithMeta[];
+                {packages.map((pkg) => {
+                  const pkgTemplates = (pkg.items ?? [])
+                    .map((it) => templates.find((t) => t.id === it.template_id))
+                    .filter(Boolean) as TemplateWithMeta[];
                   return (
-                    <div key={pkg.id} className="rounded-2xl border border-border/60 bg-card p-4 space-y-2">
+                    <div
+                      key={pkg.id}
+                      className="rounded-2xl border border-border/60 bg-card p-4 space-y-2"
+                    >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm">{pkg.name}</p>
-                          {pkg.description && <p className="text-xs text-muted-foreground">{pkg.description}</p>}
-                          <p className="text-xs text-muted-foreground mt-0.5">{pkgTemplates.length} mallar</p>
+                          {pkg.description && (
+                            <p className="text-xs text-muted-foreground">{pkg.description}</p>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {pkgTemplates.length} mallar
+                          </p>
                         </div>
                         <div className="flex gap-1 shrink-0">
                           <Button
-                            variant="outline" size="sm"
+                            variant="outline"
+                            size="sm"
                             className="rounded-full h-7 text-xs"
-                            onClick={() => { setActivatePackageTarget(pkg); setShowPackagesPanel(false); openBulkCreate(pkgTemplates.map(t => t.id)); }}
+                            onClick={() => {
+                              setActivatePackageTarget(pkg);
+                              setShowPackagesPanel(false);
+                              openBulkCreate(pkgTemplates.map((t) => t.id));
+                            }}
                           >
                             <ListChecks className="h-3 w-3 mr-1" /> Aktivera
                           </Button>
                           {(isAdmin || isHK) && (
-                          <>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:text-primary" onClick={() => openEditPackage(pkg)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:text-destructive" onClick={() => deletePackage(pkg)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                          </>
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-full text-muted-foreground hover:text-primary"
+                                onClick={() => openEditPackage(pkg)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-full text-muted-foreground hover:text-destructive"
+                                onClick={() => deletePackage(pkg)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-1">
-                        {pkgTemplates.map(t => (
-                          <Badge key={t.id} variant="secondary" className="text-xs">{t.title}</Badge>
+                        {pkgTemplates.map((t) => (
+                          <Badge key={t.id} variant="secondary" className="text-xs">
+                            {t.title}
+                          </Badge>
                         ))}
                       </div>
                     </div>
@@ -4711,17 +6968,32 @@ function MallarPage() {
       </Dialog>
 
       {/* Review Dialog */}
-      <Dialog open={!!reviewTarget} onOpenChange={(o) => { if (!o) { setReviewTarget(null); setReviewEndDate(""); } }}>
+      <Dialog
+        open={!!reviewTarget}
+        onOpenChange={(o) => {
+          if (!o) {
+            setReviewTarget(null);
+            setReviewEndDate("");
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Granska mall</DialogTitle>
             <DialogDescription>
               <span className="font-medium text-foreground">{reviewTarget?.title}</span>
-              {reviewTarget && (() => {
-                const created = new Date((reviewTarget as ChecklistTemplate & { created_at?: string }).created_at ?? "");
-                const months = isNaN(created.getTime()) ? null : Math.round((getSimulatedNow() - created.getTime()) / (1000 * 60 * 60 * 24 * 30));
-                return months != null ? ` — aktiv sedan ca ${months} månader` : "";
-              })()}
+              {reviewTarget &&
+                (() => {
+                  const created = new Date(
+                    (reviewTarget as ChecklistTemplate & { created_at?: string }).created_at ?? "",
+                  );
+                  const months = isNaN(created.getTime())
+                    ? null
+                    : Math.round(
+                        (getSimulatedNow() - created.getTime()) / (1000 * 60 * 60 * 24 * 30),
+                      );
+                  return months != null ? ` — aktiv sedan ca ${months} månader` : "";
+                })()}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
@@ -4736,7 +7008,10 @@ function MallarPage() {
             >
               <span className="block text-sm font-medium">Fortsätt till nästa granskning</span>
               <span className="block text-xs text-muted-foreground mt-0.5">
-                Mallen fortsätter som vanligt. Nästa granskning om {(reviewTarget as ChecklistTemplate & { review_interval_months?: number })?.review_interval_months ?? 24} månader.
+                Mallen fortsätter som vanligt. Nästa granskning om{" "}
+                {(reviewTarget as ChecklistTemplate & { review_interval_months?: number })
+                  ?.review_interval_months ?? 24}{" "}
+                månader.
               </span>
             </button>
             <button
@@ -4746,11 +7021,15 @@ function MallarPage() {
               className="w-full rounded-lg border border-primary/30 px-4 py-3 text-left hover:bg-primary/5 transition-colors"
             >
               <span className="block text-sm font-medium">Redigera mall</span>
-              <span className="block text-xs text-muted-foreground mt-0.5">Öppna mallen för redigering innan beslut fattas.</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                Öppna mallen för redigering innan beslut fattas.
+              </span>
             </button>
             <div className="rounded-lg border border-border px-4 py-3 space-y-2">
               <span className="block text-sm font-medium">Sätt slutdatum</span>
-              <span className="block text-xs text-muted-foreground">Mallen slutar skapa uppgifter efter detta datum.</span>
+              <span className="block text-xs text-muted-foreground">
+                Mallen slutar skapa uppgifter efter detta datum.
+              </span>
               <div className="flex gap-2">
                 <input
                   type="date"
@@ -4776,7 +7055,9 @@ function MallarPage() {
                 className="w-full rounded-lg border border-destructive/30 px-4 py-3 text-left hover:bg-destructive/5 transition-colors"
               >
                 <span className="block text-sm font-medium text-destructive">Arkivera mall</span>
-                <span className="block text-xs text-muted-foreground mt-0.5">Mallen arkiveras och skapar inga fler uppgifter.</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  Mallen arkiveras och skapar inga fler uppgifter.
+                </span>
               </button>
             )}
             {(reviewTarget as ChecklistTemplate & { is_critical?: boolean })?.is_critical && (
@@ -4789,7 +7070,12 @@ function MallarPage() {
       </Dialog>
 
       {/* CSV delivery supplier mapping dialog */}
-      <Dialog open={deliveryMappingOpen} onOpenChange={(o) => { if (!o) setDeliveryMappingOpen(false); }}>
+      <Dialog
+        open={deliveryMappingOpen}
+        onOpenChange={(o) => {
+          if (!o) setDeliveryMappingOpen(false);
+        }}
+      >
         <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogTitle className="sr-only">Koppla leveranser till mallar</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
@@ -4801,38 +7087,60 @@ function MallarPage() {
           </p>
           <div className="flex-1 overflow-y-auto px-5 space-y-5 pb-8">
             {deliveryMappingItems.map((item, idx) => {
-              const dayOrder = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
-              const byDay = deliveryWeekEntries.reduce<Record<string, typeof deliveryWeekEntries>>((acc, e) => {
-                const k = e.delivery_day || "Okänd dag";
-                if (!acc[k]) acc[k] = [];
-                acc[k].push(e);
-                return acc;
-              }, {});
+              const dayOrder = [
+                "Måndag",
+                "Tisdag",
+                "Onsdag",
+                "Torsdag",
+                "Fredag",
+                "Lördag",
+                "Söndag",
+              ];
+              const byDay = deliveryWeekEntries.reduce<Record<string, typeof deliveryWeekEntries>>(
+                (acc, e) => {
+                  const k = e.delivery_day || "Okänd dag";
+                  if (!acc[k]) acc[k] = [];
+                  acc[k].push(e);
+                  return acc;
+                },
+                {},
+              );
               const sortedDays = Object.keys(byDay).sort((a, b) => {
-                const ai = dayOrder.indexOf(a); const bi = dayOrder.indexOf(b);
+                const ai = dayOrder.indexOf(a);
+                const bi = dayOrder.indexOf(b);
                 return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
               });
               const selectedKeys = new Set(item.entryKeys);
-              const entryKey = (e: typeof deliveryWeekEntries[0]) => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`;
+              const entryKey = (e: (typeof deliveryWeekEntries)[0]) =>
+                `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`;
 
-              const toggleEntry = (e: typeof deliveryWeekEntries[0]) => {
+              const toggleEntry = (e: (typeof deliveryWeekEntries)[0]) => {
                 const k = entryKey(e);
-                const next = selectedKeys.has(k) ? item.entryKeys.filter(x => x !== k) : [...item.entryKeys, k];
-                setDeliveryMappingItems(prev => prev.map((it, i) => i === idx ? { ...it, entryKeys: next } : it));
+                const next = selectedKeys.has(k)
+                  ? item.entryKeys.filter((x) => x !== k)
+                  : [...item.entryKeys, k];
+                setDeliveryMappingItems((prev) =>
+                  prev.map((it, i) => (i === idx ? { ...it, entryKeys: next } : it)),
+                );
               };
               const toggleDay = (entries: typeof deliveryWeekEntries) => {
                 const dayKeys = entries.map(entryKey);
-                const allSelected = dayKeys.every(k => selectedKeys.has(k));
+                const allSelected = dayKeys.every((k) => selectedKeys.has(k));
                 const next = allSelected
-                  ? item.entryKeys.filter(k => !dayKeys.includes(k))
+                  ? item.entryKeys.filter((k) => !dayKeys.includes(k))
                   : [...new Set([...item.entryKeys, ...dayKeys])];
-                setDeliveryMappingItems(prev => prev.map((it, i) => i === idx ? { ...it, entryKeys: next } : it));
+                setDeliveryMappingItems((prev) =>
+                  prev.map((it, i) => (i === idx ? { ...it, entryKeys: next } : it)),
+                );
               };
               const allKeys = deliveryWeekEntries.map(entryKey);
-              const allSelected = allKeys.length > 0 && allKeys.every(k => selectedKeys.has(k));
+              const allSelected = allKeys.length > 0 && allKeys.every((k) => selectedKeys.has(k));
 
               return (
-                <div key={item.templateId} className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
+                <div
+                  key={item.templateId}
+                  className="rounded-xl border border-border/60 bg-card p-4 space-y-3"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Truck className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
@@ -4842,10 +7150,18 @@ function MallarPage() {
                       <button
                         type="button"
                         className="text-[11px] text-primary hover:underline shrink-0"
-                        onClick={() => setDeliveryMappingItems(prev => prev.map((it, i) => i !== idx ? it : {
-                          ...it,
-                          entryKeys: allSelected ? [] : allKeys,
-                        }))}
+                        onClick={() =>
+                          setDeliveryMappingItems((prev) =>
+                            prev.map((it, i) =>
+                              i !== idx
+                                ? it
+                                : {
+                                    ...it,
+                                    entryKeys: allSelected ? [] : allKeys,
+                                  },
+                            ),
+                          )
+                        }
                       >
                         {allSelected ? "Avmarkera alla" : "Välj alla"}
                       </button>
@@ -4853,45 +7169,63 @@ function MallarPage() {
                   </div>
                   <div className="space-y-1 max-h-56 overflow-y-auto rounded-lg border border-border/50 p-2">
                     {deliveryWeekEntries.length === 0 ? (
-                      <p className="text-xs text-muted-foreground py-1">Inga leveranser i aktiv plan</p>
-                    ) : sortedDays.map(dayName => {
-                      const entries = byDay[dayName];
-                      const dayKeys = entries.map(entryKey);
-                      const allDaySelected = dayKeys.every(k => selectedKeys.has(k));
-                      const someDaySelected = dayKeys.some(k => selectedKeys.has(k));
-                      return (
-                        <div key={dayName} className="space-y-0.5">
-                          <label className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 bg-muted/30 hover:bg-muted/50">
-                            <Checkbox
-                              checked={allDaySelected}
-                              data-state={someDaySelected && !allDaySelected ? "indeterminate" : undefined}
-                              onCheckedChange={() => toggleDay(entries)}
-                              className="h-3.5 w-3.5"
-                            />
-                            <span className="text-xs font-semibold flex-1">{dayName}</span>
-                            <span className="text-[10px] text-muted-foreground">{entries.length} lev.</span>
-                          </label>
-                          {entries.map(e => (
-                            <label key={e.id} className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 pl-6 hover:bg-muted/50">
+                      <p className="text-xs text-muted-foreground py-1">
+                        Inga leveranser i aktiv plan
+                      </p>
+                    ) : (
+                      sortedDays.map((dayName) => {
+                        const entries = byDay[dayName];
+                        const dayKeys = entries.map(entryKey);
+                        const allDaySelected = dayKeys.every((k) => selectedKeys.has(k));
+                        const someDaySelected = dayKeys.some((k) => selectedKeys.has(k));
+                        return (
+                          <div key={dayName} className="space-y-0.5">
+                            <label className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 bg-muted/30 hover:bg-muted/50">
                               <Checkbox
-                                checked={selectedKeys.has(entryKey(e))}
-                                onCheckedChange={() => toggleEntry(e)}
+                                checked={allDaySelected}
+                                data-state={
+                                  someDaySelected && !allDaySelected ? "indeterminate" : undefined
+                                }
+                                onCheckedChange={() => toggleDay(entries)}
                                 className="h-3.5 w-3.5"
                               />
-                              <div className="flex-1 min-w-0">
-                                <span className="text-xs">{e.supplier}</span>
-                                <span className="text-[10px] text-muted-foreground ml-1.5">{e.flow_name}</span>
-                              </div>
-                              {e.delivery_time && <span className="text-[11px] font-medium text-foreground/70 tabular-nums shrink-0">{e.delivery_time}</span>}
+                              <span className="text-xs font-semibold flex-1">{dayName}</span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {entries.length} lev.
+                              </span>
                             </label>
-                          ))}
-                        </div>
-                      );
-                    })}
+                            {entries.map((e) => (
+                              <label
+                                key={e.id}
+                                className="flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 pl-6 hover:bg-muted/50"
+                              >
+                                <Checkbox
+                                  checked={selectedKeys.has(entryKey(e))}
+                                  onCheckedChange={() => toggleEntry(e)}
+                                  className="h-3.5 w-3.5"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-xs">{e.supplier}</span>
+                                  <span className="text-[10px] text-muted-foreground ml-1.5">
+                                    {e.flow_name}
+                                  </span>
+                                </div>
+                                {e.delivery_time && (
+                                  <span className="text-[11px] font-medium text-foreground/70 tabular-nums shrink-0">
+                                    {e.delivery_time}
+                                  </span>
+                                )}
+                              </label>
+                            ))}
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                   {item.entryKeys.length > 0 && (
                     <p className="text-[11px] text-primary">
-                      {item.entryKeys.length} leverans{item.entryKeys.length !== 1 ? "er" : ""} vald{item.entryKeys.length !== 1 ? "a" : ""}
+                      {item.entryKeys.length} leverans{item.entryKeys.length !== 1 ? "er" : ""} vald
+                      {item.entryKeys.length !== 1 ? "a" : ""}
                     </p>
                   )}
                 </div>
@@ -4905,7 +7239,9 @@ function MallarPage() {
             <Button
               size="sm"
               className="rounded-full"
-              disabled={deliveryMappingSaving || deliveryMappingItems.every(i => !i.entryKeys.length)}
+              disabled={
+                deliveryMappingSaving || deliveryMappingItems.every((i) => !i.entryKeys.length)
+              }
               onClick={saveDeliveryMapping}
             >
               {deliveryMappingSaving ? "Sparar..." : "Spara kopplingar"}
@@ -4915,16 +7251,35 @@ function MallarPage() {
       </Dialog>
 
       {/* Article type disambiguation */}
-      <AlertDialog open={!!mallArticlePrompt} onOpenChange={(o) => { if (!o) setMallArticlePrompt(null); }}>
+      <AlertDialog
+        open={!!mallArticlePrompt}
+        onOpenChange={(o) => {
+          if (!o) setMallArticlePrompt(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Vad är <span className="font-mono">{mallArticlePrompt}</span>?</AlertDialogTitle>
-            <AlertDialogDescription>Välj vilken typ av nummer — det avgör länken till Mitt Coop-sortiment.</AlertDialogDescription>
+            <AlertDialogTitle>
+              Vad är <span className="font-mono">{mallArticlePrompt}</span>?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Välj vilken typ av nummer — det avgör länken till Mitt Coop-sortiment.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
             {(["mat-nr", "ean", "bnr"] as ArticleIdType[]).map((t) => (
-              <AlertDialogAction key={t} onClick={() => { setMallArticleType(t); setMallArticlePrompt(null); }}>
-                {t === "mat-nr" ? "Materialnummer" : t === "ean" ? "EAN-streckkod" : "BNR (Beställningsnr)"}
+              <AlertDialogAction
+                key={t}
+                onClick={() => {
+                  setMallArticleType(t);
+                  setMallArticlePrompt(null);
+                }}
+              >
+                {t === "mat-nr"
+                  ? "Materialnummer"
+                  : t === "ean"
+                    ? "EAN-streckkod"
+                    : "BNR (Beställningsnr)"}
               </AlertDialogAction>
             ))}
           </AlertDialogFooter>

@@ -121,11 +121,18 @@ function RateBar({ pct, size = "md" }: { pct: number | null; size?: "sm" | "md" 
   return (
     <div className={cn("flex items-center gap-2", size === "sm" ? "w-20" : "w-28")}>
       <div className="flex-1 overflow-hidden rounded-full bg-muted h-1.5">
-        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${val}%` }} />
+        <div
+          className={cn("h-full rounded-full transition-[width]", color)}
+          style={{ width: `${val}%` }}
+        />
       </div>
-      <span className={cn("tabular-nums font-semibold shrink-0", size === "sm" ? "text-xs" : "text-sm",
-        val >= 80 ? "text-success" : val >= 60 ? "text-warning-foreground" : "text-destructive"
-      )}>
+      <span
+        className={cn(
+          "tabular-nums font-semibold shrink-0",
+          size === "sm" ? "text-xs" : "text-sm",
+          val >= 80 ? "text-success" : val >= 60 ? "text-warning-foreground" : "text-destructive",
+        )}
+      >
         {pct != null ? `${val}%` : "–"}
       </span>
     </div>
@@ -134,15 +141,23 @@ function RateBar({ pct, size = "md" }: { pct: number | null; size?: "sm" | "md" 
 
 function StatusDot({ active }: { active: boolean }) {
   return (
-    <span className={cn(
-      "inline-block h-2 w-2 shrink-0 rounded-full",
-      active ? "bg-success shadow-[0_0_6px_1px_oklch(var(--success)/0.5)]" : "bg-muted-foreground/40",
-    )} />
+    <span
+      className={cn(
+        "inline-block h-2 w-2 shrink-0 rounded-full",
+        active
+          ? "bg-success shadow-[0_0_6px_1px_oklch(var(--success)/0.5)]"
+          : "bg-muted-foreground/40",
+      )}
+    />
   );
 }
 
 function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-lg bg-muted", className)} />;
+  return (
+    <div
+      className={cn("animate-pulse motion-reduce:animate-none rounded-lg bg-muted", className)}
+    />
+  );
 }
 
 // ─── KPI Card ────────────────────────────────────────────────────────────────
@@ -158,7 +173,16 @@ type KpiCardProps = {
   loading?: boolean;
 };
 
-function KpiCard({ label, value, sub, icon, trend, trendLabel, accent = "primary", loading }: KpiCardProps) {
+function KpiCard({
+  label,
+  value,
+  sub,
+  icon,
+  trend,
+  trendLabel,
+  accent = "primary",
+  loading,
+}: KpiCardProps) {
   const accentMap = {
     primary: "bg-primary-soft text-primary",
     success: "bg-success/10 text-success",
@@ -178,7 +202,12 @@ function KpiCard({ label, value, sub, icon, trend, trendLabel, accent = "primary
 
   return (
     <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)] transition-shadow hover:shadow-[var(--shadow-md)]">
-      <div className={cn("mb-3 flex h-9 w-9 items-center justify-center rounded-xl", accentMap[accent])}>
+      <div
+        className={cn(
+          "mb-3 flex h-9 w-9 items-center justify-center rounded-xl",
+          accentMap[accent],
+        )}
+      >
         {icon}
       </div>
       <div className="space-y-0.5">
@@ -217,7 +246,10 @@ function ExceptionsSidebar({ storeIdFilter }: { storeIdFilter?: string[] }) {
         storesQuery = storesQuery.in("id", storeIdFilter);
       }
       const { data: stores } = await storesQuery;
-      if (!stores || stores.length === 0) { setLoading(false); return; }
+      if (!stores || stores.length === 0) {
+        setLoading(false);
+        return;
+      }
 
       const storeIds = stores.map((s) => s.id);
 
@@ -237,8 +269,12 @@ function ExceptionsSidebar({ storeIdFilter }: { storeIdFilter?: string[] }) {
         .eq("week_number", upcomingWeek);
       const storesWithPlan = new Set((plans ?? []).map((r) => r.store_id));
 
-      const isSpecialWeek = specialWeeks.some((sw) => sw.week === upcomingWeek && sw.year === upcomingYear);
-      const holidayName = specialWeeks.find((sw) => sw.week === upcomingWeek && sw.year === upcomingYear)?.name ?? null;
+      const isSpecialWeek = specialWeeks.some(
+        (sw) => sw.week === upcomingWeek && sw.year === upcomingYear,
+      );
+      const holidayName =
+        specialWeeks.find((sw) => sw.week === upcomingWeek && sw.year === upcomingYear)?.name ??
+        null;
 
       const result: OperationalException[] = [];
       for (const store of stores) {
@@ -280,13 +316,19 @@ function ExceptionsSidebar({ storeIdFilter }: { storeIdFilter?: string[] }) {
           <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 truncate">
             Operativa undantag
           </p>
-          <p className="text-[10px] text-amber-700/70 dark:text-amber-400/70">{upcomingWeekLabel}</p>
+          <p className="text-[10px] text-amber-700/70 dark:text-amber-400/70">
+            {upcomingWeekLabel}
+          </p>
         </div>
         {!loading && (
-          <span className={cn(
-            "text-xs font-bold tabular-nums rounded-full px-1.5 py-0.5",
-            exceptions.length > 0 ? "bg-destructive/10 text-destructive" : "bg-success/10 text-success"
-          )}>
+          <span
+            className={cn(
+              "text-xs font-bold tabular-nums rounded-full px-1.5 py-0.5",
+              exceptions.length > 0
+                ? "bg-destructive/10 text-destructive"
+                : "bg-success/10 text-success",
+            )}
+          >
             {exceptions.length}
           </span>
         )}
@@ -316,8 +358,12 @@ function ExceptionsSidebar({ storeIdFilter }: { storeIdFilter?: string[] }) {
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-foreground leading-snug truncate">{ex.store_name}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">{ex.distrikt ?? "Okänt distrikt"}</p>
+                    <p className="text-xs font-medium text-foreground leading-snug truncate">
+                      {ex.store_name}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {ex.distrikt ?? "Okänt distrikt"}
+                    </p>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {ex.missing_schedule && (
                         <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-[9px] font-semibold text-destructive">
@@ -408,32 +454,53 @@ function StoresSidebar({
           </div>
         ) : (
           <div className="divide-y divide-border/20">
-            {sorted.map((d) => {
+            {sorted.map((d, idx) => {
               const dStores = storesByDistrikt[d.distrikt] ?? [];
               const isExpanded = expanded.has(d.distrikt);
               const isSelected = selectedDistrikt === d.distrikt;
               return (
                 <div key={d.distrikt}>
                   {/* Distrikt row */}
-                  <div className={cn(
-                    "flex items-center gap-1 px-2 py-2 transition-colors",
-                    isSelected ? "bg-primary-soft" : "hover:bg-muted/40"
-                  )}>
+                  <div
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-2 transition-colors",
+                      isSelected ? "bg-primary-soft" : "hover:bg-muted/40",
+                    )}
+                  >
                     <button
+                      type="button"
                       onClick={() => toggleExpand(d.distrikt)}
+                      aria-label={
+                        isExpanded ? `Dölj butiker i ${d.distrikt}` : `Visa butiker i ${d.distrikt}`
+                      }
+                      aria-expanded={isExpanded}
+                      aria-controls={`distrikt-stores-${idx}`}
                       className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
                     >
-                      {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      {isExpanded ? (
+                        <ChevronUp className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )}
                     </button>
                     <button
+                      type="button"
+                      aria-pressed={isSelected}
                       className="flex flex-1 min-w-0 items-center gap-2 text-left"
                       onClick={() => onSelectDistrikt(isSelected ? null : d.distrikt)}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className={cn("text-xs font-semibold truncate", isSelected ? "text-primary" : "text-foreground")}>
+                        <p
+                          className={cn(
+                            "text-xs font-semibold truncate",
+                            isSelected ? "text-primary" : "text-foreground",
+                          )}
+                        >
                           {d.distrikt}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">{d.store_count} butiker</p>
+                        <p className="text-[10px] text-muted-foreground tabular-nums">
+                          {d.store_count} butiker
+                        </p>
                       </div>
                       <div className="shrink-0">
                         <RateBar pct={d.completion_rate_pct} size="sm" />
@@ -443,31 +510,53 @@ function StoresSidebar({
 
                   {/* Store list under distrikt */}
                   {isExpanded && (
-                    <div className="border-l-2 border-primary/20 ml-6 bg-muted/20">
+                    <div
+                      id={`distrikt-stores-${idx}`}
+                      className="border-l-2 border-primary/20 ml-6 bg-muted/20"
+                    >
                       {dStores.length === 0 ? (
                         <p className="px-3 py-2 text-[10px] text-muted-foreground">Ingen data</p>
-                      ) : dStores.map((s) => (
-                        <div key={s.store_id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted/40 transition-colors">
-                          <StatusDot active={s.active_24h} />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-medium text-foreground truncate">{s.store_name}</p>
-                            {(s.open_incidents > 0 || s.tasks_late > 0) && (
-                              <div className="flex gap-2 text-[9px]">
-                                {s.open_incidents > 0 && <span className="text-destructive font-medium">{s.open_incidents} avv.</span>}
-                                {s.tasks_late > 0 && <span className="text-warning-foreground font-medium">{s.tasks_late} sena</span>}
-                              </div>
-                            )}
+                      ) : (
+                        dStores.map((s) => (
+                          <div
+                            key={s.store_id}
+                            className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted/40 transition-colors"
+                          >
+                            <StatusDot active={s.active_24h} />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-medium text-foreground truncate">
+                                {s.store_name}
+                              </p>
+                              {(s.open_incidents > 0 || s.tasks_late > 0) && (
+                                <div className="flex gap-2 text-[9px]">
+                                  {s.open_incidents > 0 && (
+                                    <span className="tabular-nums text-destructive font-medium">
+                                      {s.open_incidents} avv.
+                                    </span>
+                                  )}
+                                  {s.tasks_late > 0 && (
+                                    <span className="tabular-nums text-warning-foreground font-medium">
+                                      {s.tasks_late} sena
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <span
+                              className={cn(
+                                "text-[10px] font-bold tabular-nums shrink-0",
+                                (s.completion_rate_pct ?? 0) >= 80
+                                  ? "text-success"
+                                  : (s.completion_rate_pct ?? 0) >= 60
+                                    ? "text-warning-foreground"
+                                    : "text-destructive",
+                              )}
+                            >
+                              {s.completion_rate_pct != null ? `${s.completion_rate_pct}%` : "–"}
+                            </span>
                           </div>
-                          <span className={cn(
-                            "text-[10px] font-bold tabular-nums shrink-0",
-                            (s.completion_rate_pct ?? 0) >= 80 ? "text-success"
-                            : (s.completion_rate_pct ?? 0) >= 60 ? "text-warning-foreground"
-                            : "text-destructive"
-                          )}>
-                            {s.completion_rate_pct != null ? `${s.completion_rate_pct}%` : "–"}
-                          </span>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   )}
                 </div>
@@ -521,7 +610,7 @@ function HkDashboardPage() {
   }, [user, isAllowed, navigate]);
 
   // Scope: which store IDs does this user see?
-  const scopedStoreIds = (isDistrikt || isForening) ? userStores.map((s) => s.id) : undefined;
+  const scopedStoreIds = isDistrikt || isForening ? userStores.map((s) => s.id) : undefined;
 
   const [national, setNational] = useState<NationalStats | null>(null);
   const [distrikt, setDistrikt] = useState<DistriktRow[]>([]);
@@ -558,14 +647,16 @@ function HkDashboardPage() {
         const rows = data as Record<string, unknown>[];
         const total = rows.length;
         const active24h = rows.filter((r) => r.active_24h).length;
-        const avgCompletion = rows.reduce((s, r) => s + (Number(r.completion_rate_pct) || 0), 0) / total;
+        const avgCompletion =
+          rows.reduce((s, r) => s + (Number(r.completion_rate_pct) || 0), 0) / total;
         const totalIncidents = rows.reduce((s, r) => s + Number(r.open_incidents ?? 0), 0);
         const totalSessions = rows.reduce((s, r) => s + Number(r.sessions_last_7d ?? 0), 0);
         const totalLate = rows.reduce((s, r) => s + Number(r.tasks_late ?? 0), 0);
         const resHours = rows.filter((r) => r.avg_resolution_hours != null);
-        const avgRes = resHours.length > 0
-          ? resHours.reduce((s, r) => s + Number(r.avg_resolution_hours), 0) / resHours.length
-          : 0;
+        const avgRes =
+          resHours.length > 0
+            ? resHours.reduce((s, r) => s + Number(r.avg_resolution_hours), 0) / resHours.length
+            : 0;
         setNational({
           total_stores: total,
           active_stores_24h: active24h,
@@ -592,7 +683,10 @@ function HkDashboardPage() {
             total_sessions: Number(r.total_sessions ?? 0),
             completion_rate_pct: Number(r.completion_rate_pct ?? 0),
             open_incidents: Number(r.open_incidents ?? 0),
-            avg_incident_resolution_hours: r.avg_incident_resolution_hours != null ? Number(r.avg_incident_resolution_hours) : null,
+            avg_incident_resolution_hours:
+              r.avg_incident_resolution_hours != null
+                ? Number(r.avg_incident_resolution_hours)
+                : null,
             active_stores_24h: Number(r.active_stores_24h ?? 0),
             last_session_at: (r.last_session_at as string | null) ?? null,
           })),
@@ -611,16 +705,20 @@ function HkDashboardPage() {
           if (!byDistrikt[dk]) byDistrikt[dk] = [];
           byDistrikt[dk].push(row);
         }
-        setDistrikt(Object.entries(byDistrikt).map(([dk, rows]) => ({
-          distrikt: dk,
-          store_count: rows.length,
-          total_sessions: rows.reduce((s, r) => s + Number(r.sessions_last_7d ?? 0), 0),
-          completion_rate_pct: Math.round(rows.reduce((s, r) => s + Number(r.completion_rate_pct ?? 0), 0) / rows.length),
-          open_incidents: rows.reduce((s, r) => s + Number(r.open_incidents ?? 0), 0),
-          avg_incident_resolution_hours: null,
-          active_stores_24h: rows.filter((r) => r.active_24h).length,
-          last_session_at: null,
-        })));
+        setDistrikt(
+          Object.entries(byDistrikt).map(([dk, rows]) => ({
+            distrikt: dk,
+            store_count: rows.length,
+            total_sessions: rows.reduce((s, r) => s + Number(r.sessions_last_7d ?? 0), 0),
+            completion_rate_pct: Math.round(
+              rows.reduce((s, r) => s + Number(r.completion_rate_pct ?? 0), 0) / rows.length,
+            ),
+            open_incidents: rows.reduce((s, r) => s + Number(r.open_incidents ?? 0), 0),
+            avg_incident_resolution_hours: null,
+            active_stores_24h: rows.filter((r) => r.active_24h).length,
+            last_session_at: null,
+          })),
+        );
       }
     }
     setLoadingDistrikt(false);
@@ -679,15 +777,14 @@ function HkDashboardPage() {
   const scopeLabel = isDistrikt
     ? (distrikt[0]?.distrikt ?? "Ditt distrikt")
     : isForening
-    ? "Din förening"
-    : "Hela kedjan";
+      ? "Din förening"
+      : "Hela kedjan";
 
   const topStore = visibleStores[0] ?? null;
   const bottomStore = visibleStores[visibleStores.length - 1] ?? null;
 
   return (
     <div className="flex" style={{ height: "calc(100dvh - 3.5rem)" }}>
-
       {/* ── Left sidebar: stores by distrikt ── */}
       <aside className="hidden lg:flex w-64 xl:w-72 shrink-0 flex-col border-r border-border/60 bg-card overflow-hidden">
         <StoresSidebar
@@ -702,14 +799,17 @@ function HkDashboardPage() {
       {/* ── Main content ── */}
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[900px] px-4 py-6 md:px-6 md:py-8">
-
           {/* Header */}
           <div className="mb-6 flex items-start justify-between gap-3">
             <div>
               <h1 className="text-xl font-bold tracking-tight text-foreground">
-                {isDistrikt ? `Distrikt: ${distrikt[0]?.distrikt ?? "–"}` : isForening ? "Föreningsdashboard" : "Dashboard"}
+                {isDistrikt
+                  ? `Distrikt: ${distrikt[0]?.distrikt ?? "–"}`
+                  : isForening
+                    ? "Föreningsdashboard"
+                    : "Dashboard"}
               </h1>
-              <p className="mt-0.5 text-sm text-muted-foreground">
+              <p className="mt-0.5 text-sm text-muted-foreground tabular-nums">
                 {selectedDistrikt ? `Filtrerat på ${selectedDistrikt}` : scopeLabel}
                 {" · "}
                 {visibleStores.length} butiker
@@ -724,7 +824,12 @@ function HkDashboardPage() {
                 disabled={loadingNational || loadingDistrikt}
                 className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
               >
-                <RefreshCw className={cn("h-3.5 w-3.5", (loadingNational || loadingDistrikt) && "animate-spin")} />
+                <RefreshCw
+                  className={cn(
+                    "h-3.5 w-3.5 motion-reduce:animate-none",
+                    (loadingNational || loadingDistrikt) && "animate-spin",
+                  )}
+                />
                 <span className="hidden sm:inline">Uppdatera</span>
               </button>
             </div>
@@ -734,12 +839,14 @@ function HkDashboardPage() {
           <div className="lg:hidden mb-4 overflow-x-auto">
             <div className="flex gap-2 pb-1">
               <button
+                type="button"
                 onClick={() => setSelectedDistrikt(null)}
+                aria-pressed={selectedDistrikt === null}
                 className={cn(
                   "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
                   selectedDistrikt === null
                     ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border/60 bg-card text-muted-foreground hover:bg-muted"
+                    : "border-border/60 bg-card text-muted-foreground hover:bg-muted",
                 )}
               >
                 Alla
@@ -747,12 +854,16 @@ function HkDashboardPage() {
               {distrikt.map((d) => (
                 <button
                   key={d.distrikt}
-                  onClick={() => setSelectedDistrikt(selectedDistrikt === d.distrikt ? null : d.distrikt)}
+                  type="button"
+                  onClick={() =>
+                    setSelectedDistrikt(selectedDistrikt === d.distrikt ? null : d.distrikt)
+                  }
+                  aria-pressed={selectedDistrikt === d.distrikt}
                   className={cn(
                     "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap",
                     selectedDistrikt === d.distrikt
                       ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border/60 bg-card text-muted-foreground hover:bg-muted"
+                      : "border-border/60 bg-card text-muted-foreground hover:bg-muted",
                   )}
                 >
                   {d.distrikt}
@@ -768,7 +879,13 @@ function HkDashboardPage() {
               value={national ? `${national.national_completion}%` : "–"}
               sub="Kundrundor 30 dagar"
               icon={<CheckCircle2 className="h-4.5 w-4.5" />}
-              accent={(national?.national_completion ?? 0) >= 80 ? "success" : (national?.national_completion ?? 0) >= 60 ? "warning" : "destructive"}
+              accent={
+                (national?.national_completion ?? 0) >= 80
+                  ? "success"
+                  : (national?.national_completion ?? 0) >= 60
+                    ? "warning"
+                    : "destructive"
+              }
               loading={loadingNational}
             />
             <KpiCard
@@ -776,7 +893,13 @@ function HkDashboardPage() {
               value={national ? fmtHours(national.avg_resolution_hours) : "–"}
               sub="Avvikelse → stängd"
               icon={<Clock className="h-4.5 w-4.5" />}
-              accent={(national?.avg_resolution_hours ?? 999) <= 4 ? "success" : (national?.avg_resolution_hours ?? 999) <= 24 ? "warning" : "destructive"}
+              accent={
+                (national?.avg_resolution_hours ?? 999) <= 4
+                  ? "success"
+                  : (national?.avg_resolution_hours ?? 999) <= 24
+                    ? "warning"
+                    : "destructive"
+              }
               loading={loadingNational}
             />
             <KpiCard
@@ -806,7 +929,11 @@ function HkDashboardPage() {
                 </div>
                 <div>
                   <p className="text-lg font-bold tabular-nums">
-                    {loadingNational ? <Skeleton className="h-5 w-10 inline-block" /> : national?.total_sessions_7d ?? "–"}
+                    {loadingNational ? (
+                      <Skeleton className="h-5 w-10 inline-block" />
+                    ) : (
+                      (national?.total_sessions_7d ?? "–")
+                    )}
                   </p>
                   <p className="text-[10px] text-muted-foreground">Kundrundor (7 dagar)</p>
                 </div>
@@ -819,7 +946,11 @@ function HkDashboardPage() {
                 </div>
                 <div>
                   <p className="text-lg font-bold tabular-nums">
-                    {loadingNational ? <Skeleton className="h-5 w-10 inline-block" /> : national?.total_stores ?? "–"}
+                    {loadingNational ? (
+                      <Skeleton className="h-5 w-10 inline-block" />
+                    ) : (
+                      (national?.total_stores ?? "–")
+                    )}
                   </p>
                   <p className="text-[10px] text-muted-foreground">Aktiva butiker</p>
                 </div>
@@ -832,7 +963,11 @@ function HkDashboardPage() {
                 </div>
                 <div>
                   <p className="text-lg font-bold tabular-nums">
-                    {loadingNational ? <Skeleton className="h-5 w-10 inline-block" /> : national?.total_tasks_late ?? "–"}
+                    {loadingNational ? (
+                      <Skeleton className="h-5 w-10 inline-block" />
+                    ) : (
+                      (national?.total_tasks_late ?? "–")
+                    )}
                   </p>
                   <p className="text-[10px] text-muted-foreground">Sena uppgifter</p>
                 </div>
@@ -852,18 +987,26 @@ function HkDashboardPage() {
                 </div>
                 <p className="text-base font-bold text-foreground">{topStore?.store_name}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {topStore?.completion_rate_pct != null ? `${topStore.completion_rate_pct}% fullföljandegrad` : "Ingen data"}
+                  {topStore?.completion_rate_pct != null
+                    ? `${topStore.completion_rate_pct}% fullföljandegrad`
+                    : "Ingen data"}
                 </p>
               </div>
               <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
                 <div className="mb-1.5 flex items-center gap-2">
                   <TrendingDown className="h-4 w-4 text-destructive" />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-destructive">Behöver stöd</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-destructive">
+                    Behöver stöd
+                  </span>
                 </div>
                 <p className="text-base font-bold text-foreground">{bottomStore?.store_name}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {bottomStore?.completion_rate_pct != null ? `${bottomStore.completion_rate_pct}% fullföljandegrad` : "Ingen data"}
-                  {(bottomStore?.open_incidents ?? 0) > 0 ? ` · ${bottomStore?.open_incidents} avvikelser` : ""}
+                  {bottomStore?.completion_rate_pct != null
+                    ? `${bottomStore.completion_rate_pct}% fullföljandegrad`
+                    : "Ingen data"}
+                  {(bottomStore?.open_incidents ?? 0) > 0
+                    ? ` · ${bottomStore?.open_incidents} avvikelser`
+                    : ""}
                 </p>
               </div>
             </div>
@@ -892,21 +1035,33 @@ function HkDashboardPage() {
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground">
                           {idx + 1}
                         </span>
-                        <span className="font-medium text-sm text-foreground truncate">{s.store_name}</span>
+                        <span className="font-medium text-sm text-foreground truncate">
+                          {s.store_name}
+                        </span>
                         <StatusDot active={s.active_24h} />
                       </div>
                       <div className="ml-7 flex items-center gap-3 flex-wrap">
                         <RateBar pct={s.completion_rate_pct} size="sm" />
                         <div className="flex gap-2 text-xs text-muted-foreground">
-                          <span>{s.sessions_last_7d} rundor/v</span>
-                          {s.open_incidents > 0 && <span className="text-destructive font-medium">{s.open_incidents} avv.</span>}
-                          {s.tasks_late > 0 && <span className="text-warning-foreground font-medium">{s.tasks_late} sena</span>}
+                          <span className="tabular-nums">{s.sessions_last_7d} rundor/v</span>
+                          {s.open_incidents > 0 && (
+                            <span className="tabular-nums text-destructive font-medium">
+                              {s.open_incidents} avv.
+                            </span>
+                          )}
+                          {s.tasks_late > 0 && (
+                            <span className="tabular-nums text-warning-foreground font-medium">
+                              {s.tasks_late} sena
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
                   ))}
               {!loadingAllStores && visibleStores.length === 0 && (
-                <div className="px-4 py-10 text-center text-sm text-muted-foreground">Inga butiker.</div>
+                <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  Inga butiker.
+                </div>
               )}
             </div>
 
@@ -915,28 +1070,64 @@ function HkDashboardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/40">
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Butik</th>
-                    {!selectedDistrikt && <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Distrikt</th>}
-                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fullföljandegrad</th>
-                    <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rundor/v</th>
-                    <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">Avvikelser</th>
-                    <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sena</th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Senast</th>
-                    <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">Online</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Butik
+                    </th>
+                    {!selectedDistrikt && (
+                      <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Distrikt
+                      </th>
+                    )}
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Fullföljandegrad
+                    </th>
+                    <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Rundor/v
+                    </th>
+                    <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Avvikelser
+                    </th>
+                    <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Sena
+                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Senast
+                    </th>
+                    <th className="px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Online
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingAllStores
                     ? Array.from({ length: 6 }).map((_, i) => (
                         <tr key={i} className="border-b border-border/30">
-                          <td className="px-4 py-3"><Skeleton className="h-4 w-36" /></td>
-                          {!selectedDistrikt && <td className="px-3 py-3"><Skeleton className="h-4 w-24" /></td>}
-                          <td className="px-3 py-3"><Skeleton className="h-4 w-24" /></td>
-                          <td className="px-3 py-3"><Skeleton className="mx-auto h-4 w-8" /></td>
-                          <td className="px-3 py-3"><Skeleton className="mx-auto h-4 w-8" /></td>
-                          <td className="px-3 py-3"><Skeleton className="mx-auto h-4 w-8" /></td>
-                          <td className="px-3 py-3"><Skeleton className="h-4 w-20" /></td>
-                          <td className="px-3 py-3"><Skeleton className="mx-auto h-3 w-3 rounded-full" /></td>
+                          <td className="px-4 py-3">
+                            <Skeleton className="h-4 w-36" />
+                          </td>
+                          {!selectedDistrikt && (
+                            <td className="px-3 py-3">
+                              <Skeleton className="h-4 w-24" />
+                            </td>
+                          )}
+                          <td className="px-3 py-3">
+                            <Skeleton className="h-4 w-24" />
+                          </td>
+                          <td className="px-3 py-3">
+                            <Skeleton className="mx-auto h-4 w-8" />
+                          </td>
+                          <td className="px-3 py-3">
+                            <Skeleton className="mx-auto h-4 w-8" />
+                          </td>
+                          <td className="px-3 py-3">
+                            <Skeleton className="mx-auto h-4 w-8" />
+                          </td>
+                          <td className="px-3 py-3">
+                            <Skeleton className="h-4 w-20" />
+                          </td>
+                          <td className="px-3 py-3">
+                            <Skeleton className="mx-auto h-3 w-3 rounded-full" />
+                          </td>
                         </tr>
                       ))
                     : visibleStores.map((s, idx) => (
@@ -956,29 +1147,52 @@ function HkDashboardPage() {
                             </div>
                           </td>
                           {!selectedDistrikt && (
-                            <td className="px-3 py-3 text-xs text-muted-foreground">{s.distrikt}</td>
+                            <td className="px-3 py-3 text-xs text-muted-foreground">
+                              {s.distrikt}
+                            </td>
                           )}
                           <td className="px-3 py-3">
                             <RateBar pct={s.completion_rate_pct} size="sm" />
                           </td>
-                          <td className="px-3 py-3 text-center tabular-nums text-foreground/80">{s.sessions_last_7d}</td>
+                          <td className="px-3 py-3 text-center tabular-nums text-foreground/80">
+                            {s.sessions_last_7d}
+                          </td>
                           <td className="px-3 py-3 text-center">
-                            <span className={cn("tabular-nums font-medium", s.open_incidents > 0 ? "text-destructive" : "text-muted-foreground")}>
+                            <span
+                              className={cn(
+                                "tabular-nums font-medium",
+                                s.open_incidents > 0 ? "text-destructive" : "text-muted-foreground",
+                              )}
+                            >
                               {s.open_incidents}
                             </span>
                           </td>
                           <td className="px-3 py-3 text-center">
-                            <span className={cn("tabular-nums font-medium", s.tasks_late > 0 ? "text-warning-foreground" : "text-muted-foreground")}>
+                            <span
+                              className={cn(
+                                "tabular-nums font-medium",
+                                s.tasks_late > 0
+                                  ? "text-warning-foreground"
+                                  : "text-muted-foreground",
+                              )}
+                            >
                               {s.tasks_late}
                             </span>
                           </td>
-                          <td className="px-3 py-3 text-xs text-muted-foreground">{fmtDate(s.last_session_at)}</td>
-                          <td className="px-3 py-3 text-center"><StatusDot active={s.active_24h} /></td>
+                          <td className="px-3 py-3 text-xs text-muted-foreground">
+                            {fmtDate(s.last_session_at)}
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <StatusDot active={s.active_24h} />
+                          </td>
                         </tr>
                       ))}
                   {!loadingAllStores && visibleStores.length === 0 && (
                     <tr>
-                      <td colSpan={selectedDistrikt ? 7 : 8} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td
+                        colSpan={selectedDistrikt ? 7 : 8}
+                        className="px-4 py-10 text-center text-sm text-muted-foreground"
+                      >
                         Inga butiker hittades.
                       </td>
                     </tr>
@@ -987,15 +1201,15 @@ function HkDashboardPage() {
               </table>
             </div>
           </div>
-
         </div>
       </main>
 
       {/* ── Right sidebar: operational exceptions ── */}
       <aside className="hidden xl:flex w-64 shrink-0 flex-col border-l border-border/60 bg-card overflow-hidden">
-        <ExceptionsSidebar storeIdFilter={visibleStoreIds.length > 0 ? visibleStoreIds : scopedStoreIds} />
+        <ExceptionsSidebar
+          storeIdFilter={visibleStoreIds.length > 0 ? visibleStoreIds : scopedStoreIds}
+        />
       </aside>
-
     </div>
   );
 }

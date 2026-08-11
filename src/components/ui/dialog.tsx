@@ -22,7 +22,7 @@ const DialogOverlay = React.forwardRef<
     ref={ref}
     className={cn(
       "fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 backdrop-blur-sm",
-      className
+      className,
     )}
     {...props}
   />
@@ -64,7 +64,7 @@ const DialogContent = React.forwardRef<
           "sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=open]:slide-in-from-left-1/2",
           "sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-top-[48%]",
 
-          className
+          className,
         )}
         {...props}
       >
@@ -78,9 +78,7 @@ const DialogContent = React.forwardRef<
           <div className="flex-1 min-h-0 flex flex-col">{children}</div>
         ) : (
           /* Innehållsområde med intern scroll om texten är lång */
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-            {children}
-          </div>
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">{children}</div>
         )}
 
         {/* Stängningsknapp (Fixerad uppe till höger i modalen) — kan döljas om dialogen har egen */}
@@ -108,7 +106,7 @@ const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   <div
     className={cn(
       "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-2 pt-2",
-      className
+      className,
     )}
     {...props}
   />

@@ -19,7 +19,7 @@ type State = {
 };
 
 export class ErrorBoundary extends React.Component<Props, State> {
-  state: State = { 
+  state: State = {
     error: null,
     errorInfo: null,
   };
@@ -39,7 +39,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
     // 2. Fire-and-forget: Rapportera till Supabase (system_errors)
     const activeStoreId = this.props.storeId ?? null;
-    
+
     supabase
       .from("system_errors")
       .insert({
@@ -58,7 +58,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
         },
         (err) => {
           console.error("ErrorBoundary: Network error while logging to Supabase:", err);
-        }
+        },
       );
   }
 
@@ -100,7 +100,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
     ].join("\n");
 
     return (
-      <div 
+      <div
         role="alert"
         aria-live="assertive"
         className="flex min-h-[320px] w-full flex-col items-center justify-center gap-4 rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center"
@@ -136,7 +136,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             Stack Trace & Komponentträd:
           </p>
           <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-destructive">
-            {shouldShowFullTrace ? fullTraceOutput : (error.message || String(error))}
+            {shouldShowFullTrace ? fullTraceOutput : error.message || String(error)}
           </pre>
         </div>
 

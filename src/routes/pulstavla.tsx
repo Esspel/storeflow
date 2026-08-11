@@ -65,13 +65,25 @@ function useCountdown(targetMs: number): string {
   useEffect(() => {
     const update = () => {
       const diff = targetMs - Date.now();
-      if (targetMs === Infinity) { setLabel("—"); return; }
-      if (diff <= 0) { setLabel("Försenad"); return; }
+      if (targetMs === Infinity) {
+        setLabel("—");
+        return;
+      }
+      if (diff <= 0) {
+        setLabel("Försenad");
+        return;
+      }
       const h = Math.floor(diff / 3_600_000);
       const m = Math.floor((diff % 3_600_000) / 60_000);
       const s = Math.floor((diff % 60_000) / 1_000);
-      if (h >= 24) { setLabel(`${Math.floor(h / 24)}d ${h % 24}h`); return; }
-      if (h > 0) { setLabel(`${h}h ${m}m`); return; }
+      if (h >= 24) {
+        setLabel(`${Math.floor(h / 24)}d ${h % 24}h`);
+        return;
+      }
+      if (h > 0) {
+        setLabel(`${h}h ${m}m`);
+        return;
+      }
       setLabel(`${m}m ${s}s`);
     };
     update();
@@ -112,7 +124,12 @@ function TaskCarousel({ tasks }: { tasks: LiveTask[] }) {
     return () => clearInterval(id);
   }, [totalPages, goTo]);
 
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
   const slice = tasks.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
@@ -120,10 +137,13 @@ function TaskCarousel({ tasks }: { tasks: LiveTask[] }) {
     <div className="flex flex-col h-full">
       <div
         className={cn(
-          "flex-1 divide-y divide-gray-700/40 overflow-hidden transition-all duration-300",
-          visible ? "opacity-100 translate-x-0" : animDir === "left" ? "opacity-0 -translate-x-4" : "opacity-0 translate-x-4",
+          "flex-1 divide-y divide-gray-700/40 overflow-hidden transition-[opacity,transform] duration-300 motion-reduce:transition-none",
+          visible
+            ? "opacity-100 translate-x-0"
+            : animDir === "left"
+              ? "opacity-0 -translate-x-4"
+              : "opacity-0 translate-x-4",
         )}
-        style={{ transitionProperty: "opacity, transform" }}
       >
         {slice.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full py-10 text-center">
@@ -137,7 +157,9 @@ function TaskCarousel({ tasks }: { tasks: LiveTask[] }) {
       {totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-gray-700/40 px-4 py-2">
           <button
+            type="button"
             onClick={() => goTo((page - 1 + totalPages) % totalPages, "right")}
+            aria-label="Föregående sida"
             className="rounded-lg p-1 text-gray-500 hover:text-white transition-colors"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -147,14 +169,16 @@ function TaskCarousel({ tasks }: { tasks: LiveTask[] }) {
               <div
                 key={i}
                 className={cn(
-                  "h-1.5 rounded-full transition-all",
+                  "h-1.5 rounded-full transition-[width,background-color]",
                   i === page ? "w-4 bg-emerald-500" : "w-1.5 bg-gray-600",
                 )}
               />
             ))}
           </div>
           <button
+            type="button"
             onClick={() => goTo((page + 1) % totalPages, "left")}
+            aria-label="Nästa sida"
             className="rounded-lg p-1 text-gray-500 hover:text-white transition-colors"
           >
             <ChevronRight className="h-4 w-4" />
@@ -172,24 +196,19 @@ function TaskRow({ task }: { task: LiveTask }) {
   const isUrgent = !isOverdue && task.status !== "done" && deadlineMs - Date.now() < 3_600_000;
 
   return (
-    <div
-      className={cn(
-        "flex items-center gap-3 px-4 py-3",
-        isOverdue && "bg-red-950/30",
-      )}
-    >
+    <div className={cn("flex items-center gap-3 px-4 py-3", isOverdue && "bg-red-950/30")}>
       <div
         className={cn(
           "h-2 w-2 shrink-0 rounded-full",
           task.status === "done"
             ? "bg-emerald-500"
             : isOverdue
-            ? "bg-red-500 animate-pulse"
-            : task.status === "progress"
-            ? "bg-amber-400"
-            : isUrgent
-            ? "bg-orange-400"
-            : "bg-gray-500",
+              ? "bg-red-500 animate-pulse motion-reduce:animate-none"
+              : task.status === "progress"
+                ? "bg-amber-400"
+                : isUrgent
+                  ? "bg-orange-400"
+                  : "bg-gray-500",
         )}
       />
       <div className="min-w-0 flex-1">
@@ -219,17 +238,15 @@ function TaskRow({ task }: { task: LiveTask }) {
               isOverdue
                 ? "bg-red-900/60 text-red-400"
                 : isUrgent
-                ? "bg-orange-900/50 text-orange-400"
-                : "bg-gray-700/60 text-gray-300",
+                  ? "bg-orange-900/50 text-orange-400"
+                  : "bg-gray-700/60 text-gray-300",
             )}
           >
             {countdown}
           </span>
         )}
         {task.due_time && task.status !== "done" && (
-          <p className="mt-0.5 text-[10px] text-gray-600">
-            {task.due_time.slice(0, 5)}
-          </p>
+          <p className="mt-0.5 text-[10px] text-gray-600">{task.due_time.slice(0, 5)}</p>
         )}
       </div>
     </div>
@@ -262,7 +279,7 @@ function IncidentCarousel({ incidents }: { incidents: LiveIncident[] }) {
     <div className="flex flex-col h-full">
       <div
         className={cn(
-          "flex-1 divide-y divide-gray-700/40 overflow-hidden transition-opacity duration-300",
+          "flex-1 divide-y divide-gray-700/40 overflow-hidden transition-opacity duration-300 motion-reduce:transition-none",
           visible ? "opacity-100" : "opacity-0",
         )}
       >
@@ -278,12 +295,12 @@ function IncidentCarousel({ incidents }: { incidents: LiveIncident[] }) {
                 className={cn(
                   "h-2 w-2 shrink-0 rounded-full",
                   inc.priority === "Kritisk"
-                    ? "bg-red-500 animate-pulse"
+                    ? "bg-red-500 animate-pulse motion-reduce:animate-none"
                     : inc.priority === "Hög"
-                    ? "bg-orange-400"
-                    : inc.priority === "Medel"
-                    ? "bg-amber-400"
-                    : "bg-gray-500",
+                      ? "bg-orange-400"
+                      : inc.priority === "Medel"
+                        ? "bg-amber-400"
+                        : "bg-gray-500",
                 )}
               />
               <div className="min-w-0 flex-1">
@@ -298,8 +315,8 @@ function IncidentCarousel({ incidents }: { incidents: LiveIncident[] }) {
                   inc.priority === "Kritisk"
                     ? "bg-red-900/50 text-red-400"
                     : inc.priority === "Hög"
-                    ? "bg-orange-900/50 text-orange-400"
-                    : "bg-amber-900/50 text-amber-400",
+                      ? "bg-orange-900/50 text-orange-400"
+                      : "bg-amber-900/50 text-amber-400",
                 )}
               >
                 {inc.priority}
@@ -314,7 +331,7 @@ function IncidentCarousel({ incidents }: { incidents: LiveIncident[] }) {
             <div
               key={i}
               className={cn(
-                "h-1.5 rounded-full transition-all",
+                "h-1.5 rounded-full transition-[width,background-color]",
                 i === page ? "w-4 bg-amber-400" : "w-1.5 bg-gray-600",
               )}
             />
@@ -329,24 +346,15 @@ function IncidentCarousel({ incidents }: { incidents: LiveIncident[] }) {
 function StorePulse({ tasks, incidents }: { tasks: LiveTask[]; incidents: LiveIncident[] }) {
   const done = tasks.filter((t) => t.status === "done").length;
   const total = tasks.length;
-  const overdue = tasks.filter(
-    (t) => t.status !== "done" && getDeadlineMs(t) < Date.now(),
-  ).length;
+  const overdue = tasks.filter((t) => t.status !== "done" && getDeadlineMs(t) < Date.now()).length;
   const critical = incidents.filter((i) => i.priority === "Kritisk").length;
 
-  const score = total === 0
-    ? 100
-    : Math.max(0, Math.round(((done / total) * 100) - overdue * 8 - critical * 10));
+  const score =
+    total === 0 ? 100 : Math.max(0, Math.round((done / total) * 100 - overdue * 8 - critical * 10));
 
-  const color =
-    score >= 80 ? "text-emerald-400" :
-    score >= 50 ? "text-amber-400" :
-    "text-red-400";
+  const color = score >= 80 ? "text-emerald-400" : score >= 50 ? "text-amber-400" : "text-red-400";
 
-  const label =
-    score >= 80 ? "Bra läge" :
-    score >= 50 ? "Håll koll" :
-    "Kräver åtgärd";
+  const label = score >= 80 ? "Bra läge" : score >= 50 ? "Håll koll" : "Kräver åtgärd";
 
   return (
     <div className="rounded-2xl bg-gray-800/60 p-4 flex flex-col justify-between">
@@ -374,9 +382,8 @@ function CompletedTicker({ tasks }: { tasks: LiveTask[] }) {
   const [idx, setIdx] = useState(0);
   const [fade, setFade] = useState(true);
 
-  const items = done.length > 0
-    ? done.map((t) => `Klart: ${t.title} (${t.assigneeLabel})`)
-    : MOTIVATIONAL;
+  const items =
+    done.length > 0 ? done.map((t) => `Klart: ${t.title} (${t.assigneeLabel})`) : MOTIVATIONAL;
 
   useEffect(() => {
     if (items.length <= 1) return;
@@ -395,7 +402,7 @@ function CompletedTicker({ tasks }: { tasks: LiveTask[] }) {
       <Star className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
       <p
         className={cn(
-          "text-xs text-emerald-300 truncate transition-opacity duration-400",
+          "text-xs text-emerald-300 truncate transition-opacity duration-400 motion-reduce:transition-none",
           fade ? "opacity-100" : "opacity-0",
         )}
       >
@@ -417,26 +424,27 @@ function LiveBoard({ storeId }: { storeId: string }) {
     const sevenDaysAgo = new Date(today.getTime() - 7 * 86400000).toISOString();
     const endOfToday = new Date(today.getTime() + 86400000).toISOString();
 
-    const [{ data: storeRow }, { data: rawTasks }, { data: incidents }] =
-      await Promise.all([
-        supabase.from("stores").select("name,upshop_url").eq("id", storeId).maybeSingle(),
-        supabase
-          .from("tasks")
-          .select("id,title,category,status,due_date,due_date_time,assigned_to,assignee:app_users!assigned_to(display_name)")
-          .eq("store_id", storeId)
-          .in("status", ["todo", "progress", "late", "done"])
-          .gte("due_date", sevenDaysAgo)
-          .lt("due_date", endOfToday)
-          .order("due_date", { ascending: true })
-          .limit(60),
-        supabase
-          .from("incidents")
-          .select("id,ref_number,title,priority,status,category,created_at")
-          .eq("store_id", storeId)
-          .in("status", ["open", "in_progress", "escalated"])
-          .order("created_at", { ascending: false })
-          .limit(40),
-      ]);
+    const [{ data: storeRow }, { data: rawTasks }, { data: incidents }] = await Promise.all([
+      supabase.from("stores").select("name,upshop_url").eq("id", storeId).maybeSingle(),
+      supabase
+        .from("tasks")
+        .select(
+          "id,title,category,status,due_date,due_date_time,assigned_to,assignee:app_users!assigned_to(display_name)",
+        )
+        .eq("store_id", storeId)
+        .in("status", ["todo", "progress", "late", "done"])
+        .gte("due_date", sevenDaysAgo)
+        .lt("due_date", endOfToday)
+        .order("due_date", { ascending: true })
+        .limit(60),
+      supabase
+        .from("incidents")
+        .select("id,ref_number,title,priority,status,category,created_at")
+        .eq("store_id", storeId)
+        .in("status", ["open", "in_progress", "escalated"])
+        .order("created_at", { ascending: false })
+        .limit(40),
+    ]);
 
     // Build assignee map from task_assignees (fetch separately once we have task ids)
     const taskIds = (rawTasks ?? []).map((t: { id: string }) => t.id);
@@ -460,15 +468,17 @@ function LiveBoard({ storeId }: { storeId: string }) {
       }
     }
 
-    const tasks: LiveTask[] = ((rawTasks ?? []) as unknown as {
-      id: string;
-      title: string;
-      category: string;
-      status: "todo" | "progress" | "done" | "late" | "cancelled";
-      due_date: string | null;
-      due_date_time?: string | null;
-      assignee?: { display_name: string } | null;
-    }[]).map((t) => {
+    const tasks: LiveTask[] = (
+      (rawTasks ?? []) as unknown as {
+        id: string;
+        title: string;
+        category: string;
+        status: "todo" | "progress" | "done" | "late" | "cancelled";
+        due_date: string | null;
+        due_date_time?: string | null;
+        assignee?: { display_name: string } | null;
+      }[]
+    ).map((t) => {
       const names = assigneeMap[t.id] ?? [];
       // Fall back to direct assignee field if no task_assignees rows
       const fallback = t.assignee?.display_name;
@@ -477,7 +487,7 @@ function LiveBoard({ storeId }: { storeId: string }) {
           ? names.length <= 2
             ? names.join(", ")
             : `${names.slice(0, 2).join(", ")} +${names.length - 2}`
-          : fallback ?? "Alla";
+          : (fallback ?? "Alla");
       return {
         id: t.id,
         title: t.title,
@@ -513,8 +523,16 @@ function LiveBoard({ storeId }: { storeId: string }) {
 
     const ch = supabase
       .channel("pulstavla")
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks", filter: `store_id=eq.${storeId}` }, fetchData)
-      .on("postgres_changes", { event: "*", schema: "public", table: "incidents", filter: `store_id=eq.${storeId}` }, fetchData)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasks", filter: `store_id=eq.${storeId}` },
+        fetchData,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "incidents", filter: `store_id=eq.${storeId}` },
+        fetchData,
+      )
       .subscribe();
 
     return () => {
@@ -527,7 +545,7 @@ function LiveBoard({ storeId }: { storeId: string }) {
   if (!data) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-950">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+        <div className="h-10 w-10 animate-spin motion-reduce:animate-none rounded-full border-4 border-emerald-500 border-t-transparent" />
       </div>
     );
   }
@@ -550,7 +568,7 @@ function LiveBoard({ storeId }: { storeId: string }) {
           <div>
             <h1 className="text-lg font-bold text-white leading-tight">{data.storeName}</h1>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+              <div className="h-1.5 w-1.5 animate-pulse motion-reduce:animate-none rounded-full bg-emerald-500" />
               <p className="text-[11px] text-gray-500">Live · uppdateras var 30s</p>
             </div>
           </div>
@@ -568,7 +586,9 @@ function LiveBoard({ storeId }: { storeId: string }) {
       {/* KPI row */}
       <div className="mb-4 grid grid-cols-4 gap-3">
         <div className="rounded-2xl bg-gray-800/60 p-3.5">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">Uppgifter</p>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
+            Uppgifter
+          </p>
           <p className="mt-0.5 text-3xl font-bold text-white tabular-nums">{total}</p>
           <p className="text-[11px] text-gray-500">{done} klara</p>
         </div>
@@ -577,14 +597,23 @@ function LiveBoard({ storeId }: { storeId: string }) {
           <p className="mt-0.5 text-3xl font-bold text-emerald-400 tabular-nums">{pct}%</p>
           <div className="mt-1.5 h-1.5 w-full rounded-full bg-gray-700">
             <div
-              className="h-1.5 rounded-full bg-emerald-500 transition-all duration-700"
+              className="h-1.5 rounded-full bg-emerald-500 transition-[width] duration-700 motion-reduce:transition-none"
               style={{ width: `${pct}%` }}
             />
           </div>
         </div>
         <div className={cn("rounded-2xl p-3.5", overdue > 0 ? "bg-red-900/40" : "bg-gray-800/60")}>
-          <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">Försenade</p>
-          <p className={cn("mt-0.5 text-3xl font-bold tabular-nums", overdue > 0 ? "text-red-400" : "text-white")}>{overdue}</p>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">
+            Försenade
+          </p>
+          <p
+            className={cn(
+              "mt-0.5 text-3xl font-bold tabular-nums",
+              overdue > 0 ? "text-red-400" : "text-white",
+            )}
+          >
+            {overdue}
+          </p>
           <p className="text-[11px] text-gray-500">
             {overdue === 0 ? "Inga" : overdue === 1 ? "1 uppgift" : `${overdue} uppgifter`}
           </p>
@@ -598,7 +627,12 @@ function LiveBoard({ storeId }: { storeId: string }) {
       </div>
 
       {/* Main grid */}
-      <div className={cn("grid flex-1 gap-3 overflow-hidden", data.upshopUrl ? "grid-cols-3" : "grid-cols-2")}>
+      <div
+        className={cn(
+          "grid flex-1 gap-3 overflow-hidden",
+          data.upshopUrl ? "grid-cols-3" : "grid-cols-2",
+        )}
+      >
         {/* Tasks carousel */}
         <div className="flex flex-col overflow-hidden rounded-2xl bg-gray-800/40">
           <div className="flex items-center justify-between border-b border-gray-700/60 px-4 py-2.5">
@@ -607,7 +641,9 @@ function LiveBoard({ storeId }: { storeId: string }) {
               <span className="text-sm font-semibold text-white">Uppgifter idag</span>
             </div>
             {total > 0 && (
-              <span className="text-xs text-gray-500 tabular-nums">{done}/{total}</span>
+              <span className="text-xs text-gray-500 tabular-nums">
+                {done}/{total}
+              </span>
             )}
           </div>
           <div className="flex-1 overflow-hidden">
@@ -640,6 +676,7 @@ function LiveBoard({ storeId }: { storeId: string }) {
             </div>
             <iframe
               src={data.upshopUrl}
+              title="Upshop styrtavla"
               className="flex-1 w-full"
               style={{ border: "none", minHeight: 0 }}
               allow="fullscreen"
@@ -654,7 +691,11 @@ function LiveBoard({ storeId }: { storeId: string }) {
         <div className="flex items-center gap-1.5">
           <Clock className="h-3 w-3 text-gray-700" />
           <p className="text-[11px] text-gray-700">
-            {data.lastUpdated.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            {data.lastUpdated.toLocaleTimeString("sv-SE", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}
           </p>
         </div>
       </div>
@@ -663,13 +704,7 @@ function LiveBoard({ storeId }: { storeId: string }) {
 }
 
 // ── PIN Gate ───────────────────────────────────────────────────────────────────
-function PinGate({
-  storeId,
-  onUnlock,
-}: {
-  storeId: string;
-  onUnlock: () => void;
-}) {
+function PinGate({ storeId, onUnlock }: { storeId: string; onUnlock: () => void }) {
   const [digits, setDigits] = useState<string[]>(["", "", "", ""]);
   const [error, setError] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -677,8 +712,14 @@ function PinGate({
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    supabase.from("stores").select("name").eq("id", storeId).maybeSingle()
-      .then(({ data }) => { if (data) setStoreName(data.name); });
+    supabase
+      .from("stores")
+      .select("name")
+      .eq("id", storeId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setStoreName(data.name);
+      });
   }, [storeId]);
 
   const checkPin = async (pin: string) => {
@@ -690,8 +731,15 @@ function PinGate({
       .eq("store_id", storeId)
       .maybeSingle();
     setChecking(false);
-    if (!data?.pin_hash) { setError(true); setDigits(["", "", "", ""]); return; }
-    const { data: verified } = await supabase.rpc("verify_password", { plain_password: pin, hashed_password: data.pin_hash });
+    if (!data?.pin_hash) {
+      setError(true);
+      setDigits(["", "", "", ""]);
+      return;
+    }
+    const { data: verified } = await supabase.rpc("verify_password", {
+      plain_password: pin,
+      hashed_password: data.pin_hash,
+    });
     if (verified) {
       onUnlock();
     } else {
@@ -732,27 +780,36 @@ function PinGate({
           {digits.map((d, i) => (
             <input
               key={i}
-              ref={(el) => { inputRefs.current[i] = el; }}
+              ref={(el) => {
+                inputRefs.current[i] = el;
+              }}
               type="tel"
               inputMode="numeric"
               maxLength={1}
               value={d}
+              aria-label={`Siffra ${i + 1} i PIN-kod`}
               autoFocus={i === 0}
               onChange={(e) => handleDigit(i, e.target.value.slice(-1))}
               onKeyDown={(e) => handleKeyDown(i, e)}
               className={cn(
-                "h-16 w-14 rounded-xl border-2 bg-gray-800 text-center text-2xl font-bold text-white outline-none transition-all",
+                "h-16 w-14 rounded-xl border-2 bg-gray-800 text-center text-2xl font-bold text-white outline-none transition-[border-color,box-shadow] focus-visible:ring-2 focus-visible:ring-emerald-500/60",
                 error
                   ? "border-red-500 text-red-400"
                   : d
-                  ? "border-emerald-500"
-                  : "border-gray-600 focus:border-gray-400",
+                    ? "border-emerald-500"
+                    : "border-gray-600 focus:border-gray-400",
               )}
             />
           ))}
         </div>
-        {error && <p className="text-sm font-medium text-red-400">Fel PIN-kod, försök igen</p>}
-        {checking && <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />}
+        {error && (
+          <p role="alert" className="text-sm font-medium text-red-400">
+            Fel PIN-kod, försök igen
+          </p>
+        )}
+        {checking && (
+          <div className="h-5 w-5 animate-spin motion-reduce:animate-none rounded-full border-2 border-emerald-500 border-t-transparent" />
+        )}
         <p className="text-xs text-gray-600">PIN-koden sätts av butikschefen under Inställningar</p>
       </div>
     </div>
@@ -772,7 +829,7 @@ function StoreSelector({ onSelect }: { onSelect: (id: string) => void }) {
       .then(({ data }) => {
         if (data) {
           const storeList = data
-            .map((row) => (row.store as unknown as { id: string; name: string } | null))
+            .map((row) => row.store as unknown as { id: string; name: string } | null)
             .filter((s): s is { id: string; name: string } => s !== null)
             .sort((a, b) => a.name.localeCompare(b.name, "sv"));
           setStores(storeList);
@@ -799,7 +856,8 @@ function StoreSelector({ onSelect }: { onSelect: (id: string) => void }) {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 pointer-events-none" />
           <input
             type="text"
-            placeholder="Sök butik..."
+            placeholder="Sök butik…"
+            aria-label="Sök butik"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-xl border border-gray-700 bg-gray-800 py-2.5 pl-9 pr-3 text-sm text-white placeholder:text-gray-500 outline-none focus:border-gray-500"
@@ -808,16 +866,23 @@ function StoreSelector({ onSelect }: { onSelect: (id: string) => void }) {
         {loading ? (
           <div className="space-y-2">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-12 animate-pulse rounded-xl bg-gray-800" />
+              <div
+                key={i}
+                className="h-12 animate-pulse motion-reduce:animate-none rounded-xl bg-gray-800"
+              />
             ))}
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-xl bg-gray-800/60 px-4 py-8 text-center">
             <p className="text-sm text-gray-400">
-              {search ? "Ingen butik matchar sökningen" : "Inga butiker har aktiverat Pulstavla-PIN ännu"}
+              {search
+                ? "Ingen butik matchar sökningen"
+                : "Inga butiker har aktiverat Pulstavla-PIN ännu"}
             </p>
             {!search && (
-              <p className="mt-1 text-xs text-gray-600">En butikschef aktiverar PIN under Inställningar</p>
+              <p className="mt-1 text-xs text-gray-600">
+                En butikschef aktiverar PIN under Inställningar
+              </p>
             )}
           </div>
         ) : (
@@ -844,21 +909,36 @@ function PulstavlaPage() {
   const { loading: authLoading } = useAuth();
 
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(() => {
-    try { return localStorage.getItem("sf-pulstavla-store"); } catch { return null; }
+    try {
+      return localStorage.getItem("sf-pulstavla-store");
+    } catch {
+      return null;
+    }
   });
   const [unlocked, setUnlocked] = useState(false);
   const [hasPin, setHasPin] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!selectedStoreId) { setHasPin(null); return; }
-    supabase.from("pulstavla_pins").select("id").eq("store_id", selectedStoreId).maybeSingle()
+    if (!selectedStoreId) {
+      setHasPin(null);
+      return;
+    }
+    supabase
+      .from("pulstavla_pins")
+      .select("id")
+      .eq("store_id", selectedStoreId)
+      .maybeSingle()
       .then(({ data }) => setHasPin(!!data));
   }, [selectedStoreId]);
 
-  useEffect(() => { setUnlocked(false); }, [selectedStoreId]);
+  useEffect(() => {
+    setUnlocked(false);
+  }, [selectedStoreId]);
 
   const selectStore = (id: string) => {
-    try { localStorage.setItem("sf-pulstavla-store", id); } catch {}
+    try {
+      localStorage.setItem("sf-pulstavla-store", id);
+    } catch {}
     setSelectedStoreId(id);
     setHasPin(null);
     setUnlocked(false);
@@ -867,7 +947,7 @@ function PulstavlaPage() {
   if (authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin motion-reduce:animate-none rounded-full border-4 border-emerald-500 border-t-transparent" />
       </div>
     );
   }
@@ -877,13 +957,15 @@ function PulstavlaPage() {
   if (hasPin === null) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin motion-reduce:animate-none rounded-full border-4 border-emerald-500 border-t-transparent" />
       </div>
     );
   }
 
   if (!hasPin) {
-    try { localStorage.removeItem("sf-pulstavla-store"); } catch {}
+    try {
+      localStorage.removeItem("sf-pulstavla-store");
+    } catch {}
     return <StoreSelector onSelect={selectStore} />;
   }
 

@@ -1,19 +1,47 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Calendar, CalendarClock, ChevronLeft, ChevronRight, Download, Upload, Users, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, X, UserPlus, LayoutGrid, List, Timer, Trash2, Truck, FileText, Lock, FilePlus as FilePlus2, FileCode as FileCode2, ArrowLeftRight, RefreshCw, Sparkles } from "lucide-react";
+import {
+  Calendar,
+  CalendarClock,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Upload,
+  Users,
+  Clock,
+  CircleAlert as AlertCircle,
+  CircleCheck as CheckCircle2,
+  X,
+  UserPlus,
+  LayoutGrid,
+  List,
+  Timer,
+  Trash2,
+  Truck,
+  FileText,
+  Lock,
+  FilePlus as FilePlus2,
+  FileCode as FileCode2,
+  ArrowLeftRight,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react";
 
 import { useVirtualList } from "@/hooks/use-virtual-list";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
-  Dialog,
-  DialogContent,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
   Select,
@@ -26,7 +54,12 @@ import { supabase, type AppUser, type Task } from "@/lib/supabase";
 import { generatePassword, usernameFromName } from "@/lib/text-utils";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
-import { copyChildAssociations, dueFromPeriodStart, localDateStr, midnightStockholm } from "@/lib/task-utils";
+import {
+  copyChildAssociations,
+  dueFromPeriodStart,
+  localDateStr,
+  midnightStockholm,
+} from "@/lib/task-utils";
 import { exportTextAsCSV, parseCSVLine } from "@/lib/csv";
 import { toast } from "sonner";
 import { getSpecialWeekHoliday, stockholmToUtc } from "@/lib/swedish-holidays";
@@ -184,22 +217,26 @@ type MatchedEmployee = {
 // ─── Shift colour mapping ─────────────────────────────────────────────────────
 
 const SHIFT_COLORS: Record<string, { bg: string; label: string }> = {
-  kassa:            { bg: "#b5c9a1", label: "Kassa" },
-  "kassa reserv":   { bg: "#b5c9a1", label: "Kassa Reserv" },
+  kassa: { bg: "#b5c9a1", label: "Kassa" },
+  "kassa reserv": { bg: "#b5c9a1", label: "Kassa Reserv" },
   "kassa reserv 1": { bg: "#b5c9a1", label: "Kassa Reserv 1" },
-  förbutik:         { bg: "#f0c87a", label: "Förbutik" },
-  teamplock:        { bg: "#7d6547", label: "Teamplock" },
-  butikskök:        { bg: "#4a7c4e", label: "Butikskök" },
-  butik:            { bg: "#b5c9a1", label: "Butik" },
-  lager:            { bg: "#9aab85", label: "Lager" },
-  städning:         { bg: "#aec6b0", label: "Städning" },
-  standard:         { bg: "#b0b0b0", label: "Standard" },
+  förbutik: { bg: "#f0c87a", label: "Förbutik" },
+  teamplock: { bg: "#7d6547", label: "Teamplock" },
+  butikskök: { bg: "#4a7c4e", label: "Butikskök" },
+  butik: { bg: "#b5c9a1", label: "Butik" },
+  lager: { bg: "#9aab85", label: "Lager" },
+  städning: { bg: "#aec6b0", label: "Städning" },
+  standard: { bg: "#b0b0b0", label: "Standard" },
 };
 
 // Dynamic colors for unknown shift types — persisted in localStorage
 const DYNAMIC_SHIFT_COLORS_KEY = "sf_dynamic_shift_colors";
 function getDynamicShiftColors(): Record<string, string> {
-  try { return JSON.parse(localStorage.getItem(DYNAMIC_SHIFT_COLORS_KEY) ?? "{}"); } catch { return {}; }
+  try {
+    return JSON.parse(localStorage.getItem(DYNAMIC_SHIFT_COLORS_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
 }
 function saveDynamicShiftColor(key: string, color: string) {
   const d = getDynamicShiftColors();
@@ -208,8 +245,18 @@ function saveDynamicShiftColor(key: string, color: string) {
 }
 // Deterministic palette for new shift types (distinct, readable)
 const UNKNOWN_SHIFT_PALETTE = [
-  "#e8a87c", "#a78bca", "#7ec8c8", "#e88a8a", "#8abce8", "#c8c87e",
-  "#e8c88a", "#8ae8b4", "#c88ab4", "#8ab4e8", "#e8e48a", "#b4e88a",
+  "#e8a87c",
+  "#a78bca",
+  "#7ec8c8",
+  "#e88a8a",
+  "#8abce8",
+  "#c8c87e",
+  "#e8c88a",
+  "#8ae8b4",
+  "#c88ab4",
+  "#8ab4e8",
+  "#e8e48a",
+  "#b4e88a",
 ];
 function assignUnknownShiftColor(key: string): string {
   const existing = getDynamicShiftColors();
@@ -224,7 +271,8 @@ const IGNORE_COLORS = new Set(["#4caf50", "#4CAF50", "#ffffff", "#FFFFFF", "#000
 
 function shiftColor(name: string, xmlColor: string): string {
   // XML color takes priority — it's explicitly set per shift in SoftOne
-  if (xmlColor && !IGNORE_COLORS.has(xmlColor) && /^#[0-9a-fA-F]{6}$/.test(xmlColor)) return xmlColor;
+  if (xmlColor && !IGNORE_COLORS.has(xmlColor) && /^#[0-9a-fA-F]{6}$/.test(xmlColor))
+    return xmlColor;
   const key = name.toLowerCase().trim();
   for (const k of Object.keys(SHIFT_COLORS)) {
     if (key.includes(k)) return SHIFT_COLORS[k].bg;
@@ -240,11 +288,11 @@ function shiftColor(name: string, xmlColor: string): string {
 // ─── Delivery flow colors ─────────────────────────────────────────────────────
 
 const FLOW_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  "färskt":   { bg: "#d4edda", text: "#155724", label: "Färskt" },
-  "torrt":    { bg: "#fff3cd", text: "#856404", label: "Torrt" },
-  "fryst":    { bg: "#cce5ff", text: "#004085", label: "Fryst" },
-  "standard": { bg: "#f0f0f0", text: "#555555", label: "Standard" },
-  "mejeri":   { bg: "#fde8f5", text: "#8b1a5c", label: "Mejeri" },
+  färskt: { bg: "#d4edda", text: "#155724", label: "Färskt" },
+  torrt: { bg: "#fff3cd", text: "#856404", label: "Torrt" },
+  fryst: { bg: "#cce5ff", text: "#004085", label: "Fryst" },
+  standard: { bg: "#f0f0f0", text: "#555555", label: "Standard" },
+  mejeri: { bg: "#fde8f5", text: "#8b1a5c", label: "Mejeri" },
   "non-food": { bg: "#e8eaf6", text: "#283593", label: "Non-Food" },
 };
 
@@ -293,7 +341,13 @@ async function readFileText(file: File): Promise<string> {
 }
 
 function nameToUsername(name: string): string {
-  return name.toLowerCase().trim().replace(/\s+/g, ".").replace(/[åä]/g, "a").replace(/ö/g, "o").replace(/[^a-z0-9.]/g, "");
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ".")
+    .replace(/[åä]/g, "a")
+    .replace(/ö/g, "o")
+    .replace(/[^a-z0-9.]/g, "");
 }
 
 // Räkna ut minsta tillåtna vecka (2 veckor bakåt i tiden)
@@ -308,7 +362,7 @@ function getMinAllowedWeek() {
   if (minWeek < 1) {
     minYear -= 1;
     // Hanterar årsskifte (ca 52 veckor beroende på år)
-    minWeek += 52; 
+    minWeek += 52;
   }
 
   return { weekNumber: minWeek, year: minYear };
@@ -317,10 +371,10 @@ function getMinAllowedWeek() {
 // Kontrollerar om en specifik vecka är äldre än tillåtet
 function isWeekTooOld(weekNumber: number, year: number): boolean {
   const minAllowed = getMinAllowedWeek();
-  
+
   if (year < minAllowed.year) return true;
   if (year === minAllowed.year && weekNumber < minAllowed.weekNumber) return true;
-  
+
   return false;
 }
 
@@ -365,7 +419,9 @@ function parseXmlDay(
   if (dayNr === 1 && scheduleDate) onMonday(scheduleDate);
 
   const dayShiftLink = getAttrOrText(dayEl, "ShiftLink") || "";
-  const dayScheduleCost = parseFloat((getAttrOrText(dayEl, "ScheduleTotalCost") || "-1").replace(",", "."));
+  const dayScheduleCost = parseFloat(
+    (getAttrOrText(dayEl, "ScheduleTotalCost") || "-1").replace(",", "."),
+  );
   const isDayLendedOut = !isAbsenceDay && dayShiftLink.length > 8 && dayScheduleCost === 0;
 
   // Break windows (ScheduleBreak1Start..ScheduleBreak4Start)
@@ -395,7 +451,8 @@ function parseXmlDay(
     const sDescription = getAttrOrText(dayEl, `${prefix}Description`) || "";
     const deviationCause = getAttrOrText(dayEl, `${prefix}TimeDeviationCauseName`) || absenceName;
     const shiftLendedRaw = getAttrOrText(dayEl, `${prefix}Lended`) || "";
-    const isShiftLended = shiftLendedRaw === "1" || shiftLendedRaw.toLowerCase() === "true" || isDayLendedOut;
+    const isShiftLended =
+      shiftLendedRaw === "1" || shiftLendedRaw.toLowerCase() === "true" || isDayLendedOut;
     const shiftLink = getAttrOrText(dayEl, `${prefix}Link`) || dayShiftLink;
     // Break applies to first shift only (day-level break belongs to first work segment)
     const shiftBreakMins = sIdx === 1 ? dayBreakTotal : 0;
@@ -405,8 +462,10 @@ function parseXmlDay(
       description: sDescription,
       startTime: parseTime(sStartRaw),
       stopTime: parseTime(sStopRaw),
-      color: xmlCol && xmlCol !== "#000000" && xmlCol !== "#FFFFFF" && xmlCol !== "#ffffff"
-        ? xmlCol : shiftColor(sName, xmlCol),
+      color:
+        xmlCol && xmlCol !== "#000000" && xmlCol !== "#FFFFFF" && xmlCol !== "#ffffff"
+          ? xmlCol
+          : shiftColor(sName, xmlCol),
       grossMinutes: effectiveGross,
       netMinutes: netMins,
       breakMinutes: shiftBreakMins,
@@ -423,16 +482,18 @@ function parseXmlDay(
   // Parse these even when flat shifts exist — they may carry the <Shifts id="N"> list
   if (shifts.length === 0) {
     let isFirst = true;
-    for (const sEl of Array.from(dayEl.children).filter(c => c.nodeName === "Shifts")) {
+    for (const sEl of Array.from(dayEl.children).filter((c) => c.nodeName === "Shifts")) {
       const g = (attr: string) => getAttrOrText(sEl, attr) || getText(sEl, attr);
       const sName = g("ShiftName");
       const colRaw = g("Color");
       const xmlCol = colRaw ? (colRaw.startsWith("#") ? colRaw : `#${colRaw}`) : "";
       const grossMinutes = parseInt(g("ShiftGrossTimeMinutes") || "0", 10);
       const xmlNet = parseInt(g("ShiftNetTimeMinutes") || "0", 10);
-      const netMinutes = xmlNet > 0 ? xmlNet : Math.max(0, grossMinutes - (isFirst ? dayBreakTotal : 0));
+      const netMinutes =
+        xmlNet > 0 ? xmlNet : Math.max(0, grossMinutes - (isFirst ? dayBreakTotal : 0));
       const shiftLendedRaw = g("ShiftLended");
-      const isShiftLended = shiftLendedRaw === "1" || shiftLendedRaw.toLowerCase() === "true" || isDayLendedOut;
+      const isShiftLended =
+        shiftLendedRaw === "1" || shiftLendedRaw.toLowerCase() === "true" || isDayLendedOut;
       shifts.push({
         shiftName: sName,
         description: g("ShiftDescription") || "",
@@ -455,12 +516,16 @@ function parseXmlDay(
 
   // Distribute day-level break windows to the shift that contains each break start
   if (shifts.length > 0 && dayBreakWindows.length > 0) {
-    const toMins = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+    const toMins = (t: string) => {
+      const [h, m] = t.split(":").map(Number);
+      return h * 60 + m;
+    };
     for (const bw of dayBreakWindows) {
       const bStart = toMins(bw.start);
       let target = shifts.find((s) => {
         if (!s.startTime || !s.stopTime) return false;
-        const ss = toMins(s.startTime), se = toMins(s.stopTime);
+        const ss = toMins(s.startTime),
+          se = toMins(s.stopTime);
         return bStart >= ss && bStart < se;
       });
       if (!target) {
@@ -471,15 +536,25 @@ function parseXmlDay(
     }
   }
 
-  const anyShiftSemester = shifts.some((s) =>
-    s.deviationCause.toLowerCase().includes("semester") || s.deviationCause.toLowerCase().includes("holiday")
+  const anyShiftSemester = shifts.some(
+    (s) =>
+      s.deviationCause.toLowerCase().includes("semester") ||
+      s.deviationCause.toLowerCase().includes("holiday"),
   );
-  const isSemester = isAbsenceDay && (
-    absenceName.toLowerCase().includes("semester") ||
-    absenceName.toLowerCase().includes("holiday") ||
-    anyShiftSemester
-  );
-  return { dayNr, scheduleDate, isAbsenceDay, isSemester, isPreliminary, isZeroScheduleDay, shifts };
+  const isSemester =
+    isAbsenceDay &&
+    (absenceName.toLowerCase().includes("semester") ||
+      absenceName.toLowerCase().includes("holiday") ||
+      anyShiftSemester);
+  return {
+    dayNr,
+    scheduleDate,
+    isAbsenceDay,
+    isSemester,
+    isPreliminary,
+    isZeroScheduleDay,
+    shifts,
+  };
 }
 
 function parseXml(xmlText: string): ParsedSchedule[] | null {
@@ -494,36 +569,55 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
     getText(root, "ReportHeader Company") ||
     getText(root, "TimeEmployeeSchedule ReportHeader Company") ||
     getAttrOrText(root, "Company") ||
-    getText(root, "Store StoreName") || "";
+    getText(root, "Store StoreName") ||
+    "";
 
   // The actual data container — may be wrapped in <TimeEmployeeSchedule>
   const dataRoot: Element = root.querySelector("TimeEmployeeSchedule") ?? root;
 
   // ── Primary structure: Employee > Week > Day ────────────────────────────────
   // SoftOne GO format: TimeEmployeeSchedule > Employee > Week > Day
-  const employeeEls = Array.from(dataRoot.children).filter(c => c.nodeName === "Employee");
-  if (employeeEls.length > 0 && employeeEls.some(e => e.querySelector("Week"))) {
+  const employeeEls = Array.from(dataRoot.children).filter((c) => c.nodeName === "Employee");
+  if (employeeEls.length > 0 && employeeEls.some((e) => e.querySelector("Week"))) {
     // Collect all unique week numbers across all employees to build per-week schedules
-    const weekMap = new Map<string, { weekNumber: number; year: number; weekStartDate: string; employees: ParsedEmployee[] }>();
+    const weekMap = new Map<
+      string,
+      { weekNumber: number; year: number; weekStartDate: string; employees: ParsedEmployee[] }
+    >();
 
     for (const empEl of employeeEls) {
       const employeeNr = getAttrOrText(empEl, "EmployeeNr");
       const employeeName = getAttrOrText(empEl, "EmployeeName");
       const employeeGroup = getAttrOrText(empEl, "EmployeeGroup");
       const employeeCategory = getAttrOrText(empEl, "EmployeeCategory") || "";
-      const employmentPercentRaw = getAttrOrText(empEl, "EmploymentPercent") || getAttrOrText(empEl, "EmployeeGroupRuleWorkTimeYear") || "";
-      const employmentPercent = employmentPercentRaw ? parseFloat(employmentPercentRaw.replace(",", ".")) || null : null;
-      const workTimeWeekRaw = getAttrOrText(empEl, "EmploymentWorkTimeWeek") || getAttrOrText(empEl, "EmployeeGroupRuleWorkTimeWeek") || "";
-      const workTimeWeek = workTimeWeekRaw ? parseFloat(workTimeWeekRaw.replace(",", ".")) || null : null;
+      const employmentPercentRaw =
+        getAttrOrText(empEl, "EmploymentPercent") ||
+        getAttrOrText(empEl, "EmployeeGroupRuleWorkTimeYear") ||
+        "";
+      const employmentPercent = employmentPercentRaw
+        ? parseFloat(employmentPercentRaw.replace(",", ".")) || null
+        : null;
+      const workTimeWeekRaw =
+        getAttrOrText(empEl, "EmploymentWorkTimeWeek") ||
+        getAttrOrText(empEl, "EmployeeGroupRuleWorkTimeWeek") ||
+        "";
+      const workTimeWeek = workTimeWeekRaw
+        ? parseFloat(workTimeWeekRaw.replace(",", ".")) || null
+        : null;
 
-      const weekEls = Array.from(empEl.children).filter(c => c.nodeName === "Week");
+      const weekEls = Array.from(empEl.children).filter((c) => c.nodeName === "Week");
       for (const weekEl of weekEls) {
-        const weekNrText = getAttrOrText(weekEl, "ScheduleWeekNr") || getAttrOrText(weekEl, "WeekNr") || "";
+        const weekNrText =
+          getAttrOrText(weekEl, "ScheduleWeekNr") || getAttrOrText(weekEl, "WeekNr") || "";
         const weekNumber = parseInt(weekNrText, 10) || 0;
         if (!weekNumber) continue;
 
         // Year: try Week element first, then ReportHeader (inside dataRoot), then from day dates
-        const yearText = getAttrOrText(weekEl, "Year") || getText(dataRoot, "ReportHeader Year") || getText(root, "ReportHeader Year") || "";
+        const yearText =
+          getAttrOrText(weekEl, "Year") ||
+          getText(dataRoot, "ReportHeader Year") ||
+          getText(root, "ReportHeader Year") ||
+          "";
         let year = parseInt(yearText, 10) || 0;
 
         let weekStartDate = "";
@@ -533,14 +627,18 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
         };
 
         const days: XmlDay[] = Array.from(weekEl.children)
-          .filter(c => c.nodeName === "Day")
-          .map(dayEl => parseXmlDay(dayEl, "", onMonday));
+          .filter((c) => c.nodeName === "Day")
+          .map((dayEl) => parseXmlDay(dayEl, "", onMonday));
 
         if (!year) year = new Date().getFullYear();
 
         // Derive weekStartDate from DateInterval if still missing
         if (!weekStartDate) {
-          const diRaw = getAttrOrText(weekEl, "DateInterval") || getAttrOrText(root, "DateInterval") || getText(root, "ReportHeader DateInterval") || "";
+          const diRaw =
+            getAttrOrText(weekEl, "DateInterval") ||
+            getAttrOrText(root, "DateInterval") ||
+            getText(root, "ReportHeader DateInterval") ||
+            "";
           const diMatch = diRaw.match(/(\d{4}-\d{2}-\d{2})/);
           if (diMatch) weekStartDate = diMatch[1];
         }
@@ -551,24 +649,35 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
         } else if (!weekMap.get(key)!.weekStartDate && weekStartDate) {
           weekMap.get(key)!.weekStartDate = weekStartDate;
         }
-        weekMap.get(key)!.employees.push({ employeeNr, employeeName, employeeGroup, employeeCategory, employmentPercent, workTimeWeek, days });
+        weekMap
+          .get(key)!
+          .employees.push({
+            employeeNr,
+            employeeName,
+            employeeGroup,
+            employeeCategory,
+            employmentPercent,
+            workTimeWeek,
+            days,
+          });
       }
     }
 
     if (weekMap.size > 0) {
       return Array.from(weekMap.values())
-        .filter(s => s.weekNumber > 0)
-        .sort((a, b) => a.year !== b.year ? a.year - b.year : a.weekNumber - b.weekNumber)
-        .map(s => ({ ...s, storeName }));
+        .filter((s) => s.weekNumber > 0)
+        .sort((a, b) => (a.year !== b.year ? a.year - b.year : a.weekNumber - b.weekNumber))
+        .map((s) => ({ ...s, storeName }));
     }
   }
 
   // ── Fallback A: Week elements are direct children of dataRoot (Week > Employee > Day) ──
-  const directWeekEls = Array.from(dataRoot.children).filter(c => c.nodeName === "Week");
+  const directWeekEls = Array.from(dataRoot.children).filter((c) => c.nodeName === "Week");
   if (directWeekEls.length > 0) {
     const results: ParsedSchedule[] = [];
     for (const weekEl of directWeekEls) {
-      const weekNrText = getAttrOrText(weekEl, "ScheduleWeekNr") || getAttrOrText(weekEl, "WeekNr") || "";
+      const weekNrText =
+        getAttrOrText(weekEl, "ScheduleWeekNr") || getAttrOrText(weekEl, "WeekNr") || "";
       const weekNumber = parseInt(weekNrText, 10) || 0;
       if (!weekNumber) continue;
       const yearText = getAttrOrText(weekEl, "Year") || getText(root, "ReportHeader Year") || "";
@@ -580,15 +689,19 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
       })();
 
       const employees: ParsedEmployee[] = Array.from(weekEl.children)
-        .filter(c => c.nodeName === "Employee")
-        .map(empEl => {
-          const days: XmlDay[] = Array.from(empEl.querySelectorAll("Day"))
-            .map(dayEl => parseXmlDay(dayEl, "", (date) => {
+        .filter((c) => c.nodeName === "Employee")
+        .map((empEl) => {
+          const days: XmlDay[] = Array.from(empEl.querySelectorAll("Day")).map((dayEl) =>
+            parseXmlDay(dayEl, "", (date) => {
               if (!weekStartDate) weekStartDate = date;
               if (!year && date.length >= 4) year = parseInt(date.slice(0, 4), 10);
-            }));
+            }),
+          );
           const epRaw = getAttrOrText(empEl, "EmploymentPercent") || "";
-          const wtwRaw = getAttrOrText(empEl, "EmploymentWorkTimeWeek") || getAttrOrText(empEl, "EmployeeGroupRuleWorkTimeWeek") || "";
+          const wtwRaw =
+            getAttrOrText(empEl, "EmploymentWorkTimeWeek") ||
+            getAttrOrText(empEl, "EmployeeGroupRuleWorkTimeWeek") ||
+            "";
           return {
             employeeNr: getAttrOrText(empEl, "EmployeeNr"),
             employeeName: getAttrOrText(empEl, "EmployeeName"),
@@ -605,25 +718,36 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
   }
 
   // ── Fallback B: No Week elements — week metadata on dataRoot, employees are direct children ──
-  const rootEmpEls = Array.from(dataRoot.children).filter(c => c.nodeName === "Employee");
+  const rootEmpEls = Array.from(dataRoot.children).filter((c) => c.nodeName === "Employee");
   if (rootEmpEls.length > 0) {
-    const weekNrText = getAttrOrText(dataRoot, "ScheduleWeekNr") || getAttrOrText(dataRoot, "WeekNr") || getText(root, "ReportHeader WeekNr") || "";
+    const weekNrText =
+      getAttrOrText(dataRoot, "ScheduleWeekNr") ||
+      getAttrOrText(dataRoot, "WeekNr") ||
+      getText(root, "ReportHeader WeekNr") ||
+      "";
     const weekNumber = parseInt(weekNrText, 10) || 0;
-    let year = parseInt(getAttrOrText(dataRoot, "Year") || getText(root, "ReportHeader Year") || "0", 10) || new Date().getFullYear();
+    let year =
+      parseInt(getAttrOrText(dataRoot, "Year") || getText(root, "ReportHeader Year") || "0", 10) ||
+      new Date().getFullYear();
     let weekStartDate = (() => {
-      const r = getAttrOrText(dataRoot, "DateInterval") || getText(root, "ReportHeader DateInterval") || "";
+      const r =
+        getAttrOrText(dataRoot, "DateInterval") || getText(root, "ReportHeader DateInterval") || "";
       const m = r.match(/(\d{4}-\d{2}-\d{2})/);
       return m ? m[1] : "";
     })();
 
-    const employees: ParsedEmployee[] = rootEmpEls.map(empEl => {
-      const days: XmlDay[] = Array.from(empEl.querySelectorAll("Day"))
-        .map(dayEl => parseXmlDay(dayEl, "", (date) => {
+    const employees: ParsedEmployee[] = rootEmpEls.map((empEl) => {
+      const days: XmlDay[] = Array.from(empEl.querySelectorAll("Day")).map((dayEl) =>
+        parseXmlDay(dayEl, "", (date) => {
           if (!weekStartDate) weekStartDate = date;
           if (!year && date.length >= 4) year = parseInt(date.slice(0, 4), 10);
-        }));
+        }),
+      );
       const epRaw = getAttrOrText(empEl, "EmploymentPercent") || "";
-      const wtwRaw = getAttrOrText(empEl, "EmploymentWorkTimeWeek") || getAttrOrText(empEl, "EmployeeGroupRuleWorkTimeWeek") || "";
+      const wtwRaw =
+        getAttrOrText(empEl, "EmploymentWorkTimeWeek") ||
+        getAttrOrText(empEl, "EmployeeGroupRuleWorkTimeWeek") ||
+        "";
       return {
         employeeNr: getAttrOrText(empEl, "EmployeeNr"),
         employeeName: getAttrOrText(empEl, "EmployeeName"),
@@ -643,7 +767,13 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
 // ─── PDF Delivery plan parser ─────────────────────────────────────────────────
 
 const DAY_TO_INDEX: Record<string, number> = {
-  måndag: 0, tisdag: 1, onsdag: 2, torsdag: 3, fredag: 4, lördag: 5, söndag: 6,
+  måndag: 0,
+  tisdag: 1,
+  onsdag: 2,
+  torsdag: 3,
+  fredag: 4,
+  lördag: 5,
+  söndag: 6,
 };
 
 type ParsedDelivery = {
@@ -659,7 +789,10 @@ function parseCsvDelivery(text: string): ParsedDelivery[] {
   const results: ParsedDelivery[] = [];
   const dayNames = new Set(Object.keys(DAY_TO_INDEX));
   // Strip BOM and split lines
-  const lines = text.replace(/^\uFEFF/, "").split(/[\r\n]+/).filter(Boolean);
+  const lines = text
+    .replace(/^\uFEFF/, "")
+    .split(/[\r\n]+/)
+    .filter(Boolean);
   for (const line of lines) {
     // Parse CSV fields via den delade quote-medvetna parsern (komma-avgr\u00E4nsad)
     const fields = parseCSVLine(line, ",").map((f) => f.trim());
@@ -803,7 +936,9 @@ function SchemaPage() {
   type CsvFileLabel = { weekNumber: number; year: number; label: string };
   const [csvFileLabels, setCsvFileLabels] = useState<Record<string, CsvFileLabel>>({});
   const [scheduleTasks, setScheduleTasks] = useState<Task[]>([]);
-  const [scheduleTaskAssignees, setScheduleTaskAssignees] = useState<{ task_id: string; user_id: string | null }[]>([]);
+  const [scheduleTaskAssignees, setScheduleTaskAssignees] = useState<
+    { task_id: string; user_id: string | null }[]
+  >([]);
 
   const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [bulkCreatingAccounts, setBulkCreatingAccounts] = useState(false);
@@ -813,10 +948,16 @@ function SchemaPage() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const mobileListRef = useRef<HTMLDivElement>(null);
   const storeId = activeStore?.id ?? user?.store_id ?? null;
-  const todayStr = (() => { const d = new Date(); const p = (n: number) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; })();
+  const todayStr = (() => {
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  })();
 
   async function addImportFiles(newFiles: File[]) {
-    const merged = [...importFiles, ...newFiles].filter((f, i, arr) => arr.findIndex((x) => x.name === f.name) === i);
+    const merged = [...importFiles, ...newFiles].filter(
+      (f, i, arr) => arr.findIndex((x) => x.name === f.name) === i,
+    );
     setImportFiles(merged);
     // Initialize per-file labels for new CSVs
     setCsvFileLabels((prev) => {
@@ -843,8 +984,16 @@ function SchemaPage() {
 
   function removeImportFile(name: string) {
     setImportFiles((p) => p.filter((f) => f.name !== name));
-    setPdfPreviews((p) => { const n = { ...p }; delete n[name]; return n; });
-    setCsvFileLabels((p) => { const n = { ...p }; delete n[name]; return n; });
+    setPdfPreviews((p) => {
+      const n = { ...p };
+      delete n[name];
+      return n;
+    });
+    setCsvFileLabels((p) => {
+      const n = { ...p };
+      delete n[name];
+      return n;
+    });
   }
 
   // Upserts forening/distrikt memberships for a user based on the active store's hierarchy.
@@ -853,23 +1002,35 @@ function SchemaPage() {
     const foreningId = activeStore?.forening_id;
     const distriktId = activeStore?.distrikt_id;
     if (foreningId) {
-      await supabase.from("user_foreningar").upsert(
-        { user_id: userId, forening_id: foreningId, is_primary: false },
-        { onConflict: "user_id,forening_id" }
-      );
+      await supabase
+        .from("user_foreningar")
+        .upsert(
+          { user_id: userId, forening_id: foreningId, is_primary: false },
+          { onConflict: "user_id,forening_id" },
+        );
       // Only set app_users.forening_id if not already set (primary indicator)
-      const { data: existing } = await supabase.from("app_users").select("forening_id").eq("id", userId).maybeSingle();
+      const { data: existing } = await supabase
+        .from("app_users")
+        .select("forening_id")
+        .eq("id", userId)
+        .maybeSingle();
       if (!existing?.forening_id) {
         await supabase.from("app_users").update({ forening_id: foreningId }).eq("id", userId);
       }
     }
     if (distriktId) {
-      await supabase.from("user_distrikt").upsert(
-        { user_id: userId, distrikt_id: distriktId, is_primary: false },
-        { onConflict: "user_id,distrikt_id" }
-      );
+      await supabase
+        .from("user_distrikt")
+        .upsert(
+          { user_id: userId, distrikt_id: distriktId, is_primary: false },
+          { onConflict: "user_id,distrikt_id" },
+        );
       // Only set app_users.distrikt_id if not already set (primary indicator)
-      const { data: existing } = await supabase.from("app_users").select("distrikt_id").eq("id", userId).maybeSingle();
+      const { data: existing } = await supabase
+        .from("app_users")
+        .select("distrikt_id")
+        .eq("id", userId)
+        .maybeSingle();
       if (!existing?.distrikt_id) {
         await supabase.from("app_users").update({ distrikt_id: distriktId }).eq("id", userId);
       }
@@ -895,7 +1056,9 @@ function SchemaPage() {
 
   useEffect(() => {
     if (!storeId) return;
-    const weekStart = activeImport ? activeImport.week_start_date : getWeekStartDate(selectedWeek.weekNumber, selectedWeek.year);
+    const weekStart = activeImport
+      ? activeImport.week_start_date
+      : getWeekStartDate(selectedWeek.weekNumber, selectedWeek.year);
     const queryStart = addDays(weekStart, -1);
     const queryEnd = addDays(weekStart, 7);
 
@@ -904,7 +1067,9 @@ function SchemaPage() {
       if (isAdmin) {
         const { data: parents } = await supabase
           .from("tasks")
-          .select("id, title, description, category, priority, recurrence_rule, recurrence_days, recurrence_start, recurrence_end, recurrence_period_start, parent_task_id, due_date, due_date_time, created_at, status, store_id, assigned_to, created_by, deleted_periods")
+          .select(
+            "id, title, description, category, priority, recurrence_rule, recurrence_days, recurrence_start, recurrence_end, recurrence_period_start, parent_task_id, due_date, due_date_time, created_at, status, store_id, assigned_to, created_by, deleted_periods",
+          )
           .eq("store_id", storeId!)
           .not("recurrence_rule", "is", null)
           .is("parent_task_id", null);
@@ -918,31 +1083,108 @@ function SchemaPage() {
 
           // Load steps/questions/assignees once so spawned children get the full checklist
           const [stepsRes, questionsRes, assigneesRes] = await Promise.all([
-            supabase.from("task_steps").select("task_id, label, sort_order, requires_photo, link_url, condition_question_id, condition_answer").in("task_id", parentIds),
-            supabase.from("task_questions").select("id, task_id, label, question_type, is_required, sort_order, link_url").in("task_id", parentIds),
-            supabase.from("task_assignees").select("task_id, user_id, group_id").in("task_id", parentIds),
+            supabase
+              .from("task_steps")
+              .select(
+                "task_id, label, sort_order, requires_photo, link_url, condition_question_id, condition_answer",
+              )
+              .in("task_id", parentIds),
+            supabase
+              .from("task_questions")
+              .select("id, task_id, label, question_type, is_required, sort_order, link_url")
+              .in("task_id", parentIds),
+            supabase
+              .from("task_assignees")
+              .select("task_id, user_id, group_id")
+              .in("task_id", parentIds),
           ]);
-          const stepsByParent = new Map<string, { label: string; sort_order: number; requires_photo: boolean; link_url: string | null; condition_question_id: string | null; condition_answer: string | null }[]>();
-          for (const s of (stepsRes.data ?? []) as { task_id: string; label: string; sort_order: number; requires_photo: boolean; link_url: string | null; condition_question_id: string | null; condition_answer: string | null }[]) {
+          const stepsByParent = new Map<
+            string,
+            {
+              label: string;
+              sort_order: number;
+              requires_photo: boolean;
+              link_url: string | null;
+              condition_question_id: string | null;
+              condition_answer: string | null;
+            }[]
+          >();
+          for (const s of (stepsRes.data ?? []) as {
+            task_id: string;
+            label: string;
+            sort_order: number;
+            requires_photo: boolean;
+            link_url: string | null;
+            condition_question_id: string | null;
+            condition_answer: string | null;
+          }[]) {
             if (!stepsByParent.has(s.task_id)) stepsByParent.set(s.task_id, []);
-            stepsByParent.get(s.task_id)!.push({ label: s.label, sort_order: s.sort_order, requires_photo: s.requires_photo, link_url: s.link_url, condition_question_id: s.condition_question_id, condition_answer: s.condition_answer });
+            stepsByParent
+              .get(s.task_id)!
+              .push({
+                label: s.label,
+                sort_order: s.sort_order,
+                requires_photo: s.requires_photo,
+                link_url: s.link_url,
+                condition_question_id: s.condition_question_id,
+                condition_answer: s.condition_answer,
+              });
           }
-          const questionsByParent = new Map<string, { id: string; label: string; question_type: string | null; is_required: boolean; sort_order: number; link_url: string | null }[]>();
-          for (const q of (questionsRes.data ?? []) as { id: string; task_id: string; label: string; question_type: string | null; is_required: boolean; sort_order: number; link_url: string | null }[]) {
+          const questionsByParent = new Map<
+            string,
+            {
+              id: string;
+              label: string;
+              question_type: string | null;
+              is_required: boolean;
+              sort_order: number;
+              link_url: string | null;
+            }[]
+          >();
+          for (const q of (questionsRes.data ?? []) as {
+            id: string;
+            task_id: string;
+            label: string;
+            question_type: string | null;
+            is_required: boolean;
+            sort_order: number;
+            link_url: string | null;
+          }[]) {
             if (!questionsByParent.has(q.task_id)) questionsByParent.set(q.task_id, []);
-            questionsByParent.get(q.task_id)!.push({ id: q.id, label: q.label, question_type: q.question_type, is_required: q.is_required, sort_order: q.sort_order, link_url: q.link_url });
+            questionsByParent
+              .get(q.task_id)!
+              .push({
+                id: q.id,
+                label: q.label,
+                question_type: q.question_type,
+                is_required: q.is_required,
+                sort_order: q.sort_order,
+                link_url: q.link_url,
+              });
           }
-          const assigneesByParent = new Map<string, { user_id: string | null; group_id: string | null }[]>();
-          for (const a of (assigneesRes.data ?? []) as { task_id: string; user_id: string | null; group_id: string | null }[]) {
+          const assigneesByParent = new Map<
+            string,
+            { user_id: string | null; group_id: string | null }[]
+          >();
+          for (const a of (assigneesRes.data ?? []) as {
+            task_id: string;
+            user_id: string | null;
+            group_id: string | null;
+          }[]) {
             if (!assigneesByParent.has(a.task_id)) assigneesByParent.set(a.task_id, []);
             assigneesByParent.get(a.task_id)!.push({ user_id: a.user_id, group_id: a.group_id });
           }
 
           const coveredByParent = new Map<string, Set<string>>();
-          for (const c of (existingChildren ?? []) as { parent_task_id: string; recurrence_period_start: string | null }[]) {
+          for (const c of (existingChildren ?? []) as {
+            parent_task_id: string;
+            recurrence_period_start: string | null;
+          }[]) {
             if (!c.parent_task_id) continue;
-            if (!coveredByParent.has(c.parent_task_id)) coveredByParent.set(c.parent_task_id, new Set());
-            if (c.recurrence_period_start) coveredByParent.get(c.parent_task_id)!.add(c.recurrence_period_start.slice(0, 10));
+            if (!coveredByParent.has(c.parent_task_id))
+              coveredByParent.set(c.parent_task_id, new Set());
+            if (c.recurrence_period_start)
+              coveredByParent.get(c.parent_task_id)!.add(c.recurrence_period_start.slice(0, 10));
           }
 
           const weekCeil = new Date(queryEnd);
@@ -950,23 +1192,50 @@ function SchemaPage() {
 
           for (const t of parents as Task[]) {
             if (!t.recurrence_rule) continue;
-            const originDate = t.recurrence_start ? midnightStockholm(new Date(t.recurrence_start)) : t.due_date ? midnightStockholm(new Date(t.due_date)) : midnightStockholm(new Date(t.created_at));
+            const originDate = t.recurrence_start
+              ? midnightStockholm(new Date(t.recurrence_start))
+              : t.due_date
+                ? midnightStockholm(new Date(t.due_date))
+                : midnightStockholm(new Date(t.created_at));
 
-            const periodStarts = buildPeriodStartsSimple(originDate, t.recurrence_rule, t.recurrence_days ?? null, t.recurrence_start ? new Date(t.recurrence_start) : null, t.recurrence_end ? new Date(t.recurrence_end) : null, weekCeil, weekStartLocal);
+            const periodStarts = buildPeriodStartsSimple(
+              originDate,
+              t.recurrence_rule,
+              t.recurrence_days ?? null,
+              t.recurrence_start ? new Date(t.recurrence_start) : null,
+              t.recurrence_end ? new Date(t.recurrence_end) : null,
+              weekCeil,
+              weekStartLocal,
+            );
             const covered = coveredByParent.get(t.id) ?? new Set<string>();
             const deletedPeriods = new Set<string>(t.deleted_periods ?? []);
             for (const ps of periodStarts) {
               const psKey = localDateStr(ps);
               if (covered.has(psKey) || deletedPeriods.has(psKey)) continue;
-              const childDue = dueFromPeriodStart(ps, (t as Task & { due_date_time?: string }).due_date_time);
-              const { data: child } = await supabase.from("tasks").insert({
-                title: t.title, description: t.description, category: t.category, priority: t.priority,
-                store_id: t.store_id, due_date: childDue ? childDue.toISOString() : null,
-                due_date_time: (t as Task & { due_date_time?: string }).due_date_time ?? null,
-                recurrence_rule: t.recurrence_rule, recurrence_days: t.recurrence_days,
-                recurrence_period_start: psKey, parent_task_id: t.id,
-                created_by: t.created_by, assigned_to: t.assigned_to, status: "todo",
-              }).select("id").maybeSingle();
+              const childDue = dueFromPeriodStart(
+                ps,
+                (t as Task & { due_date_time?: string }).due_date_time,
+              );
+              const { data: child } = await supabase
+                .from("tasks")
+                .insert({
+                  title: t.title,
+                  description: t.description,
+                  category: t.category,
+                  priority: t.priority,
+                  store_id: t.store_id,
+                  due_date: childDue ? childDue.toISOString() : null,
+                  due_date_time: (t as Task & { due_date_time?: string }).due_date_time ?? null,
+                  recurrence_rule: t.recurrence_rule,
+                  recurrence_days: t.recurrence_days,
+                  recurrence_period_start: psKey,
+                  parent_task_id: t.id,
+                  created_by: t.created_by,
+                  assigned_to: t.assigned_to,
+                  status: "todo",
+                })
+                .select("id")
+                .maybeSingle();
               if (child?.id) {
                 await copyChildAssociations(child.id, {
                   steps: stepsByParent.get(t.id),
@@ -994,8 +1263,13 @@ function SchemaPage() {
         const { data: assignees } = await supabase
           .from("task_assignees")
           .select("task_id, user_id")
-          .in("task_id", tasks.map(t => t.id));
-        setScheduleTaskAssignees((assignees ?? []) as { task_id: string; user_id: string | null }[]);
+          .in(
+            "task_id",
+            tasks.map((t) => t.id),
+          );
+        setScheduleTaskAssignees(
+          (assignees ?? []) as { task_id: string; user_id: string | null }[],
+        );
       } else {
         setScheduleTaskAssignees([]);
       }
@@ -1006,14 +1280,19 @@ function SchemaPage() {
 
   async function loadImports() {
     if (!storeId) return;
-    const { data } = await supabase.from("schedule_imports").select("*").eq("store_id", storeId).order("week_start_date", { ascending: false });
+    const { data } = await supabase
+      .from("schedule_imports")
+      .select("*")
+      .eq("store_id", storeId)
+      .order("week_start_date", { ascending: false });
     const rows = (data ?? []) as ImportRow[];
     setImports(rows);
     if (rows.length > 0 && !activeImport) {
       const now = new Date();
       const currWeek = getISOWeek(now);
       const currYear = now.getFullYear();
-      const current = rows.find((r) => r.week_number === currWeek && r.year === currYear) ?? rows[0];
+      const current =
+        rows.find((r) => r.week_number === currWeek && r.year === currYear) ?? rows[0];
       setActiveImport(current);
       setSelectedWeek({ weekNumber: current.week_number, year: current.year });
     }
@@ -1023,9 +1302,9 @@ function SchemaPage() {
     if (!activeImport || scheduleEmployees.length === 0) return;
     const header = "Anställningsnummer;Namn;Datum;Start;Slut;Rast (min);Avdelning;Frånvaro;Lånad";
     const rows: string[] = [];
-    scheduleEmployees.forEach(emp => {
-      const empShifts = scheduleShifts.filter(s => s.schedule_employee_id === emp.id);
-      empShifts.forEach(s => {
+    scheduleEmployees.forEach((emp) => {
+      const empShifts = scheduleShifts.filter((s) => s.schedule_employee_id === emp.id);
+      empShifts.forEach((s) => {
         const cells = [
           emp.employee_nr,
           emp.name,
@@ -1037,7 +1316,7 @@ function SchemaPage() {
           s.is_absence_day ? "Ja" : "Nej",
           s.is_lended ? "Ja" : "Nej",
         ];
-        rows.push(cells.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"));
+        rows.push(cells.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";"));
       });
     });
     const csv = [header, ...rows].join("\n");
@@ -1055,10 +1334,15 @@ function SchemaPage() {
 
   async function deleteAllDeliveryPlans() {
     if (!storeId) return;
-    await supabase.from("delivery_entries").delete().in(
-      "plan_id",
-      (await supabase.from("delivery_plans").select("id").eq("store_id", storeId)).data?.map((r: { id: string }) => r.id) ?? []
-    );
+    await supabase
+      .from("delivery_entries")
+      .delete()
+      .in(
+        "plan_id",
+        (await supabase.from("delivery_plans").select("id").eq("store_id", storeId)).data?.map(
+          (r: { id: string }) => r.id,
+        ) ?? [],
+      );
     await supabase.from("delivery_plans").delete().eq("store_id", storeId);
     setDeleteDeliveryPlanConfirm(false);
     await loadDeliveryPlans();
@@ -1066,23 +1350,43 @@ function SchemaPage() {
 
   async function loadAppUsers() {
     if (!storeId) return;
-    const { data } = await supabase.from("app_users").select("id, username, display_name, role, role_manually_set, employee_group, store_id, active_store_id, is_active, last_login, created_at").eq("store_id", storeId).eq("is_active", true).order("display_name");
+    const { data } = await supabase
+      .from("app_users")
+      .select(
+        "id, username, display_name, role, role_manually_set, employee_group, store_id, active_store_id, is_active, last_login, created_at",
+      )
+      .eq("store_id", storeId)
+      .eq("is_active", true)
+      .order("display_name");
     setAppUsers((data ?? []) as AppUser[]);
     // Also load all users globally for cross-store name matching
-    const { data: all } = await supabase.from("app_users").select("id, username, display_name, role, role_manually_set, employee_group, store_id, active_store_id, is_active, last_login, created_at").eq("is_active", true).order("display_name");
+    const { data: all } = await supabase
+      .from("app_users")
+      .select(
+        "id, username, display_name, role, role_manually_set, employee_group, store_id, active_store_id, is_active, last_login, created_at",
+      )
+      .eq("is_active", true)
+      .order("display_name");
     setAllUsers((all ?? []) as AppUser[]);
   }
 
   async function loadMappings() {
     if (!storeId) return;
-    const { data } = await supabase.from("employee_mappings").select("employee_nr, app_user_id").eq("store_id", storeId);
+    const { data } = await supabase
+      .from("employee_mappings")
+      .select("employee_nr, app_user_id")
+      .eq("store_id", storeId);
     setMappings((data ?? []) as EmployeeMapping[]);
   }
 
   async function loadScheduleData(importId: string) {
     setLoadingSchedule(true);
     const [empRes, shiftRes] = await Promise.all([
-      supabase.from("schedule_employees").select("*").eq("import_id", importId).order("employee_name"),
+      supabase
+        .from("schedule_employees")
+        .select("*")
+        .eq("import_id", importId)
+        .order("employee_name"),
       supabase.from("schedule_shifts").select("*").eq("import_id", importId),
     ]);
     setScheduleEmployees((empRes.data ?? []) as ScheduleEmployee[]);
@@ -1092,12 +1396,20 @@ function SchemaPage() {
 
   async function loadDeliveryPlans() {
     if (!storeId) return;
-    const { data: plans } = await supabase.from("delivery_plans").select("*").eq("store_id", storeId).order("year", { ascending: false }).order("week_number", { ascending: false });
+    const { data: plans } = await supabase
+      .from("delivery_plans")
+      .select("*")
+      .eq("store_id", storeId)
+      .order("year", { ascending: false })
+      .order("week_number", { ascending: false });
     const planList = (plans ?? []) as DeliveryPlan[];
     setDeliveryPlans(planList);
     if (planList.length > 0) {
       const ids = planList.map((p) => p.id);
-      const { data: entries } = await supabase.from("delivery_entries").select("*").in("plan_id", ids);
+      const { data: entries } = await supabase
+        .from("delivery_entries")
+        .select("*")
+        .in("plan_id", ids);
       setDeliveryEntries((entries ?? []) as DeliveryEntry[]);
     }
   }
@@ -1117,7 +1429,9 @@ function SchemaPage() {
           const text = await readFileText(file);
           const results = parseXml(text);
           if (!results || results.length === 0) {
-            toast.error(`Kunde inte läsa XML-filen: ${file.name}. Kontrollera att det är en SoftOne GO-export.`);
+            toast.error(
+              `Kunde inte läsa XML-filen: ${file.name}. Kontrollera att det är en SoftOne GO-export.`,
+            );
             continue;
           }
           for (const r of results) {
@@ -1140,24 +1454,31 @@ function SchemaPage() {
               weekMap.set(key, {
                 ...s,
                 weekStartDate: s.weekStartDate || getWeekStartDate(s.weekNumber, s.year),
-                employees: s.employees.map(e => ({ ...e, days: e.days.map(d => ({ ...d, shifts: [...d.shifts] })) })),
+                employees: s.employees.map((e) => ({
+                  ...e,
+                  days: e.days.map((d) => ({ ...d, shifts: [...d.shifts] })),
+                })),
               });
             } else {
               const existing = weekMap.get(key)!;
               // Propagate weekStartDate if this file has one and existing doesn't
-              if (!existing.weekStartDate && s.weekStartDate) existing.weekStartDate = s.weekStartDate;
+              if (!existing.weekStartDate && s.weekStartDate)
+                existing.weekStartDate = s.weekStartDate;
               // Build a map of existing employees by employeeNr for O(1) lookup
-              const empByNr = new Map(existing.employees.map(e => [e.employeeNr, e]));
+              const empByNr = new Map(existing.employees.map((e) => [e.employeeNr, e]));
               for (const incomingEmp of s.employees) {
                 const existingEmp = empByNr.get(incomingEmp.employeeNr);
                 if (!existingEmp) {
                   // New employee — add them with a deep copy of their days
-                  const copy = { ...incomingEmp, days: incomingEmp.days.map(d => ({ ...d, shifts: [...d.shifts] })) };
+                  const copy = {
+                    ...incomingEmp,
+                    days: incomingEmp.days.map((d) => ({ ...d, shifts: [...d.shifts] })),
+                  };
                   existing.employees.push(copy);
                   empByNr.set(incomingEmp.employeeNr, copy);
                 } else {
                   // Same employee — merge their days by dayNr
-                  const dayByNr = new Map(existingEmp.days.map(d => [d.dayNr, d]));
+                  const dayByNr = new Map(existingEmp.days.map((d) => [d.dayNr, d]));
                   for (const incomingDay of incomingEmp.days) {
                     const existingDay = dayByNr.get(incomingDay.dayNr);
                     if (!existingDay) {
@@ -1166,7 +1487,9 @@ function SchemaPage() {
                     } else {
                       // Day in both files — append shifts that aren't already present
                       // (deduplicate by shiftName+startTime to avoid exact duplicates)
-                      const shiftKeys = new Set(existingDay.shifts.map(s => `${s.shiftName}|${s.startTime}`));
+                      const shiftKeys = new Set(
+                        existingDay.shifts.map((s) => `${s.shiftName}|${s.startTime}`),
+                      );
                       for (const incomingShift of incomingDay.shifts) {
                         const k = `${incomingShift.shiftName}|${incomingShift.startTime}`;
                         if (!shiftKeys.has(k)) {
@@ -1184,8 +1507,8 @@ function SchemaPage() {
               }
             }
           }
-          const mergedSchedules = Array.from(weekMap.values()).sort(
-            (a, b) => a.year !== b.year ? a.year - b.year : a.weekNumber - b.weekNumber
+          const mergedSchedules = Array.from(weekMap.values()).sort((a, b) =>
+            a.year !== b.year ? a.year - b.year : a.weekNumber - b.weekNumber,
           );
 
           // Collect unique employees across all weeks for the mapping dialog
@@ -1197,8 +1520,13 @@ function SchemaPage() {
           }
           const allEmployees = Array.from(allEmpMap.values());
 
-          const { data: storeUserLinks } = await supabase.from("user_stores").select("user_id").eq("store_id", storeId!);
-          const storeUserIds = new Set((storeUserLinks ?? []).map((r: { user_id: string }) => r.user_id));
+          const { data: storeUserLinks } = await supabase
+            .from("user_stores")
+            .select("user_id")
+            .eq("store_id", storeId!);
+          const storeUserIds = new Set(
+            (storeUserLinks ?? []).map((r: { user_id: string }) => r.user_id),
+          );
           const storeUsers = allUsers.filter((u) => storeUserIds.has(u.id));
 
           const usedUserIds = new Set<string>();
@@ -1206,26 +1534,69 @@ function SchemaPage() {
             const savedMapping = mappings.find((m) => m.employee_nr === emp.employeeNr);
             if (savedMapping?.app_user_id) {
               usedUserIds.add(savedMapping.app_user_id);
-              return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "existing" as const, appUserId: savedMapping.app_user_id, newUsername: "", newPassword: "" };
+              return {
+                employeeNr: emp.employeeNr,
+                employeeName: emp.employeeName,
+                employeeGroup: emp.employeeGroup,
+                matchType: "existing" as const,
+                appUserId: savedMapping.app_user_id,
+                newUsername: "",
+                newPassword: "",
+              };
             }
             const normEmp = normalizeName(emp.employeeName);
-            const byStoreAndName = storeUsers.find((u) => !usedUserIds.has(u.id) && normalizeName(u.display_name) === normEmp);
+            const byStoreAndName = storeUsers.find(
+              (u) => !usedUserIds.has(u.id) && normalizeName(u.display_name) === normEmp,
+            );
             if (byStoreAndName) {
               usedUserIds.add(byStoreAndName.id);
-              return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "existing" as const, appUserId: byStoreAndName.id, newUsername: "", newPassword: "" };
+              return {
+                employeeNr: emp.employeeNr,
+                employeeName: emp.employeeName,
+                employeeGroup: emp.employeeGroup,
+                matchType: "existing" as const,
+                appUserId: byStoreAndName.id,
+                newUsername: "",
+                newPassword: "",
+              };
             }
-            const globalNameMatch = allUsers.find((u) => !usedUserIds.has(u.id) && normalizeName(u.display_name) === normEmp && !storeUserIds.has(u.id));
+            const globalNameMatch = allUsers.find(
+              (u) =>
+                !usedUserIds.has(u.id) &&
+                normalizeName(u.display_name) === normEmp &&
+                !storeUserIds.has(u.id),
+            );
             if (globalNameMatch) {
               usedUserIds.add(globalNameMatch.id);
               toast.info(`${emp.employeeName} identifierad som Lånad Personal från annan butik.`);
-              return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "existing" as const, appUserId: globalNameMatch.id, newUsername: "", newPassword: "", isBorrowed: true };
+              return {
+                employeeNr: emp.employeeNr,
+                employeeName: emp.employeeName,
+                employeeGroup: emp.employeeGroup,
+                matchType: "existing" as const,
+                appUserId: globalNameMatch.id,
+                newUsername: "",
+                newPassword: "",
+                isBorrowed: true,
+              };
             }
-            return { employeeNr: emp.employeeNr, employeeName: emp.employeeName, employeeGroup: emp.employeeGroup, matchType: "new" as const, appUserId: null, newUsername: usernameFromName(emp.employeeName), newPassword: generatePassword(16) };
+            return {
+              employeeNr: emp.employeeNr,
+              employeeName: emp.employeeName,
+              employeeGroup: emp.employeeGroup,
+              matchType: "new" as const,
+              appUserId: null,
+              newUsername: usernameFromName(emp.employeeName),
+              newPassword: generatePassword(16),
+            };
           });
 
           const weekNums = mergedSchedules.map((s) => s.weekNumber);
-          const weekLabel = weekNums.length === 1 ? `vecka ${weekNums[0]}` : `veckorna ${weekNums.join(", ")}`;
-          toast.info(`${xmlFiles.length} fil${xmlFiles.length > 1 ? "er" : ""} tolkade — ${weekLabel} · ${allEmployees.length} medarbetare`);
+          const weekLabel =
+            weekNums.length === 1 ? `vecka ${weekNums[0]}` : `veckorna ${weekNums.join(", ")}`;
+          toast.info(
+            `${xmlFiles.length} fil${xmlFiles.length > 1 ? "er" : ""} tolkade — ${weekLabel} · ${allEmployees.length} medarbetare`,
+          );
 
           setParsed(mergedSchedules);
           setMatchedEmployees(matched);
@@ -1240,55 +1611,81 @@ function SchemaPage() {
 
       // ── Pass 2: CSV delivery plans ──
       for (const file of csvFiles) {
-          try {
-            // Re-use already-parsed preview if available
-            let entries = pdfPreviews[file.name];
-            if (entries === undefined) {
-              const text = await readFileText(file);
-              entries = parseCsvDelivery(text);
-            }
-            if (entries.length === 0) {
-              toast.error(`Inga leveranser hittades i ${file.name}`);
-              continue;
-            }
-            const fileLabel = csvFileLabels[file.name];
-            const weekNumber = fileLabel?.weekNumber ?? csvWeekNumber;
-            const year = fileLabel?.year ?? csvYear;
-            const userLabel = fileLabel?.label ?? "Standard";
-            const weekStart = getWeekStartDate(weekNumber, year);
-            // Detect Swedish special weeks (holidays)
-            const holidayName = getSpecialWeekHoliday(year, weekNumber);
-            const isSpecialWeek = holidayName !== null;
-            if (isSpecialWeek) {
-              toast.info(`Vecka ${weekNumber} innehåller helgdag: ${holidayName}. Importerar som specialvecka.`);
-            }
-            // Delete existing plans for this store/week/year before inserting new
-            const { data: oldPlans } = await supabase.from("delivery_plans").select("id").eq("store_id", storeId).eq("week_number", weekNumber).eq("year", year);
-            if (oldPlans && oldPlans.length > 0) {
-              const oldPlanIds = oldPlans.map((p: { id: string }) => p.id);
-              await supabase.from("delivery_entries").delete().in("plan_id", oldPlanIds);
-              await supabase.from("delivery_plans").delete().in("id", oldPlanIds);
-            }
-            const { data: plan, error: planErr } = await supabase.from("delivery_plans").insert({
-              store_id: storeId, week_number: weekNumber, year, imported_by: user.id, filename: file.name,
-              is_special_week: isSpecialWeek || userLabel !== "Standard", holiday_name: holidayName,
+        try {
+          // Re-use already-parsed preview if available
+          let entries = pdfPreviews[file.name];
+          if (entries === undefined) {
+            const text = await readFileText(file);
+            entries = parseCsvDelivery(text);
+          }
+          if (entries.length === 0) {
+            toast.error(`Inga leveranser hittades i ${file.name}`);
+            continue;
+          }
+          const fileLabel = csvFileLabels[file.name];
+          const weekNumber = fileLabel?.weekNumber ?? csvWeekNumber;
+          const year = fileLabel?.year ?? csvYear;
+          const userLabel = fileLabel?.label ?? "Standard";
+          const weekStart = getWeekStartDate(weekNumber, year);
+          // Detect Swedish special weeks (holidays)
+          const holidayName = getSpecialWeekHoliday(year, weekNumber);
+          const isSpecialWeek = holidayName !== null;
+          if (isSpecialWeek) {
+            toast.info(
+              `Vecka ${weekNumber} innehåller helgdag: ${holidayName}. Importerar som specialvecka.`,
+            );
+          }
+          // Delete existing plans for this store/week/year before inserting new
+          const { data: oldPlans } = await supabase
+            .from("delivery_plans")
+            .select("id")
+            .eq("store_id", storeId)
+            .eq("week_number", weekNumber)
+            .eq("year", year);
+          if (oldPlans && oldPlans.length > 0) {
+            const oldPlanIds = oldPlans.map((p: { id: string }) => p.id);
+            await supabase.from("delivery_entries").delete().in("plan_id", oldPlanIds);
+            await supabase.from("delivery_plans").delete().in("id", oldPlanIds);
+          }
+          const { data: plan, error: planErr } = await supabase
+            .from("delivery_plans")
+            .insert({
+              store_id: storeId,
+              week_number: weekNumber,
+              year,
+              imported_by: user.id,
+              filename: file.name,
+              is_special_week: isSpecialWeek || userLabel !== "Standard",
+              holiday_name: holidayName,
               is_default_template: userLabel === "Standard" && !isSpecialWeek,
               notes: userLabel !== "Standard" ? userLabel : (holidayName ?? null),
-            }).select().single();
-            if (planErr || !plan) { toast.error(`Fel vid sparande av leveransplan: ${planErr?.message}`); continue; }
-            const planId = (plan as DeliveryPlan).id;
-            const rows = entries.map((e) => ({
-              plan_id: planId, delivery_day: e.deliveryDay, delivery_time: e.deliveryTime,
-              order_day: e.orderDay, stop_time: e.stopTime, flow_name: e.flowName, supplier: e.supplier,
-              delivery_date: deliveryDateForDay(e.deliveryDay, weekStart),
-            }));
-            await supabase.from("delivery_entries").insert(rows);
-            const wasOverwrite = oldPlans && oldPlans.length > 0;
-            toast.success(`Leveransplan ${wasOverwrite ? "uppdaterad" : "importerad"} från ${file.name} (${rows.length} leveranser)`);
-          } catch (err) {
-            toast.error(`Fel vid läsning av ${file.name}`);
-            console.error(err);
+            })
+            .select()
+            .single();
+          if (planErr || !plan) {
+            toast.error(`Fel vid sparande av leveransplan: ${planErr?.message}`);
+            continue;
           }
+          const planId = (plan as DeliveryPlan).id;
+          const rows = entries.map((e) => ({
+            plan_id: planId,
+            delivery_day: e.deliveryDay,
+            delivery_time: e.deliveryTime,
+            order_day: e.orderDay,
+            stop_time: e.stopTime,
+            flow_name: e.flowName,
+            supplier: e.supplier,
+            delivery_date: deliveryDateForDay(e.deliveryDay, weekStart),
+          }));
+          await supabase.from("delivery_entries").insert(rows);
+          const wasOverwrite = oldPlans && oldPlans.length > 0;
+          toast.success(
+            `Leveransplan ${wasOverwrite ? "uppdaterad" : "importerad"} från ${file.name} (${rows.length} leveranser)`,
+          );
+        } catch (err) {
+          toast.error(`Fel vid läsning av ${file.name}`);
+          console.error(err);
+        }
       }
       setImportDialogOpen(false);
       setImportFiles([]);
@@ -1307,7 +1704,11 @@ function SchemaPage() {
   function setMapping(employeeNr: string, appUserId: string | null) {
     setMappings((prev) => {
       const idx = prev.findIndex((m) => m.employee_nr === employeeNr);
-      if (idx >= 0) { const n = [...prev]; n[idx] = { ...n[idx], app_user_id: appUserId }; return n; }
+      if (idx >= 0) {
+        const n = [...prev];
+        n[idx] = { ...n[idx], app_user_id: appUserId };
+        return n;
+      }
       return [...prev, { employee_nr: employeeNr, app_user_id: appUserId }];
     });
   }
@@ -1315,41 +1716,78 @@ function SchemaPage() {
   async function saveMappings() {
     if (!storeId || !user) return;
     for (const m of mappings) {
-      await supabase.from("employee_mappings").upsert(
-        { store_id: storeId, employee_nr: m.employee_nr, app_user_id: m.app_user_id || null, created_by: user.id, updated_at: new Date().toISOString() },
-        { onConflict: "store_id,employee_nr" }
-      );
+      await supabase
+        .from("employee_mappings")
+        .upsert(
+          {
+            store_id: storeId,
+            employee_nr: m.employee_nr,
+            app_user_id: m.app_user_id || null,
+            created_by: user.id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "store_id,employee_nr" },
+        );
     }
   }
 
   async function bulkCreateUnmatchedAccounts() {
     if (!storeId || !user) return;
     setBulkCreatingAccounts(true);
-    const unmapped = Array.from(new Map(scheduleEmployees.map((e) => [e.employee_nr, e])).values())
-      .filter((emp) => !getMappedUserId(emp.employee_nr));
+    const unmapped = Array.from(
+      new Map(scheduleEmployees.map((e) => [e.employee_nr, e])).values(),
+    ).filter((emp) => !getMappedUserId(emp.employee_nr));
 
     for (const emp of unmapped) {
       const username = usernameFromName(emp.employee_name);
       const password = generatePassword(16);
       if (!username) continue;
       let finalUsername = username;
-      const { data: existing } = await supabase.from("app_users").select("id").eq("username", finalUsername).maybeSingle();
+      const { data: existing } = await supabase
+        .from("app_users")
+        .select("id")
+        .eq("username", finalUsername)
+        .maybeSingle();
       if (existing) finalUsername = `${username}_${emp.employee_nr.slice(-4)}`;
       const { data: hash } = await supabase.rpc("hash_password", { plain_password: password });
       const role = groupToRole(emp.employee_group);
-      const { data: created } = await supabase.from("app_users").insert({
-        username: finalUsername, password_hash: hash, display_name: emp.employee_name,
-        role, employee_group: emp.employee_group, store_id: storeId, is_active: true,
-        must_change_password: true,
-      }).select("id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at").maybeSingle();
+      const { data: created } = await supabase
+        .from("app_users")
+        .insert({
+          username: finalUsername,
+          password_hash: hash,
+          display_name: emp.employee_name,
+          role,
+          employee_group: emp.employee_group,
+          store_id: storeId,
+          is_active: true,
+          must_change_password: true,
+        })
+        .select(
+          "id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at",
+        )
+        .maybeSingle();
       if (!created) continue;
       const newUser = created as AppUser;
-      await supabase.from("user_stores").upsert({ user_id: newUser.id, store_id: storeId, is_primary: true }, { onConflict: "user_id,store_id" });
+      await supabase
+        .from("user_stores")
+        .upsert(
+          { user_id: newUser.id, store_id: storeId, is_primary: true },
+          { onConflict: "user_id,store_id" },
+        );
       await linkUserToStoreHierarchy(newUser.id);
-      await supabase.from("employee_mappings").upsert(
-        { store_id: storeId, employee_nr: emp.employee_nr, app_user_id: newUser.id, created_by: user.id, updated_at: new Date().toISOString() },
-        { onConflict: "store_id,employee_nr" }
-      );
+      await supabase
+        .from("employee_mappings")
+        .upsert(
+          {
+            store_id: storeId,
+            employee_nr: emp.employee_nr,
+            app_user_id: newUser.id,
+            created_by: user.id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "store_id,employee_nr" },
+        );
       setAppUsers((p) => [...p, newUser]);
       setAllUsers((p) => [...p, newUser]);
       setMapping(emp.employee_nr, newUser.id);
@@ -1357,7 +1795,9 @@ function SchemaPage() {
 
     await loadMappings();
     setBulkCreatingAccounts(false);
-    toast.success(`${unmapped.length} konton skapade. De loggar in och byter lösenord vid första inloggning.`);
+    toast.success(
+      `${unmapped.length} konton skapade. De loggar in och byter lösenord vid första inloggning.`,
+    );
   }
 
   async function confirmImport() {
@@ -1372,37 +1812,66 @@ function SchemaPage() {
         if (me.matchType === "existing" && me.appUserId) {
           finalMappings.push({ employee_nr: me.employeeNr, app_user_id: me.appUserId });
           if (!me.isBorrowed) {
-            await supabase.from("user_stores").upsert({ user_id: me.appUserId, store_id: storeId, is_primary: false }, { onConflict: "user_id,store_id" });
+            await supabase
+              .from("user_stores")
+              .upsert(
+                { user_id: me.appUserId, store_id: storeId, is_primary: false },
+                { onConflict: "user_id,store_id" },
+              );
             await linkUserToStoreHierarchy(me.appUserId);
             const existingUser = allUsers.find((u) => u.id === me.appUserId);
             if (me.employeeGroup && !existingUser?.role_manually_set) {
               const role = groupToRole(me.employeeGroup);
-              await supabase.from("app_users").update({ role, employee_group: me.employeeGroup }).eq("id", me.appUserId);
+              await supabase
+                .from("app_users")
+                .update({ role, employee_group: me.employeeGroup })
+                .eq("id", me.appUserId);
             } else if (me.employeeGroup) {
-              await supabase.from("app_users").update({ employee_group: me.employeeGroup }).eq("id", me.appUserId);
+              await supabase
+                .from("app_users")
+                .update({ employee_group: me.employeeGroup })
+                .eq("id", me.appUserId);
             }
           }
         } else if (me.matchType === "new") {
           const username = me.newUsername || usernameFromName(me.employeeName);
-          const password = me.newPassword && me.newPassword.length >= 12 ? me.newPassword : generatePassword(16);
+          const password =
+            me.newPassword && me.newPassword.length >= 12 ? me.newPassword : generatePassword(16);
           if (!username) continue;
           let finalUsername = username;
-          const { data: existing } = await supabase.from("app_users").select("id").eq("username", finalUsername).maybeSingle();
+          const { data: existing } = await supabase
+            .from("app_users")
+            .select("id")
+            .eq("username", finalUsername)
+            .maybeSingle();
           if (existing) finalUsername = `${username}_${me.employeeNr.slice(-4)}`;
           const { data: hash } = await supabase.rpc("hash_password", { plain_password: password });
           const role = groupToRole(me.employeeGroup);
-          const { data: created, error: createErr } = await supabase.from("app_users").insert({
-            username: finalUsername, password_hash: hash, display_name: me.employeeName,
-            role, employee_group: me.employeeGroup, store_id: storeId, is_active: true,
-            must_change_password: true,
-          }).select("id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at").single();
+          const { data: created, error: createErr } = await supabase
+            .from("app_users")
+            .insert({
+              username: finalUsername,
+              password_hash: hash,
+              display_name: me.employeeName,
+              role,
+              employee_group: me.employeeGroup,
+              store_id: storeId,
+              is_active: true,
+              must_change_password: true,
+            })
+            .select(
+              "id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at",
+            )
+            .single();
           if (createErr || !created) {
             toast.error(`Kunde inte skapa användare för ${me.employeeName}: ${createErr?.message}`);
             continue;
           }
           const newUser = created as AppUser;
           newlyCreated.push(newUser);
-          await supabase.from("user_stores").insert({ user_id: newUser.id, store_id: storeId, is_primary: true });
+          await supabase
+            .from("user_stores")
+            .insert({ user_id: newUser.id, store_id: storeId, is_primary: true });
           await linkUserToStoreHierarchy(newUser.id);
           finalMappings.push({ employee_nr: me.employeeNr, app_user_id: newUser.id });
         }
@@ -1410,21 +1879,41 @@ function SchemaPage() {
 
       // Persist mappings
       for (const m of finalMappings) {
-        await supabase.from("employee_mappings").upsert(
-          { store_id: storeId, employee_nr: m.employee_nr, app_user_id: m.app_user_id || null, created_by: user.id, updated_at: new Date().toISOString() },
-          { onConflict: "store_id,employee_nr" }
-        );
+        await supabase
+          .from("employee_mappings")
+          .upsert(
+            {
+              store_id: storeId,
+              employee_nr: m.employee_nr,
+              app_user_id: m.app_user_id || null,
+              created_by: user.id,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "store_id,employee_nr" },
+          );
       }
       setMappings(finalMappings);
 
       async function upsertGroup(name: string, memberIds: string[]) {
-        let { data: grp } = await supabase.from("user_groups").select("id").eq("store_id", storeId!).eq("name", name).maybeSingle();
+        let { data: grp } = await supabase
+          .from("user_groups")
+          .select("id")
+          .eq("store_id", storeId!)
+          .eq("name", name)
+          .maybeSingle();
         if (!grp) {
-          const { data: created } = await supabase.from("user_groups").insert({ name, store_id: storeId! }).select("id").maybeSingle();
+          const { data: created } = await supabase
+            .from("user_groups")
+            .insert({ name, store_id: storeId! })
+            .select("id")
+            .maybeSingle();
           grp = created;
         }
         if (!grp?.id || memberIds.length === 0) return;
-        await supabase.from("user_group_members").upsert(memberIds.map((uid) => ({ group_id: grp!.id, user_id: uid })), { onConflict: "group_id,user_id" });
+        await supabase.from("user_group_members").upsert(
+          memberIds.map((uid) => ({ group_id: grp!.id, user_id: uid })),
+          { onConflict: "group_id,user_id" },
+        );
       }
 
       // Import each week separately; overwrite any existing import for the same store/week/year
@@ -1445,18 +1934,44 @@ function SchemaPage() {
           await supabase.from("schedule_imports").delete().in("id", oldIds);
         }
 
-        const resolvedWeekStart = weekSchedule.weekStartDate || getWeekStartDate(weekSchedule.weekNumber, weekSchedule.year);
+        const resolvedWeekStart =
+          weekSchedule.weekStartDate ||
+          getWeekStartDate(weekSchedule.weekNumber, weekSchedule.year);
         const { data: importData, error: importErr } = await supabase
           .from("schedule_imports")
-          .insert({ store_id: storeId, week_start_date: resolvedWeekStart, week_number: weekSchedule.weekNumber, year: weekSchedule.year, imported_by: user.id, filename: `vecka_${weekSchedule.weekNumber}_${weekSchedule.year}.xml`, raw_employee_count: weekSchedule.employees.length })
-          .select().single();
-        if (importErr || !importData) throw new Error(`schedule_imports vecka ${weekSchedule.weekNumber}: ${importErr?.message ?? "Import failed"}`);
+          .insert({
+            store_id: storeId,
+            week_start_date: resolvedWeekStart,
+            week_number: weekSchedule.weekNumber,
+            year: weekSchedule.year,
+            imported_by: user.id,
+            filename: `vecka_${weekSchedule.weekNumber}_${weekSchedule.year}.xml`,
+            raw_employee_count: weekSchedule.employees.length,
+          })
+          .select()
+          .single();
+        if (importErr || !importData)
+          throw new Error(
+            `schedule_imports vecka ${weekSchedule.weekNumber}: ${importErr?.message ?? "Import failed"}`,
+          );
         const importId = (importData as ImportRow).id;
         allWeekNums.push(weekSchedule.weekNumber);
         lastImportData = importData as ImportRow;
 
         for (const emp of weekSchedule.employees) {
-          const { data: empData } = await supabase.from("schedule_employees").insert({ import_id: importId, employee_nr: emp.employeeNr, employee_name: emp.employeeName, employee_group: emp.employeeGroup, employee_category: emp.employeeCategory || "", employment_percent: emp.employmentPercent ?? null, work_time_week: emp.workTimeWeek ?? null }).select().single();
+          const { data: empData } = await supabase
+            .from("schedule_employees")
+            .insert({
+              import_id: importId,
+              employee_nr: emp.employeeNr,
+              employee_name: emp.employeeName,
+              employee_group: emp.employeeGroup,
+              employee_category: emp.employeeCategory || "",
+              employment_percent: emp.employmentPercent ?? null,
+              work_time_week: emp.workTimeWeek ?? null,
+            })
+            .select()
+            .single();
           if (!empData) continue;
           const empId = (empData as ScheduleEmployee).id;
           const borrowedMe = matchedEmployees.find((me) => me.employeeNr === emp.employeeNr);
@@ -1464,29 +1979,40 @@ function SchemaPage() {
 
           const rows = emp.days.flatMap((day) => {
             // If the XML day has no ScheduleDate, derive it from the week start + dayNr (1=Mon)
-            const effectiveDayDate = day.scheduleDate || (day.dayNr >= 1 ? addDays(resolvedWeekStart, day.dayNr - 1) : "");
+            const effectiveDayDate =
+              day.scheduleDate || (day.dayNr >= 1 ? addDays(resolvedWeekStart, day.dayNr - 1) : "");
             const isAbsence = day.isAbsenceDay || day.isSemester;
             if (day.shifts.length > 0) {
               return day.shifts.map((s) => {
                 let startUtc: string | null = null;
                 let stopUtc: string | null = null;
-                if (s.startTime && effectiveDayDate) startUtc = stockholmToUtc(`${effectiveDayDate}T${s.startTime}`);
+                if (s.startTime && effectiveDayDate)
+                  startUtc = stockholmToUtc(`${effectiveDayDate}T${s.startTime}`);
                 if (s.stopTime && effectiveDayDate) {
-                  const stopDay = (s.stopTime < s.startTime) ? addDays(effectiveDayDate, 1) : effectiveDayDate;
+                  const stopDay =
+                    s.stopTime < s.startTime ? addDays(effectiveDayDate, 1) : effectiveDayDate;
                   stopUtc = stockholmToUtc(`${stopDay}T${s.stopTime}`);
                 }
                 return {
-                  schedule_employee_id: empId, import_id: importId, day_date: effectiveDayDate,
-                  start_time: s.startTime || null, stop_time: s.stopTime || null,
-                  start_time_utc: startUtc, stop_time_utc: stopUtc,
+                  schedule_employee_id: empId,
+                  import_id: importId,
+                  day_date: effectiveDayDate,
+                  start_time: s.startTime || null,
+                  stop_time: s.stopTime || null,
+                  start_time_utc: startUtc,
+                  stop_time_utc: stopUtc,
                   shift_name: s.shiftName,
                   shift_description: s.description || "",
                   color: isAbsence ? (day.isSemester ? "#fca5a5" : "#e0e0e0") : s.color,
-                  gross_minutes: isAbsence ? 0 : s.grossMinutes, net_minutes: isAbsence ? 0 : s.netMinutes,
-                  break_minutes: isAbsence ? 0 : s.breakMinutes, break_windows: isAbsence ? [] : s.breakWindows,
+                  gross_minutes: isAbsence ? 0 : s.grossMinutes,
+                  net_minutes: isAbsence ? 0 : s.netMinutes,
+                  break_minutes: isAbsence ? 0 : s.breakMinutes,
+                  break_windows: isAbsence ? [] : s.breakWindows,
                   deviation_cause: s.deviationCause || (day.isSemester ? "Semester" : ""),
-                  is_absence_day: isAbsence, is_lended: s.isLended,
-                  is_borrowed: isEmpBorrowed || s.isBorrowed, shift_link: s.shiftLink,
+                  is_absence_day: isAbsence,
+                  is_lended: s.isLended,
+                  is_borrowed: isEmpBorrowed || s.isBorrowed,
+                  shift_link: s.shiftLink,
                   is_shadow_shift: isAbsence && !!(s.startTime || s.shiftName),
                   is_preliminary: day.isPreliminary,
                   is_zero_schedule_day: day.isZeroScheduleDay,
@@ -1494,15 +2020,32 @@ function SchemaPage() {
               });
             }
             if (isAbsence) {
-              return [{
-                schedule_employee_id: empId, import_id: importId, day_date: effectiveDayDate,
-                start_time: null, stop_time: null, start_time_utc: null, stop_time_utc: null,
-                shift_name: day.isSemester ? "Semester" : "", color: day.isSemester ? "#fca5a5" : "#e0e0e0",
-                shift_description: "", gross_minutes: 0, net_minutes: 0, break_minutes: 0, break_windows: [],
-                deviation_cause: day.isSemester ? "Semester" : "", is_absence_day: true,
-                is_lended: false, is_borrowed: false, shift_link: "", is_shadow_shift: false,
-                is_preliminary: day.isPreliminary, is_zero_schedule_day: day.isZeroScheduleDay,
-              }];
+              return [
+                {
+                  schedule_employee_id: empId,
+                  import_id: importId,
+                  day_date: effectiveDayDate,
+                  start_time: null,
+                  stop_time: null,
+                  start_time_utc: null,
+                  stop_time_utc: null,
+                  shift_name: day.isSemester ? "Semester" : "",
+                  color: day.isSemester ? "#fca5a5" : "#e0e0e0",
+                  shift_description: "",
+                  gross_minutes: 0,
+                  net_minutes: 0,
+                  break_minutes: 0,
+                  break_windows: [],
+                  deviation_cause: day.isSemester ? "Semester" : "",
+                  is_absence_day: true,
+                  is_lended: false,
+                  is_borrowed: false,
+                  shift_link: "",
+                  is_shadow_shift: false,
+                  is_preliminary: day.isPreliminary,
+                  is_zero_schedule_day: day.isZeroScheduleDay,
+                },
+              ];
             }
             return [];
           });
@@ -1512,14 +2055,22 @@ function SchemaPage() {
 
       // Auto-create/update "Alla medarbetare" and "Ledning" user groups
       const allUserIds = finalMappings.map((m) => m.app_user_id).filter(Boolean) as string[];
-      const managersInSchedule = allUsers.filter((u) => allUserIds.includes(u.id) && (u.role === "manager" || u.hierarchy_level === "chef")).map((u) => u.id);
+      const managersInSchedule = allUsers
+        .filter(
+          (u) =>
+            allUserIds.includes(u.id) && (u.role === "manager" || u.hierarchy_level === "chef"),
+        )
+        .map((u) => u.id);
       await upsertGroup("Alla medarbetare", allUserIds);
       if (managersInSchedule.length > 0) await upsertGroup("Ledning", managersInSchedule);
 
       const createdCount = newlyCreated.length;
       const matchedCount = finalMappings.length - createdCount;
-      const weekLabel = allWeekNums.length === 1 ? `vecka ${allWeekNums[0]}` : `veckorna ${allWeekNums.join(", ")}`;
-      toast.success(`Schema ${weekLabel} importerat. ${matchedCount} matchade · ${createdCount > 0 ? `${createdCount} nya konton skapade` : "inga nya konton"}.`);
+      const weekLabel =
+        allWeekNums.length === 1 ? `vecka ${allWeekNums[0]}` : `veckorna ${allWeekNums.join(", ")}`;
+      toast.success(
+        `Schema ${weekLabel} importerat. ${matchedCount} matchade · ${createdCount > 0 ? `${createdCount} nya konton skapade` : "inga nya konton"}.`,
+      );
       if (newlyCreated.length > 0) setAppUsers((p) => [...p, ...newlyCreated]);
       setMappingOpen(false);
       setParsed(null);
@@ -1539,7 +2090,10 @@ function SchemaPage() {
 
   // Week start for selected week (always defined from selectedWeek state)
   const selectedWeekStart = getWeekStartDate(selectedWeek.weekNumber, selectedWeek.year);
-  const selectedWeekImport = imports.find((r) => r.week_number === selectedWeek.weekNumber && r.year === selectedWeek.year) ?? null;
+  const selectedWeekImport =
+    imports.find(
+      (r) => r.week_number === selectedWeek.weekNumber && r.year === selectedWeek.year,
+    ) ?? null;
 
   // Navigate to a week: update selectedWeek and sync activeImport
   function navigateToWeek(weekNumber: number, year: number) {
@@ -1571,27 +2125,39 @@ function SchemaPage() {
   }
   function isComplexEmployee(empId: string): boolean {
     // Has at least one day with 2+ distinct shift types
-    const workDays = weekDates.map(date =>
-      scheduleShifts.filter(s => s.schedule_employee_id === empId && s.day_date === date && !s.is_absence_day && s.start_time)
-    ).filter(ds => ds.length > 0);
-    return workDays.some(ds => {
-      const types = new Set(ds.map(s => s.shift_name.toLowerCase().trim()));
+    const workDays = weekDates
+      .map((date) =>
+        scheduleShifts.filter(
+          (s) =>
+            s.schedule_employee_id === empId &&
+            s.day_date === date &&
+            !s.is_absence_day &&
+            s.start_time,
+        ),
+      )
+      .filter((ds) => ds.length > 0);
+    return workDays.some((ds) => {
+      const types = new Set(ds.map((s) => s.shift_name.toLowerCase().trim()));
       return types.size >= 2;
     });
   }
 
-  const allEmpIds = scheduleEmployees.map(e => e.id);
-  const complexCount = allEmpIds.filter(id => isComplexEmployee(id)).length;
+  const allEmpIds = scheduleEmployees.map((e) => e.id);
+  const complexCount = allEmpIds.filter((id) => isComplexEmployee(id)).length;
   const complexRatio = allEmpIds.length > 0 ? complexCount / allEmpIds.length : 0;
   const autoBorrowedEmployeeIds = new Set<string>();
   if (complexRatio > 0.6) {
     for (const emp of scheduleEmployees) {
-      const weekWork = scheduleShifts.filter(s => s.schedule_employee_id === emp.id && !s.is_absence_day && s.start_time);
+      const weekWork = scheduleShifts.filter(
+        (s) => s.schedule_employee_id === emp.id && !s.is_absence_day && s.start_time,
+      );
       if (weekWork.length === 0) continue;
-      const allButik = weekWork.every(s => isButikOnly(s.shift_name));
+      const allButik = weekWork.every((s) => isButikOnly(s.shift_name));
       // Also check: each work day has only 1 shift
-      const days = [...new Set(weekWork.map(s => s.day_date))];
-      const singleShiftDays = days.every(d => weekWork.filter(s => s.day_date === d).length === 1);
+      const days = [...new Set(weekWork.map((s) => s.day_date))];
+      const singleShiftDays = days.every(
+        (d) => weekWork.filter((s) => s.day_date === d).length === 1,
+      );
       if (allButik && singleShiftDays) autoBorrowedEmployeeIds.add(emp.id);
     }
   }
@@ -1603,21 +2169,52 @@ function SchemaPage() {
           const allShifts = scheduleShifts.filter((s) => s.schedule_employee_id === emp.id);
           const dayShifts = allShifts.filter((s) => s.day_date === currentDate);
           const workShifts = dayShifts.filter((s) => !s.is_absence_day && s.start_time);
-          const shadowShifts = dayShifts.filter((s) => s.is_absence_day && s.is_shadow_shift && s.start_time);
+          const shadowShifts = dayShifts.filter(
+            (s) => s.is_absence_day && s.is_shadow_shift && s.start_time,
+          );
           const absenceShift = dayShifts.find((s) => s.is_absence_day);
           const mapping = mappings.find((m) => m.employee_nr === emp.employee_nr);
-          const appUser = mapping?.app_user_id ? appUsers.find((u) => u.id === mapping.app_user_id) : null;
-          const weekMinutes = allShifts.filter((s) => !s.is_absence_day && s.start_time).reduce((sum, s) => sum + (s.net_minutes > 0 ? s.net_minutes : Math.max(0, s.gross_minutes - s.break_minutes)), 0);
-          const initials = (appUser?.display_name ?? emp.employee_name).split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase();
+          const appUser = mapping?.app_user_id
+            ? appUsers.find((u) => u.id === mapping.app_user_id)
+            : null;
+          const weekMinutes = allShifts
+            .filter((s) => !s.is_absence_day && s.start_time)
+            .reduce(
+              (sum, s) =>
+                sum +
+                (s.net_minutes > 0
+                  ? s.net_minutes
+                  : Math.max(0, s.gross_minutes - s.break_minutes)),
+              0,
+            );
+          const initials = (appUser?.display_name ?? emp.employee_name)
+            .split(" ")
+            .map((p: string) => p[0])
+            .slice(0, 2)
+            .join("")
+            .toUpperCase();
           const dayTasks = appUser
             ? scheduleTasks.filter((t) => {
                 if (!t.due_date || toLocalDateStr(t.due_date) !== currentDate) return false;
                 if (t.assigned_to === appUser.id) return true;
-                return scheduleTaskAssignees.some(a => a.task_id === t.id && a.user_id === appUser.id);
+                return scheduleTaskAssignees.some(
+                  (a) => a.task_id === t.id && a.user_id === appUser.id,
+                );
               })
             : [];
           const isAutoBorrowed = autoBorrowedEmployeeIds.has(emp.id);
-          return { emp, dayShifts, workShifts, shadowShifts, absenceShift, appUser, weekMinutes, initials, dayTasks, isAutoBorrowed };
+          return {
+            emp,
+            dayShifts,
+            workShifts,
+            shadowShifts,
+            absenceShift,
+            appUser,
+            weekMinutes,
+            initials,
+            dayTasks,
+            isAutoBorrowed,
+          };
         })
     : appUsers.map((u) => {
         // Fallback row when no schedule import exists — show user with their tasks
@@ -1634,30 +2231,64 @@ function SchemaPage() {
         const dayTasks = scheduleTasks.filter((t) => {
           if (!t.due_date || toLocalDateStr(t.due_date) !== currentDate) return false;
           if (t.assigned_to === u.id) return true;
-          return scheduleTaskAssignees.some(a => a.task_id === t.id && a.user_id === u.id);
+          return scheduleTaskAssignees.some((a) => a.task_id === t.id && a.user_id === u.id);
         });
-        const initials = u.display_name.split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase();
-        return { emp: fakeEmp, dayShifts: [], workShifts: [], shadowShifts: [], absenceShift: undefined, appUser: u, weekMinutes: 0, initials, dayTasks, isAutoBorrowed: false };
+        const initials = u.display_name
+          .split(" ")
+          .map((p: string) => p[0])
+          .slice(0, 2)
+          .join("")
+          .toUpperCase();
+        return {
+          emp: fakeEmp,
+          dayShifts: [],
+          workShifts: [],
+          shadowShifts: [],
+          absenceShift: undefined,
+          appUser: u,
+          weekMinutes: 0,
+          initials,
+          dayTasks,
+          isAutoBorrowed: false,
+        };
       });
 
   const workingToday = employeeRows.filter((r) => r.workShifts.length > 0).length;
-  const absentToday = employeeRows.filter((r) => r.workShifts.length === 0 && r.absenceShift).length;
+  const absentToday = employeeRows.filter(
+    (r) => r.workShifts.length === 0 && r.absenceShift,
+  ).length;
   const totalStaff = employeeRows.length;
   const totalWeekHours = employeeRows.reduce((sum, r) => sum + r.weekMinutes, 0);
 
   // Apply filter and sort
-  const timeToMinsSort = (t: string | null) => { if (!t) return 9999; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+  const timeToMinsSort = (t: string | null) => {
+    if (!t) return 9999;
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+  };
   const displayRows = employeeRows
     .filter((r) => !hideLedig || r.workShifts.length > 0 || r.absenceShift)
     .sort((a, b) => {
       if (sortMode === "start") {
-        const aStart = Math.min(...(a.workShifts.length > 0 ? a.workShifts.map(s => timeToMinsSort(s.start_time)) : [9999]));
-        const bStart = Math.min(...(b.workShifts.length > 0 ? b.workShifts.map(s => timeToMinsSort(s.start_time)) : [9999]));
+        const aStart = Math.min(
+          ...(a.workShifts.length > 0
+            ? a.workShifts.map((s) => timeToMinsSort(s.start_time))
+            : [9999]),
+        );
+        const bStart = Math.min(
+          ...(b.workShifts.length > 0
+            ? b.workShifts.map((s) => timeToMinsSort(s.start_time))
+            : [9999]),
+        );
         return aStart - bStart;
       }
       if (sortMode === "end") {
-        const aEnd = Math.max(...(a.workShifts.length > 0 ? a.workShifts.map(s => timeToMinsSort(s.stop_time)) : [0]));
-        const bEnd = Math.max(...(b.workShifts.length > 0 ? b.workShifts.map(s => timeToMinsSort(s.stop_time)) : [0]));
+        const aEnd = Math.max(
+          ...(a.workShifts.length > 0 ? a.workShifts.map((s) => timeToMinsSort(s.stop_time)) : [0]),
+        );
+        const bEnd = Math.max(
+          ...(b.workShifts.length > 0 ? b.workShifts.map((s) => timeToMinsSort(s.stop_time)) : [0]),
+        );
         return bEnd - aEnd;
       }
       return 0;
@@ -1691,7 +2322,10 @@ function SchemaPage() {
 
   // Delivery plan status for the selected week
   const activeWeekHasSpecialPlan = deliveryPlans.some(
-    (p) => p.week_number === selectedWeek.weekNumber && p.year === selectedWeek.year && p.is_special_week
+    (p) =>
+      p.week_number === selectedWeek.weekNumber &&
+      p.year === selectedWeek.year &&
+      p.is_special_week,
   );
   const activeWeekIsHoliday = getSpecialWeekHoliday(selectedWeek.year, selectedWeek.weekNumber);
   const missingSpecialPlan = activeWeekIsHoliday && !activeWeekHasSpecialPlan;
@@ -1715,7 +2349,10 @@ function SchemaPage() {
     let targetEl: HTMLElement | null = null;
     for (const card of Array.from(cards)) {
       const stop = parseInt(card.dataset.shiftStop ?? "9999", 10);
-      if (stop > nowMins - 15) { targetEl = card; break; }
+      if (stop > nowMins - 15) {
+        targetEl = card;
+        break;
+      }
     }
     if (targetEl) {
       setTimeout(() => {
@@ -1749,11 +2386,18 @@ function SchemaPage() {
                 const ws = getWeekStartDate(w, currYear);
                 const wsYear = parseInt(ws.slice(0, 4), 10);
                 // week belongs to this year if its Monday is in the year or w=1 starts just before
-                if (w === 1 && wsYear < currYear) { allWeeks.push({ weekNumber: w, year: currYear, weekStart: ws }); continue; }
+                if (w === 1 && wsYear < currYear) {
+                  allWeeks.push({ weekNumber: w, year: currYear, weekStart: ws });
+                  continue;
+                }
                 if (wsYear > currYear) break;
                 // Check week 53 actually exists for this year
                 if (w === 53) {
-                  const testDate = new Date(parseInt(ws.slice(0,4)), parseInt(ws.slice(5,7))-1, parseInt(ws.slice(8,10)));
+                  const testDate = new Date(
+                    parseInt(ws.slice(0, 4)),
+                    parseInt(ws.slice(5, 7)) - 1,
+                    parseInt(ws.slice(8, 10)),
+                  );
                   if (getISOWeek(testDate) !== 53) break;
                 }
                 allWeeks.push({ weekNumber: w, year: currYear, weekStart: ws });
@@ -1786,24 +2430,34 @@ function SchemaPage() {
                     <SelectTrigger className="h-9 w-40 text-sm font-medium">
                       <SelectValue placeholder="Välj vecka" />
                     </SelectTrigger>
-                      <SelectContent className="max-h-64">
-                        {allWeeks
-                          .filter((wk) => !isWeekTooOld(wk.weekNumber, wk.year)) // 👈 Filtrerar bort veckor äldre än 2 veckor
-                          .map((wk) => {
-                            const hasImport = imports.some((i) => i.week_number === wk.weekNumber && i.year === wk.year);
-                            const monthStr = new Date(parseInt(wk.weekStart.slice(0,4)), parseInt(wk.weekStart.slice(5,7))-1, parseInt(wk.weekStart.slice(8,10)))
-                              .toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
-                            return (
-                              <SelectItem key={`${wk.year}-${wk.weekNumber}`} value={`${wk.year}-${wk.weekNumber}`}>
-                                <span className="flex items-center gap-2">
-                                  <span>V{wk.weekNumber}</span>
-                                  <span className="text-muted-foreground text-xs">{monthStr}</span>
-                                  {!hasImport && <span className="text-[10px] text-muted-foreground/50">–</span>}
-                                </span>
-                              </SelectItem>
-                            );
-                          })}
-                      </SelectContent>
+                    <SelectContent className="max-h-64">
+                      {allWeeks
+                        .filter((wk) => !isWeekTooOld(wk.weekNumber, wk.year)) // 👈 Filtrerar bort veckor äldre än 2 veckor
+                        .map((wk) => {
+                          const hasImport = imports.some(
+                            (i) => i.week_number === wk.weekNumber && i.year === wk.year,
+                          );
+                          const monthStr = new Date(
+                            parseInt(wk.weekStart.slice(0, 4)),
+                            parseInt(wk.weekStart.slice(5, 7)) - 1,
+                            parseInt(wk.weekStart.slice(8, 10)),
+                          ).toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
+                          return (
+                            <SelectItem
+                              key={`${wk.year}-${wk.weekNumber}`}
+                              value={`${wk.year}-${wk.weekNumber}`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <span>V{wk.weekNumber}</span>
+                                <span className="text-muted-foreground text-xs">{monthStr}</span>
+                                {!hasImport && (
+                                  <span className="text-[10px] text-muted-foreground/50">–</span>
+                                )}
+                              </span>
+                            </SelectItem>
+                          );
+                        })}
+                    </SelectContent>
                   </Select>
                   <button
                     className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
@@ -1822,32 +2476,69 @@ function SchemaPage() {
               );
             })()}
             {deliveryPlans.length > 0 && (
-              <Button size="sm" variant={showDeliveries ? "default" : "outline"} onClick={() => setShowDeliveries((v) => !v)} className="hidden sm:flex gap-1.5">
+              <Button
+                size="sm"
+                variant={showDeliveries ? "default" : "outline"}
+                onClick={() => setShowDeliveries((v) => !v)}
+                className="hidden sm:flex gap-1.5"
+                aria-pressed={showDeliveries}
+              >
                 <Truck className="h-4 w-4" />
                 {activeWeekPlan?.is_special_week ? "Specialleveranser" : "Leveranser"}
-                {(missingAnyPlan || missingSpecialPlan) && <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
+                {(missingAnyPlan || missingSpecialPlan) && (
+                  <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
+                )}
               </Button>
             )}
             {isAdmin && selectedWeekImport && (
-              <Button size="sm" variant="outline" className="hidden sm:flex gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/5" onClick={() => setDeleteImportTarget(selectedWeekImport)}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="hidden sm:flex gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/5"
+                onClick={() => setDeleteImportTarget(selectedWeekImport)}
+              >
                 <Trash2 className="h-4 w-4" />
                 Ta bort vecka
               </Button>
             )}
             {isAdmin && deliveryPlans.length > 0 && (
-              <Button size="sm" variant="outline" className="hidden sm:flex gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/5" onClick={() => setDeleteDeliveryPlanConfirm(true)}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="hidden sm:flex gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/5"
+                onClick={() => setDeleteDeliveryPlanConfirm(true)}
+              >
                 <Trash2 className="h-4 w-4" />
                 Ta bort leveransplan
               </Button>
             )}
             {activeImport && scheduleEmployees.length > 0 && (
-              <Button size="sm" variant="outline" className="hidden sm:flex gap-1.5" onClick={exportScheduleCSV}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="hidden sm:flex gap-1.5"
+                onClick={exportScheduleCSV}
+              >
                 <Download className="h-4 w-4" />
                 Exportera CSV
               </Button>
             )}
             {isAdmin && (
-              <Button size="sm" className="hidden sm:flex gap-1.5" onClick={() => { setImportFiles([]); setPdfPreviews({}); if (activeImport) { setCsvWeekNumber(activeImport.week_number + 1 > 53 ? 1 : activeImport.week_number + 1); setCsvYear(activeImport.year); } setImportDialogOpen(true); }}>
+              <Button
+                size="sm"
+                className="hidden sm:flex gap-1.5"
+                onClick={() => {
+                  setImportFiles([]);
+                  setPdfPreviews({});
+                  if (activeImport) {
+                    setCsvWeekNumber(
+                      activeImport.week_number + 1 > 53 ? 1 : activeImport.week_number + 1,
+                    );
+                    setCsvYear(activeImport.year);
+                  }
+                  setImportDialogOpen(true);
+                }}
+              >
                 <Upload className="h-4 w-4" />
                 Importera
               </Button>
@@ -1858,7 +2549,18 @@ function SchemaPage() {
                 Enbart visning
               </div>
             )}
-            <input ref={importInputRef} type="file" accept=".xml,.csv" multiple className="hidden" onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length) addImportFiles(files); e.target.value = ""; }} />
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xml,.csv"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                if (files.length) addImportFiles(files);
+                e.target.value = "";
+              }}
+            />
           </div>
         </div>
       </div>
@@ -1866,9 +2568,24 @@ function SchemaPage() {
       {/* Stats bar */}
       {activeImport && (
         <div className="grid grid-cols-2 gap-3 border-b border-border/40 bg-card/50 px-6 py-3 sm:grid-cols-4">
-          <StatPill icon={<Users className="h-4 w-4" />} label="Arbetar idag" value={String(workingToday)} tone="primary" />
-          <StatPill icon={<Calendar className="h-4 w-4" />} label="Totalt i veckan" value={String(totalStaff)} tone="default" />
-          <StatPill icon={<Clock className="h-4 w-4" />} label="Frånvaro idag" value={String(absentToday)} tone={absentToday > 0 ? "warning" : "default"} />
+          <StatPill
+            icon={<Users className="h-4 w-4" />}
+            label="Arbetar idag"
+            value={String(workingToday)}
+            tone="primary"
+          />
+          <StatPill
+            icon={<Calendar className="h-4 w-4" />}
+            label="Totalt i veckan"
+            value={String(totalStaff)}
+            tone="default"
+          />
+          <StatPill
+            icon={<Clock className="h-4 w-4" />}
+            label="Frånvaro idag"
+            value={String(absentToday)}
+            tone={absentToday > 0 ? "warning" : "default"}
+          />
         </div>
       )}
 
@@ -1877,8 +2594,18 @@ function SchemaPage() {
         <div className="flex items-start gap-3 border-b border-sky-200/70 bg-sky-50/60 px-6 py-2.5 dark:border-sky-800/30 dark:bg-sky-950/15">
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
           <p className="text-xs text-sky-800 dark:text-sky-300">
-            Schemat i Storeflow är baserat på en import från Softone Go och ska inte ses som en definitiv källa till sanning.
-            {" "}<span className="font-medium">Importerat: {new Date(selectedWeekImport.imported_at).toLocaleString("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+            Schemat i Storeflow är baserat på en import från Softone Go och ska inte ses som en
+            definitiv källa till sanning.{" "}
+            <span className="font-medium">
+              Importerat:{" "}
+              {new Date(selectedWeekImport.imported_at).toLocaleString("sv-SE", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
           </p>
         </div>
       )}
@@ -1888,8 +2615,18 @@ function SchemaPage() {
         <div className="flex items-start gap-3 border-b border-amber-200/70 bg-amber-50/50 px-6 py-2.5 dark:border-amber-800/30 dark:bg-amber-950/15">
           <Truck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
           <p className="text-xs text-amber-800 dark:text-amber-300">
-            Leveransplanen är baserad på en importerad mall och ska inte ses som definitiv information.
-            {" "}<span className="font-medium">Importerad: {new Date(activeWeekPlan.imported_at).toLocaleString("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+            Leveransplanen är baserad på en importerad mall och ska inte ses som definitiv
+            information.{" "}
+            <span className="font-medium">
+              Importerad:{" "}
+              {new Date(activeWeekPlan.imported_at).toLocaleString("sv-SE", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
           </p>
         </div>
       )}
@@ -1904,8 +2641,12 @@ function SchemaPage() {
               : "Leveransplan saknas för denna vecka. Kontakta din chef för information om leveranser."}
           </p>
           {isAdmin && (
-            <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
-              onClick={() => setImportDialogOpen(true)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="ml-auto h-7 text-xs text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
+              onClick={() => setImportDialogOpen(true)}
+            >
               Importera
             </Button>
           )}
@@ -1915,21 +2656,39 @@ function SchemaPage() {
         <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 dark:border-amber-800/40 dark:bg-amber-950/20">
           <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <p className="text-sm text-amber-800 dark:text-amber-300">
-            {isAdmin
-              ? <><span className="font-medium">Helgvecka ({activeWeekIsHoliday})</span> — ingen specialleveransplan importerad. Visar standardplan. Importera en specialplan för denna vecka om leveranserna avviker.</>
-              : <><span className="font-medium">Helgvecka ({activeWeekIsHoliday})</span> — standardplan visas. Leveranserna kan avvika denna vecka, fråga din chef om du är osäker.</>}
+            {isAdmin ? (
+              <>
+                <span className="font-medium">Helgvecka ({activeWeekIsHoliday})</span> — ingen
+                specialleveransplan importerad. Visar standardplan. Importera en specialplan för
+                denna vecka om leveranserna avviker.
+              </>
+            ) : (
+              <>
+                <span className="font-medium">Helgvecka ({activeWeekIsHoliday})</span> —
+                standardplan visas. Leveranserna kan avvika denna vecka, fråga din chef om du är
+                osäker.
+              </>
+            )}
           </p>
           {isAdmin && (
-            <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
-              onClick={() => setImportDialogOpen(true)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="ml-auto h-7 text-xs text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
+              onClick={() => setImportDialogOpen(true)}
+            >
               Importera specialplan
             </Button>
           )}
         </div>
       )}
-      {showDeliveries && activeWeekPlan && !activeWeekPlan.is_special_week && activeWeekIsHoliday && !activeWeekHasSpecialPlan && (
-        <div className="hidden" /> /* covered by missingSpecialPlan above */
-      )}
+      {showDeliveries &&
+        activeWeekPlan &&
+        !activeWeekPlan.is_special_week &&
+        activeWeekIsHoliday &&
+        !activeWeekHasSpecialPlan && (
+          <div className="hidden" /> /* covered by missingSpecialPlan above */
+        )}
 
       {/* Empty state — no schedule imported */}
       {imports.length === 0 && (
@@ -1940,11 +2699,26 @@ function SchemaPage() {
           <div className="text-center">
             <h3 className="text-lg font-semibold text-foreground">Inget schema importerat</h3>
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-              {isAdmin ? "Exportera ett schema från SoftOne GO som XML och importera det för att se skiftöversikten." : "Schema importeras av administratören. Kontrollera att rätt butik är vald."}
+              {isAdmin
+                ? "Exportera ett schema från SoftOne GO som XML och importera det för att se skiftöversikten."
+                : "Schema importeras av administratören. Kontrollera att rätt butik är vald."}
             </p>
           </div>
           {isAdmin && (
-            <Button className="min-h-[48px] gap-2 rounded-full" onClick={() => { setImportFiles([]); setPdfPreviews({}); if (activeImport) { setCsvWeekNumber(activeImport.week_number + 1 > 53 ? 1 : activeImport.week_number + 1); setCsvYear(activeImport.year); } setImportDialogOpen(true); }}>
+            <Button
+              className="min-h-[48px] gap-2 rounded-full"
+              onClick={() => {
+                setImportFiles([]);
+                setPdfPreviews({});
+                if (activeImport) {
+                  setCsvWeekNumber(
+                    activeImport.week_number + 1 > 53 ? 1 : activeImport.week_number + 1,
+                  );
+                  setCsvYear(activeImport.year);
+                }
+                setImportDialogOpen(true);
+              }}
+            >
               <Upload className="h-4 w-4" />
               Importera schema
             </Button>
@@ -1961,10 +2735,24 @@ function SchemaPage() {
                 <CalendarClock className="h-8 w-8 text-primary/60" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-foreground">Inget schema importerat för vecka {selectedWeek.weekNumber}</p>
-                <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">Exportera schema för vecka {selectedWeek.weekNumber}, {selectedWeek.year} från SoftOne GO och importera det här.</p>
+                <p className="text-lg font-semibold text-foreground">
+                  Inget schema importerat för vecka {selectedWeek.weekNumber}
+                </p>
+                <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
+                  Exportera schema för vecka {selectedWeek.weekNumber}, {selectedWeek.year} från
+                  SoftOne GO och importera det här.
+                </p>
               </div>
-              <Button className="gap-2 rounded-full" onClick={() => { setImportFiles([]); setPdfPreviews({}); setCsvWeekNumber(selectedWeek.weekNumber); setCsvYear(selectedWeek.year); setImportDialogOpen(true); }}>
+              <Button
+                className="gap-2 rounded-full"
+                onClick={() => {
+                  setImportFiles([]);
+                  setPdfPreviews({});
+                  setCsvWeekNumber(selectedWeek.weekNumber);
+                  setCsvYear(selectedWeek.year);
+                  setImportDialogOpen(true);
+                }}
+              >
                 <Upload className="h-4 w-4" />
                 Importera schema för V{selectedWeek.weekNumber}
               </Button>
@@ -1975,8 +2763,13 @@ function SchemaPage() {
                 <Calendar className="h-7 w-7 text-muted-foreground/50" />
               </div>
               <div>
-                <p className="font-semibold text-foreground">Inget schema för vecka {selectedWeek.weekNumber}</p>
-                <p className="mt-1 text-sm text-muted-foreground">Schemat för denna vecka har ännu inte lagts till. Fråga din chef om du behöver information.</p>
+                <p className="font-semibold text-foreground">
+                  Inget schema för vecka {selectedWeek.weekNumber}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Schemat för denna vecka har ännu inte lagts till. Fråga din chef om du behöver
+                  information.
+                </p>
               </div>
             </div>
           )}
@@ -1988,56 +2781,128 @@ function SchemaPage() {
         <div className="flex flex-1 flex-col px-3 py-3 sm:px-6 sm:py-4">
           {/* Sticky day strip — touch-action: pan-x so only horizontal swipe changes day */}
           <div className="sticky top-14 z-20 -mx-3 mb-3 flex items-center gap-1 border-b border-border/40 bg-background/95 px-2 py-2 backdrop-blur-sm sm:-mx-6 sm:top-16 sm:px-4">
-            <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors" onClick={() => setSelectedDayIndex((i) => Math.max(0, i - 1))} disabled={selectedDayIndex === 0} aria-label="Föregående dag">
+            <button
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
+              onClick={() => setSelectedDayIndex((i) => Math.max(0, i - 1))}
+              disabled={selectedDayIndex === 0}
+              aria-label="Föregående dag"
+            >
               <ChevronLeft className="h-5 w-5" />
             </button>
             <div className="flex flex-1 gap-1 overflow-x-auto scrollbar-none">
               {weekDates.map((date, idx) => {
                 const isToday = date === todayStr;
-                const count = scheduleEmployees.filter((emp) => scheduleShifts.some((s) => s.schedule_employee_id === emp.id && s.day_date === date && !s.is_absence_day && s.start_time)).length;
+                const count = scheduleEmployees.filter((emp) =>
+                  scheduleShifts.some(
+                    (s) =>
+                      s.schedule_employee_id === emp.id &&
+                      s.day_date === date &&
+                      !s.is_absence_day &&
+                      s.start_time,
+                  ),
+                ).length;
                 const delivCount = activeWeekEntries.filter((d) => d.delivery_date === date).length;
                 const isSelected = selectedDayIndex === idx;
                 return (
-                  <button key={date} onClick={() => setSelectedDayIndex(idx)}
-                    className={["relative flex min-w-[44px] flex-col items-center rounded-xl px-1.5 py-2 text-center transition-all",
-                      isSelected ? "bg-primary text-primary-foreground shadow-[var(--shadow-md)]" : isToday ? "bg-primary-soft text-primary border border-primary/30" : "bg-card text-foreground hover:bg-muted border border-border/60"].join(" ")}
+                  <button
+                    key={date}
+                    onClick={() => setSelectedDayIndex(idx)}
+                    aria-pressed={isSelected}
+                    className={[
+                      "relative flex min-w-[44px] flex-col items-center rounded-xl px-1.5 py-2 text-center transition-colors",
+                      isSelected
+                        ? "bg-primary text-primary-foreground shadow-[var(--shadow-md)]"
+                        : isToday
+                          ? "bg-primary-soft text-primary border border-primary/30"
+                          : "bg-card text-foreground hover:bg-muted border border-border/60",
+                    ].join(" ")}
                   >
-                    <span className="text-[9px] font-semibold uppercase tracking-widest leading-none">{DAY_SHORT[idx]}</span>
+                    <span className="text-[9px] font-semibold uppercase tracking-widest leading-none">
+                      {DAY_SHORT[idx]}
+                    </span>
                     {(() => {
                       const [y, m, d] = date.split("-").map(Number);
                       const dateObj = new Date(y, m - 1, d);
                       return (
                         <>
-                          <span className="mt-1 text-base font-bold leading-none tabular-nums">{dateObj.getDate()}</span>
-                          <span className={["text-[9px] font-medium leading-none mt-0.5", isSelected ? "text-primary-foreground/70" : "text-muted-foreground"].join(" ")}>
+                          <span className="mt-1 text-base font-bold leading-none tabular-nums">
+                            {dateObj.getDate()}
+                          </span>
+                          <span
+                            className={[
+                              "text-[9px] font-medium leading-none mt-0.5",
+                              isSelected ? "text-primary-foreground/70" : "text-muted-foreground",
+                            ].join(" ")}
+                          >
                             {dateObj.toLocaleDateString("sv-SE", { month: "short" })}
                           </span>
                         </>
                       );
                     })()}
-                    <span className={["mt-0.5 text-[9px] font-medium leading-none", isSelected ? "text-primary-foreground/70" : count > 0 ? "text-muted-foreground" : "text-muted-foreground/40"].join(" ")}>
+                    <span
+                      className={[
+                        "mt-0.5 text-[9px] font-medium leading-none tabular-nums",
+                        isSelected
+                          ? "text-primary-foreground/70"
+                          : count > 0
+                            ? "text-muted-foreground"
+                            : "text-muted-foreground/40",
+                      ].join(" ")}
+                    >
                       {activeImport ? (count > 0 ? `${count}p` : "–") : ""}
                     </span>
                     {delivCount > 0 && (
-                      <span className={["text-[8px] font-medium leading-none", isSelected ? "text-primary-foreground/60" : "text-info"].join(" ")}>
+                      <span
+                        className={[
+                          "text-[8px] font-medium leading-none",
+                          isSelected ? "text-primary-foreground/60" : "text-info",
+                        ].join(" ")}
+                      >
                         {delivCount}l
                       </span>
                     )}
-                    {isToday && !isSelected && <span className="absolute bottom-1 h-1 w-1 rounded-full bg-primary" />}
+                    {isToday && !isSelected && (
+                      <span className="absolute bottom-1 h-1 w-1 rounded-full bg-primary" />
+                    )}
                   </button>
                 );
               })}
             </div>
-            <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors" onClick={() => setSelectedDayIndex((i) => Math.min(6, i + 1))} disabled={selectedDayIndex === 6} aria-label="Nästa dag">
+            <button
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
+              onClick={() => setSelectedDayIndex((i) => Math.min(6, i + 1))}
+              disabled={selectedDayIndex === 6}
+              aria-label="Nästa dag"
+            >
               <ChevronRight className="h-5 w-5" />
             </button>
             {/* View mode toggle — hidden on mobile, visible sm+ */}
             <div className="ml-1 hidden shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted/40 sm:flex">
-              <button onClick={() => setViewMode("day")} className={["flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "day" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"].join(" ")}>
-                <List className="h-3.5 w-3.5" />Dag
+              <button
+                onClick={() => setViewMode("day")}
+                aria-pressed={viewMode === "day"}
+                className={[
+                  "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
+                  viewMode === "day"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                ].join(" ")}
+              >
+                <List className="h-3.5 w-3.5" />
+                Dag
               </button>
-              <button onClick={() => setViewMode("week")} className={["flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "week" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"].join(" ")}>
-                <LayoutGrid className="h-3.5 w-3.5" />Vecka
+              <button
+                onClick={() => setViewMode("week")}
+                aria-pressed={viewMode === "week"}
+                className={[
+                  "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
+                  viewMode === "week"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                ].join(" ")}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Vecka
               </button>
             </div>
           </div>
@@ -2047,11 +2912,16 @@ function SchemaPage() {
             <div>
               <h2 className="text-base font-semibold text-foreground">
                 {viewMode === "day" ? DAY_NAMES[selectedDayIndex] : "Veckovy"}
-                {viewMode === "day" && weekDates[selectedDayIndex] && <span className="ml-2 font-normal text-muted-foreground">{fmtDate(weekDates[selectedDayIndex])}</span>}
+                {viewMode === "day" && weekDates[selectedDayIndex] && (
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    {fmtDate(weekDates[selectedDayIndex])}
+                  </span>
+                )}
               </h2>
               {viewMode === "day" && (
                 <p className="text-xs text-muted-foreground">
-                  {workingToday} arbetar · {absentToday > 0 ? `${absentToday} frånvaro · ` : ""}{totalStaff - workingToday - absentToday} lediga
+                  {workingToday} arbetar · {absentToday > 0 ? `${absentToday} frånvaro · ` : ""}
+                  {totalStaff - workingToday - absentToday} lediga
                   {todayDeliveries.length > 0 && ` · ${todayDeliveries.length} leveranser`}
                 </p>
               )}
@@ -2059,15 +2929,30 @@ function SchemaPage() {
             {viewMode === "day" && (
               <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                 <button
-                  onClick={() => setHideLedig(v => !v)}
-                  className={["hidden sm:block rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors min-h-[36px]", hideLedig ? "bg-primary text-primary-foreground border-primary" : "bg-card text-muted-foreground border-border/60 hover:border-primary/50"].join(" ")}
+                  onClick={() => setHideLedig((v) => !v)}
+                  aria-pressed={hideLedig}
+                  className={[
+                    "hidden sm:block rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors min-h-[36px]",
+                    hideLedig
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-card text-muted-foreground border-border/60 hover:border-primary/50",
+                  ].join(" ")}
                 >
                   Dölj lediga
                 </button>
                 <div className="hidden items-center overflow-hidden rounded-lg border border-border/60 bg-muted/40 sm:flex">
-                  {(["default","start","end"] as const).map(m => (
-                    <button key={m} onClick={() => setSortMode(m)}
-                      className={["px-2.5 py-1.5 text-xs font-medium transition-colors", sortMode === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"].join(" ")}>
+                  {(["default", "start", "end"] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setSortMode(m)}
+                      aria-pressed={sortMode === m}
+                      className={[
+                        "px-2.5 py-1.5 text-xs font-medium transition-colors",
+                        sortMode === m
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      ].join(" ")}
+                    >
                       {m === "default" ? "Standard" : m === "start" ? "Starttid" : "Sluttid"}
                     </button>
                   ))}
@@ -2083,9 +2968,15 @@ function SchemaPage() {
                 const c = flowColor(d.flow_name, d.supplier);
                 const label = flowDisplayName(d.flow_name, d.supplier);
                 return (
-                  <div key={d.id} className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium" style={{ backgroundColor: c.bg, color: c.text, borderColor: c.text + "30" }}>
+                  <div
+                    key={d.id}
+                    className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium"
+                    style={{ backgroundColor: c.bg, color: c.text, borderColor: c.text + "30" }}
+                  >
                     <Truck className="h-3 w-3" />
-                    <span>{d.delivery_time} — {label}</span>
+                    <span>
+                      {d.delivery_time} — {label}
+                    </span>
                     {d.supplier && <span className="opacity-60 text-[10px]">· {d.supplier}</span>}
                   </div>
                 );
@@ -2102,14 +2993,22 @@ function SchemaPage() {
               <div>
                 <p className="text-lg font-semibold text-foreground">Schemat saknar pass</p>
                 <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
-                  Vecka {activeImport.week_number}, {activeImport.year} verkar vara tomt eller felaktigt importerat. Vänligen exportera denna vecka från SoftOne GO igen och importera på nytt.
+                  Vecka {activeImport.week_number}, {activeImport.year} verkar vara tomt eller
+                  felaktigt importerat. Vänligen exportera denna vecka från SoftOne GO igen och
+                  importera på nytt.
                 </p>
               </div>
               {isAdmin && (
                 <Button
                   variant="destructive"
                   className="gap-2 rounded-full"
-                  onClick={() => { setImportFiles([]); setPdfPreviews({}); setCsvWeekNumber(activeImport.week_number); setCsvYear(activeImport.year); setImportDialogOpen(true); }}
+                  onClick={() => {
+                    setImportFiles([]);
+                    setPdfPreviews({});
+                    setCsvWeekNumber(activeImport.week_number);
+                    setCsvYear(activeImport.year);
+                    setImportDialogOpen(true);
+                  }}
                 >
                   <Upload className="h-4 w-4" />
                   Importera vecka {activeImport.week_number} igen
@@ -2124,8 +3023,12 @@ function SchemaPage() {
               {deliveryEntries.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-14 text-center">
                   <Truck className="mb-3 h-8 w-8 text-muted-foreground/30" />
-                  <p className="text-sm font-medium text-muted-foreground">Ingen leveransplan importerad</p>
-                  <p className="mt-1 text-xs text-muted-foreground/70">Importera en CSV-fil för att se leveranserna</p>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Ingen leveransplan importerad
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground/70">
+                    Importera en CSV-fil för att se leveranserna
+                  </p>
                 </div>
               ) : todayDeliveries.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-14 text-center">
@@ -2138,13 +3041,24 @@ function SchemaPage() {
                     const c = flowColor(d.flow_name, d.supplier);
                     const label = flowDisplayName(d.flow_name, d.supplier);
                     return (
-                      <div key={d.id} className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3" style={{ borderLeftWidth: 4, borderLeftColor: c.text }}>
+                      <div
+                        key={d.id}
+                        className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3"
+                        style={{ borderLeftWidth: 4, borderLeftColor: c.text }}
+                      >
                         <Truck className="h-5 w-5 shrink-0" style={{ color: c.text }} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-foreground">{label}</p>
-                          {d.supplier && <p className="text-xs text-muted-foreground">{d.supplier}</p>}
+                          {d.supplier && (
+                            <p className="text-xs text-muted-foreground">{d.supplier}</p>
+                          )}
                         </div>
-                        <span className="text-sm font-mono font-bold shrink-0" style={{ color: c.text }}>{d.delivery_time}</span>
+                        <span
+                          className="text-sm font-mono font-bold shrink-0"
+                          style={{ color: c.text }}
+                        >
+                          {d.delivery_time}
+                        </span>
                       </div>
                     );
                   })}
@@ -2158,14 +3072,17 @@ function SchemaPage() {
             <div className="hidden pb-6" data-scroll-container ref={mobileListRef}>
               {loadingSchedule ? (
                 <div className="space-y-3">
-                  {[1,2,3,4,5].map(i => (
-                    <div key={i} className="rounded-2xl border border-border/60 bg-card p-4 flex items-center gap-4">
-                      <div className="h-10 w-10 animate-pulse rounded-full bg-muted shrink-0" />
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div
+                      key={i}
+                      className="rounded-2xl border border-border/60 bg-card p-4 flex items-center gap-4"
+                    >
+                      <div className="h-10 w-10 animate-pulse rounded-full bg-muted shrink-0 motion-reduce:animate-none" />
                       <div className="flex-1 space-y-2">
-                        <div className="h-4 w-1/2 animate-pulse rounded-md bg-muted" />
-                        <div className="h-3 w-1/3 animate-pulse rounded-md bg-muted/60" />
+                        <div className="h-4 w-1/2 animate-pulse rounded-md bg-muted motion-reduce:animate-none" />
+                        <div className="h-3 w-1/3 animate-pulse rounded-md bg-muted/60 motion-reduce:animate-none" />
                       </div>
-                      <div className="h-6 w-20 animate-pulse rounded-full bg-muted/60 shrink-0" />
+                      <div className="h-6 w-20 animate-pulse rounded-full bg-muted/60 shrink-0 motion-reduce:animate-none" />
                     </div>
                   ))}
                 </div>
@@ -2176,10 +3093,14 @@ function SchemaPage() {
                   </div>
                   <div>
                     <p className="font-semibold text-foreground">Inga pass schemalagda</p>
-                    <p className="mt-1 text-sm text-muted-foreground">Kontrollera att rätt butik är vald eller uppdatera sidan.</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Kontrollera att rätt butik är vald eller uppdatera sidan.
+                    </p>
                   </div>
                   <button
-                    onClick={() => { if (activeImport) loadScheduleData(activeImport.id); }}
+                    onClick={() => {
+                      if (activeImport) loadScheduleData(activeImport.id);
+                    }}
                     className="flex items-center gap-2 rounded-full border border-border/60 bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/60 transition-colors min-h-[48px]"
                   >
                     <RefreshCw className="h-4 w-4" /> Uppdatera schema
@@ -2187,145 +3108,233 @@ function SchemaPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {displayRows.map(({ emp, workShifts, absenceShift, appUser, initials, dayTasks, weekMinutes }) => {
-                    const isAbsent = workShifts.length === 0 && !!absenceShift;
-                    const isSemester = absenceShift?.deviation_cause?.toLowerCase().includes("semester") || absenceShift?.shift_name?.toLowerCase() === "semester";
-                    const isLedig = workShifts.length === 0 && !absenceShift;
-                    const name = appUser?.display_name ?? emp.employee_name;
+                  {displayRows.map(
+                    ({
+                      emp,
+                      workShifts,
+                      absenceShift,
+                      appUser,
+                      initials,
+                      dayTasks,
+                      weekMinutes,
+                    }) => {
+                      const isAbsent = workShifts.length === 0 && !!absenceShift;
+                      const isSemester =
+                        absenceShift?.deviation_cause?.toLowerCase().includes("semester") ||
+                        absenceShift?.shift_name?.toLowerCase() === "semester";
+                      const isLedig = workShifts.length === 0 && !absenceShift;
+                      const name = appUser?.display_name ?? emp.employee_name;
 
-                    // Compute now relative to shifts for fading
-                    const now = new Date();
-                    const nowMins = now.getHours() * 60 + now.getMinutes();
-                    const timeToMins2 = (t: string | null) => { if (!t) return 0; const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+                      // Compute now relative to shifts for fading
+                      const now = new Date();
+                      const nowMins = now.getHours() * 60 + now.getMinutes();
+                      const timeToMins2 = (t: string | null) => {
+                        if (!t) return 0;
+                        const [h, m] = t.split(":").map(Number);
+                        return h * 60 + m;
+                      };
 
-                    // Primary shift (first active/upcoming shift)
-                    const primaryShift = workShifts.sort((a, b) => timeToMins2(a.start_time) - timeToMins2(b.start_time))[0];
-                    const isPast = primaryShift ? timeToMins2(primaryShift.stop_time) < nowMins - 5 && currentDate === todayStr : false;
+                      // Primary shift (first active/upcoming shift)
+                      const primaryShift = workShifts.sort(
+                        (a, b) => timeToMins2(a.start_time) - timeToMins2(b.start_time),
+                      )[0];
+                      const isPast = primaryShift
+                        ? timeToMins2(primaryShift.stop_time) < nowMins - 5 &&
+                          currentDate === todayStr
+                        : false;
 
-                    if (isLedig) return null; // hidden when hideLedig is off they're already excluded by filter
+                      if (isLedig) return null; // hidden when hideLedig is off they're already excluded by filter
 
-                    const startMins = primaryShift ? timeToMins2(primaryShift.start_time) : 0;
-                    const stopMins = primaryShift ? timeToMins2(primaryShift.stop_time) : 0;
+                      const startMins = primaryShift ? timeToMins2(primaryShift.start_time) : 0;
+                      const stopMins = primaryShift ? timeToMins2(primaryShift.stop_time) : 0;
 
-                    return (
-                      <div
-                        key={emp.id}
-                        data-shift-start={startMins}
-                        data-shift-stop={stopMins}
-                        className={cn(
-                          "rounded-2xl border bg-card p-4 transition-all",
-                          isSemester ? "border-red-200/60 bg-red-50/40" : isAbsent ? "border-warning/30 bg-warning/5" : "border-border/60",
-                          isPast && "opacity-60",
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          {/* Avatar */}
-                          <div
-                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                            style={{
-                              background: isSemester ? "#fca5a5" : appUser ? "oklch(0.5 0.16 148)" : "oklch(0.88 0.02 145)",
-                              color: isSemester ? "#7f1d1d" : appUser ? "white" : "oklch(0.4 0.05 145)",
-                            }}
-                          >
-                            {initials}
-                          </div>
-
-                          {/* Name + dept */}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <p className="font-semibold text-sm leading-snug text-foreground">{name}</p>
-                              {emp.employment_percent != null && (
-                                <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 rounded-full px-1.5 py-0.5 leading-none" title={`Sysselsättningsgrad: ${emp.employment_percent}%`}>{emp.employment_percent}%</span>
-                              )}
-                              {primaryShift?.is_borrowed && (() => {
-                                const isButikBorrowed = primaryShift.shift_name.toLowerCase().includes("butik");
-                                return isButikBorrowed
-                                  ? <span className="flex items-center gap-0.5 text-[10px] font-medium text-violet-700 bg-violet-50 rounded-full px-1.5 py-0.5 leading-none"><ArrowLeftRight className="h-2.5 w-2.5" />Utlånad</span>
-                                  : <span className="flex items-center gap-0.5 text-[10px] font-medium text-sky-600 bg-sky-50 rounded-full px-1.5 py-0.5 leading-none"><ArrowLeftRight className="h-2.5 w-2.5" />Inlånad</span>;
-                              })()}
-                              {primaryShift?.is_preliminary && (
-                                <span className="text-[10px] font-medium text-amber-600 bg-amber-50 rounded-full px-1.5 py-0.5 leading-none">Preliminär</span>
-                              )}
+                      return (
+                        <div
+                          key={emp.id}
+                          data-shift-start={startMins}
+                          data-shift-stop={stopMins}
+                          className={cn(
+                            "rounded-2xl border bg-card p-4 transition-colors",
+                            isSemester
+                              ? "border-red-200/60 bg-red-50/40"
+                              : isAbsent
+                                ? "border-warning/30 bg-warning/5"
+                                : "border-border/60",
+                            isPast && "opacity-60",
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            {/* Avatar */}
+                            <div
+                              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                              style={{
+                                background: isSemester
+                                  ? "#fca5a5"
+                                  : appUser
+                                    ? "oklch(0.5 0.16 148)"
+                                    : "oklch(0.88 0.02 145)",
+                                color: isSemester
+                                  ? "#7f1d1d"
+                                  : appUser
+                                    ? "white"
+                                    : "oklch(0.4 0.05 145)",
+                              }}
+                            >
+                              {initials}
                             </div>
-                            {primaryShift && (
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {primaryShift.shift_name}
-                                {primaryShift.shift_description ? ` · ${primaryShift.shift_description}` : ""}
-                                {primaryShift.deviation_cause && !isAbsent ? ` · ${primaryShift.deviation_cause}` : ""}
-                              </p>
-                            )}
-                            {isSemester && <p className="text-xs font-medium text-red-500">Semester</p>}
-                            {isAbsent && !isSemester && <p className="text-xs text-warning-foreground">{absenceShift?.deviation_cause || "Frånvaro"}</p>}
-                            {(() => {
-                              const dayMins = workShifts.reduce((s, sh) => s + (sh.net_minutes > 0 ? sh.net_minutes : Math.max(0, sh.gross_minutes - sh.break_minutes)), 0);
-                              return (
-                                <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-                                  {dayMins > 0 ? `${minsToHours(dayMins)} idag` : ""}
-                                  {dayMins > 0 && weekMinutes > 0 ? " · " : ""}
-                                  {weekMinutes > 0 ? `V: ${minsToHours(weekMinutes)}` : ""}
-                                </p>
-                              );
-                            })()}
-                          </div>
 
-                          {/* Time block — primary info, bold */}
-                          <div className="shrink-0 text-right">
-                            {primaryShift ? (
-                              <>
-                                <p className="text-sm font-bold text-foreground tabular-nums leading-snug">
-                                  {primaryShift.start_time}–{primaryShift.stop_time}
+                            {/* Name + dept */}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="font-semibold text-sm leading-snug text-foreground">
+                                  {name}
                                 </p>
-                                {workShifts.length > 1 && (
-                                  <p className="text-[10px] text-muted-foreground">+{workShifts.length - 1} pass</p>
+                                {emp.employment_percent != null && (
+                                  <span
+                                    className="text-[10px] font-medium text-muted-foreground bg-muted/60 rounded-full px-1.5 py-0.5 leading-none"
+                                    title={`Sysselsättningsgrad: ${emp.employment_percent}%`}
+                                  >
+                                    {emp.employment_percent}%
+                                  </span>
                                 )}
-                              </>
-                            ) : null}
+                                {primaryShift?.is_borrowed &&
+                                  (() => {
+                                    const isButikBorrowed = primaryShift.shift_name
+                                      .toLowerCase()
+                                      .includes("butik");
+                                    return isButikBorrowed ? (
+                                      <span className="flex items-center gap-0.5 text-[10px] font-medium text-violet-700 bg-violet-50 rounded-full px-1.5 py-0.5 leading-none">
+                                        <ArrowLeftRight className="h-2.5 w-2.5" />
+                                        Utlånad
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-0.5 text-[10px] font-medium text-sky-600 bg-sky-50 rounded-full px-1.5 py-0.5 leading-none">
+                                        <ArrowLeftRight className="h-2.5 w-2.5" />
+                                        Inlånad
+                                      </span>
+                                    );
+                                  })()}
+                                {primaryShift?.is_preliminary && (
+                                  <span className="text-[10px] font-medium text-amber-600 bg-amber-50 rounded-full px-1.5 py-0.5 leading-none">
+                                    Preliminär
+                                  </span>
+                                )}
+                              </div>
+                              {primaryShift && (
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {primaryShift.shift_name}
+                                  {primaryShift.shift_description
+                                    ? ` · ${primaryShift.shift_description}`
+                                    : ""}
+                                  {primaryShift.deviation_cause && !isAbsent
+                                    ? ` · ${primaryShift.deviation_cause}`
+                                    : ""}
+                                </p>
+                              )}
+                              {isSemester && (
+                                <p className="text-xs font-medium text-red-500">Semester</p>
+                              )}
+                              {isAbsent && !isSemester && (
+                                <p className="text-xs text-warning-foreground">
+                                  {absenceShift?.deviation_cause || "Frånvaro"}
+                                </p>
+                              )}
+                              {(() => {
+                                const dayMins = workShifts.reduce(
+                                  (s, sh) =>
+                                    s +
+                                    (sh.net_minutes > 0
+                                      ? sh.net_minutes
+                                      : Math.max(0, sh.gross_minutes - sh.break_minutes)),
+                                  0,
+                                );
+                                return (
+                                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                                    {dayMins > 0 ? `${minsToHours(dayMins)} idag` : ""}
+                                    {dayMins > 0 && weekMinutes > 0 ? " · " : ""}
+                                    {weekMinutes > 0 ? `V: ${minsToHours(weekMinutes)}` : ""}
+                                  </p>
+                                );
+                              })()}
+                            </div>
+
+                            {/* Time block — primary info, bold */}
+                            <div className="shrink-0 text-right">
+                              {primaryShift ? (
+                                <>
+                                  <p className="text-sm font-bold text-foreground tabular-nums leading-snug">
+                                    {primaryShift.start_time}–{primaryShift.stop_time}
+                                  </p>
+                                  {workShifts.length > 1 && (
+                                    <p className="text-[10px] text-muted-foreground">
+                                      +{workShifts.length - 1} pass
+                                    </p>
+                                  )}
+                                </>
+                              ) : null}
+                            </div>
+
+                            {/* Shift type badge — color coded */}
+                            {primaryShift &&
+                              (() => {
+                                const col = shiftColor(primaryShift.shift_name, primaryShift.color);
+                                const light = isLightColor(col);
+                                return (
+                                  <div
+                                    className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-snug hidden xs:block"
+                                    style={{
+                                      backgroundColor: col,
+                                      color: light ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.92)",
+                                    }}
+                                  >
+                                    {primaryShift.shift_name || "–"}
+                                  </div>
+                                );
+                              })()}
                           </div>
 
-                          {/* Shift type badge — color coded */}
-                          {primaryShift && (() => {
-                            const col = shiftColor(primaryShift.shift_name, primaryShift.color);
-                            const light = isLightColor(col);
-                            return (
-                              <div
-                                className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold leading-snug hidden xs:block"
-                                style={{ backgroundColor: col, color: light ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.92)" }}
-                              >
-                                {primaryShift.shift_name || "–"}
-                              </div>
-                            );
-                          })()}
-                        </div>
+                          {/* Additional shifts */}
+                          {workShifts.length > 1 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5 pl-14">
+                              {workShifts.slice(1).map((s) => {
+                                const col = shiftColor(s.shift_name, s.color);
+                                return (
+                                  <div
+                                    key={s.id}
+                                    className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                                    style={{
+                                      backgroundColor: col + "55",
+                                      borderLeft: `2px solid ${col}`,
+                                    }}
+                                  >
+                                    <span>{s.shift_name}</span>
+                                    <span className="opacity-70 font-mono">
+                                      {s.start_time}–{s.stop_time}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
 
-                        {/* Additional shifts */}
-                        {workShifts.length > 1 && (
-                          <div className="mt-2 flex flex-wrap gap-1.5 pl-14">
-                            {workShifts.slice(1).map((s) => {
-                              const col = shiftColor(s.shift_name, s.color);
-                              return (
-                                <div key={s.id} className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ backgroundColor: col + "55", borderLeft: `2px solid ${col}` }}>
-                                  <span>{s.shift_name}</span>
-                                  <span className="opacity-70 font-mono">{s.start_time}–{s.stop_time}</span>
+                          {/* Due tasks for this employee today */}
+                          {dayTasks.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1 pl-14">
+                              {dayTasks.map((t) => (
+                                <div
+                                  key={t.id}
+                                  className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800"
+                                >
+                                  <Timer className="h-2.5 w-2.5 shrink-0" />
+                                  {t.title}
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {/* Due tasks for this employee today */}
-                        {dayTasks.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1 pl-14">
-                            {dayTasks.map((t) => (
-                              <div key={t.id} className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-                                <Timer className="h-2.5 w-2.5 shrink-0" />
-                                {t.title}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    },
+                  )}
                 </div>
               )}
             </div>
@@ -2333,16 +3342,28 @@ function SchemaPage() {
 
           {/* ── DESKTOP TIMELINE VIEW (sm and above) ────────────────────────── */}
           {viewMode === "day" && (
-            <div ref={dayVirtual.scrollRef} onScroll={dayVirtual.onScroll} className="hidden overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)] sm:flex sm:flex-col" style={{ maxHeight: "calc(100vh - 18rem)" }}>
+            <div
+              ref={dayVirtual.scrollRef}
+              onScroll={dayVirtual.onScroll}
+              className="hidden overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)] sm:flex sm:flex-col"
+              style={{ maxHeight: "calc(100vh - 18rem)" }}
+            >
               <div className="sticky top-0 z-10 flex bg-card/95 backdrop-blur-sm border-b border-border/60">
                 <div className="w-48 shrink-0 border-r border-border/40 px-4 py-2.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Medarbetare</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Medarbetare
+                  </span>
                 </div>
                 <div className="relative flex-1" style={{ minWidth: `${TOTAL_HOURS * 60}px` }}>
                   <div className="flex h-full">
                     {hourMarkers.map((h) => (
-                      <div key={h} className="flex-1 border-r border-border/30 px-1 py-2.5 last:border-r-0">
-                        <span className="text-[11px] font-mono text-muted-foreground/60">{String(h).padStart(2, "0")}:00</span>
+                      <div
+                        key={h}
+                        className="flex-1 border-r border-border/30 px-1 py-2.5 last:border-r-0"
+                      >
+                        <span className="text-[11px] font-mono text-muted-foreground/60">
+                          {String(h).padStart(2, "0")}:00
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -2357,9 +3378,14 @@ function SchemaPage() {
                       <Truck className="h-3 w-3" /> Leveranser
                     </span>
                   </div>
-                  <div className="relative flex-1 py-1" style={{ minWidth: `${TOTAL_HOURS * 60}px` }}>
+                  <div
+                    className="relative flex-1 py-1"
+                    style={{ minWidth: `${TOTAL_HOURS * 60}px` }}
+                  >
                     <div className="absolute inset-0 flex pointer-events-none">
-                      {hourMarkers.map((h) => <div key={h} className="flex-1 border-r border-border/15 last:border-r-0" />)}
+                      {hourMarkers.map((h) => (
+                        <div key={h} className="flex-1 border-r border-border/15 last:border-r-0" />
+                      ))}
                     </div>
                     {todayDeliveries.map((d) => {
                       const left = timeToPercent(d.delivery_time);
@@ -2367,8 +3393,20 @@ function SchemaPage() {
                       const c = flowColor(d.flow_name, d.supplier);
                       const label = flowDisplayName(d.flow_name, d.supplier);
                       return (
-                        <div key={d.id} className="absolute top-0.5 bottom-0.5 flex items-center rounded px-1.5 text-[10px] font-semibold cursor-default select-none" style={{ left: `${Math.max(0, left)}%`, width: "auto", minWidth: "48px", maxWidth: "10%", backgroundColor: c.bg, color: c.text, borderLeft: `2px solid ${c.text}` }}
-                          title={`${label} ${d.delivery_time} — ${d.supplier}`}>
+                        <div
+                          key={d.id}
+                          className="absolute top-0.5 bottom-0.5 flex items-center rounded px-1.5 text-[10px] font-semibold cursor-default select-none"
+                          style={{
+                            left: `${Math.max(0, left)}%`,
+                            width: "auto",
+                            minWidth: "48px",
+                            maxWidth: "10%",
+                            backgroundColor: c.bg,
+                            color: c.text,
+                            borderLeft: `2px solid ${c.text}`,
+                          }}
+                          title={`${label} ${d.delivery_time} — ${d.supplier}`}
+                        >
                           {d.delivery_time}
                         </div>
                       );
@@ -2378,31 +3416,50 @@ function SchemaPage() {
               )}
 
               {/* Tasks row in day timeline */}
-              {scheduleTasks.filter((t) => t.due_date && toLocalDateStr(t.due_date) === currentDate).length > 0 && (
+              {scheduleTasks.filter((t) => t.due_date && toLocalDateStr(t.due_date) === currentDate)
+                .length > 0 && (
                 <div className="flex border-b border-border/20 bg-amber-50/40 dark:bg-amber-950/10">
                   <div className="flex w-48 shrink-0 items-center border-r border-border/30 px-4 py-1.5">
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
                       <Timer className="h-3 w-3" /> Uppgifter
                     </span>
                   </div>
-                  <div className="relative flex-1 py-1" style={{ minWidth: `${TOTAL_HOURS * 60}px` }}>
+                  <div
+                    className="relative flex-1 py-1"
+                    style={{ minWidth: `${TOTAL_HOURS * 60}px` }}
+                  >
                     <div className="absolute inset-0 flex pointer-events-none">
-                      {hourMarkers.map((h) => <div key={h} className="flex-1 border-r border-border/15 last:border-r-0" />)}
+                      {hourMarkers.map((h) => (
+                        <div key={h} className="flex-1 border-r border-border/15 last:border-r-0" />
+                      ))}
                     </div>
-                    {scheduleTasks.filter((t) => t.due_date && toLocalDateStr(t.due_date) === currentDate).map((task) => {
-                      const dueTime = new Date(task.due_date!).toTimeString().slice(0, 5);
-                      const dueH = parseInt(dueTime.split(":")[0]);
-                      if (dueH < TIMELINE_START || dueH > TIMELINE_END) return null;
-                      const left = timeToPercent(dueTime);
-                      const isLate = task.status === "late" || new Date(task.due_date!) < new Date();
-                      return (
-                        <div key={task.id} className="absolute top-0.5 bottom-0.5 flex items-center rounded px-1.5 text-[10px] font-semibold cursor-default select-none whitespace-nowrap overflow-hidden"
-                          style={{ left: `${Math.max(0, left)}%`, minWidth: "60px", maxWidth: "14%", backgroundColor: isLate ? "#fee2e2" : "#fef3c7", color: isLate ? "#dc2626" : "#92400e", borderLeft: `2px solid ${isLate ? "#dc2626" : "#d97706"}` }}
-                          title={`${task.title} — ${dueTime}`}>
-                          {dueTime} {task.title}
-                        </div>
-                      );
-                    })}
+                    {scheduleTasks
+                      .filter((t) => t.due_date && toLocalDateStr(t.due_date) === currentDate)
+                      .map((task) => {
+                        const dueTime = new Date(task.due_date!).toTimeString().slice(0, 5);
+                        const dueH = parseInt(dueTime.split(":")[0]);
+                        if (dueH < TIMELINE_START || dueH > TIMELINE_END) return null;
+                        const left = timeToPercent(dueTime);
+                        const isLate =
+                          task.status === "late" || new Date(task.due_date!) < new Date();
+                        return (
+                          <div
+                            key={task.id}
+                            className="absolute top-0.5 bottom-0.5 flex items-center rounded px-1.5 text-[10px] font-semibold cursor-default select-none whitespace-nowrap overflow-hidden"
+                            style={{
+                              left: `${Math.max(0, left)}%`,
+                              minWidth: "60px",
+                              maxWidth: "14%",
+                              backgroundColor: isLate ? "#fee2e2" : "#fef3c7",
+                              color: isLate ? "#dc2626" : "#92400e",
+                              borderLeft: `2px solid ${isLate ? "#dc2626" : "#d97706"}`,
+                            }}
+                            title={`${task.title} — ${dueTime}`}
+                          >
+                            {dueTime} {task.title}
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
               )}
@@ -2413,132 +3470,319 @@ function SchemaPage() {
                   <p className="text-sm text-muted-foreground">Inga pass schemalagda denna dag</p>
                 </div>
               ) : (
-                <div style={{ paddingTop: dayVirtual.paddingTop, paddingBottom: dayVirtual.paddingBottom }}>
-                  {dayVirtual.visibleItems.map(({ emp, workShifts, shadowShifts, absenceShift, appUser, weekMinutes, initials, dayTasks }) => {
-                  const isSemesterDay = absenceShift?.deviation_cause?.toLowerCase().includes("semester") || absenceShift?.shift_name?.toLowerCase() === "semester";
-                  return (
-                  <div key={emp.id} className={["group flex border-b border-border/20 last:border-b-0 transition-colors", isSemesterDay ? "bg-red-50/60 hover:bg-red-50/80 dark:bg-red-950/20" : "hover:bg-muted/20"].join(" ")} style={{ minHeight: dayTasks.length > 0 ? "56px" : undefined }}>
-                    <div className={["flex w-48 shrink-0 items-center gap-2.5 border-r px-4 py-3", isSemesterDay ? "border-red-200/60 dark:border-red-800/40" : "border-border/30"].join(" ")}>
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
-                        style={{ background: isSemesterDay ? "#fca5a5" : appUser ? "oklch(0.5 0.16 148)" : "oklch(0.88 0.02 145)", color: isSemesterDay ? "#7f1d1d" : appUser ? "white" : "oklch(0.4 0.05 145)" }}>
-                        {initials}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-foreground leading-tight">{appUser?.display_name ?? emp.employee_name}</p>
-                        <div className="flex items-center gap-1 flex-wrap mt-0.5">
-                          {emp.employment_percent != null && (
-                            <span className="text-[9px] text-muted-foreground/70" title={`Sysselsättningsgrad: ${emp.employment_percent}%`}>{emp.employment_percent}%</span>
-                          )}
-                          {weekMinutes > 0 && <span className="text-[9px] text-muted-foreground/70" title="Schemalagd tid denna vecka">{minsToHours(weekMinutes)}/v</span>}
-                          {(() => {
-                            const dayMins = workShifts.reduce((s, sh) => s + (sh.net_minutes > 0 ? sh.net_minutes : Math.max(0, sh.gross_minutes - sh.break_minutes)), 0);
-                            return dayMins > 0 ? <span className="text-[9px] font-medium text-foreground/60" title="Schemalagd tid idag">{minsToHours(dayMins)}/dag</span> : null;
-                          })()}
-                        </div>
-                        {isSemesterDay && <p className="truncate text-[10px] text-red-500 font-medium">Semester</p>}
-                      </div>
-                    </div>
-                    <div className="relative flex-1 py-2.5" style={{ minWidth: `${TOTAL_HOURS * 60}px` }}>
-                      <div className="absolute inset-0 flex pointer-events-none">
-                        {hourMarkers.map((h) => <div key={h} className="flex-1 border-r border-border/15 last:border-r-0" />)}
-                      </div>
-                      {currentNowPercent >= 0 && (
-                        <div className="absolute top-0 bottom-0 z-10 w-px bg-destructive/70 pointer-events-none" style={{ left: `${currentNowPercent}%` }} />
-                      )}
-                      {isSemesterDay ? (
-                        <>
-                          <div className="absolute top-1.5 bottom-1.5 flex items-center gap-2 flex-wrap" style={{ left: "12px" }}>
-                            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-100/60 px-3 py-1.5 dark:border-red-800/40 dark:bg-red-900/20">
-                              <span className="text-[11px] font-medium text-red-600 dark:text-red-400">Semester</span>
+                <div
+                  style={{
+                    paddingTop: dayVirtual.paddingTop,
+                    paddingBottom: dayVirtual.paddingBottom,
+                  }}
+                >
+                  {dayVirtual.visibleItems.map(
+                    ({
+                      emp,
+                      workShifts,
+                      shadowShifts,
+                      absenceShift,
+                      appUser,
+                      weekMinutes,
+                      initials,
+                      dayTasks,
+                    }) => {
+                      const isSemesterDay =
+                        absenceShift?.deviation_cause?.toLowerCase().includes("semester") ||
+                        absenceShift?.shift_name?.toLowerCase() === "semester";
+                      return (
+                        <div
+                          key={emp.id}
+                          className={[
+                            "group flex border-b border-border/20 last:border-b-0 transition-colors",
+                            isSemesterDay
+                              ? "bg-red-50/60 hover:bg-red-50/80 dark:bg-red-950/20"
+                              : "hover:bg-muted/20",
+                          ].join(" ")}
+                          style={{ minHeight: dayTasks.length > 0 ? "56px" : undefined }}
+                        >
+                          <div
+                            className={[
+                              "flex w-48 shrink-0 items-center gap-2.5 border-r px-4 py-3",
+                              isSemesterDay
+                                ? "border-red-200/60 dark:border-red-800/40"
+                                : "border-border/30",
+                            ].join(" ")}
+                          >
+                            <div
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
+                              style={{
+                                background: isSemesterDay
+                                  ? "#fca5a5"
+                                  : appUser
+                                    ? "oklch(0.5 0.16 148)"
+                                    : "oklch(0.88 0.02 145)",
+                                color: isSemesterDay
+                                  ? "#7f1d1d"
+                                  : appUser
+                                    ? "white"
+                                    : "oklch(0.4 0.05 145)",
+                              }}
+                            >
+                              {initials}
                             </div>
-                            {shadowShifts.map((shift) => {
-                              const col = shiftColor(shift.shift_name, shift.color);
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-semibold text-foreground leading-tight">
+                                {appUser?.display_name ?? emp.employee_name}
+                              </p>
+                              <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                                {emp.employment_percent != null && (
+                                  <span
+                                    className="text-[9px] text-muted-foreground/70"
+                                    title={`Sysselsättningsgrad: ${emp.employment_percent}%`}
+                                  >
+                                    {emp.employment_percent}%
+                                  </span>
+                                )}
+                                {weekMinutes > 0 && (
+                                  <span
+                                    className="text-[9px] text-muted-foreground/70"
+                                    title="Schemalagd tid denna vecka"
+                                  >
+                                    {minsToHours(weekMinutes)}/v
+                                  </span>
+                                )}
+                                {(() => {
+                                  const dayMins = workShifts.reduce(
+                                    (s, sh) =>
+                                      s +
+                                      (sh.net_minutes > 0
+                                        ? sh.net_minutes
+                                        : Math.max(0, sh.gross_minutes - sh.break_minutes)),
+                                    0,
+                                  );
+                                  return dayMins > 0 ? (
+                                    <span
+                                      className="text-[9px] font-medium text-foreground/60"
+                                      title="Schemalagd tid idag"
+                                    >
+                                      {minsToHours(dayMins)}/dag
+                                    </span>
+                                  ) : null;
+                                })()}
+                              </div>
+                              {isSemesterDay && (
+                                <p className="truncate text-[10px] text-red-500 font-medium">
+                                  Semester
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div
+                            className="relative flex-1 py-2.5"
+                            style={{ minWidth: `${TOTAL_HOURS * 60}px` }}
+                          >
+                            <div className="absolute inset-0 flex pointer-events-none">
+                              {hourMarkers.map((h) => (
+                                <div
+                                  key={h}
+                                  className="flex-1 border-r border-border/15 last:border-r-0"
+                                />
+                              ))}
+                            </div>
+                            {currentNowPercent >= 0 && (
+                              <div
+                                className="absolute top-0 bottom-0 z-10 w-px bg-destructive/70 pointer-events-none"
+                                style={{ left: `${currentNowPercent}%` }}
+                              />
+                            )}
+                            {isSemesterDay ? (
+                              <>
+                                <div
+                                  className="absolute top-1.5 bottom-1.5 flex items-center gap-2 flex-wrap"
+                                  style={{ left: "12px" }}
+                                >
+                                  <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-100/60 px-3 py-1.5 dark:border-red-800/40 dark:bg-red-900/20">
+                                    <span className="text-[11px] font-medium text-red-600 dark:text-red-400">
+                                      Semester
+                                    </span>
+                                  </div>
+                                  {shadowShifts.map((shift) => {
+                                    const col = shiftColor(shift.shift_name, shift.color);
+                                    return (
+                                      <div
+                                        key={shift.id}
+                                        className="flex items-center gap-1 rounded-lg border px-2 py-1 opacity-60"
+                                        style={{
+                                          borderColor: col + "80",
+                                          backgroundColor: col + "20",
+                                        }}
+                                        title={`Planerat: ${shift.shift_name} ${shift.start_time}–${shift.stop_time}`}
+                                      >
+                                        <span
+                                          className="text-[10px] font-medium"
+                                          style={{
+                                            color: isLightColor(col) ? "rgba(0,0,0,0.6)" : col,
+                                          }}
+                                        >
+                                          {shift.shift_name}
+                                        </span>
+                                        <span
+                                          className="text-[10px] opacity-70"
+                                          style={{
+                                            color: isLightColor(col)
+                                              ? "rgba(0,0,0,0.5)"
+                                              : col + "cc",
+                                          }}
+                                        >
+                                          {shift.start_time}–{shift.stop_time}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            ) : workShifts.length === 0 ? (
+                              <div className="flex h-full items-center px-3">
+                                <span className="text-[11px] italic text-muted-foreground/40">
+                                  {absenceShift?.deviation_cause || "Ledig"}
+                                </span>
+                              </div>
+                            ) : (
+                              <>
+                                {workShifts.map((shift) => {
+                                  const left = timeToPercent(shift.start_time!);
+                                  const width = shiftWidthPercent(
+                                    shift.start_time!,
+                                    shift.stop_time!,
+                                  );
+                                  const col = shiftColor(shift.shift_name, shift.color);
+                                  const light = isLightColor(col);
+                                  return (
+                                    <div
+                                      key={shift.id}
+                                      className="absolute top-1.5 bottom-1.5"
+                                      style={{
+                                        left: `${Math.max(0, left)}%`,
+                                        width: `${Math.max(width, 1.5)}%`,
+                                        minWidth: "36px",
+                                      }}
+                                    >
+                                      <div
+                                        className="absolute inset-0 flex items-center gap-1 overflow-hidden rounded-lg px-2 text-[11px] font-semibold shadow-sm cursor-default select-none transition-opacity hover:opacity-90"
+                                        style={{
+                                          backgroundColor: col,
+                                          color: light
+                                            ? "rgba(0,0,0,0.75)"
+                                            : "rgba(255,255,255,0.92)",
+                                          borderLeft: `2px solid ${light ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.3)"}`,
+                                        }}
+                                        title={[
+                                          `${shift.shift_name || emp.employee_name}: ${shift.start_time} – ${shift.stop_time}`,
+                                          shift.shift_description
+                                            ? `Beskrivning: ${shift.shift_description}`
+                                            : null,
+                                          `Brutto: ${minsToHours(shift.gross_minutes)}`,
+                                          shift.break_minutes > 0
+                                            ? `Rast: ${shift.break_minutes} min`
+                                            : null,
+                                          `Netto: ${minsToHours(shift.net_minutes > 0 ? shift.net_minutes : Math.max(0, shift.gross_minutes - shift.break_minutes))}`,
+                                          shift.deviation_cause && !shift.is_absence_day
+                                            ? `Avvikelse: ${shift.deviation_cause}`
+                                            : null,
+                                          shift.is_lended ? "↔ Utlånad till annan enhet" : null,
+                                          shift.is_borrowed
+                                            ? shift.shift_name.toLowerCase().includes("butik")
+                                              ? "↔ Utlånad från Skogstorp"
+                                              : "↔ Inlånad från annan enhet"
+                                            : null,
+                                          shift.is_preliminary ? "⚠ Preliminärt pass" : null,
+                                        ]
+                                          .filter(Boolean)
+                                          .join("\n")}
+                                      >
+                                        {shift.is_lended && (
+                                          <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />
+                                        )}
+                                        {shift.is_borrowed && (
+                                          <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />
+                                        )}
+                                        {shift.is_preliminary && (
+                                          <span className="shrink-0 text-[9px] opacity-70">※</span>
+                                        )}
+                                        <span className="truncate leading-tight">
+                                          {shift.shift_name ? (
+                                            <>
+                                              {shift.shift_name}
+                                              <br />
+                                              <span className="opacity-70">
+                                                {shift.start_time}–{shift.stop_time}
+                                              </span>
+                                            </>
+                                          ) : (
+                                            `${shift.start_time}–${shift.stop_time}`
+                                          )}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                                {/* Breaks rendered on the timeline directly using absolute timestamps */}
+                                {workShifts.flatMap((shift) =>
+                                  (Array.isArray(shift.break_windows)
+                                    ? (shift.break_windows as BreakWindow[])
+                                    : []
+                                  ).map((bw, bi) => {
+                                    const bLeft = timeToPercent(bw.start);
+                                    const bWidthPct = (bw.minutes / (TOTAL_HOURS * 60)) * 100;
+                                    if (bLeft < 0 || bLeft > 100) return null;
+                                    return (
+                                      <div
+                                        key={`${shift.id}-bw-${bi}`}
+                                        className="absolute top-1.5 bottom-1.5 z-20 pointer-events-none rounded-sm"
+                                        style={{
+                                          left: `${bLeft}%`,
+                                          width: `${Math.max(bWidthPct, 0.4)}%`,
+                                          backgroundColor: "rgba(0,0,0,0.28)",
+                                          backdropFilter: "brightness(0.72)",
+                                        }}
+                                        title={`Rast ${bw.start}, ${bw.minutes} min`}
+                                      />
+                                    );
+                                  }),
+                                )}
+                              </>
+                            )}
+                            {dayTasks.map((task) => {
+                              if (!task.due_date) return null;
+                              const dueTime = new Date(task.due_date).toTimeString().slice(0, 5);
+                              const dueH = parseInt(dueTime.split(":")[0]);
+                              if (dueH < TIMELINE_START || dueH > TIMELINE_END) return null;
+                              const dueLeft = timeToPercent(dueTime);
+                              const isLate =
+                                task.status === "late" || new Date(task.due_date) < new Date();
                               return (
-                                <div key={shift.id} className="flex items-center gap-1 rounded-lg border px-2 py-1 opacity-60"
-                                  style={{ borderColor: col + "80", backgroundColor: col + "20" }}
-                                  title={`Planerat: ${shift.shift_name} ${shift.start_time}–${shift.stop_time}`}>
-                                  <span className="text-[10px] font-medium" style={{ color: isLightColor(col) ? "rgba(0,0,0,0.6)" : col }}>{shift.shift_name}</span>
-                                  <span className="text-[10px] opacity-70" style={{ color: isLightColor(col) ? "rgba(0,0,0,0.5)" : col + "cc" }}>{shift.start_time}–{shift.stop_time}</span>
+                                <div
+                                  key={task.id}
+                                  className="absolute bottom-0.5 z-30 -translate-x-1/2 pointer-events-auto"
+                                  style={{ left: `${dueLeft}%` }}
+                                  title={`${task.title}\nKlar senast: ${dueTime}\nPrioritet: ${task.priority}`}
+                                >
+                                  <div
+                                    className={[
+                                      "flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold shadow-sm whitespace-nowrap",
+                                      isLate
+                                        ? "bg-destructive text-destructive-foreground"
+                                        : "bg-amber-500 text-white",
+                                    ].join(" ")}
+                                  >
+                                    <Timer className="h-2.5 w-2.5 shrink-0" />
+                                    <span className="truncate max-w-[80px]">{task.title}</span>
+                                    <span className="opacity-80">{dueTime}</span>
+                                  </div>
                                 </div>
                               );
                             })}
                           </div>
-                        </>
-                      ) : workShifts.length === 0 ? (
-                        <div className="flex h-full items-center px-3">
-                          <span className="text-[11px] italic text-muted-foreground/40">{absenceShift?.deviation_cause || "Ledig"}</span>
                         </div>
-                      ) : (
-                        <>
-                          {workShifts.map((shift) => {
-                            const left = timeToPercent(shift.start_time!);
-                            const width = shiftWidthPercent(shift.start_time!, shift.stop_time!);
-                            const col = shiftColor(shift.shift_name, shift.color);
-                            const light = isLightColor(col);
-                            return (
-                              <div key={shift.id} className="absolute top-1.5 bottom-1.5" style={{ left: `${Math.max(0, left)}%`, width: `${Math.max(width, 1.5)}%`, minWidth: "36px" }}>
-                                <div
-                                  className="absolute inset-0 flex items-center gap-1 overflow-hidden rounded-lg px-2 text-[11px] font-semibold shadow-sm cursor-default select-none transition-opacity hover:opacity-90"
-                                  style={{ backgroundColor: col, color: light ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.92)", borderLeft: `2px solid ${light ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.3)"}` }}
-                                  title={[
-                                    `${shift.shift_name || emp.employee_name}: ${shift.start_time} – ${shift.stop_time}`,
-                                    shift.shift_description ? `Beskrivning: ${shift.shift_description}` : null,
-                                    `Brutto: ${minsToHours(shift.gross_minutes)}`,
-                                    shift.break_minutes > 0 ? `Rast: ${shift.break_minutes} min` : null,
-                                    `Netto: ${minsToHours(shift.net_minutes > 0 ? shift.net_minutes : Math.max(0, shift.gross_minutes - shift.break_minutes))}`,
-                                    shift.deviation_cause && !shift.is_absence_day ? `Avvikelse: ${shift.deviation_cause}` : null,
-                                    shift.is_lended ? "↔ Utlånad till annan enhet" : null,
-                                    shift.is_borrowed ? (shift.shift_name.toLowerCase().includes("butik") ? "↔ Utlånad från Skogstorp" : "↔ Inlånad från annan enhet") : null,
-                                    shift.is_preliminary ? "⚠ Preliminärt pass" : null,
-                                  ].filter(Boolean).join("\n")}>
-                                  {shift.is_lended && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
-                                  {shift.is_borrowed && <ArrowLeftRight className="h-2.5 w-2.5 shrink-0 opacity-80" />}
-                                  {shift.is_preliminary && <span className="shrink-0 text-[9px] opacity-70">※</span>}
-                                  <span className="truncate leading-tight">
-                                    {shift.shift_name ? <>{shift.shift_name}<br /><span className="opacity-70">{shift.start_time}–{shift.stop_time}</span></> : `${shift.start_time}–${shift.stop_time}`}
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {/* Breaks rendered on the timeline directly using absolute timestamps */}
-                          {workShifts.flatMap((shift) =>
-                            (Array.isArray(shift.break_windows) ? shift.break_windows as BreakWindow[] : []).map((bw, bi) => {
-                              const bLeft = timeToPercent(bw.start);
-                              const bWidthPct = (bw.minutes / (TOTAL_HOURS * 60)) * 100;
-                              if (bLeft < 0 || bLeft > 100) return null;
-                              return (
-                                <div key={`${shift.id}-bw-${bi}`}
-                                  className="absolute top-1.5 bottom-1.5 z-20 pointer-events-none rounded-sm"
-                                  style={{ left: `${bLeft}%`, width: `${Math.max(bWidthPct, 0.4)}%`, backgroundColor: "rgba(0,0,0,0.28)", backdropFilter: "brightness(0.72)" }}
-                                  title={`Rast ${bw.start}, ${bw.minutes} min`}
-                                />
-                              );
-                            })
-                          )}
-                        </>
-                      )}
-                      {dayTasks.map((task) => {
-                        if (!task.due_date) return null;
-                        const dueTime = new Date(task.due_date).toTimeString().slice(0, 5);
-                        const dueH = parseInt(dueTime.split(":")[0]);
-                        if (dueH < TIMELINE_START || dueH > TIMELINE_END) return null;
-                        const dueLeft = timeToPercent(dueTime);
-                        const isLate = task.status === "late" || new Date(task.due_date) < new Date();
-                        return (
-                          <div key={task.id} className="absolute bottom-0.5 z-30 -translate-x-1/2 pointer-events-auto" style={{ left: `${dueLeft}%` }} title={`${task.title}\nKlar senast: ${dueTime}\nPrioritet: ${task.priority}`}>
-                            <div className={["flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold shadow-sm whitespace-nowrap", isLate ? "bg-destructive text-destructive-foreground" : "bg-amber-500 text-white"].join(" ")}>
-                              <Timer className="h-2.5 w-2.5 shrink-0" />
-                              <span className="truncate max-w-[80px]">{task.title}</span>
-                              <span className="opacity-80">{dueTime}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  );
-                })}
+                      );
+                    },
+                  )}
                 </div>
               )}
             </div>
@@ -2546,19 +3790,66 @@ function SchemaPage() {
 
           {/* ── WEEK OVERVIEW (desktop only) ─────────────────────────────── */}
           {viewMode === "week" && (
-            <div ref={weekVirtual.scrollRef} onScroll={weekVirtual.onScroll} className="overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)]" style={{ maxHeight: "calc(100vh - 18rem)" }}>
-              <div className="sticky top-0 z-10 grid bg-card/95 backdrop-blur-sm border-b border-border/60" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>
+            <div
+              ref={weekVirtual.scrollRef}
+              onScroll={weekVirtual.onScroll}
+              className="overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)]"
+              style={{ maxHeight: "calc(100vh - 18rem)" }}
+            >
+              <div
+                className="sticky top-0 z-10 grid bg-card/95 backdrop-blur-sm border-b border-border/60"
+                style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}
+              >
                 <div className="border-r border-border/40 px-4 py-2.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Medarbetare</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Medarbetare
+                  </span>
                 </div>
                 {weekDates.map((date, idx) => {
                   const isToday = date === todayStr;
-                  const delivCount = activeWeekEntries.filter((d) => d.delivery_date === date).length;
+                  const delivCount = activeWeekEntries.filter(
+                    (d) => d.delivery_date === date,
+                  ).length;
                   return (
-                    <div key={date} className={["border-r border-border/30 last:border-r-0 px-2 py-2.5 text-center cursor-pointer hover:bg-muted/30 transition-colors", isToday ? "bg-primary-soft/40" : ""].join(" ")} onClick={() => { setSelectedDayIndex(idx); setViewMode("day"); }}>
-                      <p className={["text-[10px] font-semibold uppercase tracking-wide", isToday ? "text-primary" : "text-muted-foreground"].join(" ")}>{DAY_SHORT[idx]}</p>
-                      <p className={["text-sm font-bold", isToday ? "text-primary" : "text-foreground"].join(" ")}>{fmtDate(date).split(" ")[0]}</p>
-                      {delivCount > 0 && <p className="text-[9px] text-info font-medium">{delivCount} lev</p>}
+                    <div
+                      key={date}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedDayIndex(idx);
+                          setViewMode("day");
+                        }
+                      }}
+                      className={[
+                        "border-r border-border/30 last:border-r-0 px-2 py-2.5 text-center cursor-pointer hover:bg-muted/30 transition-colors",
+                        isToday ? "bg-primary-soft/40" : "",
+                      ].join(" ")}
+                      onClick={() => {
+                        setSelectedDayIndex(idx);
+                        setViewMode("day");
+                      }}
+                    >
+                      <p
+                        className={[
+                          "text-[10px] font-semibold uppercase tracking-wide",
+                          isToday ? "text-primary" : "text-muted-foreground",
+                        ].join(" ")}
+                      >
+                        {DAY_SHORT[idx]}
+                      </p>
+                      <p
+                        className={[
+                          "text-sm font-bold",
+                          isToday ? "text-primary" : "text-foreground",
+                        ].join(" ")}
+                      >
+                        {fmtDate(date).split(" ")[0]}
+                      </p>
+                      {delivCount > 0 && (
+                        <p className="text-[9px] text-info font-medium">{delivCount} lev</p>
+                      )}
                     </div>
                   );
                 })}
@@ -2570,120 +3861,239 @@ function SchemaPage() {
                   <p className="text-sm text-muted-foreground">Inga schemalagda pass</p>
                 </div>
               ) : (
-                <div style={{ paddingTop: weekVirtual.paddingTop, paddingBottom: weekVirtual.paddingBottom }}>
+                <div
+                  style={{
+                    paddingTop: weekVirtual.paddingTop,
+                    paddingBottom: weekVirtual.paddingBottom,
+                  }}
+                >
                   {weekVirtual.visibleItems.map(({ emp, appUser, weekMinutes, initials }) => (
-                    <div key={emp.id} className="grid border-b border-border/20 hover:bg-muted/10 transition-colors" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>
-                    <div className="flex items-center gap-2.5 border-r border-border/30 px-4 py-3">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
-                        style={{ background: appUser ? "oklch(0.5 0.16 148)" : "oklch(0.88 0.02 145)", color: appUser ? "white" : "oklch(0.4 0.05 145)" }}>
-                        {initials}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-foreground">{appUser?.display_name ?? emp.employee_name}</p>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          {emp.employment_percent != null && <span className="text-[9px] text-muted-foreground/60">{emp.employment_percent}%</span>}
-                          {weekMinutes > 0 && <span className="text-[9px] text-muted-foreground/60">{minsToHours(weekMinutes)}</span>}
+                    <div
+                      key={emp.id}
+                      className="grid border-b border-border/20 hover:bg-muted/10 transition-colors"
+                      style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}
+                    >
+                      <div className="flex items-center gap-2.5 border-r border-border/30 px-4 py-3">
+                        <div
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+                          style={{
+                            background: appUser ? "oklch(0.5 0.16 148)" : "oklch(0.88 0.02 145)",
+                            color: appUser ? "white" : "oklch(0.4 0.05 145)",
+                          }}
+                        >
+                          {initials}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-semibold text-foreground">
+                            {appUser?.display_name ?? emp.employee_name}
+                          </p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            {emp.employment_percent != null && (
+                              <span className="text-[9px] text-muted-foreground/60">
+                                {emp.employment_percent}%
+                              </span>
+                            )}
+                            {weekMinutes > 0 && (
+                              <span className="text-[9px] text-muted-foreground/60">
+                                {minsToHours(weekMinutes)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
+                      {weekDates.map((date, idx) => {
+                        const dayShifts = scheduleShifts.filter(
+                          (s) => s.schedule_employee_id === emp.id && s.day_date === date,
+                        );
+                        const work = dayShifts.filter((s) => !s.is_absence_day && s.start_time);
+                        const absence = dayShifts.find((s) => s.is_absence_day);
+                        const isSemDay =
+                          absence?.deviation_cause?.toLowerCase().includes("semester") ||
+                          absence?.shift_name?.toLowerCase() === "semester";
+                        const isToday = date === todayStr;
+                        return (
+                          <div
+                            key={idx}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setSelectedDayIndex(idx);
+                                setViewMode("day");
+                              }
+                            }}
+                            className={[
+                              "border-r border-border/20 last:border-r-0 px-1.5 py-2 flex flex-col justify-center gap-0.5 cursor-pointer transition-colors",
+                              isSemDay
+                                ? "bg-red-50/70 hover:bg-red-50 dark:bg-red-950/20"
+                                : isToday
+                                  ? "bg-primary-soft/20 hover:bg-muted/20"
+                                  : "hover:bg-muted/20",
+                            ].join(" ")}
+                            onClick={() => {
+                              setSelectedDayIndex(idx);
+                              setViewMode("day");
+                            }}
+                          >
+                            {work.length === 0 && !absence && (
+                              <span className="text-center text-[10px] text-muted-foreground/30">
+                                –
+                              </span>
+                            )}
+                            {absence && work.length === 0 && (
+                              <span
+                                className={[
+                                  "rounded px-1 py-0.5 text-center text-[10px] font-medium truncate",
+                                  isSemDay
+                                    ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+                                    : "bg-warning/15 text-warning-foreground",
+                                ].join(" ")}
+                              >
+                                {isSemDay ? "Semester" : absence.deviation_cause || "Frånvaro"}
+                              </span>
+                            )}
+                            {work.map((s) => {
+                              const col = shiftColor(s.shift_name, s.color);
+                              const tooltipParts = [
+                                s.shift_name
+                                  ? `${s.shift_name}: ${s.start_time}–${s.stop_time}`
+                                  : `${s.start_time}–${s.stop_time}`,
+                                s.shift_description ? `Beskrivning: ${s.shift_description}` : null,
+                                s.gross_minutes > 0
+                                  ? `Brutto: ${minsToHours(s.gross_minutes)}`
+                                  : null,
+                                s.break_minutes > 0 ? `Rast: ${s.break_minutes} min` : null,
+                                s.net_minutes > 0 ? `Netto: ${minsToHours(s.net_minutes)}` : null,
+                                s.deviation_cause && !s.is_absence_day
+                                  ? `Avvikelse: ${s.deviation_cause}`
+                                  : null,
+                                s.is_lended ? "↔ Utlånad till annan enhet" : null,
+                                s.is_borrowed ? "↔ Inlånad från annan enhet" : null,
+                                s.is_preliminary ? "⚠ Preliminärt pass" : null,
+                              ]
+                                .filter(Boolean)
+                                .join("\n");
+                              return (
+                                <div
+                                  key={s.id}
+                                  className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-semibold truncate"
+                                  style={{
+                                    backgroundColor: col + "55",
+                                    borderLeft: `2px solid ${col}`,
+                                    color: isLightColor(col)
+                                      ? "oklch(0.25 0.05 145)"
+                                      : "oklch(0.15 0.05 145)",
+                                  }}
+                                  title={tooltipParts}
+                                >
+                                  {(s.is_lended || s.is_borrowed) && (
+                                    <ArrowLeftRight className="h-2 w-2 shrink-0" />
+                                  )}
+                                  {s.is_preliminary && (
+                                    <span className="shrink-0 opacity-60">※</span>
+                                  )}
+                                  <span className="truncate">
+                                    {s.start_time}–{s.stop_time}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
                     </div>
-                    {weekDates.map((date, idx) => {
-                      const dayShifts = scheduleShifts.filter((s) => s.schedule_employee_id === emp.id && s.day_date === date);
-                      const work = dayShifts.filter((s) => !s.is_absence_day && s.start_time);
-                      const absence = dayShifts.find((s) => s.is_absence_day);
-                      const isSemDay = absence?.deviation_cause?.toLowerCase().includes("semester") || absence?.shift_name?.toLowerCase() === "semester";
-                      const isToday = date === todayStr;
-                      return (
-                        <div key={idx} className={["border-r border-border/20 last:border-r-0 px-1.5 py-2 flex flex-col justify-center gap-0.5 cursor-pointer transition-colors", isSemDay ? "bg-red-50/70 hover:bg-red-50 dark:bg-red-950/20" : isToday ? "bg-primary-soft/20 hover:bg-muted/20" : "hover:bg-muted/20"].join(" ")} onClick={() => { setSelectedDayIndex(idx); setViewMode("day"); }}>
-                          {work.length === 0 && !absence && <span className="text-center text-[10px] text-muted-foreground/30">–</span>}
-                          {absence && work.length === 0 && (
-                            <span className={["rounded px-1 py-0.5 text-center text-[10px] font-medium truncate", isSemDay ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" : "bg-warning/15 text-warning-foreground"].join(" ")}>
-                              {isSemDay ? "Semester" : absence.deviation_cause || "Frånvaro"}
-                            </span>
-                          )}
-                          {work.map((s) => {
-                            const col = shiftColor(s.shift_name, s.color);
-                            const tooltipParts = [
-                              s.shift_name ? `${s.shift_name}: ${s.start_time}–${s.stop_time}` : `${s.start_time}–${s.stop_time}`,
-                              s.shift_description ? `Beskrivning: ${s.shift_description}` : null,
-                              s.gross_minutes > 0 ? `Brutto: ${minsToHours(s.gross_minutes)}` : null,
-                              s.break_minutes > 0 ? `Rast: ${s.break_minutes} min` : null,
-                              s.net_minutes > 0 ? `Netto: ${minsToHours(s.net_minutes)}` : null,
-                              s.deviation_cause && !s.is_absence_day ? `Avvikelse: ${s.deviation_cause}` : null,
-                              s.is_lended ? "↔ Utlånad till annan enhet" : null,
-                              s.is_borrowed ? "↔ Inlånad från annan enhet" : null,
-                              s.is_preliminary ? "⚠ Preliminärt pass" : null,
-                            ].filter(Boolean).join("\n");
+                  ))}
+                  {/* Tasks assigned to users not mapped to any schedule employee */}
+                  {(() => {
+                    const scheduledUserIds = new Set(
+                      displayRows.map((r) => r.appUser?.id).filter((id): id is string => !!id),
+                    );
+                    const unscheduled = scheduleTasks.filter((t) => {
+                      if (!t.due_date || toLocalDateStr(t.due_date) !== currentDate) return false;
+                      if (!t.assigned_to) return false;
+                      return !scheduledUserIds.has(t.assigned_to);
+                    });
+                    if (unscheduled.length === 0) return null;
+                    return (
+                      <div className="rounded-xl border border-border/40 bg-muted/20 px-3 py-2.5">
+                        <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <Timer className="h-3 w-3" /> Uppgifter utan schemarad
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {unscheduled.map((t) => {
+                            const u = appUsers.find((u) => u.id === t.assigned_to);
                             return (
-                              <div key={s.id} className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-semibold truncate"
-                                style={{ backgroundColor: col + "55", borderLeft: `2px solid ${col}`, color: isLightColor(col) ? "oklch(0.25 0.05 145)" : "oklch(0.15 0.05 145)" }}
-                                title={tooltipParts}>
-                                {(s.is_lended || s.is_borrowed) && <ArrowLeftRight className="h-2 w-2 shrink-0" />}
-                                {s.is_preliminary && <span className="shrink-0 opacity-60">※</span>}
-                                <span className="truncate">{s.start_time}–{s.stop_time}</span>
+                              <div
+                                key={t.id}
+                                className="flex items-center gap-1.5 rounded-full border border-border/50 bg-card px-2.5 py-1 text-[11px] font-medium"
+                              >
+                                <CheckCircle2
+                                  className={`h-3 w-3 shrink-0 ${t.status === "done" ? "text-green-500" : "text-muted-foreground/40"}`}
+                                />
+                                <span className="truncate max-w-[180px] text-foreground">
+                                  {t.title}
+                                </span>
+                                {u && (
+                                  <span className="shrink-0 text-muted-foreground">
+                                    · {u.display_name.split(" ")[0]}
+                                  </span>
+                                )}
                               </div>
                             );
                           })}
                         </div>
-                      );
-                    })}
-                  </div>
-                ))}
-                {/* Tasks assigned to users not mapped to any schedule employee */}
-                {(() => {
-                  const scheduledUserIds = new Set(
-                    displayRows.map(r => r.appUser?.id).filter((id): id is string => !!id)
-                  );
-                  const unscheduled = scheduleTasks.filter((t) => {
-                    if (!t.due_date || toLocalDateStr(t.due_date) !== currentDate) return false;
-                    if (!t.assigned_to) return false;
-                    return !scheduledUserIds.has(t.assigned_to);
-                  });
-                  if (unscheduled.length === 0) return null;
-                  return (
-                    <div className="rounded-xl border border-border/40 bg-muted/20 px-3 py-2.5">
-                      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        <Timer className="h-3 w-3" /> Uppgifter utan schemarad
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {unscheduled.map((t) => {
-                          const u = appUsers.find((u) => u.id === t.assigned_to);
-                          return (
-                            <div key={t.id} className="flex items-center gap-1.5 rounded-full border border-border/50 bg-card px-2.5 py-1 text-[11px] font-medium">
-                              <CheckCircle2 className={`h-3 w-3 shrink-0 ${t.status === "done" ? "text-green-500" : "text-muted-foreground/40"}`} />
-                              <span className="truncate max-w-[180px] text-foreground">{t.title}</span>
-                              {u && <span className="shrink-0 text-muted-foreground">· {u.display_name.split(" ")[0]}</span>}
-                            </div>
-                          );
-                        })}
                       </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
                 </div>
               )}
 
               {/* Deliveries row in week view */}
               {showDeliveries && deliveryEntries.length > 0 && (
-                <div className="grid border-t border-border/40 bg-muted/10" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>
+                <div
+                  className="grid border-t border-border/40 bg-muted/10"
+                  style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}
+                >
                   <div className="border-r border-border/40 px-4 py-2 flex items-center gap-1.5">
                     <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Leveranser</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Leveranser
+                    </span>
                   </div>
                   {weekDates.map((date, idx) => {
                     const dayDeliveries = activeWeekEntries.filter((d) => d.delivery_date === date);
                     const isToday = date === todayStr;
                     return (
-                      <div key={idx} className={["border-r border-border/20 last:border-r-0 px-1.5 py-1.5 flex flex-col gap-0.5", isToday ? "bg-primary-soft/10" : ""].join(" ")}>
+                      <div
+                        key={idx}
+                        className={[
+                          "border-r border-border/20 last:border-r-0 px-1.5 py-1.5 flex flex-col gap-0.5",
+                          isToday ? "bg-primary-soft/10" : "",
+                        ].join(" ")}
+                      >
                         {dayDeliveries.map((d) => {
                           const c = flowColor(d.flow_name, d.supplier);
                           const label = flowDisplayName(d.flow_name, d.supplier);
                           return (
-                            <div key={d.id} className="rounded px-1 py-0.5 text-[9px] font-semibold truncate" style={{ backgroundColor: c.bg, color: c.text, borderLeft: `2px solid ${c.text}` }}>
+                            <div
+                              key={d.id}
+                              className="rounded px-1 py-0.5 text-[9px] font-semibold truncate"
+                              style={{
+                                backgroundColor: c.bg,
+                                color: c.text,
+                                borderLeft: `2px solid ${c.text}`,
+                              }}
+                            >
                               {d.delivery_time} {label}
                             </div>
                           );
                         })}
-                        {dayDeliveries.length === 0 && <span className="text-center text-[10px] text-muted-foreground/20">–</span>}
+                        {dayDeliveries.length === 0 && (
+                          <span className="text-center text-[10px] text-muted-foreground/20">
+                            –
+                          </span>
+                        )}
                       </div>
                     );
                   })}
@@ -2692,27 +4102,53 @@ function SchemaPage() {
 
               {/* Tasks row in week view */}
               {scheduleTasks.length > 0 && (
-                <div className="grid border-t border-border/20 bg-amber-50/20 dark:bg-amber-950/10" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>
+                <div
+                  className="grid border-t border-border/20 bg-amber-50/20 dark:bg-amber-950/10"
+                  style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}
+                >
                   <div className="border-r border-border/40 px-4 py-2 flex items-center gap-1.5">
                     <Timer className="h-3.5 w-3.5 text-amber-600" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Uppgifter</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Uppgifter
+                    </span>
                   </div>
                   {weekDates.map((date, idx) => {
-                    const dayTasksForDate = scheduleTasks.filter((t) => t.due_date && toLocalDateStr(t.due_date) === date);
+                    const dayTasksForDate = scheduleTasks.filter(
+                      (t) => t.due_date && toLocalDateStr(t.due_date) === date,
+                    );
                     const isToday = date === todayStr;
                     return (
-                      <div key={idx} className={["border-r border-border/20 last:border-r-0 px-1.5 py-1.5 flex flex-col gap-0.5", isToday ? "bg-primary-soft/10" : ""].join(" ")}>
+                      <div
+                        key={idx}
+                        className={[
+                          "border-r border-border/20 last:border-r-0 px-1.5 py-1.5 flex flex-col gap-0.5",
+                          isToday ? "bg-primary-soft/10" : "",
+                        ].join(" ")}
+                      >
                         {dayTasksForDate.map((task) => {
-                          const isLate = task.status === "late" || (task.due_date && new Date(task.due_date) < new Date());
+                          const isLate =
+                            task.status === "late" ||
+                            (task.due_date && new Date(task.due_date) < new Date());
                           return (
-                            <div key={task.id} className="rounded px-1 py-0.5 text-[9px] font-semibold truncate"
-                              style={{ backgroundColor: isLate ? "#fee2e2" : "#fef3c7", color: isLate ? "#dc2626" : "#92400e", borderLeft: `2px solid ${isLate ? "#dc2626" : "#d97706"}` }}
-                              title={task.title}>
+                            <div
+                              key={task.id}
+                              className="rounded px-1 py-0.5 text-[9px] font-semibold truncate"
+                              style={{
+                                backgroundColor: isLate ? "#fee2e2" : "#fef3c7",
+                                color: isLate ? "#dc2626" : "#92400e",
+                                borderLeft: `2px solid ${isLate ? "#dc2626" : "#d97706"}`,
+                              }}
+                              title={task.title}
+                            >
                               {task.title}
                             </div>
                           );
                         })}
-                        {dayTasksForDate.length === 0 && <span className="text-center text-[10px] text-muted-foreground/20">–</span>}
+                        {dayTasksForDate.length === 0 && (
+                          <span className="text-center text-[10px] text-muted-foreground/20">
+                            –
+                          </span>
+                        )}
                       </div>
                     );
                   })}
@@ -2720,18 +4156,48 @@ function SchemaPage() {
               )}
 
               {/* Totals footer */}
-              <div className="grid border-t border-border/60 bg-muted/20" style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}>
+              <div
+                className="grid border-t border-border/60 bg-muted/20"
+                style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}
+              >
                 <div className="border-r border-border/40 px-4 py-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Totalt per dag</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Totalt per dag
+                  </span>
                 </div>
                 {weekDates.map((date, idx) => {
-                  const count = scheduleEmployees.filter((emp) => scheduleShifts.some((s) => s.schedule_employee_id === emp.id && s.day_date === date && !s.is_absence_day && s.start_time)).length;
-                  const mins = scheduleShifts.filter((s) => s.day_date === date && !s.is_absence_day).reduce((sum, s) => sum + (s.gross_minutes || 0), 0);
+                  const count = scheduleEmployees.filter((emp) =>
+                    scheduleShifts.some(
+                      (s) =>
+                        s.schedule_employee_id === emp.id &&
+                        s.day_date === date &&
+                        !s.is_absence_day &&
+                        s.start_time,
+                    ),
+                  ).length;
+                  const mins = scheduleShifts
+                    .filter((s) => s.day_date === date && !s.is_absence_day)
+                    .reduce((sum, s) => sum + (s.gross_minutes || 0), 0);
                   const isToday = date === todayStr;
                   return (
-                    <div key={idx} className={["border-r border-border/20 last:border-r-0 px-2 py-2 text-center", isToday ? "bg-primary-soft/20" : ""].join(" ")}>
-                      <p className={["text-xs font-bold", isToday ? "text-primary" : "text-foreground"].join(" ")}>{count}p</p>
-                      <p className="text-[10px] text-muted-foreground">{mins > 0 ? minsToHours(mins) : "–"}</p>
+                    <div
+                      key={idx}
+                      className={[
+                        "border-r border-border/20 last:border-r-0 px-2 py-2 text-center",
+                        isToday ? "bg-primary-soft/20" : "",
+                      ].join(" ")}
+                    >
+                      <p
+                        className={[
+                          "text-xs font-bold tabular-nums",
+                          isToday ? "text-primary" : "text-foreground",
+                        ].join(" ")}
+                      >
+                        {count}p
+                      </p>
+                      <p className="text-[10px] text-muted-foreground tabular-nums">
+                        {mins > 0 ? minsToHours(mins) : "–"}
+                      </p>
                     </div>
                   );
                 })}
@@ -2742,7 +4208,18 @@ function SchemaPage() {
       )}
 
       {/* Unified import dialog */}
-      <Dialog open={importDialogOpen} onOpenChange={(o) => { if (!importProcessing) { setImportDialogOpen(o); if (!o) { setImportFiles([]); setPdfPreviews({}); } } }}>
+      <Dialog
+        open={importDialogOpen}
+        onOpenChange={(o) => {
+          if (!importProcessing) {
+            setImportDialogOpen(o);
+            if (!o) {
+              setImportFiles([]);
+              setPdfPreviews({});
+            }
+          }
+        }}
+      >
         <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col p-0 gap-0 overflow-hidden">
           <div className="flex shrink-0 items-center gap-3 border-b border-border/60 px-5 py-4">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-soft">
@@ -2750,9 +4227,21 @@ function SchemaPage() {
             </div>
             <div className="flex-1">
               <h2 className="text-sm font-semibold">Importera filer</h2>
-              <p className="text-xs text-muted-foreground">Schema (XML) och/eller leveransplan (CSV)</p>
+              <p className="text-xs text-muted-foreground">
+                Schema (XML) och/eller leveransplan (CSV)
+              </p>
             </div>
-            <button className="rounded-md p-1.5 text-muted-foreground hover:bg-muted transition-colors" onClick={() => { if (!importProcessing) { setImportDialogOpen(false); setImportFiles([]); setPdfPreviews({}); } }}>
+            <button
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted transition-colors"
+              aria-label="Stäng"
+              onClick={() => {
+                if (!importProcessing) {
+                  setImportDialogOpen(false);
+                  setImportFiles([]);
+                  setPdfPreviews({});
+                }
+              }}
+            >
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -2764,14 +4253,18 @@ function SchemaPage() {
                 <FileCode2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div>
                   <p className="text-xs font-semibold text-foreground">Schema (XML)</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">SoftOne GO-export med anställda och skift</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    SoftOne GO-export med anställda och skift
+                  </p>
                 </div>
               </div>
               <div className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-muted/30 p-3">
                 <FileText className="mt-0.5 h-4 w-4 shrink-0 text-info" />
                 <div>
                   <p className="text-xs font-semibold text-foreground">Leveransplan (CSV)</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">Export från leveransportalen — välj veckonummer nedan</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Export från leveransportalen — välj veckonummer nedan
+                  </p>
                 </div>
               </div>
             </div>
@@ -2779,45 +4272,83 @@ function SchemaPage() {
             {/* Default week picker — used as starting values for newly added CSV files */}
             <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
               <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="text-xs font-medium text-foreground shrink-0">Standardvecka för ny CSV</span>
+              <span className="text-xs font-medium text-foreground shrink-0">
+                Standardvecka för ny CSV
+              </span>
               <div className="flex items-center gap-2">
                 <input
-                  type="number" min={1} max={53} value={csvWeekNumber}
-                  onChange={(e) => setCsvWeekNumber(Math.max(1, Math.min(53, parseInt(e.target.value) || 1)))}
+                  type="number"
+                  min={1}
+                  max={53}
+                  value={csvWeekNumber}
+                  onChange={(e) =>
+                    setCsvWeekNumber(Math.max(1, Math.min(53, parseInt(e.target.value) || 1)))
+                  }
+                  aria-label="Veckonummer"
                   className="w-16 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                 />
                 <span className="text-xs text-muted-foreground">/</span>
                 <input
-                  type="number" min={2020} max={2099} value={csvYear}
+                  type="number"
+                  min={2020}
+                  max={2099}
+                  value={csvYear}
                   onChange={(e) => setCsvYear(parseInt(e.target.value) || new Date().getFullYear())}
+                  aria-label="År"
                   className="w-20 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                 />
               </div>
-              <span className="text-[11px] text-muted-foreground ml-auto">Ange vecka/år per fil nedan</span>
+              <span className="text-[11px] text-muted-foreground ml-auto">
+                Ange vecka/år per fil nedan
+              </span>
             </div>
 
             {/* Drop zone */}
             <div
               className={[
                 "relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed py-8 px-6 text-center transition-colors cursor-pointer select-none",
-                importDragOver ? "border-primary bg-primary-soft/40" : "border-border/60 bg-muted/20 hover:border-primary/50 hover:bg-muted/40",
+                importDragOver
+                  ? "border-primary bg-primary-soft/40"
+                  : "border-border/60 bg-muted/20 hover:border-primary/50 hover:bg-muted/40",
               ].join(" ")}
-              onDragOver={(e) => { e.preventDefault(); setImportDragOver(true); }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setImportDragOver(true);
+              }}
               onDragLeave={() => setImportDragOver(false)}
               onDrop={(e) => {
                 e.preventDefault();
                 setImportDragOver(false);
-                const dropped = Array.from(e.dataTransfer.files).filter((f) => f.name.endsWith(".xml") || f.name.toLowerCase().endsWith(".csv"));
+                const dropped = Array.from(e.dataTransfer.files).filter(
+                  (f) => f.name.endsWith(".xml") || f.name.toLowerCase().endsWith(".csv"),
+                );
                 if (dropped.length) addImportFiles(dropped);
               }}
               onClick={() => importInputRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  importInputRef.current?.click();
+                }
+              }}
             >
-              <div className={["flex h-10 w-10 items-center justify-center rounded-2xl transition-colors", importDragOver ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"].join(" ")}>
+              <div
+                className={[
+                  "flex h-10 w-10 items-center justify-center rounded-2xl transition-colors",
+                  importDragOver
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground",
+                ].join(" ")}
+              >
                 <FilePlus2 className="h-5 w-5" />
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">Dra och släpp filer här</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">eller klicka för att välja · .xml och .csv</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  eller klicka för att välja · .xml och .csv
+                </p>
               </div>
             </div>
 
@@ -2828,65 +4359,141 @@ function SchemaPage() {
                   const isCsv = f.name.toLowerCase().endsWith(".csv");
                   const preview = pdfPreviews[f.name];
                   return (
-                    <div key={f.name} className="rounded-xl border border-border/60 bg-card overflow-hidden">
+                    <div
+                      key={f.name}
+                      className="rounded-xl border border-border/60 bg-card overflow-hidden"
+                    >
                       {/* File header row */}
                       <div className="flex items-center gap-2.5 px-3 py-2.5">
-                        {isCsv ? <FileText className="h-4 w-4 shrink-0 text-info" /> : <FileCode2 className="h-4 w-4 shrink-0 text-primary" />}
+                        {isCsv ? (
+                          <FileText className="h-4 w-4 shrink-0 text-info" />
+                        ) : (
+                          <FileCode2 className="h-4 w-4 shrink-0 text-primary" />
+                        )}
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-xs font-medium text-foreground">{f.name}</p>
                           <p className="text-[10px] text-muted-foreground">
-                            {isCsv ? "Leveransplan CSV" : "Schema XML"} · {(f.size / 1024).toFixed(0)} KB
+                            {isCsv ? "Leveransplan CSV" : "Schema XML"} ·{" "}
+                            {(f.size / 1024).toFixed(0)} KB
                             {isCsv && preview !== undefined && (
-                              <span className={preview.length > 0 ? " · text-success" : " · text-warning"}>
-                                {preview.length > 0 ? ` · ${preview.length} leveranser hittade` : " · inga leveranser hittades"}
+                              <span
+                                className={
+                                  preview.length > 0 ? " · text-success" : " · text-warning"
+                                }
+                              >
+                                {preview.length > 0
+                                  ? ` · ${preview.length} leveranser hittade`
+                                  : " · inga leveranser hittades"}
                               </span>
                             )}
-                            {isCsv && preview === undefined && <span className="text-muted-foreground"> · läser…</span>}
+                            {isCsv && preview === undefined && (
+                              <span className="text-muted-foreground"> · läser…</span>
+                            )}
                           </p>
                         </div>
-                        <button className="shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-destructive transition-colors" onClick={(e) => { e.stopPropagation(); removeImportFile(f.name); }} aria-label="Ta bort">
+                        <button
+                          className="shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-destructive transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeImportFile(f.name);
+                          }}
+                          aria-label="Ta bort"
+                        >
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
 
                       {/* Per-file week + label controls (CSV only) */}
-                      {isCsv && (() => {
-                        const lbl = csvFileLabels[f.name] ?? { weekNumber: csvWeekNumber, year: csvYear, label: "Standard" };
-                        const holiday = getSpecialWeekHoliday(lbl.year, lbl.weekNumber);
-                        return (
-                          <div className={["border-t border-border/40 px-3 py-2.5 space-y-2", holiday ? "bg-amber-50/40 dark:bg-amber-950/10" : "bg-muted/20"].join(" ")}>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                              <span className="text-[11px] font-medium text-foreground shrink-0">Vecka:</span>
-                              <input type="number" min={1} max={53} value={lbl.weekNumber}
-                                onChange={(e) => setCsvFileLabels((p) => ({ ...p, [f.name]: { ...lbl, weekNumber: Math.max(1, Math.min(53, parseInt(e.target.value) || 1)) } }))}
-                                className="w-14 rounded border border-border/60 bg-background px-1.5 py-0.5 text-center text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                              />
-                              <span className="text-[11px] text-muted-foreground">/</span>
-                              <input type="number" min={2020} max={2099} value={lbl.year}
-                                onChange={(e) => setCsvFileLabels((p) => ({ ...p, [f.name]: { ...lbl, year: parseInt(e.target.value) || new Date().getFullYear() } }))}
-                                className="w-18 rounded border border-border/60 bg-background px-1.5 py-0.5 text-center text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                              />
-                              <label className="ml-2 flex items-center gap-1.5 cursor-pointer select-none">
+                      {isCsv &&
+                        (() => {
+                          const lbl = csvFileLabels[f.name] ?? {
+                            weekNumber: csvWeekNumber,
+                            year: csvYear,
+                            label: "Standard",
+                          };
+                          const holiday = getSpecialWeekHoliday(lbl.year, lbl.weekNumber);
+                          return (
+                            <div
+                              className={[
+                                "border-t border-border/40 px-3 py-2.5 space-y-2",
+                                holiday ? "bg-amber-50/40 dark:bg-amber-950/10" : "bg-muted/20",
+                              ].join(" ")}
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <span className="text-[11px] font-medium text-foreground shrink-0">
+                                  Vecka:
+                                </span>
                                 <input
-                                  type="checkbox"
-                                  checked={lbl.label === "Specialvecka" || holiday !== null}
-                                  disabled={holiday !== null}
-                                  onChange={(e) => setCsvFileLabels((p) => ({ ...p, [f.name]: { ...lbl, label: e.target.checked ? "Specialvecka" : "Standard" } }))}
-                                  className="rounded accent-amber-600"
+                                  type="number"
+                                  min={1}
+                                  max={53}
+                                  value={lbl.weekNumber}
+                                  onChange={(e) =>
+                                    setCsvFileLabels((p) => ({
+                                      ...p,
+                                      [f.name]: {
+                                        ...lbl,
+                                        weekNumber: Math.max(
+                                          1,
+                                          Math.min(53, parseInt(e.target.value) || 1),
+                                        ),
+                                      },
+                                    }))
+                                  }
+                                  aria-label="Veckonummer"
+                                  className="w-14 rounded border border-border/60 bg-background px-1.5 py-0.5 text-center text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
                                 />
-                                <span className="text-[11px] font-medium text-foreground">Specialvecka</span>
-                              </label>
-                            </div>
-                            {holiday && (
-                              <div className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
-                                <AlertCircle className="h-3 w-3 shrink-0" />
-                                <span>Helgdag: <strong>{holiday}</strong></span>
+                                <span className="text-[11px] text-muted-foreground">/</span>
+                                <input
+                                  type="number"
+                                  min={2020}
+                                  max={2099}
+                                  value={lbl.year}
+                                  onChange={(e) =>
+                                    setCsvFileLabels((p) => ({
+                                      ...p,
+                                      [f.name]: {
+                                        ...lbl,
+                                        year: parseInt(e.target.value) || new Date().getFullYear(),
+                                      },
+                                    }))
+                                  }
+                                  aria-label="År"
+                                  className="w-18 rounded border border-border/60 bg-background px-1.5 py-0.5 text-center text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                                />
+                                <label className="ml-2 flex items-center gap-1.5 cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={lbl.label === "Specialvecka" || holiday !== null}
+                                    disabled={holiday !== null}
+                                    onChange={(e) =>
+                                      setCsvFileLabels((p) => ({
+                                        ...p,
+                                        [f.name]: {
+                                          ...lbl,
+                                          label: e.target.checked ? "Specialvecka" : "Standard",
+                                        },
+                                      }))
+                                    }
+                                    className="rounded accent-amber-600"
+                                  />
+                                  <span className="text-[11px] font-medium text-foreground">
+                                    Specialvecka
+                                  </span>
+                                </label>
                               </div>
-                            )}
-                          </div>
-                        );
-                      })()}
+                              {holiday && (
+                                <div className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                                  <AlertCircle className="h-3 w-3 shrink-0" />
+                                  <span>
+                                    Helgdag: <strong>{holiday}</strong>
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                       {/* CSV delivery preview table */}
                       {isCsv && preview && preview.length > 0 && (
@@ -2903,14 +4510,32 @@ function SchemaPage() {
                               const c = flowColor(d.flowName, d.supplier);
                               const label = flowDisplayName(d.flowName, d.supplier);
                               return (
-                                <div key={i} className="col-span-5 grid grid-cols-[1fr_auto_auto_auto_1fr] items-center border-t border-border/20 px-3 py-1.5 hover:bg-muted/20 transition-colors">
-                                  <span className="font-medium text-foreground capitalize">{d.deliveryDay}</span>
-                                  <span className="px-3 font-mono text-foreground">{d.deliveryTime}</span>
-                                  <span className="px-3 text-muted-foreground capitalize">{d.orderDay}</span>
-                                  <span className="px-3 font-mono text-muted-foreground">{d.stopTime}</span>
+                                <div
+                                  key={i}
+                                  className="col-span-5 grid grid-cols-[1fr_auto_auto_auto_1fr] items-center border-t border-border/20 px-3 py-1.5 hover:bg-muted/20 transition-colors"
+                                >
+                                  <span className="font-medium text-foreground capitalize">
+                                    {d.deliveryDay}
+                                  </span>
+                                  <span className="px-3 font-mono text-foreground">
+                                    {d.deliveryTime}
+                                  </span>
+                                  <span className="px-3 text-muted-foreground capitalize">
+                                    {d.orderDay}
+                                  </span>
+                                  <span className="px-3 font-mono text-muted-foreground">
+                                    {d.stopTime}
+                                  </span>
                                   <span className="flex items-center gap-1.5 min-w-0">
-                                    <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: c.bg, color: c.text }}>{label || "–"}</span>
-                                    <span className="truncate text-muted-foreground">{d.supplier}</span>
+                                    <span
+                                      className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
+                                      style={{ backgroundColor: c.bg, color: c.text }}
+                                    >
+                                      {label || "–"}
+                                    </span>
+                                    <span className="truncate text-muted-foreground">
+                                      {d.supplier}
+                                    </span>
                                   </span>
                                 </div>
                               );
@@ -2923,7 +4548,10 @@ function SchemaPage() {
                       {isCsv && preview && preview.length === 0 && (
                         <div className="border-t border-border/40 flex items-center gap-2 px-3 py-2.5 bg-warning/5">
                           <AlertCircle className="h-3.5 w-3.5 shrink-0 text-warning" />
-                          <p className="text-[11px] text-warning">Kunde inte läsa leveranser från denna CSV. Kontrollera att det är en korrekt leveransplan.</p>
+                          <p className="text-[11px] text-warning">
+                            Kunde inte läsa leveranser från denna CSV. Kontrollera att det är en
+                            korrekt leveransplan.
+                          </p>
                         </div>
                       )}
                     </div>
@@ -2934,17 +4562,46 @@ function SchemaPage() {
           </div>
 
           <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-4">
-            <Button variant="outline" size="sm" onClick={() => { setImportDialogOpen(false); setImportFiles([]); setPdfPreviews({}); }} disabled={importProcessing}>Avbryt</Button>
-            <Button size="sm" onClick={() => processImportFiles(importFiles)} disabled={importFiles.length === 0 || importProcessing} className="gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setImportDialogOpen(false);
+                setImportFiles([]);
+                setPdfPreviews({});
+              }}
+              disabled={importProcessing}
+            >
+              Avbryt
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => processImportFiles(importFiles)}
+              disabled={importFiles.length === 0 || importProcessing}
+              className="gap-1.5"
+            >
               <Upload className="h-3.5 w-3.5" />
-              {importProcessing ? "Importerar…" : `Importera${importFiles.length > 0 ? ` (${importFiles.length})` : ""}`}
+              {importProcessing
+                ? "Importerar…"
+                : `Importera${importFiles.length > 0 ? ` (${importFiles.length})` : ""}`}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Import + mapping dialog */}
-      <Dialog open={mappingOpen} onOpenChange={(o) => { if (!savingImport) { setMappingOpen(o); if (!o) { setParsed(null); setMatchedEmployees([]); } } }}>
+      <Dialog
+        open={mappingOpen}
+        onOpenChange={(o) => {
+          if (!savingImport) {
+            setMappingOpen(o);
+            if (!o) {
+              setParsed(null);
+              setMatchedEmployees([]);
+            }
+          }
+        }}
+      >
         <DialogContent className="flex h-[90vh] w-full max-w-2xl flex-col p-0 gap-0 overflow-hidden">
           {/* Header */}
           <div className="flex shrink-0 items-center gap-3 border-b border-border/60 px-5 py-4">
@@ -2960,8 +4617,8 @@ function SchemaPage() {
                   {parsed[0].storeName && `${parsed[0].storeName} · `}
                   {parsed.length === 1
                     ? `Vecka ${parsed[0].weekNumber}, ${parsed[0].year}`
-                    : `Veckorna ${parsed.map(p => p.weekNumber).join(", ")}, ${parsed[0].year}`
-                  } · {matchedEmployees.length} anställda
+                    : `Veckorna ${parsed.map((p) => p.weekNumber).join(", ")}, ${parsed[0].year}`}{" "}
+                  · {matchedEmployees.length} anställda
                 </p>
               )}
             </div>
@@ -2975,12 +4632,14 @@ function SchemaPage() {
                 <div className="flex flex-wrap gap-2">
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    {matchedEmployees.filter((m) => m.matchType === "existing").length} matchade befintliga
+                    {matchedEmployees.filter((m) => m.matchType === "existing").length} matchade
+                    befintliga
                   </span>
                   {matchedEmployees.filter((m) => m.matchType === "new").length > 0 && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1 text-xs font-medium text-primary">
                       <UserPlus className="h-3.5 w-3.5" />
-                      {matchedEmployees.filter((m) => m.matchType === "new").length} nya konton skapas
+                      {matchedEmployees.filter((m) => m.matchType === "new").length} nya konton
+                      skapas
                     </span>
                   )}
                 </div>
@@ -2988,39 +4647,74 @@ function SchemaPage() {
                 {/* Existing matches */}
                 {matchedEmployees.some((m) => m.matchType === "existing") && (
                   <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Matchade användare</p>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Matchade användare
+                    </p>
                     <div className="divide-y divide-border/40 rounded-xl border border-border/60 overflow-hidden">
-                      {matchedEmployees.filter((m) => m.matchType === "existing").map((me) => {
-                        const matched = allUsers.find((u) => u.id === me.appUserId);
-                        const role = groupToRole(me.employeeGroup);
-                        const roleLabel = role === "manager" ? "Chef" : "Anställd";
-                        return (
-                          <div key={me.employeeNr} className="flex items-center gap-3 px-4 py-3">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-success/10 text-[10px] font-bold text-success">
-                              {me.employeeName.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
+                      {matchedEmployees
+                        .filter((m) => m.matchType === "existing")
+                        .map((me) => {
+                          const matched = allUsers.find((u) => u.id === me.appUserId);
+                          const role = groupToRole(me.employeeGroup);
+                          const roleLabel = role === "manager" ? "Chef" : "Anställd";
+                          return (
+                            <div key={me.employeeNr} className="flex items-center gap-3 px-4 py-3">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-success/10 text-[10px] font-bold text-success">
+                                {me.employeeName
+                                  .split(" ")
+                                  .map((p) => p[0])
+                                  .slice(0, 2)
+                                  .join("")
+                                  .toUpperCase()}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-foreground">
+                                  {me.employeeName}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {me.employeeGroup || "—"}
+                                </p>
+                              </div>
+                              <CheckCircle2 className="h-4 w-4 shrink-0 text-success/60" />
+                              <div className="min-w-0 text-right">
+                                <p className="text-xs font-medium text-foreground">
+                                  {matched?.display_name ?? "–"}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">{roleLabel}</p>
+                              </div>
+                              <Select
+                                value={me.appUserId ?? "__none__"}
+                                onValueChange={(v) =>
+                                  setMatchedEmployees((prev) =>
+                                    prev.map((x) =>
+                                      x.employeeNr === me.employeeNr
+                                        ? {
+                                            ...x,
+                                            appUserId: v === "__none__" ? null : v,
+                                            matchType: v === "__none__" ? "new" : "existing",
+                                          }
+                                        : x,
+                                    ),
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="h-7 w-36 shrink-0 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">
+                                    <span className="text-muted-foreground">Inget konto</span>
+                                  </SelectItem>
+                                  {allUsers.map((u) => (
+                                    <SelectItem key={u.id} value={u.id}>
+                                      {u.display_name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-foreground">{me.employeeName}</p>
-                              <p className="text-xs text-muted-foreground">{me.employeeGroup || "—"}</p>
-                            </div>
-                            <CheckCircle2 className="h-4 w-4 shrink-0 text-success/60" />
-                            <div className="min-w-0 text-right">
-                              <p className="text-xs font-medium text-foreground">{matched?.display_name ?? "–"}</p>
-                              <p className="text-[10px] text-muted-foreground">{roleLabel}</p>
-                            </div>
-                            <Select
-                              value={me.appUserId ?? "__none__"}
-                              onValueChange={(v) => setMatchedEmployees((prev) => prev.map((x) => x.employeeNr === me.employeeNr ? { ...x, appUserId: v === "__none__" ? null : v, matchType: v === "__none__" ? "new" : "existing" } : x))}
-                            >
-                              <SelectTrigger className="h-7 w-36 shrink-0 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__"><span className="text-muted-foreground">Inget konto</span></SelectItem>
-                                {allUsers.map((u) => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
                     </div>
                   </div>
                 )}
@@ -3028,48 +4722,120 @@ function SchemaPage() {
                 {/* New users to create */}
                 {matchedEmployees.some((m) => m.matchType === "new") && (
                   <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nya konton skapas</p>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Nya konton skapas
+                    </p>
                     <div className="divide-y divide-border/40 rounded-xl border border-border/60 overflow-hidden">
-                      {matchedEmployees.filter((m) => m.matchType === "new").map((me) => {
-                        const role = groupToRole(me.employeeGroup);
-                        const roleLabel = role === "manager" ? "Chef" : "Anställd";
-                        return (
-                          <div key={me.employeeNr} className="px-4 py-3 space-y-2">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[10px] font-bold text-primary">
-                                {me.employeeName.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <p className="text-sm font-medium text-foreground">{me.employeeName}</p>
-                                  <span className={["rounded-full px-1.5 py-0.5 text-[10px] font-semibold", role === "manager" ? "bg-info/15 text-info" : "bg-muted text-muted-foreground"].join(" ")}>{roleLabel}</span>
+                      {matchedEmployees
+                        .filter((m) => m.matchType === "new")
+                        .map((me) => {
+                          const role = groupToRole(me.employeeGroup);
+                          const roleLabel = role === "manager" ? "Chef" : "Anställd";
+                          return (
+                            <div key={me.employeeNr} className="px-4 py-3 space-y-2">
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[10px] font-bold text-primary">
+                                  {me.employeeName
+                                    .split(" ")
+                                    .map((p) => p[0])
+                                    .slice(0, 2)
+                                    .join("")
+                                    .toUpperCase()}
                                 </div>
-                                <p className="text-xs text-muted-foreground">{me.employeeGroup || "—"}</p>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-medium text-foreground">
+                                      {me.employeeName}
+                                    </p>
+                                    <span
+                                      className={[
+                                        "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                                        role === "manager"
+                                          ? "bg-info/15 text-info"
+                                          : "bg-muted text-muted-foreground",
+                                      ].join(" ")}
+                                    >
+                                      {roleLabel}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    {me.employeeGroup || "—"}
+                                  </p>
+                                </div>
+                                <Select
+                                  value="__new__"
+                                  onValueChange={(v) => {
+                                    if (v !== "__new__")
+                                      setMatchedEmployees((prev) =>
+                                        prev.map((x) =>
+                                          x.employeeNr === me.employeeNr
+                                            ? { ...x, appUserId: v, matchType: "existing" }
+                                            : x,
+                                        ),
+                                      );
+                                  }}
+                                >
+                                  <SelectTrigger className="h-7 w-36 shrink-0 text-xs">
+                                    <SelectValue placeholder="Skapa nytt" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__new__">
+                                      <span className="text-primary font-medium">
+                                        Skapa nytt konto
+                                      </span>
+                                    </SelectItem>
+                                    {allUsers.map((u) => (
+                                      <SelectItem key={u.id} value={u.id}>
+                                        {u.display_name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
-                              <Select
-                                value="__new__"
-                                onValueChange={(v) => { if (v !== "__new__") setMatchedEmployees((prev) => prev.map((x) => x.employeeNr === me.employeeNr ? { ...x, appUserId: v, matchType: "existing" } : x)); }}
-                              >
-                                <SelectTrigger className="h-7 w-36 shrink-0 text-xs"><SelectValue placeholder="Skapa nytt" /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__new__"><span className="text-primary font-medium">Skapa nytt konto</span></SelectItem>
-                                  {allUsers.map((u) => <SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
+                              <div className="grid grid-cols-2 gap-2 pl-11">
+                                <div>
+                                  <Label className="text-[11px] text-muted-foreground">
+                                    Användarnamn
+                                  </Label>
+                                  <Input
+                                    value={me.newUsername}
+                                    aria-label={`Användarnamn för ${me.employeeName}`}
+                                    onChange={(e) =>
+                                      setMatchedEmployees((prev) =>
+                                        prev.map((x) =>
+                                          x.employeeNr === me.employeeNr
+                                            ? { ...x, newUsername: e.target.value }
+                                            : x,
+                                        ),
+                                      )
+                                    }
+                                    className="mt-1 h-7 text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-[11px] text-muted-foreground">
+                                    Lösenord
+                                  </Label>
+                                  <Input
+                                    type="password"
+                                    value={me.newPassword}
+                                    aria-label={`Lösenord för ${me.employeeName}`}
+                                    onChange={(e) =>
+                                      setMatchedEmployees((prev) =>
+                                        prev.map((x) =>
+                                          x.employeeNr === me.employeeNr
+                                            ? { ...x, newPassword: e.target.value }
+                                            : x,
+                                        ),
+                                      )
+                                    }
+                                    className="mt-1 h-7 text-xs"
+                                  />
+                                </div>
+                              </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 pl-11">
-                              <div>
-                                <Label className="text-[11px] text-muted-foreground">Användarnamn</Label>
-                                <Input value={me.newUsername} onChange={(e) => setMatchedEmployees((prev) => prev.map((x) => x.employeeNr === me.employeeNr ? { ...x, newUsername: e.target.value } : x))} className="mt-1 h-7 text-xs" />
-                              </div>
-                              <div>
-                                <Label className="text-[11px] text-muted-foreground">Lösenord</Label>
-                                <Input type="password" value={me.newPassword} onChange={(e) => setMatchedEmployees((prev) => prev.map((x) => x.employeeNr === me.employeeNr ? { ...x, newPassword: e.target.value } : x))} className="mt-1 h-7 text-xs" />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
                     </div>
                   </div>
                 )}
@@ -3080,25 +4846,48 @@ function SchemaPage() {
             {!parsed && (
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-16">
                 <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
-                <p className="text-center text-sm text-muted-foreground">Matchningar hanteras vid import. Importera ett nytt schema för att uppdatera matchningar.</p>
+                <p className="text-center text-sm text-muted-foreground">
+                  Matchningar hanteras vid import. Importera ett nytt schema för att uppdatera
+                  matchningar.
+                </p>
               </div>
             )}
           </div>
 
           {/* Sticky footer */}
           <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-4">
-            <Button variant="outline" size="sm" onClick={() => { if (!savingImport) { setMappingOpen(false); setParsed(null); setMatchedEmployees([]); } }} disabled={savingImport}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!savingImport) {
+                  setMappingOpen(false);
+                  setParsed(null);
+                  setMatchedEmployees([]);
+                }
+              }}
+              disabled={savingImport}
+            >
               {parsed ? "Avbryt" : "Stäng"}
             </Button>
-            {parsed && (() => {
-              const unmappedCount = matchedEmployees.filter((m) => m.matchType === "new").length;
-              return unmappedCount > 0 ? (
-                <Button size="sm" variant="outline" onClick={bulkCreateUnmatchedAccounts} disabled={bulkCreatingAccounts} className="gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {bulkCreatingAccounts ? "Skapar konton…" : `Skapa konton för alla (${unmappedCount})`}
-                </Button>
-              ) : null;
-            })()}
+            {parsed &&
+              (() => {
+                const unmappedCount = matchedEmployees.filter((m) => m.matchType === "new").length;
+                return unmappedCount > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={bulkCreateUnmatchedAccounts}
+                    disabled={bulkCreatingAccounts}
+                    className="gap-1.5"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {bulkCreatingAccounts
+                      ? "Skapar konton…"
+                      : `Skapa konton för alla (${unmappedCount})`}
+                  </Button>
+                ) : null;
+              })()}
             {parsed && (
               <Button size="sm" onClick={confirmImport} disabled={savingImport} className="gap-1.5">
                 <Upload className="h-3.5 w-3.5" />
@@ -3110,12 +4899,18 @@ function SchemaPage() {
       </Dialog>
 
       {/* DELETE SCHEDULE IMPORT */}
-      <AlertDialog open={!!deleteImportTarget} onOpenChange={(o) => !o && setDeleteImportTarget(null)}>
+      <AlertDialog
+        open={!!deleteImportTarget}
+        onOpenChange={(o) => !o && setDeleteImportTarget(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Ta bort schema — V{deleteImportTarget?.week_number} {deleteImportTarget?.year}</AlertDialogTitle>
+            <AlertDialogTitle>
+              Ta bort schema — V{deleteImportTarget?.week_number} {deleteImportTarget?.year}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Schemaimporten och alla tillhörande skift för denna vecka raderas permanent. Åtgärden kan inte ångras.
+              Schemaimporten och alla tillhörande skift för denna vecka raderas permanent. Åtgärden
+              kan inte ångras.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -3136,7 +4931,8 @@ function SchemaPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort alla leveransplaner</AlertDialogTitle>
             <AlertDialogDescription>
-              Alla leveransplaner och leveransposter för denna butik raderas permanent. Du kan sedan importera en ny leveransplan.
+              Alla leveransplaner och leveransposter för denna butik raderas permanent. Du kan sedan
+              importera en ny leveransplan.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -3154,13 +4950,20 @@ function SchemaPage() {
   );
 }
 
-
 function buildPeriodStartsSimple(
-  originDue: Date, rule: string, weekdays: number[] | null,
-  startDate: Date | null, endDate: Date | null,
-  ceil: Date, floor: Date,
+  originDue: Date,
+  rule: string,
+  weekdays: number[] | null,
+  startDate: Date | null,
+  endDate: Date | null,
+  ceil: Date,
+  floor: Date,
 ): Date[] {
-  const midnight = (d: Date) => { const n = new Date(d); n.setHours(0,0,0,0); return n; };
+  const midnight = (d: Date) => {
+    const n = new Date(d);
+    n.setHours(0, 0, 0, 0);
+    return n;
+  };
   const effectiveCeil = endDate && midnight(endDate) < ceil ? midnight(endDate) : ceil;
   const effectiveFloor = startDate ? midnight(startDate) : floor;
   const results: Date[] = [];
@@ -3182,18 +4985,25 @@ function buildPeriodStartsSimple(
     else if (rule === "every_other_day") n.setDate(n.getDate() + 2);
     else if (rule === "weekly") n.setDate(n.getDate() + 7);
     else if (rule === "biweekly") n.setDate(n.getDate() + 14);
-    else if (rule === "monthly") { const od = originDue.getDate(); n.setMonth(n.getMonth() + 1); const dim = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate(); n.setDate(Math.min(od, dim)); }
-    else if (rule === "quarterly") n.setMonth(n.getMonth() + 3);
+    else if (rule === "monthly") {
+      const od = originDue.getDate();
+      n.setMonth(n.getMonth() + 1);
+      const dim = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
+      n.setDate(Math.min(od, dim));
+    } else if (rule === "quarterly") n.setMonth(n.getMonth() + 3);
     else if (rule === "yearly") n.setFullYear(n.getFullYear() + 1);
     else n.setDate(n.getDate() + 1);
-    n.setHours(0,0,0,0);
+    n.setHours(0, 0, 0, 0);
     return n;
   };
 
   let cur = midnight(new Date(originDue));
   cur = advance(cur);
   while (cur < effectiveFloor) cur = advance(cur);
-  while (cur <= effectiveCeil) { results.push(new Date(cur)); cur = advance(new Date(cur)); }
+  while (cur <= effectiveCeil) {
+    results.push(new Date(cur));
+    cur = advance(new Date(cur));
+  }
   return results;
 }
 
@@ -3220,14 +5030,35 @@ function getWeekStartDate(week: number, year: number): string {
 
 // ─── StatPill ─────────────────────────────────────────────────────────────────
 
-function StatPill({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "primary" | "default" | "warning" }) {
-  const colors = { primary: "text-primary bg-primary-soft", default: "text-muted-foreground bg-muted", warning: "text-warning-foreground bg-warning/15" };
+function StatPill({
+  icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  tone: "primary" | "default" | "warning";
+}) {
+  const colors = {
+    primary: "text-primary bg-primary-soft",
+    default: "text-muted-foreground bg-muted",
+    warning: "text-warning-foreground bg-warning/15",
+  };
   return (
     <div className="flex items-center gap-2.5">
-      <div className={["flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", colors[tone]].join(" ")}>{icon}</div>
+      <div
+        className={[
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+          colors[tone],
+        ].join(" ")}
+      >
+        {icon}
+      </div>
       <div>
         <p className="text-[11px] text-muted-foreground">{label}</p>
-        <p className="text-sm font-semibold text-foreground">{value}</p>
+        <p className="text-sm font-semibold text-foreground tabular-nums">{value}</p>
       </div>
     </div>
   );
@@ -3235,11 +5066,28 @@ function StatPill({ icon, label, value, tone }: { icon: React.ReactNode; label: 
 
 // ─── MappingRow ───────────────────────────────────────────────────────────────
 
-function MappingRow({ employeeNr, employeeName, employeeGroup, appUsers, mappedUserId, storeId, foreningId, distriktId, onMap, onUserCreated }: {
-  employeeNr: string; employeeName: string; employeeGroup: string;
-  appUsers: AppUser[]; mappedUserId: string | null; storeId: string | null;
-  foreningId?: string | null; distriktId?: string | null;
-  onMap: (uid: string | null) => void; onUserCreated: (user: AppUser) => void;
+function MappingRow({
+  employeeNr,
+  employeeName,
+  employeeGroup,
+  appUsers,
+  mappedUserId,
+  storeId,
+  foreningId,
+  distriktId,
+  onMap,
+  onUserCreated,
+}: {
+  employeeNr: string;
+  employeeName: string;
+  employeeGroup: string;
+  appUsers: AppUser[];
+  mappedUserId: string | null;
+  storeId: string | null;
+  foreningId?: string | null;
+  distriktId?: string | null;
+  onMap: (uid: string | null) => void;
+  onUserCreated: (user: AppUser) => void;
 }) {
   const [creating, setCreating] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -3254,63 +5102,192 @@ function MappingRow({ employeeNr, employeeName, employeeGroup, appUsers, mappedU
   async function handleCreate() {
     if (!storeId) return;
     setCreateError("");
-    if (newUsername.length < 3) { setCreateError("Minst 3 tecken i användarnamnet."); return; }
+    if (newUsername.length < 3) {
+      setCreateError("Minst 3 tecken i användarnamnet.");
+      return;
+    }
     setCreating(true);
     try {
-      const { data: existing } = await supabase.from("app_users").select("id").eq("username", newUsername.toLowerCase().trim()).maybeSingle();
-      if (existing) { setCreateError("Användarnamnet är redan taget."); return; }
+      const { data: existing } = await supabase
+        .from("app_users")
+        .select("id")
+        .eq("username", newUsername.toLowerCase().trim())
+        .maybeSingle();
+      if (existing) {
+        setCreateError("Användarnamnet är redan taget.");
+        return;
+      }
       const { data: hash } = await supabase.rpc("hash_password", { plain_password: newPassword });
-      const { data: created, error } = await supabase.from("app_users").insert({ username: newUsername.toLowerCase().trim(), password_hash: hash, display_name: employeeName, role, employee_group: employeeGroup, store_id: storeId, is_active: true, must_change_password: true })
-        .select("id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at").single();
-      if (error || !created) { setCreateError(error?.message ?? "Något gick fel."); return; }
-      await supabase.from("user_stores").upsert({ user_id: (created as AppUser).id, store_id: storeId, is_primary: true }, { onConflict: "user_id,store_id" });
+      const { data: created, error } = await supabase
+        .from("app_users")
+        .insert({
+          username: newUsername.toLowerCase().trim(),
+          password_hash: hash,
+          display_name: employeeName,
+          role,
+          employee_group: employeeGroup,
+          store_id: storeId,
+          is_active: true,
+          must_change_password: true,
+        })
+        .select(
+          "id, username, display_name, role, employee_group, store_id, active_store_id, is_active, last_login, created_at",
+        )
+        .single();
+      if (error || !created) {
+        setCreateError(error?.message ?? "Något gick fel.");
+        return;
+      }
+      await supabase
+        .from("user_stores")
+        .upsert(
+          { user_id: (created as AppUser).id, store_id: storeId, is_primary: true },
+          { onConflict: "user_id,store_id" },
+        );
       if (foreningId) {
-        await supabase.from("user_foreningar").upsert({ user_id: (created as AppUser).id, forening_id: foreningId, is_primary: true }, { onConflict: "user_id,forening_id" });
-        await supabase.from("app_users").update({ forening_id: foreningId }).eq("id", (created as AppUser).id);
+        await supabase
+          .from("user_foreningar")
+          .upsert(
+            { user_id: (created as AppUser).id, forening_id: foreningId, is_primary: true },
+            { onConflict: "user_id,forening_id" },
+          );
+        await supabase
+          .from("app_users")
+          .update({ forening_id: foreningId })
+          .eq("id", (created as AppUser).id);
       }
       if (distriktId) {
-        await supabase.from("user_distrikt").upsert({ user_id: (created as AppUser).id, distrikt_id: distriktId, is_primary: true }, { onConflict: "user_id,distrikt_id" });
-        await supabase.from("app_users").update({ distrikt_id: distriktId }).eq("id", (created as AppUser).id);
+        await supabase
+          .from("user_distrikt")
+          .upsert(
+            { user_id: (created as AppUser).id, distrikt_id: distriktId, is_primary: true },
+            { onConflict: "user_id,distrikt_id" },
+          );
+        await supabase
+          .from("app_users")
+          .update({ distrikt_id: distriktId })
+          .eq("id", (created as AppUser).id);
       }
       onUserCreated(created as AppUser);
       setShowCreate(false);
       toast.success(`Konto för ${employeeName} skapat. Lösenord byts vid första inloggning.`);
-    } finally { setCreating(false); }
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
     <div className="px-4 py-3">
       <div className="flex items-center gap-3">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
-          {employeeName.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
+          {employeeName
+            .split(" ")
+            .map((p) => p[0])
+            .slice(0, 2)
+            .join("")
+            .toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <p className="truncate text-sm font-medium text-foreground">{employeeName}</p>
-            {employeeGroup && <span className={["rounded-full px-1.5 py-0.5 text-[10px] font-semibold shrink-0", roleBg].join(" ")}>{roleLabel}</span>}
+            {employeeGroup && (
+              <span
+                className={[
+                  "rounded-full px-1.5 py-0.5 text-[10px] font-semibold shrink-0",
+                  roleBg,
+                ].join(" ")}
+              >
+                {roleLabel}
+              </span>
+            )}
           </div>
-          <p className="truncate text-xs text-muted-foreground">#{employeeNr}{employeeGroup ? ` · ${employeeGroup}` : ""}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            #{employeeNr}
+            {employeeGroup ? ` · ${employeeGroup}` : ""}
+          </p>
         </div>
-        <Select value={mappedUserId ?? "__none__"} onValueChange={(v) => { if (v === "__create__") { setShowCreate((s) => !s); return; } onMap(v === "__none__" ? null : v); }}>
-          <SelectTrigger className="h-8 w-48 shrink-0 text-xs"><SelectValue placeholder="Välj användare…" /></SelectTrigger>
+        <Select
+          value={mappedUserId ?? "__none__"}
+          onValueChange={(v) => {
+            if (v === "__create__") {
+              setShowCreate((s) => !s);
+              return;
+            }
+            onMap(v === "__none__" ? null : v);
+          }}
+        >
+          <SelectTrigger className="h-8 w-48 shrink-0 text-xs">
+            <SelectValue placeholder="Välj användare…" />
+          </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__none__"><span className="text-muted-foreground">Ingen koppling</span></SelectItem>
-            {appUsers.map((u) => (<SelectItem key={u.id} value={u.id}>{u.display_name}</SelectItem>))}
-            <SelectItem value="__create__"><span className="flex items-center gap-1.5 text-primary"><UserPlus className="h-3 w-3" />Skapa ny användare</span></SelectItem>
+            <SelectItem value="__none__">
+              <span className="text-muted-foreground">Ingen koppling</span>
+            </SelectItem>
+            {appUsers.map((u) => (
+              <SelectItem key={u.id} value={u.id}>
+                {u.display_name}
+              </SelectItem>
+            ))}
+            <SelectItem value="__create__">
+              <span className="flex items-center gap-1.5 text-primary">
+                <UserPlus className="h-3 w-3" />
+                Skapa ny användare
+              </span>
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>
       {showCreate && (
         <div className="mt-3 rounded-lg border border-border/60 bg-muted/20 p-3">
-          <p className="mb-2.5 text-xs font-medium text-foreground">Skapa <span className="text-primary">{roleLabel}</span> för {employeeName}</p>
+          <p className="mb-2.5 text-xs font-medium text-foreground">
+            Skapa <span className="text-primary">{roleLabel}</span> för {employeeName}
+          </p>
           <div className="grid grid-cols-2 gap-2">
-            <div><Label className="text-[11px] text-muted-foreground">Användarnamn</Label><Input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} className="mt-1 h-7 text-xs" /></div>
-            <div><Label className="text-[11px] text-muted-foreground">Lösenord</Label><Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="mt-1 h-7 text-xs" /></div>
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Användarnamn</Label>
+              <Input
+                value={newUsername}
+                aria-label={`Användarnamn för ${employeeName}`}
+                onChange={(e) => setNewUsername(e.target.value)}
+                className="mt-1 h-7 text-xs"
+              />
+            </div>
+            <div>
+              <Label className="text-[11px] text-muted-foreground">Lösenord</Label>
+              <Input
+                type="password"
+                value={newPassword}
+                aria-label={`Lösenord för ${employeeName}`}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="mt-1 h-7 text-xs"
+              />
+            </div>
           </div>
-          {createError && <p className="mt-1.5 text-[11px] text-destructive">{createError}</p>}
+          {createError && (
+            <p role="alert" className="mt-1.5 text-[11px] text-destructive">
+              {createError}
+            </p>
+          )}
           <div className="mt-2.5 flex gap-2">
-            <Button size="sm" className="h-7 px-3 text-xs" onClick={handleCreate} disabled={creating}>{creating ? "Skapar…" : "Skapa"}</Button>
-            <Button size="sm" variant="ghost" className="h-7 px-3 text-xs" onClick={() => { setShowCreate(false); setCreateError(""); }}>Avbryt</Button>
+            <Button
+              size="sm"
+              className="h-7 px-3 text-xs"
+              onClick={handleCreate}
+              disabled={creating}
+            >
+              {creating ? "Skapar…" : "Skapa"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-3 text-xs"
+              onClick={() => {
+                setShowCreate(false);
+                setCreateError("");
+              }}
+            >
+              Avbryt
+            </Button>
           </div>
         </div>
       )}

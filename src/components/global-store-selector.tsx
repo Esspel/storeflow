@@ -71,18 +71,21 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
   if (inline) {
     return (
       <div className="px-2 py-1">
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Butik</p>
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Butik
+        </p>
         <div className="mb-2 flex items-center gap-2 rounded-lg bg-muted/60 px-2.5 py-1.5">
           <Search className="h-3 w-3 shrink-0 text-muted-foreground" />
           <input
             type="text"
+            aria-label="Sök butik"
             placeholder="Sök butik..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+            className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
           />
           {search && (
-            <button onClick={() => setSearch("")}>
+            <button type="button" aria-label="Rensa sökning" onClick={() => setSearch("")}>
               <X className="h-3 w-3 text-muted-foreground" />
             </button>
           )}
@@ -96,20 +99,30 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
               return (
                 <button
                   key={s.id}
-                  onClick={() => { setActiveStore(s); setSearch(""); }}
+                  onClick={() => {
+                    setActiveStore(s);
+                    setSearch("");
+                  }}
                   className={cn(
                     "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted/50",
                     isSelected && "bg-primary/10 text-primary font-medium",
                   )}
                 >
-                  <Building2 className={cn("h-3 w-3 shrink-0", isSelected ? "text-primary" : "text-muted-foreground")} />
+                  <Building2
+                    className={cn(
+                      "h-3 w-3 shrink-0",
+                      isSelected ? "text-primary" : "text-muted-foreground",
+                    )}
+                  />
                   <span className="flex-1 truncate">{s.name}</span>
                   {isSelected && <span className="shrink-0 text-[10px]">Aktiv</span>}
                 </button>
               );
             })}
             {filtered.length === 0 && (
-              <p className="py-2 text-center text-xs text-muted-foreground">Inga butiker hittades</p>
+              <p className="py-2 text-center text-xs text-muted-foreground">
+                Inga butiker hittades
+              </p>
             )}
           </div>
         )}
@@ -123,6 +136,8 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
         variant="outline"
         size="sm"
         onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         className="flex items-center gap-1.5 rounded-full border-border/80 text-xs max-w-[280px]"
       >
         <Building2 className="h-3.5 w-3.5 shrink-0" />
@@ -138,13 +153,14 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
               <input
                 autoFocus
                 type="text"
+                aria-label="Sök butik"
                 placeholder="Sök butik, stad, förening..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
               />
               {search && (
-                <button onClick={() => setSearch("")}>
+                <button type="button" aria-label="Rensa sökning" onClick={() => setSearch("")}>
                   <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
                 </button>
               )}
@@ -155,29 +171,40 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
             {loading ? (
               <p className="px-4 py-6 text-center text-sm text-muted-foreground">Laddar...</p>
             ) : filtered.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-muted-foreground">Inga butiker hittades</p>
+              <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                Inga butiker hittades
+              </p>
             ) : (
               filtered.map((s) => {
                 const isSelected = activeStore?.id === s.id;
                 return (
                   <button
                     key={s.id}
-                    onClick={() => { setActiveStore(s); setOpen(false); setSearch(""); }}
+                    onClick={() => {
+                      setActiveStore(s);
+                      setOpen(false);
+                      setSearch("");
+                    }}
                     className={cn(
                       "flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/50",
                       isSelected && "bg-primary/5 text-primary",
                     )}
                   >
-                    <Building2 className={cn("mt-0.5 h-4 w-4 shrink-0", isSelected ? "text-primary" : "text-muted-foreground")} />
+                    <Building2
+                      className={cn(
+                        "mt-0.5 h-4 w-4 shrink-0",
+                        isSelected ? "text-primary" : "text-muted-foreground",
+                      )}
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{s.name}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {[s.butiks_nr && `#${s.butiks_nr}`, s.city, s.bolag].filter(Boolean).join(" · ")}
+                        {[s.butiks_nr && `#${s.butiks_nr}`, s.city, s.bolag]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
                     </div>
-                    {isSelected && (
-                      <span className="shrink-0 text-[10px] text-primary">Aktiv</span>
-                    )}
+                    {isSelected && <span className="shrink-0 text-[10px] text-primary">Aktiv</span>}
                   </button>
                 );
               })

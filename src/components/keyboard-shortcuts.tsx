@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Keyboard, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
@@ -18,18 +18,18 @@ type Shortcut = {
 // Admin: Personal, Inställningar
 // Special: Belastning (manager), Pulstavla
 const ALL_SHORTCUTS: Shortcut[] = [
-  { key: "1", label: "Dashboard",          to: "/",             access: "all" },
-  { key: "2", label: "Uppgifter",           to: "/uppgifter",    access: "all" },
-  { key: "3", label: "Schema",              to: "/schema",       access: "all" },
-  { key: "4", label: "Avvikelser",          to: "/avvikelser",   access: "all" },
-  { key: "5", label: "Kundönskemål",        to: "/kundonskemal", access: "all" },
-  { key: "6", label: "Kundrunda",           to: "/kundrunda",    access: "all" },
-  { key: "7", label: "Rapporter",           to: "/rapporter",    access: "all" },
-  { key: "8", label: "Personal",            to: "/personal",     access: "manager" },
-  { key: "9", label: "Inställningar",       to: "/installningar", access: "all" },
-  { key: "m", label: "Mallar",              to: "/mallar",       access: "manager" },
-  { key: "b", label: "Medarbetarbelastning", to: "/belastning",  access: "manager" },
-  { key: "p", label: "Pulstavla",           to: "/pulstavla",    access: "all" },
+  { key: "1", label: "Dashboard", to: "/", access: "all" },
+  { key: "2", label: "Uppgifter", to: "/uppgifter", access: "all" },
+  { key: "3", label: "Schema", to: "/schema", access: "all" },
+  { key: "4", label: "Avvikelser", to: "/avvikelser", access: "all" },
+  { key: "5", label: "Kundönskemål", to: "/kundonskemal", access: "all" },
+  { key: "6", label: "Kundrunda", to: "/kundrunda", access: "all" },
+  { key: "7", label: "Rapporter", to: "/rapporter", access: "all" },
+  { key: "8", label: "Personal", to: "/personal", access: "manager" },
+  { key: "9", label: "Inställningar", to: "/installningar", access: "all" },
+  { key: "m", label: "Mallar", to: "/mallar", access: "manager" },
+  { key: "b", label: "Medarbetarbelastning", to: "/belastning", access: "manager" },
+  { key: "p", label: "Pulstavla", to: "/pulstavla", access: "all" },
 ];
 
 export function KeyboardShortcuts() {
@@ -46,10 +46,29 @@ export function KeyboardShortcuts() {
     return true;
   });
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+  // Flytta fokus in i dialogen när den öppnas och återställ när den stängs
+  useEffect(() => {
+    if (!showHelp) return;
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    return () => {
+      previouslyFocusedRef.current?.focus?.();
+    };
+  }, [showHelp]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (e.target as HTMLElement).isContentEditable) return;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        (e.target as HTMLElement).isContentEditable
+      )
+        return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       if (e.key === "?" || (e.key === "/" && e.shiftKey)) {
@@ -82,7 +101,12 @@ export function KeyboardShortcuts() {
       onClick={() => setShowHelp(false)}
     >
       <div
-        className="mx-4 w-full max-w-sm overflow-hidden rounded-2xl border border-border/60 bg-card shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Kortkommandon"
+        tabIndex={-1}
+        ref={dialogRef}
+        className="mx-4 w-full max-w-sm overflow-hidden rounded-2xl border border-border/60 bg-card shadow-2xl outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
@@ -91,6 +115,8 @@ export function KeyboardShortcuts() {
             <span className="text-sm font-semibold text-foreground">Tangentbordsgenvägar</span>
           </div>
           <button
+            type="button"
+            aria-label="Stäng"
             onClick={() => setShowHelp(false)}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/60"
           >
@@ -102,7 +128,10 @@ export function KeyboardShortcuts() {
             <button
               key={s.key}
               className="flex w-full items-center justify-between px-4 py-2.5 text-sm hover:bg-muted/40 transition-colors"
-              onClick={() => { navigate({ to: s.to }); setShowHelp(false); }}
+              onClick={() => {
+                navigate({ to: s.to });
+                setShowHelp(false);
+              }}
             >
               <span className="text-foreground">{s.label}</span>
               <kbd className="rounded-md border border-border/60 bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
@@ -112,12 +141,18 @@ export function KeyboardShortcuts() {
           ))}
           <div className="flex items-center justify-between px-4 py-2.5 text-sm">
             <span className="text-muted-foreground">Stäng</span>
-            <kbd className="rounded-md border border-border/60 bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">Esc</kbd>
+            <kbd className="rounded-md border border-border/60 bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+              Esc
+            </kbd>
           </div>
         </div>
         <div className="border-t border-border/40 px-4 py-2.5">
           <p className="text-xs text-muted-foreground">
-            Tryck <kbd className="rounded border border-border/60 bg-muted px-1 py-0.5 font-mono text-[10px]">?</kbd> för att öppna/stänga
+            Tryck{" "}
+            <kbd className="rounded border border-border/60 bg-muted px-1 py-0.5 font-mono text-[10px]">
+              ?
+            </kbd>{" "}
+            för att öppna/stänga
           </p>
         </div>
       </div>

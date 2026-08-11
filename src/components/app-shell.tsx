@@ -24,7 +24,13 @@ import {
   X as XIcon,
   ChartBar,
 } from "lucide-react";
-import { ROLE_LABELS, HIERARCHY_LABELS, supabase, type Notification, cleanOldNotifications } from "@/lib/supabase";
+import {
+  ROLE_LABELS,
+  HIERARCHY_LABELS,
+  supabase,
+  type Notification,
+  cleanOldNotifications,
+} from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
 import { GlobalStoreSelector } from "@/components/global-store-selector";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -38,11 +44,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { getSimulatedDate, setTimeOffsetMs, isSimulationActive } from "@/lib/time-simulation";
@@ -108,7 +110,7 @@ function SwUpdateBanner() {
       () => {
         window.location.reload();
       },
-      { once: true }
+      { once: true },
     );
   }
 
@@ -136,7 +138,7 @@ function SwUpdateBanner() {
 // ── Offline snackbar ────────────────────────────────────────────────────────
 function OfflineSnackbar() {
   const [status, setStatus] = useState<"idle" | "offline" | "reconnected">(
-    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "idle"
+    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "idle",
   );
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wentOfflineRef = useRef(typeof navigator !== "undefined" && !navigator.onLine);
@@ -173,7 +175,7 @@ function OfflineSnackbar() {
         "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium shadow-lg transition-all",
         status === "offline"
           ? "bg-destructive text-destructive-foreground"
-          : "bg-emerald-600 text-white"
+          : "bg-emerald-600 text-white",
       )}
     >
       {status === "offline" ? (
@@ -259,7 +261,7 @@ export function AppShell() {
               user_agent: navigator.userAgent,
               updated_at: new Date().toISOString(),
             },
-            { onConflict: "endpoint" }
+            { onConflict: "endpoint" },
           );
         }
       } catch (err) {
@@ -291,7 +293,9 @@ export function AppShell() {
     { to: "/avvikelser", label: "Avvikelser", mobileHidden: true, Icon: TriangleAlert },
     { to: "/kundrunda", label: "Kundrunda", mobileHidden: true, Icon: UserRound },
     { to: "/kundonskemal", label: "Kundönskemål", mobileHidden: true, Icon: ShoppingCart },
-    ...(isManager ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }] : []),
+    ...(isManager
+      ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }]
+      : []),
     { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
   ];
 
@@ -329,9 +333,10 @@ export function AppShell() {
   useEffect(() => {
     if (!user || !("serviceWorker" in navigator)) return;
     const onMessage = (event: MessageEvent) => {
-      const data = event.data as
-        | { type?: string; payload?: { title?: string; body?: string } }
-        | null;
+      const data = event.data as {
+        type?: string;
+        payload?: { title?: string; body?: string };
+      } | null;
       if (!data || data.type !== "PUSH_RECEIVED") return;
       const title = data.payload?.title;
       if (title) toast(title, { description: data.payload?.body });
@@ -345,7 +350,11 @@ export function AppShell() {
 
   const markAllRead = async () => {
     if (!user || unreadCount === 0) return;
-    await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false);
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("user_id", user.id)
+      .eq("is_read", false);
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
   };
 
@@ -381,60 +390,65 @@ export function AppShell() {
     : "?";
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-background" style={{ isolation: "isolate" }}>
+    <div
+      className="flex min-h-screen w-full flex-col bg-background"
+      style={{ isolation: "isolate" }}
+    >
       <SwUpdateBanner />
       <div className="pt-safe" />
-      
+
       {/* Mobile Bottom Nav */}
-          <nav
-            className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-card/95 backdrop-blur-sm pb-safe md:hidden"
-            data-safe-bottom
-          >
-            {nav
-              .filter((item) => !item.mobileHidden)
-              .map(({ to, label, Icon }) => (
-                <Link
-                  key={to}
-                  to={to}
-                  className={cn(
-                    "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
-                    isActive(to) ? "text-primary" : "text-muted-foreground"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "flex h-7 w-10 items-center justify-center rounded-full transition-all",
-                      isActive(to) ? "bg-primary/10" : "bg-transparent"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <span className="leading-none">{label}</span>
-                </Link>
-              ))}
-            <button
-              onClick={() => setMoreOpen(true)}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-card/95 backdrop-blur-sm pb-safe md:hidden"
+        data-safe-bottom
+      >
+        {nav
+          .filter((item) => !item.mobileHidden)
+          .map(({ to, label, Icon }) => (
+            <Link
+              key={to}
+              to={to}
               className={cn(
                 "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
-                isMoreActive ? "text-primary" : "text-muted-foreground"
+                isActive(to) ? "text-primary" : "text-muted-foreground",
               )}
             >
               <div
                 className={cn(
                   "flex h-7 w-10 items-center justify-center rounded-full transition-all",
-                  isMoreActive ? "bg-primary/10" : "bg-transparent"
+                  isActive(to) ? "bg-primary/10" : "bg-transparent",
                 )}
               >
-                <MoreHorizontal className="h-4 w-4" />
+                <Icon className="h-4 w-4" />
               </div>
-              <span className="leading-none">Övrigt</span>
-            </button>
-          </nav>
+              <span className="leading-none">{label}</span>
+            </Link>
+          ))}
+        <button
+          onClick={() => setMoreOpen(true)}
+          className={cn(
+            "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
+            isMoreActive ? "text-primary" : "text-muted-foreground",
+          )}
+        >
+          <div
+            className={cn(
+              "flex h-7 w-10 items-center justify-center rounded-full transition-all",
+              isMoreActive ? "bg-primary/10" : "bg-transparent",
+            )}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </div>
+          <span className="leading-none">Övrigt</span>
+        </button>
+      </nav>
       <header className="sticky top-0 z-40 border-b border-border/60 bg-card/95 backdrop-blur-sm">
         <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4 md:h-16 md:gap-4 md:px-8">
           <Link to="/" className="flex shrink-0 items-center gap-2">
             <div className="flex flex-col leading-none">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Store</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                Store
+              </span>
               <span className="text-2xl font-black tracking-tight text-primary">Flow</span>
             </div>
           </Link>
@@ -447,7 +461,7 @@ export function AppShell() {
                 to={item.to}
                 className={cn(
                   "relative rounded-full px-3.5 py-2 text-sm font-medium text-foreground/70 transition-colors hover:text-primary",
-                  isActive(item.to) && "text-primary"
+                  isActive(item.to) && "text-primary",
                 )}
               >
                 {item.label}
@@ -478,7 +492,12 @@ export function AppShell() {
             {/* Notifications Popover */}
             <Popover open={notifOpen} onOpenChange={setNotifOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="icon" className="relative rounded-xl border-border/80" aria-label="Notiser">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="relative rounded-xl border-border/80"
+                  aria-label="Notiser"
+                >
                   <Bell className="h-4 w-4" />
                   {unreadCount > 0 && (
                     <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
@@ -498,23 +517,32 @@ export function AppShell() {
                 </div>
                 <div className="max-h-72 overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">Inga notiser</p>
+                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                      Inga notiser
+                    </p>
                   ) : (
                     notifications.map((n) => (
                       <div
                         key={n.id}
                         className={cn(
                           "group border-b border-border/40 px-4 py-3 last:border-0",
-                          !n.is_read && "bg-primary-soft/30"
+                          !n.is_read && "bg-primary-soft/30",
                         )}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <p className={cn("text-sm font-medium leading-snug", !n.is_read && "text-primary")}>
+                            <p
+                              className={cn(
+                                "text-sm font-medium leading-snug",
+                                !n.is_read && "text-primary",
+                              )}
+                            >
                               {n.title}
                             </p>
                             {n.body && (
-                              <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{n.body}</p>
+                              <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                                {n.body}
+                              </p>
                             )}
                             <p className="mt-1 text-xs text-muted-foreground/70">
                               {new Date(n.created_at).toLocaleString("sv-SE", {
@@ -541,7 +569,12 @@ export function AppShell() {
             {/* User Menu Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="rounded-xl border-border/80" aria-label="Konto">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-xl border-border/80"
+                  aria-label="Konto"
+                >
                   <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-soft text-[10px] font-bold text-primary">
                     {initials}
                   </div>
@@ -552,10 +585,16 @@ export function AppShell() {
                   <p className="text-sm font-medium">{user?.display_name}</p>
                   <p className="text-xs text-muted-foreground">
                     {user?.hierarchy_level
-                      ? (HIERARCHY_LABELS[user.hierarchy_level] ?? ROLE_LABELS[user.role] ?? user.role)
-                      : (user?.role ? (ROLE_LABELS[user.role] ?? user.role) : "")}
+                      ? (HIERARCHY_LABELS[user.hierarchy_level] ??
+                        ROLE_LABELS[user.role] ??
+                        user.role)
+                      : user?.role
+                        ? (ROLE_LABELS[user.role] ?? user.role)
+                        : ""}
                   </p>
-                  {activeStore && <p className="text-xs text-muted-foreground">{activeStore.name}</p>}
+                  {activeStore && (
+                    <p className="text-xs text-muted-foreground">{activeStore.name}</p>
+                  )}
                 </div>
                 <div className="md:hidden">
                   <DropdownMenuSeparator />
@@ -646,7 +685,10 @@ export function AppShell() {
           <span>
             Tidssimulering aktiv — simulerad tid:{" "}
             <strong>
-              {getSimulatedDate().toLocaleString("sv-SE", { dateStyle: "short", timeStyle: "short" })}
+              {getSimulatedDate().toLocaleString("sv-SE", {
+                dateStyle: "short",
+                timeStyle: "short",
+              })}
             </strong>
           </span>
           <button
@@ -720,7 +762,7 @@ export function AppShell() {
                     "flex flex-col items-center gap-2 rounded-2xl border border-border/60 px-3 py-4 transition-colors",
                     isActive(to)
                       ? "bg-primary/10 border-primary/30 text-primary"
-                      : "bg-muted/30 text-foreground hover:bg-muted/60"
+                      : "bg-muted/30 text-foreground hover:bg-muted/60",
                   )}
                 >
                   <Icon className="h-6 w-6" />
