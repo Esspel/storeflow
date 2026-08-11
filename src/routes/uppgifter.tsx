@@ -128,7 +128,36 @@ function utcIsoToLocalInput(utcStr: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const emptyForm = (storeId: string) => ({
+type NewTaskForm = {
+  title: string;
+  description: string;
+  category: string;
+  priority: string;
+  store_id: string;
+  due_date: string;
+  due_date_time: string;
+  time_slots: string[];
+  recurrence_rule: string;
+  recurrence_days: number[];
+  recurrence_interval: number;
+  recurrence_months: number[];
+  recurrence_month_day: number;
+  recurrence_start: string;
+  recurrence_end: string;
+  sap_article_id: string;
+  completion_mode: "manual" | "auto_from_children" | "auto_complete_children";
+  steps: { label: string; requires_photo: boolean; link_url: string }[];
+  questions: FormQuestion[];
+  assigneeUserIds: string[];
+  assigneeGroupIds: string[];
+  event_trigger_description: string;
+  event_trigger_user_id: string;
+  depends_on_task_id: string;
+  delivery_entry_id: string;
+  is_critical: boolean;
+};
+
+const emptyForm = (storeId: string): NewTaskForm => ({
   title: "",
   description: "",
   category: "Drift",
@@ -153,6 +182,7 @@ const emptyForm = (storeId: string) => ({
   event_trigger_description: "",
   event_trigger_user_id: "",
   depends_on_task_id: "",
+  delivery_entry_id: "",
   is_critical: false,
 });
 
@@ -384,11 +414,11 @@ function TasksPage() {
   const [taskArticleType, setTaskArticleType] = useState<ArticleIdType>("mat-nr");
   const [taskArticlePrompt, setTaskArticlePrompt] = useState<string | null>(null);
   const TASK_DRAFT_KEY = `sf-task-draft-${user?.id ?? ""}`;
-  const [newTask, _setNewTask] = useState<ReturnType<typeof emptyForm>>(() => {
+  const [newTask, _setNewTask] = useState<NewTaskForm>(() => {
     try {
       const saved = localStorage.getItem(`sf-task-draft-${user?.id ?? ""}`);
       if (saved) {
-        const parsed = JSON.parse(saved) as ReturnType<typeof emptyForm>;
+        const parsed = JSON.parse(saved) as NewTaskForm;
         const base = emptyForm(parsed.store_id ?? "");
         return {
           ...base, ...parsed,
@@ -405,7 +435,7 @@ function TasksPage() {
     return emptyForm(activeStore?.id ?? "");
   });
 
-  const setNewTask = (v: ReturnType<typeof emptyForm> | ((p: ReturnType<typeof emptyForm>) => ReturnType<typeof emptyForm>)) => {
+  const setNewTask = (v: NewTaskForm | ((p: NewTaskForm) => NewTaskForm)) => {
     _setNewTask(prev => {
       const next = typeof v === "function" ? v(prev) : v;
       try { localStorage.setItem(TASK_DRAFT_KEY, JSON.stringify(next)); } catch {}
@@ -442,7 +472,7 @@ function TasksPage() {
   const [bulkDeleteHasFuture, setBulkDeleteHasFuture] = useState(false);
 
   const [editTask, setEditTask] = useState<TaskFull | null>(null);
-  const [editForm, setEditForm] = useState<ReturnType<typeof emptyForm> | null>(null);
+  const [editForm, setEditForm] = useState<NewTaskForm | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [editScope, setEditScope] = useState<"all_future" | "single">("all_future");
 
@@ -567,14 +597,14 @@ function TasksPage() {
     }
     setTasks(prev => prev.map(t =>
       taskIds.includes(t.id)
-        ? {
+        ? ({
             ...t,
             assignee_confirmed: true,
             ...(assigneeOverrides[t.id] ? {
               assigned_to: assigneeOverrides[t.id],
               assignees: [{ id: "", task_id: t.id, user_id: assigneeOverrides[t.id], group_id: null, user: storeUsers.find(u => u.id === assigneeOverrides[t.id]) ?? null, group: null }]
             } : {})
-          }
+          } as TaskFull)
         : t
     ));
     setConfirmSaving(false);
@@ -629,7 +659,7 @@ function TasksPage() {
     if (activeStore) {
       supabase.from("user_stores").select("user:app_users(*)").eq("store_id", activeStore.id)
         .then(({ data }) => {
-          if (data) setStoreUsers((data as { user: AppUser }[]).map(d => d.user).filter(Boolean));
+          if (data) setStoreUsers((data as unknown as { user: AppUser }[]).map(d => d.user).filter(Boolean));
         });
       supabase.from("user_groups").select("*").eq("store_id", activeStore.id)
         .then(({ data }) => { if (data) setGroups(data as UserGroup[]); });
@@ -913,7 +943,7 @@ function TasksPage() {
       .map((it) => ({ label: it.label, requires_photo: it.requires_photo, link_url: it.link_url ?? "" }));
     const questions = (tmpl.questions ?? [])
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((q) => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required }));
+      .map((q) => ({ label: q.label, question_type: q.question_type ?? "text" as "text" | "yes_no", is_required: q.is_required, link_url: q.link_url ?? "" }));
     const dueDate = tmpl.due_date_offset != null
       ? (() => { const d = new Date(getSimulatedNow()); d.setDate(d.getDate() + tmpl.due_date_offset!); return localDateStr(d); })()
       : "";
@@ -1300,6 +1330,7 @@ function TasksPage() {
       event_trigger_description: task.event_trigger_description ?? "",
       event_trigger_user_id: task.event_trigger_user_id ?? "",
       depends_on_task_id: task.depends_on_task_id ?? "",
+      delivery_entry_id: task.delivery_entry_id ?? "",
       is_critical: task.is_critical ?? false,
     });
   };
@@ -1634,8 +1665,8 @@ function TasksPage() {
       if (firstTask.recurrence_rule) {
         spawnRef.current = false;
         for (const ct of createdTasks) {
-          const assigneesFull = newTask.assigneeUserIds.map(uid => ({ task_id: ct.id, user_id: uid, group_id: null }));
-          newTask.assigneeGroupIds.forEach(gid => assigneesFull.push({ task_id: ct.id, user_id: null as unknown as string, group_id: gid }));
+          const assigneesFull: { task_id: string; user_id: string | null; group_id: string | null }[] = newTask.assigneeUserIds.map(uid => ({ task_id: ct.id, user_id: uid, group_id: null }));
+          newTask.assigneeGroupIds.forEach(gid => assigneesFull.push({ task_id: ct.id, user_id: null, group_id: gid }));
           const parentFull: TaskFull = {
             ...ct,
             steps: validSteps.map((s, i) => ({ id: "", task_id: ct.id, label: s.label, sort_order: i, requires_photo: s.requires_photo, is_done: false, link_url: s.link_url || null })),
@@ -2182,7 +2213,7 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-destructive">Försenade</h2>
               <span className="ml-auto text-[11px] text-muted-foreground">{overdueTasks.length}</span>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">{overdueTasks.map(renderTaskCard)}</div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">{overdueTasks.map((t) => renderTaskCard(t))}</div>
           </div>
         )}
 
@@ -2193,7 +2224,7 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-primary/80">Idag</h2>
               <span className="ml-auto text-[11px] text-muted-foreground">{todayTasks.length}</span>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">{todayTasks.map(renderTaskCard)}</div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">{todayTasks.map((t) => renderTaskCard(t))}</div>
           </div>
         )}
 
@@ -2204,7 +2235,7 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Utan datum</h2>
               <span className="ml-auto text-[11px] text-muted-foreground">{noDateTasks.length}</span>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">{noDateTasks.map(renderTaskCard)}</div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">{noDateTasks.map((t) => renderTaskCard(t))}</div>
           </div>
         )}
 
@@ -2496,7 +2527,7 @@ function TasksPage() {
             </div>
           )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {filtered.map(renderTaskCard)}
+            {filtered.map((t) => renderTaskCard(t))}
           </div>
         </div>
       )}

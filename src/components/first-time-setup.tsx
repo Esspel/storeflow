@@ -144,7 +144,7 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
           <p className="text-sm font-medium text-muted-foreground">
             Välkommen,{" "}
             <span className="font-semibold text-foreground">
-              {user?.name ?? user?.username}
+              {user?.display_name ?? user?.username}
             </span>
             {effectiveStore && (
               <> · <span className="text-foreground/90">{effectiveStore.name}</span></>

@@ -116,6 +116,9 @@ type ScheduleEmployee = {
   employee_category: string;
   employment_percent: number | null;
   work_time_week: number | null;
+  // Kolumner som finns i DB (select("*")) och används vid CSV-export
+  name?: string | null;
+  department?: string | null;
 };
 
 type ScheduleShift = {
@@ -907,7 +910,7 @@ function SchemaPage() {
           .is("parent_task_id", null);
 
         if (parents && parents.length > 0) {
-          const parentIds = parents.map((p: Task) => p.id);
+          const parentIds = parents.map((p) => p.id);
           const { data: existingChildren } = await supabase
             .from("tasks")
             .select("parent_task_id, recurrence_period_start")
@@ -1493,7 +1496,7 @@ function SchemaPage() {
             if (isAbsence) {
               return [{
                 schedule_employee_id: empId, import_id: importId, day_date: effectiveDayDate,
-                start_time: null, stop_time: null,
+                start_time: null, stop_time: null, start_time_utc: null, stop_time_utc: null,
                 shift_name: day.isSemester ? "Semester" : "", color: day.isSemester ? "#fca5a5" : "#e0e0e0",
                 shift_description: "", gross_minutes: 0, net_minutes: 0, break_minutes: 0, break_windows: [],
                 deviation_cause: day.isSemester ? "Semester" : "", is_absence_day: true,
@@ -3241,7 +3244,7 @@ function MappingRow({ employeeNr, employeeName, employeeGroup, appUsers, mappedU
   const [creating, setCreating] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [newUsername, setNewUsername] = useState(() => usernameFromName(employeeName));
-  const [newPassword] = useState(() => generatePassword(16));
+  const [newPassword, setNewPassword] = useState(() => generatePassword(16));
   const [createError, setCreateError] = useState("");
 
   const role = groupToRole(employeeGroup);

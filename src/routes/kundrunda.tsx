@@ -333,7 +333,7 @@ function KundrundaPage() {
     if (activeStore) {
       supabase.from("user_stores").select("user:app_users(*)").eq("store_id", activeStore.id)
         .then(({ data }) => {
-          if (data) setStoreUsers((data as { user: AppUser }[]).map(d => d.user).filter(Boolean));
+          if (data) setStoreUsers((data as unknown as { user: AppUser }[]).map(d => d.user).filter(Boolean));
         });
     } else {
       supabase.from("app_users").select("*").eq("is_active", true)

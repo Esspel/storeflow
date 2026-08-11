@@ -89,7 +89,7 @@ function BelastningPage() {
       .select("user:app_users(*)")
       .eq("store_id", activeStore.id);
 
-    const storeUsers = ((userStoreRows ?? []) as { user: AppUser }[])
+    const storeUsers = ((userStoreRows ?? []) as unknown as { user: AppUser }[])
       .map((r) => r.user)
       .filter((u) => u?.is_active);
 

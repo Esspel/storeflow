@@ -75,7 +75,7 @@ function QrKundonskemalPage() {
           status: req.status,
           priority: req.priority,
           created_at: req.created_at,
-          store_name: (req.store as { name: string } | null)?.name ?? "",
+          store_name: (req.store as unknown as { name: string } | null)?.name ?? "",
         });
         setResolving(false);
       });

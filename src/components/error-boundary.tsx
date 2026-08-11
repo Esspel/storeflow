@@ -50,14 +50,16 @@ export class ErrorBoundary extends React.Component<Props, State> {
         route: typeof window !== "undefined" ? window.location.pathname : null,
         extra: { section: this.props.section ?? "unknown" },
       })
-      .then(({ error: insertErr }) => {
-        if (insertErr) {
-          console.error("ErrorBoundary: Failed to log error to Supabase:", insertErr);
+      .then(
+        ({ error: insertErr }) => {
+          if (insertErr) {
+            console.error("ErrorBoundary: Failed to log error to Supabase:", insertErr);
+          }
+        },
+        (err) => {
+          console.error("ErrorBoundary: Network error while logging to Supabase:", err);
         }
-      })
-      .catch((err) => {
-        console.error("ErrorBoundary: Network error while logging to Supabase:", err);
-      });
+      );
   }
 
   componentDidUpdate(prevProps: Props) {

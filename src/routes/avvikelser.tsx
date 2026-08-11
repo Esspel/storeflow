@@ -292,7 +292,7 @@ function IssuesPage() {
     if (activeStore) {
       supabase.from("user_stores").select("user:app_users(*)").eq("store_id", activeStore.id)
         .then(({ data }) => {
-          if (data) setStoreUsers((data as { user: AppUser }[]).map(d => d.user).filter(Boolean));
+          if (data) setStoreUsers((data as unknown as { user: AppUser }[]).map(d => d.user).filter(Boolean));
         });
       supabase.from("user_groups").select("*").eq("store_id", activeStore.id).order("name")
         .then(({ data }) => { if (data) setGroups(data as UserGroup[]); });
@@ -464,7 +464,7 @@ function IssuesPage() {
     setEditSaving(false);
     if (showDetail?.id === editTarget.id) {
       const responsible = storeUsers.find(u => u.id === editForm.responsible_user_id);
-      setShowDetail(p => p ? { ...p, title: editForm.title.trim(), description: editForm.description.trim(), category: editForm.category, priority: editForm.priority, responsible_user_id: editForm.responsible_user_id || null, responsible: responsible ?? undefined, sap_article_id: editForm.sap_article_id?.trim() || null } : null);
+      setShowDetail(p => p ? { ...p, title: editForm.title.trim(), description: editForm.description.trim(), category: editForm.category, priority: editForm.priority as Incident["priority"], responsible_user_id: editForm.responsible_user_id || null, responsible: responsible ?? undefined, sap_article_id: editForm.sap_article_id?.trim() || null } : null);
     }
     setEditTarget(null);
     await fetchIncidents();

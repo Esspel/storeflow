@@ -449,7 +449,7 @@ function LiveBoard({ storeId }: { storeId: string }) {
         .in("task_id", taskIds);
 
       for (const row of assignees ?? []) {
-        const r = row as {
+        const r = row as unknown as {
           task_id: string;
           user: { display_name: string } | null;
           group: { name: string } | null;
@@ -460,7 +460,7 @@ function LiveBoard({ storeId }: { storeId: string }) {
       }
     }
 
-    const tasks: LiveTask[] = (rawTasks ?? []).map((t: {
+    const tasks: LiveTask[] = ((rawTasks ?? []) as unknown as {
       id: string;
       title: string;
       category: string;
@@ -468,10 +468,10 @@ function LiveBoard({ storeId }: { storeId: string }) {
       due_date: string | null;
       due_date_time?: string | null;
       assignee?: { display_name: string } | null;
-    }) => {
+    }[]).map((t) => {
       const names = assigneeMap[t.id] ?? [];
       // Fall back to direct assignee field if no task_assignees rows
-      const fallback = (t.assignee as { display_name: string } | null)?.display_name;
+      const fallback = t.assignee?.display_name;
       const assigneeLabel =
         names.length > 0
           ? names.length <= 2
@@ -772,7 +772,7 @@ function StoreSelector({ onSelect }: { onSelect: (id: string) => void }) {
       .then(({ data }) => {
         if (data) {
           const storeList = data
-            .map((row) => (row.store as { id: string; name: string } | null))
+            .map((row) => (row.store as unknown as { id: string; name: string } | null))
             .filter((s): s is { id: string; name: string } => s !== null)
             .sort((a, b) => a.name.localeCompare(b.name, "sv"));
           setStores(storeList);

@@ -26,9 +26,9 @@ function StoreCard({ store }: { store: StoreType }) {
   const hasExtra = !!(
     store.butikschef || store.email_sm_chef || store.telefon_butik || store.bc_telefon ||
     store.mobil || store.organisationsnummer || store.distriktschef || store.forsaljningschef ||
-    store.direktor_forsaljning || store.marknadsorrade || store.k_stalle || store.saljplan ||
+    store.direktor_forsaljning || store.marknadsomrade || store.k_stalle || store.saljplan ||
     store.hr_generalist || store.bemanningsspecialist || store.sak_kval_samordnare ||
-    store.enhet || store.foretag || store.gamla_butiksnummer || store.marknadsomrade
+    store.enhet || store.foretag || store.gamla_butiksnummer
   );
 
   return (

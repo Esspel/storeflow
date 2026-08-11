@@ -34,6 +34,7 @@ export type AppUser = {
   must_change_password: boolean;
   last_login: string | null;
   created_at: string;
+  barcode_id?: string | null;
   // Enterprise hierarchy
   hierarchy_level?: "admin" | "hk" | "forening" | "distrikt" | "chef" | "anvandare";
   forening_id?: string | null;
@@ -642,7 +643,7 @@ export type CustomerRequest = {
   staff_comment: string | null;
   source: string | null;
   requested_by: string | null;
-  status: "open" | "ordered" | "declined" | "fulfilled";
+  status: "open" | "ordered" | "declined" | "fulfilled" | "not_in_assortment" | "discontinued";
   priority: "low" | "normal" | "high";
   mitt_coop_category_id: number | null;
   mitt_coop_status_code: number | null;
