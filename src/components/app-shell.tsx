@@ -48,6 +48,74 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { getSimulatedDate, setTimeOffsetMs, isSimulationActive } from "@/lib/time-simulation";
+import { getOfflineQueueLength } from "@/lib/supabase";
+
+// Offline queue badge component
+function OfflineQueueBadge() {
+  const [queueLen, setQueueLen] = useState(getOfflineQueueLength());
+  const [lastSync, setLastSync] = useState<Date>(new Date());
+  const [syncStale, setSyncStale] = useState(false);
+
+  useEffect(() => {
+    const updateQueue = () => {
+      const len = getOfflineQueueLength();
+      setQueueLen(len);
+      if (len === 0) setLastSync(new Date());
+    };
+
+    const onOnline = () => {
+      updateQueue();
+      setLastSync(new Date());
+      setSyncStale(false);
+    };
+
+    window.addEventListener("online", onOnline);
+    const interval = setInterval(() => {
+      updateQueue();
+      const minutesAgo = Math.floor((Date.now() - lastSync.getTime()) / 60000);
+      setSyncStale(minutesAgo > 10);
+    }, 5000);
+
+    return () => {
+      window.removeEventListener("online", onOnline);
+      clearInterval(interval);
+    };
+  }, [lastSync]);
+
+  if (queueLen === 0 && !syncStale) {
+    return (
+      <span className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+        Synkad {lastSync.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      role="status"
+      aria-live="polite"
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+        queueLen > 0
+          ? "bg-warning/15 text-warning-foreground"
+          : "bg-muted text-muted-foreground",
+      )}
+    >
+      {queueLen > 0 ? (
+        <>
+          <span className="relative">
+            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-warning text-[10px] font-bold text-warning-foreground">
+              {queueLen > 9 ? "9+" : queueLen}
+            </span>
+          </span>
+          {queueLen} väntar på synk
+        </>
+      ) : (
+        `Synkad ${lastSync.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}`
+      )}
+    </span>
+  );
+}
 
 // ── SW update banner ────────────────────────────────────────────────────────
 function SwUpdateBanner() {
@@ -473,6 +541,7 @@ export function AppShell() {
           </nav>
 
           <div className="ml-auto flex items-center gap-1.5 md:gap-2">
+            <OfflineQueueBadge />
             <GlobalStoreSelector />
 
             {/* SAP Catalog Button */}

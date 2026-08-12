@@ -406,6 +406,45 @@ export function logAudit(
     .then(() => {});
 }
 
+// Offline queue integration
+import { enqueue, getQueueLength } from "@/lib/offline-queue";
+
+export function getOfflineQueueLength(): number {
+  return getQueueLength();
+}
+
+export async function mutateWithQueue<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    const isNetwork = /failed to fetch|network|timeout/i.test(String(err));
+    if (isNetwork && typeof navigator !== "undefined" && !navigator.onLine) {
+      enqueue({
+        fn: fn.name || "anonymous",
+        args: {},
+        timestamp: Date.now(),
+        retryCount: 0,
+      });
+      throw new Error("offline-queued");
+    }
+    throw err;
+  }
+}
+
+export function errorToSwedish(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/jwt expired|token.*expired|401/i.test(msg)) {
+    return "Inloggning utgången – logga in igen";
+  }
+  if (/failed to fetch|network|timeout|offline/i.test(msg)) {
+    return "Ingen internetuppkoppling – sparas offline";
+  }
+  if (/500|502|503|504|server/i.test(msg)) {
+    return "Servern svarar inte – försök om en minut";
+  }
+  return msg || "Något gick fel – försök igen";
+}
+
 const PUSH_EDGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`;
 const PUSH_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
@@ -1016,4 +1055,70 @@ export function parseMittCoopUrl(inputUrl: string): ParsedMittCoopUrl | null {
     // Return null if invalid URL
   }
   return null;
+}
+
+export type SupportTicket = {
+  id: string;
+  user_id: string | null;
+  store_id: string | null;
+  app_version: string | null;
+  user_agent: string | null;
+  offline_queue_length: number;
+  last_error: string | null;
+  idb_usage: string | null;
+  message: string | null;
+  status: string;
+  created_at: string;
+  resolved_at: string | null;
+};
+
+export type KundrundaAssignment = {
+  id: string;
+  store_id: string | null;
+  week_start: string;
+  day_of_week: number;
+  assigned_user_id: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export async function insertSupportTicket(
+  data: Omit<SupportTicket, "id" | "status" | "created_at" | "resolved_at">,
+): Promise<void> {
+  const { error } = await supabase.from("support_tickets").insert(data);
+  if (error) throw error;
+}
+
+export async function upsertKundrundaAssignment(data: {
+  store_id: string;
+  week_start: string;
+  day_of_week: number;
+  assigned_user_id: string;
+  created_by: string;
+}): Promise<void> {
+  const { error } = await supabase
+    .from("kundrunda_assignments")
+    .upsert(data, { onConflict: "store_id,week_start,day_of_week" });
+  if (error) throw error;
+}
+
+export async function getKundrundaAssignmentsThisWeek(
+  storeId: string,
+  userId?: string,
+): Promise<KundrundaAssignment[]> {
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun .. 6=Sat
+  const diffToMonday = (day === 0 ? -6 : 1) - day;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMonday);
+  const weekStart = monday.toISOString().slice(0, 10);
+  let q = supabase
+    .from("kundrunda_assignments")
+    .select("*")
+    .eq("store_id", storeId)
+    .eq("week_start", weekStart);
+  if (userId) q = q.eq("assigned_user_id", userId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as KundrundaAssignment[];
 }
