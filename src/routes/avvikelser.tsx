@@ -15,6 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { SkeletonCard } from "@/components/skeleton-card";
+import { EmptyState } from "@/components/empty-state";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -29,12 +31,13 @@ import {
   type Store as StoreType, type AppUser, type CommonDefect, type UserGroup,
   logAudit, createNotification, notifyUsers,
   uploadAttachment, getPublicUrl, deleteStorageFiles, mittCoopUrl, mittCoopSearchUrl,
-  type ArticleIdType,
+  type ArticleIdType, mutateWithQueue, errorToSwedish,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { exportCSV as downloadCSVRows } from "@/lib/csv";
 import { GdprImageReminder } from "@/components/gdpr-image-reminder";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/avvikelser")({
   component: IssuesPage,
@@ -153,7 +156,14 @@ function IssuesPage() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("active");
   const [filterPriority, setFilterPriority] = useState("all");
+  const [quickFilter, setQuickFilter] = useState<"Mina" | "Öppna" | "Alla">(
+    () => (localStorage.getItem("sf-filter-avvikelser") as "Mina" | "Öppna" | "Alla" | null) ?? "Alla",
+  );
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    localStorage.setItem("sf-filter-avvikelser", quickFilter);
+  }, [quickFilter]);
   const [showCreate, setShowCreate] = useState(false);
   const [showDetail, setShowDetail] = useState<IncidentFull | null>(null);
   const [comments, setComments] = useState<(IncidentComment & { author?: { display_name: string } })[]>([]);
@@ -306,24 +316,48 @@ function IssuesPage() {
     setNewIncident(p => ({ ...p, store_id: activeStore?.id ?? "" }));
 
     fetchCommonDefects();
+
+    // Auto-restore draft if exists
+    try {
+      const saved = localStorage.getItem(INCIDENT_DRAFT_KEY);
+      if (saved) {
+        const values = JSON.parse(saved);
+        const hasContent = values.title?.trim() || values.description?.trim();
+        if (hasContent) {
+          toast("Återställ utkast?", {
+            action: { label: "Återställ", onClick: () => setNewIncident(values) },
+            cancel: { label: "Nej", onClick: () => localStorage.removeItem(INCIDENT_DRAFT_KEY) },
+          });
+        }
+      }
+    } catch {}
   }, [activeStore, user]);
 
   const createIncident = async () => {
-    if (!newIncident.title.trim()) return;
-    if (!newIncident.description.trim()) return;
+    if (!newIncident.title.trim()) {
+      setCreateStep(1);
+      return;
+    }
+    if (!newIncident.description.trim()) {
+      setCreateStep(2);
+      return;
+    }
     setSaving(true);
-    const { data: inc } = await supabase.from("incidents").insert({
-      title: newIncident.title.trim(),
-      description: newIncident.description.trim(),
-      category: newIncident.category,
-      store_id: newIncident.store_id || null,
-      priority: newIncident.priority,
-      reported_by: user?.id,
-      responsible_user_id: newIncident.responsible_user_id || null,
-      responsible_group_id: newIncident.responsible_group_id || null,
-      sap_article_id: newIncident.sap_article_id?.trim() || null,
-      status: "open",
-    }).select().maybeSingle();
+    try {
+      const { data: inc } = await mutateWithQueue(async () => {
+        return await supabase.from("incidents").insert({
+          title: newIncident.title.trim(),
+          description: newIncident.description.trim(),
+          category: newIncident.category,
+          store_id: newIncident.store_id || null,
+          priority: newIncident.priority,
+          reported_by: user?.id,
+          responsible_user_id: newIncident.responsible_user_id || null,
+          responsible_group_id: newIncident.responsible_group_id || null,
+          sap_article_id: newIncident.sap_article_id?.trim() || null,
+          status: "open",
+        }).select().maybeSingle();
+      });
 
     if (inc) {
       // Upload images
@@ -354,12 +388,20 @@ function IssuesPage() {
       notifyUsers([...notifyIds], "incident_new", `Ny avvikelse: ${inc.title}`, `Rapporterad av ${user?.display_name}`, "/avvikelser");
 
       await fetchIncidents();
+      }
+      toast.success("Avvikelse skapad");
+    } catch (err) {
+      // Om offline: meddelandet kommer från mutateWithQueue redan (kön sparad).
+      if ((err as Error).message !== "offline-queued") {
+        toast.error(errorToSwedish(err));
+      }
+    } finally {
+      setSaving(false);
+      setShowCreate(false);
+      setUploadFiles([]);
+      try { localStorage.removeItem(INCIDENT_DRAFT_KEY); } catch {}
+      setNewIncident(emptyIncident());
     }
-    setSaving(false);
-    setShowCreate(false);
-    setUploadFiles([]);
-    try { localStorage.removeItem(INCIDENT_DRAFT_KEY); } catch {}
-    setNewIncident(emptyIncident());
   };
 
   const updateStatus = async (id: string, newStatus: string) => {
@@ -471,6 +513,8 @@ function IssuesPage() {
   };
 
   const visible = incidents.filter((i) => {
+    if (quickFilter === "Mina" && i.reported_by !== user?.id) return false;
+    if (quickFilter === "Öppna" && ["resolved", "closed"].includes(i.status)) return false;
     if (filterStatus === "active" && ["resolved", "closed"].includes(i.status)) return false;
     if (filterStatus !== "all" && filterStatus !== "active" && i.status !== filterStatus) return false;
     if (filterPriority !== "all" && i.priority !== filterPriority) return false;
@@ -563,24 +607,58 @@ function IssuesPage() {
         </Select>
       </div>
 
+      {/* Quick filter chips (Mina / Öppna / Alla) */}
+      <div role="group" aria-label="Snabbfilter" className="flex flex-wrap gap-2">
+        <button
+          aria-pressed={quickFilter === "Mina"}
+          onClick={() => setQuickFilter("Mina")}
+          className={cn(
+            "rounded-full px-3 py-1.5 text-sm transition-colors",
+            quickFilter === "Mina" ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted text-muted-foreground hover:bg-muted/80",
+          )}
+        >
+          Mina
+        </button>
+        <button
+          aria-pressed={quickFilter === "Öppna"}
+          onClick={() => setQuickFilter("Öppna")}
+          className={cn(
+            "rounded-full px-3 py-1.5 text-sm transition-colors",
+            quickFilter === "Öppna" ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted text-muted-foreground hover:bg-muted/80",
+          )}
+        >
+          Öppna
+        </button>
+        <button
+          aria-pressed={quickFilter === "Alla"}
+          onClick={() => setQuickFilter("Alla")}
+          className={cn(
+            "rounded-full px-3 py-1.5 text-sm transition-colors",
+            quickFilter === "Alla" ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted text-muted-foreground hover:bg-muted/80",
+          )}
+        >
+          Alla
+        </button>
+      </div>
+
       {loading ? (
-        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
-          {[1,2,3,4].map(i => (
-            <div key={i} className="flex items-center gap-4 border-b border-border/40 px-5 py-4 last:border-0">
-              <div className="h-4 w-4 animate-pulse rounded-full bg-muted/60 shrink-0" />
-              <div className="flex-1 space-y-1.5">
-                <div className="h-3.5 w-2/3 animate-pulse rounded-md bg-muted" />
-                <div className="h-3 w-1/3 animate-pulse rounded-md bg-muted/60" />
-              </div>
-              <div className="h-5 w-16 animate-pulse rounded-full bg-muted/60 shrink-0" />
-            </div>
-          ))}
+        <div className="space-y-3">
+          {[1,2,3,4].map(i => <SkeletonCard key={i} rows={2} />)}
         </div>
       ) : visible.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
-          <AlertTriangle className="mb-3 h-10 w-10 text-muted-foreground/40" />
-          <p className="text-sm font-medium text-muted-foreground">Inga avvikelser hittades</p>
-        </div>
+        incidents.length === 0 ? (
+          <EmptyState
+            title="Inga avvikelser än"
+            description="När du rapporterar en avvikelse syns den här."
+            actionLabel="Logga avvikelse"
+            actionTo="/avvikelser"
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
+            <AlertTriangle className="mb-3 h-10 w-10 text-muted-foreground/40" />
+            <p className="text-sm font-medium text-muted-foreground">Inga avvikelser matchar filtren</p>
+          </div>
+        )
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
           <table className="w-full text-sm">
@@ -710,8 +788,18 @@ function IssuesPage() {
                 placeholder="Titel på avvikelsen..."
                 value={newIncident.title}
                 onChange={(e) => setNewIncident(p => ({ ...p, title: e.target.value }))}
-                className="w-full border-0 bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground/50 outline-none focus:outline-none"
+                aria-invalid={createStep === 1 && newIncident.title.trim().length === 0}
+                aria-describedby="incident-title-error"
+                className={cn(
+                  "w-full border-0 bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground/50 outline-none focus:outline-none",
+                  createStep === 1 && newIncident.title.trim().length === 0 && "border-b-2 border-destructive/60 pb-1",
+                )}
               />
+              {createStep === 1 && newIncident.title.trim().length === 0 && (
+                <p id="incident-title-error" className="text-[0.8rem] font-medium text-destructive">
+                  Ange en titel på avvikelsen
+                </p>
+              )}
               {/* Common defects quick-select */}
               {commonDefects.length > 0 && (() => {
                 const uniqueDefects = Array.from(new Map(commonDefects.map(d => [d.label, d])).values());
@@ -757,8 +845,18 @@ function IssuesPage() {
                 value={newIncident.description}
                 onChange={(e) => setNewIncident(p => ({ ...p, description: e.target.value }))}
                 rows={5}
-                className="resize-none border-0 bg-transparent px-0 text-sm text-muted-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 shadow-none"
+                aria-invalid={createStep === 2 && newIncident.description.trim().length === 0}
+                aria-describedby="incident-desc-error"
+                className={cn(
+                  "resize-none border-0 bg-transparent px-0 text-sm text-muted-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 shadow-none",
+                  createStep === 2 && newIncident.description.trim().length === 0 && "border-b-2 border-destructive/60 pb-1",
+                )}
               />
+              {createStep === 2 && newIncident.description.trim().length === 0 && (
+                <p id="incident-desc-error" className="text-[0.8rem] font-medium text-destructive">
+                  Beskriv avvikelsen — vad hände, var, när?
+                </p>
+              )}
 
               {/* Images */}
               <div className="space-y-2">

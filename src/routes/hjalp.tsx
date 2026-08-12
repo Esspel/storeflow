@@ -521,6 +521,16 @@ function HjalpPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             Kontakta din butiksadministratör eller HK-support.
           </p>
+          <div className="mt-3 flex flex-col sm:flex-row gap-2 justify-center">
+            <Button asChild variant="outline" className="rounded-full gap-2">
+              <Link to="/installningar">Skicka felrapport från inställningar</Link>
+            </Button>
+            {user?.role === "admin" && (
+              <Button asChild className="rounded-full gap-2">
+                <Link to="/admin-support">Admin: Visa alla supportärenden</Link>
+              </Button>
+            )}
+          </div>
         </section>
       </div>
     </div>

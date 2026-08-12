@@ -68,6 +68,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { SkeletonCard } from "@/components/skeleton-card";
+import { EmptyState } from "@/components/empty-state";
 import {
   supabase,
   type Task,
@@ -3410,40 +3412,25 @@ function TasksPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-2">
-          {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="rounded-2xl border border-border/50 bg-card p-4 flex items-center gap-3"
-            >
-              <div className="w-1 h-12 rounded-full animate-pulse bg-muted" />
-              <div className="flex-1 space-y-2">
-                <div className="h-4 w-2/3 animate-pulse rounded-md bg-muted" />
-                <div className="h-3 w-1/3 animate-pulse rounded-md bg-muted/60" />
-              </div>
-              <div className="h-5 w-5 animate-pulse rounded-full bg-muted/60" />
-            </div>
-          ))}
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map((i) => <SkeletonCard key={i} rows={2} />)}
         </div>
       ) : tab === "today" ? (
         renderTodayView()
       ) : filtered.length === 0 && hiddenPastCount === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
-          <ListChecks className="mb-3 h-10 w-10 text-muted-foreground/40" />
-          <p className="text-sm font-medium text-muted-foreground">Inga uppgifter hittades</p>
-          {isManager && (
-            <Button
-              className="mt-4 rounded-full"
-              size="sm"
-              onClick={() => {
-                setShowRecurrenceSetup(true);
-                setSaveError("");
-              }}
-            >
-              <Plus className="mr-1.5 h-3.5 w-3.5" /> Skapa uppgift
-            </Button>
-          )}
-        </div>
+        tasks.length === 0 ? (
+          <EmptyState
+            title="Inga uppgifter än"
+            description="Skapa en uppgift eller koppla en checklistmall för att komma igång."
+            actionLabel={isManager ? "Skapa uppgift" : ""}
+            onAction={isManager ? () => { setShowRecurrenceSetup(true); setSaveError(""); } : undefined}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
+            <ListChecks className="mb-3 h-10 w-10 text-muted-foreground/40" />
+            <p className="text-sm font-medium text-muted-foreground">Inga uppgifter matchar filtren</p>
+          </div>
+        )
       ) : (
         <div className="space-y-6">
           {unconfirmedEventTasks.length > 0 && tab !== "done" && (

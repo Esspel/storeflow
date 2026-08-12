@@ -1067,6 +1067,7 @@ export type SupportTicket = {
   last_error: string | null;
   idb_usage: string | null;
   message: string | null;
+  components: string[] | null;
   status: string;
   created_at: string;
   resolved_at: string | null;

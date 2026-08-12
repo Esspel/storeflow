@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import {
   TriangleAlert as AlertTriangle,
   ArrowRight,
@@ -7,12 +8,16 @@ import {
   ListChecks,
   UserRound,
   ShoppingCart,
+  RefreshCw,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { CopyableId } from "@/components/copyable-id";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { getKundrundaAssignmentsThisWeek } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
   component: HubPage,
@@ -22,6 +27,20 @@ function HubPage() {
   const { user, activeStore } = useAuth();
   const isManager = user?.role === "manager" || user?.role === "admin";
   const firstName = user?.display_name?.split(" ")[0] ?? "";
+
+  // Hämta min tilldelade kundrunda denna vecka
+  const [myKundrunda, setMyKundrunda] = useState<{ day: string } | null>(null);
+  useEffect(() => {
+    if (!activeStore?.id || !user?.id) return;
+    getKundrundaAssignmentsThisWeek(activeStore.id, user.id)
+      .then((a) => {
+        if (a.length > 0) {
+          const days = ["Söndag", "Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag"];
+          setMyKundrunda({ day: days[a[0].day_of_week] });
+        }
+      })
+      .catch(() => {});
+  }, [activeStore?.id, user?.id]);
 
   return (
     <div className="min-h-full" style={{ background: "oklch(0.94 0.04 145)" }}>
@@ -42,6 +61,17 @@ function HubPage() {
           )}
         </div>
 
+        {/* Min kundrunda-snabblänk (endast om tilldelad) */}
+        {myKundrunda && (
+          <a
+            href="/kundrunda"
+            className="mb-4 flex items-center gap-2 rounded-2xl border border-primary/30 bg-primary-soft p-4 sm:col-span-3"
+          >
+            <UserRound className="h-5 w-5 text-primary" />
+            <span className="text-sm font-medium text-primary">Din kundrunda: {myKundrunda.day}</span>
+          </a>
+        )}
+
         {/* Quick nav cards */}
         <div
           className={cn(
@@ -49,52 +79,83 @@ function HubPage() {
             isManager ? "lg:grid-cols-6" : "lg:grid-cols-5",
           )}
         >
-          <QuickCard
-            to="/uppgifter"
-            icon={ListChecks}
-            title="Uppgifter"
-            desc="Rutiner och checklistor"
-            tone="blue"
-          />
-          <QuickCard
-            to="/avvikelser"
-            icon={AlertTriangle}
-            title="Avvikelser"
-            desc="Rapportera ärenden"
-            tone="amber"
-          />
-          <QuickCard
-            to="/schema"
-            icon={CalendarDays}
-            title="Schema"
-            desc="Skiftöversikt"
-            tone="green"
-          />
-          <QuickCard
-            to="/kundrunda"
-            icon={UserRound}
-            title="Kundrunda"
-            desc="Butikskontroll"
-            tone="teal"
-          />
-          <QuickCard
-            to="/kundonskemal"
-            icon={ShoppingCart}
-            title="Kundönskemål"
-            desc="Produktförfrågningar"
-            tone="rose"
-          />
-          {isManager && (
+          <ErrorBoundary section="Uppgifter" fallback={<WidgetFallback name="Uppgifter" />}>
             <QuickCard
-              to="/rapporter"
-              icon={BarChart3}
-              title="Rapporter"
-              desc="KPI:er och insikter"
+              to="/uppgifter"
+              icon={ListChecks}
+              title="Uppgifter"
+              desc="Rutiner och checklistor"
+              tone="blue"
+            />
+          </ErrorBoundary>
+          <ErrorBoundary section="Avvikelser" fallback={<WidgetFallback name="Avvikelser" />}>
+            <QuickCard
+              to="/avvikelser"
+              icon={AlertTriangle}
+              title="Avvikelser"
+              desc="Rapportera ärenden"
+              tone="amber"
+            />
+          </ErrorBoundary>
+          <ErrorBoundary section="Schema" fallback={<WidgetFallback name="Schema" />}>
+            <QuickCard
+              to="/schema"
+              icon={CalendarDays}
+              title="Schema"
+              desc="Skiftöversikt"
               tone="green"
             />
+          </ErrorBoundary>
+          <ErrorBoundary section="Kundrunda" fallback={<WidgetFallback name="Kundrunda" />}>
+            <QuickCard
+              to="/kundrunda"
+              icon={UserRound}
+              title="Kundrunda"
+              desc="Butikskontroll"
+              tone="teal"
+            />
+          </ErrorBoundary>
+          <ErrorBoundary section="Kundönskemål" fallback={<WidgetFallback name="Kundönskemål" />}>
+            <QuickCard
+              to="/kundonskemal"
+              icon={ShoppingCart}
+              title="Kundönskemål"
+              desc="Produktförfrågningar"
+              tone="rose"
+            />
+          </ErrorBoundary>
+          {isManager && (
+            <ErrorBoundary section="Rapporter" fallback={<WidgetFallback name="Rapporter" />}>
+              <QuickCard
+                to="/rapporter"
+                icon={BarChart3}
+                title="Rapporter"
+                desc="KPI:er och insikter"
+                tone="green"
+              />
+            </ErrorBoundary>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function WidgetFallback({ name }: { name: string }) {
+  return (
+    <div
+      role="alert"
+      className="col-span-2 flex flex-col items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-center sm:col-span-3"
+    >
+      <span className="text-sm text-destructive">Kunde inte ladda {name}</span>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => window.location.reload()}
+      >
+        <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+        Försök igen
+      </Button>
     </div>
   );
 }

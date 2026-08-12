@@ -24,12 +24,14 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase, logAudit, HIERARCHY_LABELS } from "@/lib/supabase";
+import { supabase, logAudit, HIERARCHY_LABELS, insertSupportTicket, getOfflineQueueLength, errorToSwedish } from "@/lib/supabase";
+import { getRecentErrors, initErrorCapture } from "@/lib/error-capture";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { PushNotificationSetup } from "@/components/push-notification-setup";
 import { ApiKeysManager } from "@/components/api-keys-manager";
 import { CopyableId } from "@/components/copyable-id";
+import { toast } from "sonner";
 
 const APP_VERSION = "2.4.1";
 
@@ -56,6 +58,10 @@ function SettingsPage() {
   const [barcodeError, setBarcodeError] = useState("");
 
   // Load current PIN and barcode status
+  useEffect(() => {
+    initErrorCapture();
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     supabase
@@ -892,6 +898,48 @@ function SettingsPage() {
               <p className="mt-2 text-center text-xs text-muted-foreground">
                 Exportera lokal debug-information för felsökning.
               </p>
+            </div>
+            <div className="mt-3 space-y-2">
+              <Button
+                onClick={async () => {
+                  const message = window.prompt("Beskriv problemet (valfritt):") ?? "";
+                  try {
+                    await insertSupportTicket({
+                      user_id: user?.id ?? null,
+                      store_id: activeStore?.id ?? null,
+                      app_version: APP_VERSION,
+                      user_agent: navigator.userAgent,
+                      offline_queue_length: getOfflineQueueLength(),
+                      last_error: getRecentErrors().slice(-1)[0] ?? null,
+                      idb_usage: diagIdbUsage,
+                      message,
+                      components: ["installningar"],
+                    });
+                    toast.success("Skickat till support");
+                  } catch (err) {
+                    toast.error(errorToSwedish(err));
+                  }
+                }}
+                variant="outline"
+                className="w-full rounded-full gap-2"
+              >
+                <Bug className="h-4 w-4" /> Skicka till support
+              </Button>
+              <Button
+                onClick={() => {
+                  const info = [
+                    `User-Agent: ${navigator.userAgent}`,
+                    `App-version: ${APP_VERSION}`,
+                    `Senaste fel: ${getRecentErrors().slice(-1)[0] ?? "ingen"}`,
+                    `Offline-kö: ${getOfflineQueueLength()}`,
+                  ].join("\n");
+                  navigator.clipboard.writeText(info).then(() => toast.success("Kopierat – klistra in i mail till support"));
+                }}
+                variant="ghost"
+                className="w-full rounded-full gap-2"
+              >
+                Kopiera felinfo
+              </Button>
             </div>
           </div>
         ) : (

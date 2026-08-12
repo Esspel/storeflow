@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminSupportRouteImport } from './routes/admin-support'
 import { Route as AnvandningsvillkorRouteImport } from './routes/anvandningsvillkor'
 import { Route as AvvikelserRouteImport } from './routes/avvikelser'
 import { Route as BelastningRouteImport } from './routes/belastning'
@@ -37,6 +38,11 @@ import { Route as UppgifterRouteImport } from './routes/uppgifter'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSupportRoute = AdminSupportRouteImport.update({
+  id: '/admin-support',
+  path: '/admin-support',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AnvandningsvillkorRoute = AnvandningsvillkorRouteImport.update({
@@ -157,6 +163,7 @@ const UppgifterRoute = UppgifterRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin-support': typeof AdminSupportRoute
   '/anvandningsvillkor': typeof AnvandningsvillkorRoute
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
@@ -183,6 +190,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin-support': typeof AdminSupportRoute
   '/anvandningsvillkor': typeof AnvandningsvillkorRoute
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
@@ -210,6 +218,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin-support': typeof AdminSupportRoute
   '/anvandningsvillkor': typeof AnvandningsvillkorRoute
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
@@ -238,6 +247,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin-support'
     | '/anvandningsvillkor'
     | '/avvikelser'
     | '/belastning'
@@ -264,6 +274,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin-support'
     | '/anvandningsvillkor'
     | '/avvikelser'
     | '/belastning'
@@ -290,6 +301,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/admin-support'
     | '/anvandningsvillkor'
     | '/avvikelser'
     | '/belastning'
@@ -317,6 +329,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminSupportRoute: typeof AdminSupportRoute
   AnvandningsvillkorRoute: typeof AnvandningsvillkorRoute
   AvvikelserRoute: typeof AvvikelserRoute
   BelastningRoute: typeof BelastningRoute
@@ -349,6 +362,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-support': {
+      id: '/admin-support'
+      path: '/admin-support'
+      fullPath: '/admin-support'
+      preLoaderRoute: typeof AdminSupportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/anvandningsvillkor': {
@@ -517,6 +537,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminSupportRoute: AdminSupportRoute,
   AnvandningsvillkorRoute: AnvandningsvillkorRoute,
   AvvikelserRoute: AvvikelserRoute,
   BelastningRoute: BelastningRoute,

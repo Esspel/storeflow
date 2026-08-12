@@ -30,6 +30,7 @@ import {
   RefreshCw,
   Info,
   ExternalLink,
+  Users,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -74,6 +75,9 @@ import {
   getPublicUrl,
   deleteStorageFiles,
   type ArticleIdType,
+  getKundrundaAssignmentsThisWeek,
+  errorToSwedish,
+  type KundrundaAssignment,
 } from "@/lib/supabase";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
@@ -306,6 +310,12 @@ function KundrundaPage() {
   const [dropZoneIdx, setDropZoneIdx] = useState<number | null>(null);
   const [dragCpKey, setDragCpKey] = useState<{ zoneId: string; idx: number } | null>(null);
   const [dropCpIdx, setDropCpIdx] = useState<number | null>(null);
+
+  // Assignment state (Task 15)
+  const [assignments, setAssignments] = useState<KundrundaAssignment[]>([]);
+  const [showAssignmentDialog, setShowAssignmentDialog] = useState<{ storeId: string; weekStart: string } | null>(null);
+  const [assignmentForm, setAssignmentForm] = useState<Record<number, string>>({});
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
   // Auto-scroll raf handle
   const autoScrollRafRef = useRef<number | null>(null);
 
@@ -383,6 +393,16 @@ function KundrundaPage() {
     if (sessionsRes.data) setSessions(sessionsRes.data as KundrundaSession[]);
     if (defectsRes.data) setCommonDefects(defectsRes.data as CommonDefect[]);
     setLocalVersion((localVersionRes.data as LocalVersionRecord | null) ?? null);
+
+    if (activeStore) {
+      try {
+        const asg = await getKundrundaAssignmentsThisWeek(activeStore.id);
+        setAssignments(asg);
+        const form: Record<number, string> = {};
+        asg.forEach((a) => (form[a.day_of_week] = a.assigned_user_id ?? ""));
+        setAssignmentForm(form);
+      } catch {}
+    }
     setLoading(false);
   };
 
@@ -3120,6 +3140,69 @@ function KundrundaPage() {
         )}
       </div>
 
+      {showAssignmentDialog && (
+        <KundrundaAssignmentDialog
+          open={!!showAssignmentDialog}
+          onClose={() => setShowAssignmentDialog(null)}
+          storeId={showAssignmentDialog.storeId}
+          weekStart={showAssignmentDialog.weekStart}
+          form={assignmentForm}
+          setForm={setAssignmentForm}
+          users={storeUsers.map((u) => ({ id: u.id, display_name: u.display_name }))}
+          onSave={async (data) => {
+            for (const d of data) {
+              const { error } = await supabase
+                .from("kundrunda_assignments")
+                .upsert({
+                  store_id: showAssignmentDialog!.storeId,
+                  week_start: d.weekStart,
+                  day_of_week: d.day_of_week,
+                  assigned_user_id: d.assigned_user_id || null,
+                  created_by: user?.id ?? null,
+                }, { onConflict: "store_id,week_start,day_of_week" });
+              if (error) { toast.error(errorToSwedish(error)); return; }
+            }
+            logAudit(user?.id ?? null, "kundrunda.assignment.update", "kundrunda_assignments", showAssignmentDialog!.storeId, {});
+            await fetchData();
+            toast.success("Tilldelning sparad");
+          }}
+        />
+      )}
+
+      {/* Assignment overview + button */}
+      {isManager && activeStore && (
+        <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-5 shadow-[var(--shadow-sm)]">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold text-sm">Tilldelning av kundrunda</p>
+              <p className="text-xs text-muted-foreground">
+                {assignments.length > 0
+                  ? `${assignments.filter((a) => a.assigned_user_id).length} av 7 dagar tilldelade`
+                  : "Ingen tilldelning gjord denna vecka"}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full gap-1.5"
+              onClick={() => {
+                const now = new Date();
+                const day = now.getDay();
+                const diffToMonday = (day === 0 ? -6 : 1) - day;
+                const monday = new Date(now);
+                monday.setDate(now.getDate() + diffToMonday);
+                setShowAssignmentDialog({
+                  storeId: activeStore!.id,
+                  weekStart: monday.toISOString().slice(0, 10),
+                });
+              }}
+            >
+              <Users className="h-4 w-4" /> Tilldela
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Recent sessions */}
       {completedSessions.length > 0 && (
         <div>
@@ -3470,5 +3553,72 @@ function KundrundaPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function KundrundaAssignmentDialog({
+  open, onClose, storeId, weekStart, form, setForm, users, onSave,
+}: {
+  open: boolean;
+  onClose: () => void;
+  storeId: string;
+  weekStart: string;
+  form: Record<number, string>;
+  setForm: (f: Record<number, string> | ((prev: Record<number, string>) => Record<number, string>)) => void;
+  users: { id: string; display_name: string }[];
+  onSave: (data: { weekStart: string; day_of_week: number; assigned_user_id: string }[]) => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const days = [
+    { n: 1, name: "Måndag" }, { n: 2, name: "Tisdag" }, { n: 3, name: "Onsdag" },
+    { n: 4, name: "Torsdag" }, { n: 5, name: "Fredag" }, { n: 6, name: "Lördag" }, { n: 0, name: "Söndag" },
+  ];
+  const save = async () => {
+    setSaving(true);
+    try {
+      await onSave(days.map((d) => ({
+        weekStart,
+        day_of_week: d.n,
+        assigned_user_id: form[d.n] || "",
+      })));
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Tilldela kundrunda per veckodag</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Välj vem som ansvarar för kundrundan varje dag denna vecka (startar {weekStart}).
+        </p>
+        <div className="space-y-2 my-2 max-h-72 overflow-y-auto">
+          {days.map((d) => (
+            <div key={d.n} className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2">
+              <span className="text-sm font-medium">{d.name}</span>
+              <select
+                value={form[d.n] || ""}
+                onChange={(e) => setForm((f) => ({ ...f, [d.n]: e.target.value }))}
+                className="flex h-9 w-full max-w-[180px] items-center rounded-lg border border-border/60 bg-background px-3 py-2 text-sm"
+              >
+                <option value="">— Ingen —</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>{u.display_name}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose} className="rounded-full">Avbryt</Button>
+          <Button onClick={save} disabled={saving} className="rounded-full">
+            {saving ? "Sparar..." : "Spara tilldelning"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
