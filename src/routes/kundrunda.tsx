@@ -944,13 +944,15 @@ function KundrundaPage() {
         if (task) {
           taskId = task.id;
           if (defectDialog.responsible_user_id !== user?.id) {
-            createNotification(
+            const { error, pushResult } = await createNotification(
               defectDialog.responsible_user_id,
               "task_assigned",
               `Kundrunda-uppgift: ${zone?.name ?? ""}`,
               defectDialog.defect_description.slice(0, 100),
               "/uppgifter",
             );
+            if (error) toast.error(`Notis misslyckades: ${error}`);
+            else if (pushResult?.partialErrors?.length) toast.warning(`Push delvis misslyckades: ${pushResult.partialErrors.join(", ")}`);
           }
         }
       }

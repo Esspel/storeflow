@@ -1,0 +1,6 @@
+src/lib/error-capture.test.ts(1,54): error TS2307: Cannot find module 'vitest' or its corresponding type declarations.
+src/lib/error-capture.test.ts(78,76): error TS2345: Argument of type '{ reason: Error; }' is not assignable to parameter of type 'PromiseRejectionEventInit'.
+  Property 'promise' is missing in type '{ reason: Error; }' but required in type 'PromiseRejectionEventInit'.
+src/lib/error-capture.test.ts(87,76): error TS2345: Argument of type '{ reason: string; }' is not assignable to parameter of type 'PromiseRejectionEventInit'.
+  Property 'promise' is missing in type '{ reason: string; }' but required in type 'PromiseRejectionEventInit'.
+src/lib/offline-queue.test.ts(1,54): error TS2307: Cannot find module 'vitest' or its corresponding type declarations.

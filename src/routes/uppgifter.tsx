@@ -1516,13 +1516,14 @@ function TasksPage() {
         task.assignees?.forEach((a) => {
           if (a.user_id && a.user_id !== user?.id) notifyIds.add(a.user_id);
         });
-        notifyUsers(
+        const { errors } = await notifyUsers(
           [...notifyIds],
           "task_done",
           `Uppgift klar: ${task.title}`,
           `Slutförd av ${user?.display_name}`,
           "/uppgifter",
         );
+        if (errors.length) toast.error(`Notis/push misslyckades: ${errors.join("; ")}`);
 
         const { data: krResponse } = await supabase
           .from("kundrunda_responses")
@@ -2255,13 +2256,14 @@ function TasksPage() {
         });
       }
       if (notifyIds.size > 0) {
-        notifyUsers(
+        const { errors } = await notifyUsers(
           [...notifyIds],
           "task_assigned",
           `Ny uppgift tilldelad: ${firstTask.title}`,
           `Tilldelad av ${user?.display_name}`,
           "/uppgifter",
         );
+        if (errors.length) toast.error(`Notis/push misslyckades: ${errors.join("; ")}`);
       }
 
       if (firstTask.recurrence_rule) {

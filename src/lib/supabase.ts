@@ -407,11 +407,7 @@ export function logAudit(
 }
 
 // Offline queue integration
-import { enqueue, getQueueLength } from "@/lib/offline-queue";
-
-export function getOfflineQueueLength(): number {
-  return getQueueLength();
-}
+import { enqueue } from "@/lib/offline-queue";
 
 export async function mutateWithQueue<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -448,48 +444,79 @@ export function errorToSwedish(err: unknown): string {
 const PUSH_EDGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`;
 const PUSH_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-function firePush(userIds: string[], title: string, body: string, url: string) {
-  if (!userIds.length) return;
-  fetch(PUSH_EDGE_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${PUSH_ANON_KEY}` },
-    body: JSON.stringify({ user_ids: userIds, title, body, url }),
-  })
-    .then(async (res) => {
-      const json = await res.json().catch(() => null);
-      if (!res.ok) {
-        console.error("firePush failed:", res.status, json);
-      } else if (json?.errors?.length) {
-        console.warn("firePush partial errors:", json.errors);
-      }
-    })
-    .catch((err) => console.error("firePush network error:", err));
+export interface PushResult {
+  ok: boolean;
+  error?: string;
+  partialErrors?: string[];
+}
+
+async function firePush(userIds: string[], title: string, body: string, url: string): Promise<PushResult> {
+  if (!userIds.length) return { ok: true };
+  try {
+    const res = await fetch(PUSH_EDGE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${PUSH_ANON_KEY}` },
+      body: JSON.stringify({ user_ids: userIds, title, body, url }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      const errMsg = `firePush failed: ${res.status} ${json ? JSON.stringify(json) : ""}`;
+      console.error(errMsg);
+      return { ok: false, error: errMsg };
+    }
+    if (json?.errors?.length) {
+      const partial = json.errors as string[];
+      console.warn("firePush partial errors:", partial);
+      return { ok: true, partialErrors: partial };
+    }
+    return { ok: true };
+  } catch (err) {
+    const errMsg = `firePush network error: ${err}`;
+    console.error(errMsg);
+    return { ok: false, error: errMsg };
+  }
 }
 
 // Helper: create a notification
-export function createNotification(
+export async function createNotification(
   userId: string,
   type: string,
   title: string,
   body = "",
   link = "",
-) {
-  supabase.from("notifications").insert({ user_id: userId, type, title, body, link }).then(() => {});
-  firePush([userId], title, body, link || "/");
+): Promise<{ error?: string; pushResult?: PushResult }> {
+  const { error } = await supabase.from("notifications").insert({ user_id: userId, type, title, body, link });
+  if (error) {
+    const errMsg = `createNotification insert failed: ${error.message}`;
+    console.error(errMsg);
+    return { error: errMsg };
+  }
+  const pushResult = await firePush([userId], title, body, link || "/");
+  return { pushResult };
 }
 
 // Helper: notify multiple users
-export function notifyUsers(
+export async function notifyUsers(
   userIds: string[],
   type: string,
   title: string,
   body = "",
   link = "",
-) {
-  if (userIds.length === 0) return;
+): Promise<{ errors: string[]; pushResult?: PushResult }> {
+  if (userIds.length === 0) return { errors: [] };
   const rows = userIds.map((uid) => ({ user_id: uid, type, title, body, link }));
-  supabase.from("notifications").insert(rows).then(() => {});
-  firePush(userIds, title, body, link || "/");
+  const { error } = await supabase.from("notifications").insert(rows);
+  const errors: string[] = [];
+  if (error) {
+    const errMsg = `notifyUsers insert failed: ${error.message}`;
+    console.error(errMsg);
+    errors.push(errMsg);
+  }
+  const pushResult = await firePush(userIds, title, body, link || "/");
+  if (!pushResult.ok) {
+    errors.push(pushResult.error!);
+  }
+  return { errors, pushResult };
 }
 
 // Helper: get public URL for a storage path
@@ -610,7 +637,7 @@ export type KundrundaCheckpointImage = {
   created_at: string;
 };
 
-export type KundrundaCommonDefect = {
+export type CommonDefect = {
   id: string;
   store_id: string | null;
   checkpoint_id: string | null;
@@ -662,15 +689,6 @@ export type KundrundaResponseImage = {
 };
 
 // Retry wrapper for transient network errors — waits 2^attempt * 200ms between retries
-
-export type CommonDefect = {
-  id: string;
-  store_id: string | null;
-  label: string;
-  sort_order: number;
-  checkpoint_ids: string[];
-  created_at: string;
-};
 
 export type CustomerRequest = {
   id: string;
@@ -937,7 +955,7 @@ export function mittCoopSearchUrl(
   return url;
 }
 
-// Keep the old name as an alias so existing callers don't break
+// Backwards-compatible alias for callers using the old `mittCoopEanUrl` name
 export const mittCoopEanUrl = mittCoopSearchUrl;
 
 // Build the correct Mitt Coop URL from a stored article_number string

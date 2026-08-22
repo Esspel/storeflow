@@ -11,9 +11,10 @@ import { useEffect, useRef } from "react";
 //
 // The hook fires `onScan(code)` globally — no input field needs focus.
 
-const SCAN_MAX_GAP_MS = 150;  // TC52: up to ~150ms between chars is still hardware
-const SCAN_MIN_CHARS = 4;     // shortest valid barcode
-const FLUSH_TIMEOUT_MS = 300; // flush buffer if nothing arrives within 300ms
+// Hardware burst window constants (inlined below with comments)
+// TC52: up to ~150ms between chars is still hardware
+// Shortest valid barcode: 4 chars
+// Flush buffer if nothing arrives within 300ms
 
 type Options = {
   onScan: (code: string) => void;
@@ -35,7 +36,7 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
     const flush = () => {
       const code = bufRef.current.trim();
       bufRef.current = "";
-      if (code.length >= SCAN_MIN_CHARS) onScanRef.current(code);
+      if (code.length >= 4) onScanRef.current(code); // SCAN_MIN_CHARS = 4
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -54,11 +55,15 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
 
       // Enter terminates a scan burst
       if (e.key === "Enter") {
-        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
         const code = bufRef.current.trim();
         bufRef.current = "";
         // Accept if we had a burst (gap since last char is still within scan window)
-        if (code.length >= SCAN_MIN_CHARS && gap < SCAN_MAX_GAP_MS * 4) {
+        if (code.length >= 4 && gap < 600) {
+          // 150ms * 4 = 600ms max burst duration
           onScanRef.current(code);
           // Prevent Enter from submitting a focused form while we handled it
           if (!isEditable) e.preventDefault();
@@ -67,11 +72,14 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
       }
 
       // Tab can also terminate some DataWedge configurations
-      if (e.key === "Tab" && bufRef.current.length >= SCAN_MIN_CHARS) {
-        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+      if (e.key === "Tab" && bufRef.current.length >= 4) {
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
         const code = bufRef.current.trim();
         bufRef.current = "";
-        if (code.length >= SCAN_MIN_CHARS) {
+        if (code.length >= 4) {
           onScanRef.current(code);
           e.preventDefault();
         }
@@ -84,7 +92,7 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
 
       // If not accepting alpha, only digits, hyphens and alphanumeric chars during a burst
       if (!acceptAlphaRef.current && !/[\d\-]/.test(char)) {
-        if (bufRef.current.length > 0 && gap < SCAN_MAX_GAP_MS) {
+        if (bufRef.current.length > 0 && gap < 150) {
           // Mid-burst non-numeric (some barcodes include letters even in digit mode)
           if (char !== " ") bufRef.current += char;
         } else {
@@ -94,67 +102,40 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
       }
 
       // Gap too large — this is a new manual keystroke, reset buffer
-      if (bufRef.current.length > 0 && gap > SCAN_MAX_GAP_MS) {
+      if (bufRef.current.length > 0 && gap > 150) {
         bufRef.current = "";
-        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
       }
 
       // Don't intercept manual typing in focused input fields (gap is large = human typing)
-      if (isEditable && bufRef.current.length === 0 && gap > SCAN_MAX_GAP_MS) return;
+      if (isEditable && bufRef.current.length === 0 && gap > 150) return;
 
       bufRef.current += char;
 
-      // Reset the flush timer — if nothing arrives for FLUSH_TIMEOUT_MS, fire
+      // Reset the flush timer — if nothing arrives for 300ms, fire
       if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(flush, FLUSH_TIMEOUT_MS);
+      timerRef.current = setTimeout(flush, 300);
     };
 
     // TC52 / Zebra DataWedge also fires a `textInput` event containing the
     // entire barcode as a single string (like a paste). Handle this separately
-    // so scanners that skip individual keydown events still work.
+    // so scanners using that mode also work without the keypress path.
     const onTextInput = (e: Event) => {
-      const target = e.target as HTMLElement;
-      const isEditable =
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable;
-      if (isEditable) return;
-      const data = (e as InputEvent).data ?? "";
-      if (data.length >= SCAN_MIN_CHARS) {
-        e.preventDefault();
-        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-        bufRef.current = "";
-        onScanRef.current(data.trim());
+      const inputEvent = e as InputEvent;
+      if (inputEvent.data && inputEvent.data.length >= 4) {
+        onScanRef.current(inputEvent.data.trim());
       }
     };
 
-    // Some Zebra DataWedge configurations use clipboard paste (Ctrl+V equivalent)
-    // Handle paste events globally as well
-    const onPaste = (e: ClipboardEvent) => {
-      const text = e.clipboardData?.getData("text") ?? "";
-      if (text.length >= SCAN_MIN_CHARS && text.length <= 64 && !/\n/.test(text)) {
-        const target = e.target as HTMLElement;
-        const isEditable =
-          target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable;
-        // Only intercept paste in non-editable contexts (scanner paste outside input)
-        if (!isEditable) {
-          e.preventDefault();
-          bufRef.current = "";
-          onScanRef.current(text.trim());
-        }
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown, { capture: true });
-    window.addEventListener("textInput", onTextInput, { capture: true });
-    window.addEventListener("paste", onPaste, { capture: true });
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("textInput", onTextInput as EventListener, true);
     return () => {
-      window.removeEventListener("keydown", onKeyDown, { capture: true });
-      window.removeEventListener("textInput", onTextInput, { capture: true });
-      window.removeEventListener("paste", onPaste, { capture: true });
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("textInput", onTextInput as EventListener, true);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, []); // Empty deps — listener registered once, uses refs for live values
+  }, []);
 }

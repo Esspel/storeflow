@@ -2,11 +2,9 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Zap, ZapOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BrowserMultiFormatOneDReader } from "@zxing/browser";
+import { DecodeHintType } from "@zxing/library";
 
-// Numeric values from @zxing/library enums (avoids CJS/ESM interop issues)
 const ZXING_FORMATS = [1, 2, 3, 4, 6, 7, 8, 11, 14, 15]; // CODABAR, CODE_39, CODE_93, CODE_128, EAN_8, EAN_13, ITF, QR_CODE, UPC_A, UPC_E
-const HINT_POSSIBLE_FORMATS = 2;
-const HINT_TRY_HARDER = 3;
 
 interface Props {
   onScan: (code: string) => void;
@@ -182,8 +180,8 @@ export function CameraScanner({ onScan, onClose }: Props) {
     if (!video) return;
 
     const hints = new Map<number, unknown>();
-    hints.set(HINT_POSSIBLE_FORMATS, ZXING_FORMATS);
-    hints.set(HINT_TRY_HARDER, true);
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, ZXING_FORMATS);
+    hints.set(DecodeHintType.TRY_HARDER, true);
 
     const reader = new BrowserMultiFormatOneDReader(hints);
 

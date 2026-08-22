@@ -48,7 +48,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { getSimulatedDate, setTimeOffsetMs, isSimulationActive } from "@/lib/time-simulation";
-import { getOfflineQueueLength } from "@/lib/supabase";
+import { getQueueLength as getOfflineQueueLength } from "@/lib/offline-queue";
 
 // Offline queue badge component
 function OfflineQueueBadge() {

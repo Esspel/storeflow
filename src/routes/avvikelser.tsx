@@ -374,7 +374,9 @@ function IssuesPage() {
 
       // Notify responsible user
       if (newIncident.responsible_user_id && newIncident.responsible_user_id !== user?.id) {
-        createNotification(newIncident.responsible_user_id, "incident_assigned", `Ny avvikelse tilldelad: ${inc.title}`, `Tilldelad av ${user?.display_name}`, "/avvikelser");
+        const { error, pushResult } = await createNotification(newIncident.responsible_user_id, "incident_assigned", `Ny avvikelse tilldelad: ${inc.title}`, `Tilldelad av ${user?.display_name}`, "/avvikelser");
+        if (error) toast.error(`Notis misslyckades: ${error}`);
+        else if (pushResult?.partialErrors?.length) toast.warning(`Push delvis misslyckades: ${pushResult.partialErrors.join(", ")}`);
       }
 
       // Notify managers
@@ -385,7 +387,8 @@ function IssuesPage() {
         .in("role", ["admin", "manager"])
         .eq("is_active", true);
       managers?.forEach((m: { id: string }) => { if (m.id !== user?.id) notifyIds.add(m.id); });
-      notifyUsers([...notifyIds], "incident_new", `Ny avvikelse: ${inc.title}`, `Rapporterad av ${user?.display_name}`, "/avvikelser");
+      const { errors } = await notifyUsers([...notifyIds], "incident_new", `Ny avvikelse: ${inc.title}`, `Rapporterad av ${user?.display_name}`, "/avvikelser");
+      if (errors.length) toast.error(`Notis/push misslyckades: ${errors.join("; ")}`);
 
       await fetchIncidents();
       }
@@ -414,7 +417,8 @@ function IssuesPage() {
       const notifyIds = new Set<string>();
       if (inc.reported_by && inc.reported_by !== user?.id) notifyIds.add(inc.reported_by);
       if (inc.responsible_user_id && inc.responsible_user_id !== user?.id) notifyIds.add(inc.responsible_user_id);
-      notifyUsers([...notifyIds], "incident_status", `Avvikelse uppdaterad: ${inc.title}`, `Status: ${STATUS_LABELS[newStatus]}`, "/avvikelser");
+      const { errors } = await notifyUsers([...notifyIds], "incident_status", `Avvikelse uppdaterad: ${inc.title}`, `Status: ${STATUS_LABELS[newStatus]}`, "/avvikelser");
+      if (errors.length) toast.error(`Notis/push misslyckades: ${errors.join("; ")}`);
     }
 
     await fetchIncidents();
@@ -427,7 +431,9 @@ function IssuesPage() {
     await supabase.from("incidents").update({ responsible_user_id: userId || null }).eq("id", incId);
     if (userId && userId !== user?.id) {
       const inc = incidents.find(i => i.id === incId);
-      createNotification(userId, "incident_assigned", `Du är nu ansvarig för: ${inc?.title ?? "avvikelse"}`, `Tilldelad av ${user?.display_name}`, "/avvikelser");
+      const { error, pushResult } = await createNotification(userId, "incident_assigned", `Du är nu ansvarig för: ${inc?.title ?? "avvikelse"}`, `Tilldelad av ${user?.display_name}`, "/avvikelser");
+      if (error) toast.error(`Notis misslyckades: ${error}`);
+      else if (pushResult?.partialErrors?.length) toast.warning(`Push delvis misslyckades: ${pushResult.partialErrors.join(", ")}`);
     }
     await fetchIncidents();
     if (showDetail?.id === incId) {

@@ -232,29 +232,33 @@ function TestPanel() {
   // ---- Notifications ----
   async function testNotification() {
     setRunning(true);
-    createNotification(
+    const { error, pushResult } = await createNotification(
       user!.id,
       "test",
       "Testnotis",
       "Detta är en testnotis från testpanelen.",
       "/testpanel",
     );
-    addResult(true, "Testnotis skickad.");
+    if (error) addResult(false, `Notis misslyckades: ${error}`);
+    else if (pushResult?.partialErrors?.length) addResult(true, `Testnotis skickad (push varningar: ${pushResult.partialErrors.join(", ")})`);
+    else addResult(true, "Testnotis skickad.");
     setRunning(false);
   }
 
   async function testBulkNotifications() {
     setRunning(true);
+    let allOk = true;
     for (let i = 1; i <= 5; i++) {
-      createNotification(
+      const { error } = await createNotification(
         user!.id,
         "test",
         `Bulk-notis ${i}`,
         "Massa-test från testpanelen",
         "/testpanel",
       );
+      if (error) allOk = false;
     }
-    addResult(true, "5 bulk-notiser skickade.");
+    addResult(allOk, allOk ? "5 bulk-notiser skickade." : "Vissa bulk-notiser misslyckades.");
     await loadStats();
     setRunning(false);
   }
@@ -299,8 +303,10 @@ function TestPanel() {
   async function sendCustomNotification() {
     if (!customMsg.trim()) return;
     setRunning(true);
-    createNotification(user!.id, "test", customMsg.trim(), "", "/testpanel");
-    addResult(true, `Anpassad notis skickad: "${customMsg}"`);
+    const { error, pushResult } = await createNotification(user!.id, "test", customMsg.trim(), "", "/testpanel");
+    if (error) addResult(false, `Notis misslyckades: ${error}`);
+    else if (pushResult?.partialErrors?.length) addResult(true, `Anpassad notis skickad: "${customMsg}" (push varningar: ${pushResult.partialErrors.join(", ")})`);
+    else addResult(true, `Anpassad notis skickad: "${customMsg}"`);
     setCustomMsg("");
     setRunning(false);
   }
@@ -477,14 +483,15 @@ function TestPanel() {
       setRunning(false);
       return;
     }
-    notifyUsers(
+    const { errors } = await notifyUsers(
       userIds,
       "test",
       `[TEST] Notis: ${activeStore.name}`,
       "Skickad till alla i butiken via testpanelen",
       "/testpanel",
     );
-    addResult(true, `Notis + push skickad till ${userIds.length} användare i ${activeStore.name}.`);
+    if (errors.length) addResult(false, `Notis/push misslyckades: ${errors.join("; ")}`);
+    else addResult(true, `Notis + push skickad till ${userIds.length} användare i ${activeStore.name}.`);
     await loadStats();
     setRunning(false);
   }
