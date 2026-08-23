@@ -60,6 +60,7 @@
     "jsdom": "^30.0.1",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.28.0",
+    "pdf-parse": "^2.4.5",
     "prettier": "^3.9.6",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",
