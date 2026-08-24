@@ -15,6 +15,7 @@ import { Route as AnvandningsvillkorRouteImport } from './routes/anvandningsvill
 import { Route as AvvikelserRouteImport } from './routes/avvikelser'
 import { Route as BelastningRouteImport } from './routes/belastning'
 import { Route as ButiksregisterRouteImport } from './routes/butiksregister'
+import { Route as CustomerNavRouteImport } from './routes/customer-nav'
 import { Route as GdprRouteImport } from './routes/gdpr'
 import { Route as HjalpRouteImport } from './routes/hjalp'
 import { Route as HkDashboardRouteImport } from './routes/hk-dashboard'
@@ -26,6 +27,7 @@ import { Route as LicensRouteImport } from './routes/licens'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as PersonalRouteImport } from './routes/personal'
+import { Route as PlanogramUploadRouteImport } from './routes/planogram-upload'
 import { Route as PulstavlaRouteImport } from './routes/pulstavla'
 import { Route as QrAvvikelseRouteImport } from './routes/qr-avvikelse'
 import { Route as QrKundonskemalRouteImport } from './routes/qr-kundonskemal'
@@ -33,6 +35,7 @@ import { Route as QrKundonskemalFormRouteImport } from './routes/qr-kundonskemal
 import { Route as RapporterRouteImport } from './routes/rapporter'
 import { Route as SchemaRouteImport } from './routes/schema'
 import { Route as ShelfAnalyticsRouteImport } from './routes/shelf-analytics'
+import { Route as SpatialNavigationRouteImport } from './routes/spatial-navigation'
 import { Route as TestpanelRouteImport } from './routes/testpanel'
 import { Route as UppgifterRouteImport } from './routes/uppgifter'
 
@@ -64,6 +67,11 @@ const BelastningRoute = BelastningRouteImport.update({
 const ButiksregisterRoute = ButiksregisterRouteImport.update({
   id: '/butiksregister',
   path: '/butiksregister',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CustomerNavRoute = CustomerNavRouteImport.update({
+  id: '/customer-nav',
+  path: '/customer-nav',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GdprRoute = GdprRouteImport.update({
@@ -121,6 +129,11 @@ const PersonalRoute = PersonalRouteImport.update({
   path: '/personal',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlanogramUploadRoute = PlanogramUploadRouteImport.update({
+  id: '/planogram-upload',
+  path: '/planogram-upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PulstavlaRoute = PulstavlaRouteImport.update({
   id: '/pulstavla',
   path: '/pulstavla',
@@ -156,6 +169,11 @@ const ShelfAnalyticsRoute = ShelfAnalyticsRouteImport.update({
   path: '/shelf-analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SpatialNavigationRoute = SpatialNavigationRouteImport.update({
+  id: '/spatial-navigation',
+  path: '/spatial-navigation',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TestpanelRoute = TestpanelRouteImport.update({
   id: '/testpanel',
   path: '/testpanel',
@@ -174,6 +192,7 @@ export interface FileRoutesByFullPath {
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
+  '/customer-nav': typeof CustomerNavRoute
   '/gdpr': typeof GdprRoute
   '/hjalp': typeof HjalpRoute
   '/hk-dashboard': typeof HkDashboardRoute
@@ -185,6 +204,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
+  '/planogram-upload': typeof PlanogramUploadRoute
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
@@ -192,6 +212,7 @@ export interface FileRoutesByFullPath {
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/shelf-analytics': typeof ShelfAnalyticsRoute
+  '/spatial-navigation': typeof SpatialNavigationRoute
   '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
@@ -202,6 +223,7 @@ export interface FileRoutesByTo {
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
+  '/customer-nav': typeof CustomerNavRoute
   '/gdpr': typeof GdprRoute
   '/hjalp': typeof HjalpRoute
   '/hk-dashboard': typeof HkDashboardRoute
@@ -213,6 +235,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
+  '/planogram-upload': typeof PlanogramUploadRoute
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
@@ -220,6 +243,7 @@ export interface FileRoutesByTo {
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/shelf-analytics': typeof ShelfAnalyticsRoute
+  '/spatial-navigation': typeof SpatialNavigationRoute
   '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
@@ -231,6 +255,7 @@ export interface FileRoutesById {
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
+  '/customer-nav': typeof CustomerNavRoute
   '/gdpr': typeof GdprRoute
   '/hjalp': typeof HjalpRoute
   '/hk-dashboard': typeof HkDashboardRoute
@@ -242,6 +267,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
+  '/planogram-upload': typeof PlanogramUploadRoute
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
@@ -249,6 +275,7 @@ export interface FileRoutesById {
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/shelf-analytics': typeof ShelfAnalyticsRoute
+  '/spatial-navigation': typeof SpatialNavigationRoute
   '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
@@ -261,6 +288,7 @@ export interface FileRouteTypes {
     | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
+    | '/customer-nav'
     | '/gdpr'
     | '/hjalp'
     | '/hk-dashboard'
@@ -272,6 +300,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/mallar'
     | '/personal'
+    | '/planogram-upload'
     | '/pulstavla'
     | '/qr-avvikelse'
     | '/qr-kundonskemal'
@@ -279,6 +308,7 @@ export interface FileRouteTypes {
     | '/rapporter'
     | '/schema'
     | '/shelf-analytics'
+    | '/spatial-navigation'
     | '/testpanel'
     | '/uppgifter'
   fileRoutesByTo: FileRoutesByTo
@@ -289,6 +319,7 @@ export interface FileRouteTypes {
     | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
+    | '/customer-nav'
     | '/gdpr'
     | '/hjalp'
     | '/hk-dashboard'
@@ -300,6 +331,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/mallar'
     | '/personal'
+    | '/planogram-upload'
     | '/pulstavla'
     | '/qr-avvikelse'
     | '/qr-kundonskemal'
@@ -307,6 +339,7 @@ export interface FileRouteTypes {
     | '/rapporter'
     | '/schema'
     | '/shelf-analytics'
+    | '/spatial-navigation'
     | '/testpanel'
     | '/uppgifter'
   id:
@@ -317,6 +350,7 @@ export interface FileRouteTypes {
     | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
+    | '/customer-nav'
     | '/gdpr'
     | '/hjalp'
     | '/hk-dashboard'
@@ -328,6 +362,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/mallar'
     | '/personal'
+    | '/planogram-upload'
     | '/pulstavla'
     | '/qr-avvikelse'
     | '/qr-kundonskemal'
@@ -335,6 +370,7 @@ export interface FileRouteTypes {
     | '/rapporter'
     | '/schema'
     | '/shelf-analytics'
+    | '/spatial-navigation'
     | '/testpanel'
     | '/uppgifter'
   fileRoutesById: FileRoutesById
@@ -346,6 +382,7 @@ export interface RootRouteChildren {
   AvvikelserRoute: typeof AvvikelserRoute
   BelastningRoute: typeof BelastningRoute
   ButiksregisterRoute: typeof ButiksregisterRoute
+  CustomerNavRoute: typeof CustomerNavRoute
   GdprRoute: typeof GdprRoute
   HjalpRoute: typeof HjalpRoute
   HkDashboardRoute: typeof HkDashboardRoute
@@ -357,6 +394,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MallarRoute: typeof MallarRoute
   PersonalRoute: typeof PersonalRoute
+  PlanogramUploadRoute: typeof PlanogramUploadRoute
   PulstavlaRoute: typeof PulstavlaRoute
   QrAvvikelseRoute: typeof QrAvvikelseRoute
   QrKundonskemalRoute: typeof QrKundonskemalRoute
@@ -364,6 +402,7 @@ export interface RootRouteChildren {
   RapporterRoute: typeof RapporterRoute
   SchemaRoute: typeof SchemaRoute
   ShelfAnalyticsRoute: typeof ShelfAnalyticsRoute
+  SpatialNavigationRoute: typeof SpatialNavigationRoute
   TestpanelRoute: typeof TestpanelRoute
   UppgifterRoute: typeof UppgifterRoute
 }
@@ -410,6 +449,13 @@ declare module '@tanstack/react-router' {
       path: '/butiksregister'
       fullPath: '/butiksregister'
       preLoaderRoute: typeof ButiksregisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/customer-nav': {
+      id: '/customer-nav'
+      path: '/customer-nav'
+      fullPath: '/customer-nav'
+      preLoaderRoute: typeof CustomerNavRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gdpr': {
@@ -489,6 +535,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PersonalRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/planogram-upload': {
+      id: '/planogram-upload'
+      path: '/planogram-upload'
+      fullPath: '/planogram-upload'
+      preLoaderRoute: typeof PlanogramUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pulstavla': {
       id: '/pulstavla'
       path: '/pulstavla'
@@ -538,6 +591,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShelfAnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/spatial-navigation': {
+      id: '/spatial-navigation'
+      path: '/spatial-navigation'
+      fullPath: '/spatial-navigation'
+      preLoaderRoute: typeof SpatialNavigationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/testpanel': {
       id: '/testpanel'
       path: '/testpanel'
@@ -562,6 +622,7 @@ const rootRouteChildren: RootRouteChildren = {
   AvvikelserRoute: AvvikelserRoute,
   BelastningRoute: BelastningRoute,
   ButiksregisterRoute: ButiksregisterRoute,
+  CustomerNavRoute: CustomerNavRoute,
   GdprRoute: GdprRoute,
   HjalpRoute: HjalpRoute,
   HkDashboardRoute: HkDashboardRoute,
@@ -573,6 +634,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MallarRoute: MallarRoute,
   PersonalRoute: PersonalRoute,
+  PlanogramUploadRoute: PlanogramUploadRoute,
   PulstavlaRoute: PulstavlaRoute,
   QrAvvikelseRoute: QrAvvikelseRoute,
   QrKundonskemalRoute: QrKundonskemalRoute,
@@ -580,6 +642,7 @@ const rootRouteChildren: RootRouteChildren = {
   RapporterRoute: RapporterRoute,
   SchemaRoute: SchemaRoute,
   ShelfAnalyticsRoute: ShelfAnalyticsRoute,
+  SpatialNavigationRoute: SpatialNavigationRoute,
   TestpanelRoute: TestpanelRoute,
   UppgifterRoute: UppgifterRoute,
 }
