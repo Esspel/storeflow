@@ -19,12 +19,14 @@ import {
 import { usePosemeshDetection } from "@/hooks/usePosemesh";
 import type {
   QRCode as QRCodeType,
+  Barcode as BarcodeType,
   ArUcoMarker,
   Pose,
   ShelfObservation,
   ObservedProduct,
   Vector3,
 } from "@/lib/posemesh/types";
+import { lookupProductByEAN, lookupProductByBNR } from "@/lib/coop-products";
 import { checkPlanogramCompliance, type PlanogramCheckResult } from "@/lib/planogram-engine";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +79,45 @@ export function ShelfScanner({
     });
   }, []);
 
+  const onBarcodeDetected = useCallback((codes: BarcodeType[]) => {
+    // Convert barcodes (EAN-13, EAN-8, UPC, Code128) into observed products
+    codes.forEach(async (barcode) => {
+      if (barcode.data) {
+        // Try to look up product from Coop sortiment by EAN or BNR
+        let productInfo: { name: string; bnr?: string } | null = null;
+
+        // Check if it's an EAN (13 or 8 digits)
+        if (/^\d{13}$/.test(barcode.data) || /^\d{8}$/.test(barcode.data)) {
+          productInfo = await lookupProductByEAN(barcode.data);
+        }
+        // Check if it's a BNR (Coop article number, typically 6-7 digits)
+        else if (/^\d{6,7}$/.test(barcode.data)) {
+          productInfo = await lookupProductByBNR(barcode.data);
+        }
+
+        setScanHistory((prev) => {
+          const exists = prev.some(
+            (item) => item.ean === barcode.data || item.product_id === barcode.data,
+          );
+          if (exists) return prev;
+          const newObserved: ObservedProduct = {
+            product_id: barcode.data,
+            ean: barcode.data,
+            name: productInfo?.name ?? `Produkt (${barcode.format}: ${barcode.data.slice(-4)})`,
+            position: currentPoseRef.current
+              ? currentPoseRef.current.position
+              : { x: 0, y: 0, z: 0 },
+            confidence: barcode.confidence ?? 0.9,
+            marker_id: `barcode-${barcode.format}-${barcode.data.slice(0, 8)}`,
+            facing_count: 1,
+            bnr: productInfo?.bnr,
+          };
+          return [...prev, newObserved];
+        });
+      }
+    });
+  }, []);
+
   const onArUcoDetected = useCallback((markers: ArUcoMarker[]) => {
     setDetectedArUcos(markers);
     // Use ArUco marker for pose estimation if available
@@ -100,6 +141,7 @@ export function ShelfScanner({
     scanIntervalMs: 200,
     callbacks: {
       onQRDetected,
+      onBarcodeDetected,
       onArUcoDetected,
       onPoseEstimated,
       onError,

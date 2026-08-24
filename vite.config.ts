@@ -7,12 +7,13 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     tanstackStart({
+      // Disable prerendering globally - we use auth-dependent routes
+      prerender: {
+        enabled: false,
+      },
+      // Disable SPA to prevent forced prerendering of shell
       spa: {
-        enabled: true,
-        maskPath: "/",
-        prerender: {
-          outputPath: "/index",
-        },
+        enabled: false,
       },
       importProtection: {
         behavior: "error",

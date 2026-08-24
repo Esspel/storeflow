@@ -530,17 +530,15 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
         if (!weekMap.has(key)) weekMap.set(key, { weekNumber, year, weekStartDate, employees: [] });
         else if (!weekMap.get(key)!.weekStartDate && weekStartDate)
           weekMap.get(key)!.weekStartDate = weekStartDate;
-        weekMap
-          .get(key)!
-          .employees.push({
-            employeeNr,
-            employeeName,
-            employeeGroup,
-            employeeCategory,
-            employmentPercent,
-            workTimeWeek,
-            days,
-          });
+        weekMap.get(key)!.employees.push({
+          employeeNr,
+          employeeName,
+          employeeGroup,
+          employeeCategory,
+          employmentPercent,
+          workTimeWeek,
+          days,
+        });
       }
     }
 
@@ -980,18 +978,16 @@ Deno.serve(async (req: Request) => {
   }
 
   for (const [employeeNr, appUserId] of finalMappings) {
-    await supabase
-      .from("employee_mappings")
-      .upsert(
-        {
-          store_id,
-          employee_nr: employeeNr,
-          app_user_id: appUserId,
-          created_by: imported_by_user_id,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "store_id,employee_nr" },
-      );
+    await supabase.from("employee_mappings").upsert(
+      {
+        store_id,
+        employee_nr: employeeNr,
+        app_user_id: appUserId,
+        created_by: imported_by_user_id,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "store_id,employee_nr" },
+    );
   }
 
   // ── Import each week's shifts (mirrors confirmImport's shift-insertion loop) ──

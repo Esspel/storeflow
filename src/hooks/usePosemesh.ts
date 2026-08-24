@@ -8,6 +8,7 @@ import type {
   PosemeshConfig,
   PosemeshStatus,
   QRCode,
+  Barcode,
   ArUcoMarker,
   Pose,
   PosemeshDetectionOptions,
@@ -19,10 +20,12 @@ import type {
 // posemesh Module Types (matching Emscripten exports)
 // ============================================================================
 
-// Use a looser type for the Emscripten module since we don't have exact types
 interface PosemeshModule {
   QRDetection?: {
-    detectQRFromLuminance(luminance: Uint8Array, width: number, height: number): unknown[];
+    detectQRFromLuminance(luminance: Uint8Array, width: number, height: number): QRCode[];
+  };
+  BarcodeDetection?: {
+    detectBarcodeFromLuminance(luminance: Uint8Array, width: number, height: number): Barcode[];
   };
   ArucoDetection?: {
     detectArucoFromLuminance(
@@ -30,12 +33,12 @@ interface PosemeshModule {
       width: number,
       height: number,
       markerFormat?: number,
-    ): unknown[];
+    ): ArUcoMarker[];
     detectArucoFromLuminanceLandmarkObservations(
       luminance: Uint8Array,
       width: number,
       height: number,
-    ): unknown[];
+    ): ArUcoMarker[];
   };
   PoseEstimation?: {
     solvePnP(
@@ -43,7 +46,7 @@ interface PosemeshModule {
       imagePoints: number[],
       cameraMatrix: number[],
       distCoeffs: number[],
-    ): unknown | null;
+    ): Pose | null;
   };
   getVersion?: () => string;
   getCommitId?: () => string;
@@ -54,9 +57,9 @@ interface PosemeshModule {
 // ============================================================================
 
 let posemeshModule: PosemeshModule | null = null;
-let posemeshInitPromise: Promise<PosemeshModule> | null = null;
+let posemeshInitPromise: Promise<PosemeshModule | null> | null = null;
 
-async function loadPosemeshModule(): Promise<PosemeshModule> {
+async function loadPosemeshModule(): Promise<PosemeshModule | null> {
   if (posemeshModule) return posemeshModule;
   if (posemeshInitPromise) return posemeshInitPromise;
 
@@ -84,9 +87,10 @@ async function loadPosemeshModule(): Promise<PosemeshModule> {
 
     // Extract the classes we need from the wasm exports
     posemeshModule = {
-      QRDetection: wasmExports.QRDetection,
-      ArucoDetection: wasmExports.ArucoDetection,
-      PoseEstimation: wasmExports.PoseEstimation,
+      QRDetection: wasmExports.QRDetection as PosemeshModule["QRDetection"],
+      BarcodeDetection: wasmExports.BarcodeDetection as PosemeshModule["BarcodeDetection"],
+      ArucoDetection: wasmExports.ArucoDetection as PosemeshModule["ArucoDetection"],
+      PoseEstimation: wasmExports.PoseEstimation as PosemeshModule["PoseEstimation"],
       getVersion: () => wasmExports.version || "0.1.0",
       getCommitId: () => wasmExports.commitId || "unknown",
     };
@@ -126,6 +130,9 @@ export function usePosemesh(): UsePosemeshReturn {
     try {
       // Load and initialize posemesh WASM module
       const module = await loadPosemeshModule();
+      if (!module) {
+        throw new Error("Failed to load posemesh module");
+      }
 
       // Get version info
       if (module.getVersion) {
@@ -240,6 +247,9 @@ export function usePosemeshDetection(
 
       // Load posemesh module for detection
       const module = await loadPosemeshModule();
+      if (!module) {
+        return;
+      }
 
       // Detect QR codes
       if (callbacks.onQRDetected && module.QRDetection) {
@@ -250,6 +260,22 @@ export function usePosemeshDetection(
           }
         } catch (qrError) {
           console.warn("QR detection error:", qrError);
+        }
+      }
+
+      // Detect Barcodes (EAN-13, EAN-8, UPC, Code128, etc.)
+      if (callbacks.onBarcodeDetected && module.BarcodeDetection) {
+        try {
+          const barcodes = module.BarcodeDetection.detectBarcodeFromLuminance(
+            luminance,
+            width,
+            height,
+          );
+          if (barcodes.length > 0) {
+            callbacks.onBarcodeDetected(barcodes);
+          }
+        } catch (barcodeError) {
+          console.warn("Barcode detection error:", barcodeError);
         }
       }
 
@@ -370,7 +396,23 @@ export function convertPosemeshQR(raw: unknown): QRCode {
   const r = raw as Record<string, unknown>;
   return {
     data: (r.data as string) || "",
-    corners: ((r.corners as Array<Record<string, unknown>> | undefined)?.map((c) => ({ x: c.x as number, y: c.y as number })) || []) as Vector2[],
+    corners: ((r.corners as Array<Record<string, unknown>> | undefined)?.map((c) => ({
+      x: c.x as number,
+      y: c.y as number,
+    })) || []) as Vector2[],
+    confidence: r.confidence as number | undefined,
+  };
+}
+
+export function convertPosemeshBarcode(raw: unknown): Barcode {
+  const r = raw as Record<string, unknown>;
+  return {
+    data: (r.data as string) || "",
+    format: (r.format as string) || "unknown",
+    corners: ((r.corners as Array<Record<string, unknown>> | undefined)?.map((c) => ({
+      x: c.x as number,
+      y: c.y as number,
+    })) || []) as Vector2[],
     confidence: r.confidence as number | undefined,
   };
 }
@@ -379,7 +421,10 @@ export function convertPosemeshArUco(raw: unknown): ArUcoMarker {
   const r = raw as Record<string, unknown>;
   return {
     id: (r.id as number) ?? 0,
-    corners: ((r.corners as Array<Record<string, unknown>> | undefined)?.map((c) => ({ x: c.x as number, y: c.y as number })) || []) as Vector2[],
+    corners: ((r.corners as Array<Record<string, unknown>> | undefined)?.map((c) => ({
+      x: c.x as number,
+      y: c.y as number,
+    })) || []) as Vector2[],
     size: r.size as number | undefined,
     confidence: r.confidence as number | undefined,
   };
@@ -388,9 +433,9 @@ export function convertPosemeshArUco(raw: unknown): ArUcoMarker {
 export function convertPosemeshPose(raw: unknown): Pose {
   const r = raw as Record<string, unknown>;
   return {
-    position: (r.position as Vector3) || { x: 0, y: 0, z: 0 },
-    rotation: (r.rotation as Quaternion) || { x: 0, y: 0, z: 0, w: 1 },
-    matrix: (r.matrix as Matrix4) || [],
+    position: (r.position as Pose["position"]) || { x: 0, y: 0, z: 0 },
+    rotation: (r.rotation as Pose["rotation"]) || { x: 0, y: 0, z: 0, w: 1 },
+    matrix: (r.matrix as Pose["matrix"]) || [],
     confidence: (r.confidence as number) ?? 1,
     timestamp: (r.timestamp as number) ?? Date.now(),
   };

@@ -1,9 +1,10 @@
 /**
  * Shelf Analytics & Planogram Compliance Route Component
+ * Protected route - requires authentication to access confidential planogram data
  */
 
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import {
   BarChart3,
   Layers,
@@ -14,12 +15,16 @@ import {
   TrendingUp,
   Search,
   FileSpreadsheet,
+  QrCode as QrCodeIcon,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ShelfScanner } from "@/components/shelf-scanner";
+import { QRGenerator } from "@/components/qr-generator";
 import type { PlanogramCheckResult } from "@/lib/planogram-engine";
+import { useAuth } from "@/lib/auth-context";
 
 interface ShelfData {
   id: string;
@@ -66,10 +71,51 @@ const MOCK_SHELVES: ShelfData[] = [
 ];
 
 function ShelfAnalyticsComponent() {
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [shelves] = useState<ShelfData[]>(MOCK_SHELVES);
   const [activeScannerShelf, setActiveScannerShelf] = useState<ShelfData | null>(null);
   const [selectedShelf, setSelectedShelf] = useState<ShelfData | null>(MOCK_SHELVES[0]);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Redirect to login if not authenticated (planogram data is confidential)
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate({ to: "/login", replace: true });
+    }
+  }, [user, authLoading, navigate]);
+
+  // Show loading or access denied while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-full bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent mx-auto mb-4" />
+          <p className="text-slate-600 dark:text-slate-400">Kontrollerar autentisering...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-full bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+        <div className="text-center p-8">
+          <Lock className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
+            Autentisering krävs
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-md">
+            Planogramdata är konfidentiell och kräver inloggning. Logga in för att komma åt
+            hyllanalys och planogram-efterlevnad.
+          </p>
+          <Button onClick={() => navigate({ to: "/login" })} className="w-full sm:w-auto">
+            Logga in
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const handleScanComplete = (_obs: unknown, compliance?: PlanogramCheckResult) => {
     if (compliance && activeScannerShelf) {
@@ -302,6 +348,19 @@ function ShelfAnalyticsComponent() {
                 <div className="text-xs text-slate-500 dark:text-slate-400">Kritiskt</div>
               </Card>
             </div>
+
+            {/* QR Code Generator for Shelf Positioning */}
+            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 mt-4">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <QrCodeIcon className="w-5 h-5 text-indigo-500" />
+                  Generera hyllmarkörer för positionering
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <QRGenerator />
+              </CardContent>
+            </Card>
           </div>
         </div>
 

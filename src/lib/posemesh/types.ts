@@ -51,6 +51,18 @@ export interface QRCode {
   confidence?: number;
 }
 
+/** Barcode detection result (EAN-13, EAN-8, UPC, Code128, etc.) */
+export interface Barcode {
+  /** Decoded barcode content (EAN, UPC, etc.) */
+  data: string;
+  /** Barcode format (ean_13, ean_8, upc_a, upc_e, code_128, etc.) */
+  format: string;
+  /** Corner points in image coordinates */
+  corners: Vector2[];
+  /** Detection confidence (0-1) */
+  confidence?: number;
+}
+
 /** 2D point */
 export interface Vector2 {
   x: number;
@@ -186,6 +198,8 @@ export interface ObservedProduct {
   confidence: number;
   marker_id: string;
   facing_count?: number;
+  /** Coop article number (BNR) if product was looked up in Coop sortiment */
+  bnr?: string;
 }
 
 /** Misplaced product */
@@ -229,6 +243,7 @@ export interface SpatialRoute {
 
 export interface PosemeshDetectionCallbacks {
   onQRDetected?: (codes: QRCode[]) => void;
+  onBarcodeDetected?: (codes: Barcode[]) => void;
   onArUcoDetected?: (markers: ArUcoMarker[]) => void;
   onPoseEstimated?: (pose: Pose) => void;
   onError?: (error: Error) => void;

@@ -3,6 +3,9 @@ declare module "@/lib/posemesh/Posemesh.js" {
     QRDetection?: {
       detectQRFromLuminance(luminance: Uint8Array, width: number, height: number): unknown[];
     };
+    BarcodeDetection?: {
+      detectBarcodeFromLuminance(luminance: Uint8Array, width: number, height: number): unknown[];
+    };
     ArucoDetection?: {
       detectArucoFromLuminance(
         luminance: Uint8Array,
