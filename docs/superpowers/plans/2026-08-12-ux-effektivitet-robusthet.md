@@ -12,7 +12,7 @@
 
 - Ingen auditlogg / transaktionslogg i databasen (undantag: `support_tickets` och `kundrunda_assignments` tabeller enligt spec).
 - Ingen "smart prefill" eller tangentbordsgenvägar.
-- Kundrunda är en **delad runtur**, inte personligt kopplad — tilldelning väljer bara *vem som ska göra* den.
+- Kundrunda är en **delad runtur**, inte personligt kopplad — tilldelning väljer bara _vem som ska göra_ den.
 - Offline-kö, diagnostik och felinfo ska vara **klientsidiga** (localStorage / minne) där det inte krävs serversynk.
 - Pull-to-refresh och "duplicera ärende" i avvikelser — utelämnas (implementeras ej).
 - Svensk copy i alla UI-texter och felmeddelanden (WCAG 3.3.1 för validering: inline, inte toast).
@@ -23,32 +23,34 @@
 
 ## Filstruktur
 
-| Fil | Ansvar |
-|---|---|
-| `supabase/migrations/20260812120000_add_support_and_kundrunda_assignment.sql` | Nya tabeller + RLS för `support_tickets`, `support_ticket_replies`, `kundrunda_assignments` |
-| `src/lib/supabase.ts` | `mutateWithQueue(fn)`, `errorToSwedish(err)`, typer `SupportTicket`, `KundrundaAssignment`, `insertSupportTicket()`, `upsertKundrundaAssignment()`, `getKundrundaAssignments()` |
-| `src/lib/offline-queue.ts` (ny) | Lokal kö: `enqueue`, `dequeueAll`, `getQueueLength`, `markSynced` — localStorage `["sf-offline-queue"]` |
-| `src/lib/error-capture.ts` (ny) | Ringbuffer `captureError(err)` + `getRecentErrors()` (max 100) från `window.onerror`/`unhandledrejection` |
-| `src/components/app-shell.tsx` | Header-badge för offline-kö (`aria-live="polite"`) + "senast synkad"-indikator |
-| `src/components/ui/form.tsx` | `mode: "onChange"` default + `aria-describedby` (finns delvis) + Enter-spara-hjälp + fokus-första-fel |
-| `src/components/skeleton-card.tsx` (ny) | Återanvändbar skeleton-rad/kort för listor |
-| `src/components/empty-state.tsx` (ny) | Handlingsbara tomma tillstånd med primärknapp |
-| `src/routes/index.tsx` | Startsida per roll + snabblänk tilldelad kundrunda + `ErrorBoundary` per widget + skeleton |
-| `src/routes/avvikelser.tsx` | Inline-validering, disabled submit, `Skeleton`, `ErrorBoundary`, snabbfilter chips, auto-spara utkast |
-| `src/routes/uppgifter.tsx` | Samma som avvikelser |
-| `src/routes/kundrunda.tsx` | "Mina tilldelningar denna vecka" + veckovis tilldelning (admin/chef) i egen sektion |
-| `src/routes/support.tsx` (ny) | Admin-sida: lista + detalj + status + svar på `support_tickets` |
-| `src/routes/installningar.tsx` | Utöka diagnostik-sektion: "Skicka till support"-knapp + "Kopiera felinfo" (alla roller) |
+| Fil                                                                           | Ansvar                                                                                                                                                                          |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `supabase/migrations/20260812120000_add_support_and_kundrunda_assignment.sql` | Nya tabeller + RLS för `support_tickets`, `support_ticket_replies`, `kundrunda_assignments`                                                                                     |
+| `src/lib/supabase.ts`                                                         | `mutateWithQueue(fn)`, `errorToSwedish(err)`, typer `SupportTicket`, `KundrundaAssignment`, `insertSupportTicket()`, `upsertKundrundaAssignment()`, `getKundrundaAssignments()` |
+| `src/lib/offline-queue.ts` (ny)                                               | Lokal kö: `enqueue`, `dequeueAll`, `getQueueLength`, `markSynced` — localStorage `["sf-offline-queue"]`                                                                         |
+| `src/lib/error-capture.ts` (ny)                                               | Ringbuffer `captureError(err)` + `getRecentErrors()` (max 100) från `window.onerror`/`unhandledrejection`                                                                       |
+| `src/components/app-shell.tsx`                                                | Header-badge för offline-kö (`aria-live="polite"`) + "senast synkad"-indikator                                                                                                  |
+| `src/components/ui/form.tsx`                                                  | `mode: "onChange"` default + `aria-describedby` (finns delvis) + Enter-spara-hjälp + fokus-första-fel                                                                           |
+| `src/components/skeleton-card.tsx` (ny)                                       | Återanvändbar skeleton-rad/kort för listor                                                                                                                                      |
+| `src/components/empty-state.tsx` (ny)                                         | Handlingsbara tomma tillstånd med primärknapp                                                                                                                                   |
+| `src/routes/index.tsx`                                                        | Startsida per roll + snabblänk tilldelad kundrunda + `ErrorBoundary` per widget + skeleton                                                                                      |
+| `src/routes/avvikelser.tsx`                                                   | Inline-validering, disabled submit, `Skeleton`, `ErrorBoundary`, snabbfilter chips, auto-spara utkast                                                                           |
+| `src/routes/uppgifter.tsx`                                                    | Samma som avvikelser                                                                                                                                                            |
+| `src/routes/kundrunda.tsx`                                                    | "Mina tilldelningar denna vecka" + veckovis tilldelning (admin/chef) i egen sektion                                                                                             |
+| `src/routes/support.tsx` (ny)                                                 | Admin-sida: lista + detalj + status + svar på `support_tickets`                                                                                                                 |
+| `src/routes/installningar.tsx`                                                | Utöka diagnostik-sektion: "Skicka till support"-knapp + "Kopiera felinfo" (alla roller)                                                                                         |
 
 ---
 
 ## Task 1: Offline-kö (localStorage)
 
 **Files:**
+
 - Create: `src/lib/offline-queue.ts`
 - Test: `src/lib/offline-queue.test.ts`
 
 **Interfaces:**
+
 - Consumes: inget
 - Produces: `enqueue(item)`, `dequeueAll()`, `getQueueLength()`, `clearQueue()` — används av Task 2 (`mutateWithQueue`)
 
@@ -155,10 +157,12 @@ git commit -m "feat: add client-side offline queue for mutations"
 ## Task 2: mutateWithQueue-wrapper + errorToSwedish
 
 **Files:**
+
 - Modify: `src/lib/supabase.ts` (lägg till efter `logAudit`)
 - Test: `src/lib/supabase-error.test.ts`
 
 **Interfaces:**
+
 - Consumes: `enqueue`/`dequeueAll`/`getQueueLength` från Task 1
 - Produces: `mutateWithQueue(fn: () => Promise<T>): Promise<T>`, `errorToSwedish(err: unknown): string`, `getOfflineQueueLength(): number`
 
@@ -255,10 +259,12 @@ git commit -m "feat: add mutateWithQueue wrapper and Swedish error mapper"
 ## Task 3: error-capture ringbuffer
 
 **Files:**
+
 - Create: `src/lib/error-capture.ts`
 - Test: `src/lib/error-capture.test.ts`
 
 **Interfaces:**
+
 - Consumes: inget
 - Produces: `initErrorCapture()`, `captureError(err: Error)`, `getRecentErrors(): string[]` (max 100) — används av Task 13 (diagnostik)
 
@@ -342,9 +348,11 @@ git commit -m "feat: add client-side error ringbuffer for diagnostics"
 ## Task 4: DB-migration (support + kundrunda-tilldelning)
 
 **Files:**
+
 - Create: `supabase/migrations/20260812120000_add_support_and_kundrunda_assignment.sql`
 
 **Interfaces:**
+
 - Consumes: `app_users`, `stores` (finns)
 - Produces: tabeller `support_tickets`, `support_ticket_replies`, `kundrunda_assignments` med RLS
 
@@ -451,9 +459,11 @@ git commit -m "feat: add support_tickets and kundrunda_assignments tables"
 ## Task 5: Typer + data-access-funktioner i supabase.ts
 
 **Files:**
+
 - Modify: `src/lib/supabase.ts` (lägg till efter `errorToSwedish`)
 
 **Interfaces:**
+
 - Consumes: `supabase`-klienten (finns)
 - Produces: `SupportTicket`, `KundrundaAssignment` typer + `insertSupportTicket()`, `upsertKundrundaAssignment()`, `getKundrundaAssignmentsThisWeek(storeId, userId?)`
 
@@ -485,7 +495,9 @@ export type KundrundaAssignment = {
   created_at: string;
 };
 
-export async function insertSupportTicket(data: Omit<SupportTicket, "id" | "status" | "created_at" | "resolved_at">): Promise<void> {
+export async function insertSupportTicket(
+  data: Omit<SupportTicket, "id" | "status" | "created_at" | "resolved_at">,
+): Promise<void> {
   const { error } = await supabase.from("support_tickets").insert(data);
   if (error) throw error;
 }
@@ -503,14 +515,21 @@ export async function upsertKundrundaAssignment(data: {
   if (error) throw error;
 }
 
-export async function getKundrundaAssignmentsThisWeek(storeId: string, userId?: string): Promise<KundrundaAssignment[]> {
+export async function getKundrundaAssignmentsThisWeek(
+  storeId: string,
+  userId?: string,
+): Promise<KundrundaAssignment[]> {
   const now = new Date();
   const day = now.getDay(); // 0=Sun .. 6=Sat
   const diffToMonday = (day === 0 ? -6 : 1) - day;
   const monday = new Date(now);
   monday.setDate(now.getDate() + diffToMonday);
   const weekStart = monday.toISOString().slice(0, 10);
-  let q = supabase.from("kundrunda_assignments").select("*").eq("store_id", storeId).eq("week_start", weekStart);
+  let q = supabase
+    .from("kundrunda_assignments")
+    .select("*")
+    .eq("store_id", storeId)
+    .eq("week_start", weekStart);
   if (userId) q = q.eq("assigned_user_id", userId);
   const { data, error } = await q;
   if (error) throw error;
@@ -535,10 +554,12 @@ git commit -m "feat: add support ticket and kundrunda assignment types + access 
 ## Task 6: UI-hjälper — SkeletonCard + EmptyState
 
 **Files:**
+
 - Create: `src/components/skeleton-card.tsx`
 - Create: `src/components/empty-state.tsx`
 
 **Interfaces:**
+
 - Consumes: `Skeleton` från `ui/skeleton`, `Button` från `ui/button`, `Link` från router
 - Produces: `<SkeletonCard />`, `<EmptyState title actionLabel actionTo />` — används av Task 7, 8, 9
 
@@ -605,9 +626,11 @@ git commit -m "feat: add reusable SkeletonCard and EmptyState components"
 ## Task 7: Startsida per roll + ErrorBoundary + Skeleton
 
 **Files:**
+
 - Modify: `src/routes/index.tsx` (lägg till per-roll-sektioner + wrappa kort i ErrorBoundary)
 
 **Interfaces:**
+
 - Consumes: `useAuth()` (finns), `ErrorBoundary` (finns), `SkeletonCard` (Task 6), `getKundrundaAssignmentsThisWeek` (Task 5)
 - Produces: ny startsida-layout
 
@@ -626,7 +649,7 @@ useEffect(() => {
   getKundrundaAssignmentsThisWeek(activeStore.id, user.id)
     .then((a) => {
       if (a.length > 0) {
-        const days = ["Söndag","Måndag","Tisdag","Onsdag","Torsdag","Fredag","Lördag"];
+        const days = ["Söndag", "Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag"];
         setMyKundrunda({ day: days[a[0].day_of_week] });
       }
     })
@@ -637,18 +660,33 @@ useEffect(() => {
 - [ ] **Step 2: Wrappa varje QuickCard i ErrorBoundary + lägg till kundrunda-snabblänk**
 
 ```tsx
-{myKundrunda && (
-  <a href="/kundrunda" className="col-span-2 flex items-center gap-2 rounded-2xl border border-primary/30 bg-primary-soft p-4 sm:col-span-3">
-    <UserRound className="h-5 w-5 text-primary" />
-    <span className="text-sm font-medium text-primary">Din kundrunda: {myKundrunda.day}</span>
-  </a>
-)}
+{
+  myKundrunda && (
+    <a
+      href="/kundrunda"
+      className="col-span-2 flex items-center gap-2 rounded-2xl border border-primary/30 bg-primary-soft p-4 sm:col-span-3"
+    >
+      <UserRound className="h-5 w-5 text-primary" />
+      <span className="text-sm font-medium text-primary">Din kundrunda: {myKundrunda.day}</span>
+    </a>
+  );
+}
 
-{/* Wrappa korten */}
+{
+  /* Wrappa korten */
+}
 <ErrorBoundary section="Uppgifter" fallback={<WidgetFallback name="Uppgifter" />}>
-  <QuickCard to="/uppgifter" icon={ListChecks} title="Uppgifter" desc="Rutiner och checklistor" tone="blue" />
-</ErrorBoundary>
-{/* ... repeat för övriga kort ... */}
+  <QuickCard
+    to="/uppgifter"
+    icon={ListChecks}
+    title="Uppgifter"
+    desc="Rutiner och checklistor"
+    tone="blue"
+  />
+</ErrorBoundary>;
+{
+  /* ... repeat för övriga kort ... */
+}
 ```
 
 Lägg till hjälp-komponent:
@@ -657,7 +695,10 @@ Lägg till hjälp-komponent:
 function WidgetFallback({ name }: { name: string }) {
   const { queryClient } = useQueryClientContext(); // eller importera från @tanstack/react-query
   return (
-    <div role="alert" className="col-span-2 flex flex-col items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-center sm:col-span-3">
+    <div
+      role="alert"
+      className="col-span-2 flex flex-col items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-center sm:col-span-3"
+    >
       <span className="text-sm text-destructive">Kunde inte ladda {name}</span>
       <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries()}>
         Försök igen
@@ -686,10 +727,12 @@ git commit -m "feat: role-based hub page with per-widget error boundaries"
 ## Task 8: Inline-validering + disabled submit (form.tsx + avvikelser)
 
 **Files:**
+
 - Modify: `src/components/ui/form.tsx` (mode onChange default)
 - Modify: `src/routes/avvikelser.tsx` (useForm mode, disabled submit, inline error)
 
 **Interfaces:**
+
 - Consumes: `useFormField`, `FormMessage` (finns), `errorToSwedish` (Task 2)
 - Produces: inline validering i avvikelser
 
@@ -700,7 +743,7 @@ I `avvikelser.tsx` där `useForm` anropas, lägg till `mode: "onChange"`:
 ```tsx
 const form = useForm({
   mode: "onChange",
-  defaultValues: { /* ... */ },
+  defaultValues: {/* ... */},
 });
 ```
 
@@ -758,9 +801,11 @@ git commit -m "feat: inline validation and disabled submit in avvikelser"
 ## Task 9: Skeleton + EmptyState + snabbfilter i listor (avvikelser, uppgifter)
 
 **Files:**
+
 - Modify: `src/routes/avvikelser.tsx`, `src/routes/uppgifter.tsx`
 
 **Interfaces:**
+
 - Consumes: `SkeletonCard` (Task 6), `EmptyState` (Task 6)
 - Produces: skeleton vid laddning, handlingsbara tomma tillstånd, chips-filter
 
@@ -777,14 +822,16 @@ I båda listorna, ersätt:
 - [ ] **Step 2: EmptyState när lista är tom**
 
 ```tsx
-{!isLoading && items.length === 0 && (
-  <EmptyState
-    title="Inga avvikelser än"
-    description="När du rapporterar en avvikelse syns den här."
-    actionLabel="Logga avvikelse"
-    actionTo="/avvikelser"
-  />
-)}
+{
+  !isLoading && items.length === 0 && (
+    <EmptyState
+      title="Inga avvikelser än"
+      description="När du rapporterar en avvikelse syns den här."
+      actionLabel="Logga avvikelse"
+      actionTo="/avvikelser"
+    />
+  );
+}
 ```
 
 - [ ] **Step 3: Snabbfilter chips**
@@ -793,8 +840,8 @@ I båda listorna, ersätt:
 
 ```tsx
 const FILTERS = ["Mina", "Öppna", "Alla"] as const;
-const [filter, setFilter] = useState<"Mina"|"Öppna"|"Alla">(
-  () => (localStorage.getItem("sf-filter-avvikelser") as any) ?? "Alla"
+const [filter, setFilter] = useState<"Mina" | "Öppna" | "Alla">(
+  () => (localStorage.getItem("sf-filter-avvikelser") as any) ?? "Alla",
 );
 useEffect(() => localStorage.setItem("sf-filter-avvikelser", filter), [filter]);
 
@@ -804,12 +851,15 @@ useEffect(() => localStorage.setItem("sf-filter-avvikelser", filter), [filter]);
       key={f}
       aria-pressed={filter === f}
       onClick={() => setFilter(f)}
-      className={cn("rounded-full px-3 py-1 text-sm", filter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}
+      className={cn(
+        "rounded-full px-3 py-1 text-sm",
+        filter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+      )}
     >
       {f}
     </button>
   ))}
-</div>
+</div>;
 ```
 
 Filtrera `items` enligt `filter` (Mina → `reported_by === user.id`, Öppna → `status !== "closed"`).
@@ -833,9 +883,11 @@ git commit -m "feat: skeletons, empty states and quick-filter chips in lists"
 ## Task 10: Auto-spara utkast (avvikelser, kundrunda-checkpoint)
 
 **Files:**
+
 - Modify: `src/routes/avvikelser.tsx`, `src/routes/kundrunda.tsx`
 
 **Interfaces:**
+
 - Consumes: `useForm` (finns)
 - Produces: utkast i `localStorage["sf-draft-<route>-<id>"]`
 
@@ -889,9 +941,11 @@ git commit -m "feat: auto-save form drafts to localStorage"
 ## Task 11: "Senast synkad"-indikator + offline-badge i app-shell
 
 **Files:**
+
 - Modify: `src/components/app-shell.tsx` (header)
 
 **Interfaces:**
+
 - Consumes: `getOfflineQueueLength()` (Task 2)
 - Produces: badge + synk-tidstämpel
 
@@ -905,14 +959,23 @@ useEffect(() => {
   const on = () => setQueueLen(getOfflineQueueLength());
   window.addEventListener("online", on);
   const t = setInterval(on, 5000);
-  return () => { window.removeEventListener("online", on); clearInterval(t); };
+  return () => {
+    window.removeEventListener("online", on);
+    clearInterval(t);
+  };
 }, []);
 
-{queueLen > 0 && (
-  <span role="status" aria-live="polite" className="rounded-full bg-warning/15 px-2 py-1 text-xs font-medium text-warning-foreground">
-    {queueLen} väntar på synk
-  </span>
-)}
+{
+  queueLen > 0 && (
+    <span
+      role="status"
+      aria-live="polite"
+      className="rounded-full bg-warning/15 px-2 py-1 text-xs font-medium text-warning-foreground"
+    >
+      {queueLen} väntar på synk
+    </span>
+  );
+}
 ```
 
 - [ ] **Step 2: "Senast synkad" indikator**
@@ -930,7 +993,7 @@ const minutesAgo = Math.floor((Date.now() - lastSync.getTime()) / 60000);
 const syncStale = minutesAgo > 10;
 <span className={cn("text-xs", syncStale ? "text-destructive" : "text-muted-foreground")}>
   Synkad {lastSync.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}
-</span>
+</span>;
 ```
 
 - [ ] **Step 3: Typecheck + manuell test**
@@ -952,9 +1015,11 @@ git commit -m "feat: offline queue badge and last-sync indicator in header"
 ## Task 12: Guldklimpar (Enter-spara, fokus-första-fel, scroll-position)
 
 **Files:**
+
 - Modify: `src/components/ui/form.tsx`, `src/routes/avvikelser.tsx`, `src/routes/uppgifter.tsx`
 
 **Interfaces:**
+
 - Consumes: `useFormField` (finns)
 - Produces: Enter-spara-hjälp, fokus-första-fel, scroll-bevaring
 
@@ -1026,9 +1091,11 @@ git commit -m "feat: enter-to-submit, focus-first-error, scroll retention"
 ## Task 13: Diagnostik-utökning + "Skicka till support" i installningar
 
 **Files:**
+
 - Modify: `src/routes/installningar.tsx` (diagnostik-sektionen som redan finns bakom versionsklick)
 
 **Interfaces:**
+
 - Consumes: `insertSupportTicket` (Task 5), `getRecentErrors` (Task 3), `getOfflineQueueLength` (Task 2)
 - Produces: "Skicka till support"-knapp + "Kopiera felinfo"
 
@@ -1074,7 +1141,9 @@ I `installningar.tsx`, inuti diagnostik-`div` (efter "Exportera lokal debug-logg
       `Senaste fel: ${getRecentErrors().slice(-1)[0] ?? "ingen"}`,
       `Offline-kö: ${getOfflineQueueLength()}`,
     ].join("\n");
-    navigator.clipboard.writeText(info).then(() => toast.success("Kopierat – klistra in i mail till support"));
+    navigator.clipboard
+      .writeText(info)
+      .then(() => toast.success("Kopierat – klistra in i mail till support"));
   }}
   variant="ghost"
   className="w-full rounded-full gap-2"
@@ -1112,10 +1181,12 @@ git commit -m "feat: send-to-support button and copy-error-info in diagnostics"
 ## Task 14: Support-sida (admin)
 
 **Files:**
+
 - Create: `src/routes/support.tsx`
 - Modify: `src/routes/__root.tsx` (lägg till route i nav om admin)
 
 **Interfaces:**
+
 - Consumes: `supabase.from("support_tickets")` (Task 4)
 - Produces: admin-sida med lista + detalj + status + svar
 
@@ -1145,7 +1216,8 @@ function SupportPage() {
       .then(({ data }) => setTickets((data as SupportTicket[]) ?? []));
   });
 
-  if (!isAdmin) return <div className="p-8 text-center text-muted-foreground">Endast för admin/chef.</div>;
+  if (!isAdmin)
+    return <div className="p-8 text-center text-muted-foreground">Endast för admin/chef.</div>;
 
   return (
     <div className="mx-auto max-w-4xl p-4">
@@ -1160,11 +1232,17 @@ function SupportPage() {
               >
                 <div className="flex justify-between text-sm">
                   <span className="font-medium">{t.created_at.slice(0, 10)}</span>
-                  <span className={t.status === "open" ? "text-warning-foreground" : "text-muted-foreground"}>
+                  <span
+                    className={
+                      t.status === "open" ? "text-warning-foreground" : "text-muted-foreground"
+                    }
+                  >
                     {t.status === "open" ? "Öppen" : "Stängd"}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{t.message ?? t.last_error ?? "Inget meddelande"}</p>
+                <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                  {t.message ?? t.last_error ?? "Inget meddelande"}
+                </p>
               </button>
             </li>
           ))}
@@ -1172,14 +1250,28 @@ function SupportPage() {
         {selected && (
           <div className="rounded-2xl border border-border/60 bg-card p-4">
             <h3 className="font-semibold">Ärende {selected.created_at.slice(0, 10)}</h3>
-            <pre className="mt-2 overflow-auto rounded-lg bg-muted/40 p-2 text-xs">{selected.last_error ?? "Inget fel"}</pre>
+            <pre className="mt-2 overflow-auto rounded-lg bg-muted/40 p-2 text-xs">
+              {selected.last_error ?? "Inget fel"}
+            </pre>
             <p className="mt-2 text-sm">{selected.message}</p>
             <div className="mt-4 flex gap-2">
               <Button
                 onClick={async () => {
-                  await supabase.from("support_tickets").update({ status: selected.status === "open" ? "closed" : "open", resolved_at: selected.status === "open" ? new Date().toISOString() : null }).eq("id", selected.id);
-                  setSelected({ ...selected} as SupportTicket);
-                  setTickets((prev) => prev.map((t) => t.id === selected.id ? { ...t, status: selected.status === "open" ? "closed" : "open" } : t));
+                  await supabase
+                    .from("support_tickets")
+                    .update({
+                      status: selected.status === "open" ? "closed" : "open",
+                      resolved_at: selected.status === "open" ? new Date().toISOString() : null,
+                    })
+                    .eq("id", selected.id);
+                  setSelected({ ...selected } as SupportTicket);
+                  setTickets((prev) =>
+                    prev.map((t) =>
+                      t.id === selected.id
+                        ? { ...t, status: selected.status === "open" ? "closed" : "open" }
+                        : t,
+                    ),
+                  );
                 }}
               >
                 {selected.status === "open" ? "Stäng ärende" : "Öppna igen"}
@@ -1193,12 +1285,14 @@ function SupportPage() {
 }
 ```
 
-- [ ] **Step 2: Lägg till länk i nav (om admin) i __root.tsx**
+- [ ] **Step 2: Lägg till länk i nav (om admin) i \__root.tsx**
 
 Hitta nav-list och lägg till (inom `isManager`-block):
 
 ```tsx
-<Link to="/support" className="...">Support</Link>
+<Link to="/support" className="...">
+  Support
+</Link>
 ```
 
 - [ ] **Step 3: Typecheck + manuell test**
@@ -1220,9 +1314,11 @@ git commit -m "feat: admin support ticket page"
 ## Task 15: Veckovis kundrunda-tilldelning (admin/chef)
 
 **Files:**
+
 - Modify: `src/routes/kundrunda.tsx` (ny sektion "Tilldela kundrunda")
 
 **Interfaces:**
+
 - Consumes: `upsertKundrundaAssignment`, `getKundrundaAssignmentsThisWeek` (Task 5), `app_users` (finns)
 - Produces: veckovis tilldelning + "Mina tilldelningar" för personal
 
@@ -1235,14 +1331,20 @@ const { user, activeStore } = useAuth();
 const isManager = user?.role === "manager" || user?.role === "admin";
 const [staff, setStaff] = useState<{ id: string; display_name: string }[]>([]);
 const [assignments, setAssignments] = useState<Record<number, string>>({}); // day_of_week -> user_id
-const days = ["Måndag","Tisdag","Onsdag","Torsdag","Fredag","Lördag","Söndag"];
+const days = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
 
 useEffect(() => {
   if (!activeStore?.id) return;
-  supabase.from("app_users").select("id, display_name").eq("store_id", activeStore.id).then(({ data }) => setStaff((data as any) ?? []));
+  supabase
+    .from("app_users")
+    .select("id, display_name")
+    .eq("store_id", activeStore.id)
+    .then(({ data }) => setStaff((data as any) ?? []));
   getKundrundaAssignmentsThisWeek(activeStore.id).then((a) => {
     const map: Record<number, string> = {};
-    a.forEach((x) => { map[x.day_of_week] = x.assigned_user_id ?? ""; });
+    a.forEach((x) => {
+      map[x.day_of_week] = x.assigned_user_id ?? "";
+    });
     setAssignments(map);
   });
 }, [activeStore?.id]);
@@ -1251,38 +1353,44 @@ useEffect(() => {
 - [ ] **Step 2: Rendera veckovy med dropdowns (admin/chef)**
 
 ```tsx
-{isManager && (
-  <div className="rounded-2xl border border-border/60 bg-card p-4">
-    <h2 className="font-semibold">Tilldela kundrunda denna vecka</h2>
-    <div className="mt-3 space-y-2">
-      {days.map((day, idx) => (
-        <div key={day} className="flex items-center justify-between gap-2">
-          <span className="text-sm">{day}</span>
-          <select
-            value={assignments[idx] ?? ""}
-            onChange={async (e) => {
-              const userId = e.target.value;
-              setAssignments((prev) => ({ ...prev, [idx]: userId }));
-              if (userId) {
-                await upsertKundrundaAssignment({
-                  store_id: activeStore!.id,
-                  week_start: mondayThisWeek(),
-                  day_of_week: idx,
-                  assigned_user_id: userId,
-                  created_by: user!.id,
-                });
-              }
-            }}
-            className="rounded-lg border border-border/60 bg-background px-2 py-1 text-sm"
-          >
-            <option value="">– Ingen –</option>
-            {staff.map((s) => <option key={s.id} value={s.id}>{s.display_name}</option>)}
-          </select>
-        </div>
-      ))}
+{
+  isManager && (
+    <div className="rounded-2xl border border-border/60 bg-card p-4">
+      <h2 className="font-semibold">Tilldela kundrunda denna vecka</h2>
+      <div className="mt-3 space-y-2">
+        {days.map((day, idx) => (
+          <div key={day} className="flex items-center justify-between gap-2">
+            <span className="text-sm">{day}</span>
+            <select
+              value={assignments[idx] ?? ""}
+              onChange={async (e) => {
+                const userId = e.target.value;
+                setAssignments((prev) => ({ ...prev, [idx]: userId }));
+                if (userId) {
+                  await upsertKundrundaAssignment({
+                    store_id: activeStore!.id,
+                    week_start: mondayThisWeek(),
+                    day_of_week: idx,
+                    assigned_user_id: userId,
+                    created_by: user!.id,
+                  });
+                }
+              }}
+              className="rounded-lg border border-border/60 bg-background px-2 py-1 text-sm"
+            >
+              <option value="">– Ingen –</option>
+              {staff.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.display_name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ))}
+      </div>
     </div>
-  </div>
-)}
+  );
+}
 ```
 
 Hjälp-funktion (lägg till i filen):
@@ -1301,15 +1409,24 @@ function mondayThisWeek(): string {
 - [ ] **Step 3: "Mina tilldelningar" för personal (visas i Task 7 på startsidan, här en sektion i kundrunda)**
 
 ```tsx
-{!isManager && myAssignments.length > 0 && (
-  <div className="rounded-2xl border border-primary/30 bg-primary-soft p-4">
-    <h2 className="font-semibold text-primary">Dina kundrundor denna vecka</h2>
-    <ul className="mt-2 space-y-1 text-sm">
-      {myAssignments.map((a) => <li key={a.id}>{days[a.day_of_week]}</li>)}
-    </ul>
-    <Link to="/kundrunda" className="mt-2 inline-block text-sm font-medium text-primary underline">Starta runda</Link>
-  </div>
-)}
+{
+  !isManager && myAssignments.length > 0 && (
+    <div className="rounded-2xl border border-primary/30 bg-primary-soft p-4">
+      <h2 className="font-semibold text-primary">Dina kundrundor denna vecka</h2>
+      <ul className="mt-2 space-y-1 text-sm">
+        {myAssignments.map((a) => (
+          <li key={a.id}>{days[a.day_of_week]}</li>
+        ))}
+      </ul>
+      <Link
+        to="/kundrunda"
+        className="mt-2 inline-block text-sm font-medium text-primary underline"
+      >
+        Starta runda
+      </Link>
+    </div>
+  );
+}
 ```
 
 - [ ] **Step 4: Typecheck + manuell test**
@@ -1331,9 +1448,11 @@ git commit -m "feat: weekly kundrunda assignment for managers"
 ## Task 16: Svenska felmeddelanden i alla toast.error
 
 **Files:**
+
 - Modify: `src/routes/avvikelser.tsx`, `src/routes/uppgifter.tsx`, `src/routes/kundrunda.tsx`
 
 **Interfaces:**
+
 - Consumes: `errorToSwedish` (Task 2)
 - Produces: svenska fel i alla `toast.error`
 
@@ -1360,9 +1479,11 @@ git commit -m "feat: Swedish error messages in all toasts"
 ## Task 17: Slutlig integration + bygge
 
 **Files:**
+
 - Modify: (ingen ny, bara verifiering)
 
 **Interfaces:**
+
 - Consumes: alla tidigare tasks
 - Produces: grönt bygge
 

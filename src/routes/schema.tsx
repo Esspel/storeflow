@@ -649,17 +649,15 @@ function parseXml(xmlText: string): ParsedSchedule[] | null {
         } else if (!weekMap.get(key)!.weekStartDate && weekStartDate) {
           weekMap.get(key)!.weekStartDate = weekStartDate;
         }
-        weekMap
-          .get(key)!
-          .employees.push({
-            employeeNr,
-            employeeName,
-            employeeGroup,
-            employeeCategory,
-            employmentPercent,
-            workTimeWeek,
-            days,
-          });
+        weekMap.get(key)!.employees.push({
+          employeeNr,
+          employeeName,
+          employeeGroup,
+          employeeCategory,
+          employmentPercent,
+          workTimeWeek,
+          days,
+        });
       }
     }
 
@@ -1119,16 +1117,14 @@ function SchemaPage() {
             condition_answer: string | null;
           }[]) {
             if (!stepsByParent.has(s.task_id)) stepsByParent.set(s.task_id, []);
-            stepsByParent
-              .get(s.task_id)!
-              .push({
-                label: s.label,
-                sort_order: s.sort_order,
-                requires_photo: s.requires_photo,
-                link_url: s.link_url,
-                condition_question_id: s.condition_question_id,
-                condition_answer: s.condition_answer,
-              });
+            stepsByParent.get(s.task_id)!.push({
+              label: s.label,
+              sort_order: s.sort_order,
+              requires_photo: s.requires_photo,
+              link_url: s.link_url,
+              condition_question_id: s.condition_question_id,
+              condition_answer: s.condition_answer,
+            });
           }
           const questionsByParent = new Map<
             string,
@@ -1151,16 +1147,14 @@ function SchemaPage() {
             link_url: string | null;
           }[]) {
             if (!questionsByParent.has(q.task_id)) questionsByParent.set(q.task_id, []);
-            questionsByParent
-              .get(q.task_id)!
-              .push({
-                id: q.id,
-                label: q.label,
-                question_type: q.question_type,
-                is_required: q.is_required,
-                sort_order: q.sort_order,
-                link_url: q.link_url,
-              });
+            questionsByParent.get(q.task_id)!.push({
+              id: q.id,
+              label: q.label,
+              question_type: q.question_type,
+              is_required: q.is_required,
+              sort_order: q.sort_order,
+              link_url: q.link_url,
+            });
           }
           const assigneesByParent = new Map<
             string,
@@ -1716,18 +1710,16 @@ function SchemaPage() {
   async function saveMappings() {
     if (!storeId || !user) return;
     for (const m of mappings) {
-      await supabase
-        .from("employee_mappings")
-        .upsert(
-          {
-            store_id: storeId,
-            employee_nr: m.employee_nr,
-            app_user_id: m.app_user_id || null,
-            created_by: user.id,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "store_id,employee_nr" },
-        );
+      await supabase.from("employee_mappings").upsert(
+        {
+          store_id: storeId,
+          employee_nr: m.employee_nr,
+          app_user_id: m.app_user_id || null,
+          created_by: user.id,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "store_id,employee_nr" },
+      );
     }
   }
 
@@ -1776,18 +1768,16 @@ function SchemaPage() {
           { onConflict: "user_id,store_id" },
         );
       await linkUserToStoreHierarchy(newUser.id);
-      await supabase
-        .from("employee_mappings")
-        .upsert(
-          {
-            store_id: storeId,
-            employee_nr: emp.employee_nr,
-            app_user_id: newUser.id,
-            created_by: user.id,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "store_id,employee_nr" },
-        );
+      await supabase.from("employee_mappings").upsert(
+        {
+          store_id: storeId,
+          employee_nr: emp.employee_nr,
+          app_user_id: newUser.id,
+          created_by: user.id,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "store_id,employee_nr" },
+      );
       setAppUsers((p) => [...p, newUser]);
       setAllUsers((p) => [...p, newUser]);
       setMapping(emp.employee_nr, newUser.id);
@@ -1879,18 +1869,16 @@ function SchemaPage() {
 
       // Persist mappings
       for (const m of finalMappings) {
-        await supabase
-          .from("employee_mappings")
-          .upsert(
-            {
-              store_id: storeId,
-              employee_nr: m.employee_nr,
-              app_user_id: m.app_user_id || null,
-              created_by: user.id,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "store_id,employee_nr" },
-          );
+        await supabase.from("employee_mappings").upsert(
+          {
+            store_id: storeId,
+            employee_nr: m.employee_nr,
+            app_user_id: m.app_user_id || null,
+            created_by: user.id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "store_id,employee_nr" },
+        );
       }
       setMappings(finalMappings);
 

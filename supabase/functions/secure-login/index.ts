@@ -50,14 +50,16 @@ Deno.serve(async (req: Request) => {
         429,
         {
           "Retry-After": String(Math.ceil((unlockAt.getTime() - Date.now()) / 1000)),
-        }
+        },
       );
     }
 
     // 3. Fetch user
     const { data: user, error: userError } = await supabase
       .from("app_users")
-      .select("id, username, password_hash, is_active, failed_login_count, locked_until, display_name, role, role_manually_set, employee_group, store_id, active_store_id, must_change_password, last_login, created_at, hierarchy_level, forening_id, distrikt_id")
+      .select(
+        "id, username, password_hash, is_active, failed_login_count, locked_until, display_name, role, role_manually_set, employee_group, store_id, active_store_id, must_change_password, last_login, created_at, hierarchy_level, forening_id, distrikt_id",
+      )
       .eq("username", username)
       .eq("is_active", true)
       .maybeSingle();
@@ -98,7 +100,7 @@ Deno.serve(async (req: Request) => {
           429,
           {
             "Retry-After": String(LOCKOUT_MINUTES * 60),
-          }
+          },
         );
       }
 
@@ -106,7 +108,7 @@ Deno.serve(async (req: Request) => {
         {
           error: `Ogiltigt användarnamn eller lösenord.${remainingAttempts <= 2 ? ` ${remainingAttempts} försök kvar innan kontot låses.` : ""}`,
         },
-        401
+        401,
       );
     }
 

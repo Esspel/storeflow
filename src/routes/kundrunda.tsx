@@ -313,7 +313,10 @@ function KundrundaPage() {
 
   // Assignment state (Task 15)
   const [assignments, setAssignments] = useState<KundrundaAssignment[]>([]);
-  const [showAssignmentDialog, setShowAssignmentDialog] = useState<{ storeId: string; weekStart: string } | null>(null);
+  const [showAssignmentDialog, setShowAssignmentDialog] = useState<{
+    storeId: string;
+    weekStart: string;
+  } | null>(null);
   const [assignmentForm, setAssignmentForm] = useState<Record<number, string>>({});
   const [assignmentSaving, setAssignmentSaving] = useState(false);
   // Auto-scroll raf handle
@@ -952,7 +955,8 @@ function KundrundaPage() {
               "/uppgifter",
             );
             if (error) toast.error(`Notis misslyckades: ${error}`);
-            else if (pushResult?.partialErrors?.length) toast.warning(`Push delvis misslyckades: ${pushResult.partialErrors.join(", ")}`);
+            else if (pushResult?.partialErrors?.length)
+              toast.warning(`Push delvis misslyckades: ${pushResult.partialErrors.join(", ")}`);
           }
         }
       }
@@ -990,14 +994,12 @@ function KundrundaPage() {
     if (!responseId) return;
     const path = await uploadAttachment(file, `kundrunda/${activeSession.id}/${responseId}`);
     if (path) {
-      await supabase
-        .from("kundrunda_response_images")
-        .insert({
-          response_id: responseId,
-          session_id: activeSession.id,
-          storage_path: path,
-          uploaded_by: user?.id,
-        });
+      await supabase.from("kundrunda_response_images").insert({
+        response_id: responseId,
+        session_id: activeSession.id,
+        storage_path: path,
+        uploaded_by: user?.id,
+      });
       setResponseImages((p) => ({
         ...p,
         [responseId!]: [
@@ -3153,18 +3155,28 @@ function KundrundaPage() {
           users={storeUsers.map((u) => ({ id: u.id, display_name: u.display_name }))}
           onSave={async (data) => {
             for (const d of data) {
-              const { error } = await supabase
-                .from("kundrunda_assignments")
-                .upsert({
+              const { error } = await supabase.from("kundrunda_assignments").upsert(
+                {
                   store_id: showAssignmentDialog!.storeId,
                   week_start: d.weekStart,
                   day_of_week: d.day_of_week,
                   assigned_user_id: d.assigned_user_id || null,
                   created_by: user?.id ?? null,
-                }, { onConflict: "store_id,week_start,day_of_week" });
-              if (error) { toast.error(errorToSwedish(error)); return; }
+                },
+                { onConflict: "store_id,week_start,day_of_week" },
+              );
+              if (error) {
+                toast.error(errorToSwedish(error));
+                return;
+              }
             }
-            logAudit(user?.id ?? null, "kundrunda.assignment.update", "kundrunda_assignments", showAssignmentDialog!.storeId, {});
+            logAudit(
+              user?.id ?? null,
+              "kundrunda.assignment.update",
+              "kundrunda_assignments",
+              showAssignmentDialog!.storeId,
+              {},
+            );
             await fetchData();
             toast.success("Tilldelning sparad");
           }}
@@ -3559,30 +3571,48 @@ function KundrundaPage() {
 }
 
 function KundrundaAssignmentDialog({
-  open, onClose, storeId, weekStart, form, setForm, users, onSave,
+  open,
+  onClose,
+  storeId,
+  weekStart,
+  form,
+  setForm,
+  users,
+  onSave,
 }: {
   open: boolean;
   onClose: () => void;
   storeId: string;
   weekStart: string;
   form: Record<number, string>;
-  setForm: (f: Record<number, string> | ((prev: Record<number, string>) => Record<number, string>)) => void;
+  setForm: (
+    f: Record<number, string> | ((prev: Record<number, string>) => Record<number, string>),
+  ) => void;
   users: { id: string; display_name: string }[];
-  onSave: (data: { weekStart: string; day_of_week: number; assigned_user_id: string }[]) => Promise<void>;
+  onSave: (
+    data: { weekStart: string; day_of_week: number; assigned_user_id: string }[],
+  ) => Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
   const days = [
-    { n: 1, name: "Måndag" }, { n: 2, name: "Tisdag" }, { n: 3, name: "Onsdag" },
-    { n: 4, name: "Torsdag" }, { n: 5, name: "Fredag" }, { n: 6, name: "Lördag" }, { n: 0, name: "Söndag" },
+    { n: 1, name: "Måndag" },
+    { n: 2, name: "Tisdag" },
+    { n: 3, name: "Onsdag" },
+    { n: 4, name: "Torsdag" },
+    { n: 5, name: "Fredag" },
+    { n: 6, name: "Lördag" },
+    { n: 0, name: "Söndag" },
   ];
   const save = async () => {
     setSaving(true);
     try {
-      await onSave(days.map((d) => ({
-        weekStart,
-        day_of_week: d.n,
-        assigned_user_id: form[d.n] || "",
-      })));
+      await onSave(
+        days.map((d) => ({
+          weekStart,
+          day_of_week: d.n,
+          assigned_user_id: form[d.n] || "",
+        })),
+      );
       onClose();
     } finally {
       setSaving(false);
@@ -3599,7 +3629,10 @@ function KundrundaAssignmentDialog({
         </p>
         <div className="space-y-2 my-2 max-h-72 overflow-y-auto">
           {days.map((d) => (
-            <div key={d.n} className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2">
+            <div
+              key={d.n}
+              className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2"
+            >
               <span className="text-sm font-medium">{d.name}</span>
               <select
                 value={form[d.n] || ""}
@@ -3608,14 +3641,18 @@ function KundrundaAssignmentDialog({
               >
                 <option value="">— Ingen —</option>
                 {users.map((u) => (
-                  <option key={u.id} value={u.id}>{u.display_name}</option>
+                  <option key={u.id} value={u.id}>
+                    {u.display_name}
+                  </option>
                 ))}
               </select>
             </div>
           ))}
         </div>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose} className="rounded-full">Avbryt</Button>
+          <Button variant="ghost" onClick={onClose} className="rounded-full">
+            Avbryt
+          </Button>
           <Button onClick={save} disabled={saving} className="rounded-full">
             {saving ? "Sparar..." : "Spara tilldelning"}
           </Button>

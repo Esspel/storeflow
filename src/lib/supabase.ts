@@ -256,7 +256,11 @@ export type ChecklistTemplate = {
   parent_template_id?: string | null;
   inherit_mode?: "copy" | "variant" | null;
   hidden_step_ids?: string[] | null;
-  overridden_steps?: Array<{ parent_step_id: string; label: string; requires_photo: boolean }> | null;
+  overridden_steps?: Array<{
+    parent_step_id: string;
+    label: string;
+    requires_photo: boolean;
+  }> | null;
   created_at: string;
   updated_at: string;
   items?: ChecklistTemplateItem[];
@@ -267,7 +271,10 @@ export type TemplateVersion = {
   id: string;
   template_id: string;
   version: number;
-  snapshot: ChecklistTemplate & { items?: ChecklistTemplateItem[]; questions?: ChecklistTemplateQuestion[] };
+  snapshot: ChecklistTemplate & {
+    items?: ChecklistTemplateItem[];
+    questions?: ChecklistTemplateQuestion[];
+  };
   change_summary: string;
   saved_by: string | null;
   saved_at: string;
@@ -450,7 +457,12 @@ export interface PushResult {
   partialErrors?: string[];
 }
 
-async function firePush(userIds: string[], title: string, body: string, url: string): Promise<PushResult> {
+async function firePush(
+  userIds: string[],
+  title: string,
+  body: string,
+  url: string,
+): Promise<PushResult> {
   if (!userIds.length) return { ok: true };
   try {
     const res = await fetch(PUSH_EDGE_URL, {
@@ -485,7 +497,9 @@ export async function createNotification(
   body = "",
   link = "",
 ): Promise<{ error?: string; pushResult?: PushResult }> {
-  const { error } = await supabase.from("notifications").insert({ user_id: userId, type, title, body, link });
+  const { error } = await supabase
+    .from("notifications")
+    .insert({ user_id: userId, type, title, body, link });
   if (error) {
     const errMsg = `createNotification insert failed: ${error.message}`;
     console.error(errMsg);
@@ -533,7 +547,9 @@ export async function cleanOldNotifications(userId: string) {
 // Validate a file's true MIME type by inspecting its magic bytes.
 // Returns the detected MIME or null if the signature is not one of the allowed types.
 // Allowed: image/jpeg, image/png, image/webp
-export async function detectImageMimeFromBytes(file: File): Promise<"image/jpeg" | "image/png" | "image/webp" | null> {
+export async function detectImageMimeFromBytes(
+  file: File,
+): Promise<"image/jpeg" | "image/png" | "image/webp" | null> {
   const header = await file.slice(0, 12).arrayBuffer();
   const bytes = new Uint8Array(header);
 
@@ -541,12 +557,30 @@ export async function detectImageMimeFromBytes(file: File): Promise<"image/jpeg"
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
 
   // PNG: 89 50 4E 47 0D 0A 1A 0A
-  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
-      bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) return "image/png";
+  if (
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  )
+    return "image/png";
 
   // WebP: 52 49 46 46 ?? ?? ?? ?? 57 45 42 50
-  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
-      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "image/webp";
+  if (
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  )
+    return "image/webp";
 
   return null;
 }
@@ -564,20 +598,33 @@ export async function compressImage(file: File, maxPx = 1920, quality = 0.82): P
       URL.revokeObjectURL(url);
       let { width, height } = img;
       if (width > maxPx || height > maxPx) {
-        if (width >= height) { height = Math.round((height / width) * maxPx); width = maxPx; }
-        else { width = Math.round((width / height) * maxPx); height = maxPx; }
+        if (width >= height) {
+          height = Math.round((height / width) * maxPx);
+          width = maxPx;
+        } else {
+          width = Math.round((width / height) * maxPx);
+          height = maxPx;
+        }
       }
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
       canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
       canvas.toBlob(
-        (blob) => resolve(blob ? new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }) : file),
+        (blob) =>
+          resolve(
+            blob
+              ? new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" })
+              : file,
+          ),
         "image/jpeg",
         quality,
       );
     };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
     img.src = url;
   });
 }
@@ -607,7 +654,10 @@ export async function uploadAttachment(file: File, folder: string): Promise<stri
 // Helper: remove storage files for a list of paths (fire-and-forget, best-effort)
 export function deleteStorageFiles(paths: string[]) {
   if (paths.length === 0) return;
-  supabase.storage.from("attachments").remove(paths).then(() => {});
+  supabase.storage
+    .from("attachments")
+    .remove(paths)
+    .then(() => {});
 }
 
 export type KundrundaZone = {
@@ -710,10 +760,7 @@ export type CustomerRequest = {
 };
 
 // Retry wrapper for transient network errors — waits 2^attempt * 200ms between retries
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxAttempts = 3,
-): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
@@ -909,7 +956,9 @@ export const MITT_COOP_CATEGORIES: { id: number; label: string }[] = [
 export type ArticleIdType = "mat-nr" | "ean" | "bnr";
 
 // Decode the stored article_number string into its type and raw value
-export function decodeArticleNumber(stored: string | null | undefined): { type: ArticleIdType; value: string } | null {
+export function decodeArticleNumber(
+  stored: string | null | undefined,
+): { type: ArticleIdType; value: string } | null {
   if (!stored?.trim()) return null;
   if (stored.startsWith("EAN:")) return { type: "ean", value: stored.slice(4) };
   if (stored.startsWith("BNR:")) return { type: "bnr", value: stored.slice(4) };
@@ -1022,9 +1071,18 @@ export function parseMittCoopUrl(inputUrl: string): ParsedMittCoopUrl | null {
     const params = url.searchParams;
     const eanParam = params.get("ean");
     const bnrParam = params.get("bnr");
-    const matnrParam = params.get("matnr") || params.get("articleId") || params.get("article_number") || params.get("article");
+    const matnrParam =
+      params.get("matnr") ||
+      params.get("articleId") ||
+      params.get("article_number") ||
+      params.get("article");
     const searchParam = params.get("search") || params.get("q") || params.get("query");
-    const nameParam = params.get("name") || params.get("title") || params.get("product_name") || params.get("product") || params.get("productName");
+    const nameParam =
+      params.get("name") ||
+      params.get("title") ||
+      params.get("product_name") ||
+      params.get("product") ||
+      params.get("productName");
 
     if (eanParam) {
       result.article_number = eanParam.replace(/\D/g, "");

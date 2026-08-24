@@ -96,9 +96,7 @@ function OfflineQueueBadge() {
       aria-live="polite"
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
-        queueLen > 0
-          ? "bg-warning/15 text-warning-foreground"
-          : "bg-muted text-muted-foreground",
+        queueLen > 0 ? "bg-warning/15 text-warning-foreground" : "bg-muted text-muted-foreground",
       )}
     >
       {queueLen > 0 ? (

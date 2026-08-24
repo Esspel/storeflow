@@ -68,7 +68,9 @@ function HubPage() {
             className="mb-4 flex items-center gap-2 rounded-2xl border border-primary/30 bg-primary-soft p-4 sm:col-span-3"
           >
             <UserRound className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium text-primary">Din kundrunda: {myKundrunda.day}</span>
+            <span className="text-sm font-medium text-primary">
+              Din kundrunda: {myKundrunda.day}
+            </span>
           </a>
         )}
 
@@ -148,11 +150,7 @@ function WidgetFallback({ name }: { name: string }) {
       className="col-span-2 flex flex-col items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-center sm:col-span-3"
     >
       <span className="text-sm text-destructive">Kunde inte ladda {name}</span>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => window.location.reload()}
-      >
+      <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
         <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
         Försök igen
       </Button>

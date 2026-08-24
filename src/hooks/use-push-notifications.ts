@@ -35,7 +35,9 @@ export function usePushNotifications(): PushNotificationState {
   const { user } = useAuth();
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [permissionState, setPermissionState] = useState<NotificationPermission | "unknown">("unknown");
+  const [permissionState, setPermissionState] = useState<NotificationPermission | "unknown">(
+    "unknown",
+  );
 
   const isSupported =
     typeof window !== "undefined" &&
@@ -71,7 +73,9 @@ export function usePushNotifications(): PushNotificationState {
           await sub.unsubscribe();
           if (isMounted) {
             setIsSubscribed(false);
-            toast.info("Notisprenumerationen behövde förnyas. Aktivera notiser igen i inställningarna.");
+            toast.info(
+              "Notisprenumerationen behövde förnyas. Aktivera notiser igen i inställningarna.",
+            );
           }
           return;
         }
@@ -85,13 +89,13 @@ export function usePushNotifications(): PushNotificationState {
             user_agent: navigator.userAgent,
             updated_at: new Date().toISOString(),
           },
-          { onConflict: "endpoint" }
+          { onConflict: "endpoint" },
         );
 
         if (upsertErr) {
           // Om unikt villkor fallerar (t.ex. ägs av annan användare på samma enhet), skapa ny
           await sub.unsubscribe();
-          
+
           const freshSub = await reg.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!),
@@ -166,7 +170,7 @@ export function usePushNotifications(): PushNotificationState {
           user_agent: navigator.userAgent,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "endpoint" }
+        { onConflict: "endpoint" },
       );
 
       if (error) throw error;

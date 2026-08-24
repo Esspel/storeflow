@@ -4,9 +4,8 @@ import { secureGetSession, secureSetSession, secureClearSession } from "./secure
 const SECURE_LOGIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/secure-login`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-export type LoginResponse = 
-  | { user: AppUser; token: string; mustChangePassword?: boolean } 
-  | { error: string };
+export type LoginResponse =
+  { user: AppUser; token: string; mustChangePassword?: boolean } | { error: string };
 
 export async function getStoredSession(): Promise<{ token: string; user: AppUser } | null> {
   return secureGetSession<AppUser>();
@@ -20,10 +19,7 @@ export async function clearSession(): Promise<void> {
   await secureClearSession();
 }
 
-export async function login(
-  username: string,
-  password: string,
-): Promise<LoginResponse> {
+export async function login(username: string, password: string): Promise<LoginResponse> {
   try {
     const res = await fetch(SECURE_LOGIN_URL, {
       method: "POST",

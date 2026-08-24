@@ -5,19 +5,28 @@ import { serviceRoleClient } from "../_shared/auth.ts";
 import { SignJWT } from "npm:jose@^6.2.5";
 
 const ALL_SCOPES = [
-  "templates:read", "templates:write",
-  "tasks:read", "tasks:write",
-  "customer_requests:read", "customer_requests:write",
+  "templates:read",
+  "templates:write",
+  "tasks:read",
+  "tasks:write",
+  "customer_requests:read",
+  "customer_requests:write",
   "customer_rounds:read",
-  "deviations:read", "deviations:write",
+  "deviations:read",
+  "deviations:write",
   "stores:read",
-  "template_packages:read", "template_packages:write",
-  "deliveries:read", "schedule:read", "products:search",
+  "template_packages:read",
+  "template_packages:write",
+  "deliveries:read",
+  "schedule:read",
+  "products:search",
 ];
 
 async function sha256Hex(text: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function safeCompare(a: string, b: string): boolean {
@@ -31,7 +40,9 @@ function safeCompare(a: string, b: string): boolean {
 function generateApiKey(): string {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
-  const hex = Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const hex = Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
   return `sf_live_${hex}`;
 }
 
@@ -59,7 +70,8 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     if (!error && session) {
-      const isNotExpired = !session.expires_at || new Date(session.expires_at).getTime() > Date.now();
+      const isNotExpired =
+        !session.expires_at || new Date(session.expires_at).getTime() > Date.now();
       if (isNotExpired) {
         isAuthenticated = true;
         currentUserId = session.user_id;
@@ -91,7 +103,9 @@ Deno.serve(async (req: Request) => {
   if (body.action === "list") {
     const { data, error } = await supabase
       .from("api_keys")
-      .select("id, name, key_prefix, store_id, scopes, created_at, last_used_at, revoked_at, expires_at, rotated_from_id")
+      .select(
+        "id, name, key_prefix, store_id, scopes, created_at, last_used_at, revoked_at, expires_at, rotated_from_id",
+      )
       .order("created_at", { ascending: false });
 
     if (error) return json({ error: error.message }, 500);
@@ -113,23 +127,31 @@ Deno.serve(async (req: Request) => {
   if (body.action === "create") {
     if (!body.name) return json({ error: "name saknas." }, 400);
 
-    const scopes = (body.scopes && body.scopes.length > 0 ? body.scopes : ALL_SCOPES).filter((s) => ALL_SCOPES.includes(s));
-    if (scopes.length === 0) return json({ error: `scopes måste vara en delmängd av: ${ALL_SCOPES.join(", ")}` }, 400);
+    const scopes = (body.scopes && body.scopes.length > 0 ? body.scopes : ALL_SCOPES).filter((s) =>
+      ALL_SCOPES.includes(s),
+    );
+    if (scopes.length === 0)
+      return json({ error: `scopes måste vara en delmängd av: ${ALL_SCOPES.join(", ")}` }, 400);
 
     const rawKey = generateApiKey();
     const keyHash = await sha256Hex(rawKey);
 
-    const { data: created, error } = await supabase.from("api_keys").insert({
-      name: body.name,
-      key_prefix: rawKey.slice(0, 16),
-      key_hash: keyHash,
-      store_id: body.store_id ?? null,
-      scopes,
-      expires_at: body.expires_at ?? null,
-      created_by: currentUserId ?? body.user_id ?? null,
-    }).select("id, key_prefix").single();
+    const { data: created, error } = await supabase
+      .from("api_keys")
+      .insert({
+        name: body.name,
+        key_prefix: rawKey.slice(0, 16),
+        key_hash: keyHash,
+        store_id: body.store_id ?? null,
+        scopes,
+        expires_at: body.expires_at ?? null,
+        created_by: currentUserId ?? body.user_id ?? null,
+      })
+      .select("id, key_prefix")
+      .single();
 
-    if (error || !created) return json({ error: error?.message ?? "Kunde inte skapa nyckel." }, 500);
+    if (error || !created)
+      return json({ error: error?.message ?? "Kunde inte skapa nyckel." }, 500);
 
     return json({
       success: true,
@@ -162,18 +184,23 @@ Deno.serve(async (req: Request) => {
     const rawKey = generateApiKey();
     const keyHash = await sha256Hex(rawKey);
 
-    const { data: newKey, error: createErr } = await supabase.from("api_keys").insert({
-      name: oldKey.name,
-      key_prefix: rawKey.slice(0, 16),
-      key_hash: keyHash,
-      store_id: oldKey.store_id,
-      scopes: oldKey.scopes,
-      expires_at: oldKey.expires_at,
-      rotated_from_id: oldKey.id,
-      created_by: currentUserId ?? oldKey.created_by ?? null,
-    }).select("id, key_prefix").single();
+    const { data: newKey, error: createErr } = await supabase
+      .from("api_keys")
+      .insert({
+        name: oldKey.name,
+        key_prefix: rawKey.slice(0, 16),
+        key_hash: keyHash,
+        store_id: oldKey.store_id,
+        scopes: oldKey.scopes,
+        expires_at: oldKey.expires_at,
+        rotated_from_id: oldKey.id,
+        created_by: currentUserId ?? oldKey.created_by ?? null,
+      })
+      .select("id, key_prefix")
+      .single();
 
-    if (createErr || !newKey) return json({ error: createErr?.message ?? "Kunde inte rotera nyckeln." }, 500);
+    if (createErr || !newKey)
+      return json({ error: createErr?.message ?? "Kunde inte rotera nyckeln." }, 500);
 
     return json({
       success: true,
@@ -201,7 +228,11 @@ Deno.serve(async (req: Request) => {
       return json({ error: "API-nyckeln har gått ut." }, 401);
     }
 
-    supabase.from("api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", keyRecord.id).then();
+    supabase
+      .from("api_keys")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", keyRecord.id)
+      .then();
 
     const jwtSecret = Deno.env.get("JWT_SECRET");
     if (!jwtSecret) {

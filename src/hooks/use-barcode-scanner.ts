@@ -42,9 +42,7 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       const isEditable =
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable;
+        target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
 
       // Never intercept clipboard shortcuts or modifier combos in editable fields
       if (isEditable && (e.ctrlKey || e.metaKey)) return;

@@ -24,7 +24,13 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase, logAudit, HIERARCHY_LABELS, insertSupportTicket, errorToSwedish } from "@/lib/supabase";
+import {
+  supabase,
+  logAudit,
+  HIERARCHY_LABELS,
+  insertSupportTicket,
+  errorToSwedish,
+} from "@/lib/supabase";
 import { getQueueLength as getOfflineQueueLength } from "@/lib/offline-queue";
 import { getRecentErrors, initErrorCapture } from "@/lib/error-capture";
 import { useAuth } from "@/lib/auth-context";
@@ -934,7 +940,9 @@ function SettingsPage() {
                     `Senaste fel: ${getRecentErrors().slice(-1)[0] ?? "ingen"}`,
                     `Offline-kö: ${getOfflineQueueLength()}`,
                   ].join("\n");
-                  navigator.clipboard.writeText(info).then(() => toast.success("Kopierat – klistra in i mail till support"));
+                  navigator.clipboard
+                    .writeText(info)
+                    .then(() => toast.success("Kopierat – klistra in i mail till support"));
                 }}
                 variant="ghost"
                 className="w-full rounded-full gap-2"

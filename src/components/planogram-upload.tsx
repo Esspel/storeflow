@@ -4,7 +4,18 @@
  */
 
 import { useState, useCallback, useRef } from "react";
-import { Upload, X, FileText, Eye, CheckCircle, AlertTriangle, Loader2, Trash2, Download, RotateCcw } from "lucide-react";
+import {
+  Upload,
+  X,
+  FileText,
+  Eye,
+  CheckCircle,
+  AlertTriangle,
+  Loader2,
+  Trash2,
+  Download,
+  RotateCcw,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,41 +70,35 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
     e.stopPropagation();
   }, []);
 
-  const handleDrop = useCallback(
-    async (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-      const droppedFiles = Array.from(e.dataTransfer.files).filter(
-        (f) => f.type === "application/pdf"
-      );
+    const droppedFiles = Array.from(e.dataTransfer.files).filter(
+      (f) => f.type === "application/pdf",
+    );
 
-      if (droppedFiles.length === 0) {
-        toast.error("Endast PDF-filer accepteras");
-        return;
-      }
+    if (droppedFiles.length === 0) {
+      toast.error("Endast PDF-filer accepteras");
+      return;
+    }
 
-      await processFiles(droppedFiles);
-    },
-    []
-  );
+    await processFiles(droppedFiles);
+  }, []);
 
-  const handleFileSelect = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const selectedFiles = Array.from(e.target.files || []).filter(
-        (f) => f.type === "application/pdf"
-      );
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files || []).filter(
+      (f) => f.type === "application/pdf",
+    );
 
-      if (selectedFiles.length > 0) {
-        await processFiles(selectedFiles);
-      }
-      // Reset input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    },
-    []
-  );
+    if (selectedFiles.length > 0) {
+      await processFiles(selectedFiles);
+    }
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, []);
 
   const processFiles = async (newFiles: File[]) => {
     for (const file of newFiles) {
@@ -109,9 +114,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
   };
 
   const parseFile = async (uploadedFile: UploadedFile) => {
-    setFiles((prev) =>
-      prev.map((f) => (f === uploadedFile ? { ...f, status: "parsing" } : f))
-    );
+    setFiles((prev) => prev.map((f) => (f === uploadedFile ? { ...f, status: "parsing" } : f)));
 
     try {
       const arrayBuffer = await uploadedFile.file.arrayBuffer();
@@ -144,17 +147,15 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                 error: validation.valid ? undefined : validation.errors.join(", "),
                 pdfUrl,
               }
-            : f
-        )
+            : f,
+        ),
       );
     } catch (err) {
       console.error("Parse error:", err);
       setFiles((prev) =>
         prev.map((f) =>
-          f === uploadedFile
-            ? { ...f, status: "error", error: "Kunde inte tolka PDF-filen" }
-            : f
-        )
+          f === uploadedFile ? { ...f, status: "error", error: "Kunde inte tolka PDF-filen" } : f,
+        ),
       );
     }
   };
@@ -162,9 +163,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
   const prepareImport = async (uploadedFile: UploadedFile) => {
     if (!uploadedFile.parsed || !user) return;
 
-    setFiles((prev) =>
-      prev.map((f) => (f === uploadedFile ? { ...f, status: "validating" } : f))
-    );
+    setFiles((prev) => prev.map((f) => (f === uploadedFile ? { ...f, status: "validating" } : f)));
 
     try {
       // Fetch product catalog for this store to map EAN/BNR to product IDs
@@ -178,8 +177,16 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
 
         if (!productsError && products) {
           products.forEach((p) => {
-            if (p.ean) productCatalog.set(p.ean, { id: p.id, sap_article_id: p.sap_article_id || p.article_number || p.id });
-            if (p.article_number) productCatalog.set(p.article_number, { id: p.id, sap_article_id: p.sap_article_id || p.article_number });
+            if (p.ean)
+              productCatalog.set(p.ean, {
+                id: p.id,
+                sap_article_id: p.sap_article_id || p.article_number || p.id,
+              });
+            if (p.article_number)
+              productCatalog.set(p.article_number, {
+                id: p.id,
+                sap_article_id: p.sap_article_id || p.article_number,
+              });
           });
         }
       } catch (catalogError) {
@@ -191,9 +198,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
       const storeFlowData = planogramToStoreFlow(uploadedFile.parsed, productCatalog, storeId);
 
       setFiles((prev) =>
-        prev.map((f) =>
-          f === uploadedFile ? { ...f, storeFlowData, status: "parsed" } : f
-        )
+        prev.map((f) => (f === uploadedFile ? { ...f, storeFlowData, status: "parsed" } : f)),
       );
 
       setShowPreview(uploadedFile);
@@ -211,9 +216,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
   const importPlanogram = async (uploadedFile: UploadedFile) => {
     if (!uploadedFile.storeFlowData || !user) return;
 
-    setFiles((prev) =>
-      prev.map((f) => (f === uploadedFile ? { ...f, status: "importing" } : f))
-    );
+    setFiles((prev) => prev.map((f) => (f === uploadedFile ? { ...f, status: "importing" } : f)));
 
     try {
       // Create planogram in database
@@ -238,21 +241,15 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
 
       // Link PDF file if uploaded
       if (uploadedFile.pdfUrl) {
-        await supabase
-          .from("planogram_pdfs")
-          .insert({
-            planogram_id: planogram.id,
-            storage_path: uploadedFile.pdfUrl.split("/attachments/")[1],
-            original_filename: uploadedFile.file.name,
-            uploaded_by: user.id,
-          });
+        await supabase.from("planogram_pdfs").insert({
+          planogram_id: planogram.id,
+          storage_path: uploadedFile.pdfUrl.split("/attachments/")[1],
+          original_filename: uploadedFile.file.name,
+          uploaded_by: user.id,
+        });
       }
 
-      setFiles((prev) =>
-        prev.map((f) =>
-          f === uploadedFile ? { ...f, status: "completed" } : f
-        )
-      );
+      setFiles((prev) => prev.map((f) => (f === uploadedFile ? { ...f, status: "completed" } : f)));
 
       toast.success(`Planogram "${uploadedFile.storeFlowData.name}" importerat!`);
       onImportSuccess?.(planogram.id);
@@ -261,10 +258,8 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
       console.error("Import error:", err);
       setFiles((prev) =>
         prev.map((f) =>
-          f === uploadedFile
-            ? { ...f, status: "error", error: "Import misslyckades" }
-            : f
-        )
+          f === uploadedFile ? { ...f, status: "error", error: "Import misslyckades" } : f,
+        ),
       );
       toast.error("Kunde inte importera planogram");
     }
@@ -276,7 +271,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
 
   const retryFile = async (uploadedFile: UploadedFile) => {
     setFiles((prev) =>
-      prev.map((f) => (f === uploadedFile ? { ...f, status: "pending", error: undefined } : f))
+      prev.map((f) => (f === uploadedFile ? { ...f, status: "pending", error: undefined } : f)),
     );
     await parseFile(uploadedFile);
   };
@@ -323,7 +318,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
       <div
         className={cn(
           "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
-          "border-gray-300 hover:border-blue-500 dark:border-gray-600 dark:hover:border-blue-400"
+          "border-gray-300 hover:border-blue-500 dark:border-gray-600 dark:hover:border-blue-400",
         )}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
@@ -363,9 +358,11 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                 key={index}
                 className={cn(
                   "flex items-center gap-3 p-3 rounded-lg border transition-colors",
-                  uploadedFile.status === "error" && "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-900/20",
-                  uploadedFile.status === "completed" && "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-900/20",
-                  "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800"
+                  uploadedFile.status === "error" &&
+                    "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-900/20",
+                  uploadedFile.status === "completed" &&
+                    "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-900/20",
+                  "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800",
                 )}
               >
                 <div className="flex-shrink-0">{getStatusIcon(uploadedFile.status)}</div>
@@ -381,8 +378,8 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                         uploadedFile.status === "error"
                           ? "destructive"
                           : uploadedFile.status === "completed"
-                          ? "default"
-                          : "secondary"
+                            ? "default"
+                            : "secondary"
                       }
                       className="text-xs"
                     >
@@ -393,15 +390,22 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                   {uploadedFile.parsed && (
                     <div className="mt-1 text-sm text-gray-500 dark:text-gray-400 space-y-1">
                       <span>
-                        Planogram: <span className="font-medium">{uploadedFile.parsed.header.planogramName}</span>
+                        Planogram:{" "}
+                        <span className="font-medium">
+                          {uploadedFile.parsed.header.planogramName}
+                        </span>
                       </span>
                       <span>
-                        Hyllor: <span className="font-medium">{uploadedFile.parsed.shelves.length}</span>
+                        Hyllor:{" "}
+                        <span className="font-medium">{uploadedFile.parsed.shelves.length}</span>
                       </span>
                       <span>
                         Produkter:{" "}
                         <span className="font-medium">
-                          {uploadedFile.parsed.shelves.reduce((sum, s) => sum + s.products.length, 0)}
+                          {uploadedFile.parsed.shelves.reduce(
+                            (sum, s) => sum + s.products.length,
+                            0,
+                          )}
                         </span>
                       </span>
                       {uploadedFile.validation && uploadedFile.validation.warnings.length > 0 && (
@@ -420,31 +424,26 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                 </div>
 
                 <div className="flex items-center gap-1">
-                  {uploadedFile.status === "parsed" && uploadedFile.parsed && !uploadedFile.storeFlowData && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => prepareImport(uploadedFile)}
-                    >
-                      Förbered import
-                    </Button>
-                  )}
+                  {uploadedFile.status === "parsed" &&
+                    uploadedFile.parsed &&
+                    !uploadedFile.storeFlowData && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => prepareImport(uploadedFile)}
+                      >
+                        Förbered import
+                      </Button>
+                    )}
 
                   {uploadedFile.storeFlowData && uploadedFile.status === "parsed" && (
-                    <Button
-                      size="sm"
-                      onClick={() => importPlanogram(uploadedFile)}
-                    >
+                    <Button size="sm" onClick={() => importPlanogram(uploadedFile)}>
                       Importera
                     </Button>
                   )}
 
                   {uploadedFile.status === "error" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => retryFile(uploadedFile)}
-                    >
+                    <Button size="sm" variant="outline" onClick={() => retryFile(uploadedFile)}>
                       <RotateCcw className="w-4 h-4 mr-1" />
                       Försök igen
                     </Button>
@@ -463,21 +462,13 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                   )}
 
                   {uploadedFile.status === "completed" && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => removeFile(uploadedFile)}
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => removeFile(uploadedFile)}>
                       <X className="w-4 h-4" />
                     </Button>
                   )}
 
                   {uploadedFile.status !== "completed" && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => removeFile(uploadedFile)}
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => removeFile(uploadedFile)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   )}
@@ -492,7 +483,9 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
       <Dialog open={!!showPreview} onOpenChange={(open) => !open && setShowPreview(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
           <DialogHeader>
-            <DialogTitle>Förhandsgranskning: {showPreview?.parsed?.header.planogramName}</DialogTitle>
+            <DialogTitle>
+              Förhandsgranskning: {showPreview?.parsed?.header.planogramName}
+            </DialogTitle>
           </DialogHeader>
           <div className="p-0 overflow-auto max-h-[70vh]">
             {showPreview?.parsed && (
@@ -524,7 +517,11 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
 
                 {/* Validation */}
                 {showPreview.validation && (
-                  <Card className={cn(showPreview.validation.valid ? "border-green-200" : "border-red-200")}>
+                  <Card
+                    className={cn(
+                      showPreview.validation.valid ? "border-green-200" : "border-red-200",
+                    )}
+                  >
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         {showPreview.validation.valid ? (
@@ -548,7 +545,9 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                       )}
                       {showPreview.validation.warnings.length > 0 && (
                         <div className="space-y-1">
-                          <Label className="text-amber-600 dark:text-amber-400 font-medium">Varningar:</Label>
+                          <Label className="text-amber-600 dark:text-amber-400 font-medium">
+                            Varningar:
+                          </Label>
                           <ul className="list-disc list-inside text-sm text-amber-600 dark:text-amber-400">
                             {showPreview.validation.warnings.map((w, i) => (
                               <li key={i}>{w}</li>
@@ -556,9 +555,12 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                           </ul>
                         </div>
                       )}
-                      {showPreview.validation.valid && showPreview.validation.warnings.length === 0 && (
-                        <p className="text-green-600 dark:text-green-400">Inga problem hittades</p>
-                      )}
+                      {showPreview.validation.valid &&
+                        showPreview.validation.warnings.length === 0 && (
+                          <p className="text-green-600 dark:text-green-400">
+                            Inga problem hittades
+                          </p>
+                        )}
                     </CardContent>
                   </Card>
                 )}
@@ -577,7 +579,9 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                               <span className="font-medium">Hylla {shelf.shelfNumber}</span>
                               <div className="flex items-center gap-4 text-xs text-gray-500">
                                 <span>Notch: {shelf.notch}</span>
-                                <span>{shelf.widthInch}" x {shelf.heightInch}"</span>
+                                <span>
+                                  {shelf.widthInch}" x {shelf.heightInch}"
+                                </span>
                                 <span>Golv: {shelf.heightFromFloorInch}"</span>
                                 <span>Lutning: {shelf.tiltDegrees}°</span>
                               </div>
@@ -605,14 +609,18 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                                       key={product.position}
                                       className={cn(
                                         "border-b",
-                                        product.action === "Tillagd" && "bg-green-50 dark:bg-green-900/20",
-                                        product.action === "Borttagen" && "bg-red-50 dark:bg-red-900/20 line-through"
+                                        product.action === "Tillagd" &&
+                                          "bg-green-50 dark:bg-green-900/20",
+                                        product.action === "Borttagen" &&
+                                          "bg-red-50 dark:bg-red-900/20 line-through",
                                       )}
                                     >
                                       <td className="py-1 pr-3 font-mono">{product.position}</td>
                                       <td className="py-1 pr-3 font-mono">{product.ean}</td>
                                       <td className="py-1 pr-3 font-mono">{product.bnr}</td>
-                                      <td className="py-1 pr-3 truncate max-w-[200px]">{product.articleName}</td>
+                                      <td className="py-1 pr-3 truncate max-w-[200px]">
+                                        {product.articleName}
+                                      </td>
                                       <td className="py-1 pr-3">{product.brand}</td>
                                       <td className="py-1 pr-3 font-mono">{product.size}</td>
                                       <td className="py-1 pr-3 text-center">{product.bPack}</td>
@@ -623,7 +631,9 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                                         {product.action && (
                                           <Badge
                                             variant={
-                                              product.action === "Tillagd" ? "default" : "destructive"
+                                              product.action === "Tillagd"
+                                                ? "default"
+                                                : "destructive"
                                             }
                                             className="text-xs"
                                           >
@@ -659,8 +669,12 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                           <p className="font-medium">{storeId}</p>
                         </div>
                         <div>
-                          <Label className="text-gray-500 dark:text-gray-400">Produkter att importera</Label>
-                          <p className="font-medium">{showPreview.storeFlowData.expected_products.length}</p>
+                          <Label className="text-gray-500 dark:text-gray-400">
+                            Produkter att importera
+                          </Label>
+                          <p className="font-medium">
+                            {showPreview.storeFlowData.expected_products.length}
+                          </p>
                         </div>
                         <div>
                           <Label className="text-gray-500 dark:text-gray-400">Version</Label>
@@ -692,25 +706,30 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                               </tr>
                             </thead>
                             <tbody>
-                              {showPreview.storeFlowData.expected_products.slice(0, 10).map((p, i) => (
-                                <tr key={i} className="border-b">
-                                  <td className="py-1 pr-3 font-mono">{p.product_id}</td>
-                                  <td className="py-1 pr-3 font-mono">{p.ean}</td>
-                                  <td className="py-1 pr-3 truncate max-w-[150px]">{p.name}</td>
-                                  <td className="py-1 pr-3 text-center">{p.position.shelf_number}</td>
-                                  <td className="py-1 pr-3 text-center">{p.position.shelf_position}</td>
-                                  <td className="py-1 pr-3 text-center">{p.facings}</td>
-                                  <td className="py-1 pr-3 text-center">{p.total_quantity}</td>
-                                </tr>
-                              ))}
+                              {showPreview.storeFlowData.expected_products
+                                .slice(0, 10)
+                                .map((p, i) => (
+                                  <tr key={i} className="border-b">
+                                    <td className="py-1 pr-3 font-mono">{p.product_id}</td>
+                                    <td className="py-1 pr-3 font-mono">{p.ean}</td>
+                                    <td className="py-1 pr-3 truncate max-w-[150px]">{p.name}</td>
+                                    <td className="py-1 pr-3 text-center">
+                                      {p.position.shelf_number}
+                                    </td>
+                                    <td className="py-1 pr-3 text-center">
+                                      {p.position.shelf_position}
+                                    </td>
+                                    <td className="py-1 pr-3 text-center">{p.facings}</td>
+                                    <td className="py-1 pr-3 text-center">{p.total_quantity}</td>
+                                  </tr>
+                                ))}
                             </tbody>
                           </table>
                         </div>
                         {showPreview.storeFlowData.expected_products.length > 10 && (
                           <p className="text-sm text-gray-500 mt-2">
-                            ...och{" "}
-                            {showPreview.storeFlowData.expected_products.length - 10}{" "}
-                            fler produkter
+                            ...och {showPreview.storeFlowData.expected_products.length - 10} fler
+                            produkter
                           </p>
                         )}
                       </div>
@@ -722,11 +741,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
           </div>
           <DialogFooter>
             {showPreview?.status === "parsed" && showPreview.storeFlowData && (
-              <Button
-                onClick={() => importPlanogram(showPreview!)}
-              >
-                Importera planogram
-              </Button>
+              <Button onClick={() => importPlanogram(showPreview!)}>Importera planogram</Button>
             )}
             <Button variant="outline" onClick={() => setShowPreview(null)}>
               Stäng

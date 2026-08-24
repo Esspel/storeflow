@@ -968,16 +968,14 @@ function MallarPage() {
 
     const validItems = (source.items ?? []).filter((it) => it.label.trim());
     if (validItems.length > 0) {
-      await supabase
-        .from("checklist_template_items")
-        .insert(
-          validItems.map((it, idx) => ({
-            template_id: tmpl.id,
-            label: it.label,
-            requires_photo: it.requires_photo,
-            sort_order: idx,
-          })),
-        );
+      await supabase.from("checklist_template_items").insert(
+        validItems.map((it, idx) => ({
+          template_id: tmpl.id,
+          label: it.label,
+          requires_photo: it.requires_photo,
+          sort_order: idx,
+        })),
+      );
     }
 
     if (source.storeIds.length > 0) {
@@ -1007,15 +1005,13 @@ function MallarPage() {
         .eq("id", editPackageTarget.id);
       await supabase.from("template_package_items").delete().eq("package_id", editPackageTarget.id);
       if (packageTemplateIds.length > 0) {
-        await supabase
-          .from("template_package_items")
-          .insert(
-            packageTemplateIds.map((tid, idx) => ({
-              package_id: editPackageTarget.id,
-              template_id: tid,
-              sort_order: idx,
-            })),
-          );
+        await supabase.from("template_package_items").insert(
+          packageTemplateIds.map((tid, idx) => ({
+            package_id: editPackageTarget.id,
+            template_id: tid,
+            sort_order: idx,
+          })),
+        );
       }
       setEditPackageTarget(null);
     } else {
@@ -1030,15 +1026,13 @@ function MallarPage() {
         .select("id")
         .maybeSingle();
       if (pkg?.id && packageTemplateIds.length > 0) {
-        await supabase
-          .from("template_package_items")
-          .insert(
-            packageTemplateIds.map((tid, idx) => ({
-              package_id: pkg.id,
-              template_id: tid,
-              sort_order: idx,
-            })),
-          );
+        await supabase.from("template_package_items").insert(
+          packageTemplateIds.map((tid, idx) => ({
+            package_id: pkg.id,
+            template_id: tid,
+            sort_order: idx,
+          })),
+        );
       }
     }
     setPackageForm({ name: "", description: "" });
@@ -1198,19 +1192,17 @@ function MallarPage() {
 
     const validItems = form.items.filter((it) => it.label.trim());
     if (validItems.length > 0) {
-      await supabase
-        .from("checklist_template_items")
-        .insert(
-          validItems.map((it, idx) => ({
-            template_id: tmpl.id,
-            label: it.label.trim(),
-            requires_photo: it.requires_photo,
-            link_url: it.link_url || null,
-            sort_order: idx,
-            condition_question_id: it.condition_question_id ?? null,
-            condition_answer: it.condition_answer ?? null,
-          })),
-        );
+      await supabase.from("checklist_template_items").insert(
+        validItems.map((it, idx) => ({
+          template_id: tmpl.id,
+          label: it.label.trim(),
+          requires_photo: it.requires_photo,
+          link_url: it.link_url || null,
+          sort_order: idx,
+          condition_question_id: it.condition_question_id ?? null,
+          condition_answer: it.condition_answer ?? null,
+        })),
+      );
     }
 
     if (createScope === "store") {
@@ -1225,18 +1217,16 @@ function MallarPage() {
 
     const validQuestions = form.questions.filter((q) => q.label.trim());
     if (validQuestions.length > 0) {
-      await supabase
-        .from("checklist_template_questions")
-        .insert(
-          validQuestions.map((q, idx) => ({
-            template_id: tmpl.id,
-            label: q.label.trim(),
-            question_type: q.question_type ?? "text",
-            is_required: q.is_required,
-            link_url: q.link_url || null,
-            sort_order: idx,
-          })),
-        );
+      await supabase.from("checklist_template_questions").insert(
+        validQuestions.map((q, idx) => ({
+          template_id: tmpl.id,
+          label: q.label.trim(),
+          question_type: q.question_type ?? "text",
+          is_required: q.is_required,
+          link_url: q.link_url || null,
+          sort_order: idx,
+        })),
+      );
     }
 
     logAudit(user?.id ?? null, "template.create", "checklist_templates", tmpl.id, {
@@ -1708,31 +1698,26 @@ function MallarPage() {
               .maybeSingle();
             if (!task?.id) continue;
             if (validQuestions.length > 0) {
-              await supabase
-                .from("task_questions")
-                .insert(
-                  validQuestions.map((q, i) => ({
-                    task_id: task.id,
-                    label: q.label,
-                    question_type: q.question_type ?? "text",
-                    is_required: q.is_required,
-                    sort_order: i,
-                  })),
-                );
+              await supabase.from("task_questions").insert(
+                validQuestions.map((q, i) => ({
+                  task_id: task.id,
+                  label: q.label,
+                  question_type: q.question_type ?? "text",
+                  is_required: q.is_required,
+                  sort_order: i,
+                })),
+              );
             }
             if (validItems.length > 0) {
-              await supabase
-                .from("task_steps")
-                .insert(
-                  validItems.map((it, i) => ({
-                    task_id: task.id,
-                    label: it.label,
-                    sort_order: i,
-                    requires_photo: it.requires_photo,
-                    link_url:
-                      (it as ChecklistTemplateItem & { link_url?: string }).link_url || null,
-                  })),
-                );
+              await supabase.from("task_steps").insert(
+                validItems.map((it, i) => ({
+                  task_id: task.id,
+                  label: it.label,
+                  sort_order: i,
+                  requires_photo: it.requires_photo,
+                  link_url: (it as ChecklistTemplateItem & { link_url?: string }).link_url || null,
+                })),
+              );
             }
             const aRows = assigneeRows(task.id);
             if (aRows.length > 0) await supabase.from("task_assignees").insert(aRows);
@@ -2092,36 +2077,32 @@ function MallarPage() {
     await supabase.from("checklist_template_items").delete().eq("template_id", editTarget.id);
     const validItems = editForm.items.filter((it) => it.label.trim());
     if (validItems.length > 0) {
-      await supabase
-        .from("checklist_template_items")
-        .insert(
-          validItems.map((it, idx) => ({
-            template_id: editTarget.id,
-            label: it.label.trim(),
-            requires_photo: it.requires_photo,
-            link_url: it.link_url || null,
-            sort_order: idx,
-            condition_question_id: it.condition_question_id ?? null,
-            condition_answer: it.condition_answer ?? null,
-          })),
-        );
+      await supabase.from("checklist_template_items").insert(
+        validItems.map((it, idx) => ({
+          template_id: editTarget.id,
+          label: it.label.trim(),
+          requires_photo: it.requires_photo,
+          link_url: it.link_url || null,
+          sort_order: idx,
+          condition_question_id: it.condition_question_id ?? null,
+          condition_answer: it.condition_answer ?? null,
+        })),
+      );
     }
 
     await supabase.from("checklist_template_questions").delete().eq("template_id", editTarget.id);
     const validQuestions = editForm.questions.filter((q) => q.label.trim());
     if (validQuestions.length > 0) {
-      await supabase
-        .from("checklist_template_questions")
-        .insert(
-          validQuestions.map((q, idx) => ({
-            template_id: editTarget.id,
-            label: q.label.trim(),
-            question_type: q.question_type,
-            is_required: q.is_required,
-            link_url: q.link_url || null,
-            sort_order: idx,
-          })),
-        );
+      await supabase.from("checklist_template_questions").insert(
+        validQuestions.map((q, idx) => ({
+          template_id: editTarget.id,
+          label: q.label.trim(),
+          question_type: q.question_type,
+          is_required: q.is_required,
+          link_url: q.link_url || null,
+          sort_order: idx,
+        })),
+      );
     }
 
     await supabase.from("template_stores").delete().eq("template_id", editTarget.id);
@@ -2258,30 +2239,26 @@ function MallarPage() {
 
     const validItems = (source.items ?? []).filter((it) => it.label.trim());
     if (validItems.length > 0) {
-      await supabase
-        .from("checklist_template_items")
-        .insert(
-          validItems.map((it, idx) => ({
-            template_id: tmpl.id,
-            label: it.label,
-            requires_photo: it.requires_photo,
-            sort_order: idx,
-          })),
-        );
+      await supabase.from("checklist_template_items").insert(
+        validItems.map((it, idx) => ({
+          template_id: tmpl.id,
+          label: it.label,
+          requires_photo: it.requires_photo,
+          sort_order: idx,
+        })),
+      );
     }
     const validQuestions = (source.questions ?? []).filter((q) => q.label.trim());
     if (validQuestions.length > 0) {
-      await supabase
-        .from("checklist_template_questions")
-        .insert(
-          validQuestions.map((q, idx) => ({
-            template_id: tmpl.id,
-            label: q.label,
-            question_type: q.question_type ?? "text",
-            is_required: q.is_required,
-            sort_order: idx,
-          })),
-        );
+      await supabase.from("checklist_template_questions").insert(
+        validQuestions.map((q, idx) => ({
+          template_id: tmpl.id,
+          label: q.label,
+          question_type: q.question_type ?? "text",
+          is_required: q.is_required,
+          sort_order: idx,
+        })),
+      );
     }
     if (storeId) {
       await supabase.from("template_stores").insert({ template_id: tmpl.id, store_id: storeId });
@@ -2337,33 +2314,29 @@ function MallarPage() {
     await supabase.from("checklist_template_items").delete().eq("template_id", variant.id);
     const validItems = (parent.items ?? []).filter((it) => it.label.trim());
     if (validItems.length > 0) {
-      await supabase
-        .from("checklist_template_items")
-        .insert(
-          validItems.map((it, idx) => ({
-            template_id: variant.id,
-            label: it.label,
-            requires_photo: it.requires_photo,
-            sort_order: idx,
-          })),
-        );
+      await supabase.from("checklist_template_items").insert(
+        validItems.map((it, idx) => ({
+          template_id: variant.id,
+          label: it.label,
+          requires_photo: it.requires_photo,
+          sort_order: idx,
+        })),
+      );
     }
 
     // Replace questions with parent's questions
     await supabase.from("checklist_template_questions").delete().eq("template_id", variant.id);
     const validQuestions = (parent.questions ?? []).filter((q) => q.label.trim());
     if (validQuestions.length > 0) {
-      await supabase
-        .from("checklist_template_questions")
-        .insert(
-          validQuestions.map((q, idx) => ({
-            template_id: variant.id,
-            label: q.label,
-            question_type: q.question_type ?? "text",
-            is_required: q.is_required,
-            sort_order: idx,
-          })),
-        );
+      await supabase.from("checklist_template_questions").insert(
+        validQuestions.map((q, idx) => ({
+          template_id: variant.id,
+          label: q.label,
+          question_type: q.question_type ?? "text",
+          is_required: q.is_required,
+          sort_order: idx,
+        })),
+      );
     }
 
     logAudit(user?.id ?? null, "template.variant.merge", "checklist_templates", variant.id, {

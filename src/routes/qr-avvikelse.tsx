@@ -1,14 +1,24 @@
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
-import { TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, ChevronDown } from "lucide-react";
+import {
+  TriangleAlert as AlertTriangle,
+  CircleCheck as CheckCircle2,
+  ChevronDown,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const searchSchema = z.object({
   t: z.string().optional(),
@@ -56,7 +66,11 @@ function QrAvvikelsePage() {
   const [submitError, setSubmitError] = useState(false);
 
   useEffect(() => {
-    if (!token) { setInvalid(true); setResolving(false); return; }
+    if (!token) {
+      setInvalid(true);
+      setResolving(false);
+      return;
+    }
 
     supabase
       .from("qr_tokens")
@@ -65,9 +79,17 @@ function QrAvvikelsePage() {
       .eq("token_type", "incident_zone")
       .maybeSingle()
       .then(({ data }) => {
-        if (!data) { setInvalid(true); setResolving(false); return; }
+        if (!data) {
+          setInvalid(true);
+          setResolving(false);
+          return;
+        }
         const store = data.store as { id: string; name: string } | null;
-        if (!store) { setInvalid(true); setResolving(false); return; }
+        if (!store) {
+          setInvalid(true);
+          setResolving(false);
+          return;
+        }
         setStoreId(store.id);
         setStoreName(store.name);
         const m = (data.meta ?? {}) as TokenMeta;
@@ -84,17 +106,15 @@ function QrAvvikelsePage() {
   const submit = async () => {
     if (!form.title.trim() || !storeId) return;
     setSaving(true);
-    const { error } = await supabase
-      .from("incidents")
-      .insert({
-        title: form.title.trim(),
-        description: form.description.trim() || null,
-        category: form.category,
-        priority: form.priority,
-        store_id: storeId,
-        status: "open",
-        source: "qr",
-      });
+    const { error } = await supabase.from("incidents").insert({
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      category: form.category,
+      priority: form.priority,
+      store_id: storeId,
+      status: "open",
+      source: "qr",
+    });
     setSaving(false);
     if (!error) {
       setDone(true);
@@ -140,7 +160,15 @@ function QrAvvikelsePage() {
           </p>
           <button
             className="mt-6 rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground"
-            onClick={() => { setDone(false); setForm((f) => ({ ...f, title: meta.zone_name ? `Avvikelse i ${meta.zone_name}` : "", description: "", reporter_name: "" })); }}
+            onClick={() => {
+              setDone(false);
+              setForm((f) => ({
+                ...f,
+                title: meta.zone_name ? `Avvikelse i ${meta.zone_name}` : "",
+                description: "",
+                reporter_name: "",
+              }));
+            }}
           >
             Registrera en till
           </button>
@@ -160,7 +188,10 @@ function QrAvvikelsePage() {
             </div>
             <div>
               <h1 className="font-semibold text-foreground">Rapportera avvikelse</h1>
-              <p className="text-xs text-muted-foreground">{storeName}{meta.zone_name ? ` · ${meta.zone_name}` : ""}</p>
+              <p className="text-xs text-muted-foreground">
+                {storeName}
+                {meta.zone_name ? ` · ${meta.zone_name}` : ""}
+              </p>
             </div>
           </div>
         </div>
@@ -194,19 +225,37 @@ function QrAvvikelsePage() {
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Kategori</Label>
-            <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
-              <SelectTrigger className="h-11 text-sm"><SelectValue /></SelectTrigger>
+            <Select
+              value={form.category}
+              onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}
+            >
+              <SelectTrigger className="h-11 text-sm">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                {CATEGORIES.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Allvarlighet</Label>
-            <Select value={form.priority} onValueChange={(v) => setForm((f) => ({ ...f, priority: v as typeof form.priority }))}>
-              <SelectTrigger className="h-11 text-sm"><SelectValue /></SelectTrigger>
+            <Select
+              value={form.priority}
+              onValueChange={(v) => setForm((f) => ({ ...f, priority: v as typeof form.priority }))}
+            >
+              <SelectTrigger className="h-11 text-sm">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {PRIORITIES.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+                {PRIORITIES.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -221,7 +270,10 @@ function QrAvvikelsePage() {
         <Button
           className="h-12 w-full rounded-2xl text-base font-semibold"
           disabled={!form.title.trim() || saving}
-          onClick={() => { setSubmitError(false); submit(); }}
+          onClick={() => {
+            setSubmitError(false);
+            submit();
+          }}
         >
           {saving ? "Skickar..." : "Skicka in avvikelse"}
         </Button>

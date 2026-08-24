@@ -60,7 +60,8 @@ Deno.serve(async (req: Request) => {
 
     // Endast relativa sökvägar tillåts — förhindrar att en notis kan navigera
     // användaren till en extern sida när den klickas.
-    const safeUrl = typeof url === "string" && url.startsWith("/") && !url.startsWith("//") ? url : "/";
+    const safeUrl =
+      typeof url === "string" && url.startsWith("/") && !url.startsWith("//") ? url : "/";
 
     // Build query for subscriptions
     let query = supabase.from("push_subscriptions").select("*");
@@ -98,7 +99,10 @@ Deno.serve(async (req: Request) => {
         }
 
         try {
-          await webpush.sendNotification(sub.subscription_json as webpush.PushSubscription, pushPayload);
+          await webpush.sendNotification(
+            sub.subscription_json as webpush.PushSubscription,
+            pushPayload,
+          );
           sent++;
         } catch (err: unknown) {
           const e = err as { statusCode?: number; body?: string; message?: string };

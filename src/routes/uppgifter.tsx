@@ -952,15 +952,13 @@ function TasksPage() {
       assignees: t.assignees,
     });
     if ((t.images ?? []).length > 0) {
-      await supabase
-        .from("task_images")
-        .insert(
-          t.images!.map((img) => ({
-            task_id: childId,
-            storage_path: img.storage_path,
-            uploaded_by: img.uploaded_by,
-          })),
-        );
+      await supabase.from("task_images").insert(
+        t.images!.map((img) => ({
+          task_id: childId,
+          storage_path: img.storage_path,
+          uploaded_by: img.uploaded_by,
+        })),
+      );
     }
   }
 
@@ -1571,14 +1569,12 @@ function TasksPage() {
   const uploadTaskImage = async (task: TaskFull, file: File, stepId?: string) => {
     const path = await uploadAttachment(file, `tasks/${task.id}`);
     if (path) {
-      await supabase
-        .from("task_images")
-        .insert({
-          task_id: task.id,
-          step_id: stepId ?? null,
-          storage_path: path,
-          uploaded_by: user?.id,
-        });
+      await supabase.from("task_images").insert({
+        task_id: task.id,
+        step_id: stepId ?? null,
+        storage_path: path,
+        uploaded_by: user?.id,
+      });
       logAudit(user?.id ?? null, "task.image.upload", "task_images", task.id, { path });
       await markInProgress(task);
       fetchTasks();
@@ -1943,33 +1939,29 @@ function TasksPage() {
       const validQuestions = editForm.questions.filter((q) => q.label.trim());
       await supabase.from("task_steps").delete().eq("task_id", editTask.id);
       if (validSteps.length > 0) {
-        await supabase
-          .from("task_steps")
-          .insert(
-            validSteps.map((s, i) => ({
-              task_id: editTask.id,
-              label: s.label,
-              sort_order: i,
-              requires_photo: s.requires_photo,
-              is_done: false,
-              link_url: s.link_url || null,
-            })),
-          );
+        await supabase.from("task_steps").insert(
+          validSteps.map((s, i) => ({
+            task_id: editTask.id,
+            label: s.label,
+            sort_order: i,
+            requires_photo: s.requires_photo,
+            is_done: false,
+            link_url: s.link_url || null,
+          })),
+        );
       }
       await supabase.from("task_questions").delete().eq("task_id", editTask.id);
       if (validQuestions.length > 0) {
-        await supabase
-          .from("task_questions")
-          .insert(
-            validQuestions.map((q, i) => ({
-              task_id: editTask.id,
-              label: q.label,
-              question_type: q.question_type,
-              is_required: q.is_required,
-              sort_order: i,
-              link_url: q.link_url || null,
-            })),
-          );
+        await supabase.from("task_questions").insert(
+          validQuestions.map((q, i) => ({
+            task_id: editTask.id,
+            label: q.label,
+            question_type: q.question_type,
+            is_required: q.is_required,
+            sort_order: i,
+            link_url: q.link_url || null,
+          })),
+        );
       }
       await supabase.from("task_assignees").delete().eq("task_id", editTask.id);
       const singleAssigneeRows: { task_id: string; user_id?: string; group_id?: string }[] = [];
@@ -2051,33 +2043,29 @@ function TasksPage() {
     for (const tid of affectedIds) {
       await supabase.from("task_steps").delete().eq("task_id", tid);
       if (validSteps.length > 0) {
-        await supabase
-          .from("task_steps")
-          .insert(
-            validSteps.map((s, i) => ({
-              task_id: tid,
-              label: s.label,
-              sort_order: i,
-              requires_photo: s.requires_photo,
-              is_done: false,
-              link_url: s.link_url || null,
-            })),
-          );
+        await supabase.from("task_steps").insert(
+          validSteps.map((s, i) => ({
+            task_id: tid,
+            label: s.label,
+            sort_order: i,
+            requires_photo: s.requires_photo,
+            is_done: false,
+            link_url: s.link_url || null,
+          })),
+        );
       }
       await supabase.from("task_questions").delete().eq("task_id", tid);
       if (validQuestions.length > 0) {
-        await supabase
-          .from("task_questions")
-          .insert(
-            validQuestions.map((q, i) => ({
-              task_id: tid,
-              label: q.label,
-              question_type: q.question_type,
-              is_required: q.is_required,
-              sort_order: i,
-              link_url: q.link_url || null,
-            })),
-          );
+        await supabase.from("task_questions").insert(
+          validQuestions.map((q, i) => ({
+            task_id: tid,
+            label: q.label,
+            question_type: q.question_type,
+            is_required: q.is_required,
+            sort_order: i,
+            link_url: q.link_url || null,
+          })),
+        );
       }
       await supabase.from("task_assignees").delete().eq("task_id", tid);
       const rows = assigneeRows.map((r) => ({ ...r, task_id: tid }));
@@ -2178,31 +2166,27 @@ function TasksPage() {
       if (error || !task) return null;
 
       if (validSteps.length > 0) {
-        await supabase
-          .from("task_steps")
-          .insert(
-            validSteps.map((s, i) => ({
-              task_id: task.id,
-              label: s.label,
-              sort_order: i,
-              requires_photo: s.requires_photo,
-              link_url: s.link_url || null,
-            })),
-          );
+        await supabase.from("task_steps").insert(
+          validSteps.map((s, i) => ({
+            task_id: task.id,
+            label: s.label,
+            sort_order: i,
+            requires_photo: s.requires_photo,
+            link_url: s.link_url || null,
+          })),
+        );
       }
       if (validQuestions.length > 0) {
-        await supabase
-          .from("task_questions")
-          .insert(
-            validQuestions.map((q, i) => ({
-              task_id: task.id,
-              label: q.label,
-              question_type: q.question_type ?? "text",
-              is_required: q.is_required,
-              sort_order: i,
-              link_url: q.link_url || null,
-            })),
-          );
+        await supabase.from("task_questions").insert(
+          validQuestions.map((q, i) => ({
+            task_id: task.id,
+            label: q.label,
+            question_type: q.question_type ?? "text",
+            is_required: q.is_required,
+            sort_order: i,
+            link_url: q.link_url || null,
+          })),
+        );
       }
 
       const assigneeRows: { task_id: string; user_id?: string; group_id?: string }[] = [];
@@ -3415,7 +3399,9 @@ function TasksPage() {
 
       {loading ? (
         <div className="space-y-3">
-          {[1, 2, 3, 4].map((i) => <SkeletonCard key={i} rows={2} />)}
+          {[1, 2, 3, 4].map((i) => (
+            <SkeletonCard key={i} rows={2} />
+          ))}
         </div>
       ) : tab === "today" ? (
         renderTodayView()
@@ -3425,12 +3411,21 @@ function TasksPage() {
             title="Inga uppgifter än"
             description="Skapa en uppgift eller koppla en checklistmall för att komma igång."
             actionLabel={isManager ? "Skapa uppgift" : ""}
-            onAction={isManager ? () => { setShowRecurrenceSetup(true); setSaveError(""); } : undefined}
+            onAction={
+              isManager
+                ? () => {
+                    setShowRecurrenceSetup(true);
+                    setSaveError("");
+                  }
+                : undefined
+            }
           />
         ) : (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
             <ListChecks className="mb-3 h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm font-medium text-muted-foreground">Inga uppgifter matchar filtren</p>
+            <p className="text-sm font-medium text-muted-foreground">
+              Inga uppgifter matchar filtren
+            </p>
           </div>
         )
       ) : (

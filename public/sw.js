@@ -56,7 +56,9 @@ async function enqueueSync(entry) {
     const db = await openSyncDB();
     const tx = db.transaction(SYNC_STORE, "readwrite");
     tx.objectStore(SYNC_STORE).add(entry);
-    await new Promise((r) => { tx.oncomplete = r; });
+    await new Promise((r) => {
+      tx.oncomplete = r;
+    });
     db.close();
   } catch {}
 }
@@ -65,7 +67,11 @@ async function drainSyncQueue() {
   const token = await getTokenFromIDB();
   if (!token) return;
   let db;
-  try { db = await openSyncDB(); } catch { return; }
+  try {
+    db = await openSyncDB();
+  } catch {
+    return;
+  }
 
   const tx = db.transaction(SYNC_STORE, "readwrite");
   const store = tx.objectStore(SYNC_STORE);
@@ -83,13 +89,15 @@ async function drainSyncQueue() {
   for (let i = 0; i < all.length; i++) {
     const entry = all[i];
     try {
-      const res = await fetch(entry.url, { /* ... */ });
-  
+      const res = await fetch(entry.url, {/* ... */});
+
       if (res.ok || res.status < 500) {
         // Skapa en ny transaktion för varje radering
         const delTx = db.transaction(SYNC_STORE, "readwrite");
         delTx.objectStore(SYNC_STORE).delete(keys[i]);
-        await new Promise((r) => { delTx.oncomplete = r; });
+        await new Promise((r) => {
+          delTx.oncomplete = r;
+        });
       }
     } catch {
       break;
@@ -104,7 +112,7 @@ self.addEventListener("message", (event) => {
     self.skipWaiting();
   }
   if (event.data?.type === "ENQUEUE_SYNC") {
-  event.waitUntil(enqueueSync(event.data.entry));
+    event.waitUntil(enqueueSync(event.data.entry));
   }
 });
 
@@ -114,9 +122,7 @@ const SHELL_URLS = ["/", "/login"];
 self.addEventListener("install", (event) => {
   // Pre-cache the app shell. Do NOT skipWaiting here — the update banner in
   // the main thread controls when the new SW activates (after user is notified).
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS)),
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS)));
 });
 
 self.addEventListener("activate", (event) => {
@@ -209,19 +215,17 @@ self.addEventListener("push", (event) => {
   };
 
   event.waitUntil(
-    self.clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clients) => {
-        // Forward to visible window for in-app toast
-        for (const client of clients) {
-          if (client.visibilityState === "visible") {
-            client.postMessage({ type: "PUSH_RECEIVED", payload });
-            break;
-          }
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      // Forward to visible window for in-app toast
+      for (const client of clients) {
+        if (client.visibilityState === "visible") {
+          client.postMessage({ type: "PUSH_RECEIVED", payload });
+          break;
         }
-        // Always show OS-level notification regardless of app visibility
-        return self.registration.showNotification(title, options);
-      }),
+      }
+      // Always show OS-level notification regardless of app visibility
+      return self.registration.showNotification(title, options);
+    }),
   );
 });
 
@@ -232,29 +236,27 @@ self.addEventListener("notificationclick", (event) => {
   const targetUrl = new URL(relativeUrl, self.location.origin).href;
 
   event.waitUntil(
-    self.clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clients) => {
-        // Focus existing window if already open on target URL
-        for (const client of clients) {
-          if (client.url === targetUrl && "focus" in client) {
-            return client.focus();
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      // Focus existing window if already open on target URL
+      for (const client of clients) {
+        if (client.url === targetUrl && "focus" in client) {
+          return client.focus();
+        }
+      }
+      // Focus any open window and navigate
+      for (const client of clients) {
+        if ("focus" in client) {
+          client.focus();
+          if ("navigate" in client) {
+            return client.navigate(targetUrl);
           }
+          return;
         }
-        // Focus any open window and navigate
-        for (const client of clients) {
-          if ("focus" in client) {
-            client.focus();
-            if ("navigate" in client) {
-              return client.navigate(targetUrl);
-            }
-            return;
-          }
-        }
-        // Open new window
-        if (self.clients.openWindow) {
-          return self.clients.openWindow(targetUrl);
-        }
-      }),
+      }
+      // Open new window
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    }),
   );
 });

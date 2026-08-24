@@ -1,7 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  Copy, ExternalLink, Hash, ImagePlus, Link as LinkIcon, Plus, QrCode, ScanLine, Search, ShoppingCart, Store as StoreIcon, Trash2, X,
+  Copy,
+  ExternalLink,
+  Hash,
+  ImagePlus,
+  Link as LinkIcon,
+  Plus,
+  QrCode,
+  ScanLine,
+  Search,
+  ShoppingCart,
+  Store as StoreIcon,
+  Trash2,
+  X,
 } from "lucide-react";
 import { CameraScanner } from "@/components/camera-scanner";
 import { QrDisplay } from "@/components/qr-display";
@@ -11,19 +23,36 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  supabase, type CustomerRequest, type Store as StoreType,
-  mittCoopUrlFromStored, decodeArticleNumber,
-  encodeArticleNumber, parseMittCoopUrl, type ArticleIdType,
-  getPublicUrl, uploadAttachment, deleteStorageFiles,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  supabase,
+  type CustomerRequest,
+  type Store as StoreType,
+  mittCoopUrlFromStored,
+  decodeArticleNumber,
+  encodeArticleNumber,
+  parseMittCoopUrl,
+  type ArticleIdType,
+  getPublicUrl,
+  uploadAttachment,
+  deleteStorageFiles,
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -50,9 +79,24 @@ const PRIORITY_LABELS: Record<string, string> = {
 function statusBadge(s: string) {
   if (s === "ordered") return <Badge className="bg-info/15 text-info">Beställd</Badge>;
   if (s === "fulfilled") return <Badge className="bg-success/15 text-success">Uppfylld</Badge>;
-  if (s === "declined") return <Badge variant="secondary" className="text-muted-foreground">Avböjd</Badge>;
-  if (s === "not_in_assortment") return <Badge variant="secondary" className="text-muted-foreground">Finns ej i sortiment</Badge>;
-  if (s === "discontinued") return <Badge variant="secondary" className="text-muted-foreground">Utgått</Badge>;
+  if (s === "declined")
+    return (
+      <Badge variant="secondary" className="text-muted-foreground">
+        Avböjd
+      </Badge>
+    );
+  if (s === "not_in_assortment")
+    return (
+      <Badge variant="secondary" className="text-muted-foreground">
+        Finns ej i sortiment
+      </Badge>
+    );
+  if (s === "discontinued")
+    return (
+      <Badge variant="secondary" className="text-muted-foreground">
+        Utgått
+      </Badge>
+    );
   return <Badge variant="secondary">Inkommit</Badge>;
 }
 
@@ -76,7 +120,9 @@ function CustomerRequestsPage() {
   const isManager = user?.role === "manager" || isAdmin;
 
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
-  const [requestImagesMap, setRequestImagesMap] = useState<Record<string, { id: string; storage_path: string }[]>>({});
+  const [requestImagesMap, setRequestImagesMap] = useState<
+    Record<string, { id: string; storage_path: string }[]>
+  >({});
   const [stores, setStores] = useState<StoreType[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -134,7 +180,9 @@ function CustomerRequestsPage() {
   const [editImages, setEditImages] = useState<File[]>([]);
   const [editPreviews, setEditPreviews] = useState<string[]>([]);
   const editFileRef = useRef<HTMLInputElement>(null);
-  const [currentEditImages, setCurrentEditImages] = useState<{ id: string; storage_path: string }[]>([]);
+  const [currentEditImages, setCurrentEditImages] = useState<
+    { id: string; storage_path: string }[]
+  >([]);
 
   const MAX_IMAGES = 5;
 
@@ -232,13 +280,17 @@ function CustomerRequestsPage() {
     if (existing) {
       setQrTokenUrl(`${window.location.origin}/qr-kundonskemal?t=${existing.token}`);
     } else {
-      const { data: created } = await supabase.from("qr_tokens").insert({
-        token_type: "customer_request_status",
-        store_id: activeStore.id,
-        meta: { request_id: req.id },
-        created_by: user.id,
-        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      }).select("token").maybeSingle();
+      const { data: created } = await supabase
+        .from("qr_tokens")
+        .insert({
+          token_type: "customer_request_status",
+          store_id: activeStore.id,
+          meta: { request_id: req.id },
+          created_by: user.id,
+          expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        })
+        .select("token")
+        .maybeSingle();
       if (created) setQrTokenUrl(`${window.location.origin}/qr-kundonskemal?t=${created.token}`);
     }
   };
@@ -257,12 +309,16 @@ function CustomerRequestsPage() {
     if (existing) {
       setStoreQrToken(existing.token);
     } else {
-      const { data: created } = await supabase.from("qr_tokens").insert({
-        token_type: "customer_request_form",
-        store_id: activeStore.id,
-        meta: {},
-        created_by: user.id,
-      }).select("token").maybeSingle();
+      const { data: created } = await supabase
+        .from("qr_tokens")
+        .insert({
+          token_type: "customer_request_form",
+          store_id: activeStore.id,
+          meta: {},
+          created_by: user.id,
+        })
+        .select("token")
+        .maybeSingle();
       if (created) setStoreQrToken(created.token);
     }
     setStoreQrLoading(false);
@@ -276,7 +332,10 @@ function CustomerRequestsPage() {
     if (activeStore) {
       q = q.eq("store_id", activeStore.id);
     } else if (userStores.length > 0) {
-      q = q.in("store_id", userStores.map((s) => s.id));
+      q = q.in(
+        "store_id",
+        userStores.map((s) => s.id),
+      );
     }
     const { data } = await q;
     if (data) {
@@ -291,9 +350,13 @@ function CustomerRequestsPage() {
     setLoading(true);
     fetchRequests();
     if (isAdmin) {
-      supabase.from("stores").select("*").eq("is_active", true).then(({ data }) => {
-        if (data) setStores(data as StoreType[]);
-      });
+      supabase
+        .from("stores")
+        .select("*")
+        .eq("is_active", true)
+        .then(({ data }) => {
+          if (data) setStores(data as StoreType[]);
+        });
     }
   }, [activeStore, user]);
 
@@ -303,14 +366,18 @@ function CustomerRequestsPage() {
     const storedArticle = form.article_number.trim()
       ? encodeArticleNumber(form.article_number.trim(), form.article_type)
       : null;
-    const { data: inserted } = await supabase.from("customer_requests").insert({
-      store_id: activeStore?.id,
-      product_name: form.product_name.trim(),
-      article_number: storedArticle,
-      notes: form.notes.trim() || null,
-      priority: form.priority,
-      requested_by: user?.id,
-    }).select("id").maybeSingle();
+    const { data: inserted } = await supabase
+      .from("customer_requests")
+      .insert({
+        store_id: activeStore?.id,
+        product_name: form.product_name.trim(),
+        article_number: storedArticle,
+        notes: form.notes.trim() || null,
+        priority: form.priority,
+        requested_by: user?.id,
+      })
+      .select("id")
+      .maybeSingle();
     if (inserted?.id && createImages.length > 0) {
       await uploadImages(inserted.id, createImages);
     }
@@ -332,12 +399,15 @@ function CustomerRequestsPage() {
     const storedArticle = editArticleNumber.trim()
       ? encodeArticleNumber(editArticleNumber.trim(), editArticleType)
       : null;
-    await supabase.from("customer_requests").update({
-      status: editStatus,
-      article_number: storedArticle,
-      internal_notes: editInternalNotes.trim() || null,
-      staff_comment: editComment.trim() || null,
-    }).eq("id", editTarget.id);
+    await supabase
+      .from("customer_requests")
+      .update({
+        status: editStatus,
+        article_number: storedArticle,
+        internal_notes: editInternalNotes.trim() || null,
+        staff_comment: editComment.trim() || null,
+      })
+      .eq("id", editTarget.id);
     if (editImages.length > 0) {
       await uploadImages(editTarget.id, editImages);
     }
@@ -368,13 +438,25 @@ function CustomerRequestsPage() {
   const buildMcUrl = (
     articleNumber: string | null | undefined,
     storeSapSiteId: string | null | undefined,
-  ): string | null =>
-    mittCoopUrlFromStored(articleNumber, storeSapSiteId);
+  ): string | null => mittCoopUrlFromStored(articleNumber, storeSapSiteId);
 
   const filtered = requests.filter((r) => {
-    if (filterStatus === "active" && (r.status === "fulfilled" || r.status === "declined" || r.status === "not_in_assortment" || r.status === "discontinued")) return false;
-    if (filterStatus !== "active" && filterStatus !== "all" && r.status !== filterStatus) return false;
-    if (search && !r.product_name.toLowerCase().includes(search.toLowerCase()) && !(r.article_number ?? "").toLowerCase().includes(search.toLowerCase())) return false;
+    if (
+      filterStatus === "active" &&
+      (r.status === "fulfilled" ||
+        r.status === "declined" ||
+        r.status === "not_in_assortment" ||
+        r.status === "discontinued")
+    )
+      return false;
+    if (filterStatus !== "active" && filterStatus !== "all" && r.status !== filterStatus)
+      return false;
+    if (
+      search &&
+      !r.product_name.toLowerCase().includes(search.toLowerCase()) &&
+      !(r.article_number ?? "").toLowerCase().includes(search.toLowerCase())
+    )
+      return false;
     return true;
   });
 
@@ -386,11 +468,19 @@ function CustomerRequestsPage() {
     <div className="mx-auto max-w-[1200px] px-5 py-8 md:px-8 md:py-10">
       <PageHeader
         title="Kundönskemål"
-        description={activeStore ? `Önskemål från kunder i ${activeStore.name}` : "Produktönskemål från kunder."}
+        description={
+          activeStore
+            ? `Önskemål från kunder i ${activeStore.name}`
+            : "Produktönskemål från kunder."
+        }
         actions={
           <div className="flex gap-2">
             {isManager && activeStore && (
-              <Button variant="outline" className="rounded-full hidden lg:flex gap-1.5" onClick={openStoreQr}>
+              <Button
+                variant="outline"
+                className="rounded-full hidden lg:flex gap-1.5"
+                onClick={openStoreQr}
+              >
                 <StoreIcon className="h-4 w-4" /> Butiks-QR
               </Button>
             )}
@@ -428,7 +518,7 @@ function CustomerRequestsPage() {
                   "rounded-full px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap",
                   filterStatus === f.value
                     ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {f.label}
@@ -468,10 +558,14 @@ function CustomerRequestsPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((r) => {
             const store = stores.find((s) => s.id === r.store_id) ?? null;
-            const mcUrl = buildMcUrl(r.article_number, store?.sap_site_id ?? activeStore?.sap_site_id ?? null);
+            const mcUrl = buildMcUrl(
+              r.article_number,
+              store?.sap_site_id ?? activeStore?.sap_site_id ?? null,
+            );
             const decodedArticle = decodeArticleNumber(r.article_number);
             const images = requestImagesMap[r.id] || [];
-            const staffComment = (r as CustomerRequest & { staff_comment?: string | null }).staff_comment;
+            const staffComment = (r as CustomerRequest & { staff_comment?: string | null })
+              .staff_comment;
 
             return (
               <div
@@ -491,7 +585,12 @@ function CustomerRequestsPage() {
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-1.5">
                       {statusBadge(r.status)}
-                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", priorityClass(r.priority))}>
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                          priorityClass(r.priority),
+                        )}
+                      >
                         {PRIORITY_LABELS[r.priority]}
                       </span>
                     </div>
@@ -501,7 +600,11 @@ function CustomerRequestsPage() {
                   {r.article_number && (
                     <div className="rounded-xl border border-border/60 bg-muted/30 p-2.5 space-y-1">
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
-                        {decodedArticle?.type === "ean" ? "EAN" : decodedArticle?.type === "bnr" ? "BNR" : "Materialnummer"}
+                        {decodedArticle?.type === "ean"
+                          ? "EAN"
+                          : decodedArticle?.type === "bnr"
+                            ? "BNR"
+                            : "Materialnummer"}
                       </p>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-xs font-semibold text-foreground">
@@ -535,7 +638,9 @@ function CustomerRequestsPage() {
                   {/* Staff Comment */}
                   {staffComment && (
                     <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70 mb-0.5">Meddelande till kund</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70 mb-0.5">
+                        Meddelande till kund
+                      </p>
                       <p className="text-xs text-foreground leading-relaxed">{staffComment}</p>
                     </div>
                   )}
@@ -543,15 +648,21 @@ function CustomerRequestsPage() {
                   {/* Internal Notes */}
                   {r.internal_notes && (
                     <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-0.5">Intern anteckning</p>
-                      <p className="text-xs text-muted-foreground leading-relaxed">{r.internal_notes}</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-0.5">
+                        Intern anteckning
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {r.internal_notes}
+                      </p>
                     </div>
                   )}
 
                   {/* Images */}
                   {images.length > 0 && (
                     <div className="space-y-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">Bilder</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                        Bilder
+                      </p>
                       <div className="flex flex-wrap gap-1.5">
                         {images.map((img) => (
                           <a
@@ -561,7 +672,11 @@ function CustomerRequestsPage() {
                             rel="noopener noreferrer"
                             className="h-14 w-14 overflow-hidden rounded-lg border border-border/60 block hover:opacity-90 transition-opacity"
                           >
-                            <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
+                            <img
+                              src={getPublicUrl(img.storage_path)}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
                           </a>
                         ))}
                       </div>
@@ -589,7 +704,9 @@ function CustomerRequestsPage() {
                           setEditArticleNumber(decoded?.value ?? "");
                           setEditArticleType(decoded?.type ?? "mat-nr");
                           setEditInternalNotes(r.internal_notes ?? "");
-                          setEditComment((r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "");
+                          setEditComment(
+                            (r as CustomerRequest & { staff_comment?: string }).staff_comment ?? "",
+                          );
                           setEditMcUrlInput("");
                         }}
                       >
@@ -628,7 +745,19 @@ function CustomerRequestsPage() {
       )}
 
       {/* Create dialog */}
-      <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setForm(emptyForm()); setMcUrlInput(""); createPreviews.forEach((p) => URL.revokeObjectURL(p)); setCreateImages([]); setCreatePreviews([]); } }}>
+      <Dialog
+        open={showCreate}
+        onOpenChange={(o) => {
+          setShowCreate(o);
+          if (!o) {
+            setForm(emptyForm());
+            setMcUrlInput("");
+            createPreviews.forEach((p) => URL.revokeObjectURL(p));
+            setCreateImages([]);
+            setCreatePreviews([]);
+          }
+        }}
+      >
         <DialogContent className="w-full max-w-md sm:max-w-md mx-0 sm:mx-auto">
           <DialogHeader>
             <DialogTitle>Registrera kundönskemål</DialogTitle>
@@ -667,7 +796,11 @@ function CustomerRequestsPage() {
                 value={form.product_name}
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (val.includes("mittcoop") || val.startsWith("http://") || val.startsWith("https://")) {
+                  if (
+                    val.includes("mittcoop") ||
+                    val.startsWith("http://") ||
+                    val.startsWith("https://")
+                  ) {
                     handlePasteMcUrl(val, "create");
                   } else {
                     setForm((p) => ({ ...p, product_name: val }));
@@ -684,11 +817,21 @@ function CustomerRequestsPage() {
               </Label>
               <div className="flex gap-2">
                 <Input
-                  placeholder={form.article_type === "mat-nr" ? "T.ex. 1047133" : form.article_type === "ean" ? "T.ex. 7310865003294" : "T.ex. 123456"}
+                  placeholder={
+                    form.article_type === "mat-nr"
+                      ? "T.ex. 1047133"
+                      : form.article_type === "ean"
+                        ? "T.ex. 7310865003294"
+                        : "T.ex. 123456"
+                  }
                   value={form.article_number}
                   onChange={(e) => {
                     const val = e.target.value;
-                    if (val.includes("mittcoop") || val.startsWith("http://") || val.startsWith("https://")) {
+                    if (
+                      val.includes("mittcoop") ||
+                      val.startsWith("http://") ||
+                      val.startsWith("https://")
+                    ) {
                       handlePasteMcUrl(val, "create");
                     } else {
                       setForm((p) => ({ ...p, article_number: val.replace(/\D/g, "") }));
@@ -697,7 +840,12 @@ function CustomerRequestsPage() {
                   inputMode="numeric"
                   className="font-mono text-sm"
                 />
-                <Select value={form.article_type} onValueChange={(v) => setForm((p) => ({ ...p, article_type: v as ArticleIdType }))}>
+                <Select
+                  value={form.article_type}
+                  onValueChange={(v) =>
+                    setForm((p) => ({ ...p, article_type: v as ArticleIdType }))
+                  }
+                >
                   <SelectTrigger className="w-28 shrink-0 text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -724,7 +872,10 @@ function CustomerRequestsPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs">Prioritet</Label>
-              <Select value={form.priority} onValueChange={(v) => setForm((p) => ({ ...p, priority: v as typeof p.priority }))}>
+              <Select
+                value={form.priority}
+                onValueChange={(v) => setForm((p) => ({ ...p, priority: v as typeof p.priority }))}
+              >
                 <SelectTrigger className="text-sm">
                   <SelectValue />
                 </SelectTrigger>
@@ -759,7 +910,11 @@ function CustomerRequestsPage() {
               <CameraScanner
                 onScan={(code) => {
                   setArticleCameraOpen(false);
-                  setForm(p => ({ ...p, article_number: code.replace(/\D/g, ""), article_type: "ean" }));
+                  setForm((p) => ({
+                    ...p,
+                    article_number: code.replace(/\D/g, ""),
+                    article_type: "ean",
+                  }));
                 }}
                 onClose={() => setArticleCameraOpen(false)}
               />
@@ -771,10 +926,16 @@ function CustomerRequestsPage() {
               {createPreviews.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {createPreviews.map((src, i) => (
-                    <div key={i} className="relative h-16 w-16 overflow-hidden rounded-lg border border-border/60">
+                    <div
+                      key={i}
+                      className="relative h-16 w-16 overflow-hidden rounded-lg border border-border/60"
+                    >
                       <img src={src} alt="" className="h-full w-full object-cover" />
-                      <button type="button" onClick={() => removeCreateImage(i)}
-                        className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white">
+                      <button
+                        type="button"
+                        onClick={() => removeCreateImage(i)}
+                        className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white"
+                      >
                         <X className="h-2.5 w-2.5" />
                       </button>
                     </div>
@@ -783,19 +944,30 @@ function CustomerRequestsPage() {
               )}
               {createImages.length < MAX_IMAGES && (
                 <>
-                  <button type="button" onClick={() => createFileRef.current?.click()}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50">
+                  <button
+                    type="button"
+                    onClick={() => createFileRef.current?.click()}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
+                  >
                     <ImagePlus className="h-3.5 w-3.5" />
                     Lägg till bild
                   </button>
-                  <input ref={createFileRef} type="file" accept="image/*" multiple className="hidden"
-                    onChange={(e) => addCreateImages(e.target.files, e.target)} />
+                  <input
+                    ref={createFileRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => addCreateImages(e.target.files, e.target)}
+                  />
                 </>
               )}
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" className="rounded-full" onClick={() => setShowCreate(false)}>Avbryt</Button>
+            <Button variant="outline" className="rounded-full" onClick={() => setShowCreate(false)}>
+              Avbryt
+            </Button>
             <Button
               className="rounded-full"
               disabled={!form.product_name.trim() || saving}
@@ -809,7 +981,19 @@ function CustomerRequestsPage() {
 
       {/* Edit Dialog */}
       {editTarget && (
-        <Dialog open onOpenChange={(o) => { if (!o) { setEditTarget(null); setEditMcUrlInput(""); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setCurrentEditImages([]); } }}>
+        <Dialog
+          open
+          onOpenChange={(o) => {
+            if (!o) {
+              setEditTarget(null);
+              setEditMcUrlInput("");
+              editPreviews.forEach((p) => URL.revokeObjectURL(p));
+              setEditImages([]);
+              setEditPreviews([]);
+              setCurrentEditImages([]);
+            }
+          }}
+        >
           <DialogContent className="w-full max-w-md sm:max-w-md mx-0 sm:mx-auto">
             <DialogHeader>
               <DialogTitle>Hantera önskemål</DialogTitle>
@@ -859,34 +1043,59 @@ function CustomerRequestsPage() {
                 {(currentEditImages.length > 0 || editPreviews.length > 0) && (
                   <div className="flex flex-wrap gap-2">
                     {currentEditImages.map((img) => (
-                      <div key={img.id} className="relative h-16 w-16 overflow-hidden rounded-lg border border-border/60">
-                        <img src={getPublicUrl(img.storage_path)} alt="" className="h-full w-full object-cover" />
-                        <button type="button" onClick={() => deleteExistingImage(img.id)}
-                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white">
+                      <div
+                        key={img.id}
+                        className="relative h-16 w-16 overflow-hidden rounded-lg border border-border/60"
+                      >
+                        <img
+                          src={getPublicUrl(img.storage_path)}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => deleteExistingImage(img.id)}
+                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white"
+                        >
                           <X className="h-2.5 w-2.5" />
                         </button>
                       </div>
                     ))}
                     {editPreviews.map((src, i) => (
-                      <div key={`new-${i}`} className="relative h-16 w-16 overflow-hidden rounded-lg border border-border/60 ring-1 ring-primary/40">
+                      <div
+                        key={`new-${i}`}
+                        className="relative h-16 w-16 overflow-hidden rounded-lg border border-border/60 ring-1 ring-primary/40"
+                      >
                         <img src={src} alt="" className="h-full w-full object-cover" />
-                        <button type="button" onClick={() => removeEditImage(i)}
-                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white">
+                        <button
+                          type="button"
+                          onClick={() => removeEditImage(i)}
+                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white"
+                        >
                           <X className="h-2.5 w-2.5" />
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
-                {(currentEditImages.length + editImages.length) < MAX_IMAGES && (
+                {currentEditImages.length + editImages.length < MAX_IMAGES && (
                   <>
-                    <button type="button" onClick={() => editFileRef.current?.click()}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50">
+                    <button
+                      type="button"
+                      onClick={() => editFileRef.current?.click()}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
+                    >
                       <ImagePlus className="h-3.5 w-3.5" />
                       Lägg till bild
                     </button>
-                    <input ref={editFileRef} type="file" accept="image/*" multiple className="hidden"
-                      onChange={(e) => addEditImages(e.target.files, e.target)} />
+                    <input
+                      ref={editFileRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => addEditImages(e.target.files, e.target)}
+                    />
                   </>
                 )}
               </div>
@@ -898,11 +1107,21 @@ function CustomerRequestsPage() {
                 </Label>
                 <div className="flex gap-2">
                   <Input
-                    placeholder={editArticleType === "mat-nr" ? "T.ex. 1047133" : editArticleType === "ean" ? "T.ex. 7310865003294" : "T.ex. 123456"}
+                    placeholder={
+                      editArticleType === "mat-nr"
+                        ? "T.ex. 1047133"
+                        : editArticleType === "ean"
+                          ? "T.ex. 7310865003294"
+                          : "T.ex. 123456"
+                    }
                     value={editArticleNumber}
                     onChange={(e) => {
                       const val = e.target.value;
-                      if (val.includes("mittcoop") || val.startsWith("http://") || val.startsWith("https://")) {
+                      if (
+                        val.includes("mittcoop") ||
+                        val.startsWith("http://") ||
+                        val.startsWith("https://")
+                      ) {
                         handlePasteMcUrl(val, "edit");
                       } else {
                         setEditArticleNumber(val.replace(/\D/g, ""));
@@ -911,7 +1130,10 @@ function CustomerRequestsPage() {
                     inputMode="numeric"
                     className="font-mono text-sm"
                   />
-                  <Select value={editArticleType} onValueChange={(v) => setEditArticleType(v as ArticleIdType)}>
+                  <Select
+                    value={editArticleType}
+                    onValueChange={(v) => setEditArticleType(v as ArticleIdType)}
+                  >
                     <SelectTrigger className="w-28 shrink-0 text-xs">
                       <SelectValue />
                     </SelectTrigger>
@@ -922,16 +1144,25 @@ function CustomerRequestsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <p className="text-[11px] text-muted-foreground">Syns bara internt — används för direktlänk till Mitt Coop-sortiment.</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Syns bara internt — används för direktlänk till Mitt Coop-sortiment.
+                </p>
               </div>
 
               <div className="space-y-1.5">
                 <Label className="text-xs">Status</Label>
-                <Select value={editStatus} onValueChange={(v) => setEditStatus(v as typeof editStatus)}>
-                  <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                <Select
+                  value={editStatus}
+                  onValueChange={(v) => setEditStatus(v as typeof editStatus)}
+                >
+                  <SelectTrigger className="text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {Object.entries(STATUS_LABELS).map(([v, l]) => (
-                      <SelectItem key={v} value={v}>{l}</SelectItem>
+                      <SelectItem key={v} value={v}>
+                        {l}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -939,7 +1170,8 @@ function CustomerRequestsPage() {
 
               <div className="space-y-1.5">
                 <Label className="text-xs">
-                  Meddelande till kund (visas på statuslänk) {editStatus === "declined" && <span className="text-destructive">*</span>}
+                  Meddelande till kund (visas på statuslänk){" "}
+                  {editStatus === "declined" && <span className="text-destructive">*</span>}
                 </Label>
                 <Textarea
                   value={editComment}
@@ -967,8 +1199,25 @@ function CustomerRequestsPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" className="rounded-full" onClick={() => { setEditTarget(null); setEditMcUrlInput(""); editPreviews.forEach((p) => URL.revokeObjectURL(p)); setEditImages([]); setEditPreviews([]); setCurrentEditImages([]); }}>Avbryt</Button>
-              <Button className="rounded-full" disabled={saving || (editStatus === "declined" && !editComment.trim())} onClick={updateRequest}>
+              <Button
+                variant="outline"
+                className="rounded-full"
+                onClick={() => {
+                  setEditTarget(null);
+                  setEditMcUrlInput("");
+                  editPreviews.forEach((p) => URL.revokeObjectURL(p));
+                  setEditImages([]);
+                  setEditPreviews([]);
+                  setCurrentEditImages([]);
+                }}
+              >
+                Avbryt
+              </Button>
+              <Button
+                className="rounded-full"
+                disabled={saving || (editStatus === "declined" && !editComment.trim())}
+                onClick={updateRequest}
+              >
                 {saving ? "Sparar..." : "Spara"}
               </Button>
             </div>
@@ -977,7 +1226,12 @@ function CustomerRequestsPage() {
       )}
 
       {/* Delete confirm */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => {
+          if (!o) setDeleteTarget(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort önskemål?</AlertDialogTitle>
@@ -1008,7 +1262,17 @@ function CustomerRequestsPage() {
 
       {/* QR-status dialog */}
       {showQrModal && qrRequest && (
-        <Dialog open onOpenChange={(o) => { if (!o) { setShowQrModal(false); setQrRequest(null); setQrTokenUrl(""); setCopiedQr(false); } }}>
+        <Dialog
+          open
+          onOpenChange={(o) => {
+            if (!o) {
+              setShowQrModal(false);
+              setQrRequest(null);
+              setQrTokenUrl("");
+              setCopiedQr(false);
+            }
+          }}
+        >
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <div className="flex items-center gap-3">
@@ -1017,7 +1281,9 @@ function CustomerRequestsPage() {
                 </div>
                 <div>
                   <DialogTitle className="text-base">Dela status med kund</DialogTitle>
-                  <p className="text-xs text-muted-foreground">Kunden kan följa önskemålets status via denna QR-kod.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Kunden kan följa önskemålets status via denna QR-kod.
+                  </p>
                 </div>
               </div>
             </DialogHeader>
@@ -1032,7 +1298,9 @@ function CustomerRequestsPage() {
                     <QrDisplay url={qrTokenUrl} size={180} />
                   </div>
                   <div className="rounded-xl border border-border/60 bg-muted/20 p-2.5">
-                    <p className="break-all font-mono text-[10px] text-muted-foreground leading-relaxed">{qrTokenUrl}</p>
+                    <p className="break-all font-mono text-[10px] text-muted-foreground leading-relaxed">
+                      {qrTokenUrl}
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -1058,7 +1326,9 @@ function CustomerRequestsPage() {
                       Öppna
                     </a>
                   </div>
-                  <p className="text-xs text-center text-muted-foreground">Länken är giltig i 30 dagar.</p>
+                  <p className="text-xs text-center text-muted-foreground">
+                    Länken är giltig i 30 dagar.
+                  </p>
                 </div>
               ) : (
                 <div className="flex items-center justify-center py-8">
@@ -1072,7 +1342,16 @@ function CustomerRequestsPage() {
 
       {/* Store QR modal */}
       {showStoreQrModal && (
-        <Dialog open onOpenChange={(o) => { if (!o) { setShowStoreQrModal(false); setStoreQrToken(""); setCopiedQr(false); } }}>
+        <Dialog
+          open
+          onOpenChange={(o) => {
+            if (!o) {
+              setShowStoreQrModal(false);
+              setStoreQrToken("");
+              setCopiedQr(false);
+            }
+          }}
+        >
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <div className="flex items-center gap-3">
@@ -1081,7 +1360,9 @@ function CustomerRequestsPage() {
                 </div>
                 <div>
                   <DialogTitle className="text-base">Butiks-QR för kundönskemål</DialogTitle>
-                  <p className="text-xs text-muted-foreground">Kunder kan skanna och skicka in önskemål direkt.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Kunder kan skanna och skicka in önskemål direkt.
+                  </p>
                 </div>
               </div>
             </DialogHeader>
@@ -1093,7 +1374,10 @@ function CustomerRequestsPage() {
               ) : storeQrToken ? (
                 <>
                   <div className="flex justify-center rounded-2xl border border-border/60 bg-white p-4">
-                    <QrDisplay url={`${window.location.origin}/qr-kundonskemal-form?t=${storeQrToken}`} size={200} />
+                    <QrDisplay
+                      url={`${window.location.origin}/qr-kundonskemal-form?t=${storeQrToken}`}
+                      size={200}
+                    />
                   </div>
                   <div className="rounded-xl border border-border/60 bg-muted/20 p-2.5">
                     <p className="break-all font-mono text-[10px] text-muted-foreground leading-relaxed">

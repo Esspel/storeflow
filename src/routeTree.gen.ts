@@ -32,6 +32,7 @@ import { Route as QrKundonskemalRouteImport } from './routes/qr-kundonskemal'
 import { Route as QrKundonskemalFormRouteImport } from './routes/qr-kundonskemal-form'
 import { Route as RapporterRouteImport } from './routes/rapporter'
 import { Route as SchemaRouteImport } from './routes/schema'
+import { Route as ShelfAnalyticsRouteImport } from './routes/shelf-analytics'
 import { Route as TestpanelRouteImport } from './routes/testpanel'
 import { Route as UppgifterRouteImport } from './routes/uppgifter'
 
@@ -150,6 +151,11 @@ const SchemaRoute = SchemaRouteImport.update({
   path: '/schema',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ShelfAnalyticsRoute = ShelfAnalyticsRouteImport.update({
+  id: '/shelf-analytics',
+  path: '/shelf-analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TestpanelRoute = TestpanelRouteImport.update({
   id: '/testpanel',
   path: '/testpanel',
@@ -185,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
+  '/shelf-analytics': typeof ShelfAnalyticsRoute
   '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
@@ -212,6 +219,7 @@ export interface FileRoutesByTo {
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
+  '/shelf-analytics': typeof ShelfAnalyticsRoute
   '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
@@ -240,6 +248,7 @@ export interface FileRoutesById {
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
+  '/shelf-analytics': typeof ShelfAnalyticsRoute
   '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
@@ -269,6 +278,7 @@ export interface FileRouteTypes {
     | '/qr-kundonskemal-form'
     | '/rapporter'
     | '/schema'
+    | '/shelf-analytics'
     | '/testpanel'
     | '/uppgifter'
   fileRoutesByTo: FileRoutesByTo
@@ -296,6 +306,7 @@ export interface FileRouteTypes {
     | '/qr-kundonskemal-form'
     | '/rapporter'
     | '/schema'
+    | '/shelf-analytics'
     | '/testpanel'
     | '/uppgifter'
   id:
@@ -323,6 +334,7 @@ export interface FileRouteTypes {
     | '/qr-kundonskemal-form'
     | '/rapporter'
     | '/schema'
+    | '/shelf-analytics'
     | '/testpanel'
     | '/uppgifter'
   fileRoutesById: FileRoutesById
@@ -351,6 +363,7 @@ export interface RootRouteChildren {
   QrKundonskemalFormRoute: typeof QrKundonskemalFormRoute
   RapporterRoute: typeof RapporterRoute
   SchemaRoute: typeof SchemaRoute
+  ShelfAnalyticsRoute: typeof ShelfAnalyticsRoute
   TestpanelRoute: typeof TestpanelRoute
   UppgifterRoute: typeof UppgifterRoute
 }
@@ -518,6 +531,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SchemaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/shelf-analytics': {
+      id: '/shelf-analytics'
+      path: '/shelf-analytics'
+      fullPath: '/shelf-analytics'
+      preLoaderRoute: typeof ShelfAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/testpanel': {
       id: '/testpanel'
       path: '/testpanel'
@@ -559,6 +579,7 @@ const rootRouteChildren: RootRouteChildren = {
   QrKundonskemalFormRoute: QrKundonskemalFormRoute,
   RapporterRoute: RapporterRoute,
   SchemaRoute: SchemaRoute,
+  ShelfAnalyticsRoute: ShelfAnalyticsRoute,
   TestpanelRoute: TestpanelRoute,
   UppgifterRoute: UppgifterRoute,
 }

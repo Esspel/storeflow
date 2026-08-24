@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { enqueue, dequeueAll, getQueueLength, clearQueue, type QueuedOp } from "./offline-queue";
 
-const getRawQueue = () => JSON.parse(localStorage.getItem("sf-offline-queue") ?? "[]") as QueuedOp[];
+const getRawQueue = () =>
+  JSON.parse(localStorage.getItem("sf-offline-queue") ?? "[]") as QueuedOp[];
 
 describe("offline-queue", () => {
   beforeEach(() => {

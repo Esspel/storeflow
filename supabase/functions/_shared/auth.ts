@@ -8,7 +8,9 @@ export type ApiKeyContext = {
 
 export async function sha256Hex(text: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 /**
@@ -16,7 +18,10 @@ export async function sha256Hex(text: string): Promise<string> {
  * Stöder både API-nycklar (sf_live_...) och JWT-access tokens.
  * Avvisar återkallade (revoked_at) och utgångna (expires_at) nycklar.
  */
-export async function authenticateRequest(req: Request, admin?: SupabaseClient): Promise<ApiKeyContext | null> {
+export async function authenticateRequest(
+  req: Request,
+  admin?: SupabaseClient,
+): Promise<ApiKeyContext | null> {
   const client = admin ?? serviceRoleClient();
   const authHeader = req.headers.get("Authorization") || "";
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
@@ -38,13 +43,20 @@ export async function authenticateRequest(req: Request, admin?: SupabaseClient):
     if (key.expires_at && new Date(key.expires_at).getTime() < Date.now()) return null;
 
     // Fire-and-forget uppdatering av last_used_at
-    client.from("api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", key.id).then(() => {});
+    client
+      .from("api_keys")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", key.id)
+      .then(() => {});
 
     return { keyId: key.id, storeId: key.store_id, scopes: key.scopes ?? [] };
   }
 
   // Fall 2: JWT Access Token (från Token Exchange / Supabase Auth)
-  const { data: { user }, error } = await client.auth.getUser(token);
+  const {
+    data: { user },
+    error,
+  } = await client.auth.getUser(token);
   if (error || !user) return null;
 
   // Hämta tillhörande scopes och storeId från user_metadata / app_metadata
@@ -91,7 +103,10 @@ export type AppSessionContext = {
   displayName: string;
 };
 
-export async function authenticateAppSession(req: Request, admin?: SupabaseClient): Promise<AppSessionContext | null> {
+export async function authenticateAppSession(
+  req: Request,
+  admin?: SupabaseClient,
+): Promise<AppSessionContext | null> {
   const token = req.headers.get("x-session-token");
   if (!token) return null;
 

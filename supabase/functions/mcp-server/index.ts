@@ -15,14 +15,34 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { serviceRoleClient, authenticateRequest } from "../_shared/auth.ts";
 import {
-  ScopeError, listTemplates, getTemplate, createTemplate, updateTemplate,
-  listTasks, getTask, createTask, updateTask,
-  listCustomerRequests, getCustomerRequest, createCustomerRequest, updateCustomerRequest,
-  listCustomerRounds, getCustomerRound,
-  listDeviations, getDeviation, createDeviation, updateDeviation,
-  listStores, getStore,
-  listTemplatePackages, getTemplatePackage, createTemplatePackage, updateTemplatePackage,
-  listDeliveryPlan, listSchedule, searchProduct,
+  ScopeError,
+  listTemplates,
+  getTemplate,
+  createTemplate,
+  updateTemplate,
+  listTasks,
+  getTask,
+  createTask,
+  updateTask,
+  listCustomerRequests,
+  getCustomerRequest,
+  createCustomerRequest,
+  updateCustomerRequest,
+  listCustomerRounds,
+  getCustomerRound,
+  listDeviations,
+  getDeviation,
+  createDeviation,
+  updateDeviation,
+  listStores,
+  getStore,
+  listTemplatePackages,
+  getTemplatePackage,
+  createTemplatePackage,
+  updateTemplatePackage,
+  listDeliveryPlan,
+  listSchedule,
+  searchProduct,
 } from "../_shared/storeflow-core.ts";
 
 const SERVER_INFO = { name: "storeflow-mcp", version: "2.0.0" };
@@ -31,17 +51,26 @@ const PROTOCOL_VERSION = "2025-06-18";
 // deno-lint-ignore no-explicit-any
 type ToolHandler = (supabase: any, ctx: any, args: Record<string, unknown>) => Promise<unknown>;
 
-const TOOLS: { name: string; description: string; inputSchema: Record<string, unknown>; handler: ToolHandler }[] = [
+const TOOLS: {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  handler: ToolHandler;
+}[] = [
   // ── Mallar (Templates) ──
   {
     name: "list_templates",
-    description: "Lista checklistmallar i storeflow, valfritt filtrerat på butik, kategori eller status.",
+    description:
+      "Lista checklistmallar i storeflow, valfritt filtrerat på butik, kategori eller status.",
     inputSchema: {
       type: "object",
       properties: {
         store_id: { type: "string", description: "Butiks-UUID." },
         category: { type: "string" },
-        status: { type: "string", description: "T.ex. 'active', 'review', 'deprecated', 'archived'" },
+        status: {
+          type: "string",
+          description: "T.ex. 'active', 'review', 'deprecated', 'archived'",
+        },
         limit: { type: "number", description: "Max antal, default 50, max 200." },
       },
     },
@@ -49,7 +78,8 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
   },
   {
     name: "get_template",
-    description: "Hämta en checklistmall i sin helhet, inklusive alla steg och vilka butiker den är kopplad till.",
+    description:
+      "Hämta en checklistmall i sin helhet, inklusive alla steg och vilka butiker den är kopplad till.",
     inputSchema: {
       type: "object",
       properties: { template_id: { type: "string" } },
@@ -70,7 +100,11 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
         recurrence_rule: { type: "string", description: "T.ex. 'daily', 'weekly', 'monthly'" },
         due_date_offset: { type: "number" },
         sap_article_id: { type: "string" },
-        store_ids: { type: "array", items: { type: "string" }, description: "Vilka butiker mallen ska tilldelas." },
+        store_ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "Vilka butiker mallen ska tilldelas.",
+        },
         items: {
           type: "array",
           items: {
@@ -104,7 +138,12 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
           type: "array",
           items: {
             type: "object",
-            properties: { id: { type: "string" }, label: { type: "string" }, requires_photo: { type: "boolean" }, sort_order: { type: "number" } },
+            properties: {
+              id: { type: "string" },
+              label: { type: "string" },
+              requires_photo: { type: "boolean" },
+              sort_order: { type: "number" },
+            },
             required: ["label"],
           },
         },
@@ -117,7 +156,8 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
   // ── Uppgifter (Tasks) ──
   {
     name: "list_tasks",
-    description: "Lista uppgifter/aktiva checklistor i storeflow, valfritt filtrerat på butik, status, kategori, tilldelad användare eller förfallodatum.",
+    description:
+      "Lista uppgifter/aktiva checklistor i storeflow, valfritt filtrerat på butik, status, kategori, tilldelad användare eller förfallodatum.",
     inputSchema: {
       type: "object",
       properties: {
@@ -172,7 +212,11 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
           type: "array",
           items: {
             type: "object",
-            properties: { label: { type: "string" }, question_type: { type: "string" }, is_required: { type: "boolean" } },
+            properties: {
+              label: { type: "string" },
+              question_type: { type: "string" },
+              is_required: { type: "boolean" },
+            },
             required: ["label"],
           },
         },
@@ -183,7 +227,8 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
   },
   {
     name: "update_task",
-    description: "Redigera/uppdatera en uppgift, ändra status (t.ex. markera som 'done'), förfallodatum, tilldelning eller steg.",
+    description:
+      "Redigera/uppdatera en uppgift, ändra status (t.ex. markera som 'done'), förfallodatum, tilldelning eller steg.",
     inputSchema: {
       type: "object",
       properties: {
@@ -201,7 +246,12 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
           type: "array",
           items: {
             type: "object",
-            properties: { id: { type: "string" }, label: { type: "string" }, is_done: { type: "boolean" }, requires_photo: { type: "boolean" } },
+            properties: {
+              id: { type: "string" },
+              label: { type: "string" },
+              is_done: { type: "boolean" },
+              requires_photo: { type: "boolean" },
+            },
           },
         },
       },
@@ -213,14 +263,18 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
   // ── Kundönskemål (Customer Requests) ──
   {
     name: "list_customer_requests",
-    description: "Lista kundönskemål i storeflow, valfritt filtrerat på butik, status, prioritet eller fritextsökning.",
+    description:
+      "Lista kundönskemål i storeflow, valfritt filtrerat på butik, status, prioritet eller fritextsökning.",
     inputSchema: {
       type: "object",
       properties: {
         store_id: { type: "string" },
         status: { type: "string", description: "'open', 'ordered', 'declined', 'fulfilled'" },
         priority: { type: "string", description: "'low', 'normal', 'high'" },
-        query: { type: "string", description: "Sök i produktnamn, artikelnummer eller anteckningar." },
+        query: {
+          type: "string",
+          description: "Sök i produktnamn, artikelnummer eller anteckningar.",
+        },
         limit: { type: "number" },
       },
     },
@@ -234,7 +288,8 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
       properties: { request_id: { type: "string" } },
       required: ["request_id"],
     },
-    handler: async (supabase, ctx, args) => getCustomerRequest(supabase, ctx, args.request_id as string),
+    handler: async (supabase, ctx, args) =>
+      getCustomerRequest(supabase, ctx, args.request_id as string),
   },
   {
     name: "create_customer_request",
@@ -280,7 +335,8 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
   // ── Kundrundor (Customer Rounds) ──
   {
     name: "list_customer_rounds",
-    description: "Läsa av och lista genomförda och pågående kundrundor (butiksrundor) för en butik.",
+    description:
+      "Läsa av och lista genomförda och pågående kundrundor (butiksrundor) för en butik.",
     inputSchema: {
       type: "object",
       properties: {
@@ -293,24 +349,30 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
   },
   {
     name: "get_customer_round",
-    description: "Hämta en kundrunda i sin helhet inklusive alla svar, poäng och eventuella avvikelser.",
+    description:
+      "Hämta en kundrunda i sin helhet inklusive alla svar, poäng och eventuella avvikelser.",
     inputSchema: {
       type: "object",
       properties: { session_id: { type: "string" } },
       required: ["session_id"],
     },
-    handler: async (supabase, ctx, args) => getCustomerRound(supabase, ctx, args.session_id as string),
+    handler: async (supabase, ctx, args) =>
+      getCustomerRound(supabase, ctx, args.session_id as string),
   },
 
   // ── Avvikelser (Deviations / Incidents) ──
   {
     name: "list_deviations",
-    description: "Läsa av och lista avvikelser (incidents) i storeflow, valfritt filtrerat på butik, status, prioritet, kategori eller sökord.",
+    description:
+      "Läsa av och lista avvikelser (incidents) i storeflow, valfritt filtrerat på butik, status, prioritet, kategori eller sökord.",
     inputSchema: {
       type: "object",
       properties: {
         store_id: { type: "string" },
-        status: { type: "string", description: "'open', 'in_progress', 'escalated', 'resolved', 'closed'" },
+        status: {
+          type: "string",
+          description: "'open', 'in_progress', 'escalated', 'resolved', 'closed'",
+        },
         priority: { type: "string", description: "'Låg', 'Medel', 'Hög', 'Kritisk'" },
         category: { type: "string" },
         query: { type: "string" },
@@ -327,7 +389,8 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
       properties: { deviation_id: { type: "string" } },
       required: ["deviation_id"],
     },
-    handler: async (supabase, ctx, args) => getDeviation(supabase, ctx, args.deviation_id as string),
+    handler: async (supabase, ctx, args) =>
+      getDeviation(supabase, ctx, args.deviation_id as string),
   },
   {
     name: "create_deviation",
@@ -343,7 +406,10 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
         assigned_to: { type: "string" },
         responsible_user_id: { type: "string" },
         priority: { type: "string", description: "'Låg', 'Medel', 'Hög', 'Kritisk'" },
-        status: { type: "string", description: "'open', 'in_progress', 'escalated', 'resolved', 'closed'" },
+        status: {
+          type: "string",
+          description: "'open', 'in_progress', 'escalated', 'resolved', 'closed'",
+        },
         sap_article_id: { type: "string" },
         source: { type: "string" },
       },
@@ -353,7 +419,8 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
   },
   {
     name: "update_deviation",
-    description: "Redigera/uppdatera en avvikelse, ändra status (t.ex. till 'resolved'), tilldelning, prioritet eller beskrivning.",
+    description:
+      "Redigera/uppdatera en avvikelse, ändra status (t.ex. till 'resolved'), tilldelning, prioritet eller beskrivning.",
     inputSchema: {
       type: "object",
       properties: {
@@ -361,7 +428,10 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
         title: { type: "string" },
         description: { type: "string" },
         priority: { type: "string" },
-        status: { type: "string", description: "'open', 'in_progress', 'escalated', 'resolved', 'closed'" },
+        status: {
+          type: "string",
+          description: "'open', 'in_progress', 'escalated', 'resolved', 'closed'",
+        },
         assigned_to: { type: "string" },
         responsible_user_id: { type: "string" },
         resolved_at: { type: "string" },
@@ -374,7 +444,8 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
   // ── Butiksregister (Stores) ──
   {
     name: "list_stores",
-    description: "Läsa av butiksregistret i storeflow (alla butiker med kontaktuppgifter, koncept, adress, butikschef, etc.).",
+    description:
+      "Läsa av butiksregistret i storeflow (alla butiker med kontaktuppgifter, koncept, adress, butikschef, etc.).",
     inputSchema: {
       type: "object",
       properties: {
@@ -400,7 +471,8 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
   // ── Mallpaket (Template Packages) ──
   {
     name: "list_template_packages",
-    description: "Lista alla mallpaket (samlingar av mallar för t.ex. öppning/stängning/granskningar).",
+    description:
+      "Lista alla mallpaket (samlingar av mallar för t.ex. öppning/stängning/granskningar).",
     inputSchema: {
       type: "object",
       properties: {
@@ -418,7 +490,8 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
       properties: { package_id: { type: "string" } },
       required: ["package_id"],
     },
-    handler: async (supabase, ctx, args) => getTemplatePackage(supabase, ctx, args.package_id as string),
+    handler: async (supabase, ctx, args) =>
+      getTemplatePackage(supabase, ctx, args.package_id as string),
   },
   {
     name: "create_template_package",
@@ -430,7 +503,11 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
         description: { type: "string" },
         store_id: { type: "string" },
         created_by: { type: "string" },
-        template_ids: { type: "array", items: { type: "string" }, description: "Array av mall-UUIDs som ingår i paketet." },
+        template_ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "Array av mall-UUIDs som ingår i paketet.",
+        },
       },
       required: ["name"],
     },
@@ -438,7 +515,8 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
   },
   {
     name: "update_template_package",
-    description: "Redigera ett befintligt mallpaket (ändra namn, beskrivning eller ingående mallar).",
+    description:
+      "Redigera ett befintligt mallpaket (ändra namn, beskrivning eller ingående mallar).",
     inputSchema: {
       type: "object",
       properties: {
@@ -456,7 +534,8 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
   // ── Existing Tools ──
   {
     name: "list_delivery_plans",
-    description: "Läs leveransplan(er) med tillhörande leveranser för en butik, valfritt filtrerat på vecka/år.",
+    description:
+      "Läs leveransplan(er) med tillhörande leveranser för en butik, valfritt filtrerat på vecka/år.",
     inputSchema: {
       type: "object",
       properties: {
@@ -491,13 +570,19 @@ const TOOLS: { name: string; description: string; inputSchema: Record<string, un
     inputSchema: {
       type: "object",
       properties: {
-        store_id: { type: "string", description: "Avgör vilken butiks siteId som används i länken." },
+        store_id: {
+          type: "string",
+          description: "Avgör vilken butiks siteId som används i länken.",
+        },
         material_number: { type: "string" },
         ean: { type: "string" },
         bnr: { type: "string" },
         query: { type: "string", description: "Fritextsökning." },
         category_id: { type: "number", description: "Mitt Coop-kategori-id." },
-        status_code: { type: "number", description: "Mitt Coop-statuskod (t.ex. 3=Aktiv, 6=Har utgått)." },
+        status_code: {
+          type: "number",
+          description: "Mitt Coop-statuskod (t.ex. 3=Aktiv, 6=Har utgått).",
+        },
       },
     },
     handler: async (supabase, ctx, args) => searchProduct(supabase, ctx, args as never),
@@ -515,7 +600,8 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "MCP-servern använder POST med JSON-RPC 2.0." }), {
-      status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
@@ -526,12 +612,16 @@ Deno.serve(async (req: Request) => {
     rpc = await req.json();
   } catch {
     return new Response(JSON.stringify(rpcError(null, -32700, "Parse error")), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
   const respond = (body: unknown, status = 200) =>
-    new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
 
   const isNotification = rpc.id === undefined;
 
@@ -556,27 +646,51 @@ Deno.serve(async (req: Request) => {
   const ctx = await authenticateRequest(req);
   if (!ctx) {
     if (isNotification) return new Response(null, { status: 202, headers: corsHeaders });
-    return respond(rpcError(rpc.id, -32001, "Ogiltig eller saknad Authorization: Bearer <token>."), 401);
+    return respond(
+      rpcError(rpc.id, -32001, "Ogiltig eller saknad Authorization: Bearer <token>."),
+      401,
+    );
   }
 
   if (rpc.method === "tools/list") {
-    return respond(rpcResult(rpc.id, {
-      tools: TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
-    }));
+    return respond(
+      rpcResult(rpc.id, {
+        tools: TOOLS.map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.inputSchema,
+        })),
+      }),
+    );
   }
 
   if (rpc.method === "tools/call") {
     const toolName = rpc.params?.name as string | undefined;
     const args = (rpc.params?.arguments as Record<string, unknown>) ?? {};
     const tool = TOOLS.find((t) => t.name === toolName);
-    if (!tool) return respond(rpcResult(rpc.id, { content: [{ type: "text", text: `Okänt verktyg: ${toolName}` }], isError: true }));
+    if (!tool)
+      return respond(
+        rpcResult(rpc.id, {
+          content: [{ type: "text", text: `Okänt verktyg: ${toolName}` }],
+          isError: true,
+        }),
+      );
 
     try {
       const result = await tool.handler(supabase, ctx, args);
-      return respond(rpcResult(rpc.id, { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }));
+      return respond(
+        rpcResult(rpc.id, { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }),
+      );
     } catch (err) {
-      const message = err instanceof ScopeError ? err.message : (err instanceof Error ? err.message : "Internt fel.");
-      return respond(rpcResult(rpc.id, { content: [{ type: "text", text: message }], isError: true }));
+      const message =
+        err instanceof ScopeError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Internt fel.";
+      return respond(
+        rpcResult(rpc.id, { content: [{ type: "text", text: message }], isError: true }),
+      );
     }
   }
 

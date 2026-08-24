@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { initErrorCapture, captureError, getRecentErrors, consumeLastCapturedError } from "./error-capture";
+import {
+  initErrorCapture,
+  captureError,
+  getRecentErrors,
+  consumeLastCapturedError,
+} from "./error-capture";
 
 describe("error-capture", () => {
   beforeEach(() => {
@@ -39,7 +44,11 @@ describe("error-capture", () => {
   });
 
   it("consumeLastCapturedError returns and removes the last error", async () => {
-    const { captureError: c4, getRecentErrors: g4, consumeLastCapturedError: cl4 } = await import("./error-capture");
+    const {
+      captureError: c4,
+      getRecentErrors: g4,
+      consumeLastCapturedError: cl4,
+    } = await import("./error-capture");
     c4(new Error("first"));
     c4(new Error("second"));
     c4(new Error("third"));
@@ -73,7 +82,10 @@ describe("error-capture", () => {
     initErrorCapture();
 
     // Simulate window.error event
-    const errorEvent = new ErrorEvent("error", { error: new Error("window error"), message: "window error" });
+    const errorEvent = new ErrorEvent("error", {
+      error: new Error("window error"),
+      message: "window error",
+    });
     window.dispatchEvent(errorEvent);
 
     const recent = getRecentErrors();
@@ -87,7 +99,10 @@ describe("error-capture", () => {
 
     // Simulate unhandledrejection - need to catch the promise to avoid unhandled rejection
     const promise = Promise.reject(new Error("promise rejected")).catch(() => {});
-    const rejectionEvent = new PromiseRejectionEvent("unhandledrejection", { promise, reason: new Error("promise rejected") });
+    const rejectionEvent = new PromiseRejectionEvent("unhandledrejection", {
+      promise,
+      reason: new Error("promise rejected"),
+    });
     window.dispatchEvent(rejectionEvent);
 
     const recent = getRecentErrors();
@@ -101,7 +116,10 @@ describe("error-capture", () => {
 
     // Simulate unhandledrejection with string reason
     const promise = Promise.reject("string reason").catch(() => {});
-    const rejectionEvent = new PromiseRejectionEvent("unhandledrejection", { promise, reason: "string reason" });
+    const rejectionEvent = new PromiseRejectionEvent("unhandledrejection", {
+      promise,
+      reason: "string reason",
+    });
     window.dispatchEvent(rejectionEvent);
 
     const recent = getRecentErrors();

@@ -4,11 +4,7 @@ import { useCallback, useRef, useState } from "react";
  * Simple virtual list for scrollable containers with roughly fixed row heights.
  * Renders only the visible slice + overscan rows to keep DOM element count low.
  */
-export function useVirtualList<T>(
-  items: T[],
-  rowHeight = 56,
-  overscan = 5,
-) {
+export function useVirtualList<T>(items: T[], rowHeight = 56, overscan = 5) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
 

@@ -11,14 +11,34 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { serviceRoleClient, authenticateRequest } from "../_shared/auth.ts";
 import {
-  ScopeError, listTemplates, getTemplate, createTemplate, updateTemplate,
-  listTasks, getTask, createTask, updateTask,
-  listCustomerRequests, getCustomerRequest, createCustomerRequest, updateCustomerRequest,
-  listCustomerRounds, getCustomerRound,
-  listDeviations, getDeviation, createDeviation, updateDeviation,
-  listStores, getStore,
-  listTemplatePackages, getTemplatePackage, createTemplatePackage, updateTemplatePackage,
-  listDeliveryPlan, listSchedule, searchProduct,
+  ScopeError,
+  listTemplates,
+  getTemplate,
+  createTemplate,
+  updateTemplate,
+  listTasks,
+  getTask,
+  createTask,
+  updateTask,
+  listCustomerRequests,
+  getCustomerRequest,
+  createCustomerRequest,
+  updateCustomerRequest,
+  listCustomerRounds,
+  getCustomerRound,
+  listDeviations,
+  getDeviation,
+  createDeviation,
+  updateDeviation,
+  listStores,
+  getStore,
+  listTemplatePackages,
+  getTemplatePackage,
+  createTemplatePackage,
+  updateTemplatePackage,
+  listDeliveryPlan,
+  listSchedule,
+  searchProduct,
 } from "../_shared/storeflow-core.ts";
 
 function pathAfterFunctionName(req: Request): string[] {
@@ -123,7 +143,10 @@ Deno.serve(async (req: Request) => {
       }
       if (segments.length === 2 && (req.method === "PUT" || req.method === "PATCH")) {
         const body = await req.json();
-        const data = await updateCustomerRequest(supabase, ctx, { ...body, request_id: segments[1] });
+        const data = await updateCustomerRequest(supabase, ctx, {
+          ...body,
+          request_id: segments[1],
+        });
         return json({ success: true, customer_request: data });
       }
     }
@@ -210,7 +233,10 @@ Deno.serve(async (req: Request) => {
       }
       if (segments.length === 2 && (req.method === "PUT" || req.method === "PATCH")) {
         const body = await req.json();
-        const data = await updateTemplatePackage(supabase, ctx, { ...body, package_id: segments[1] });
+        const data = await updateTemplatePackage(supabase, ctx, {
+          ...body,
+          package_id: segments[1],
+        });
         return json({ success: true, template_package: data });
       }
     }
@@ -232,8 +258,13 @@ Deno.serve(async (req: Request) => {
       const storeId = q.get("store_id");
       const weekNumber = q.get("week_number");
       const year = q.get("year");
-      if (!storeId || !weekNumber || !year) return json({ error: "store_id, week_number och year krävs." }, 400);
-      const data = await listSchedule(supabase, ctx, { store_id: storeId, week_number: Number(weekNumber), year: Number(year) });
+      if (!storeId || !weekNumber || !year)
+        return json({ error: "store_id, week_number och year krävs." }, 400);
+      const data = await listSchedule(supabase, ctx, {
+        store_id: storeId,
+        week_number: Number(weekNumber),
+        year: Number(year),
+      });
       return json({ success: true, schedule: data });
     }
 

@@ -1,5 +1,4 @@
-const canVibrate = () =>
-  typeof navigator !== "undefined" && "vibrate" in navigator;
+const canVibrate = () => typeof navigator !== "undefined" && "vibrate" in navigator;
 
 export const haptic = {
   success: () => canVibrate() && navigator.vibrate(40),

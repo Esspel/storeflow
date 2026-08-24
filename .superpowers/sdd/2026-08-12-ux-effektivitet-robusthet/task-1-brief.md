@@ -1,10 +1,12 @@
 # Task 1: Offline-kö (localStorage)
 
 ## Files:
+
 - Create: `src/lib/offline-queue.ts`
 - Test: `src/lib/offline-queue.test.ts`
 
 ## Interfaces:
+
 - Consumes: inget
 - Produces: `enqueue(item)`, `dequeueAll()`, `getQueueLength()`, `clearQueue()` — används av Task 2 (`mutateWithQueue`)
 
@@ -109,6 +111,7 @@ git commit -m "feat: add client-side offline queue for mutations"
 ```
 
 ## Global Constraints:
+
 - Ingen auditlogg / transaktionslogg i databasen (undantag: `support_tickets` och `kundrunda_assignments` tabeller enligt spec).
 - Alla muterande anrop går via en gemensam `mutateWithQueue`-wrapper i `src/lib/supabase.ts`.
 - Svensk copy i alla UI-texter och felmeddelanden.

@@ -5,7 +5,7 @@ export type SwedishHoliday = {
   date: Date;
   name: string;
   isRedDay: boolean; // Strictly legal "röd dag" (Lag 1989:253)
-  isEve: boolean;    // Festive eves (Julafton, Midsommarafton, etc.)
+  isEve: boolean; // Festive eves (Julafton, Midsommarafton, etc.)
   isWeekday: boolean; // True if falling Mon–Sat
 };
 
@@ -101,7 +101,7 @@ export function getIsoWeekDetails(date: Date): { isoYear: number; isoWeek: numbe
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const isoYear = d.getUTCFullYear();
   const yearStart = new Date(Date.UTC(isoYear, 0, 1));
-  const isoWeek = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  const isoWeek = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
   return { isoYear, isoWeek };
 }
 
@@ -113,7 +113,10 @@ export function isoWeekNumber(date: Date): number {
  * Check if a calendar week (isoYear + weekNumber) contains any Swedish holiday.
  * Scans adjacent years to ensure boundary-crossing weeks (Week 1 / Week 52/53) match accurately.
  */
-export function getSpecialWeekHoliday(targetIsoYear: number, targetWeekNumber: number): string | null {
+export function getSpecialWeekHoliday(
+  targetIsoYear: number,
+  targetWeekNumber: number,
+): string | null {
   const yearsToScan = [targetIsoYear - 1, targetIsoYear, targetIsoYear + 1];
 
   for (const y of yearsToScan) {
@@ -153,7 +156,7 @@ export function stockholmToUtc(localDateTimeStr: string): string {
   for (const offsetHours of [2, 1]) {
     const candidate = new Date(naiveUtc.getTime() - offsetHours * 3600000);
     const parts = Object.fromEntries(
-      formatter.formatToParts(candidate).map((p) => [p.type, p.value])
+      formatter.formatToParts(candidate).map((p) => [p.type, p.value]),
     );
 
     const candidateLocal = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
@@ -169,7 +172,7 @@ export function stockholmToUtc(localDateTimeStr: string): string {
 
 export function formatStockholmTime(
   utcIsoString: string,
-  opts?: Intl.DateTimeFormatOptions
+  opts?: Intl.DateTimeFormatOptions,
 ): string {
   return new Date(utcIsoString).toLocaleString("sv-SE", {
     timeZone: "Europe/Stockholm",

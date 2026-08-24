@@ -1,11 +1,4 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { type AppUser, type Store, supabase, setSessionToken } from "./supabase";
 import {
   getStoredSession,
@@ -31,7 +24,7 @@ type AuthContextType = {
   dismissFirstTimeSetup: () => void;
   login: (
     username: string,
-    password: string
+    password: string,
   ) => Promise<{ error?: string; mustChangePassword?: boolean }>;
   logout: () => Promise<void>;
   refreshUser: (user: AppUser) => void;
@@ -127,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [user]
+    [user],
   );
 
   const refreshUserStores = useCallback(async () => {
@@ -253,7 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsFirstLogin(false);
       return {};
     },
-    [loadUserStores]
+    [loadUserStores],
   );
 
   const logout = useCallback(async () => {
@@ -271,7 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(updated);
       if (token) storeSession(token, updated);
     },
-    [token]
+    [token],
   );
 
   const openLockScreen = useCallback(() => setLockScreenOpen(true), []);
@@ -282,7 +275,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const quickSwitch = useCallback(
     async (newUser: AppUser, newToken: string) => {
       if (token) {
-        supabase.from("app_sessions").delete().eq("token", token).then(() => {});
+        supabase
+          .from("app_sessions")
+          .delete()
+          .eq("token", token)
+          .then(() => {});
       }
       setSessionToken(newToken);
       setUser(newUser);
@@ -298,7 +295,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setLockScreenOpen(false);
     },
-    [token, loadUserStores]
+    [token, loadUserStores],
   );
 
   return (

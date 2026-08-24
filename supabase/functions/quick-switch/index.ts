@@ -76,7 +76,9 @@ Deno.serve(async (req: Request) => {
 
       const { data: user } = await supabase
         .from("app_users")
-        .select("id, username, display_name, role, role_manually_set, employee_group, store_id, active_store_id, must_change_password, last_login, created_at")
+        .select(
+          "id, username, display_name, role, role_manually_set, employee_group, store_id, active_store_id, must_change_password, last_login, created_at",
+        )
         .eq("id", user_id)
         .eq("is_active", true)
         .maybeSingle();

@@ -4,7 +4,7 @@ import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { supabase } from "@/lib/supabase";
 
 const CameraScanner = React.lazy(() =>
-  import("@/components/camera-scanner").then((m) => ({ default: m.CameraScanner }))
+  import("@/components/camera-scanner").then((m) => ({ default: m.CameraScanner })),
 );
 
 // Global context so any component can listen to scan events too
@@ -18,7 +18,12 @@ type BarcodeCtx = {
   setScanSuppressed: (suppressed: boolean) => void;
 };
 
-const Ctx = createContext<BarcodeCtx>({ lastScan: null, onScan: () => () => {}, openCameraScanner: () => {}, setScanSuppressed: () => {} });
+const Ctx = createContext<BarcodeCtx>({
+  lastScan: null,
+  onScan: () => () => {},
+  openCameraScanner: () => {},
+  setScanSuppressed: () => {},
+});
 
 export function useBarcodeContext() {
   return useContext(Ctx);
@@ -90,13 +95,18 @@ export function BarcodeProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ lastScan, onScan, openCameraScanner: () => setCameraOpen(true), setScanSuppressed }}>
+    <Ctx.Provider
+      value={{ lastScan, onScan, openCameraScanner: () => setCameraOpen(true), setScanSuppressed }}
+    >
       {children}
 
       {cameraOpen && (
         <React.Suspense fallback={null}>
           <CameraScanner
-            onScan={(code) => { setCameraOpen(false); void handleScan(code); }}
+            onScan={(code) => {
+              setCameraOpen(false);
+              void handleScan(code);
+            }}
             onClose={() => setCameraOpen(false)}
           />
         </React.Suspense>

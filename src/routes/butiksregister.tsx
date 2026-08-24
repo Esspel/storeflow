@@ -1,6 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Building2, Mail, MapPin, Phone, Search, Store, User, ChevronDown, ChevronUp, X } from "lucide-react";
+import {
+  Building2,
+  Mail,
+  MapPin,
+  Phone,
+  Search,
+  Store,
+  User,
+  ChevronDown,
+  ChevronUp,
+  X,
+} from "lucide-react";
 import { supabase, type Store as StoreType } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +25,9 @@ function Field({ label, value }: { label: string; value: string | null | undefin
   if (!value) return null;
   return (
     <div className="min-w-0">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+        {label}
+      </p>
       <p className="text-sm text-foreground truncate">{value}</p>
     </div>
   );
@@ -24,11 +37,24 @@ function StoreCard({ store }: { store: StoreType }) {
   const [expanded, setExpanded] = useState(false);
 
   const hasExtra = !!(
-    store.butikschef || store.email_sm_chef || store.telefon_butik || store.bc_telefon ||
-    store.mobil || store.organisationsnummer || store.distriktschef || store.forsaljningschef ||
-    store.direktor_forsaljning || store.marknadsomrade || store.k_stalle || store.saljplan ||
-    store.hr_generalist || store.bemanningsspecialist || store.sak_kval_samordnare ||
-    store.enhet || store.foretag || store.gamla_butiksnummer
+    store.butikschef ||
+    store.email_sm_chef ||
+    store.telefon_butik ||
+    store.bc_telefon ||
+    store.mobil ||
+    store.organisationsnummer ||
+    store.distriktschef ||
+    store.forsaljningschef ||
+    store.direktor_forsaljning ||
+    store.marknadsomrade ||
+    store.k_stalle ||
+    store.saljplan ||
+    store.hr_generalist ||
+    store.bemanningsspecialist ||
+    store.sak_kval_samordnare ||
+    store.enhet ||
+    store.foretag ||
+    store.gamla_butiksnummer
   );
 
   return (
@@ -77,7 +103,9 @@ function StoreCard({ store }: { store: StoreType }) {
               <span className="min-w-0">
                 {store.gatuadress && <span className="block truncate">{store.gatuadress}</span>}
                 {(store.postnr || store.postadress) && (
-                  <span className="block truncate">{[store.postnr, store.postadress].filter(Boolean).join(" ")}</span>
+                  <span className="block truncate">
+                    {[store.postnr, store.postadress].filter(Boolean).join(" ")}
+                  </span>
                 )}
               </span>
             </div>
@@ -85,7 +113,10 @@ function StoreCard({ store }: { store: StoreType }) {
           {store.telefon_butik && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-              <a href={`tel:${store.telefon_butik}`} className="truncate hover:text-primary transition-colors">
+              <a
+                href={`tel:${store.telefon_butik}`}
+                className="truncate hover:text-primary transition-colors"
+              >
                 {store.telefon_butik}
               </a>
             </div>
@@ -93,7 +124,10 @@ function StoreCard({ store }: { store: StoreType }) {
           {(store.email || store.email_sm_chef) && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-              <a href={`mailto:${store.email || store.email_sm_chef}`} className="truncate hover:text-primary transition-colors">
+              <a
+                href={`mailto:${store.email || store.email_sm_chef}`}
+                className="truncate hover:text-primary transition-colors"
+              >
                 {store.email || store.email_sm_chef}
               </a>
             </div>
@@ -138,9 +172,13 @@ function StoreCard({ store }: { store: StoreType }) {
             className="flex w-full items-center justify-center gap-1.5 border-t border-border/40 bg-muted/10 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
           >
             {expanded ? (
-              <><ChevronUp className="h-3.5 w-3.5" /> Visa mindre</>
+              <>
+                <ChevronUp className="h-3.5 w-3.5" /> Visa mindre
+              </>
             ) : (
-              <><ChevronDown className="h-3.5 w-3.5" /> Visa mer</>
+              <>
+                <ChevronDown className="h-3.5 w-3.5" /> Visa mer
+              </>
             )}
           </button>
         </>
@@ -169,7 +207,9 @@ function ButiksregisterPage() {
       });
   }, []);
 
-  const distriktOptions = [...new Set(stores.map((s) => s.distrikt_namn).filter(Boolean))].sort() as string[];
+  const distriktOptions = [
+    ...new Set(stores.map((s) => s.distrikt_namn).filter(Boolean)),
+  ].sort() as string[];
   const bolagOptions = [...new Set(stores.map((s) => s.bolag).filter(Boolean))].sort() as string[];
 
   const filtered = stores.filter((s) => {
@@ -235,11 +275,15 @@ function ButiksregisterPage() {
             onChange={(e) => setFilterDistrikt(e.target.value)}
             className={cn(
               "h-10 rounded-xl border border-border/60 bg-card px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer",
-              filterDistrikt ? "text-foreground" : "text-muted-foreground"
+              filterDistrikt ? "text-foreground" : "text-muted-foreground",
             )}
           >
             <option value="">Alla distrikt</option>
-            {distriktOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+            {distriktOptions.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
           </select>
         )}
 
@@ -249,17 +293,25 @@ function ButiksregisterPage() {
             onChange={(e) => setFilterBolag(e.target.value)}
             className={cn(
               "h-10 rounded-xl border border-border/60 bg-card px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer",
-              filterBolag ? "text-foreground" : "text-muted-foreground"
+              filterBolag ? "text-foreground" : "text-muted-foreground",
             )}
           >
             <option value="">Alla föreningar</option>
-            {bolagOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+            {bolagOptions.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
           </select>
         )}
 
         {hasFilters && (
           <button
-            onClick={() => { setSearch(""); setFilterDistrikt(""); setFilterBolag(""); }}
+            onClick={() => {
+              setSearch("");
+              setFilterDistrikt("");
+              setFilterBolag("");
+            }}
             className="flex h-10 items-center gap-1.5 rounded-xl border border-border/60 bg-card px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
@@ -279,7 +331,10 @@ function ButiksregisterPage() {
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="rounded-2xl border border-border/60 bg-card p-4 shadow-[var(--shadow-sm)]">
+            <div
+              key={i}
+              className="rounded-2xl border border-border/60 bg-card p-4 shadow-[var(--shadow-sm)]"
+            >
               <div className="flex items-center gap-3 mb-3">
                 <div className="h-10 w-10 rounded-xl bg-muted animate-pulse" />
                 <div className="flex-1 space-y-1.5">
@@ -300,7 +355,11 @@ function ButiksregisterPage() {
           <p className="text-sm font-medium text-muted-foreground">Inga butiker hittades</p>
           {hasFilters && (
             <button
-              onClick={() => { setSearch(""); setFilterDistrikt(""); setFilterBolag(""); }}
+              onClick={() => {
+                setSearch("");
+                setFilterDistrikt("");
+                setFilterBolag("");
+              }}
               className="mt-3 text-xs text-primary hover:underline"
             >
               Rensa filter

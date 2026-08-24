@@ -16,11 +16,13 @@
 ## Omfattning
 
 ### A. Snabbare startsida per roll (0 ny infrastruktur)
+
 - **Personal:** "Mina öppna uppgifter" + "Skapa avvikelse" + snabblänk till dagens kundrunda (om en är tilldelad denna vecka).
 - **Chef/Admin:** "Öppna avvikelser i min butik" + "Schema idag" + "Belastning" + "Personal" + "Tilldela kundrunda" (veckovis).
 - Implementation: `useAuth()` roll + `activeStore`, enkel query per sektion. Ingen ny state.
 
 ### B. Offline-kö i header (synlig, inte i DB)
+
 - Alla `POST/PATCH/DELETE` mot Supabase går via wrapper `mutateWithQueue(fn)`.
 - Nätverksfel → lägg i `localStorage["sf-offline-queue"]` (array `{fn, args, timestamp, retryCount}`).
 - Header-badge `"N väntar på synk"` med `aria-live="polite"`.
@@ -28,23 +30,27 @@
 - Ingen DB-tabell, ingen auditlogg — lokal kö som töms vid lyckad synk.
 
 ### C. Ångra/redo i formulär (5 s)
+
 - Efter lyckat `mutateWithQueue` → toast "Sparat – Ångra" (knapp).
 - "Ångra" anropar samma endpoint med DELETE eller PATCH till föregående tillstånd (behåller `previousData` i React Query cache).
 - Efter 5 s → toast försvinner, `previousData` rensas.
 - Endast i formulär som skapar/uppdaterar (avvikelse, uppgift, kundrunda-checkpoint). Inga list-vyer.
 
 ### D. Inline-validering + blockerande submit (WCAG 3.3.1)
+
 - Alla `react-hook-form` får `mode: "onChange"` + `aria-describedby` på felmeddelande.
 - Submit-knapp `disabled` tills `formState.isValid === true`.
 - Feltext: kort, specifikt, svensk ("Fältet får inte vara tomt", "Ange giltigt datum").
 - Inga toast-fel för validering — bara inline.
 
 ### E. Felgränser per widget (React Error Boundary)
+
 - Wrappa varje kort på startsida (`QuickCard`, `StatCard`, kundrunda-kort, uppgifter-lista) i `<ErrorBoundary fallback={<WidgetFallback />}>`.
 - `WidgetFallback` visar: "Kunde inte ladda [namn] – försök igen" + knapp "Uppdatera" som `queryClient.invalidateQueries({queryKey})`.
 - En krasch i kundrunda stoppar inte avvikelser-listan.
 
 ### F. Diagnostik-knapp + supportflöde (bygger på befintlig sektion i installningar.tsx)
+
 - Diagnostik-sektionen i `installningar.tsx` döljs bakom klick på versionsnummer (finns redan) — lägg till:
   - **Knapp "Skicka till support"** (alla roller): samlar diag-data (se nedan) + skapar rad i ny DB-tabell `support_tickets`.
   - Innehåll: `userAgent`, `app_version`, `offline_queue_length`, `last_error`, `diag_idb_usage`, `user_id`, `store_id`, `created_at`, och valfritt fritext-meddelande från användare.
@@ -57,30 +63,36 @@
   - `support_ticket_replies`: `id, ticket_id, admin_id, message, created_at`.
 
 ### G. Progressiv laddning + skeletons (utan ny lib)
+
 - Ersätt `isLoading` spinner i listor (`uppgifter`, `avvikelser`, `kundrunda`, `mallar`) mot skeleton-rader (befintliga `Skeleton` från `ui/skeleton.tsx`).
 - `react-query` `placeholderData: keepPreviousData` vid paginering/sort → inga flimmer.
 - `Suspense` boundary runt hela route-komponent (finns i `__root.tsx` via `ErrorComponent`) — behåller nuvarande fallback.
 
 ### H. Auto-spara utkast till localStorage
+
 - Långa formulär (avvikelse med bilder, kundrunda-checkpoint) försvinner vid misstänkt reload/tab-close.
 - `useEffect` debounced (1.5 s) sparar `form.getValues()` till `localStorage["sf-draft-<route>-<id>"]`.
 - Vid mount: om utkast finns → toast "Återställ utkast?" med knappar.
 - Rensas vid lyckat submit.
 
 ### I. Visuell "senast synkad" indikator
+
 - Liten klocka + tidstämpel i header/footer: "Synkad 14:23".
 - Uppdateras vid varje lyckad `queryClient.invalidateQueries()` + mutate.
 - Röd om > 10 min gammal.
 
 ### J. Handlingsbara tomma tillstånd
+
 - Ersätt `EmptyState` med: ikon + en mening + primärknapp ("Skapa uppgift", "Starta kundrunda", "Logga avvikelse") som navigerar rätt.
 - Använd befintliga `PageHeader` + `Button`.
 
 ### K. Snabbfilter "Mina / Alla / Öppna" som chips
+
 - Överst i listor (`avvikelser`, `uppgifter`, `kundrunda-sessioner`): 3 chips `Mina | Öppna | Alla` med `aria-pressed`.
 - Sparar val i `localStorage` per route.
 
 ### L. Felmeddelanden på svenska (inte tekniska)
+
 - Central `errorToSwedish(err)` i `supabase.ts`: mappar kända koder →
   - "Inloggning utgången – logga in igen"
   - "Ingen internetuppkoppling – sparas offline"
@@ -88,10 +100,12 @@
 - Alla `toast.error` använder denna.
 
 ### M. Kopiera felsökande info till urklipp
+
 - I `installningar.tsx` (alla roller): knapp "Kopiera felinfo" → samlar `userAgent`, `appVersion`, `lastError`, `offlineQueueLength` → `navigator.clipboard.writeText()` → toast "Kopierat — klistra in i mail till support".
 - Ingen fil, ingen DB.
 
 ### N. Veckovis kundrunda-tilldelning (admin/chef)
+
 - **Ny komponent i `/kundrunda` eller egen route `/kundrunda-schema`:**
   - Admin/chef ser en veckovy (måndag–söndag) med en dropdown per dag: "Vem gör kundrundan?"
   - Listar butikspersonal (`app_users` med `store_id = activeStore.id`).
@@ -102,13 +116,15 @@
 - Ingen ändring av själva rundan (checkpoints/zoner) — bara vem som ska göra den.
 
 ### O. Guldklimpar (låg kostnad, högt värde)
-| Idé | Kodändring |
-|---|---|
-| Enter = spara i formulär | `onKeyDown={e => e.key==="Enter" && !e.shiftKey && handleSubmit()}` på `Textarea`/`Input`. |
-| Fokus första felfält vid submit-fel | `formState.errors` → `document.getElementById(firstErrorId)?.focus()`. |
+
+| Idé                                   | Kodändring                                                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Enter = spara i formulär              | `onKeyDown={e => e.key==="Enter" && !e.shiftKey && handleSubmit()}` på `Textarea`/`Input`.                   |
+| Fokus första felfält vid submit-fel   | `formState.errors` → `document.getElementById(firstErrorId)?.focus()`.                                       |
 | Behåll scroll-position vid paginering | `queryClient.setQueryDefaults({placeholderData: keepPreviousData})` + `scrollRestoration: "manual"` i route. |
 
 ## Utelämnade (per feedback)
+
 - Smart prefill / tangentbordsgenvägar
 - Personlig kundrunda (det är delad runtur)
 - Auditlogg / transaktionslogg i DB (undantag: support_tickets)
@@ -121,6 +137,7 @@
 - "Min nästa kundrunda" per automatik (ersatt av veckovis tilldelning)
 
 ## Ny databas (endast supportflöde + kundrunda-tilldelning)
+
 ```sql
 -- Supportärenden (ersätter mejl)
 CREATE TABLE support_tickets (
@@ -160,20 +177,22 @@ CREATE TABLE kundrunda_assignments (
 ```
 
 ## Filändringar (grovt)
-| Fil | Ändring |
-|---|---|
-| `src/routes/index.tsx` | Startsida per roll + skeleton-kort + snabblänk tilldelad kundrunda |
-| `src/lib/supabase.ts` | Ny `mutateWithQueue(fn)` wrapper + offline-kö logic + `errorToSwedish(err)` + typer för `support_tickets`, `kundrunda_assignments` |
-| `src/components/app-shell.tsx` | Header-badge för offline-kö (`aria-live`) + "senast synkad"-indikator |
-| `src/routes/avvikelser.tsx`, `uppgifter.tsx`, `kundrunda.tsx`, `mallar.tsx` | Inline-validering, disabled submit, `Skeleton` rader, `ErrorBoundary` per widget, snabbfilter, auto-spara utkast |
-| `src/components/ui/form.tsx` | `mode: "onChange"` default, `aria-describedby` helper, Enter-spara, fokus-första-fel |
-| `src/routes/installningar.tsx` | Bygg vidare på diagnostik-sektion: "Skicka till support"-knapp + "Kopiera felinfo" (alla roller) |
-| `src/routes/support.tsx` (ny) | Admin-sida: lista + detalj + status + svar |
-| `src/routes/kundrunda.tsx` (eller ny `/kundrunda-schema`) | Veckovis tilldelning av kundrunda-ansvarig |
-| `src/lib/error-capture.ts` (ny) | Ringbuffer för `console.error` + `unhandledrejection` |
-| `supabase/migrations/*.sql` (ny) | Tabeller för `support_tickets`, `support_ticket_replies`, `kundrunda_assignments` |
+
+| Fil                                                                         | Ändring                                                                                                                            |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `src/routes/index.tsx`                                                      | Startsida per roll + skeleton-kort + snabblänk tilldelad kundrunda                                                                 |
+| `src/lib/supabase.ts`                                                       | Ny `mutateWithQueue(fn)` wrapper + offline-kö logic + `errorToSwedish(err)` + typer för `support_tickets`, `kundrunda_assignments` |
+| `src/components/app-shell.tsx`                                              | Header-badge för offline-kö (`aria-live`) + "senast synkad"-indikator                                                              |
+| `src/routes/avvikelser.tsx`, `uppgifter.tsx`, `kundrunda.tsx`, `mallar.tsx` | Inline-validering, disabled submit, `Skeleton` rader, `ErrorBoundary` per widget, snabbfilter, auto-spara utkast                   |
+| `src/components/ui/form.tsx`                                                | `mode: "onChange"` default, `aria-describedby` helper, Enter-spara, fokus-första-fel                                               |
+| `src/routes/installningar.tsx`                                              | Bygg vidare på diagnostik-sektion: "Skicka till support"-knapp + "Kopiera felinfo" (alla roller)                                   |
+| `src/routes/support.tsx` (ny)                                               | Admin-sida: lista + detalj + status + svar                                                                                         |
+| `src/routes/kundrunda.tsx` (eller ny `/kundrunda-schema`)                   | Veckovis tilldelning av kundrunda-ansvarig                                                                                         |
+| `src/lib/error-capture.ts` (ny)                                             | Ringbuffer för `console.error` + `unhandledrejection`                                                                              |
+| `supabase/migrations/*.sql` (ny)                                            | Tabeller för `support_tickets`, `support_ticket_replies`, `kundrunda_assignments`                                                  |
 
 ## Testkrav (definition of done)
+
 1. **Offline:** Stäng nätverk → skapa avvikelse → badge "1 väntar" → öppna nätverk → badge försvinner, avvikelse syns i lista.
 2. **Ångra:** Spara avvikelse → toast "Sparat – Ångra" → klicka Ångra inom 5 s → avvikelse försvinner, toast "Ångrat".
 3. **Validering:** Tomt obligatoriskt fält → inline feltext, submit-knapp disabled → fyll i → knapp enabled.

@@ -240,7 +240,8 @@ function TestPanel() {
       "/testpanel",
     );
     if (error) addResult(false, `Notis misslyckades: ${error}`);
-    else if (pushResult?.partialErrors?.length) addResult(true, `Testnotis skickad (push varningar: ${pushResult.partialErrors.join(", ")})`);
+    else if (pushResult?.partialErrors?.length)
+      addResult(true, `Testnotis skickad (push varningar: ${pushResult.partialErrors.join(", ")})`);
     else addResult(true, "Testnotis skickad.");
     setRunning(false);
   }
@@ -303,9 +304,19 @@ function TestPanel() {
   async function sendCustomNotification() {
     if (!customMsg.trim()) return;
     setRunning(true);
-    const { error, pushResult } = await createNotification(user!.id, "test", customMsg.trim(), "", "/testpanel");
+    const { error, pushResult } = await createNotification(
+      user!.id,
+      "test",
+      customMsg.trim(),
+      "",
+      "/testpanel",
+    );
     if (error) addResult(false, `Notis misslyckades: ${error}`);
-    else if (pushResult?.partialErrors?.length) addResult(true, `Anpassad notis skickad: "${customMsg}" (push varningar: ${pushResult.partialErrors.join(", ")})`);
+    else if (pushResult?.partialErrors?.length)
+      addResult(
+        true,
+        `Anpassad notis skickad: "${customMsg}" (push varningar: ${pushResult.partialErrors.join(", ")})`,
+      );
     else addResult(true, `Anpassad notis skickad: "${customMsg}"`);
     setCustomMsg("");
     setRunning(false);
@@ -491,7 +502,11 @@ function TestPanel() {
       "/testpanel",
     );
     if (errors.length) addResult(false, `Notis/push misslyckades: ${errors.join("; ")}`);
-    else addResult(true, `Notis + push skickad till ${userIds.length} användare i ${activeStore.name}.`);
+    else
+      addResult(
+        true,
+        `Notis + push skickad till ${userIds.length} användare i ${activeStore.name}.`,
+      );
     await loadStats();
     setRunning(false);
   }

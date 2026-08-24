@@ -1,13 +1,25 @@
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, ImagePlus, ShoppingCart, X } from "lucide-react";
+import {
+  TriangleAlert as AlertTriangle,
+  CircleCheck as CheckCircle2,
+  ImagePlus,
+  ShoppingCart,
+  X,
+} from "lucide-react";
 import { supabase, compressImage } from "@/lib/supabase";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const searchSchema = z.object({
   t: z.string().optional(),
@@ -47,7 +59,11 @@ function QrKundonskemalFormPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!token) { setInvalid(true); setResolving(false); return; }
+    if (!token) {
+      setInvalid(true);
+      setResolving(false);
+      return;
+    }
 
     supabase
       .from("qr_tokens")
@@ -56,9 +72,17 @@ function QrKundonskemalFormPage() {
       .eq("token_type", "customer_request_form")
       .maybeSingle()
       .then(({ data }) => {
-        if (!data) { setInvalid(true); setResolving(false); return; }
+        if (!data) {
+          setInvalid(true);
+          setResolving(false);
+          return;
+        }
         const store = data.store as { id: string; name: string } | null;
-        if (!store) { setInvalid(true); setResolving(false); return; }
+        if (!store) {
+          setInvalid(true);
+          setResolving(false);
+          return;
+        }
         setStoreId(store.id);
         setStoreName(store.name);
         setResolving(false);
@@ -87,20 +111,26 @@ function QrKundonskemalFormPage() {
     if (!form.product_name.trim() || !storeId) return;
     setSaving(true);
 
-    const { data: inserted, error } = await supabase.from("customer_requests").insert({
-      store_id: storeId,
-      product_name: form.product_name.trim(),
-      notes: form.notes.trim() || null,
-      priority: form.priority,
-      source: "qr",
-    }).select("id").maybeSingle();
+    const { data: inserted, error } = await supabase
+      .from("customer_requests")
+      .insert({
+        store_id: storeId,
+        product_name: form.product_name.trim(),
+        notes: form.notes.trim() || null,
+        priority: form.priority,
+        source: "qr",
+      })
+      .select("id")
+      .maybeSingle();
 
     if (!error && inserted?.id) {
       // Upload images
       for (const img of images) {
         const compressed = await compressImage(img);
         const path = `customer-requests/${inserted.id}/${crypto.randomUUID()}.jpg`;
-        const { error: uploadErr } = await supabase.storage.from("attachments").upload(path, compressed);
+        const { error: uploadErr } = await supabase.storage
+          .from("attachments")
+          .upload(path, compressed);
         if (!uploadErr) {
           await supabase.from("customer_request_images").insert({
             request_id: inserted.id,
@@ -111,11 +141,15 @@ function QrKundonskemalFormPage() {
       }
 
       // Create a status token so the customer can follow their request
-      const { data: tokenRow } = await supabase.from("qr_tokens").insert({
-        token_type: "customer_request_status",
-        store_id: storeId,
-        meta: { request_id: inserted.id },
-      }).select("token").maybeSingle();
+      const { data: tokenRow } = await supabase
+        .from("qr_tokens")
+        .insert({
+          token_type: "customer_request_status",
+          store_id: storeId,
+          meta: { request_id: inserted.id },
+        })
+        .select("token")
+        .maybeSingle();
       if (tokenRow?.token) {
         setStatusUrl(`${window.location.origin}/qr-kundonskemal?t=${tokenRow.token}`);
       }
@@ -174,7 +208,11 @@ function QrKundonskemalFormPage() {
                   onClick={(e) => (e.target as HTMLInputElement).select()}
                 />
                 <button
-                  onClick={() => { navigator.clipboard?.writeText(statusUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                  onClick={() => {
+                    navigator.clipboard?.writeText(statusUrl);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
                   className="shrink-0 rounded-xl border border-border/60 bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
                 >
                   {copied ? "Kopierat!" : "Kopiera"}
@@ -238,8 +276,13 @@ function QrKundonskemalFormPage() {
         {/* Priority */}
         <div className="space-y-1.5">
           <Label className="text-sm font-medium">Hur viktigt är detta för dig?</Label>
-          <Select value={form.priority} onValueChange={(v) => setForm((f) => ({ ...f, priority: v as typeof f.priority }))}>
-            <SelectTrigger className="h-11 text-sm"><SelectValue /></SelectTrigger>
+          <Select
+            value={form.priority}
+            onValueChange={(v) => setForm((f) => ({ ...f, priority: v as typeof f.priority }))}
+          >
+            <SelectTrigger className="h-11 text-sm">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="low">Inte så viktigt</SelectItem>
               <SelectItem value="normal">Ganska viktigt</SelectItem>
@@ -266,7 +309,10 @@ function QrKundonskemalFormPage() {
           {previews.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {previews.map((src, i) => (
-                <div key={i} className="relative h-20 w-20 overflow-hidden rounded-xl border border-border/60">
+                <div
+                  key={i}
+                  className="relative h-20 w-20 overflow-hidden rounded-xl border border-border/60"
+                >
                   <img src={src} alt="" className="h-full w-full object-cover" />
                   <button
                     type="button"
