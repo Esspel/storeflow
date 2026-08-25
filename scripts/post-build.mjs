@@ -1,44 +1,22 @@
-// Post-build: replace the entire SSR server bundle with a minimal SPA Worker.
-// The TanStack Start SSR bundle imports node:async_hooks which crashes on
-// Cloudflare Workers (Bolt.host) since it lacks Node.js compatibility flags.
-// Instead we serve the prerendered index.html shell for all navigation requests
-// and let the client-side router handle routing.
-import { readFileSync, writeFileSync } from "fs";
+// Post-build: prepare SPA for Netlify deployment.
+// TanStack Start generates _shell.html which needs to be index.html for Netlify.
+import { readFileSync, copyFileSync } from "fs";
 import { resolve } from "path";
 
-const serverJs = resolve("dist/server/server.js");
-// Look for _shell.html which is TanStack Start's SPA shell, or fallback to a custom one
-let indexHtml;
+// Copy _shell.html to index.html for Netlify SPA routing
+const shellHtml = resolve("dist/client/_shell.html");
+const indexHtml = resolve("dist/client/index.html");
+
 try {
-  indexHtml = readFileSync(resolve("dist/client/_shell.html"), "utf8");
+  copyFileSync(shellHtml, indexHtml);
+  console.log("[post-build] Copied _shell.html to index.html for Netlify SPA routing.");
 } catch (e) {
-  console.warn("[post-build] _shell.html not found, attempting to find index.html...");
+  console.warn("[post-build] _shell.html not found, checking if index.html exists...");
   try {
-    indexHtml = readFileSync(resolve("dist/client/index.html"), "utf8");
+    readFileSync(indexHtml, "utf8");
+    console.log("[post-build] index.html already exists.");
   } catch (e2) {
     console.error("[post-build] Critical: No HTML shell found in dist/client!");
     process.exit(1);
   }
 }
-
-const spaWorker = `const INDEX_HTML = ${JSON.stringify(indexHtml)};
-
-export default {
-  async fetch(request) {
-    const url = new URL(request.url);
-    const p = url.pathname;
-    const ext = p.includes(".") ? p.split(".").pop() : "";
-    const isAsset = p.startsWith("/assets/") ||
-      ["js","css","ico","png","jpg","jpeg","svg","webp","woff","woff2","ttf","json","txt","xml","map"].includes(ext);
-    if (isAsset) {
-      return new Response(null, { status: 404 });
-    }
-    return new Response(INDEX_HTML, {
-      status: 200,
-      headers: { "content-type": "text/html; charset=utf-8" },
-    });
-  },
-};`;
-
-writeFileSync(serverJs, spaWorker, "utf8");
-console.log("[post-build] dist/server/server.js replaced with SPA Worker stub.");
