@@ -161,6 +161,8 @@ export type Task = {
   process_id: string | null;
   process_instance_id: string | null;
   created_at: string;
+  // Extended metadata for spatial tasks and other integrations
+  metadata?: Record<string, unknown>;
   store?: Store;
   assignee?: AppUser;
   steps?: TaskStep[];
@@ -428,7 +430,7 @@ export async function mutateWithQueue<T>(fn: () => Promise<T>): Promise<T> {
         timestamp: Date.now(),
         retryCount: 0,
       });
-      throw new Error("offline-queued");
+      throw new Error("offline-queued", { cause: err });
     }
     throw err;
   }
@@ -1044,7 +1046,7 @@ export function parseMittCoopUrl(inputUrl: string): ParsedMittCoopUrl | null {
     const url = new URL(cleanUrl);
     const result: ParsedMittCoopUrl = {};
 
-    const articleMatch = url.pathname.match(/(?:^|\/)articles\/([^\/]+)/i);
+    const articleMatch = url.pathname.match(new RegExp("(?:^|/)articles/([^/]+)", "i"));
     if (articleMatch && articleMatch[1]) {
       const rawVal = decodeURIComponent(articleMatch[1]).trim();
       if (rawVal.toUpperCase().startsWith("EAN:")) {
@@ -1198,4 +1200,122 @@ export async function getKundrundaAssignmentsThisWeek(
   const { data, error } = await q;
   if (error) throw error;
   return (data ?? []) as KundrundaAssignment[];
+}
+
+/**
+ * Planogram & Spatial Marker Linking
+ */
+
+export interface ShelfPlanogram {
+  id: string;
+  store_id: string;
+  shelf_marker_id: string | null;
+  name: string;
+  expected_products: ExpectedProduct[];
+  version: number;
+  is_active: boolean;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExpectedProduct {
+  product_id: string;
+  ean: string;
+  name: string;
+  brand?: string;
+  size?: string;
+  position: { x: number; y: number; z: number };
+  facings: number;
+  quantity: number;
+}
+
+export interface SpatialMarker {
+  id: string;
+  store_id: string;
+  map_id: string;
+  marker_type: "aruco" | "qr" | "combined";
+  aruco_id: number | null;
+  qr_content: string | null;
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number; w: number } | null;
+  shelf_id: string | null;
+  shelf_name: string | null;
+  size_meters: number | null;
+  is_active: boolean;
+  detected_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getShelfPlanograms(storeId: string): Promise<ShelfPlanogram[]> {
+  const { data, error } = await supabase
+    .from("shelf_planograms")
+    .select("*")
+    .eq("store_id", storeId)
+    .eq("is_active", true)
+    .order("name");
+  if (error) throw error;
+  return (data ?? []) as ShelfPlanogram[];
+}
+
+export async function getSpatialMarkersForStore(storeId: string): Promise<SpatialMarker[]> {
+  const { data, error } = await supabase
+    .from("spatial_markers")
+    .select("*")
+    .eq("store_id", storeId)
+    .eq("is_active", true)
+    .order("shelf_name");
+  if (error) throw error;
+  return (data ?? []) as SpatialMarker[];
+}
+
+export async function linkPlanogramToMarker(
+  planogramId: string,
+  markerId: string,
+): Promise<ShelfPlanogram | null> {
+  const { data, error } = await supabase
+    .from("shelf_planograms")
+    .update({ shelf_marker_id: markerId, updated_at: new Date().toISOString() })
+    .eq("id", planogramId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ShelfPlanogram;
+}
+
+export async function unlinkPlanogramFromMarker(
+  planogramId: string,
+): Promise<ShelfPlanogram | null> {
+  const { data, error } = await supabase
+    .from("shelf_planograms")
+    .update({ shelf_marker_id: null, updated_at: new Date().toISOString() })
+    .eq("id", planogramId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ShelfPlanogram;
+}
+
+export async function createPlanogramFromUpload(
+  storeId: string,
+  name: string,
+  expectedProducts: ExpectedProduct[],
+  createdBy: string,
+): Promise<ShelfPlanogram | null> {
+  const { data, error } = await supabase
+    .from("shelf_planograms")
+    .insert({
+      store_id: storeId,
+      name,
+      expected_products: expectedProducts,
+      created_by: createdBy,
+      updated_by: createdBy,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ShelfPlanogram;
 }

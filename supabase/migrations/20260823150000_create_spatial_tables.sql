@@ -73,7 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_spatial_maps_store ON spatial_maps(store_id, is_a
 CREATE TABLE IF NOT EXISTS spatial_markers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   map_id uuid REFERENCES spatial_maps(id) ON DELETE CASCADE,
-  marker_type text CHECK (marker_type IN ('aruco', 'qr')) NOT NULL,
+  marker_type text CHECK (marker_type IN ('aruco', 'qr', 'entrance', 'exit')) NOT NULL,
   marker_id text NOT NULL, -- ArUco ID (integer as string) or QR code content
   -- 3D position relative to map origin
   position vector3 NOT NULL,

@@ -25,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
-import { lookupProductByEAN, searchCoopProducts, type CoopProduct, MOCK_COOP_PRODUCTS } from "@/lib/coop-products";
+import { lookupCoopProductByEan, searchCoopProducts, type CoopProduct, MOCK_COOP_PRODUCTS } from "@/lib/coop-products";
 
 interface SpatialMarker {
   id: string;
@@ -124,7 +124,7 @@ function CustomerNavPage() {
   const handleBarcodeScan = async (ean: string) => {
     setLoading(true);
     try {
-      const product = await lookupProductByEAN(ean);
+      const product = await lookupCoopProductByEan(ean);
       if (product) {
         // Find full product info
         const fullProduct = MOCK_COOP_PRODUCTS.find((p: CoopProduct) => p.ean === ean);

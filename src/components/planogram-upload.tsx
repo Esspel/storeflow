@@ -32,13 +32,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  parsePlanogramPDF,
-  planogramToStoreFlow,
-  validateParsedPlanogram,
+  parsePlanogramPdf,
+  parsedToShelfPlanogram,
+  matchProductsWithDatabase,
   type ParsedPlanogram,
-  type StoreFlowPlanogramInput,
-  type ExpectedProduct,
-} from "@/lib/pdf-planogram-parser";
+  type ParsedProduct,
+} from "@/lib/planogram-parser";
 import { supabase, uploadAttachment, getPublicUrl } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
@@ -49,10 +48,31 @@ interface PlanogramUploadProps {
   className?: string;
 }
 
+interface ParsedPlanogramValidation {
+  valid: boolean;
+  errors: string[];
+}
+
+interface StoreFlowPlanogramInput {
+  name: string;
+  shelf_marker_id: string | null;
+  expected_products: Array<{
+    productId: string;
+    ean: string;
+    name: string;
+    expectedPosition: { x: number; y: number; z: number };
+    expectedFacings: number;
+    expectedQuantity: number;
+    metadata?: Record<string, unknown>;
+  }>;
+  version: number;
+  is_active: boolean;
+}
+
 interface UploadedFile {
   file: File;
   parsed?: ParsedPlanogram;
-  validation?: ReturnType<typeof validateParsedPlanogram>;
+  validation?: ParsedPlanogramValidation;
   storeFlowData?: StoreFlowPlanogramInput;
   status: "pending" | "parsing" | "parsed" | "validating" | "importing" | "completed" | "error";
   error?: string;
@@ -117,9 +137,13 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
     setFiles((prev) => prev.map((f) => (f === uploadedFile ? { ...f, status: "parsing" } : f)));
 
     try {
-      const arrayBuffer = await uploadedFile.file.arrayBuffer();
-      const parsed = await parsePlanogramPDF(new Uint8Array(arrayBuffer), uploadedFile.file.name);
-      const validation = validateParsedPlanogram(parsed);
+      const parsed = await parsePlanogramPdf(uploadedFile.file);
+
+      // Validate - basic check
+      const validation: ParsedPlanogramValidation = {
+        valid: parsed.zones.length > 0 && parsed.zones.some((z) => z.shelves.length > 0),
+        errors: parsed.zones.length === 0 ? ["Inga zoner hittades i PDF"] : [],
+      };
 
       // Upload PDF to Supabase storage for reference
       const pdfPath = `planograms/${storeId}/${Date.now()}-${uploadedFile.file.name}`;
@@ -166,46 +190,69 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
     setFiles((prev) => prev.map((f) => (f === uploadedFile ? { ...f, status: "validating" } : f)));
 
     try {
-      // Fetch product catalog for this store to map EAN/BNR to product IDs
-      let productCatalog = new Map<string, { id: string; sap_article_id: string }>();
+      // Fetch product catalog for this store to map EAN/SKU to product IDs
+      const { data: products } = await supabase
+        .from("products")
+        .select("id, ean, article_number, name")
+        .eq("store_id", storeId);
 
-      try {
-        const { data: products, error: productsError } = await supabase
-          .from("products")
-          .select("id, sap_article_id, ean, article_number")
-          .eq("store_id", storeId);
+      // Transform to expected format for matching
+      const storeProducts = (products ?? []).map((p) => ({
+        id: p.id,
+        ean: p.ean ?? "",
+        sku: p.article_number ?? p.id,
+        name: p.name,
+      }));
 
-        if (!productsError && products) {
-          products.forEach((p) => {
-            if (p.ean)
-              productCatalog.set(p.ean, {
-                id: p.id,
-                sap_article_id: p.sap_article_id || p.article_number || p.id,
-              });
-            if (p.article_number)
-              productCatalog.set(p.article_number, {
-                id: p.id,
-                sap_article_id: p.sap_article_id || p.article_number,
-              });
-          });
-        }
-      } catch (catalogError) {
-        // Products table might not exist yet - that's OK, we'll use fallback
-        console.warn("Products table not accessible, using BNR fallback:", catalogError);
-      }
+      // Match parsed products with database
+      const matched = await matchProductsWithDatabase(uploadedFile.parsed, storeProducts);
 
-      // If no products found, we'll use fallback mapping in planogramToStoreFlow
-      const storeFlowData = planogramToStoreFlow(uploadedFile.parsed, productCatalog, storeId);
+      // Convert to ShelfPlanogram format
+      const shelfPlanogram = parsedToShelfPlanogram(matched);
+      shelfPlanogram.store_id = storeId;
+
+      // Transform ExpectedProduct[] to StoreFlowPlanogramInput format
+      const expectedProducts = shelfPlanogram.expected_products.map((p) => ({
+        productId: p.product_id,
+        ean: p.ean,
+        name: p.name,
+        expectedPosition: {
+          x: p.position.x_offset_inch * 0.0254, // inches to meters
+          y: p.position.y_offset_inch * 0.0254,
+          z: p.position.z_offset_inch * 0.0254,
+        },
+        expectedFacings: p.facings,
+        expectedQuantity: p.total_quantity,
+        metadata: {},
+      }));
+
+      // Prepare storeFlowData for import
+      const storeFlowData: StoreFlowPlanogramInput = {
+        name: uploadedFile.parsed.planogramName ?? `Planogram ${new Date().toLocaleDateString("sv-SE")}`,
+        shelf_marker_id: null, // Will be set during marker mapping
+        expected_products: expectedProducts,
+        version: 1,
+        is_active: true,
+      };
 
       setFiles((prev) =>
-        prev.map((f) => (f === uploadedFile ? { ...f, storeFlowData, status: "parsed" } : f)),
+        prev.map((f) =>
+          f === uploadedFile
+            ? {
+                ...f,
+                parsed: matched,
+                storeFlowData,
+                status: "parsed",
+              }
+            : f,
+        ),
       );
 
       setShowPreview(uploadedFile);
 
       // Show info toast if using fallback
-      if (productCatalog.size === 0) {
-        toast.info("Produktkatalog tom - använder BNR som produkt-ID (kan uppdateras senare)");
+      if (!products || products.length === 0) {
+        toast.info("Produktkatalog tom - använder EAN som produkt-ID (kan uppdateras senare)");
       }
     } catch (err) {
       console.error("Prepare import error:", err);
@@ -392,25 +439,31 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                       <span>
                         Planogram:{" "}
                         <span className="font-medium">
-                          {uploadedFile.parsed.header.planogramName}
+                          {uploadedFile.parsed.planogramName ?? "Okänt"}
                         </span>
                       </span>
                       <span>
+                        Zoner:{" "}
+                        <span className="font-medium">{uploadedFile.parsed.zones.length}</span>
+                      </span>
+                      <span>
                         Hyllor:{" "}
-                        <span className="font-medium">{uploadedFile.parsed.shelves.length}</span>
+                        <span className="font-medium">
+                          {uploadedFile.parsed.zones.reduce((sum, z) => sum + z.shelves.length, 0)}
+                        </span>
                       </span>
                       <span>
                         Produkter:{" "}
                         <span className="font-medium">
-                          {uploadedFile.parsed.shelves.reduce(
-                            (sum, s) => sum + s.products.length,
+                          {uploadedFile.parsed.zones.reduce(
+                            (sum, z) => sum + z.shelves.reduce((s, shelf) => s + shelf.products.length, 0),
                             0,
                           )}
                         </span>
                       </span>
-                      {uploadedFile.validation && uploadedFile.validation.warnings.length > 0 && (
+                      {uploadedFile.validation && uploadedFile.validation.errors.length > 0 && (
                         <span className="text-amber-600 dark:text-amber-400">
-                          ⚠ {uploadedFile.validation.warnings.length} varningar
+                          ⚠ {uploadedFile.validation.errors.length} varningar
                         </span>
                       )}
                     </div>
@@ -484,7 +537,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>
-              Förhandsgranskning: {showPreview?.parsed?.header.planogramName}
+              Förhandsgranskning: {showPreview?.parsed?.planogramName ?? "Okänt planogram"}
             </DialogTitle>
           </DialogHeader>
           <div className="p-0 overflow-auto max-h-[70vh]">
@@ -498,19 +551,19 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                   <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
                       <Label className="text-gray-500 dark:text-gray-400">Namn</Label>
-                      <p className="font-medium">{showPreview.parsed.header.planogramName}</p>
+                      <p className="font-medium">{showPreview.parsed.planogramName ?? "Okänt"}</p>
                     </div>
                     <div>
-                      <Label className="text-gray-500 dark:text-gray-400">Startdatum</Label>
-                      <p className="font-medium">{showPreview.parsed.header.startDate}</p>
+                      <Label className="text-gray-500 dark:text-gray-400">Butik</Label>
+                      <p className="font-medium">{showPreview.parsed.storeName ?? "Okänd"}</p>
                     </div>
                     <div>
-                      <Label className="text-gray-500 dark:text-gray-400">Kategori</Label>
-                      <p className="font-medium">{showPreview.parsed.header.spaceCategory}</p>
+                      <Label className="text-gray-500 dark:text-gray-400">Zoner</Label>
+                      <p className="font-medium">{showPreview.parsed.zones.length}</p>
                     </div>
                     <div>
-                      <Label className="text-gray-500 dark:text-gray-400">Kod</Label>
-                      <p className="font-medium">{showPreview.parsed.header.spaceCategoryCode}</p>
+                      <Label className="text-gray-500 dark:text-gray-400">Sidor</Label>
+                      <p className="font-medium">{showPreview.parsed.metadata.pageCount}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -543,108 +596,62 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                           </ul>
                         </div>
                       )}
-                      {showPreview.validation.warnings.length > 0 && (
-                        <div className="space-y-1">
-                          <Label className="text-amber-600 dark:text-amber-400 font-medium">
-                            Varningar:
-                          </Label>
-                          <ul className="list-disc list-inside text-sm text-amber-600 dark:text-amber-400">
-                            {showPreview.validation.warnings.map((w, i) => (
-                              <li key={i}>{w}</li>
-                            ))}
-                          </ul>
-                        </div>
+                      {showPreview.validation.errors.length === 0 && (
+                        <p className="text-green-600 dark:text-green-400">
+                          Inga problem hittades
+                        </p>
                       )}
-                      {showPreview.validation.valid &&
-                        showPreview.validation.warnings.length === 0 && (
-                          <p className="text-green-600 dark:text-green-400">
-                            Inga problem hittades
-                          </p>
-                        )}
                     </CardContent>
                   </Card>
                 )}
 
                 {/* Shelves Preview */}
-                {showPreview.parsed?.shelves.length > 0 && (
+                {showPreview.parsed?.zones.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle>Hyllayout ({showPreview.parsed.shelves.length} hyllor)</CardTitle>
+                      <CardTitle>Hyllayout ({showPreview.parsed.zones.reduce((sum, z) => sum + z.shelves.length, 0)} hyllor)</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4 max-h-[50vh] overflow-y-auto">
-                        {showPreview.parsed.shelves.map((shelf) => (
-                          <div key={shelf.shelfNumber} className="border rounded-lg p-3">
+                        {showPreview.parsed.zones.map((zone) => (
+                          <div key={zone.id} className="border rounded-lg p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium">Hylla {shelf.shelfNumber}</span>
-                              <div className="flex items-center gap-4 text-xs text-gray-500">
-                                <span>Notch: {shelf.notch}</span>
-                                <span>
-                                  {shelf.widthInch}" x {shelf.heightInch}"
-                                </span>
-                                <span>Golv: {shelf.heightFromFloorInch}"</span>
-                                <span>Lutning: {shelf.tiltDegrees}°</span>
-                              </div>
+                              <span className="font-medium">{zone.name}</span>
+                              <span className="text-xs text-gray-500">{zone.shelves.length} hyllor, {zone.shelves.reduce((s, sh) => s + sh.products.length, 0)} produkter</span>
                             </div>
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="border-b text-left text-gray-500">
-                                    <th className="pb-1 pr-3">POS</th>
-                                    <th className="pb-1 pr-3">EAN</th>
-                                    <th className="pb-1 pr-3">BNR</th>
-                                    <th className="pb-1 pr-3">Artikel</th>
-                                    <th className="pb-1 pr-3">Varumärke</th>
-                                    <th className="pb-1 pr-3">Storlek</th>
-                                    <th className="pb-1 pr-3">B-pack</th>
-                                    <th className="pb-1 pr-3">Ans</th>
-                                    <th className="pb-1 pr-3">Tot</th>
-                                    <th className="pb-1 pr-3">Kp</th>
-                                    <th className="pb-1">Åtgärd</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {shelf.products.map((product) => (
-                                    <tr
-                                      key={product.position}
-                                      className={cn(
-                                        "border-b",
-                                        product.action === "Tillagd" &&
-                                          "bg-green-50 dark:bg-green-900/20",
-                                        product.action === "Borttagen" &&
-                                          "bg-red-50 dark:bg-red-900/20 line-through",
-                                      )}
-                                    >
-                                      <td className="py-1 pr-3 font-mono">{product.position}</td>
-                                      <td className="py-1 pr-3 font-mono">{product.ean}</td>
-                                      <td className="py-1 pr-3 font-mono">{product.bnr}</td>
-                                      <td className="py-1 pr-3 truncate max-w-[200px]">
-                                        {product.articleName}
-                                      </td>
-                                      <td className="py-1 pr-3">{product.brand}</td>
-                                      <td className="py-1 pr-3 font-mono">{product.size}</td>
-                                      <td className="py-1 pr-3 text-center">{product.bPack}</td>
-                                      <td className="py-1 pr-3 text-center">{product.facings}</td>
-                                      <td className="py-1 pr-3 text-center">{product.total}</td>
-                                      <td className="py-1 pr-3 text-center">{product.kp}</td>
-                                      <td className="py-1">
-                                        {product.action && (
-                                          <Badge
-                                            variant={
-                                              product.action === "Tillagd"
-                                                ? "default"
-                                                : "destructive"
-                                            }
-                                            className="text-xs"
-                                          >
-                                            {product.action}
-                                          </Badge>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                            <div className="space-y-2">
+                              {zone.shelves.map((shelf) => (
+                                <div key={shelf.id} className="border-t pt-2">
+                                  <div className="flex items-center gap-4 text-xs text-gray-500 mb-1">
+                                    <span>Hylla: {shelf.name} (nivå {shelf.level})</span>
+                                    <span>Produkter: {shelf.products.length}</span>
+                                  </div>
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                      <thead>
+                                        <tr className="border-b text-left text-gray-500">
+                                          <th className="pb-1 pr-3">POS</th>
+                                          <th className="pb-1 pr-3">EAN</th>
+                                          <th className="pb-1 pr-3">SKU</th>
+                                          <th className="pb-1 pr-3">Artikel</th>
+                                          <th className="pb-1 pr-3">Facings</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {shelf.products.map((product) => (
+                                          <tr key={product.id} className="border-b">
+                                            <td className="py-1 pr-3 font-mono">{product.position.index + 1}</td>
+                                            <td className="py-1 pr-3 font-mono">{product.ean ?? "-"}</td>
+                                            <td className="py-1 pr-3 font-mono">{product.sku}</td>
+                                            <td className="py-1 pr-3">{product.name}</td>
+                                            <td className="py-1 pr-3 text-center">{product.facings}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         ))}
@@ -669,84 +676,36 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                           <p className="font-medium">{storeId}</p>
                         </div>
                         <div>
-                          <Label className="text-gray-500 dark:text-gray-400">
-                            Produkter att importera
-                          </Label>
-                          <p className="font-medium">
-                            {showPreview.storeFlowData.expected_products.length}
-                          </p>
+                          <Label className="text-gray-500 dark:text-gray-400">Namn</Label>
+                          <p className="font-medium">{showPreview.storeFlowData.name}</p>
+                        </div>
+                        <div>
+                          <Label className="text-gray-500 dark:text-gray-400">Produkter</Label>
+                          <p className="font-medium">{showPreview.storeFlowData.expected_products.length}</p>
                         </div>
                         <div>
                           <Label className="text-gray-500 dark:text-gray-400">Version</Label>
                           <p className="font-medium">{showPreview.storeFlowData.version}</p>
                         </div>
-                        <div>
-                          <Label className="text-gray-500 dark:text-gray-400">Aktiv</Label>
-                          <p className="font-medium">
-                            {showPreview.storeFlowData.is_active ? "Ja" : "Nej"}
-                          </p>
-                        </div>
                       </div>
-
-                      <div className="border-t pt-3">
-                        <Label className="text-gray-500 dark:text-gray-400 text-sm">
-                          Produkter (första 10):
-                        </Label>
-                        <div className="overflow-x-auto mt-2">
-                          <table className="w-full text-xs">
-                            <thead>
-                              <tr className="border-b text-left text-gray-500">
-                                <th className="pb-1 pr-3">Produkt ID</th>
-                                <th className="pb-1 pr-3">EAN</th>
-                                <th className="pb-1 pr-3">Namn</th>
-                                <th className="pb-1 pr-3">Hylla</th>
-                                <th className="pb-1 pr-3">POS</th>
-                                <th className="pb-1 pr-3">Ans</th>
-                                <th className="pb-1 pr-3">Tot</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {showPreview.storeFlowData.expected_products
-                                .slice(0, 10)
-                                .map((p, i) => (
-                                  <tr key={i} className="border-b">
-                                    <td className="py-1 pr-3 font-mono">{p.product_id}</td>
-                                    <td className="py-1 pr-3 font-mono">{p.ean}</td>
-                                    <td className="py-1 pr-3 truncate max-w-[150px]">{p.name}</td>
-                                    <td className="py-1 pr-3 text-center">
-                                      {p.position.shelf_number}
-                                    </td>
-                                    <td className="py-1 pr-3 text-center">
-                                      {p.position.shelf_position}
-                                    </td>
-                                    <td className="py-1 pr-3 text-center">{p.facings}</td>
-                                    <td className="py-1 pr-3 text-center">{p.total_quantity}</td>
-                                  </tr>
-                                ))}
-                            </tbody>
-                          </table>
+                      <details className="text-sm">
+                        <summary className="cursor-pointer text-blue-600 dark:text-blue-400 mb-2">
+                          Visa alla förväntade produkter ({showPreview.storeFlowData.expected_products.length})
+                        </summary>
+                        <div className="max-h-64 overflow-y-auto space-y-1">
+                          {showPreview.storeFlowData.expected_products.map((p, i) => (
+                            <div key={i} className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+                              {p.ean} - {p.name} (Facings: {p.expectedFacings})
+                            </div>
+                          ))}
                         </div>
-                        {showPreview.storeFlowData.expected_products.length > 10 && (
-                          <p className="text-sm text-gray-500 mt-2">
-                            ...och {showPreview.storeFlowData.expected_products.length - 10} fler
-                            produkter
-                          </p>
-                        )}
-                      </div>
+                      </details>
                     </CardContent>
                   </Card>
                 )}
               </div>
             )}
           </div>
-          <DialogFooter>
-            {showPreview?.status === "parsed" && showPreview.storeFlowData && (
-              <Button onClick={() => importPlanogram(showPreview!)}>Importera planogram</Button>
-            )}
-            <Button variant="outline" onClick={() => setShowPreview(null)}>
-              Stäng
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

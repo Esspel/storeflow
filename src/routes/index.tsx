@@ -9,6 +9,8 @@ import {
   UserRound,
   ShoppingCart,
   RefreshCw,
+  Settings,
+  Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -127,15 +129,26 @@ function HubPage() {
             />
           </ErrorBoundary>
           {isManager && (
-            <ErrorBoundary section="Rapporter" fallback={<WidgetFallback name="Rapporter" />}>
-              <QuickCard
-                to="/rapporter"
-                icon={BarChart3}
-                title="Rapporter"
-                desc="KPI:er och insikter"
-                tone="green"
-              />
-            </ErrorBoundary>
+            <>
+              <ErrorBoundary section="Rapporter" fallback={<WidgetFallback name="Rapporter" />}>
+                <QuickCard
+                  to="/rapporter"
+                  icon={BarChart3}
+                  title="Rapporter"
+                  desc="KPI:er och insikter"
+                  tone="green"
+                />
+              </ErrorBoundary>
+              <ErrorBoundary section="Butiksinstallation" fallback={<WidgetFallback name="Butiksinstallation" />}>
+                <QuickCard
+                  to="/store-setup"
+                  icon={Settings}
+                  title="Butiksinstallation"
+                  desc="QR-portaler, Digital twin, Produkter"
+                  tone="indigo"
+                />
+              </ErrorBoundary>
+            </>
           )}
         </div>
       </div>
@@ -169,7 +182,7 @@ function QuickCard({
   icon: LucideIcon;
   title: string;
   desc: string;
-  tone: "blue" | "amber" | "green" | "teal" | "slate" | "rose";
+  tone: "blue" | "amber" | "green" | "teal" | "slate" | "rose" | "indigo";
 }) {
   const colors = {
     blue: "bg-info/10 text-info",
@@ -178,6 +191,7 @@ function QuickCard({
     teal: "bg-teal-500/10 text-teal-600",
     slate: "bg-slate-500/10 text-slate-600",
     rose: "bg-rose-500/10 text-rose-600",
+    indigo: "bg-indigo-500/10 text-indigo-500",
   };
   return (
     <Link

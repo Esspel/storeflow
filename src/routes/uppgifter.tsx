@@ -32,6 +32,8 @@ import {
   Zap,
   Link2,
   ShieldCheck,
+  QrCode,
+  Box,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -93,6 +95,12 @@ import {
   mittCoopSearchUrl,
   type ArticleIdType,
 } from "@/lib/supabase";
+import {
+  getSpatialTasks,
+  getSpatialTasksByMarker,
+  spatialTaskToTask,
+  type SpatialTask,
+} from "@/lib/spatial-tasks";
 import { useAuth } from "@/lib/auth-context";
 import { cn, ensureHttps, sanitizeCsvCell, parseTimeInput } from "@/lib/utils";
 import { exportTextAsCSV } from "@/lib/csv";
@@ -213,6 +221,220 @@ type FormQuestion = {
   is_required: boolean;
   link_url: string;
 };
+
+// Shift Handover View Component
+function ShiftHandoverView({
+  spatialTasksByMarker,
+  activeStore,
+  user,
+  onSave,
+  onOpenDetail,
+}: {
+  spatialTasksByMarker: Array<{
+    marker: { id: string; name: string; marker_type: string } | null;
+    tasks: SpatialTask[];
+  }>;
+  activeStore: { id: string; name: string } | null;
+  user: { id: string; full_name?: string | null } | null;
+  onSave?: (notes: string) => Promise<void>;
+  onOpenDetail: (task: TaskFull) => void;
+}) {
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const totalTasks = spatialTasksByMarker.reduce((sum, g) => sum + g.tasks.length, 0);
+  const completedTasks = spatialTasksByMarker.reduce(
+    (sum, g) => sum + g.tasks.filter((t) => t.status === "completed").length,
+    0,
+  );
+  const inProgressTasks = spatialTasksByMarker.reduce(
+    (sum, g) => sum + g.tasks.filter((t) => t.status === "in_progress").length,
+    0,
+  );
+  const pendingTasks = totalTasks - completedTasks - inProgressTasks;
+
+  const handleSave = async () => {
+    if (!activeStore || !user) return;
+    setSaving(true);
+    try {
+      await onSave?.(notes);
+      toast.success("Skiftövergång sparad");
+    } catch (e) {
+      toast.error("Kunde inte spara skiftövergång");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (totalTasks === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
+        <Users className="mb-3 h-10 w-10 text-muted-foreground/40" />
+        <p className="text-sm font-medium text-muted-foreground">
+          Inga spatiala uppgifter att överlämna
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Skapa spatiala uppgifter från hyllanalys eller 3D-butiksvy för att se dem här
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="rounded-2xl border border-border/60 bg-card p-4">
+          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-1">
+            Totalt
+          </p>
+          <p className="text-2xl font-bold text-foreground">{totalTasks}</p>
+        </div>
+        <div className="rounded-2xl border border-border/60 bg-card p-4">
+          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-1">
+            Klara
+          </p>
+          <p className="text-2xl font-bold text-success">{completedTasks}</p>
+        </div>
+        <div className="rounded-2xl border border-border/60 bg-card p-4">
+          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-1">
+            Pågående
+          </p>
+          <p className="text-2xl font-bold text-primary">{inProgressTasks}</p>
+        </div>
+        <div className="rounded-2xl border border-border/60 bg-card p-4">
+          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-1">
+            Öppna
+          </p>
+          <p className="text-2xl font-bold text-destructive">{pendingTasks}</p>
+        </div>
+      </div>
+
+      {/* Notes Section */}
+      <div className="rounded-2xl border border-border/60 bg-card p-4">
+        <h3 className="text-sm font-semibold text-foreground mb-3">Överlämningsanteckningar</h3>
+        <Textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Skriv anteckningar för nästa skift..."
+          className="min-h-[100px] text-sm"
+          rows={4}
+        />
+        <div className="mt-3 flex justify-end">
+          <Button onClick={handleSave} disabled={saving} className="rounded-full">
+            {saving ? "Sparar..." : "Spara skiftövergång"}
+          </Button>
+        </div>
+      </div>
+
+      {/* Tasks Grouped by Marker/Zone */}
+      <div className="space-y-4">
+        {spatialTasksByMarker.map((group) => {
+          const marker = group.marker;
+          const tasks = group.tasks;
+          const markerCompleted = tasks.filter((t) => t.status === "completed").length;
+          const markerInProgress = tasks.filter((t) => t.status === "in_progress").length;
+          const markerPending = tasks.length - markerCompleted - markerInProgress;
+
+          return (
+            <div
+              key={marker?.id ?? "unassigned"}
+              className="rounded-2xl border border-border/60 bg-card overflow-hidden"
+            >
+              <div className="px-4 py-3 border-b border-border/60 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    {marker?.marker_type === "qr" ? (
+                      <QrCode className="h-4 w-4" />
+                    ) : marker?.marker_type === "aruco" ? (
+                      <Hash className="h-4 w-4" />
+                    ) : (
+                      <Box className="h-4 w-4" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      {marker?.name ?? "Ej kopplad till markör"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {markerCompleted} klar · {markerInProgress} pågår · {markerPending} öppna
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="divide-y divide-border/60 p-2">
+                {tasks.map((task) => (
+                  <div key={task.id} className="px-4 py-3 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
+                          task.status === "completed"
+                            ? "bg-success/10 text-success"
+                            : task.status === "in_progress"
+                              ? "bg-primary/10 text-primary"
+                              : "bg-destructive/10 text-destructive"
+                        }`}
+                      >
+                        {task.status === "completed" ? (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        ) : task.status === "in_progress" ? (
+                          <Clock className="h-3.5 w-3.5" />
+                        ) : (
+                          <Circle className="h-3.5 w-3.5" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">{task.description}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="outline" className="text-[10px] h-4 gap-1">
+                            {task.priority === "urgent"
+                              ? "Akut"
+                              : task.priority === "high"
+                                ? "Hög"
+                                : task.priority === "medium"
+                                  ? "Medel"
+                                  : "Låg"}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] h-4 gap-1">
+                            {task.task_type === "restock"
+                              ? "Restock"
+                              : task.task_type === "price_check"
+                                ? "Priskoll"
+                                : task.task_type === "planogram_fix"
+                                  ? "Planogram"
+                                  : task.task_type === "cleanup"
+                                    ? "Städning"
+                                    : task.task_type === "audit"
+                                      ? "Revision"
+                                      : "Annat"}
+                          </Badge>
+                          {task.assigned_to && (
+                            <span className="text-[10px] text-muted-foreground">
+                              → {task.assignee?.display_name ?? task.assigned_to}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 shrink-0"
+                        onClick={() => onOpenDetail(spatialTaskToTask(task) as TaskFull)}
+                      >
+                        Öppna
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function localInputToUtcIso(localStr: string): string {
   if (!localStr) return "";
@@ -495,6 +717,12 @@ function TasksPage() {
   const isEmployee = user?.role === "employee";
 
   const [tasks, setTasks] = useState<TaskFull[]>([]);
+  const [spatialTasksByMarker, setSpatialTasksByMarker] = useState<
+    Array<{
+      marker: { id: string; name: string; marker_type: string } | null;
+      tasks: SpatialTask[];
+    }>
+  >([]);
   const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
   const [groups, setGroups] = useState<UserGroup[]>([]);
   const [stores, setStores] = useState<StoreType[]>([]);
@@ -515,14 +743,17 @@ function TasksPage() {
   );
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showPastTasks, setShowPastTasks] = useState(false);
+  const [handoverSaving, setHandoverSaving] = useState(false);
   const [horizonDays, setHorizonDays] = useState<number>(() => getRecurrenceHorizonDays());
   const horizonRef = useRef(horizonDays);
-  horizonRef.current = horizonDays;
 
   useEffect(() => {
+    horizonRef.current = horizonDays;
     try {
       localStorage.setItem(RECURRENCE_HORIZON_KEY, String(horizonDays));
-    } catch {}
+    } catch {
+      // Ignore localStorage errors
+    }
   }, [horizonDays]);
 
   const [undoToast, setUndoToast] = useState<{
@@ -586,7 +817,9 @@ function TasksPage() {
           assigneeGroupIds: parsed.assigneeGroupIds ?? base.assigneeGroupIds,
         };
       }
-    } catch {}
+    } catch {
+      // Ignore parsing errors, return empty form
+    }
     return emptyForm(activeStore?.id ?? "");
   });
 
@@ -595,7 +828,9 @@ function TasksPage() {
       const next = typeof v === "function" ? v(prev) : v;
       try {
         localStorage.setItem(TASK_DRAFT_KEY, JSON.stringify(next));
-      } catch {}
+      } catch {
+        // Ignore localStorage errors
+      }
       return next;
     });
   };
@@ -825,8 +1060,46 @@ function TasksPage() {
 
     const { data } = await q;
     if (data) setTasks(data as TaskFull[]);
+
+    // Also fetch spatial tasks for the handover tab
+    if (activeStore) {
+      try {
+        const spatialByMarker = await getSpatialTasksByMarker(activeStore.id);
+        setSpatialTasksByMarker(spatialByMarker);
+      } catch (e) {
+        console.warn("Failed to fetch spatial tasks:", e);
+      }
+    }
+
     setLoading(false);
   }, [activeStore, userStores]);
+
+  const handleHandoverSave = useCallback(
+    async (notes: string) => {
+      if (!activeStore || !user) return;
+      const { error } = await supabase.from("shift_handovers").insert({
+        store_id: activeStore.id,
+        outgoing_shift_id: user.id,
+        incoming_shift_id: null,
+        task_snapshots: spatialTasksByMarker.map((g) => ({
+          marker_id: g.marker?.id ?? null,
+          marker_name: g.marker?.name ?? "Ej kopplad",
+          tasks: g.tasks.map((t) => ({
+            id: t.id,
+            title: t.title,
+            status: t.status,
+            task_type: t.task_type,
+            priority: t.priority,
+            assigned_to: t.assigned_to,
+          })),
+        })),
+        notes,
+        handed_over_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    },
+    [activeStore, user, spatialTasksByMarker],
+  );
 
   const fetchUserGroups = useCallback(async () => {
     if (!user) return;
@@ -838,10 +1111,12 @@ function TasksPage() {
   }, [user]);
 
   useEffect(() => {
-    setLoading(true);
-    fetchTasks();
-    fetchUserGroups();
-    fetchTodayDeliveries();
+    setTimeout(() => {
+      fetchTasks();
+      fetchUserGroups();
+      fetchTodayDeliveries();
+      setLoading(true);
+    }, 0);
 
     const storeQ =
       user?.role === "admin"
@@ -898,7 +1173,7 @@ function TasksPage() {
         });
     }
 
-    setNewTask(emptyForm(activeStore?.id ?? ""));
+    setTimeout(() => setNewTask(emptyForm(activeStore?.id ?? "")), 0);
   }, [activeStore, user]);
 
   useEffect(() => {
@@ -913,8 +1188,10 @@ function TasksPage() {
         t.due_date?.slice(0, 10) === tomorrowStr,
     );
     if (dueTomorrow.length > 0) {
-      setAssigneeConfirmOpen(true);
-      setConfirmSelectedIds(new Set(dueTomorrow.map((t) => t.id)));
+      setTimeout(() => {
+        setAssigneeConfirmOpen(true);
+        setConfirmSelectedIds(new Set(dueTomorrow.map((t) => t.id)));
+      }, 0);
     }
   }, [tasks, isManager, assigneeConfirmDismissed]);
 
@@ -1477,94 +1754,97 @@ function TasksPage() {
     }
   };
 
-  const completeTask = async (task: TaskFull) => {
-    if (completingRef.current.has(task.id)) return;
-    if (unconfirmedEventIds.has(task.id)) return;
-    if (task.depends_on_task_id) {
-      const pred = tasks.find((t) => t.id === task.depends_on_task_id);
-      if (pred && pred.status !== "done") return;
-    }
-    completingRef.current.add(task.id);
-    try {
-      const isDone = task.status === "done";
-      const newStatus = isDone ? "todo" : "done";
-
-      if (!isDone) {
-        const unanswered = (task.questions ?? []).filter((q) => !q.answer?.trim());
-        if (unanswered.length > 0) {
-          setCompleteError(`Obesvarade frågor: ${unanswered.map((q) => q.label).join(", ")}`);
-          return;
-        }
-        setCompleteError("");
+  const completeTask = useCallback(
+    async (task: TaskFull) => {
+      if (completingRef.current.has(task.id)) return;
+      if (unconfirmedEventIds.has(task.id)) return;
+      if (task.depends_on_task_id) {
+        const pred = tasks.find((t) => t.id === task.depends_on_task_id);
+        if (pred && pred.status !== "done") return;
       }
+      completingRef.current.add(task.id);
+      try {
+        const isDone = task.status === "done";
+        const newStatus = isDone ? "todo" : "done";
 
-      await supabase
-        .from("tasks")
-        .update({
-          status: newStatus,
-          completed_at: newStatus === "done" ? getSimulatedDate().toISOString() : null,
-        })
-        .eq("id", task.id);
-
-      if (newStatus === "done") {
-        await supabase.from("task_steps").update({ is_done: true }).eq("task_id", task.id);
-        logAudit(user?.id ?? null, "task.complete", "tasks", task.id, { title: task.title });
-        const notifyIds = new Set<string>();
-        if (task.created_by && task.created_by !== user?.id) notifyIds.add(task.created_by);
-        task.assignees?.forEach((a) => {
-          if (a.user_id && a.user_id !== user?.id) notifyIds.add(a.user_id);
-        });
-        const { errors } = await notifyUsers(
-          [...notifyIds],
-          "task_done",
-          `Uppgift klar: ${task.title}`,
-          `Slutförd av ${user?.display_name}`,
-          "/uppgifter",
-        );
-        if (errors.length) toast.error(`Notis/push misslyckades: ${errors.join("; ")}`);
-
-        const { data: krResponse } = await supabase
-          .from("kundrunda_responses")
-          .select("id, incident_id")
-          .eq("created_task_id", task.id)
-          .maybeSingle();
-        if (krResponse) {
-          if (krResponse.incident_id) {
-            await supabase
-              .from("incidents")
-              .update({
-                status: "resolved",
-                resolved_at: getSimulatedDate().toISOString(),
-              })
-              .eq("id", krResponse.incident_id);
+        if (!isDone) {
+          const unanswered = (task.questions ?? []).filter((q) => !q.answer?.trim());
+          if (unanswered.length > 0) {
+            setCompleteError(`Obesvarade frågor: ${unanswered.map((q) => q.label).join(", ")}`);
+            return;
           }
-          await supabase
-            .from("kundrunda_responses")
-            .update({ result: "ok" })
-            .eq("id", krResponse.id);
+          setCompleteError("");
         }
-      } else {
-        await supabase.from("task_steps").update({ is_done: false }).eq("task_id", task.id);
+
+        await supabase
+          .from("tasks")
+          .update({
+            status: newStatus,
+            completed_at: newStatus === "done" ? getSimulatedDate().toISOString() : null,
+          })
+          .eq("id", task.id);
+
+        if (newStatus === "done") {
+          await supabase.from("task_steps").update({ is_done: true }).eq("task_id", task.id);
+          logAudit(user?.id ?? null, "task.complete", "tasks", task.id, { title: task.title });
+          const notifyIds = new Set<string>();
+          if (task.created_by && task.created_by !== user?.id) notifyIds.add(task.created_by);
+          task.assignees?.forEach((a) => {
+            if (a.user_id && a.user_id !== user?.id) notifyIds.add(a.user_id);
+          });
+          const { errors } = await notifyUsers(
+            [...notifyIds],
+            "task_done",
+            `Uppgift klar: ${task.title}`,
+            `Slutförd av ${user?.display_name}`,
+            "/uppgifter",
+          );
+          if (errors.length) toast.error(`Notis/push misslyckades: ${errors.join("; ")}`);
+
+          const { data: krResponse } = await supabase
+            .from("kundrunda_responses")
+            .select("id, incident_id")
+            .eq("created_task_id", task.id)
+            .maybeSingle();
+          if (krResponse) {
+            if (krResponse.incident_id) {
+              await supabase
+                .from("incidents")
+                .update({
+                  status: "resolved",
+                  resolved_at: getSimulatedDate().toISOString(),
+                })
+                .eq("id", krResponse.incident_id);
+            }
+            await supabase
+              .from("kundrunda_responses")
+              .update({ result: "ok" })
+              .eq("id", krResponse.id);
+          }
+        } else {
+          await supabase.from("task_steps").update({ is_done: false }).eq("task_id", task.id);
+        }
+        fetchTasks();
+        if (detailTask?.id === task.id) {
+          setDetailTask((p) =>
+            p
+              ? {
+                  ...p,
+                  status: newStatus as Task["status"],
+                  steps:
+                    newStatus === "done"
+                      ? (p.steps ?? []).map((s) => ({ ...s, is_done: true }))
+                      : (p.steps ?? []).map((s) => ({ ...s, is_done: false })),
+                }
+              : null,
+          );
+        }
+      } finally {
+        completingRef.current.delete(task.id);
       }
-      fetchTasks();
-      if (detailTask?.id === task.id) {
-        setDetailTask((p) =>
-          p
-            ? {
-                ...p,
-                status: newStatus as Task["status"],
-                steps:
-                  newStatus === "done"
-                    ? (p.steps ?? []).map((s) => ({ ...s, is_done: true }))
-                    : (p.steps ?? []).map((s) => ({ ...s, is_done: false })),
-              }
-            : null,
-        );
-      }
-    } finally {
-      completingRef.current.delete(task.id);
-    }
-  };
+    },
+    [tasks, unconfirmedEventIds, user, setCompleteError, logAudit, getSimulatedDate],
+  );
 
   const uploadTaskImage = async (task: TaskFull, file: File, stepId?: string) => {
     const path = await uploadAttachment(file, `tasks/${task.id}`);
@@ -2306,7 +2586,9 @@ function TasksPage() {
     setShowCreate(false);
     try {
       localStorage.removeItem(TASK_DRAFT_KEY);
-    } catch {}
+    } catch {
+      // Ignore localStorage errors
+    }
     setNewTask(emptyForm(activeStore?.id ?? ""));
     setUploadFiles([]);
   };
@@ -2450,6 +2732,7 @@ function TasksPage() {
     { value: "all", label: "Alla" },
     { value: "done", label: "Klara" },
     { value: "late", label: "Försenade" },
+    { value: "handover", label: "Skiftövergång" },
   ];
 
   const simNow = getSimulatedNow();
@@ -3428,6 +3711,14 @@ function TasksPage() {
             </p>
           </div>
         )
+      ) : tab === "handover" ? (
+        <ShiftHandoverView
+          spatialTasksByMarker={spatialTasksByMarker}
+          activeStore={activeStore}
+          user={user}
+          onSave={handleHandoverSave}
+          onOpenDetail={openDetail}
+        />
       ) : (
         <div className="space-y-6">
           {unconfirmedEventTasks.length > 0 && tab !== "done" && (

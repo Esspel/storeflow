@@ -2,9 +2,10 @@
  * Coop Product Lookup
  * Provides functions to look up products in "Mitt Coop sortiment" by EAN or BNR
  *
- * In a real implementation, this would connect to Coop's API or a local database.
- * For now, we provide mock implementations with a sample product database.
+ * Uses centralized URL builders from @/lib/supabase for correct Mitt Coop URLs
  */
+
+import { mittCoopSearchUrl } from "@/lib/supabase";
 
 export interface CoopProduct {
   /** Product name */
@@ -28,24 +29,35 @@ export interface CoopProduct {
 }
 
 /**
- * Base URL for Mitt Coop sortiment product pages
+ * Get Mitt Coop URL for a product by EAN
+ * Uses the centralized mittCoopSearchUrl which builds correct URLs with siteId
  */
-export const MITT_COOP_BASE_URL = "https://mittcoop.coop.se/sortiment";
-
-/**
- * Generate a product URL for Mitt Coop sortiment
- * Uses BNR (article number) as the primary identifier
- */
-export function generateMittCoopProductUrl(bnr: string): string {
-  return `${MITT_COOP_BASE_URL}/${bnr}`;
+export function getMittCoopUrlForEan(ean: string, sapSiteId: string): string | null {
+  return mittCoopSearchUrl(ean, sapSiteId);
 }
 
 /**
- * Generate a product URL for Mitt Coop sortiment using EAN
- * Fallback when BNR is not available
+ * Get Mitt Coop URL for a product by BNR (article_number)
+ * Uses the centralized mittCoopSearchUrl which builds correct URLs with siteId
  */
-export function generateMittCoopProductUrlFromEan(ean: string): string {
-  return `${MITT_COOP_BASE_URL}/ean/${ean}`;
+export function getMittCoopUrlForBnr(bnr: string, sapSiteId: string): string | null {
+  return mittCoopSearchUrl(bnr, sapSiteId);
+}
+
+/**
+ * Get Mitt Coop URL for a product (tries EAN first, then BNR)
+ */
+export function getMittCoopUrlForProduct(
+  product: { ean?: string | null; bnr?: string | null },
+  sapSiteId: string
+): string | null {
+  if (product.ean) {
+    return mittCoopSearchUrl(product.ean, sapSiteId);
+  }
+  if (product.bnr) {
+    return mittCoopSearchUrl(product.bnr, sapSiteId);
+  }
+  return null;
 }
 
 /**
@@ -62,7 +74,6 @@ export const MOCK_COOP_PRODUCTS: CoopProduct[] = [
     size: "450g",
     category: "Kaffe",
     price: 89.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1001001",
   },
   {
     ean: "7310663010021",
@@ -72,413 +83,123 @@ export const MOCK_COOP_PRODUCTS: CoopProduct[] = [
     size: "450g",
     category: "Kaffe",
     price: 89.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1001002",
   },
   {
     ean: "7310663010038",
     bnr: "1001003",
-    name: "Gevalia Bryggkaffe Klassiskt",
+    name: "Gevalia Bryggkaffe",
     brand: "Gevalia",
-    size: "500g",
-    category: "Kaffe",
-    price: 99.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1001003",
-  },
-  {
-    ean: "7310663010045",
-    bnr: "1001004",
-    name: "Zoégas Skånerost",
-    brand: "Zoégas",
-    size: "450g",
-    category: "Kaffe",
-    price: 94.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1001004",
-  },
-  {
-    ean: "7310663010052",
-    bnr: "1001005",
-    name: "Zoégas Mellanrost",
-    brand: "Zoégas",
-    size: "450g",
-    category: "Kaffe",
-    price: 94.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1001005",
-  },
-  {
-    ean: "7310663010069",
-    bnr: "1001006",
-    name: "Löfbergs Lila Mellanrost",
-    brand: "Löfbergs",
-    size: "450g",
-    category: "Kaffe",
-    price: 84.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1001006",
-  },
-  {
-    ean: "7310663010076",
-    bnr: "1001007",
-    name: "Arvid Nordquist Mellanrost",
-    brand: "Arvid Nordquist",
     size: "450g",
     category: "Kaffe",
     price: 79.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1001007",
   },
-
-  // Tea
+  // Milk & Dairy
   {
-    ean: "7310663020013",
-    bnr: "1002001",
-    name: "Lipton Gul Te",
-    brand: "Lipton",
-    size: "20påsar",
-    category: "Te",
-    price: 34.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1002001",
-  },
-  {
-    ean: "7310663020020",
-    bnr: "1002002",
-    name: "Twinings Earl Grey",
-    brand: "Twinings",
-    size: "20påsar",
-    category: "Te",
-    price: 49.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1002002",
-  },
-  {
-    ean: "7310663020037",
-    bnr: "1002003",
-    name: "Rama Grön Te",
-    brand: "Rama",
-    size: "20påsar",
-    category: "Te",
-    price: 29.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1002003",
-  },
-
-  // Breakfast
-  {
-    ean: "7310663030012",
-    bnr: "1003001",
-    name: "Axa Havregryn",
-    brand: "Axa",
-    size: "750g",
-    category: "Frukost",
-    price: 24.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1003001",
-  },
-  {
-    ean: "7310663030029",
-    bnr: "1003002",
-    name: "Kellogg's Cornflakes",
-    brand: "Kellogg's",
-    size: "500g",
-    category: "Frukost",
-    price: 39.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1003002",
-  },
-  {
-    ean: "7310663030036",
-    bnr: "1003003",
-    name: "Quaker Havregryn",
-    brand: "Quaker",
-    size: "1kg",
-    category: "Frukost",
-    price: 34.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1003003",
-  },
-  {
-    ean: "7310663030043",
-    bnr: "1003004",
-    name: "Crispy Müsli",
-    brand: "Crispy",
-    size: "600g",
-    category: "Frukost",
-    price: 44.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1003004",
-  },
-
-  // Dairy
-  {
-    ean: "7310663040011",
-    bnr: "1004001",
-    name: "Arla Mjölk 3%",
+    ean: "7310521003315",
+    bnr: "2002001",
+    name: "Arla Standard Mjölk 3%",
     brand: "Arla",
     size: "1L",
-    category: "Mejeri",
+    category: "Mjölk",
+    price: 16.9,
+  },
+  {
+    ean: "7310521003322",
+    bnr: "2002002",
+    name: "Arla Lätt Mjölk 1.5%",
+    brand: "Arla",
+    size: "1L",
+    category: "Mjölk",
+    price: 15.9,
+  },
+  {
+    ean: "7310521003339",
+    bnr: "2002003",
+    name: "Arla Skummjölk 0.5%",
+    brand: "Arla",
+    size: "1L",
+    category: "Mjölk",
     price: 14.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1004001",
   },
-  {
-    ean: "7310663040028",
-    bnr: "1004002",
-    name: "Arla Mjölk 1.5%",
-    brand: "Arla",
-    size: "1L",
-    category: "Mejeri",
-    price: 13.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1004002",
-  },
-  {
-    ean: "7310663040035",
-    bnr: "1004003",
-    name: "Arla Kefir Naturell",
-    brand: "Arla",
-    size: "1L",
-    category: "Mejeri",
-    price: 19.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1004003",
-  },
-  {
-    ean: "7310663040042",
-    bnr: "1004004",
-    name: "Valio Profeel Protein Yoghurt",
-    brand: "Valio",
-    size: "200g",
-    category: "Mejeri",
-    price: 18.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1004004",
-  },
-
   // Bread
   {
-    ean: "7310663050010",
-    bnr: "1005001",
-    name: "Pågens Limpa",
-    brand: "Pågens",
-    size: "500g",
-    category: "Bröd",
-    price: 29.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1005001",
-  },
-  {
-    ean: "7310663050027",
-    bnr: "1005002",
-    name: "Hatting Kavring",
-    brand: "Hatting",
-    size: "500g",
+    ean: "7310660001008",
+    bnr: "3003001",
+    name: "Pågen Hönökaka",
+    brand: "Pågen",
+    size: "260g",
     category: "Bröd",
     price: 24.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1005002",
   },
   {
-    ean: "7310663050034",
-    bnr: "1005003",
-    name: "Polarbröd Tunnbröd",
-    brand: "Polarbröd",
-    size: "250g",
+    ean: "7310660001015",
+    bnr: "3003002",
+    name: "Pågen Limpan",
+    brand: "Pågen",
+    size: "450g",
     category: "Bröd",
-    price: 19.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1005003",
+    price: 29.9,
   },
-
   // Snacks
   {
-    ean: "7310663060019",
-    bnr: "1006001",
-    name: "OLW Chips Naturell",
+    ean: "7310662001006",
+    bnr: "4004001",
+    name: "OLW Cheez Doodles",
     brand: "OLW",
-    size: "175g",
-    category: "Snacks",
-    price: 29.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1006001",
-  },
-  {
-    ean: "7310663060026",
-    bnr: "1006002",
-    name: "OLW Chips Sour Cream & Onion",
-    brand: "OLW",
-    size: "175g",
-    category: "Snacks",
-    price: 29.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1006002",
-  },
-  {
-    ean: "7310663060033",
-    bnr: "1006003",
-    name: "TUC Crackers Original",
-    brand: "TUC",
     size: "150g",
     category: "Snacks",
-    price: 19.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1006003",
-  },
-
-  // Soft drinks
-  {
-    ean: "7310663070018",
-    bnr: "1007001",
-    name: "Coca-Cola Original",
-    brand: "Coca-Cola",
-    size: "1.5L",
-    category: "Dryck",
-    price: 22.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1007001",
-  },
-  {
-    ean: "7310663070025",
-    bnr: "1007002",
-    name: "Pepsi Max",
-    brand: "Pepsi",
-    size: "1.5L",
-    category: "Dryck",
-    price: 19.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1007002",
-  },
-  {
-    ean: "7310663070032",
-    bnr: "1007003",
-    name: "Spendrups Läsk Cola",
-    brand: "Spendrups",
-    size: "1.5L",
-    category: "Dryck",
-    price: 14.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1007003",
-  },
-  {
-    ean: "7310663070049",
-    bnr: "1007004",
-    name: "Loka Mineralvatten",
-    brand: "Loka",
-    size: "1.5L",
-    category: "Dryck",
-    price: 9.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1007004",
-  },
-
-  // Household
-  {
-    ean: "7310663080017",
-    bnr: "1008001",
-    name: "Blenda Tvåldos",
-    brand: "Blenda",
-    size: "1.5L",
-    category: "Hushåll",
-    price: 59.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1008001",
-  },
-  {
-    ean: "7310663080024",
-    bnr: "1008002",
-    name: "Via Diskmaskinstab",
-    brand: "Via",
-    size: "30st",
-    category: "Hushåll",
-    price: 49.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1008002",
-  },
-  {
-    ean: "7310663080031",
-    bnr: "1008003",
-    name: "Zalo Diskmedel",
-    brand: "Zalo",
-    size: "500ml",
-    category: "Hushåll",
     price: 24.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1008003",
-  },
-
-  // Personal care
-  {
-    ean: "7310663090016",
-    bnr: "1009001",
-    name: "Dove Tvål Original",
-    brand: "Dove",
-    size: "4x100g",
-    category: "Personlig vård",
-    price: 49.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1009001",
   },
   {
-    ean: "7310663090023",
-    bnr: "1009002",
-    name: "Signal Tandkräm",
-    brand: "Signal",
-    size: "75ml",
-    category: "Personlig vård",
-    price: 19.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1009002",
-  },
-  {
-    ean: "7310663090030",
-    bnr: "1009003",
-    name: "Colgate Tandkräm Total",
-    brand: "Colgate",
-    size: "75ml",
-    category: "Personlig vård",
-    price: 24.9,
-    productUrl: "https://mittcoop.coop.se/sortiment/1009003",
+    ean: "7310662001013",
+    bnr: "4004002",
+    name: "OLW Crunchips Sour Cream",
+    brand: "OLW",
+    size: "165g",
+    category: "Snacks",
+    price: 26.9,
   },
 ];
 
 /**
- * Look up a product by EAN barcode
- * @param ean - EAN-13 or EAN-8 barcode (13 or 8 digits)
- * @returns Product info or null if not found
+ * Look up product by EAN in mock database
  */
-export async function lookupProductByEAN(
-  ean: string,
-): Promise<Pick<CoopProduct, "name" | "bnr"> | null> {
-  // In production: call Coop API
-  // const response = await fetch(`https://api.coop.se/products?ean=${ean}`, { headers: { Authorization: `Bearer ${token}` } });
-
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
-  const product = MOCK_COOP_PRODUCTS.find((p) => p.ean === ean);
-  return product ? { name: product.name, bnr: product.bnr } : null;
+export function lookupCoopProductByEan(ean: string): CoopProduct | undefined {
+  return MOCK_COOP_PRODUCTS.find((p) => p.ean === ean);
 }
 
 /**
- * Look up a product by BNR (Coop article number)
- * @param bnr - Coop article number (typically 6-7 digits)
- * @returns Product info or null if not found
+ * Look up product by BNR in mock database
  */
-export async function lookupProductByBNR(
-  bnr: string,
-): Promise<Pick<CoopProduct, "name" | "bnr"> | null> {
-  // In production: call Coop API
-  // const response = await fetch(`https://api.coop.se/products?bnr=${bnr}`, { headers: { Authorization: `Bearer ${token}` } });
-
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
-  const product = MOCK_COOP_PRODUCTS.find((p) => p.bnr === bnr);
-  return product ? { name: product.name, bnr: product.bnr } : null;
+export function lookupCoopProductByBnr(bnr: string): CoopProduct | undefined {
+  return MOCK_COOP_PRODUCTS.find((p) => p.bnr === bnr);
 }
 
 /**
- * Search products by name (for autocomplete/search)
- * @param query - Search query
- * @returns Array of matching products
+ * Search products by name in mock database
  */
-export async function searchCoopProducts(query: string): Promise<CoopProduct[]> {
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
+export function searchCoopProducts(query: string): CoopProduct[] {
   const lowerQuery = query.toLowerCase();
   return MOCK_COOP_PRODUCTS.filter(
     (p) =>
       p.name.toLowerCase().includes(lowerQuery) ||
       p.brand?.toLowerCase().includes(lowerQuery) ||
-      p.category?.toLowerCase().includes(lowerQuery) ||
-      p.ean?.includes(query) ||
-      p.bnr?.includes(query),
+      p.category?.toLowerCase().includes(lowerQuery)
   );
 }
 
 /**
- * Get all products in a category
+ * Get product with Mitt Coop URL for a specific store
  */
-export async function getCoopProductsByCategory(category: string): Promise<CoopProduct[]> {
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  return MOCK_COOP_PRODUCTS.filter((p) => p.category === category);
+export function getCoopProductWithUrl(
+  product: CoopProduct,
+  sapSiteId: string
+): CoopProduct & { mittCoopUrl: string | null } {
+  return {
+    ...product,
+    mittCoopUrl: getMittCoopUrlForProduct(product, sapSiteId),
+  };
 }
 
-/**
- * Get all available categories
- */
-export async function getCoopCategories(): Promise<string[]> {
-  const categories = new Set(MOCK_COOP_PRODUCTS.map((p) => p.category).filter((c): c is string => Boolean(c)));
-  return Array.from(categories).sort();
-}
+// Re-export the centralized URL builders for convenience
+export { mittCoopSearchUrl } from "@/lib/supabase";

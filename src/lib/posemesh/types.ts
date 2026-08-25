@@ -100,7 +100,7 @@ export interface Pose {
 // ============================================================================
 
 /** Marker type */
-export type MarkerType = "aruco" | "qr";
+export type MarkerType = "aruco" | "qr" | "entrance" | "exit";
 
 /** Marker metadata */
 export interface MarkerMetadata {
@@ -146,12 +146,13 @@ export interface SpatialMap {
 export interface ShelfPlanogram {
   id: string;
   store_id: string;
-  shelf_marker_id: string;
+  shelf_marker_id: string | null;
   name: string;
   expected_products: ExpectedProduct[];
   version: number;
   is_active: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 /** Expected product on shelf */

@@ -4,7 +4,7 @@
  * Performs real-time shelf scans, product identification, and spatial positioning.
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Camera,
   RefreshCw,
@@ -16,6 +16,7 @@ import {
   Layers,
   QrCode,
 } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 import { usePosemeshDetection } from "@/hooks/usePosemesh";
 import type {
   QRCode as QRCodeType,
@@ -25,9 +26,16 @@ import type {
   ShelfObservation,
   ObservedProduct,
   Vector3,
+  ShelfPlanogram as PosemeshShelfPlanogram,
+  ExpectedProduct as PosemeshExpectedProduct,
 } from "@/lib/posemesh/types";
-import { lookupProductByEAN, lookupProductByBNR } from "@/lib/coop-products";
+import type {
+  ShelfPlanogram as SupabaseShelfPlanogram,
+  ExpectedProduct as SupabaseExpectedProduct,
+} from "@/lib/supabase";
+import { lookupCoopProductByEan, lookupCoopProductByBnr } from "@/lib/coop-products";
 import { checkPlanogramCompliance, type PlanogramCheckResult } from "@/lib/planogram-engine";
+import { getShelfPlanograms } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -47,12 +55,47 @@ export function ShelfScanner({
   onScanComplete,
   onClose,
 }: ShelfScannerProps) {
+  const { activeStore } = useAuth();
   const [detectedQRs, setDetectedQRs] = useState<QRCodeType[]>([]);
   const [detectedArUcos, setDetectedArUcos] = useState<ArUcoMarker[]>([]);
   const [currentPose, setCurrentPose] = useState<Pose | null>(null);
   const [scanHistory, setScanHistory] = useState<ObservedProduct[]>([]);
   const [scanResult, setScanResult] = useState<PlanogramCheckResult | null>(null);
+  const [planogram, setPlanogram] = useState<SupabaseShelfPlanogram | null>(null);
+  const [planogramLoading, setPlanogramLoading] = useState(true);
   const currentPoseRef = useRef<Pose | null>(null);
+
+  // Fetch real planogram from database
+  useEffect(() => {
+    if (!activeStore?.id || !shelfId) {
+      setTimeout(() => {
+        setPlanogram(null);
+        setPlanogramLoading(false);
+      }, 0);
+      return;
+    }
+
+    const fetchPlanogram = async () => {
+      try {
+        setTimeout(() => setPlanogramLoading(true), 0);
+        const planograms = await getShelfPlanograms(activeStore.id);
+        // Find planogram linked to this shelf marker
+        const found = planograms.find((p) => p.shelf_marker_id === shelfId);
+        if (found) {
+          setTimeout(() => setPlanogram(found), 0);
+        } else {
+          setTimeout(() => setPlanogram(null), 0);
+        }
+      } catch (err) {
+        console.error("Failed to fetch planogram:", err);
+        setTimeout(() => setPlanogram(null), 0);
+      } finally {
+        setTimeout(() => setPlanogramLoading(false), 0);
+      }
+    };
+
+    fetchPlanogram();
+  }, [activeStore?.id, shelfId]);
 
   const onQRDetected = useCallback((codes: QRCodeType[]) => {
     setDetectedQRs(codes);
@@ -88,11 +131,13 @@ export function ShelfScanner({
 
         // Check if it's an EAN (13 or 8 digits)
         if (/^\d{13}$/.test(barcode.data) || /^\d{8}$/.test(barcode.data)) {
-          productInfo = await lookupProductByEAN(barcode.data);
+          const product = await lookupCoopProductByEan(barcode.data);
+          if (product) productInfo = { name: product.name, bnr: product.bnr };
         }
         // Check if it's a BNR (Coop article number, typically 6-7 digits)
         else if (/^\d{6,7}$/.test(barcode.data)) {
-          productInfo = await lookupProductByBNR(barcode.data);
+          const product = await lookupCoopProductByBnr(barcode.data);
+          if (product) productInfo = { name: product.name, bnr: product.bnr };
         }
 
         setScanHistory((prev) => {
@@ -163,42 +208,78 @@ export function ShelfScanner({
       captured_at: new Date().toISOString(),
     };
 
-    // Mock planogram for demo (in real app, fetch from DB)
-    const mockPlanogram = {
-      id: shelfId,
-      store_id: "store-1",
-      shelf_marker_id: "marker-a1",
-      name: shelfName,
-      expected_products: scanHistory.map((item, idx) => ({
-        product_id: item.product_id,
-        ean: item.ean,
-        name: item.name ?? `Produkt ${idx + 1}`,
-        brand: "Okänt",
-        size: "1x",
-        position: {
-          shelf_number: 1,
-          shelf_position: idx,
-          x_offset_inch: (idx % 4) * 3,
-          y_offset_inch: 0,
-          z_offset_inch: 0,
-        },
-        facings: 2,
-        quantity_per_facing: 2,
-        total_quantity: 4,
-      })),
-      version: 1,
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    // Use real planogram from DB if available, otherwise fall back to mock
+    let planogramToUse: PosemeshShelfPlanogram | null = null;
 
-    const compliance = checkPlanogramCompliance(mockPlanogram, observation as ShelfObservation);
+    if (planogram) {
+      // Convert Supabase planogram to posemesh type
+      planogramToUse = {
+        id: planogram.id,
+        store_id: planogram.store_id,
+        shelf_marker_id: planogram.shelf_marker_id ?? "",
+        name: planogram.name,
+        expected_products: planogram.expected_products.map((p) => ({
+          product_id: p.product_id,
+          ean: p.ean,
+          name: p.name,
+          brand: p.brand ?? "Okänt",
+          size: p.size ?? "1x",
+          position: {
+            shelf_number: 1,
+            shelf_position: p.position?.x ?? 0,
+            x_offset_inch: p.position?.x ?? 0,
+            y_offset_inch: p.position?.y ?? 0,
+            z_offset_inch: p.position?.z ?? 0,
+          },
+          facings: p.facings,
+          quantity_per_facing: p.quantity ?? 1,
+          total_quantity: p.facings * (p.quantity ?? 1),
+        })),
+        version: planogram.version,
+        is_active: planogram.is_active,
+        created_at: planogram.created_at,
+        updated_at: planogram.updated_at ?? planogram.created_at,
+      };
+    }
+
+    if (!planogramToUse) {
+      // Fallback mock planogram for backward compatibility
+      planogramToUse = {
+        id: shelfId,
+        store_id: "store-1",
+        shelf_marker_id: shelfId,
+        name: shelfName,
+        expected_products: scanHistory.map((item, idx) => ({
+          product_id: item.product_id,
+          ean: item.ean,
+          name: item.name ?? `Produkt ${idx + 1}`,
+          brand: "Okänt",
+          size: "1x",
+          position: {
+            shelf_number: 1,
+            shelf_position: idx,
+            x_offset_inch: (idx % 4) * 3,
+            y_offset_inch: 0,
+            z_offset_inch: 0,
+          },
+          facings: 2,
+          quantity_per_facing: 2,
+          total_quantity: 4,
+        })),
+        version: 1,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    }
+
+    const compliance = checkPlanogramCompliance(planogramToUse!, observation as ShelfObservation);
     setScanResult(compliance);
 
     if (onScanComplete) {
       onScanComplete(observation, compliance);
     }
-  }, [scanHistory, shelfId, shelfName, onScanComplete]);
+  }, [scanHistory, shelfId, shelfName, onScanComplete, planogram]);
 
   return (
     <div className="relative flex flex-col h-full bg-slate-950 text-white rounded-xl overflow-hidden border border-slate-800 shadow-2xl">
@@ -211,6 +292,12 @@ export function ShelfScanner({
           </h3>
         </div>
         <div className="flex items-center gap-2">
+          {planogramLoading && (
+            <div className="flex items-center gap-1 text-xs text-slate-400">
+              <div className="animate-spin rounded-full h-3 w-3 border-2 border-indigo-500 border-t-transparent" />
+              Laddar planogram...
+            </div>
+          )}
           <Badge
             variant={isScanning ? "default" : "outline"}
             className={
@@ -221,6 +308,14 @@ export function ShelfScanner({
           >
             {isScanning ? "CV Aktiv" : "Pausad"}
           </Badge>
+          {planogram && !planogramLoading && (
+            <Badge
+              variant="secondary"
+              className="text-emerald-300 bg-emerald-500/20 border-emerald-500/30"
+            >
+              Planogram laddat
+            </Badge>
+          )}
           {onClose && (
             <Button
               size="icon"

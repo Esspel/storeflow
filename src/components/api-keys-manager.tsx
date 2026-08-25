@@ -149,6 +149,7 @@ export function ApiKeysManager() {
     [token],
   );
 
+  // Load keys - using user as dependency to satisfy React Compiler
   const loadKeys = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
@@ -161,13 +162,12 @@ export function ApiKeysManager() {
     } finally {
       setLoading(false);
     }
-  }, [callEdge, user?.id]);
+  }, [callEdge, user]);
 
   useEffect(() => {
     if (user?.id) {
-      loadKeys();
-    } else {
-      setLoading(false);
+      // Use setTimeout to avoid synchronous setState in effect
+      setTimeout(() => loadKeys(), 0);
     }
 
     supabase
@@ -177,6 +177,11 @@ export function ApiKeysManager() {
       .then(({ data }) => {
         setStores((data ?? []) as StoreOption[]);
       });
+
+    // Reset loading state when user changes
+    if (!user?.id) {
+      setTimeout(() => setLoading(false), 0);
+    }
   }, [loadKeys, user?.id]);
 
   const storeName = (id: string | null) => {
