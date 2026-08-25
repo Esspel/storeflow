@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS products (
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 
 -- Users can see products for their store
+DROP POLICY IF EXISTS "products_user_select" ON products;
 CREATE POLICY "products_user_select" ON products
   FOR SELECT USING (
     store_id = (SELECT store_id FROM app_users WHERE id = auth.uid())
@@ -48,6 +49,7 @@ CREATE POLICY "products_user_select" ON products
   );
 
 -- Managers/admins can manage products for their store
+DROP POLICY IF EXISTS "products_manager_insert" ON products;
 CREATE POLICY "products_manager_insert" ON products
   FOR INSERT WITH CHECK (
     store_id = (SELECT store_id FROM app_users WHERE id = auth.uid())
@@ -55,6 +57,7 @@ CREATE POLICY "products_manager_insert" ON products
     OR EXISTS (SELECT 1 FROM app_users WHERE id = auth.uid() AND role = 'admin')
   );
 
+DROP POLICY IF EXISTS "products_manager_update" ON products;
 CREATE POLICY "products_manager_update" ON products
   FOR UPDATE USING (
     store_id = (SELECT store_id FROM app_users WHERE id = auth.uid())
@@ -85,6 +88,7 @@ CREATE TABLE IF NOT EXISTS planogram_pdfs (
 
 ALTER TABLE planogram_pdfs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "planogram_pdfs_select" ON planogram_pdfs;
 CREATE POLICY "planogram_pdfs_select" ON planogram_pdfs
   FOR SELECT USING (
     EXISTS (
