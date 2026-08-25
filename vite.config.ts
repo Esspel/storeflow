@@ -11,9 +11,9 @@ export default defineConfig({
       prerender: {
         enabled: false,
       },
-      // Disable SPA to prevent forced prerendering of shell
+      // Enable SPA to generate client HTML shell (index.html) for post-build script
       spa: {
-        enabled: false,
+        enabled: true,
       },
       importProtection: {
         behavior: "error",

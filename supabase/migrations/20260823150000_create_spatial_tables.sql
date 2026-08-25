@@ -13,18 +13,29 @@
 -- CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- Custom composite types for 3D vectors
-CREATE TYPE vector3 AS (
-  x double precision,
-  y double precision,
-  z double precision
-);
+-- Must be created in separate transaction to be visible to subsequent statements
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'vector3') THEN
+    CREATE TYPE vector3 AS (
+      x double precision,
+      y double precision,
+      z double precision
+    );
+  END IF;
+END $$;
 
-CREATE TYPE quaternion AS (
-  x double precision,
-  y double precision,
-  z double precision,
-  w double precision
-);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'quaternion') THEN
+    CREATE TYPE quaternion AS (
+      x double precision,
+      y double precision,
+      z double precision,
+      w double precision
+    );
+  END IF;
+END $$;
 
 /*
   # Spatial Maps

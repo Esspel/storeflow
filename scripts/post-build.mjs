@@ -7,7 +7,19 @@ import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
 const serverJs = resolve("dist/server/server.js");
-const indexHtml = readFileSync(resolve("dist/client/index.html"), "utf8");
+// Look for _shell.html which is TanStack Start's SPA shell, or fallback to a custom one
+let indexHtml;
+try {
+  indexHtml = readFileSync(resolve("dist/client/_shell.html"), "utf8");
+} catch (e) {
+  console.warn("[post-build] _shell.html not found, attempting to find index.html...");
+  try {
+    indexHtml = readFileSync(resolve("dist/client/index.html"), "utf8");
+  } catch (e2) {
+    console.error("[post-build] Critical: No HTML shell found in dist/client!");
+    process.exit(1);
+  }
+}
 
 const spaWorker = `const INDEX_HTML = ${JSON.stringify(indexHtml)};
 
