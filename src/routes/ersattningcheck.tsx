@@ -269,14 +269,26 @@ function ErstatningsCheckPage() {
   const generateCompensationZip = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate_shelf_life_zip", {
-        store_id: activeStore.id,
-      });
+      const { data: shelfData, error: dbErr } = await supabase
+        .from("shelf_life")
+        .select("sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore")
+        .eq("store_id", activeStore.id)
+        .lt("expiry_date", new Date().toISOString())
+        .order("expiry_date");
 
-      // Download CSV as zip
-      const csvData = data?.result?.csv_data || "";
-      exportTextAsCSV(csvData, `ersattningsansokning_${new Date().toISOString().split("T")[0]}.csv`);
-      setImportSuccess(`Genererade ersättningsfil med ${data?.flagged_count ?? 0} flaggade produkter`);
+      if (dbErr) throw dbErr;
+
+      const flaggedCount = (shelfData ?? []).length;
+      if (shelfData && shelfData.length > 0) {
+        const csvContent = [
+          "sap_article_id,shelf_lifetime_days,expiry_date,arrival_date,compensation_price_ore",
+          ...shelfData.map((row) =>
+            `${row.sap_article_id},${row.shelf_lifetime_days},${row.expiry_date},${row.arrival_date},${row.compensation_price_ore ?? 0}`
+          ),
+        ].join("\n");
+        exportTextAsCSV(csvContent, `ersattningsansokning_${new Date().toISOString().split("T")[0]}.csv`);
+      }
+      setImportSuccess(`Genererade ersättningsfil med ${flaggedCount} flaggade produkter`);
     } catch (error) {
       console.error("Error generating zip:", error);
       setImportError("Kunde inte generera ersättningsfil.");

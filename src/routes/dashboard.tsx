@@ -190,9 +190,18 @@ function DashboardPage() {
   }) => {
     setIsLoading(true);
     try {
-      const { error } = await supabase.functions.invoke("set_shelf_life", record);
+          const { error: upsertError } = await supabase
+            .from("shelf_life")
+            .upsert({
+              sap_article_id: record.sap_article_id,
+              shelf_lifetime_days: record.shelf_lifetime_days,
+              expiry_date: record.expiry_date,
+              arrival_date: record.arrival_date,
+              compensation_price_ore: record.compensation_price_ore ?? 0,
+              updated_at: new Date().toISOString(),
+            });
 
-      if (error) throw error;
+          if (upsertError) throw upsertError;
       setImportSuccess("Hållbarhetsdata sparad!");
       await loadShelfLifeData();
     } catch (error) {
@@ -203,31 +212,34 @@ function DashboardPage() {
     }
   };
 
-  // Generate compensation zip
+  // Generate compensation zip - direct DB query instead of API endpoint
   const generateCompensationZip = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("set_shelf_life", {
-        body: {
-          jsonrpc: "2.0",
-          id: "1",
-          method: "tools/call",
-          params: {
-            tool: "generate_shelf_life_zip",
-            arguments: { store_id: activeStore.id },
-          },
-        },
-      });
+      // Direct DB query for shelf life records that need compensation
+      const { data: shelfLifeData, error: dbError } = await supabase
+        .from("shelf_life")
+        .select("sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore")
+        .eq("store_id", activeStore?.id)
+        .lt("expiry_date", new Date().toISOString())
+        .order("expiry_date");
 
-      if (error) throw error;
+      if (dbError) throw dbError;
 
-      const result = data?.result;
-      if (result?.csv_data) {
-        exportTextAsCSV(result.csv_data, `ersattningsansokning_${new Date().toISOString().split("T")[0]}.csv`);
+      const flaggedCount = (shelfLifeData ?? []).length;
+      // Generate CSV directly from DB data
+      if (shelfLifeData && shelfLifeData.length > 0) {
+        const csvContent = [
+          "sap_article_id,shelf_lifetime_days,expiry_date,arrival_date,compensation_price_ore",
+          ...shelfLifeData.map((row) =>
+            `${row.sap_article_id},${row.shelf_lifetime_days},${row.expiry_date},${row.arrival_date},${row.compensation_price_ore ?? 0}`
+          ),
+        ].join("\n");
+        exportTextAsCSV(csvContent, `ersattningsansokning_${new Date().toISOString().split("T")[0]}.csv`);
       }
-      setImportSuccess(`Genererade ersättningsfil med ${result?.flagged_count || 0} flaggade artiklar`);
+      setImportSuccess(`Genererade ersättningsfil med ${flaggedCount} flaggade artiklar`);
     } catch (error) {
-      console.error("Error generating zip:", error);
+      console.error("Error generating compensation file:", error);
       setImportError("Kunde inte generera ersättningsfil.");
     } finally {
       setIsLoading(false);

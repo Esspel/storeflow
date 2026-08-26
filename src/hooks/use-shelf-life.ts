@@ -48,19 +48,30 @@ export function useShelfLifeForProducts(
 
     const load = async () => {
       try {
-        const { data, error: fnError } = await supabase.functions.invoke(
-          "get_shelf_life_for_products",
-          { sap_article_ids: sapArticleIds },
-        );
+        // Direct DB query instead of MCP API endpoint
+        const { data, error: dbError } = await supabase
+          .from("shelf_life")
+          .select("sap_article_id,shelf_lifetime_days,expiry_date,arrival_date")
+          .in("sap_article_id", sapArticleIds);
 
-        if (fnError) throw fnError;
+        if (dbError) throw dbError;
 
-        const result = (data as { result?: ShelfLifeStatus[] })?.result ?? [];
+        const result = (data ?? []) as ShelfLifeStatus[];
         if (!isCancelled) {
           const map: ShelfLifeMap = {};
           for (const entry of result) {
             if (entry?.sap_article_id) {
-              map[entry.sap_article_id] = entry;
+              // Calculate derived fields
+              const now = new Date();
+              const exp = new Date(entry.expiry_date);
+              const daysRemaining = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              map[entry.sap_article_id] = {
+                ...entry,
+                days_remaining: daysRemaining,
+                min_required_days: 7,
+                is_flagged: daysRemaining < 7,
+                compensation_price_ore: 0,
+              };
             }
           }
           setShelfLifeBySap(map);
