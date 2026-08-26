@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabase";
+
 export type ComplianceLevel = "green" | "yellow" | "red";
 export type ComplianceResult = {
   level: ComplianceLevel;
@@ -7,18 +9,18 @@ export type ComplianceResult = {
 };
 
 export async function checkEanAtShelf(
-  storeId: string,
+  _storeId: string,
   ean: string,
   sektionId: string,
   nivå: number
 ): Promise<ComplianceResult> {
-  const { data: product } = await (await import("@/lib/supabase")).supabase
+  const { data: product } = await supabase
     .from("products")
     .select("material_nr, produktnamn")
     .eq("ean", ean)
     .maybeSingle();
   if (!product) return { level: "red", message: "EAN hittades inte i produktregistret." };
-  const { data: expected } = await (await import("@/lib/supabase")).supabase
+  const { data: expected } = await supabase
     .from("planogram_products")
     .select("hylla_id, nivå, sektion_id")
     .eq("ean", ean)
