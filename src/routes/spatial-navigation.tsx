@@ -4,7 +4,7 @@
  */
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Search,
   Navigation,
@@ -15,13 +15,14 @@ import {
   Target,
   Home,
   RotateCw,
-  Fullscreen,
   Minimize,
   Package,
   MapPin as MapPinIcon,
   DoorOpen,
   DoorClosed,
   Route as RouteIcon,
+  Cube,
+  Smartphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -30,6 +31,10 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { StoreMap3D } from "@/components/StoreMap3D";
+import { ARNavigationView } from "@/components/ARNavigationView";
+import { WorldOffsetProvider } from "@/hooks/useWorldOffset";
+import type { NavigationPath3D, Marker3DConfig } from "@/lib/three-types";
 
 interface SpatialMarker {
   id: string;
@@ -159,10 +164,7 @@ function SpatialNavigationPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2">
-              <Fullscreen className="w-4 h-4" />
-              Fullskärm
-            </Button>
+            {/* Fullscreen button removed per refactoring */}
           </div>
         </div>
 
@@ -510,7 +512,7 @@ function MapView({
   );
 }
 
-// 3D View Component (placeholder - would use Three.js or similar)
+// 3D View Component (using StoreMap3D)
 function ThreeDView({
   map,
   selectedMarker,
@@ -520,35 +522,39 @@ function ThreeDView({
   selectedMarker: SpatialMarker | null;
   onMarkerClick: (marker: SpatialMarker) => void;
 }) {
-  return (
-    <div className="flex items-center justify-center h-full bg-slate-100 dark:bg-slate-800 relative">
-      <div className="text-center p-8">
-        <Box className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">
-          3D Vy (Under utveckling)
-        </h3>
-        <p className="text-slate-500 dark:text-slate-400 mb-4 max-w-xs mx-auto">
-          Här skulle en Three.js/WebGL vy visas med markörerna i 3D-utrymme.
-        </p>
-        <div className="space-y-2 text-sm text-slate-500 dark:text-slate-400">
-          {map && (
-            <>
-              <p>Markörer: {map.markers.length}</p>
-              <p>Rutter: {map.routes?.length || 0}</p>
-            </>
-          )}
-          {selectedMarker && (
-            <p className="text-indigo-500">
-              Vald: {selectedMarker.name} ({selectedMarker.type})
-            </p>
-          )}
-        </div>
+  if (!map) {
+    return (
+      <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
+        <p>Ingen karta vald</p>
       </div>
-    </div>
+    );
+  }
+  const markers: Marker3DConfig[] = map.markers.map((m) => ({
+    id: m.id,
+    name: m.name,
+    type: m.type,
+    position: { x: m.position.x, y: m.position.y, z: m.position.z },
+    rotation: m.rotation ? { x: m.rotation.x, y: m.rotation.y, z: m.rotation.z, w: m.rotation.w } : undefined,
+    metadata: m.metadata,
+    isSelected: selectedMarker?.id === m.id,
+  }));
+  return (
+    <StoreMap3D
+      markers={markers}
+      selectedMarkerId={selectedMarker?.id}
+      onMarkerClick={(m) => {
+        const orig = map.markers.find((x) => x.id === m.id);
+        if (orig) onMarkerClick(orig);
+      }}
+      backgroundColor="#f8fafc"
+      enableOrbitControls={true}
+      showGrid={true}
+      className="w-full h-full"
+    />
   );
 }
 
-// AR View Component (camera + pose estimation)
+// AR View Component (using ARNavigationView with WorldOffsetProvider)
 function ARView({
   map,
   onClose,
@@ -556,27 +562,67 @@ function ARView({
   map: SpatialMap | null;
   onClose: () => void;
 }) {
+  if (!map) {
+    return (
+      <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
+        <p>Ingen karta vald</p>
+      </div>
+    );
+  }
+  const markers: Marker3DConfig[] = map.markers.map((m) => ({
+    id: m.id,
+    name: m.name,
+    type: m.type,
+    position: { x: m.position.x, y: m.position.y, z: m.position.z },
+    rotation: m.rotation ? { x: m.rotation.x, y: m.rotation.y, z: m.rotation.z, w: m.rotation.w } : undefined,
+    metadata: m.metadata,
+    isTarget: false,
+    isUserPosition: false,
+  }));
+  const navigationPath: NavigationPath3D | undefined = map.routes?.[0] ? {
+    waypoints: map.routes[0].from && map.routes[0].to
+      ? [
+          map.markers.find((m) => m.id === map.routes[0].from)?.position ?? { x: 0, y: 0, z: 0 },
+          ...(map.routes[0].intermediatePoints ?? []).map((p) => ({ x: p.x, y: p.y, z: p.z })),
+          map.markers.find((m) => m.id === map.routes[0].to)?.position ?? { x: 0, y: 0, z: 0 }
+        ]
+      : [],
+    totalDistance: map.routes[0].distance ?? 0,
+    estimatedTimeSeconds: (map.routes[0].distance ?? 0) / 1.4,
+    color: "#fbbf24"
+  } : undefined;
+
   return (
-    <div className="flex items-center justify-center h-full bg-slate-950 relative">
-      <div className="absolute top-4 left-4 right-4 flex justify-between">
-        <h2 className="text-white font-semibold">AR-navigering</h2>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          <Minimize className="w-4 h-4" />
-        </Button>
+    <WorldOffsetProvider>
+      <div className="relative w-full h-full">
+        <ARNavigationView
+          markers={markers}
+          navigationPath={navigationPath}
+          targetMarkerId={selectedMarker?.id}
+          userPose={null}
+          onSessionStart={() => {
+            console.log('AR session started');
+          }}
+          onSessionEnd={() => {
+            console.log('AR session ended');
+          }}
+          onMarkerSelect={(markerId) => {
+            const marker = map.markers.find((m) => m.id === markerId);
+            if (marker) setSelectedMarker(marker);
+          }}
+          showDebug={false}
+          className="w-full h-full"
+        />
+        <button
+          onClick={onClose}
+          className="absolute top-4 left-4 bg-white/80 dark:bg-slate-900/80 rounded-lg p-2 hover:bg-white/90 dark:hover:bg-slate-800/90 backdrop-blur transition-all"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-800 dark:text-slate-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
       </div>
-      <div className="text-center text-white">
-        <Navigation className="w-16 h-16 mx-auto mb-4 opacity-50" />
-        <h3 className="text-lg font-medium mb-2">Kamera-vy med AR</h3>
-        <p className="text-slate-400 mb-4 max-w-xs mx-auto">
-          Här skulle kameraströmmen visas med pose-estimering och AR-pilar för navigering.
-        </p>
-        {map && (
-          <p className="text-xs text-slate-500">
-            Karta: {map.name} • {map.markers.length} markörer
-          </p>
-        )}
-      </div>
-    </div>
+    </WorldOffsetProvider>
   );
 }
 
