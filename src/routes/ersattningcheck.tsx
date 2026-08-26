@@ -20,13 +20,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import {
-  getShelfLifeForProducts,
-  setShelfLife,
-  generateShelfLifeZip,
-  groupShelfLifeByDelivery,
-  getProductReclamationStats
-} from "@/lib/mcp";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -221,7 +214,11 @@ function ErstatningsCheckPage() {
   const loadWeeklyTask = async () => {
     setIsLoading(true);
     try {
-      const stats = await getProductReclamationStats(activeStore.id);
+      const { data: stats, error: dbErr } = await supabase
+        .from("product_reclamation_stats")
+        .select("*")
+        .eq("store_id", activeStore.id);
+      if (dbErr) throw dbErr;
 
       // Filter for products with 0 reklamationer (saknar hållbarhetsdagar)
       const productsWithoutShelfLife = (stats || [])
@@ -254,7 +251,18 @@ function ErstatningsCheckPage() {
   }) => {
     setIsLoading(true);
     try {
-      await setShelfLife(record);
+      // Direct DB insert instead of MCP wrapper
+      const { error: upsertErr } = await supabase
+        .from("product_shelf_life")
+        .upsert({
+          sap_article_id: record.sap_article_id,
+          shelf_lifetime_days: record.shelf_lifetime_days,
+          expiry_date: record.expiry_date,
+          arrival_date: record.arrival_date,
+          compensation_price_ore: record.compensation_price_ore ?? 0,
+          updated_at: new Date().toISOString(),
+        });
+      if (upsertErr) throw upsertErr;
       setImportSuccess("Hållbarhetsdata sparad!");
       await loadShelfLifeData();
     } catch (error) {
