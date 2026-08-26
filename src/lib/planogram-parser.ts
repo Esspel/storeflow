@@ -4,21 +4,24 @@
  * Also extracts product images when available in the PDF
  */
 
-import { PDFParse } from "pdf-parse";
-import * as pdfjsLib from "pdfjs-dist";
 import type { ShelfPlanogram, ExpectedProduct, Vector3 } from "@/lib/posemesh/types";
 
-// Configure pdf.js worker (krävs både för pdf-parse (som wrappar pdfjs) och pdfjs-dist direkt)
-if (typeof window !== "undefined" && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.min.mjs",
-    import.meta.url
-  ).toString();
-  // Explicit version-override to force sync with installed 6.2.108
-  (pdfjsLib as any).GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.min.mjs",
-    import.meta.url
-  ).toString();
+// Dynamic lazy import för tunga PDF-bibliotek (minimerar initial bundle)
+let PDFParse: typeof import("pdf-parse").PDFParse | null = null;
+let pdfjsLib: typeof import("pdfjs-dist") | null = null;
+
+// Configure pdf.js worker (lazy-loaded when needed)
+async function initPdfLib() {
+  if (!pdfjsLib) {
+    pdfjsLib = await import("pdfjs-dist") as any;
+    if (typeof window !== "undefined" && !(pdfjsLib as any).GlobalWorkerOptions.workerSrc) {
+      (pdfjsLib as any).GlobalWorkerOptions.workerSrc = new URL(
+        "pdfjs-dist/build/pdf.worker.min.mjs",
+        import.meta.url
+      ).toString();
+    }
+  }
+  return pdfjsLib;
 }
 
 /**
@@ -33,7 +36,8 @@ export async function extractProductImagesFromPdf(
   const arrayBuffer = file instanceof File ? await file.arrayBuffer() : file;
 
   try {
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const lib = await initPdfLib();
+    const pdf = await lib.getDocument({ data: arrayBuffer }).promise;
     const images: Record<string, string | null> = {};
 
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -189,7 +193,8 @@ export async function parsePlanogramPdf(
     throw new Error("Invalid file type: expected File or ArrayBuffer");
   }
 
-  const parser = new PDFParse({ data: arrayBuffer });
+  const pdfModule = await import("pdf-parse");
+  const parser = new pdfModule.PDFParse({ data: arrayBuffer });
   const pdfData = await parser.getText();
   const text = pdfData.text;
   const pageCount = pdfData.total;
