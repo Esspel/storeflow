@@ -4,6 +4,7 @@
  */
 
 import type { Vector3 as PosemeshVector3, Quaternion } from "@/lib/posemesh/types";
+import * as THREE from "three";
 import type { RouteResult } from "@/lib/route-optimizer";
 
 // Re-export for convenience
@@ -178,3 +179,7 @@ export const LIGHTING_CONFIG = {
   },
   hemisphere: { skyColor: "#87ceeb", groundColor: "#8fbc8f", intensity: 0.6 },
 } as const;
+// Helper: konvertera posemesh Vector3 till THREE.Vector3 med metoder
+export function toThreeVector3(v: Vector3): THREE.Vector3 {
+  return new THREE.Vector3(v.x, v.y, v.z);
+}

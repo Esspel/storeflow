@@ -568,9 +568,6 @@ export function AppShell() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
-                  <Link to="/planogram-upload" className="block w-full text-left px-4 py-2 text-sm">
-                    Ladda upp planogram
-                  </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

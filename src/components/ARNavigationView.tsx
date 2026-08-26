@@ -7,7 +7,9 @@
 "use client";
 
 import { useMemo, useRef, useCallback, useEffect, useState } from "react";
-import { Canvas, useFrame, useXR, useThree } from "@react-three/fiber";
+import {
+  Canvas, useFrame, useThree
+} from "@react-three/fiber";
 import {
   Box,
   Cylinder,
@@ -18,7 +20,7 @@ import {
   useGLTF,
 } from "@react-three/drei";
 import * as THREE from "three";
-import type {
+import {
   ARNavigationViewProps,
   Marker3DConfig,
   NavigationPath3D,
