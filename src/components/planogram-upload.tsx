@@ -138,7 +138,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
     setFiles((prev) => prev.map((f) => (f === uploadedFile ? { ...f, status: "parsing" } : f)));
 
     try {
-      const parsedWithImages = await parsePlanogramPdfWithImages(uploadedFile.file);
+      const parsedWithImages = await parsePlanogramPdf(uploadedFile.file);
 
       // Validate - basic check
       const validation: ParsedPlanogramValidation = {

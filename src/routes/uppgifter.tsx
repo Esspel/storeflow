@@ -258,9 +258,9 @@ function ShiftHandoverView({
     setSaving(true);
     try {
       await onSave?.(notes);
-      toast.success("Skiftövergång sparad");
+      toast.success("Överlämning sparad");
     } catch (e) {
-      toast.error("Kunde inte spara skiftövergång");
+      toast.error("Kunde inte spara överlämning");
     } finally {
       setSaving(false);
     }
@@ -316,7 +316,7 @@ function ShiftHandoverView({
         <Textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Skriv anteckningar för nästa skift..."
+          placeholder="Skriv anteckningar för nästa..."
           className="min-h-[100px] text-sm"
           rows={4}
         />
@@ -2732,7 +2732,7 @@ function TasksPage() {
     { value: "all", label: "Alla" },
     { value: "done", label: "Klara" },
     { value: "late", label: "Försenade" },
-    { value: "handover", label: "Skiftövergång" },
+    { value: "handover", label: "Överlämning" },
   ];
 
   const simNow = getSimulatedNow();
@@ -3655,25 +3655,10 @@ function TasksPage() {
               </Button>
             )}
             {isManager && (
-              <div
-                className="flex items-center gap-2 shrink-0 rounded-full border border-border/60 bg-card px-3 py-1.5"
-                title="Hur långt framåt återkommande uppgifter genereras"
-              >
-                <Repeat className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <input
-                  type="range"
-                  min={0}
-                  max={90}
-                  step={1}
-                  value={horizonDays}
-                  onChange={(e) => setHorizonDays(Number(e.currentTarget.value))}
-                  onPointerUp={(e) => commitHorizon(Number(e.currentTarget.value))}
-                  onKeyUp={(e) => commitHorizon(Number(e.currentTarget.value))}
-                  className="w-24 cursor-pointer accent-primary"
-                />
-                <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap min-w-14 text-right">
+              <div className="flex items-center gap-2 shrink-0">
+                <Badge variant="secondary">
                   {horizonDays === 0 ? "Inga" : `${horizonDays}d`} framåt
-                </span>
+                </Badge>
               </div>
             )}
           </div>

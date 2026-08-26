@@ -60,7 +60,6 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
-import { QRGenerator, type MarkerConfig } from "@/components/qr-generator";
 import { ShelfScanner } from "@/components/shelf-scanner";
 import { toast } from "sonner";
 
@@ -185,9 +184,9 @@ function StoreSetupPage() {
   };
 
   // ============================================================
-  // STEP 1: GENERATE QR/ARUCO PORTALS
+  // STEP 1: GENERATE ARUCO MARKERS
   // ============================================================
-  const handlePortalsGenerated = (configs: MarkerConfig[]) => {
+  const handleMarkersGenerated = (configs: MarkerConfig[]) => {
     setState((prev) => ({
       ...prev,
       portalsGenerated: true,
@@ -200,8 +199,8 @@ function StoreSetupPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <QrCode className="w-5 h-5 text-indigo-500" />
-            Steg 1: Generera och placera QR/ArUco-portaler
+            <Layers className="w-5 h-5 text-indigo-500" />
+            Steg 1: Generera och placera ArUco-markörer
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -210,7 +209,7 @@ function StoreSetupPage() {
               <HelpCircle className="w-4 h-4" /> Hur det fungerar
             </h4>
             <ol className="list-decimal list-inside space-y-1 text-sm text-indigo-600 dark:text-indigo-400">
-              <li>Konfigurera markörer för varje hylla i butiken</li>
+              <li>Konfigurera ArUco-markörer för varje hylla i butiken</li>
               <li>Klicka "Generera batch" för att skapa markörer för vänster, mitten, höger</li>
               <li>Skriv ut på A4 (matt papper, 150+ DPI rekommenderas)</li>
               <li>Klipp ut och limma på hyllkanten: vänster, mitten, höger</li>
@@ -218,11 +217,18 @@ function StoreSetupPage() {
             </ol>
           </div>
 
-          <QRGenerator
-            onPortalsGenerated={handlePortalsGenerated}
-            storeId={activeStore?.id}
-            storeName={activeStore?.name}
-          />
+          <div className="text-center py-8">
+            <p className="text-sm text-muted-foreground mb-4">
+              ArUco-markörgeneratorn finns under <strong>Posemesh → Markörgenerator</strong>
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => navigate({ to: "/posemesh/markers" })}
+            >
+              <Layers className="w-4 h-4 mr-2" />
+              Öppna Markörgenerator
+            </Button>
+          </div>
 
           {state.portalsGenerated && state.markerConfigs.length > 0 && (
             <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl">

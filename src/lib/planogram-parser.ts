@@ -169,7 +169,7 @@ export interface ParsedProduct {
 /**
  * Parse planogram PDF and extract structured data WITH images
  */
-export async function parsePlanogramPdfWithImages(
+export async function parsePlanogramPdf(
   file: File | ArrayBuffer
 ): Promise<ParsedPlanogram> {
   let arrayBuffer: ArrayBuffer;
