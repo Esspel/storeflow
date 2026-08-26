@@ -36,6 +36,7 @@ import type {
 import { lookupCoopProductByEan, lookupCoopProductByBnr } from "@/lib/coop-products";
 import { checkPlanogramCompliance, type PlanogramCheckResult } from "@/lib/planogram-engine";
 import { getShelfPlanograms } from "@/lib/supabase";
+import { useShelfLifeForProducts } from "@/hooks/use-shelf-life";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -127,17 +128,17 @@ export function ShelfScanner({
     codes.forEach(async (barcode) => {
       if (barcode.data) {
         // Try to look up product from Coop sortiment by EAN or BNR
-        let productInfo: { name: string; bnr?: string } | null = null;
+        let productInfo: { name: string; bnr?: string; sap_article_id?: string } | null = null;
 
         // Check if it's an EAN (13 or 8 digits)
         if (/^\d{13}$/.test(barcode.data) || /^\d{8}$/.test(barcode.data)) {
           const product = await lookupCoopProductByEan(barcode.data);
-          if (product) productInfo = { name: product.name, bnr: product.bnr };
+          if (product) productInfo = { name: product.name, bnr: product.bnr, sap_article_id: product.sap_article_id };
         }
         // Check if it's a BNR (Coop article number, typically 6-7 digits)
         else if (/^\d{6,7}$/.test(barcode.data)) {
           const product = await lookupCoopProductByBnr(barcode.data);
-          if (product) productInfo = { name: product.name, bnr: product.bnr };
+          if (product) productInfo = { name: product.name, bnr: product.bnr, sap_article_id: product.sap_article_id };
         }
 
         setScanHistory((prev) => {
@@ -273,8 +274,28 @@ export function ShelfScanner({
       };
     }
 
+    // Get shelf life status for products that have SAP article IDs
+    const sapIds = scanHistory
+      .filter((p): p is ObservedProduct & { sap_article_id: string } => p.sap_article_id != null)
+      .map((p) => p.sap_article_id!);
+
+    // Fetch shelf life status
+    const { shelfLifeBySap } = useShelfLifeForProducts(sapIds);
+
     const compliance = checkPlanogramCompliance(planogramToUse!, observation as ShelfObservation);
-    setScanResult(compliance);
+
+    // Add shelf life flagging data to the result
+    const shelfLifeEnrichment: Record<string, boolean> = {};
+    sapIds.forEach((id) => {
+      shelfLifeEnrichment[id] = shelfLifeBySap[id]?.is_flagged ?? false;
+    });
+
+    const enrichedCompliance: PlanogramCheckResult & { shelfLifeFlags?: Record<string, boolean> } = {
+      ...compliance,
+      shelfLifeFlags: shelfLifeEnrichment,
+    };
+
+    setScanResult(enrichedCompliance);
 
     if (onScanComplete) {
       onScanComplete(observation, compliance);

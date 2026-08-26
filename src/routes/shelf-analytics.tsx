@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ShelfScanner } from "@/components/shelf-scanner";
 import { QRGenerator } from "@/components/qr-generator";
+import { PlanogramUpload } from "@/components/planogram-upload";
 import type { PlanogramCheckResult } from "@/lib/planogram-engine";
 import { useAuth } from "@/lib/auth-context";
 import { getShelfPlanograms, getSpatialMarkersForStore, linkPlanogramToMarker, unlinkPlanogramFromMarker } from "@/lib/supabase";
@@ -219,7 +220,7 @@ function ShelfAnalyticsComponent() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <ScanLine className="w-6 h-6 text-indigo-500" />
-              Hyllanalys & Planogram
+              Planogram & Hyllanalys
             </h1>
             <p className="text-slate-500 dark:text-slate-400 mt-1">
               Skanna hyllor med posemesh CV för att kontrollera planogram-efterlevnad
@@ -232,6 +233,9 @@ function ShelfAnalyticsComponent() {
             </Button>
           </div>
         </div>
+
+        {/* Planogram Upload */}
+        <PlanogramUpload storeId={activeStore?.id ?? ""} />
 
         {/* Main Content */}
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">

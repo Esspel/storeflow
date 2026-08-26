@@ -435,14 +435,14 @@ RETURNS TABLE (
   marker_id uuid,
   marker_type text,
   marker_id_str text,
-  position vector3,
+  marker_position vector3,
   distance double precision
 ) LANGUAGE sql STABLE AS $$
   SELECT
     sm.id,
     sm.marker_type,
     sm.marker_id,
-    sm.position,
+    sm.position as marker_position,
     vector3_distance(sm.position, p_position) as distance
   FROM spatial_markers sm
   WHERE sm.map_id = p_map_id

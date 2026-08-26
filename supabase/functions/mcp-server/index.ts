@@ -43,6 +43,13 @@ import {
   listDeliveryPlan,
   listSchedule,
   searchProduct,
+  // New shelf life tools - inline handlers
+  setShelfLifeHandler,
+  calculateShelfLifeRulesHandler,
+  getShelfLifeForProductsHandler,
+  generateShelfLifeZipHandler,
+  groupShelfLifeByDeliveryHandler,
+  getProductReclamationStatsHandler,
 } from "../_shared/storeflow-core.ts";
 
 const SERVER_INFO = { name: "storeflow-mcp", version: "2.0.0" };
@@ -586,6 +593,89 @@ const TOOLS: {
       },
     },
     handler: async (supabase, ctx, args) => searchProduct(supabase, ctx, args as never),
+  },
+  // ── Shelf Life Tools (Hållbarhetsdatum) ──
+  {
+    name: "set_shelf_life",
+    description: "Lagra hållbarhetsinformation för en produkt (globalt per SAP artikel-ID)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sap_article_id: { type: "string", description: "SAP/MAT-NR identifier" },
+        shelf_lifetime_days: { type: "integer", description: "Total shelf life in days from production to expiry" },
+        expiry_date: { type: "string", format: "date-time", description: "Best before date (Bäst-före-datum) in ISO 8601 format" },
+        arrival_date: { type: "string", format: "date-time", description: "Arrival date at store (Leveransdag) in ISO 8601 format" },
+        compensation_price_ore: { type: "integer", description: "Compensation price in öre per unit (default: 2)" }
+      },
+      required: ["sap_article_id", "shelf_lifetime_days", "expiry_date", "arrival_date"]
+    },
+    handler: async (supabase, ctx, args) => setShelfLifeHandler(supabase, ctx, args as never),
+  },
+  {
+    name: "calculate_shelf_life_rules",
+    description: "Beräkna om en produkt omfattas av Coop's datumregelverk för ersättning",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sap_article_id: { type: "string", description: "SAP/MAT-NR identifier" }
+      },
+      required: ["sap_article_id"]
+    },
+    handler: async (supabase, ctx, args) => calculateShelfLifeRulesHandler(supabase, ctx, args as never),
+  },
+  {
+    name: "get_shelf_life_for_products",
+    description: "Hämta hållbarhetsdata och status (flaggad/enligt datumregelverk) för en lista sap_article_id",
+    inputSchema: {
+      type: "object",
+      properties: {
+        sap_article_ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "Lista med SAP-artikel-ID:n att kontrollera",
+        },
+      },
+      required: ["sap_article_ids"],
+    },
+    handler: async (supabase, ctx, args) =>
+      getShelfLifeForProductsHandler(supabase, ctx, args as never),
+  },
+  {
+    name: "generate_shelf_life_zip",
+    description: "Generera zip-fil med produkter som omfattas av ersättningsregler",
+    inputSchema: {
+      type: "object",
+      properties: {
+        store_id: { type: "string", description: "Butiks-UUID för att filtrera produkter" }
+      }
+    },
+    handler: async (supabase, ctx, args) => generateShelfLifeZipHandler(supabase, ctx, args as never),
+  },
+  {
+    name: "group_shelf_life_by_delivery",
+    description: "Gruppera flaggade produkter efter leveransnummer och temperaturzon för zip-filorganisation",
+    inputSchema: {
+      type: "object",
+      properties: {
+        store_id: { type: "string", description: "Butiks-UUID att gruppera för" }
+      },
+      required: ["store_id"]
+    },
+    handler: async (supabase, ctx, args) =>
+      groupShelfLifeByDeliveryHandler(supabase, ctx, args as never),
+  },
+  {
+    name: "get_product_reclamation_stats",
+    description: "Hämta reklamations- och leveranshistorik för produktkatalog",
+    inputSchema: {
+      type: "object",
+      properties: {
+        store_id: { type: "string", description: "Butiks-UUID (valfritt)" },
+        sap_article_id: { type: "string", description: "SAP-artikel-ID (valfritt)" }
+      }
+    },
+    handler: async (supabase, ctx, args) =>
+      getProductReclamationStatsHandler(supabase, ctx, args as never),
   },
 ];
 

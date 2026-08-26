@@ -16,6 +16,8 @@ import { Route as AvvikelserRouteImport } from './routes/avvikelser'
 import { Route as BelastningRouteImport } from './routes/belastning'
 import { Route as ButiksregisterRouteImport } from './routes/butiksregister'
 import { Route as CustomerNavRouteImport } from './routes/customer-nav'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as ErsattningcheckRouteImport } from './routes/ersattningcheck'
 import { Route as GdprRouteImport } from './routes/gdpr'
 import { Route as HjalpRouteImport } from './routes/hjalp'
 import { Route as HkDashboardRouteImport } from './routes/hk-dashboard'
@@ -28,6 +30,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as PersonalRouteImport } from './routes/personal'
 import { Route as PlanogramUploadRouteImport } from './routes/planogram-upload'
+import { Route as ProduktkatalogRouteImport } from './routes/produktkatalog'
 import { Route as PulstavlaRouteImport } from './routes/pulstavla'
 import { Route as QrAvvikelseRouteImport } from './routes/qr-avvikelse'
 import { Route as QrKundonskemalRouteImport } from './routes/qr-kundonskemal'
@@ -73,6 +76,16 @@ const ButiksregisterRoute = ButiksregisterRouteImport.update({
 const CustomerNavRoute = CustomerNavRouteImport.update({
   id: '/customer-nav',
   path: '/customer-nav',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ErsattningcheckRoute = ErsattningcheckRouteImport.update({
+  id: '/ersattningcheck',
+  path: '/ersattningcheck',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GdprRoute = GdprRouteImport.update({
@@ -133,6 +146,11 @@ const PersonalRoute = PersonalRouteImport.update({
 const PlanogramUploadRoute = PlanogramUploadRouteImport.update({
   id: '/planogram-upload',
   path: '/planogram-upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProduktkatalogRoute = ProduktkatalogRouteImport.update({
+  id: '/produktkatalog',
+  path: '/produktkatalog',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PulstavlaRoute = PulstavlaRouteImport.update({
@@ -199,6 +217,8 @@ export interface FileRoutesByFullPath {
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
   '/customer-nav': typeof CustomerNavRoute
+  '/dashboard': typeof DashboardRoute
+  '/ersattningcheck': typeof ErsattningcheckRoute
   '/gdpr': typeof GdprRoute
   '/hjalp': typeof HjalpRoute
   '/hk-dashboard': typeof HkDashboardRoute
@@ -211,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/planogram-upload': typeof PlanogramUploadRoute
+  '/produktkatalog': typeof ProduktkatalogRoute
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
@@ -231,6 +252,8 @@ export interface FileRoutesByTo {
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
   '/customer-nav': typeof CustomerNavRoute
+  '/dashboard': typeof DashboardRoute
+  '/ersattningcheck': typeof ErsattningcheckRoute
   '/gdpr': typeof GdprRoute
   '/hjalp': typeof HjalpRoute
   '/hk-dashboard': typeof HkDashboardRoute
@@ -243,6 +266,7 @@ export interface FileRoutesByTo {
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/planogram-upload': typeof PlanogramUploadRoute
+  '/produktkatalog': typeof ProduktkatalogRoute
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
@@ -264,6 +288,8 @@ export interface FileRoutesById {
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
   '/customer-nav': typeof CustomerNavRoute
+  '/dashboard': typeof DashboardRoute
+  '/ersattningcheck': typeof ErsattningcheckRoute
   '/gdpr': typeof GdprRoute
   '/hjalp': typeof HjalpRoute
   '/hk-dashboard': typeof HkDashboardRoute
@@ -276,6 +302,7 @@ export interface FileRoutesById {
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/planogram-upload': typeof PlanogramUploadRoute
+  '/produktkatalog': typeof ProduktkatalogRoute
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
@@ -298,6 +325,8 @@ export interface FileRouteTypes {
     | '/belastning'
     | '/butiksregister'
     | '/customer-nav'
+    | '/dashboard'
+    | '/ersattningcheck'
     | '/gdpr'
     | '/hjalp'
     | '/hk-dashboard'
@@ -310,6 +339,7 @@ export interface FileRouteTypes {
     | '/mallar'
     | '/personal'
     | '/planogram-upload'
+    | '/produktkatalog'
     | '/pulstavla'
     | '/qr-avvikelse'
     | '/qr-kundonskemal'
@@ -330,6 +360,8 @@ export interface FileRouteTypes {
     | '/belastning'
     | '/butiksregister'
     | '/customer-nav'
+    | '/dashboard'
+    | '/ersattningcheck'
     | '/gdpr'
     | '/hjalp'
     | '/hk-dashboard'
@@ -342,6 +374,7 @@ export interface FileRouteTypes {
     | '/mallar'
     | '/personal'
     | '/planogram-upload'
+    | '/produktkatalog'
     | '/pulstavla'
     | '/qr-avvikelse'
     | '/qr-kundonskemal'
@@ -362,6 +395,8 @@ export interface FileRouteTypes {
     | '/belastning'
     | '/butiksregister'
     | '/customer-nav'
+    | '/dashboard'
+    | '/ersattningcheck'
     | '/gdpr'
     | '/hjalp'
     | '/hk-dashboard'
@@ -374,6 +409,7 @@ export interface FileRouteTypes {
     | '/mallar'
     | '/personal'
     | '/planogram-upload'
+    | '/produktkatalog'
     | '/pulstavla'
     | '/qr-avvikelse'
     | '/qr-kundonskemal'
@@ -395,6 +431,8 @@ export interface RootRouteChildren {
   BelastningRoute: typeof BelastningRoute
   ButiksregisterRoute: typeof ButiksregisterRoute
   CustomerNavRoute: typeof CustomerNavRoute
+  DashboardRoute: typeof DashboardRoute
+  ErsattningcheckRoute: typeof ErsattningcheckRoute
   GdprRoute: typeof GdprRoute
   HjalpRoute: typeof HjalpRoute
   HkDashboardRoute: typeof HkDashboardRoute
@@ -407,6 +445,7 @@ export interface RootRouteChildren {
   MallarRoute: typeof MallarRoute
   PersonalRoute: typeof PersonalRoute
   PlanogramUploadRoute: typeof PlanogramUploadRoute
+  ProduktkatalogRoute: typeof ProduktkatalogRoute
   PulstavlaRoute: typeof PulstavlaRoute
   QrAvvikelseRoute: typeof QrAvvikelseRoute
   QrKundonskemalRoute: typeof QrKundonskemalRoute
@@ -469,6 +508,20 @@ declare module '@tanstack/react-router' {
       path: '/customer-nav'
       fullPath: '/customer-nav'
       preLoaderRoute: typeof CustomerNavRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ersattningcheck': {
+      id: '/ersattningcheck'
+      path: '/ersattningcheck'
+      fullPath: '/ersattningcheck'
+      preLoaderRoute: typeof ErsattningcheckRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/gdpr': {
@@ -553,6 +606,13 @@ declare module '@tanstack/react-router' {
       path: '/planogram-upload'
       fullPath: '/planogram-upload'
       preLoaderRoute: typeof PlanogramUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/produktkatalog': {
+      id: '/produktkatalog'
+      path: '/produktkatalog'
+      fullPath: '/produktkatalog'
+      preLoaderRoute: typeof ProduktkatalogRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pulstavla': {
@@ -643,6 +703,8 @@ const rootRouteChildren: RootRouteChildren = {
   BelastningRoute: BelastningRoute,
   ButiksregisterRoute: ButiksregisterRoute,
   CustomerNavRoute: CustomerNavRoute,
+  DashboardRoute: DashboardRoute,
+  ErsattningcheckRoute: ErsattningcheckRoute,
   GdprRoute: GdprRoute,
   HjalpRoute: HjalpRoute,
   HkDashboardRoute: HkDashboardRoute,
@@ -655,6 +717,7 @@ const rootRouteChildren: RootRouteChildren = {
   MallarRoute: MallarRoute,
   PersonalRoute: PersonalRoute,
   PlanogramUploadRoute: PlanogramUploadRoute,
+  ProduktkatalogRoute: ProduktkatalogRoute,
   PulstavlaRoute: PulstavlaRoute,
   QrAvvikelseRoute: QrAvvikelseRoute,
   QrKundonskemalRoute: QrKundonskemalRoute,

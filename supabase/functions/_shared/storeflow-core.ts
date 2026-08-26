@@ -1159,3 +1159,545 @@ export async function searchProduct(
     status_code: input.status_code ?? null,
   };
 }
+
+// ─── Shelf Life Tools (Hållbarhetsdatum) ─────────────────────────────────────
+
+export type SetShelfLifeInput = {
+  sap_article_id: string;
+  shelf_lifetime_days: number;
+  expiry_date: string;
+  arrival_date: string;
+  compensation_price_ore?: number;
+};
+
+export async function setShelfLifeHandler(
+  supabase: SupabaseClient,
+  ctx: ApiKeyContext,
+  input: SetShelfLifeInput,
+) {
+  requireScope(ctx, "products:write");
+
+  const { sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore } = input;
+
+  if (!sap_article_id) throw new ScopeError("sap_article_id is required", 400);
+  if (shelf_lifetime_days == null || expiry_date == null || arrival_date == null) {
+    throw new ScopeError("shelf_lifetime_days, expiry_date, and arrival_date are required", 400);
+  }
+
+  const expiry = new Date(expiry_date);
+  const arrival = new Date(arrival_date);
+
+  if (expiry <= arrival) {
+    throw new ScopeError("expiry_date must be after arrival_date", 400);
+  }
+
+  // Uppdatera eller skapa post
+  const { data: existing, error: existingError } = await supabase
+    .from("product_shelf_life")
+    .select("id")
+    .eq("sap_article_id", sap_article_id)
+    .single();
+
+  if (existing) {
+    // Uppdatera befintlig post
+    const { error: updateError } = await supabase
+      .from("product_shelf_life")
+      .update({
+        shelf_lifetime_days,
+        expiry_date: expiry,
+        arrival_date: arrival,
+        compensation_price_ore: compensation_price_ore ?? 2,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("sap_article_id", sap_article_id)
+      .eq("id", existing.id);
+
+    if (updateError) throw updateError;
+  } else {
+    // Skapa ny post
+    const { error: insertError } = await supabase
+      .from("product_shelf_life")
+      .insert({
+        sap_article_id,
+        shelf_lifetime_days,
+        expiry_date: expiry,
+        arrival_date: arrival,
+        compensation_price_ore: compensation_price_ore ?? 2,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+
+    if (insertError) throw insertError;
+  }
+
+  return { success: true };
+}
+
+export async function calculateShelfLifeRulesHandler(
+  supabase: SupabaseClient,
+  ctx: ApiKeyContext,
+  input: { sap_article_id: string },
+) {
+  requireScope(ctx, "products:read");
+
+  const { sap_article_id } = input;
+
+  if (!sap_article_id) throw new ScopeError("sap_article_id is required", 400);
+
+  // Hämta shelf life data
+  const { data: shelfLife, error: fetchError } = await supabase
+    .from("product_shelf_life")
+    .select("shelf_lifetime_days, expiry_date, arrival_date")
+    .eq("sap_article_id", sap_article_id)
+    .single();
+
+  if (fetchError) {
+    throw new ScopeError("Failed to fetch shelf life data", 404);
+  }
+
+  const { shelf_lifetime_days, expiry_date, arrival_date } = shelfLife;
+
+  // Beräkna kvarvarande dagar
+  const arrivalDate = new Date(arrival_date);
+  const expiryDate = new Date(expiry_date);
+  const daysRemaining = Math.floor((expiryDate - arrivalDate) / (1000 * 60 * 60 * 24));
+
+  // Beräkna minsta kravda hållbarhet
+  let minRequiredDays;
+  if (shelf_lifetime_days <= 548) { // 18 månader ≈ 548 dagar
+    minRequiredDays = Math.ceil(shelf_lifetime_days * 0.5);
+  } else {
+    minRequiredDays = 274; // 9 månader
+  }
+
+  const isFlagged = daysRemaining < minRequiredDays;
+
+  return {
+    shelf_lifetime_days,
+    expiry_date,
+    arrival_date,
+    days_remaining: daysRemaining,
+    min_required_days: minRequiredDays,
+    is_flagged: isFlagged,
+  };
+}
+
+export async function getShelfLifeForProductsHandler(
+  supabase: SupabaseClient,
+  ctx: ApiKeyContext,
+  input: { sap_article_ids: string[] },
+) {
+  requireScope(ctx, "products:read");
+
+  const { sap_article_ids } = input;
+  if (!sap_article_ids || sap_article_ids.length === 0) {
+    throw new ScopeError("sap_article_ids is required", 400);
+  }
+
+  const { data, error } = await supabase
+    .from("product_shelf_life")
+    .select("sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore")
+    .in("sap_article_id", sap_article_ids);
+
+  if (error) throw error;
+
+  // Beräkna status för varje produkt
+  const result = (data || []).map((record: {
+    sap_article_id: string;
+    shelf_lifetime_days: number;
+    expiry_date: string;
+    arrival_date: string;
+    compensation_price_ore: number;
+  }) => {
+    const arrival = new Date(record.arrival_date);
+    const expiry = new Date(record.expiry_date);
+    const daysRemaining = Math.floor(
+      (expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    let minRequired: number;
+    if (record.shelf_lifetime_days <= 548) {
+      minRequired = Math.ceil(record.shelf_lifetime_days * 0.5);
+    } else {
+      minRequired = 274;
+    }
+
+    const isFlagged = daysRemaining < minRequired;
+
+    return {
+      sap_article_id: record.sap_article_id,
+      shelf_lifetime_days: record.shelf_lifetime_days,
+      expiry_date: record.expiry_date,
+      arrival_date: record.arrival_date,
+      days_remaining: daysRemaining,
+      min_required_days: minRequired,
+      is_flagged: isFlagged,
+      compensation_price_ore: record.compensation_price_ore,
+    };
+  });
+
+  return result;
+}
+
+export async function generateShelfLifeZipHandler(
+  supabase: SupabaseClient,
+  ctx: ApiKeyContext,
+  input: { store_id?: string },
+) {
+  requireScope(ctx, "products:read");
+  if (input.store_id) requireStore(ctx, input.store_id);
+
+  // Hämta alla produkter med shelf life data
+  const { data: shelfLifeData, error: fetchError } = await supabase
+    .from("product_shelf_life")
+    .select("sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore")
+    .order("arrival_date", { ascending: false });
+
+  if (fetchError) throw fetchError;
+
+  // Hämta produktspecifik info (namn, EAN, BNR) från products-tabellen
+  const sapArticleIds = shelfLifeData.map(p => p.sap_article_id);
+  const { data: products } = await supabase
+    .from("products")
+    .select("id, name, ean, bnr, sap_article_id, store_id")
+    .in("sap_article_id", sapArticleIds);
+
+  // Bygg en map för snabb uppslagning
+  const productMap = new Map<string, typeof products[0]>();
+  products?.forEach(p => productMap.set(p.sap_article_id, p));
+
+  // Flagga produkter som omfattas av regelverket
+  const flaggedProducts: any[] = [];
+
+  for (const shelfLife of shelfLifeData) {
+    const product = productMap.get(shelfLife.sap_article_id);
+    if (!product) continue; // Hoppa om produkt inte finns i butiken
+
+    const { shelf_lifetime_days, expiry_date, arrival_date } = shelfLife;
+
+    const arrivalDate = new Date(arrival_date);
+    const expiryDate = new Date(expiry_date);
+    const daysRemaining = Math.floor((expiryDate - arrivalDate) / (1000 * 60 * 60 * 24));
+
+    let minRequiredDays;
+    if (shelf_lifetime_days <= 548) {
+      minRequiredDays = Math.ceil(shelf_lifetime_days * 0.5);
+    } else {
+      minRequiredDays = 274;
+    }
+
+    const isFlagged = daysRemaining < minRequiredDays;
+
+    if (isFlagged) {
+      flaggedProducts.push({
+        sap_article_id: shelfLife.sap_article_id,
+        product_name: product.name,
+        ean: product.ean,
+        bnr: product.bnr,
+        expiry_date: expiry_date,
+        arrival_date: arrival_date,
+        shelf_lifetime_days,
+        days_remaining: daysRemaining,
+        min_required_days: minRequiredDays,
+        compensation_price_ore: shelfLife.compensation_price_ore,
+        reason: daysRemaining < minRequiredDays
+          ? `Kvarvarande ${daysRemaining} dagar < minsta ${minRequiredDays} dagar (total hållbarhet ${shelf_lifetime_days} dagar)`
+          : "",
+      });
+    }
+  }
+
+  // Skapa CSV-innehåll för zip-filen
+  const csvHeaders = [
+    "BNR",
+    "EAN",
+    "SAP-produktnr",
+    "Produktnamn",
+    "Utgangsdatum",
+    "Leveransdatum",
+    "Total hållbarhet (dagar)",
+    "Kvarvarande dagar",
+    "Minsta krävda dagar",
+    "Ersättningspris (öre)",
+    "Orsak"
+  ];
+
+  const csvRows = flaggedProducts.map(p => [
+    p.bnr || "",
+    p.ean || "",
+    p.sap_article_id,
+    p.product_name,
+    new Date(p.expiry_date).toISOString().split("T")[0],
+    new Date(p.arrival_date).toISOString().split("T")[0],
+    p.shelf_lifetime_days,
+    p.days_remaining,
+    p.min_required_days,
+    p.compensation_price_ore,
+    p.reason
+  ]);
+
+  const csvContent = [csvHeaders.join(";"), ...csvRows.map(row => row.join(";"))].join("\n");
+
+  // Lägg till BOM för Excel-kompatibilitet
+  const csvWithBom = "﻿" + csvContent;
+
+  // Returnera som base64-kodad sträng (zip-generering skulle kunna göras här med en zip-bibliotek)
+  // Förnu returnerar vi CSV-data som kan användas för att skapa zip-fil klientsidan
+  return {
+    flagged_count: flaggedProducts.length,
+    total_checked: shelfLifeData.length,
+    csv_data: csvWithBom,
+  };
+}
+
+/**
+ * Gruppar flaggade produkter efter leveransnummer och temperaturzon
+ * Används för zip-filorganisation: en fil per leverans+zon
+ */
+export async function groupShelfLifeByDeliveryHandler(
+  supabase: SupabaseClient,
+  ctx: ApiKeyContext,
+  input: { store_id: string },
+) {
+  requireScope(ctx, "products:read");
+  requireStore(ctx, input.store_id);
+
+  // Hämta alla produkter med shelf life data för butiken
+  const { data: shelfLifeData, error: fetchError } = await supabase
+    .from("product_shelf_life")
+    .select("sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore, delivery_number, temperature_zone")
+    .eq("store_id", input.store_id)
+    .order("arrival_date", { ascending: false });
+
+  if (fetchError) throw fetchError;
+
+  // Hämta produktspecifik info
+  const sapArticleIds = shelfLifeData.map(p => p.sap_article_id);
+  const { data: products } = await supabase
+    .from("products")
+    .select("id, name, ean, bnr, sap_article_id, store_id")
+    .in("sap_article_id", sapArticleIds);
+
+  const productMap = new Map<string, typeof products[0]>();
+  products?.forEach(p => productMap.set(p.sap_article_id, p));
+
+  // Flagga produkter som omfattas av regelverket
+  const flaggedProducts: any[] = [];
+
+  for (const shelfLife of shelfLifeData) {
+    const product = productMap.get(shelfLife.sap_article_id);
+    if (!product) continue;
+
+    const { shelf_lifetime_days, expiry_date, arrival_date } = shelfLife;
+
+    const arrivalDate = new Date(arrival_date);
+    const expiryDate = new Date(expiry_date);
+    const daysRemaining = Math.floor((expiryDate - arrivalDate) / (1000 * 60 * 60 * 24));
+
+    let minRequiredDays;
+    if (shelf_lifetime_days <= 548) {
+      minRequiredDays = Math.ceil(shelf_lifetime_days * 0.5);
+    } else {
+      minRequiredDays = 274;
+    }
+
+    const isFlagged = daysRemaining < minRequiredDays;
+
+    if (isFlagged) {
+      flaggedProducts.push({
+        sap_article_id: shelfLife.sap_article_id,
+        product_name: product.name,
+        ean: product.ean,
+        bnr: product.bnr,
+        expiry_date: expiry_date,
+        arrival_date: arrival_date,
+        shelf_lifetime_days,
+        days_remaining: daysRemaining,
+        min_required_days: minRequiredDays,
+        compensation_price_ore: shelfLife.compensation_price_ore,
+        delivery_number: shelfLife.delivery_number || "OKÄND",
+        temperature_zone: shelfLife.temperature_zone || "torr",
+        reason: `Kvarvarande ${daysRemaining} dagar < minsta ${minRequiredDays} dagar (total hållbarhet ${shelf_lifetime_days} dagar)`,
+      });
+    }
+  }
+
+  // Gruppera efter leveransnummer + temperaturzon
+  const grouped = new Map<string, any[]>();
+  for (const p of flaggedProducts) {
+    const key = `${p.delivery_number}_${p.temperature_zone}`;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(p);
+  }
+
+  // Bygg CSV för varje grupp
+  const csvHeaders = [
+    "BNR",
+    "EAN",
+    "SAP-produktnr",
+    "Produktnamn",
+    "Utgangsdatum",
+    "Leveransdatum",
+    "Total hållbarhet (dagar)",
+    "Kvarvarande dagar",
+    "Minsta krävda dagar",
+    "Ersättningspris (öre)",
+    "Orsak",
+    "Leveransnummer",
+    "Temperaturzon",
+  ];
+
+  const groups: Record<string, { csv: string; count: number }> = {};
+
+  for (const [key, products] of grouped.entries()) {
+    const csvRows = products.map(p => [
+      p.bnr || "",
+      p.ean || "",
+      p.sap_article_id,
+      p.product_name,
+      p.expiry_date,
+      p.arrival_date,
+      p.shelf_lifetime_days.toString(),
+      p.days_remaining.toString(),
+      p.min_required_days.toString(),
+      p.compensation_price_ore.toString(),
+      p.reason,
+      p.delivery_number,
+      p.temperature_zone,
+    ]);
+
+    const csvContent = [
+      csvHeaders.join(","),
+      ...csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    const csvWithBom = "﻿" + csvContent;
+    groups[key] = {
+      csv: csvWithBom,
+      count: products.length,
+    };
+  }
+
+  return {
+    groups,
+    total_flagged: flaggedProducts.length,
+  };
+}
+
+/**
+ * Hämtar reklamationsstatistik för produktkatalog
+ */
+export async function getProductReclamationStatsHandler(
+  supabase: SupabaseClient,
+  ctx: ApiKeyContext,
+  input: { store_id?: string; sap_article_id?: string },
+) {
+  requireScope(ctx, "products:read");
+  if (input.store_id) requireStore(ctx, input.store_id);
+
+  // Bygg query för reklamationshistorik
+  let reclamationQuery = supabase
+    .from("product_reclamation_history")
+    .select("sap_article_id, count(*)", { count: "exact" });
+
+  if (input.store_id) {
+    reclamationQuery = reclamationQuery.eq("store_id", input.store_id);
+  }
+  if (input.sap_article_id) {
+    reclamationQuery = reclamationQuery.eq("sap_article_id", input.sap_article_id);
+  }
+
+  // Gruppera efter sap_article_id
+  const { data: reclamationData, error: reclamationError } = await reclamationQuery;
+  if (reclamationError) throw reclamationError;
+
+  // Bygg query för leveranshistorik
+  let deliveryQuery = supabase
+    .from("product_delivery_log")
+    .select("sap_article_id, count(*)", { count: "exact" });
+
+  if (input.store_id) {
+    deliveryQuery = deliveryQuery.eq("store_id", input.store_id);
+  }
+  if (input.sap_article_id) {
+    deliveryQuery = deliveryQuery.eq("sap_article_id", input.sap_article_id);
+  }
+
+  const { data: deliveryData, error: deliveryError } = await deliveryQuery;
+  if (deliveryError) throw deliveryError;
+
+  // Hämta senaste reklamation per produkt
+  const { data: lastReclamationData } = await supabase
+    .from("product_reclamation_history")
+    .select("sap_article_id, reclaimed_at, reason")
+    .order("reclaimed_at", { ascending: false })
+    .limit(1000);
+
+  // Hämta senaste leverans per produkt
+  const { data: lastDeliveryData } = await supabase
+    .from("product_delivery_log")
+    .select("sap_article_id, delivered_at")
+    .order("delivered_at", { ascending: false })
+    .limit(1000);
+
+  // Bygg mappar för snabb uppslagning
+  const reclamationCounts = new Map<string, number>();
+  reclamationData?.forEach((r: any) => {
+    reclamationCounts.set(r.sap_article_id, r.count);
+  });
+
+  const deliveryCounts = new Map<string, number>();
+  deliveryData?.forEach((d: any) => {
+    deliveryCounts.set(d.sap_article_id, d.count);
+  });
+
+  const lastReclamations = new Map<string, { date: string; reason: string }>();
+  lastReclamationData?.forEach((r: any) => {
+    if (!lastReclamations.has(r.sap_article_id)) {
+      lastReclamations.set(r.sap_article_id, { date: r.reclaimed_at, reason: r.reason });
+    }
+  });
+
+  const lastDeliveries = new Map<string, string>();
+  lastDeliveryData?.forEach((d: any) => {
+    if (!lastDeliveries.has(d.sap_article_id)) {
+      lastDeliveries.set(d.sap_article_id, d.delivered_at);
+    }
+  });
+
+  // Hämta produktinfo för att få namn/EAN/BNR
+  const allSapIds = new Set([
+    ...reclamationCounts.keys(),
+    ...deliveryCounts.keys(),
+  ]);
+
+  let productsMap = new Map<string, { name: string; ean: string; bnr: string }>();
+  if (allSapIds.size > 0) {
+    const { data: products } = await supabase
+      .from("products")
+      .select("name, ean, bnr, sap_article_id")
+      .in("sap_article_id", Array.from(allSapIds));
+
+    products?.forEach(p => {
+      productsMap.set(p.sap_article_id, { name: p.name, ean: p.ean, bnr: p.bnr });
+    });
+  }
+
+  // Bygg resultat
+  const results = Array.from(allSapIds).map(sap_article_id => {
+    const productInfo = productsMap.get(sap_article_id) || { name: "", ean: "", bnr: "" };
+    return {
+      sap_article_id,
+      name: productInfo.name,
+      ean: productInfo.ean,
+      bnr: productInfo.bnr,
+      reclamation_count: reclamationCounts.get(sap_article_id) || 0,
+      delivery_count: deliveryCounts.get(sap_article_id) || 0,
+      last_reclamation: lastReclamations.get(sap_article_id)?.date || null,
+      last_reclamation_reason: lastReclamations.get(sap_article_id)?.reason || null,
+      last_delivery: lastDeliveries.get(sap_article_id) || null,
+    };
+  });
+
+  return results;
+}

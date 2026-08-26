@@ -1,6 +1,6 @@
 /**
- * QR Code Generator for Shelf Positioning
- * Generates QR codes and ArUco markers for posemesh spatial positioning
+ * ArUco Marker Generator for Shelf Positioning
+ * Generates ArUco markers (DICT_4X4_50) for posemesh spatial positioning
  * Staff can print and place these markers on shelves for accurate spatial tracking
  */
 
@@ -22,13 +22,13 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 export interface MarkerConfig {
-  /** Type of marker to generate */
-  type: "aruco" | "qr" | "combined" | "customer-nav";
+  /** Type of marker to generate - always aruco for StoreFlow */
+  type: "aruco" | "customer-nav" | "combined";
   /** Shelf ID this marker belongs to */
   shelfId: string;
   /** Shelf name for display */
   shelfName: string;
-  /** ArUco marker ID (for ArUco type) */
+  /** ArUco marker ID (for ArUco type) - DICT_4X4_50: 0-1023 */
   arucoId?: number;
   /** Marker size in meters (physical print size) */
   sizeMeters: number;

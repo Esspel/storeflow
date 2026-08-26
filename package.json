@@ -43,6 +43,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "^6.0.5",
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
@@ -79,5 +80,11 @@
     "vite": "^8.2.0",
     "vitest": "^4.1.11",
     "zod": "^4.4.3"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.8",
+    "@react-three/fiber": "^9.7.0",
+    "three": "^0.185.1",
+    "xlsx": "^0.18.5"
   }
 }

@@ -542,10 +542,39 @@ export function AppShell() {
                 )}
               </Link>
             ))}
+            {/* Posemesh Submenu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="relative rounded-full px-3.5 py-2 text-sm font-medium text-foreground/70 transition-colors hover:text-primary"
+                >
+                  <Navigation className="h-4 w-4" />
+                  <span className="ml-1 text-[10px]">Posemesh</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-[200px]">
+                <DropdownMenuItem>
+                  <Link to="/spatial-navigation" className="block w-full text-left px-4 py-2 text-sm">
+                    3D Butiksvy
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Link to="/shelf-analytics" className="block w-full text-left px-4 py-2 text-sm">
+                    Planogram & Hyllanalys
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Link to="/planogram-upload" className="block w-full text-left px-4 py-2 text-sm">
+                    Ladda upp planogram
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </nav>
 
           <div className="ml-auto flex items-center gap-1.5 md:gap-2">
-            <OfflineQueueBadge />
             <GlobalStoreSelector />
 
             {/* SAP Catalog Button */}

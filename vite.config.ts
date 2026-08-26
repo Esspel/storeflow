@@ -41,4 +41,12 @@ export default defineConfig({
     host: "::",
     port: 8080,
   },
+  ssr: {
+    noExternal: [],
+  },
+  build: {
+    rollupOptions: {
+      external: [/^fs$/, /^path$/, /^crypto$/, /^posemesh/, /\/posemesh\//],
+    },
+  },
 });
