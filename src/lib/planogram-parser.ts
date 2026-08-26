@@ -8,11 +8,13 @@ import { PDFParse } from "pdf-parse";
 import * as pdfjsLib from "pdfjs-dist";
 import type { ShelfPlanogram, ExpectedProduct, Vector3 } from "@/lib/posemesh/types";
 
-// Configure pdf.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString();
+// Configure pdf.js worker (krävs både för pdf-parse (som wrappar pdfjs) och pdfjs-dist direkt)
+if (typeof window !== "undefined" && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString();
+}
 
 /**
  * Extract product images from PDF pages.

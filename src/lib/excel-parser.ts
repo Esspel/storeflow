@@ -48,9 +48,15 @@ export const SAPUI5_EXPORT_COLUMN_MAP = {
  * Handles various input formats and null/empty values.
  */
 function normalizeDate(dateStr: string | null | undefined): string | null {
-  if (!dateStr) return null;
-
-  const trimmed = dateStr.trim();
+  if (dateStr == null || dateStr === '') return null;
+  // XLSX kan ge Date-objekt eller nummer (Excel seriedatum) - normalisera till string
+  let s: string;
+  if (dateStr instanceof Date) {
+    s = dateStr.toISOString();
+  } else {
+    s = String(dateStr);
+  }
+  const trimmed = s.trim();
 
   // Already in ISO format YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
@@ -71,9 +77,10 @@ function normalizeDate(dateStr: string | null | undefined): string | null {
  * Safely parses a value to a number without losing precision for large integers.
  * Returns null if the value is empty or can't be parsed.
  */
-function safeParseInt(value: string | null | undefined): number | null {
-  if (!value || value.trim() === '') return null;
-  const trimmed = value.trim();
+function safeParseInt(value: string | number | null | undefined): number | null {
+  if (value == null || value === '') return null;
+  const s = typeof value === 'string' ? value : String(value);
+  const trimmed = s.trim();
   // Handle scientific notation and large numbers carefully
   const num = parseInt(trimmed, 10);
   if (isNaN(num)) return null;
