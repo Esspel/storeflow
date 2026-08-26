@@ -27,6 +27,7 @@ import {
   Layers,
   Box,
   Navigation,
+  TriangleAlert as AlertTriangle,
 } from "lucide-react";
 import {
   ROLE_LABELS,
