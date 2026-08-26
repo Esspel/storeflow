@@ -212,7 +212,7 @@ function ErstatningsCheckPage() {
     }
   };
 
-  // Auto-load reclamations on mount / step change
+  // Auto-load reclamations on mount and on step change
   useEffect(() => {
     if (step === "reclamations" && activeStore?.id) {
       supabase
@@ -225,6 +225,19 @@ function ErstatningsCheckPage() {
         });
     }
   }, [step, activeStore?.id]);
+
+  // Auto-load reclamations on page mount
+  useEffect(() => {
+    if (!activeStore?.id) return;
+    supabase
+      .from("reclamations")
+      .select("*")
+      .eq("store_id", activeStore.id)
+      .limit(20)
+      .then(({ data, error }) => {
+        if (!error && data) setReclamations(data as Reclamation[]);
+      });
+  }, [activeStore?.id]);
 
   // Load shelf life data
   const loadShelfLifeData = async () => {
@@ -503,8 +516,7 @@ function ErstatningsCheckPage() {
                 </div>
 
                 <div className="border rounded-lg overflow-x-auto">
-                  <div className="border rounded-lg overflow-x-auto">
-                    <Table>
+                  <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Pallnummer</TableHead>
