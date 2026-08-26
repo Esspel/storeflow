@@ -22,6 +22,8 @@ async function initPdfLib() {
       (pdfjsLib as any).GlobalWorkerOptions = {};
     }
     (pdfjsLib as any).GlobalWorkerOptions.workerSrc = workerSrcUrl;
+    // Set on globalThis too so pdf-parse's bundled pdfjs reads it on init
+    (globalThis as any).pdfjsLib = pdfjsLib;
   }
   return pdfjsLib;
 }
@@ -201,9 +203,13 @@ export async function parsePlanogramPdf(
   // Ladda pdf-parse dynamiskt
   const pdfModule = await import("pdf-parse");
 
-  // Sätt workerSrc uttryckligen på modulen om den har en egen pdfjs-instans
-  if (pdfModule.pdfjs?.GlobalWorkerOptions) {
-    pdfModule.pdfjs.GlobalWorkerOptions.workerSrc = lib.GlobalWorkerOptions.workerSrc;
+  // Sätt workerSrc på pdf-parse:s egna legacy-pdfjs (via statisk setWorker)
+  const legacyWorkerUrl = new URL(
+    "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString();
+  if (typeof (pdfModule.PDFParse as any).setWorker === "function") {
+    (pdfModule.PDFParse as any).setWorker(legacyWorkerUrl);
   }
 
   const parser = new pdfModule.PDFParse({ data: arrayBuffer });

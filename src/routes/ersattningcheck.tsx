@@ -6,7 +6,7 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Upload,
   FileSpreadsheet,
@@ -211,6 +211,20 @@ function ErstatningsCheckPage() {
       setIsLoading(false);
     }
   };
+
+  // Auto-load reclamations on mount / step change
+  useEffect(() => {
+    if (step === "reclamations" && activeStore?.id) {
+      supabase
+        .from("reclamations")
+        .select("*")
+        .eq("store_id", activeStore.id)
+        .limit(20)
+        .then(({ data, error }) => {
+          if (!error && data) setReclamations(data as Reclamation[]);
+        });
+    }
+  }, [step, activeStore?.id]);
 
   // Load shelf life data
   const loadShelfLifeData = async () => {
@@ -451,8 +465,8 @@ function ErstatningsCheckPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <p className="text-xs text-muted-foreground">Stödjer .xlsx, .xls och .csv</p>
-            </div>
+              <Label htmlFor="delivery-file">Välj följesedelsfil</Label>
+              <div
                 className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 transition-colors bg-muted/30"
                 onDrop={async (e) => {
                   e.preventDefault();
