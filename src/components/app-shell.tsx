@@ -366,6 +366,9 @@ export function AppShell() {
       ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }]
       : []),
     { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
+    { to: "/produktkatalog", label: "Produktkatalog", mobileHidden: true, Icon: Box },
+    { to: "/ersattningcheck", label: "Ersättningscheck", mobileHidden: true, Icon: AlertTriangle },
+    { to: "/dashboard", label: "Dashboard", mobileHidden: true, Icon: ChartBar },
   ];
 
   const fetchNotifications = useCallback(() => {

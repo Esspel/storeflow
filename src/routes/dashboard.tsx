@@ -190,17 +190,7 @@ function DashboardPage() {
   }) => {
     setIsLoading(true);
     try {
-      const { error } = await supabase.functions.invoke("mcp-server", {
-        body: {
-          jsonrpc: "2.0",
-          id: "1",
-          method: "tools/call",
-          params: {
-            tool: "set_shelf_life",
-            arguments: record,
-          },
-        },
-      });
+      const { error } = await supabase.functions.invoke("set_shelf_life", record);
 
       if (error) throw error;
       setImportSuccess("Hållbarhetsdata sparad!");
@@ -217,7 +207,7 @@ function DashboardPage() {
   const generateCompensationZip = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("mcp-server", {
+      const { data, error } = await supabase.functions.invoke("set_shelf_life", {
         body: {
           jsonrpc: "2.0",
           id: "1",

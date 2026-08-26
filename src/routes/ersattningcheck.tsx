@@ -20,7 +20,13 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { getProductReclamationStats } from "@/lib/mcp";
+import {
+  getShelfLifeForProducts,
+  setShelfLife,
+  generateShelfLifeZip,
+  groupShelfLifeByDelivery,
+  getProductReclamationStats
+} from "@/lib/mcp";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -248,20 +254,7 @@ function ErstatningsCheckPage() {
   }) => {
     setIsLoading(true);
     try {
-      // Use MCP-style call via supabase.functions
-      const { error } = await supabaseClient.functions.invoke("mcp-server", {
-        body: {
-          jsonrpc: "2.0",
-          id: "1",
-          method: "tools/call",
-          params: {
-            tool: "set_shelf_life",
-            arguments: record,
-          },
-        },
-      });
-
-      if (error) throw error;
+      await setShelfLife(record);
       setImportSuccess("Hållbarhetsdata sparad!");
       await loadShelfLifeData();
     } catch (error) {
@@ -276,24 +269,14 @@ function ErstatningsCheckPage() {
   const generateCompensationZip = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabaseClient.functions.invoke("mcp-server", {
-        body: {
-          jsonrpc: "2.0",
-          id: "1",
-          method: "tools/call",
-          params: {
-            tool: "generate_shelf_life_zip",
-            arguments: { store_id: activeStore.id },
-          },
-        },
+      const { data, error } = await supabase.functions.invoke("generate_shelf_life_zip", {
+        store_id: activeStore.id,
       });
-
-      if (error) throw error;
 
       // Download CSV as zip
       const csvData = data?.result?.csv_data || "";
       exportTextAsCSV(csvData, `ersattningsansokning_${new Date().toISOString().split("T")[0]}.csv`);
-      setImportSuccess(`Genererade ersättningsfil med ${data?.result?.flagged_count} flaggade produkter`);
+      setImportSuccess(`Genererade ersättningsfil med ${data?.flagged_count ?? 0} flaggade produkter`);
     } catch (error) {
       console.error("Error generating zip:", error);
       setImportError("Kunde inte generera ersättningsfil.");
