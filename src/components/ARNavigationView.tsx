@@ -11,14 +11,10 @@ import {
   Canvas, useFrame, useThree
 } from "@react-three/fiber";
 import {
-  Box,
-  Cylinder,
-  Plane,
-  Torus,
-  RoundedBox,
   Html,
   useGLTF,
 } from "@react-three/drei";
+import { BoxGeometry, CylinderGeometry, PlaneGeometry, TorusGeometry } from "three";
 import * as THREE from "three";
 import {
   ARNavigationViewProps,
@@ -69,8 +65,8 @@ function ARMarker({
     }
   });
 
-  const handleClick = (event: THREE.Event) => {
-    event.stopPropagation();
+  const handleClick = (event: any) => {
+    event?.stopPropagation?.();
     onSelect?.(marker.id);
   };
 
@@ -81,8 +77,8 @@ function ARMarker({
     const [w, h, d] = config.size;
     const baseProps = {
       ref: meshRef,
-      position: [marker.position.x, marker.position.y + h / 2, marker.position.z],
-      rotation: marker.rotation ? [marker.rotation.x, marker.rotation.y, marker.rotation.z] : undefined,
+      position: [marker.position.x, marker.position.y + h / 2, marker.position.z] as [number, number, number],
+      rotation: marker.rotation ? [marker.rotation.x, marker.rotation.y, marker.rotation.z] as [number, number, number] : undefined,
       onClick: handleClick,
       onPointerOver: handlePointerOver,
       onPointerOut: handlePointerOut,
@@ -93,56 +89,41 @@ function ARMarker({
     switch (config.geometry) {
       case "box":
         return (
-          <Box
+          <mesh
             {...baseProps}
             args={[w, h, d]}
-            color={color}
-            opacity={config.opacity}
-            transparent={config.opacity !== undefined && config.opacity < 1}
           />
         );
       case "cylinder":
         return (
-          <Cylinder
+          <mesh
             {...baseProps}
             args={[config.size[0], config.size[0], config.size[1], config.size[2]]}
-            color={color}
-            opacity={config.opacity}
-            transparent={config.opacity !== undefined && config.opacity < 1}
           />
         );
       case "plane":
         return (
-          <Plane
+          <mesh
             {...baseProps}
             args={[config.size[0], config.size[2]]}
-            color={color}
-            opacity={config.opacity}
-            transparent={config.opacity !== undefined && config.opacity < 1}
             rotation={[-Math.PI / 2, 0, 0]}
             position={[marker.position.x, marker.position.y + 0.01, marker.position.z]}
           />
         );
       case "torus":
         return (
-          <Torus
+          <mesh
             {...baseProps}
             args={[config.size[0], config.size[1], config.size[2], config.size[3]]}
-            color={color}
-            opacity={config.opacity}
-            transparent={config.opacity !== undefined && config.opacity < 1}
             rotation={[-Math.PI / 2, 0, 0]}
             position={[marker.position.x, marker.position.y + 0.05, marker.position.z]}
           />
         );
       default:
         return (
-          <RoundedBox
+          <mesh
             {...baseProps}
             args={[w, h, d, 0.05]}
-            color={color}
-            opacity={config.opacity}
-            transparent={config.opacity !== undefined && config.opacity < 1}
           />
         );
     }
@@ -386,14 +367,14 @@ function ARSessionCanvas({
       {/* User position indicator */}
       {userPose && (
         <group name="user-position">
-          <Cylinder
+          <mesh
             args={[0.3, 0.3, 0.05, 16]}
             position={[userPose.position.x, 0.025, userPose.position.z]}
             color={SELECTION_COLORS.userPosition}
             opacity={0.5}
             transparent
           />
-          <Torus
+          <mesh
             args={[0.4, 0.03, 8, 16]}
             position={[userPose.position.x, 0.08, userPose.position.z]}
             rotation={[-Math.PI / 2, 0, 0]}

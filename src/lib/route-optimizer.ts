@@ -217,17 +217,58 @@ async function applyRouteOverrides(
 }
 
 /**
- * Check line of sight between two points (simplified)
- * In production: raycast against wall geometry from spatial_maps
+ * Line-segment intersection test (2D projection on XZ-plane).
+ * Returns true if segments AB and CD intersect (excluding collinear overlap).
+ */
+function segmentsIntersect(
+  a: { x: number; z: number },
+  b: { x: number; z: number },
+  c: { x: number; z: number },
+  d: { x: number; z: number }
+): boolean {
+  const denom = (d.z - c.z) * (b.x - a.x) - (d.x - c.x) * (b.z - a.z);
+  if (Math.abs(denom) < 1e-9) return false; // Parallel
+  const ua = ((d.x - c.x) * (a.z - c.z) - (d.z - c.z) * (a.x - c.x)) / denom;
+  const ub = ((b.x - a.x) * (a.z - c.z) - (b.z - a.z) * (a.x - c.x)) / denom;
+  return ua > 1e-9 && ua < 1 - 1e-9 && ub > 1e-9 && ub < 1 - 1e-9;
+}
+
+/**
+ * Check line of sight between two points by fetching wall geometry from Supabase.
+ * Returns false if the direct segment crosses any wall; true otherwise (or if no walls).
  */
 async function checkLineOfSight(
   mapId: string,
   from: Vector3,
   to: Vector3
 ): Promise<boolean> {
-  // TODO: Implement proper raycasting against spatial_map walls
-  // For now, assume all connections are valid
-  return true;
+  // 1. Hämta vägggeometri från DB
+  const { data: walls, error } = await supabase
+    .from("spatial_walls")
+    .select("start_pos, end_pos")
+    .eq("map_id", mapId);
+
+  if (error) throw error;
+  if (!walls || walls.length === 0) return true; // Inga väggar = fri sikt
+
+  // 2. Raycasting / skärningstest på XZ-plan (y ignoreras för enkel 2D-vy)
+  const a = { x: from.x, z: from.z ?? 0 };
+  const b = { x: to.x, z: to.z ?? 0 };
+
+  for (const w of walls) {
+    const start = Array.isArray(w.start_pos)
+      ? { x: Number(w.start_pos[0] ?? 0), z: Number(w.start_pos[2] ?? 0) }
+      : { x: (w.start_pos as any)?.x ?? 0, z: (w.start_pos as any)?.z ?? 0 };
+    const end = Array.isArray(w.end_pos)
+      ? { x: Number(w.end_pos[0] ?? 0), z: Number(w.end_pos[2] ?? 0) }
+      : { x: (w.end_pos as any)?.x ?? 0, z: (w.end_pos as any)?.z ?? 0 };
+
+    if (segmentsIntersect(a, b, start, end)) {
+      return false; // Segment skär vägg = ingen fri sikt
+    }
+  }
+
+  return true; // Ingen skärning = fri sikt
 }
 
 /**

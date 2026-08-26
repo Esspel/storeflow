@@ -61,8 +61,9 @@ function ProduktkatalogPage() {
     // Direct DB query instead of MCP API call
     supabase
       .from("product_reclamation_stats")
-      .select("*")
+      .select("sap_article_id, name, ean, bnr, reclamation_count, delivery_count, last_reclamation, last_reclamation_reason, last_delivery")
       .eq("store_id", id)
+      .order("reclamation_count", { ascending: false })
       .then(({ data, error: dbErr }) => {
         if (isCancelled) return;
         if (dbErr) {

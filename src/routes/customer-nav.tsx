@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
-import { lookupCoopProductByEan, searchCoopProducts, type CoopProduct, MOCK_COOP_PRODUCTS } from "@/lib/coop-products";
+import { lookupProductByEan, searchProducts, type CoopProduct } from "@/lib/coop-products";
 
 interface SpatialMarker {
   id: string;
@@ -96,7 +96,7 @@ function CustomerNavPage() {
     }
     setLoading(true);
     try {
-      const results = await searchCoopProducts(query);
+      const results = await searchProducts(query);
       setSearchResults(results);
     } catch (err) {
       console.error("Search failed:", err);
@@ -124,11 +124,10 @@ function CustomerNavPage() {
   const handleBarcodeScan = async (ean: string) => {
     setLoading(true);
     try {
-      const product = await lookupCoopProductByEan(ean);
+      const product = await lookupProductByEan(ean);
       if (product) {
         // Find full product info
-        const fullProduct = MOCK_COOP_PRODUCTS.find((p: CoopProduct) => p.ean === ean);
-        if (fullProduct) handleProductSelect(fullProduct);
+        if (product) handleProductSelect(product);
       } else {
         setError(`Hittade ingen produkt med EAN: ${ean}`);
       }

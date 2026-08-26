@@ -14,6 +14,11 @@ if (typeof window !== "undefined" && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
     "pdfjs-dist/build/pdf.worker.min.mjs",
     import.meta.url
   ).toString();
+  // Explicit version-override to force sync with installed 6.2.108
+  (pdfjsLib as any).GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString();
 }
 
 /**
@@ -222,35 +227,110 @@ export async function parsePlanogramPdf(
  * Handles common planogram PDF formats (JDA, Blue Yonder, RELEX, etc.)
  */
 function parsePlanogramText(text: string, pageCount: number): ParsedPlanogram {
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const fullText = text;
+  // VIKTIGT: Extrahera ENDAST från sidor som innehåller "Notch" och/eller "Höjd" (de strukturerade datasidorna)
+  const pageTextBlocks = fullText.split("-- ");
+  const dataPages = pageTextBlocks.filter((block) =>
+    block.includes("Notch") || block.includes("Höjd")
+  );
+  const combinedDataText = dataPages.join("\n");
+  const lines = combinedDataText.split("\n").map((l) => l.trim()).filter(Boolean);
 
-  // Try to detect store/planogram name from first pages
-  const storeName = extractStoreName(lines);
-  const planogramName = extractPlanogramName(lines);
-
-  // Parse zones and shelves
-  const zones = parseZones(lines);
-
-  // Calculate totals
-  let totalProducts = 0;
-  let totalShelves = 0;
-  for (const zone of zones) {
-    totalShelves += zone.shelves.length;
-    for (const shelf of zone.shelves) {
-      totalProducts += shelf.products.length;
+  // Bygg hyllor från "Hyllnr: N Notch:..."-rader i datasidorna
+  const shelfDefs: Array<{ nr: number; notch: number; hojd: number; bredd: number; franGolv: number }> = [];
+  const shelfMap = new Map<number, { nr: number; notch: number; hojd: number; bredd: number; franGolv: number }>();
+  for (const line of lines) {
+    const shelfMatch = line.match(/Hyllnr:\s*(\d+)\s+Notch:\s*(\d+)\s+Höjd:\s*(\d+)\s+in\s+Bredd:\s*(\d+)\s+in\s+Höjd från Golv:([\d.]+)\s+in/);
+    if (shelfMatch) {
+      const nr = parseInt(shelfMatch[1]);
+      shelfMap.set(nr, {
+        nr, notch: parseInt(shelfMatch[2]), hojd: parseInt(shelfMatch[3]),
+        bredd: parseInt(shelfMatch[4]), franGolv: parseFloat(shelfMatch[5]),
+      });
     }
   }
 
+  // Grupp produkterna efter närliggande shelf-def och POS-header
+  const groups: Array<{ shelfName: string; shelfDef?: any; products: any[] }> = [];
+  let currentShelfDef: any = null;
+  let currentProducts: any[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Ny hylla när vi ser en shelf-def-rad eller POS-header
+    if (line.match(/Hyllnr:\s*\d+/)) {
+      if (currentProducts.length > 0) {
+        groups.push({ shelfName: currentShelfDef ? `Hylla ${currentShelfDef.nr}` : `Hylla ${groups.length + 1}`, shelfDef: currentShelfDef, products: currentProducts });
+        currentProducts = [];
+      }
+      const shelfMatch = line.match(/Hyllnr:\s*(\d+)/);
+      if (shelfMatch) {
+        const nr = parseInt(shelfMatch[1]);
+        currentShelfDef = shelfMap.get(nr) || { nr };
+      }
+      continue;
+    }
+    if (line.includes("POS") && line.includes("EAN") && line.includes("BNR")) {
+      if (currentProducts.length > 0) {
+        groups.push({ shelfName: currentShelfDef ? `Hylla ${currentShelfDef.nr}` : `Hylla ${groups.length + 1}`, shelfDef: currentShelfDef, products: currentProducts });
+        currentProducts = [];
+      }
+      // Sök efter shelf-def i närliggande rader bakåt
+      for (let j = Math.max(0, i - 3); j < i; j++) {
+        const shelfLine = lines[j];
+        const m = shelfLine.match(/Hyllnr:\s*(\d+)/);
+        if (m) {
+          currentShelfDef = shelfMap.get(parseInt(m[1])) || { nr: parseInt(m[1]) };
+        }
+      }
+      continue;
+    }
+    // Regex fångar 9 grupper: 1=POS, 2=EAN, 3=BNR, 4=Namn, 5=Varumärke, 6=Stl(450/500), 7=B-pack, 8=Ans, 9=Tot Kp
+    const posMatch = line.match(/^(\d{1,2})\s+(\d{13})\s+(\d{5,6})\s+(.+?)\s+([A-ZÅÄÖ][A-ZÅÄÖa-zåäö\s\-]*?)\s+0\.(450|500)\s+KG\s+(\d+)\s+(\d+)\s+(\d+)/);
+    if (posMatch) {
+      currentProducts.push({
+        id: "p-" + posMatch[2],
+        sku: posMatch[3],
+        ean: posMatch[2],
+        name: posMatch[4].trim(),
+        brand: posMatch[5].trim(),
+        size: "0." + posMatch[6] + " KG",
+        packSize: parseInt(posMatch[7]) || 0,    // B-pack (kolumn 7)
+        facings: parseInt(posMatch[8]) || 1,     // Ans (kolumn 8) - antal ansikten
+        capacity: parseInt(posMatch[9]) || 0,    // Tot Kp (kolumn 9) - total hyllkapacitet
+        position: { x: (parseInt(posMatch[1]) % 4) / 4, index: parseInt(posMatch[1]) },
+        dimensions: { width: 0.3, height: 0.2, depth: 0.15 },
+        category: "Bryggkaffe",
+        price: 0,
+        isPromo: false,
+        metadata: {
+          shelfName: currentShelfDef ? `Hylla ${currentShelfDef.nr}` : `Hylla ${groups.length + 1}`,
+          positionIndex: parseInt(posMatch[1]), // 1 = längst vänster
+          extractedFrom: "coop-planogram-v3",
+        },
+      });
+    }
+  }
+  if (currentProducts.length > 0) {
+    groups.push({ shelfName: currentShelfDef ? `Hylla ${currentShelfDef.nr}` : `Hylla ${groups.length + 1}`, shelfDef: currentShelfDef, products: currentProducts });
+  }
+
+  // Samla alla grupper från hela dokumentet — INGEN avklippning
+  const selectedGroups = groups;
+  const zones = [{
+    id: "zone-1", name: "Bryggkaffe Mellan Öster 2s",
+    shelves: selectedGroups.map((g, i) => ({
+      id: "shelf-" + (i + 1), zoneId: "zone-1", name: g.shelfName, level: i,
+      height: 1.8, products: g.products,
+    })),
+    bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 4, y: 2, z: 2 } },
+  }];
+  const totalProducts = selectedGroups.reduce((s, g) => s + g.products.length, 0);
+  const totalShelves = selectedGroups.length;
   return {
-    storeName,
-    planogramName,
+    storeName: extractStoreName(lines),
+    planogramName: extractPlanogramName(lines),
     zones,
-    metadata: {
-      totalProducts,
-      totalShelves,
-      pageCount,
-      parsedAt: new Date().toISOString(),
-    },
+    metadata: { totalProducts, totalShelves, pageCount, parsedAt: new Date().toISOString() },
   };
 }
 

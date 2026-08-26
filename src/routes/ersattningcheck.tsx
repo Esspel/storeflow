@@ -53,7 +53,7 @@ import {
 } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
 import { parseDeliveryNoteExcel, matchDeliveryNoteToProducts, type DeliveryNoteRow, type ProductMatchResult } from "@/lib/excel-parser";
-import { exportTextAsCSV } from "@/lib/csv";
+import { exportTextAsCSV, downloadAsZip } from "@/lib/csv";
 import { toast } from "sonner";
 
 type ShelfLifeRecord = {
@@ -75,13 +75,26 @@ type WeeklyTask = {
   delivery_count: number;
 };
 
+type ReclamationStatus = "Ej skickad" | "Granskas av butikssupporten" | "Löst" | "Nekad";
+
+type Reclamation = {
+  id: string;
+  sap_article_id: string;
+  status: ReclamationStatus;
+  created_at: string;
+  updated_at: string;
+  notes?: string;
+};
+
 export const Route = createFileRoute("/ersattningcheck")({
   component: ErstatningsCheckPage,
 });
 
 function ErstatningsCheckPage() {
   const { user, activeStore, loading: authLoading } = useAuth();
-  const [step, setStep] = useState<"import" | "manage" | "generate" | "weekly">("import");
+  const [step, setStep] = useState<"import" | "manage" | "generate" | "weekly" | "reclamations">("import");
+  const [reclamations, setReclamations] = useState<Reclamation[]>([]);
+  const [statusFilter, setStatusFilter] = useState<ReclamationStatus>("Ej skickad");
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNoteRow[]>([]);
@@ -164,22 +177,30 @@ function ErstatningsCheckPage() {
 
       // Auto-create unmatched products
       const newProducts = results
-        .filter(r => r.isNewProduct && r.row.sapProduktId)
+        .filter(r => r.isNewProduct && (r.row.bnr || r.row.sapProduktId))
         .map(r => ({
           store_id: activeStore.id,
-          sap_article_id: r.row.sapProduktId,
-          bnr: r.row.bnr,
-          name: r.row.produkt,
-          brand: r.row.varumärke,
-          size: r.row.innehåll,
-          unit: r.row.beställningsenhet,
-          category: r.row.kategori,
+          sap_article_id: r.row.sapProduktId || null,
+          ean: r.row.bnr ? String(r.row.bnr).trim() : null,
+          bnr: r.row.bnr ? String(r.row.bnr).trim() : null,
+          name: r.row.produkt || "Okänd produkt",
+          brand: r.row.varumärke || null,
+          size: r.row.innehåll || null,
+          unit: r.row.beställningsenhet || null,
+          category: r.row.kategori || null,
+          updated_at: new Date().toISOString(),
         }));
 
       if (newProducts.length > 0) {
-        // Create products (this is handled by matchDeliveryNoteToProducts returning matches)
-        // Actual creation happens in backend
-        console.log("Would create new products:", newProducts);
+        // Upsert produkter baserat på ean/bnr — uppdatera befintliga, skapa nya
+        const { error: upsertErr } = await supabase
+          .from("products")
+          .upsert(newProducts, { onConflict: "ean", ignoreDuplicates: false });
+
+        if (upsertErr) {
+          console.error("Upsert error:", upsertErr);
+          throw upsertErr;
+        }
       }
 
       setImportSuccess(`Matchade ${results.filter(r => r.product).length} produkter. Skapade ${newProducts.length} nya.`);
@@ -220,7 +241,7 @@ function ErstatningsCheckPage() {
         .eq("store_id", activeStore.id);
       if (dbErr) throw dbErr;
 
-      // Filter for products with 0 reklamationer (saknar hållbarhetsdagar)
+      // Filter for products with 0 reklamationes / missing shelf life data
       const productsWithoutShelfLife = (stats || [])
         .filter(p => p.reclamation_count === 0 && p.delivery_count > 0)
         .slice(0, 10);
@@ -230,12 +251,32 @@ function ErstatningsCheckPage() {
         return;
       }
 
-      // Show dialog with products
       setWeeklyTask(productsWithoutShelfLife);
       setStep("weekly");
     } catch (error) {
       console.error("Error loading weekly task:", error);
       toast.error("Kunde inte ladda veckouppdrag");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Save weekly shelf-life updates directly to DB
+  const saveWeeklyShelfLife = async (updates: Array<{ id: string; shelf_lifetime_days: number; expiry_date: string }>) => {
+    setIsLoading(true);
+    try {
+      for (const u of updates) {
+        await supabase.from("product_shelf_life").upsert({
+          id: u.id,
+          shelf_lifetime_days: u.shelf_lifetime_days,
+          expiry_date: u.expiry_date,
+          store_id: activeStore.id,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "id" });
+      }
+      toast.success("Hållbarhetsdata sparad.");
+    } catch (e) {
+      toast.error("Kunde inte spara hållbarhetsdata.");
     } finally {
       setIsLoading(false);
     }
@@ -273,30 +314,55 @@ function ErstatningsCheckPage() {
     }
   };
 
-  // Generate compensation zip
+  // Generate compensation zip (.txt per leverans + temperaturzon)
   const generateCompensationZip = async () => {
     setIsLoading(true);
     try {
       const { data: shelfData, error: dbErr } = await supabase
-        .from("shelf_life")
-        .select("sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore")
+        .from("product_shelf_life")
+        .select("sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore, delivery_number, temperature_zone")
         .eq("store_id", activeStore.id)
         .lt("expiry_date", new Date().toISOString())
         .order("expiry_date");
 
       if (dbErr) throw dbErr;
+      const flagged = shelfData ?? [];
+      if (flagged.length === 0) {
+        setImportSuccess("Inga flaggade produkter för ersättningsansökan.");
+        return;
+      }
 
-      const flaggedCount = (shelfData ?? []).length;
-      if (shelfData && shelfData.length > 0) {
-        const csvContent = [
-          "sap_article_id,shelf_lifetime_days,expiry_date,arrival_date,compensation_price_ore",
-          ...shelfData.map((row) =>
-            `${row.sap_article_id},${row.shelf_lifetime_days},${row.expiry_date},${row.arrival_date},${row.compensation_price_ore ?? 0}`
+      // Gruppera per leveransnummer + temperaturzon
+      const groups: Record<string, Array<typeof flagged[0]>> = {};
+      for (const r of flagged) {
+        const leverans = r.delivery_number ? String(r.delivery_number) : "okand";
+        const zon = r.temperature_zone || "okand";
+        const key = `${leverans}__${zon}`;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(r);
+      }
+
+      const files = Object.entries(groups).map(([key, rows]) => {
+        const [leverans, zon] = key.split("__");
+        const content = [
+          `LEVERANS: ${leverans}`,
+          `TEMPERATURZON: ${zon}`,
+          `SAP_ARTIKEL_ID|HALLBARHET_DAGAR|UTGANGSDATUM|ANKOMST|ERSATTNING_ORE`,
+          ...rows.map((row) =>
+            [
+              row.sap_article_id,
+              row.shelf_lifetime_days,
+              row.expiry_date,
+              row.arrival_date,
+              row.compensation_price_ore ?? 0,
+            ].join("|")
           ),
         ].join("\n");
-        exportTextAsCSV(csvContent, `ersattningsansokning_${new Date().toISOString().split("T")[0]}.csv`);
-      }
-      setImportSuccess(`Genererade ersättningsfil med ${flaggedCount} flaggade produkter`);
+        return { name: `ersattning_${leverans}_${zon}.txt`, content };
+      });
+
+      await downloadAsZip(files, `ersattningsansokan_${new Date().toISOString().split("T")[0]}.zip`);
+      setImportSuccess(`Genererade ZIP med ${files.length} .txt-fil(er), ${flagged.length} produkter.`);
     } catch (error) {
       console.error("Error generating zip:", error);
       setImportError("Kunde inte generera ersättningsfil.");
@@ -335,10 +401,7 @@ function ErstatningsCheckPage() {
         </Button>
         <Button
           variant={step === "generate" ? "default" : "outline"}
-          onClick={() => {
-            setStep("generate");
-            loadWeeklyTask();
-          }}
+          onClick={() => setStep("generate")}
           className="flex items-center gap-2"
         >
           <Download size={16} />
@@ -351,6 +414,14 @@ function ErstatningsCheckPage() {
         >
           <Clock size={16} />
           4. Veckouppdrag
+        </Button>
+        <Button
+          variant={step === "reclamations" ? "default" : "outline"}
+          onClick={() => setStep("reclamations")}
+          className="flex items-center gap-2"
+        >
+          <AlertTriangle size={16} />
+          5. Hantera varor
         </Button>
       </div>
 
@@ -684,6 +755,86 @@ function ErstatningsCheckPage() {
                 </Table>
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 5: Reclamation status / Hantera varor */}
+      {step === "reclamations" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Hantera varor — Reklamationsstatus</CardTitle>
+            <CardDescription>
+              Uppdatera status per reklamation. Spara direkt till Supabase (reclamations-tabell).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {(["Ej skickad", "Granskas av butikssupporten", "Löst", "Nekad"] as ReclamationStatus[]).map((s) => (
+                <Button
+                  key={s}
+                  size="sm"
+                  variant={statusFilter === s ? "default" : "outline"}
+                  onClick={() => setStatusFilter(s)}
+                >
+                  {s}
+                </Button>
+              ))}
+            </div>
+            <div className="border rounded-lg overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>SAP-ID</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Uppdaterad</TableHead>
+                    <TableHead>Åtgärder</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reclamations.filter((r) => (statusFilter ? r.status === statusFilter : true)).map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-mono text-sm">{r.sap_article_id}</TableCell>
+                      <TableCell>
+                        <Badge variant={r.status === "Löst" ? "default" : r.status === "Nekad" ? "destructive" : "secondary"}>
+                          {r.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{new Date(r.updated_at).toLocaleDateString("sv-SE")}</TableCell>
+                      <TableCell>
+                        {(["Ej skickad", "Granskas av butikssupporten", "Löst", "Nekad"] as ReclamationStatus[]).map((s) => (
+                          <Button
+                            key={s}
+                            size="xs"
+                            variant={r.status === s ? "default" : "outline"}
+                            onClick={async () => {
+                              await supabase.from("reclamations").update({ status: s, updated_at: new Date().toISOString() }).eq("id", r.id);
+                              setReclamations((prev) => prev.map((x) => (x.id === r.id ? { ...x, status: s, updated_at: new Date().toISOString() } : x)));
+                            }}
+                            className="mr-1 text-[10px]"
+                          >
+                            {s}
+                          </Button>
+                        ))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {reclamations.filter((r) => (statusFilter ? r.status === statusFilter : true)).length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-6">
+                        Inga reklamationer med denna status. Ladda via knappen nedan.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <Button onClick={async () => {
+              const { data, error } = await supabase.from("reclamations").select("*").eq("store_id", activeStore.id).limit(20);
+              if (!error && data) setReclamations(data as Reclamation[]);
+            }}>
+              Ladda reklamationer från DB
+            </Button>
           </CardContent>
         </Card>
       )}

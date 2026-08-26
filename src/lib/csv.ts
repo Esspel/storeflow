@@ -46,6 +46,25 @@ export function exportTextAsCSV(text: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+/** Startar nedladdning av en ZIP-fil byggd från filnamn + innehåll. */
+export async function downloadAsZip(
+  files: Array<{ name: string; content: string }>,
+  zipName: string,
+): Promise<void> {
+  const { default: JSZip } = await import("jszip");
+  const zip = new JSZip();
+  for (const file of files) {
+    zip.file(file.name, file.content);
+  }
+  const blob = await zip.generateAsync({ type: "blob" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = zipName;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /** Parserar en CSV-rad (quote-medveten, hanterar `""`-escapning). Returnerar råa fält utan trimning. */
 export function parseCSVLine(text: string, delimiter = ";"): string[] {
   const cols: string[] = [];

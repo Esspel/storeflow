@@ -370,7 +370,6 @@ export function AppShell() {
     { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
     { to: "/produktkatalog", label: "Produktkatalog", mobileHidden: true, Icon: Box },
     { to: "/ersattningcheck", label: "Ersättningscheck", mobileHidden: true, Icon: AlertTriangle },
-    { to: "/dashboard", label: "Dashboard", mobileHidden: true, Icon: ChartBar },
   ];
 
   const fetchNotifications = useCallback(() => {
@@ -446,6 +445,7 @@ export function AppShell() {
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", Icon: FlaskConical }] : []),
     { to: "/mallar", label: "Mallar", Icon: ClipboardList },
     { to: "/hjalp", label: "Hjälp", Icon: HelpCircle },
+    { to: "/spatial-navigation", label: "3D Butiksvy", Icon: Navigation },
   ];
   const isMoreActive = moreRoutes.some((r) => isActive(r.to));
 
@@ -596,7 +596,7 @@ export function AppShell() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="relative rounded-xl border-border/80"
+                  className="relative rounded-full border-border/80 h-9 w-9"
                   aria-label="Notiser"
                 >
                   <Bell className="h-4 w-4" />
@@ -673,10 +673,10 @@ export function AppShell() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="rounded-xl border-border/80"
+                  className="rounded-full border-border/80 h-9 w-9 p-0"
                   aria-label="Konto"
                 >
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-soft text-[10px] font-bold text-primary">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-soft text-[10px] font-bold text-primary">
                     {initials}
                   </div>
                 </Button>

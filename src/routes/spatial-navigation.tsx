@@ -21,7 +21,7 @@ import {
   DoorOpen,
   DoorClosed,
   Route as RouteIcon,
-  Cube,
+  Box as CubeIcon,
   Smartphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";

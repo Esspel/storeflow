@@ -5,6 +5,7 @@
  */
 
 import * as XLSX from 'xlsx';
+import { type SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * Column names for följesedel file
@@ -15,6 +16,36 @@ import * as XLSX from 'xlsx';
  * "Pris per Leveransenhet (SEK)" "Totalpris(SEK)" "Kategori"
  * "Förväntad kvantitet" "Orderrad" "Ordernummer" "Leveransnummer"
  */
+
+export type DeliveryNoteRow = {
+  leveransdag: string | null;
+  pallnummer: string;
+  sapProduktId: string;
+  bnr: string;
+  produkt: string;
+  varumärke: string;
+  innehåll: string;
+  beställningskvantitet: string;
+  beställningsenhet: string;
+  enhetsomvandling: string;
+  levereradKvantitet: string;
+  sannViktKg: string;
+  bastForeDatum: string | null;
+  leveransstatus: string;
+  prisPerLeveransenhet: string;
+  totalpris: string;
+  kategori: string;
+  förväntadKvantitet: string;
+  orderrad: string;
+  ordernummer: string;
+  leveransnummer: string;
+};
+
+export type ParsedDeliveryNote = {
+  rows: DeliveryNoteRow[];
+  headers: string[];
+  totalRows: number;
+};
 
 // Column positions (0-indexed) for the SAPUI5 - export sheet
 // This maps to the exact order in the Excel file
@@ -47,29 +78,36 @@ export const SAPUI5_EXPORT_COLUMN_MAP = {
  * Normalizes a date string to ISO format (YYYY-MM-DD).
  * Handles various input formats and null/empty values.
  */
-function normalizeDate(dateStr: string | null | undefined): string | null {
+function normalizeDate(dateStr: string | number | Date | null | undefined): string | null {
   if (dateStr == null || dateStr === '') return null;
-  // XLSX kan ge Date-objekt eller nummer (Excel seriedatum) - normalisera till string
-  let s: string;
+  // XLSX ger Date-objekt eller Excel seriedatum (number, t.ex. 46259 = 2026-08-26)
   if (dateStr instanceof Date) {
-    s = dateStr.toISOString();
-  } else {
-    s = String(dateStr);
+    const year = dateStr.getFullYear();
+    const month = String(dateStr.getMonth() + 1).padStart(2, '0');
+    const day = String(dateStr.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
-  const trimmed = s.trim();
-
+  if (typeof dateStr === 'number' && !isNaN(dateStr) && dateStr > 30000 && dateStr < 60000) {
+    // Excel serial date (days since 1899-12-30), kompenserar 1900 leap-year-bug (+1 dag)
+    const excelEpochMs = Date.UTC(1899, 11, 30); // 1899-12-30 00:00:00 UTC
+    // Excel räknar 1900 som skottår (fel), så vi drar bort 1 från serial för korrekt JS-datum
+    const resultMs = excelEpochMs + dateStr * 86400000;
+    const result = new Date(resultMs);
+    const year = result.getUTCFullYear();
+    const month = String(result.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(result.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  // Normalisera från sträng
+  let s = String(dateStr).trim();
   // Already in ISO format YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-
-  // Try to parse common date formats
-  const date = new Date(trimmed);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // Try to parse common date formats from string
+  const date = new Date(s);
   if (isNaN(date.getTime())) return null;
-
-  // Format to YYYY-MM-DD
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
-
   return `${year}-${month}-${day}`;
 }
 
@@ -134,14 +172,16 @@ export async function parseDeliveryNoteExcel(file: File): Promise<ParsedDelivery
         }
 
         // --- Step 1: Extract and normalize headers ---
-        const rawHeaders = jsonData[0] || [];
+        const rawHeaders = ((jsonData[0] || []) as unknown) as (string | number | null)[];
         // Trim all header values and remove trailing whitespace
-        const headers = rawHeaders.map((h) =>
+        const headers = rawHeaders.map((h: string | number | null) =>
           typeof h === 'string' ? h.trim().replace(/\s+$/g, '') : String(h).trim()
         );
 
         // --- Step 2: Find data rows (skip header row) ---
-        const dataRows = jsonData.slice(1).filter((row) => row && row.length > 0);
+        const dataRows = ((jsonData.slice(1)) as unknown as (string | number | null | undefined)[][]).filter(
+          (row) => Array.isArray(row) && row.length > 0
+        );
 
         // --- Step 3: Map each row to DeliveryNoteRow ---
         const rows: DeliveryNoteRow[] = dataRows.map((row) => {
@@ -281,10 +321,43 @@ export async function parseDeliveryNoteExcel(file: File): Promise<ParsedDelivery
     reader.readAsArrayBuffer(file);
   });
 }
-export function matchDeliveryNoteToProducts(
+export type ProductMatchResult = {
+  row: DeliveryNoteRow;
+  product: {
+    id: string;
+    ean: string;
+    sku: string;
+    name: string;
+  } | null;
+  isNewProduct: boolean;
+};
+
+export async function matchDeliveryNoteToProducts(
+  supabase: SupabaseClient,
+  storeId: string,
   rows: DeliveryNoteRow[],
-  storeProducts: Array<{ id: string; ean: string; sku: string; name: string }>,
-): DeliveryNoteRow[] {
-  return rows;
+): Promise<ProductMatchResult[]> {
+  // Hämta existerande produkter för butiken
+  const { data: storeProducts, error } = await supabase
+    .from("products")
+    .select("id, ean, sku, name")
+    .eq("store_id", storeId);
+
+  if (error) throw error;
+
+  const results: ProductMatchResult[] = rows.map((row) => {
+    const sapId = row.sapProduktId;
+    const existing = (storeProducts ?? []).find(
+      (p) => p.ean === row.bnr || p.sku === sapId || p.name === row.produkt
+    );
+
+    if (existing) {
+      return { row, product: existing, isNewProduct: false };
+    }
+
+    return { row, product: null, isNewProduct: true };
+  });
+
+  return results;
 }
 

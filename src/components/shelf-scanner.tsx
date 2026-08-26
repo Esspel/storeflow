@@ -33,7 +33,7 @@ import type {
   ShelfPlanogram as SupabaseShelfPlanogram,
   ExpectedProduct as SupabaseExpectedProduct,
 } from "@/lib/supabase";
-import { lookupCoopProductByEan, lookupCoopProductByBnr } from "@/lib/coop-products";
+import { lookupProductByEan, lookupProductByBnr } from "@/lib/coop-products";
 import { checkPlanogramCompliance, type PlanogramCheckResult } from "@/lib/planogram-engine";
 import { getShelfPlanograms } from "@/lib/supabase";
 import { useShelfLifeForProducts } from "@/hooks/use-shelf-life";
@@ -132,12 +132,12 @@ export function ShelfScanner({
 
         // Check if it's an EAN (13 or 8 digits)
         if (/^\d{13}$/.test(barcode.data) || /^\d{8}$/.test(barcode.data)) {
-          const product = await lookupCoopProductByEan(barcode.data);
+          const product = await lookupProductByEan(barcode.data);
           if (product) productInfo = { name: product.name, bnr: product.bnr, sap_article_id: product.sap_article_id };
         }
         // Check if it's a BNR (Coop article number, typically 6-7 digits)
         else if (/^\d{6,7}$/.test(barcode.data)) {
-          const product = await lookupCoopProductByBnr(barcode.data);
+          const product = await lookupProductByBnr(barcode.data);
           if (product) productInfo = { name: product.name, bnr: product.bnr, sap_article_id: product.sap_article_id };
         }
 
@@ -244,33 +244,23 @@ export function ShelfScanner({
     }
 
     if (!planogramToUse) {
-      // Fallback mock planogram for backward compatibility
-      planogramToUse = {
-        id: shelfId,
-        store_id: "store-1",
-        shelf_marker_id: shelfId,
-        name: shelfName,
-        expected_products: scanHistory.map((item, idx) => ({
-          product_id: item.product_id,
-          ean: item.ean,
-          name: item.name ?? `Produkt ${idx + 1}`,
-          brand: "Okänt",
-          size: "1x",
-          position: {
-            shelf_number: 1,
-            shelf_position: idx,
-            x_offset_inch: (idx % 4) * 3,
-            y_offset_inch: 0,
-            z_offset_inch: 0,
-          },
-          facings: 2,
-          quantity_per_facing: 2,
-          total_quantity: 4,
-        })),
-        version: 1,
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+      // Inget planogram kopplat — visa tomt läge
+      return {
+        shelfId,
+        shelfName,
+        observation,
+        compliance: {
+          overall_score: 0,
+          matched: 0,
+          misplaced: 0,
+          missing: 0,
+          extra: 0,
+          shelf_life_issues: 0,
+          shelf_life_flagged_products: [],
+          shelf_life_details: {},
+        },
+        needsPlanogramImport: true,
+        message: "Ett planogram måste importeras först för denna hylla.",
       };
     }
 

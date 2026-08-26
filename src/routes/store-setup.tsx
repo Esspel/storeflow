@@ -65,6 +65,16 @@ import { toast } from "sonner";
 
 type SetupStep = "portals" | "mapping" | "products" | "complete";
 
+type MarkerConfig = {
+  shelfId: string;
+  shelfName: string;
+  leftMarkerId?: string;
+  middleMarkerId?: string;
+  rightMarkerId?: string;
+  arucoId?: number;
+  products?: Array<{ ean: string; name: string; facings: number }>;
+};
+
 interface StoreSetupState {
   step: SetupStep;
   // Step 1: Portals
@@ -223,7 +233,7 @@ function StoreSetupPage() {
             </p>
             <Button
               variant="outline"
-              onClick={() => navigate({ to: "/posemesh/markers" })}
+              onClick={() => navigate({ to: "/store-setup" })}
             >
               <Layers className="w-4 h-4 mr-2" />
               Öppna Markörgenerator
@@ -293,8 +303,8 @@ function StoreSetupPage() {
           description: "Autogenererad via Store Setup Wizard",
           version: 1,
           is_active: true,
-          bounds_min: { x: 0, y: 0, z: 0 },
-          bounds_max: { x: 10, y: 5, z: 3 }, // Will be updated during mapping
+          bounds_min: "[0, 0, 0]",
+          bounds_max: "[10, 5, 3]", // Updated during mapping
         })
         .select()
         .single();
@@ -467,30 +477,55 @@ function StoreSetupPage() {
 
   const handleProductScanned = useCallback(
     async (ean: string, markerId: string) => {
-      // Look up product in Coop database
-      const product = state.markerConfigs.find((m) => m.shelfId === markerId);
-      if (!product) return;
+      const marker = state.markerConfigs.find((m) => m.shelfId === markerId);
+      if (!marker) return;
 
-      // In real app, this would call lookupProductByEAN(ean)
-      // For now, use mock data
-      const mockProduct = {
-        ean,
-        bnr: "1001001",
-        name: "Gevalia Mellanrost 450g",
-        shelfMarkerId: markerId,
-        position: { x: 0, y: 0, z: 0 }, // Would come from posemesh
-        facings: 2,
-      };
+      try {
+        // Hämta produkt från DB eller Coop API
+        const { data: dbProduct, error } = await supabase
+          .from("products")
+          .select("id, name, ean, bnr")
+          .eq("ean", ean)
+          .eq("store_id", activeStore?.id)
+          .maybeSingle();
 
-      setState((prev) => ({
-        ...prev,
-        productsRegistered: [...prev.productsRegistered, mockProduct],
-      }));
+        if (error) throw error;
 
-      setScanningProduct(null);
-      toast.success(`${mockProduct.name} registrerad på ${product.shelfName}`);
+        const productName = dbProduct?.name || `Produkt ${ean}`;
+        const bnr = dbProduct?.bnr || "";
+        const registered = {
+          ean,
+          bnr,
+          name: productName,
+          shelfMarkerId: markerId,
+          position: { x: 0, y: 0, z: 0 },
+          facings: 2,
+        };
+
+        // Spara till DB
+        await supabase.from("shelf_products").insert({
+          store_id: activeStore?.id,
+          shelf_marker_id: markerId,
+          ean,
+          bnr,
+          name: productName,
+          facings: 2,
+          created_at: new Date().toISOString(),
+        });
+
+        setState((prev) => ({
+          ...prev,
+          productsRegistered: [...prev.productsRegistered, registered],
+        }));
+
+        setScanningProduct(null);
+        toast.success(`${productName} registrerad på ${marker.shelfName}`);
+      } catch (err) {
+        console.error("Failed to register product:", err);
+        toast.error("Kunde inte registrera produkt");
+      }
     },
-    [state.markerConfigs]
+    [state.markerConfigs, activeStore?.id]
   );
 
   const renderStepProducts = () => (

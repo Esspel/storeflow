@@ -3654,13 +3654,6 @@ function TasksPage() {
                   : "Markera alla"}
               </Button>
             )}
-            {isManager && (
-              <div className="flex items-center gap-2 shrink-0">
-                <Badge variant="secondary">
-                  {horizonDays === 0 ? "Inga" : `${horizonDays}d`} framåt
-                </Badge>
-              </div>
-            )}
           </div>
         )}
       </div>

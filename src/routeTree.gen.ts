@@ -16,7 +16,6 @@ import { Route as AvvikelserRouteImport } from './routes/avvikelser'
 import { Route as BelastningRouteImport } from './routes/belastning'
 import { Route as ButiksregisterRouteImport } from './routes/butiksregister'
 import { Route as CustomerNavRouteImport } from './routes/customer-nav'
-import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ErsattningcheckRouteImport } from './routes/ersattningcheck'
 import { Route as GdprRouteImport } from './routes/gdpr'
 import { Route as HjalpRouteImport } from './routes/hjalp'
@@ -75,11 +74,6 @@ const ButiksregisterRoute = ButiksregisterRouteImport.update({
 const CustomerNavRoute = CustomerNavRouteImport.update({
   id: '/customer-nav',
   path: '/customer-nav',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ErsattningcheckRoute = ErsattningcheckRouteImport.update({
@@ -211,7 +205,6 @@ export interface FileRoutesByFullPath {
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
   '/customer-nav': typeof CustomerNavRoute
-  '/dashboard': typeof DashboardRoute
   '/ersattningcheck': typeof ErsattningcheckRoute
   '/gdpr': typeof GdprRoute
   '/hjalp': typeof HjalpRoute
@@ -245,7 +238,6 @@ export interface FileRoutesByTo {
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
   '/customer-nav': typeof CustomerNavRoute
-  '/dashboard': typeof DashboardRoute
   '/ersattningcheck': typeof ErsattningcheckRoute
   '/gdpr': typeof GdprRoute
   '/hjalp': typeof HjalpRoute
@@ -280,7 +272,6 @@ export interface FileRoutesById {
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
   '/customer-nav': typeof CustomerNavRoute
-  '/dashboard': typeof DashboardRoute
   '/ersattningcheck': typeof ErsattningcheckRoute
   '/gdpr': typeof GdprRoute
   '/hjalp': typeof HjalpRoute
@@ -316,7 +307,6 @@ export interface FileRouteTypes {
     | '/belastning'
     | '/butiksregister'
     | '/customer-nav'
-    | '/dashboard'
     | '/ersattningcheck'
     | '/gdpr'
     | '/hjalp'
@@ -350,7 +340,6 @@ export interface FileRouteTypes {
     | '/belastning'
     | '/butiksregister'
     | '/customer-nav'
-    | '/dashboard'
     | '/ersattningcheck'
     | '/gdpr'
     | '/hjalp'
@@ -384,7 +373,6 @@ export interface FileRouteTypes {
     | '/belastning'
     | '/butiksregister'
     | '/customer-nav'
-    | '/dashboard'
     | '/ersattningcheck'
     | '/gdpr'
     | '/hjalp'
@@ -419,7 +407,6 @@ export interface RootRouteChildren {
   BelastningRoute: typeof BelastningRoute
   ButiksregisterRoute: typeof ButiksregisterRoute
   CustomerNavRoute: typeof CustomerNavRoute
-  DashboardRoute: typeof DashboardRoute
   ErsattningcheckRoute: typeof ErsattningcheckRoute
   GdprRoute: typeof GdprRoute
   HjalpRoute: typeof HjalpRoute
@@ -495,13 +482,6 @@ declare module '@tanstack/react-router' {
       path: '/customer-nav'
       fullPath: '/customer-nav'
       preLoaderRoute: typeof CustomerNavRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ersattningcheck': {
@@ -683,7 +663,6 @@ const rootRouteChildren: RootRouteChildren = {
   BelastningRoute: BelastningRoute,
   ButiksregisterRoute: ButiksregisterRoute,
   CustomerNavRoute: CustomerNavRoute,
-  DashboardRoute: DashboardRoute,
   ErsattningcheckRoute: ErsattningcheckRoute,
   GdprRoute: GdprRoute,
   HjalpRoute: HjalpRoute,
