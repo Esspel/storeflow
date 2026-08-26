@@ -570,7 +570,6 @@ function ErstatningsCheckPage() {
                         ))}
                       </TableBody>
                     </Table>
-                  </div>
                   {deliveryNotes.length > 10 && (
                     <p className="text-sm text-muted-foreground text-center py-2">
                       Och {deliveryNotes.length - 10} fler rader...
