@@ -42,54 +42,41 @@ export function useShelfLifeForProducts(
       return;
     }
 
-    let cancelled = false;
+    let isCancelled = false;
     setIsLoading(true);
     setError(null);
 
     const load = async () => {
       try {
         const { data, error: fnError } = await supabase.functions.invoke(
-          "mcp-server",
-          {
-            body: {
-              jsonrpc: "2.0",
-              id: "1",
-              method: "tools/call",
-              params: {
-                tool: "get_shelf_life_for_products",
-                arguments: { sap_article_ids: sapArticleIds },
-              },
-            },
-          },
+          "get_shelf_life_for_products",
+          { sap_article_ids: sapArticleIds },
         );
 
         if (fnError) throw fnError;
 
-        // Hantera svar från MCP
         const result = (data as { result?: ShelfLifeStatus[] })?.result ?? [];
-        if (cancelled) return;
-
-        const map: ShelfLifeMap = {};
-        for (const entry of result) {
-          if (entry?.sap_article_id) {
-            map[entry.sap_article_id] = entry;
+        if (!isCancelled) {
+          const map: ShelfLifeMap = {};
+          for (const entry of result) {
+            if (entry?.sap_article_id) {
+              map[entry.sap_article_id] = entry;
+            }
           }
+          setShelfLifeBySap(map);
         }
-        setShelfLifeBySap(map);
-      } catch (e: unknown) {
-        if (cancelled) return;
-        console.error("useShelfLifeForProducts error:", e);
-        setError(e instanceof Error ? e.message : String(e));
+      } catch (e) {
+        if (!isCancelled) setError((e as Error)?.message ?? String(e));
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!isCancelled) setIsLoading(false);
       }
     };
 
     load();
     return () => {
-      cancelled = true;
+      isCancelled = true;
     };
-  }, [sapArticleIds.join("|")]);
+  }, [JSON.stringify(sapArticleIds?.sort())]);
 
   return { shelfLifeBySap, isLoading, error };
 }

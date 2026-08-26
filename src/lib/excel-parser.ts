@@ -274,3 +274,10 @@ export async function parseDeliveryNoteExcel(file: File): Promise<ParsedDelivery
     reader.readAsArrayBuffer(file);
   });
 }
+export function matchDeliveryNoteToProducts(
+  rows: DeliveryNoteRow[],
+  storeProducts: Array<{ id: string; ean: string; sku: string; name: string }>,
+): DeliveryNoteRow[] {
+  return rows;
+}
+
