@@ -152,7 +152,7 @@ function ErstatningsCheckPage() {
     try {
       const parsed = await parseDeliveryNoteExcel(file);
       setDeliveryNotes(parsed.rows);
-      setImportSuccess(`Importerade ${parsed.totalRows} följesedlar`);
+      setImportSuccess(`Importerade ${parsed.totalRows} artiklar`);
     } catch (error) {
       console.error("Import error:", error);
       setImportError("Kunde inte importera filen. Kontrollera formatet.");
@@ -452,10 +452,28 @@ function ErstatningsCheckPage() {
           <CardContent className="space-y-4">
             <div>
               <Label htmlFor="delivery-file">Välj följesedelsfil</Label>
-              <Input
+              <div
+                className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 transition-colors bg-muted/30"
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  const file = e.dataTransfer.files?.[0];
+                  if (file && (file.name.endsWith(".xlsx") || file.name.endsWith(".xls") || file.name.endsWith(".csv"))) {
+                    const dummyEvent = { target: { files: [file] } } as React.ChangeEvent<HTMLInputElement>;
+                    await handleFileUpload(dummyEvent);
+                  }
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onClick={() => document.getElementById("delivery-file")?.click()}
+              >
+                <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm font-medium">Dra och släpp Excel-filen här</p>
+                <p className="text-xs text-muted-foreground mt-1">eller klicka för att välja .xlsx / .xls / .csv</p>
+              </div>
+              <input
                 id="delivery-file"
                 type="file"
-                accept=".xlsx, .xls"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
                 onChange={handleFileUpload}
                 disabled={isLoading}
               />
@@ -471,30 +489,62 @@ function ErstatningsCheckPage() {
                 </div>
 
                 <div className="border rounded-lg overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>SAP Produkt-ID</TableHead>
-                        <TableHead>BNR</TableHead>
-                        <TableHead>Produkt</TableHead>
-                        <TableHead>Leveransdag</TableHead>
-                        <TableHead>Bäst-före-datum</TableHead>
-                        <TableHead align="right">Levererad kvantitet</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {deliveryNotes.slice(0, 10).map((row, i) => (
-                        <TableRow key={i}>
-                          <TableCell>{row.sapProduktId}</TableCell>
-                          <TableCell>{row.bnr}</TableCell>
-                          <TableCell>{row.produkt}</TableCell>
-                          <TableCell>{row.leveransdag}</TableCell>
-                          <TableCell>{row.bastForeDatum}</TableCell>
-                          <TableCell align="right">{row.levereradKvantitet}</TableCell>
+                  <div className="border rounded-lg overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Pallnummer</TableHead>
+                          <TableHead>SAP Produkt-ID</TableHead>
+                          <TableHead>BNR</TableHead>
+                          <TableHead>Produkt</TableHead>
+                          <TableHead>Varumärke</TableHead>
+                          <TableHead>Innehåll</TableHead>
+                          <TableHead>Beställningskvantitet</TableHead>
+                          <TableHead>Beställningsenhet</TableHead>
+                          <TableHead>Enhetsomvandling</TableHead>
+                          <TableHead>Levererad kvantitet</TableHead>
+                          <TableHead>Sann vikt (KG)</TableHead>
+                          <TableHead>Leveransdag</TableHead>
+                          <TableHead>Bäst-före-datum</TableHead>
+                          <TableHead>Leveransstatus</TableHead>
+                          <TableHead>Pris per enhet (SEK)</TableHead>
+                          <TableHead>Totalpris (SEK)</TableHead>
+                          <TableHead>Kategori</TableHead>
+                          <TableHead>Förväntad kvantitet</TableHead>
+                          <TableHead>Orderrad</TableHead>
+                          <TableHead>Ordernummer</TableHead>
+                          <TableHead>Leveransnummer</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {deliveryNotes.slice(0, 10).map((row, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="whitespace-nowrap">{row.pallnummer}</TableCell>
+                            <TableCell className="font-mono text-sm whitespace-nowrap">{row.sapProduktId}</TableCell>
+                            <TableCell className="font-mono text-sm whitespace-nowrap">{row.bnr}</TableCell>
+                            <TableCell className="whitespace-nowrap max-w-[200px] truncate">{row.produkt}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.varumärke}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.innehåll}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.beställningskvantitet}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.beställningsenhet}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.enhetsomvandling}</TableCell>
+                            <TableCell align="right" className="whitespace-nowrap">{row.levereradKvantitet}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.sannViktKg}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.leveransdag}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.bastForeDatum}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.leveransstatus}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.prisPerLeveransenhet}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.totalpris}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.kategori}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.förväntadKvantitet}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.orderrad}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.ordernummer}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.leveransnummer}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                   {deliveryNotes.length > 10 && (
                     <p className="text-sm text-muted-foreground text-center py-2">
                       Och {deliveryNotes.length - 10} fler rader...

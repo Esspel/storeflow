@@ -88,11 +88,11 @@ function normalizeDate(dateStr: string | number | Date | null | undefined): stri
     return `${year}-${month}-${day}`;
   }
   if (typeof dateStr === 'number' && !isNaN(dateStr) && dateStr > 30000 && dateStr < 60000) {
-    // Excel serial date (days since 1899-12-30), kompenserar 1900 leap-year-bug (+1 dag)
-    const excelEpochMs = Date.UTC(1899, 11, 30); // 1899-12-30 00:00:00 UTC
-    // Excel räknar 1900 som skottår (fel), så vi drar bort 1 från serial för korrekt JS-datum
-    const resultMs = excelEpochMs + dateStr * 86400000;
-    const result = new Date(resultMs);
+    // Excel serial date: days since 1899-12-30 (25569 days from 1970-01-01)
+    // Kompenserar Excels 1900-skottår-bug: Excel räknar 1900 som skottår (+1 dag fel)
+    // 25569 = dagar från 1899-12-30 till 1970-01-01; minus 1 dag för 1900-buggen
+    const correctedSerial = dateStr - 25569 - 1;
+    const result = new Date(Math.round((correctedSerial) * 86400 * 1000));
     const year = result.getUTCFullYear();
     const month = String(result.getUTCMonth() + 1).padStart(2, '0');
     const day = String(result.getUTCDate()).padStart(2, '0');

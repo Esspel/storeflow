@@ -14,12 +14,14 @@ let pdfjsLib: typeof import("pdfjs-dist") | null = null;
 async function initPdfLib() {
   if (!pdfjsLib) {
     pdfjsLib = await import("pdfjs-dist") as any;
-    if (typeof window !== "undefined" && !(pdfjsLib as any).GlobalWorkerOptions.workerSrc) {
-      (pdfjsLib as any).GlobalWorkerOptions.workerSrc = new URL(
-        "pdfjs-dist/build/pdf.worker.min.mjs",
-        import.meta.url
-      ).toString();
+    const workerSrcUrl = new URL(
+      "pdfjs-dist/build/pdf.worker.min.mjs",
+      import.meta.url
+    ).toString();
+    if (!(pdfjsLib as any).GlobalWorkerOptions) {
+      (pdfjsLib as any).GlobalWorkerOptions = {};
     }
+    (pdfjsLib as any).GlobalWorkerOptions.workerSrc = workerSrcUrl;
   }
   return pdfjsLib;
 }
@@ -193,7 +195,17 @@ export async function parsePlanogramPdf(
     throw new Error("Invalid file type: expected File or ArrayBuffer");
   }
 
+  // Säkerställ att PDF-biblioteket och workern är laddade FÖRST
+  const lib = await initPdfLib();
+
+  // Ladda pdf-parse dynamiskt
   const pdfModule = await import("pdf-parse");
+
+  // Sätt workerSrc uttryckligen på modulen om den har en egen pdfjs-instans
+  if (pdfModule.pdfjs?.GlobalWorkerOptions) {
+    pdfModule.pdfjs.GlobalWorkerOptions.workerSrc = lib.GlobalWorkerOptions.workerSrc;
+  }
+
   const parser = new pdfModule.PDFParse({ data: arrayBuffer });
   const pdfData = await parser.getText();
   const text = pdfData.text;

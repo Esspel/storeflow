@@ -528,13 +528,13 @@ export function AppShell() {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden flex-1 items-center gap-1 md:flex">
+          <nav className="hidden flex-1 items-center gap-0.5 md:flex overflow-x-auto">
             {nav.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  "relative rounded-full px-3.5 py-2 text-sm font-medium text-foreground/70 transition-colors hover:text-primary",
+                  "relative rounded-full px-2.5 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:text-primary whitespace-nowrap",
                   isActive(item.to) && "text-primary",
                 )}
               >
@@ -550,7 +550,7 @@ export function AppShell() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="relative rounded-full px-3.5 py-2 text-sm font-medium text-foreground/70 transition-colors hover:text-primary"
+                  className="relative rounded-full px-2 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:text-primary whitespace-nowrap"
                 >
                   <Navigation className="h-4 w-4" />
                   <span className="ml-1 text-[10px]">Posemesh</span>

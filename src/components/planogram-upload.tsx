@@ -630,22 +630,28 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                                   <div className="overflow-x-auto">
                                     <table className="w-full text-sm">
                                       <thead>
-                                        <tr className="border-b text-left text-gray-500">
+                                        <tr className="border-b text-left text-gray-500 whitespace-nowrap">
                                           <th className="pb-1 pr-3">POS</th>
                                           <th className="pb-1 pr-3">EAN</th>
                                           <th className="pb-1 pr-3">SKU</th>
                                           <th className="pb-1 pr-3">Artikel</th>
                                           <th className="pb-1 pr-3">Facings</th>
+                                          <th className="pb-1 pr-3">Kategori</th>
+                                          <th className="pb-1 pr-3">Varumärke</th>
+                                          <th className="pb-1 pr-3">Storlek</th>
                                         </tr>
                                       </thead>
                                       <tbody>
                                         {shelf.products.map((product) => (
-                                          <tr key={product.id} className="border-b">
+                                          <tr key={product.id} className="border-b whitespace-nowrap">
                                             <td className="py-1 pr-3 font-mono">{product.position.index + 1}</td>
                                             <td className="py-1 pr-3 font-mono">{product.ean ?? "-"}</td>
                                             <td className="py-1 pr-3 font-mono">{product.sku}</td>
-                                            <td className="py-1 pr-3">{product.name}</td>
+                                            <td className="py-1 pr-3 max-w-[200px] truncate">{product.name}</td>
                                             <td className="py-1 pr-3 text-center">{product.facings}</td>
+                                            <td className="py-1 pr-3">{(product as any).category ?? "-"}</td>
+                                            <td className="py-1 pr-3">{(product as any).brand ?? "-"}</td>
+                                            <td className="py-1 pr-3">{(product as any).size ?? "-"}</td>
                                           </tr>
                                         ))}
                                       </tbody>
