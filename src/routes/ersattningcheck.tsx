@@ -1,7 +1,7 @@
 /**
- * Ersättnings Check Route
- * Handles delivery note import, shelf life management, and compensation claims
- * Based on Coop's datumregelverk (date rules) for product expiration
+ * Ersättningscheck Route
+ * Hanterar följesedelimport, hållbarhetsdatum och ersättningskrav
+ * Enligt Coops datumregelverk för produktförfall
  */
 
 import { createFileRoute } from "@tanstack/react-router";
@@ -395,7 +395,7 @@ function ErstatningsCheckPage() {
                 <div className="flex justify-between items-center">
                   <h3 className="font-medium">Importerade {deliveryNotes.length} rader</h3>
                   <Button onClick={handleMatchProducts} disabled={isLoading}>
-                    {isLoading ? "Matchar..." : "Matcha produkter"}
+                    {isLoading ? "Matchar produkter..." : "Matcha produkter"}
                   </Button>
                 </div>
 
@@ -624,7 +624,7 @@ function ErstatningsCheckPage() {
                 Systemet kommer att generera en fil med alla produkter som kräver ersättning.
               </p>
               <Button onClick={generateCompensationZip} disabled={isLoading}>
-                {isLoading ? "Genererar..." : "Generera ersättningsfil"}
+                {isLoading ? "Genererar fil..." : "Generera ersättningsfil"}
               </Button>
             </div>
           </CardContent>
