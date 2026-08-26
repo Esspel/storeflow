@@ -8,16 +8,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import {
   Search,
-  Navigation,
   MapPin,
   ArrowUpRight,
-  Home,
   ShoppingCart,
   CheckCircle,
   XCircle,
   ArrowLeft,
   QrCode,
   Store,
+  Navigation,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -44,6 +43,7 @@ interface SpatialMap {
 }
 
 function CustomerNavPage() {
+  // No auth wrapper - public customer navigation route
   const [storeId, setStoreId] = useState<string | null>(null);
   const [map, setMap] = useState<SpatialMap | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -141,11 +141,11 @@ function CustomerNavPage() {
   };
 
   // Simulated camera scan - in real app would use usePosemeshDetection
-  const simulateScan = () => {
-    // Demo EAN codes
-    const demoEans = ["7310663010014", "7310663010045", "7391771001001", "7310654001002"];
-    const randomEan = demoEans[Math.floor(Math.random() * demoEans.length)];
-    handleBarcodeScan(randomEan);
+  const simulateScan = async () => {
+    // Demo store setup - use the demo store ID
+    const demoStoreId = "demo-store-1";
+    setStoreId(demoStoreId);
+    await loadMap(demoStoreId);
   };
 
   const typeColors = {
@@ -181,7 +181,7 @@ function CustomerNavPage() {
           {storeId && (
             <Badge className="gap-1.5 bg-indigo-500/20 text-indigo-300 border-indigo-500/30">
               <Store className="w-3 h-3" />
-              {map?.name || "Butik"}
+              {map?.name || "Demobutik"}
             </Badge>
           )}
         </div>
@@ -214,7 +214,7 @@ function CustomerNavPage() {
 
             <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Demo-butik: "demo-store-1" (Coop Mörby Centrum)
+                Demo-butik: "demo-store-1" (Demobutik)
               </p>
             </div>
           </div>

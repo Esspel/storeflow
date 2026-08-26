@@ -5,6 +5,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 // Mutable session token used to stamp every PostgREST request header
 let _sessionToken: string | null = null;
+export { _sessionToken };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {

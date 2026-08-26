@@ -3,7 +3,7 @@
  * Client-side wrappers for calling MCP server tools
  */
 
-import { supabase } from "@/lib/supabase";
+import { supabase, _sessionToken } from "@/lib/supabase";
 import type { ShelfLifeStatus } from "@/hooks/use-shelf-life";
 
 /**
@@ -13,6 +13,8 @@ async function invokeTool<T = unknown>(
   tool: string,
   args: Record<string, unknown>
 ): Promise<T> {
+  // Use session token if available (logged-in user), otherwise anon key
+  const token = _sessionToken || import.meta.env.VITE_SUPABASE_ANON_KEY || "anon";
   const { data, error } = await supabase.functions.invoke("mcp-server", {
     body: {
       jsonrpc: "2.0",
@@ -22,6 +24,9 @@ async function invokeTool<T = unknown>(
         tool,
         arguments: args,
       },
+    },
+    headers: {
+      Authorization: `Bearer ${token}`,
     },
   });
 

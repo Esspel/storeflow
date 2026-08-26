@@ -152,7 +152,8 @@ function AppLayout() {
     pathname === "/qr-avvikelse" ||
     pathname === "/qr-kundonskemal" ||
     pathname === "/qr-kundonskemal-form" ||
-    pathname === "/pulstavla";
+    pathname === "/pulstavla" ||
+    pathname === "/customer-nav";
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {

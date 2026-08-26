@@ -29,7 +29,6 @@ import { Route as LicensRouteImport } from './routes/licens'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as PersonalRouteImport } from './routes/personal'
-import { Route as PlanogramUploadRouteImport } from './routes/planogram-upload'
 import { Route as ProduktkatalogRouteImport } from './routes/produktkatalog'
 import { Route as PulstavlaRouteImport } from './routes/pulstavla'
 import { Route as QrAvvikelseRouteImport } from './routes/qr-avvikelse'
@@ -143,11 +142,6 @@ const PersonalRoute = PersonalRouteImport.update({
   path: '/personal',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PlanogramUploadRoute = PlanogramUploadRouteImport.update({
-  id: '/planogram-upload',
-  path: '/planogram-upload',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ProduktkatalogRoute = ProduktkatalogRouteImport.update({
   id: '/produktkatalog',
   path: '/produktkatalog',
@@ -230,7 +224,6 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
-  '/planogram-upload': typeof PlanogramUploadRoute
   '/produktkatalog': typeof ProduktkatalogRoute
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
@@ -265,7 +258,6 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
-  '/planogram-upload': typeof PlanogramUploadRoute
   '/produktkatalog': typeof ProduktkatalogRoute
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
@@ -301,7 +293,6 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
-  '/planogram-upload': typeof PlanogramUploadRoute
   '/produktkatalog': typeof ProduktkatalogRoute
   '/pulstavla': typeof PulstavlaRoute
   '/qr-avvikelse': typeof QrAvvikelseRoute
@@ -338,7 +329,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/mallar'
     | '/personal'
-    | '/planogram-upload'
     | '/produktkatalog'
     | '/pulstavla'
     | '/qr-avvikelse'
@@ -373,7 +363,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/mallar'
     | '/personal'
-    | '/planogram-upload'
     | '/produktkatalog'
     | '/pulstavla'
     | '/qr-avvikelse'
@@ -408,7 +397,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/mallar'
     | '/personal'
-    | '/planogram-upload'
     | '/produktkatalog'
     | '/pulstavla'
     | '/qr-avvikelse'
@@ -444,7 +432,6 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MallarRoute: typeof MallarRoute
   PersonalRoute: typeof PersonalRoute
-  PlanogramUploadRoute: typeof PlanogramUploadRoute
   ProduktkatalogRoute: typeof ProduktkatalogRoute
   PulstavlaRoute: typeof PulstavlaRoute
   QrAvvikelseRoute: typeof QrAvvikelseRoute
@@ -601,13 +588,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PersonalRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/planogram-upload': {
-      id: '/planogram-upload'
-      path: '/planogram-upload'
-      fullPath: '/planogram-upload'
-      preLoaderRoute: typeof PlanogramUploadRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/produktkatalog': {
       id: '/produktkatalog'
       path: '/produktkatalog'
@@ -716,7 +696,6 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MallarRoute: MallarRoute,
   PersonalRoute: PersonalRoute,
-  PlanogramUploadRoute: PlanogramUploadRoute,
   ProduktkatalogRoute: ProduktkatalogRoute,
   PulstavlaRoute: PulstavlaRoute,
   QrAvvikelseRoute: QrAvvikelseRoute,

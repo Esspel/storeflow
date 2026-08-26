@@ -378,6 +378,33 @@ function isWeekTooOld(weekNumber: number, year: number): boolean {
   return false;
 }
 
+// Hitta närmaste giltiga vecka (närmast nu men inte äldre än 2 veckor)
+function findClosestValidWeek(
+  allWeeks: Array<{ weekNumber: number; year: number }>,
+  targetWeek?: { weekNumber: number; year: number }
+): { weekNumber: number; year: number } {
+  const now = new Date();
+  const currentWeek = getISOWeek(now);
+  const currentYear = getYear(now);
+
+  // Filtrera bort för gamla veckor
+  const validWeeks = allWeeks.filter((wk) => !isWeekTooOld(wk.weekNumber, wk.year));
+
+  if (validWeeks.length === 0) {
+    // Om inga giltiga veckor finns, använd aktuell vecka
+    return { weekNumber: currentWeek, year: currentYear };
+  }
+
+  // Sortera efter avstånd från nuvarande vecka
+  validWeeks.sort((a, b) => {
+    const distA = Math.abs(a.weekNumber - currentWeek) + Math.abs(a.year - currentYear) * 52;
+    const distB = Math.abs(b.weekNumber - currentWeek) + Math.abs(b.year - currentYear) * 52;
+    return distA - distB;
+  });
+
+  return validWeeks[0];
+}
+
 // ─── XML parsing ──────────────────────────────────────────────────────────────
 
 function getText(el: Element, selector: string): string {
@@ -901,6 +928,21 @@ function SchemaPage() {
     const now = new Date();
     return { weekNumber: getISOWeek(now), year: now.getFullYear() };
   });
+
+  // Ensure selected week is valid (not older than 2 weeks)
+  useEffect(() => {
+    const unsubscribe = setSelectedWeek((prev) => {
+      const minAllowed = getMinAllowedWeek();
+      if (selectedWeek.year < minAllowed.year ||
+          (selectedWeek.year === minAllowed.year && selectedWeek.weekNumber < minAllowed.weekNumber)) {
+        // Week is too old, use closest valid week
+        const now = new Date();
+        return { weekNumber: getISOWeek(now), year: now.getFullYear() };
+      }
+      return selectedWeek;
+    });
+    return () => unsubscribe?.();
+  }, [selectedWeek]);
   const [scheduleEmployees, setScheduleEmployees] = useState<ScheduleEmployee[]>([]);
   const [scheduleShifts, setScheduleShifts] = useState<ScheduleShift[]>([]);
   const [mappings, setMappings] = useState<EmployeeMapping[]>([]);

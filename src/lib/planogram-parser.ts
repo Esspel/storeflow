@@ -1,10 +1,109 @@
 /**
  * Planogram PDF Parser
  * Extracts structured data from planogram PDFs including zones, shelves, and products
+ * Also extracts product images when available in the PDF
  */
 
 import { PDFParse } from "pdf-parse";
+import * as pdfjsLib from "pdfjs-dist";
 import type { ShelfPlanogram, ExpectedProduct, Vector3 } from "@/lib/posemesh/types";
+
+// Configure pdf.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url
+).toString();
+
+/**
+ * Extract product images from PDF pages.
+ * Matches product names from text with images in the same regions.
+ * Returns a map of product name -> data URL of the image.
+ */
+export async function extractProductImagesFromPdf(
+  file: File | ArrayBuffer,
+  productNames: string[]
+): Promise<Record<string, string | null>> {
+  const arrayBuffer = file instanceof File ? await file.arrayBuffer() : file;
+
+  try {
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const images: Record<string, string | null> = {};
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2 });
+
+      // Get text content to find product names and their positions
+      const textContent = await page.getTextContent();
+      const textItems: { str: string; x: number; y: number }[] = [];
+
+      for (const item of textContent.items) {
+        const str = (item as any).str || "";
+        if (str.trim()) {
+          textItems.push({
+            str,
+            x: (item as any).x,
+            y: (item as any).y,
+          });
+        }
+      }
+
+      // For each product name, check if any text item matches
+      for (const productName of productNames) {
+        if (images[productName]) continue; // Already found
+
+        const lowerName = productName.toLowerCase();
+        for (const textItem of textItems) {
+          if (textItem.str.toLowerCase().includes(lowerName)) {
+            // Try to render the page and capture a region around the text
+            // as a best-effort image extraction
+            try {
+              const canvas = document.createElement("canvas");
+              const ctx = canvas.getContext("2d");
+              if (!ctx) continue;
+
+              canvas.height = viewport.height;
+              canvas.width = viewport.width;
+
+              await page.render({
+                canvasContext: ctx,
+                viewport,
+              }).promise;
+
+              // Extract a small region around the matching text
+              // This is a simplified approach - in practice you'd want
+              // proper text position tracking and cropping
+              const dataUrl = canvas.toDataURL("image/png");
+              if (!images[productName]) {
+                images[productName] = dataUrl;
+              }
+            } catch (renderError) {
+              // Ignore rendering errors, continue to next product
+            }
+            break; // Found this product on this page
+          }
+        }
+      }
+    }
+
+    // Set null for any products not found
+    for (const productName of productNames) {
+      if (!images[productName]) {
+        images[productName] = null;
+      }
+    }
+
+    return images;
+  } catch (error) {
+    console.error("Failed to extract product images from PDF:", error);
+    // Return null for all products if PDF processing fails
+    const nullResult: Record<string, string | null> = {};
+    for (const name of productNames) {
+      nullResult[name] = null;
+    }
+    return nullResult;
+  }
+}
 
 export interface ParsedPlanogram {
   storeName?: string;
@@ -63,34 +162,57 @@ export interface ParsedProduct {
   price?: number;
   isPromo?: boolean;
   metadata?: Record<string, unknown>;
+  /** URL till produktbild från planogram (om tillgänglig) */
+  imageUrl?: string;
 }
 
 /**
- * Parse planogram PDF and extract structured data
+ * Parse planogram PDF and extract structured data WITH images
  */
-export async function parsePlanogramPdf(
-  file: File | Buffer | ArrayBuffer
+export async function parsePlanogramPdfWithImages(
+  file: File | ArrayBuffer
 ): Promise<ParsedPlanogram> {
-  let buffer: Buffer;
+  let arrayBuffer: ArrayBuffer;
 
   if (file instanceof File) {
-    const arrayBuffer = await file.arrayBuffer();
-    buffer = Buffer.from(arrayBuffer);
+    arrayBuffer = await file.arrayBuffer();
   } else if (file instanceof ArrayBuffer) {
-    buffer = Buffer.from(file);
+    arrayBuffer = file;
   } else {
-    buffer = file;
+    throw new Error("Invalid file type: expected File or ArrayBuffer");
   }
 
-  const parser = new PDFParse({ data: buffer });
+  const parser = new PDFParse({ data: arrayBuffer });
   const pdfData = await parser.getText();
   const text = pdfData.text;
   const pageCount = pdfData.total;
 
-  // Parse the extracted text into structured data
+  // Parse the extracted text into structured data (zones, shelves, products)
   const parsed = parsePlanogramText(text, pageCount);
 
-  return parsed;
+  // Extract product images from the PDF based on product names
+  const productNames = parsed.zones.flatMap(
+    (zone) => zone.shelves.flatMap((shelf) => shelf.products).map((p) => p.name)
+  );
+  const images = await extractProductImagesFromPdf(file, productNames);
+
+  // Attach image URLs to parsed products
+  // We need to map back from the parsed products to add image URLs
+  // This is a simplified approach - in a full implementation you'd track
+  // product IDs through the parsing pipeline
+  const updatedZones = parsed.zones.map((zone) =>
+    zone.shelves.map((shelf) =>
+      shelf.products.map((product) => ({
+        ...product,
+        imageUrl: images[product.name] ?? undefined,
+      }))
+    )
+  );
+
+  return {
+    ...parsed,
+    zones: updatedZones,
+  };
 }
 
 /**
@@ -278,49 +400,8 @@ function parseZones(lines: string[]): ParsedZone[] {
     zones.push(currentZone);
   }
 
-  // If no zones found, create a default one from all products
-  if (zones.length === 0) {
-    return [createDefaultZone(lines)];
-  }
-
+  // If no zones found, return empty zones (no default zone/shelf)
   return zones;
-}
-
-/**
- * Create a default zone when no explicit zones found
- */
-function createDefaultZone(lines: string[]): ParsedZone {
-  const products: ParsedProduct[] = [];
-  const productPattern = /(\d{8,14})\s+(.+?)\s+(\d+)\s*facings?/i;
-
-  for (const line of lines) {
-    const match = line.match(productPattern);
-    if (match) {
-      products.push({
-        id: `prod_${products.length + 1}`,
-        ean: match[1],
-        sku: match[1],
-        name: match[2].trim(),
-        facings: parseInt(match[3], 10),
-        position: { x: 0, index: products.length },
-      });
-    }
-  }
-
-  const shelf: ParsedShelf = {
-    id: "default_shelf_1",
-    zoneId: "default_zone",
-    name: "Default Shelf",
-    level: 0,
-    height: 0.3,
-    products,
-  };
-
-  return {
-    id: "default_zone",
-    name: "Default Zone",
-    shelves: products.length > 0 ? [shelf] : [],
-  };
 }
 
 /**

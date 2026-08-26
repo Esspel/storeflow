@@ -35,6 +35,7 @@ import {
   parsePlanogramPdf,
   parsedToShelfPlanogram,
   matchProductsWithDatabase,
+  extractProductImagesFromPdf,
   type ParsedPlanogram,
   type ParsedProduct,
 } from "@/lib/planogram-parser";
@@ -128,21 +129,21 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
       };
       setFiles((prev) => [...prev, uploadedFile]);
 
-      // Parse immediately
-      await parseFile(uploadedFile);
+      // Parse with image extraction
+      await parseFileWithImages(uploadedFile);
     }
   };
 
-  const parseFile = async (uploadedFile: UploadedFile) => {
+  const parseFileWithImages = async (uploadedFile: UploadedFile) => {
     setFiles((prev) => prev.map((f) => (f === uploadedFile ? { ...f, status: "parsing" } : f)));
 
     try {
-      const parsed = await parsePlanogramPdf(uploadedFile.file);
+      const parsedWithImages = await parsePlanogramPdfWithImages(uploadedFile.file);
 
       // Validate - basic check
       const validation: ParsedPlanogramValidation = {
-        valid: parsed.zones.length > 0 && parsed.zones.some((z) => z.shelves.length > 0),
-        errors: parsed.zones.length === 0 ? ["Inga zoner hittades i PDF"] : [],
+        valid: parsedWithImages.zones.length > 0 && parsedWithImages.zones.some((z) => z.shelves.length > 0),
+        errors: parsedWithImages.zones.length === 0 ? ["Inga zoner hittades i PDF"] : [],
       };
 
       // Upload PDF to Supabase storage for reference
@@ -165,7 +166,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
           f === uploadedFile
             ? {
                 ...f,
-                parsed,
+                parsed: parsedWithImages,
                 validation,
                 status: validation.valid ? "parsed" : "error",
                 error: validation.valid ? undefined : validation.errors.join(", "),

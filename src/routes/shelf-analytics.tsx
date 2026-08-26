@@ -15,23 +15,23 @@ import {
   TrendingUp,
   Search,
   FileSpreadsheet,
-  QrCode as QrCodeIcon,
   Lock,
   Link as LinkIcon,
   Link2,
   Unlink2,
   Plus,
   Settings,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ShelfScanner } from "@/components/shelf-scanner";
-import { QRGenerator } from "@/components/qr-generator";
 import { PlanogramUpload } from "@/components/planogram-upload";
 import type { PlanogramCheckResult } from "@/lib/planogram-engine";
 import { useAuth } from "@/lib/auth-context";
 import { getShelfPlanograms, getSpatialMarkersForStore, linkPlanogramToMarker, unlinkPlanogramFromMarker } from "@/lib/supabase";
+import { exportCSV } from "@/lib/csv";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
@@ -206,6 +206,27 @@ function ShelfAnalyticsComponent() {
     }
   };
 
+  const handleExportReport = () => {
+    const rows: (string | number | boolean | null | undefined)[][] = [
+      ["Hylla", "Planogram", "Status", "Poäng", "Förväntade", "Saknade", "Felplacerade", "Övriga", "Senast skannad"],
+    ];
+    for (const s of shelves) {
+      rows.push([
+        s.name,
+        s.markerName || "",
+        s.status,
+        s.complianceScore,
+        s.totalFacings,
+        s.missingFacings,
+        0,
+        Math.max(0, s.totalFacings - s.missingFacings),
+        s.lastScanned,
+      ]);
+    }
+    exportCSV(rows, `planogram-rapport-${new Date().toISOString().slice(0, 10)}.csv`);
+    toast.success("Rapport exporterad");
+  };
+
   const filteredShelves = shelves.filter(
     (shelf) =>
       shelf.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -227,8 +248,8 @@ function ShelfAnalyticsComponent() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2">
-              <FileSpreadsheet className="w-4 h-4" />
+            <Button variant="outline" className="gap-2" onClick={handleExportReport}>
+              <Download className="w-4 h-4" />
               Exportera rapport
             </Button>
           </div>
@@ -435,18 +456,7 @@ function ShelfAnalyticsComponent() {
               </Card>
             </div>
 
-            {/* QR Code Generator for Shelf Positioning */}
-            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 mt-4">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <QrCodeIcon className="w-5 h-5 text-indigo-500" />
-                  Generera hyllmarkörer för positionering
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <QRGenerator />
-              </CardContent>
-            </Card>
+            {/* QR Code Generator moved to store-setup */}
 
             {/* Planogram & Spatial Marker Linking */}
             <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 mt-4">
