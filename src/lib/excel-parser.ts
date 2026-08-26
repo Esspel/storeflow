@@ -6,6 +6,7 @@
 
 import * as XLSX from 'xlsx';
 import { type SupabaseClient } from '@supabase/supabase-js';
+import { excelSerialToIsoDate } from './excel-date';
 
 /**
  * Column names for följesedel file
@@ -76,38 +77,14 @@ export const SAPUI5_EXPORT_COLUMN_MAP = {
 
 /**
  * Normalizes a date string to ISO format (YYYY-MM-DD).
- * Handles various input formats and null/empty values.
+ * Delegates to excelSerialToIsoDate for all conversion logic
+ * (handles Date, Excel serial number, and ISO strings).
  */
 function normalizeDate(dateStr: string | number | Date | null | undefined): string | null {
   if (dateStr == null || dateStr === '') return null;
-  // XLSX ger Date-objekt eller Excel seriedatum (number, t.ex. 46259 = 2026-08-26)
-  if (dateStr instanceof Date) {
-    const year = dateStr.getFullYear();
-    const month = String(dateStr.getMonth() + 1).padStart(2, '0');
-    const day = String(dateStr.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-  if (typeof dateStr === 'number' && !isNaN(dateStr) && dateStr > 30000 && dateStr < 60000) {
-    // Excel serial date: days since 1899-12-30. Excel har bugg: 1900 räknas som skottår (+1 dag)
-    // 25569 = dagar 1899-12-30 -> 1970-01-01; subtrahera 1 för 1900-buggen
-    const serial = dateStr - 25569 - 1;
-    const result = new Date(Math.round(serial * 86400 * 1000));
-    const year = result.getUTCFullYear();
-    const month = String(result.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(result.getUTCDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-  // Normalisera från sträng
-  let s = String(dateStr).trim();
-  // Already in ISO format YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  // Try to parse common date formats from string
-  const date = new Date(s);
-  if (isNaN(date.getTime())) return null;
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  // XLSX returns Date objects or Excel serial numbers (e.g. 46259 = 2026-08-26).
+  // excelSerialToIsoDate handles all three cases.
+  return excelSerialToIsoDate(dateStr);
 }
 
 /**
