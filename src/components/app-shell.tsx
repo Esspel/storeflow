@@ -368,7 +368,6 @@ export function AppShell() {
       ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }]
       : []),
     { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
-    { to: "/produktkatalog", label: "Produktkatalog", mobileHidden: true, Icon: Box },
     { to: "/ersattningcheck", label: "Ersättningscheck", mobileHidden: true, Icon: AlertTriangle },
   ];
 
@@ -528,7 +527,7 @@ export function AppShell() {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden flex-1 items-center gap-0.5 md:flex overflow-x-auto">
+          <nav className="hidden flex-1 items-center gap-1 md:flex">
             {nav.map((item) => (
               <Link
                 key={item.to}

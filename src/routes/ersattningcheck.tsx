@@ -451,8 +451,8 @@ function ErstatningsCheckPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="delivery-file">Välj följesedelsfil</Label>
-              <div
+              <p className="text-xs text-muted-foreground">Stödjer .xlsx, .xls och .csv</p>
+            </div>
                 className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 transition-colors bg-muted/30"
                 onDrop={async (e) => {
                   e.preventDefault();
@@ -872,19 +872,13 @@ function ErstatningsCheckPage() {
                   {reclamations.filter((r) => (statusFilter ? r.status === statusFilter : true)).length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-6">
-                        Inga reklamationer med denna status. Ladda via knappen nedan.
+                        Inga reklamationer med denna status.
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
             </div>
-            <Button onClick={async () => {
-              const { data, error } = await supabase.from("reclamations").select("*").eq("store_id", activeStore.id).limit(20);
-              if (!error && data) setReclamations(data as Reclamation[]);
-            }}>
-              Ladda reklamationer från DB
-            </Button>
           </CardContent>
         </Card>
       )}
