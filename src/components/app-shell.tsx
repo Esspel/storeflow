@@ -25,6 +25,7 @@ import {
   ChartBar,
   QrCode,
   Layers,
+  Box,
   Navigation,
 } from "lucide-react";
 import {

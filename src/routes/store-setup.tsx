@@ -8,7 +8,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
 import {
   QrCode,
-  Box,
   Barcode,
   ArrowRight,
   ArrowLeft,
@@ -24,6 +23,7 @@ import {
   Grid,
   Layers,
   Package,
+  Box,
   MapPin,
   Wifi,
   WifiOff,
