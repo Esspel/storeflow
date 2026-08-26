@@ -10,7 +10,10 @@ import type { ShelfPlanogram, ExpectedProduct, Vector3 } from "@/lib/posemesh/ty
 let PDFParse: typeof import("pdf-parse").PDFParse | null = null;
 let pdfjsLib: typeof import("pdfjs-dist") | null = null;
 
-// Configure pdf.js worker (lazy-loaded when needed)
+// Configure pdf.js worker (lazy-loaded when needed).
+// IMPORTANT: GlobalWorkerOptions.workerSrc MUST be set before any
+// getDocument() / PDFParse call, otherwise pdf.js throws
+// "No GlobalWorkerOptions.workerSrc specified".
 async function initPdfLib() {
   if (!pdfjsLib) {
     pdfjsLib = await import("pdfjs-dist") as any;
