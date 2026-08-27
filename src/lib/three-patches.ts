@@ -54,3 +54,20 @@ if (typeof (v3 as any).addScaledVector !== "function") {
     };
   } catch (_e) {}
 }
+
+// Patch Vector3.clone() så att klonade instanser behåller addScaledVector
+if (typeof Vector3 !== 'undefined') {
+  const origClone = (Vector3.prototype as any).clone;
+  if (origClone) {
+    try {
+      (Vector3.prototype as any).clone = function () {
+        const c = origClone.call(this) as any;
+        if (typeof c.addScaledVector !== 'function' && typeof (Vector3.prototype as any).addScaledVector === 'function') {
+          c.addScaledVector = (Vector3.prototype as any).addScaledVector;
+        }
+        return c;
+      };
+    } catch (_e) {}
+  }
+}
+
