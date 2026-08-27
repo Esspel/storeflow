@@ -36,3 +36,7 @@ function StoreSetupPage() {
     </div>
   );
 }
+// QR-generator för customer-nav
+export function generateStoreQR(storeId: string) {
+  return `${window.location.origin}/customer-nav?storeId=${storeId}`;
+}
