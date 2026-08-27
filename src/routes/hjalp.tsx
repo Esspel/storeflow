@@ -223,21 +223,6 @@ const FEATURES: { section: string; access?: "all" | "manager"; items: Feature[] 
         ],
       },
       {
-        title: "Spatial Navigation (2D/3D/AR)",
-        description:
-          "Navigera i butiken via 2D-karta, 3D-modell eller AR med ArUco-markörer (DICT_4X4_50) och posemesh-integration.",
-        icon: Navigation,
-        path: "/spatial-navigation",
-        access: "all",
-        steps: [
-          "Klicka på Övrigt → 3D Butiksvy i mobil",
-          "Använd 2D/3D/AR-knappar för att växla vy",
-          "Skanna ArUco-markörer för positionering",
-          "Planogram-efterlevnad visas i realtid i 3D-vy",
-        ],
-        tip: "Posemesh SDK kräver WebGL-kompatibel enhet.",
-      },
-      {
         title: "Planogram & Hyllanalys",
         description:
           "Ladda upp planogram-PDF, kontrollera efterlevnad och koppla planogram till spatiala markörer.",

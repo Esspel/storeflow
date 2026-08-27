@@ -750,10 +750,10 @@ function StoreSetupPage() {
               tone="blue"
             />
             <LinkCard
-              title="3D Butiksvy & Navigation"
-              description="Navigera i butiken med AR"
+              title="3D Butiksvy"
+              description="Navigera i butiken (kommande funktion)"
               icon={Box}
-              to="/spatial-navigation"
+              to="/"
               tone="green"
             />
             <LinkCard

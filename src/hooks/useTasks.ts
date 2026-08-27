@@ -1,12 +1,10 @@
 /**
- * Unified Tasks Hook
- * Merges regular tasks and spatial tasks for unified display in uppgifter.tsx
+ * Tasks Hook
+ * Fetches regular tasks for unified display in uppgifter.tsx
  */
-
 import { useCallback, useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Task } from "@/lib/supabase";
-import { getSpatialTasks, spatialTaskToTask, type SpatialTask } from "@/lib/spatial-tasks";
 
 // Re-export TaskFull from uppgifter for unified usage
 export type TaskFull = Task & {
@@ -26,14 +24,12 @@ export type TaskFull = Task & {
 };
 
 export interface UnifiedTask extends TaskFull {
-  /** Identifier for task source: 'regular' | 'spatial' */
-  source: "regular" | "spatial";
-  /** Original spatial task data (only for spatial tasks) */
-  spatial_data?: SpatialTask;
+  /** Identifier for task source */
+  source: "regular";
 }
 
 /**
- * Fetch all tasks (regular + spatial) for a store
+ * Fetch all regular tasks for a store
  */
 export async function fetchUnifiedTasks(
   storeId: string,
@@ -55,37 +51,22 @@ export async function fetchUnifiedTasks(
     regularQuery = regularQuery.in("store_id", userStores.map((s) => s.id));
   }
 
-  const [{ data: regularData }, spatialData] = await Promise.all([
+  const [{ data: regularData }] = await Promise.all([
     regularQuery,
-    getSpatialTasks(storeId, { limit: 500 }),
   ]);
-
-  // Convert spatial tasks to Task-compatible format
-  const spatialTasks = spatialData.map((st) => ({
-    ...spatialTaskToTask(st),
-    source: "spatial" as const,
-    spatial_data: st,
-    steps: [], // Spatial tasks don't have steps currently
-    questions: [],
-    assignees: st.assignee ? [{ user: st.assignee, group: null }] : [],
-    images: [],
-    store: undefined,
-  }));
 
   const regularTasks = (regularData ?? []).map((t) => ({
     ...t,
     source: "regular" as const,
-    spatial_data: undefined,
   }));
 
-  // Merge and sort by created_at descending
-  return [...regularTasks, ...spatialTasks].sort(
+  return regularTasks.sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 }
 
 /**
- * Hook for unified task management
+ * Hook for task management
  */
 export function useUnifiedTasks() {
   const [tasks, setTasks] = useState<UnifiedTask[]>([]);
@@ -119,15 +100,9 @@ export function useUnifiedTasks() {
     setTasks((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const setTaskStatus = useCallback(async (id: string, status: UnifiedTask["status"], source: "regular" | "spatial") => {
-    if (source === "regular") {
-      const { error } = await supabase.from("tasks").update({ status: statusMap[status] }).eq("id", id);
-      if (error) throw error;
-    } else {
-      // Use spatial-tasks library
-      const { updateSpatialTaskStatus } = await import("@/lib/spatial-tasks");
-      await updateSpatialTaskStatus(id, statusMap[status] as any);
-    }
+  const setTaskStatus = useCallback(async (id: string, status: UnifiedTask["status"]) => {
+    const { error } = await supabase.from("tasks").update({ status: statusMap[status] }).eq("id", id);
+    if (error) throw error;
     updateTask(id, { status });
   }, [updateTask]);
 

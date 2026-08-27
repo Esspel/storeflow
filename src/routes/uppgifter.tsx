@@ -95,12 +95,6 @@ import {
   mittCoopSearchUrl,
   type ArticleIdType,
 } from "@/lib/supabase";
-import {
-  getSpatialTasks,
-  getSpatialTasksByMarker,
-  spatialTaskToTask,
-  type SpatialTask,
-} from "@/lib/spatial-tasks";
 import { useAuth } from "@/lib/auth-context";
 import { cn, ensureHttps, sanitizeCsvCell, parseTimeInput } from "@/lib/utils";
 import { exportTextAsCSV } from "@/lib/csv";
@@ -133,18 +127,7 @@ const RECURRENCE_OPTIONS = [
 
 const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 const MONTHS_SV = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "Maj",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Okt",
-  "Nov",
-  "Dec",
+  "Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec",
 ];
 const QUARTER_MONTHS = [
   { q: "Q1", months: [0, 1, 2] },
@@ -221,220 +204,6 @@ type FormQuestion = {
   is_required: boolean;
   link_url: string;
 };
-
-// Shift Handover View Component
-function ShiftHandoverView({
-  spatialTasksByMarker,
-  activeStore,
-  user,
-  onSave,
-  onOpenDetail,
-}: {
-  spatialTasksByMarker: Array<{
-    marker: { id: string; name: string; marker_type: string } | null;
-    tasks: SpatialTask[];
-  }>;
-  activeStore: { id: string; name: string } | null;
-  user: { id: string; full_name?: string | null } | null;
-  onSave?: (notes: string) => Promise<void>;
-  onOpenDetail: (task: TaskFull) => void;
-}) {
-  const [notes, setNotes] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const totalTasks = spatialTasksByMarker.reduce((sum, g) => sum + g.tasks.length, 0);
-  const completedTasks = spatialTasksByMarker.reduce(
-    (sum, g) => sum + g.tasks.filter((t) => t.status === "completed").length,
-    0,
-  );
-  const inProgressTasks = spatialTasksByMarker.reduce(
-    (sum, g) => sum + g.tasks.filter((t) => t.status === "in_progress").length,
-    0,
-  );
-  const pendingTasks = totalTasks - completedTasks - inProgressTasks;
-
-  const handleSave = async () => {
-    if (!activeStore || !user) return;
-    setSaving(true);
-    try {
-      await onSave?.(notes);
-      toast.success("Överlämning sparad");
-    } catch (e) {
-      toast.error("Kunde inte spara överlämning");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (totalTasks === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
-        <Users className="mb-3 h-10 w-10 text-muted-foreground/40" />
-        <p className="text-sm font-medium text-muted-foreground">
-          Inga spatiala uppgifter att överlämna
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Skapa spatiala uppgifter från hyllanalys eller 3D-butiksvy för att se dem här
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="rounded-2xl border border-border/60 bg-card p-4">
-          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-1">
-            Totalt
-          </p>
-          <p className="text-2xl font-bold text-foreground">{totalTasks}</p>
-        </div>
-        <div className="rounded-2xl border border-border/60 bg-card p-4">
-          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-1">
-            Klara
-          </p>
-          <p className="text-2xl font-bold text-success">{completedTasks}</p>
-        </div>
-        <div className="rounded-2xl border border-border/60 bg-card p-4">
-          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-1">
-            Pågående
-          </p>
-          <p className="text-2xl font-bold text-primary">{inProgressTasks}</p>
-        </div>
-        <div className="rounded-2xl border border-border/60 bg-card p-4">
-          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-1">
-            Öppna
-          </p>
-          <p className="text-2xl font-bold text-destructive">{pendingTasks}</p>
-        </div>
-      </div>
-
-      {/* Notes Section */}
-      <div className="rounded-2xl border border-border/60 bg-card p-4">
-        <h3 className="text-sm font-semibold text-foreground mb-3">Överlämningsanteckningar</h3>
-        <Textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Skriv anteckningar för nästa..."
-          className="min-h-[100px] text-sm"
-          rows={4}
-        />
-        <div className="mt-3 flex justify-end">
-          <Button onClick={handleSave} disabled={saving} className="rounded-full">
-            {saving ? "Sparar..." : "Spara skiftövergång"}
-          </Button>
-        </div>
-      </div>
-
-      {/* Tasks Grouped by Marker/Zone */}
-      <div className="space-y-4">
-        {spatialTasksByMarker.map((group) => {
-          const marker = group.marker;
-          const tasks = group.tasks;
-          const markerCompleted = tasks.filter((t) => t.status === "completed").length;
-          const markerInProgress = tasks.filter((t) => t.status === "in_progress").length;
-          const markerPending = tasks.length - markerCompleted - markerInProgress;
-
-          return (
-            <div
-              key={marker?.id ?? "unassigned"}
-              className="rounded-2xl border border-border/60 bg-card overflow-hidden"
-            >
-              <div className="px-4 py-3 border-b border-border/60 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    {marker?.marker_type === "qr" ? (
-                      <QrCode className="h-4 w-4" />
-                    ) : marker?.marker_type === "aruco" ? (
-                      <Hash className="h-4 w-4" />
-                    ) : (
-                      <Box className="h-4 w-4" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {marker?.name ?? "Ej kopplad till markör"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {markerCompleted} klar · {markerInProgress} pågår · {markerPending} öppna
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="divide-y divide-border/60 p-2">
-                {tasks.map((task) => (
-                  <div key={task.id} className="px-4 py-3 hover:bg-muted/30 transition-colors">
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
-                          task.status === "completed"
-                            ? "bg-success/10 text-success"
-                            : task.status === "in_progress"
-                              ? "bg-primary/10 text-primary"
-                              : "bg-destructive/10 text-destructive"
-                        }`}
-                      >
-                        {task.status === "completed" ? (
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                        ) : task.status === "in_progress" ? (
-                          <Clock className="h-3.5 w-3.5" />
-                        ) : (
-                          <Circle className="h-3.5 w-3.5" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
-                        <p className="text-xs text-muted-foreground truncate">{task.description}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="outline" className="text-[10px] h-4 gap-1">
-                            {task.priority === "urgent"
-                              ? "Akut"
-                              : task.priority === "high"
-                                ? "Hög"
-                                : task.priority === "medium"
-                                  ? "Medel"
-                                  : "Låg"}
-                          </Badge>
-                          <Badge variant="outline" className="text-[10px] h-4 gap-1">
-                            {task.task_type === "restock"
-                              ? "Restock"
-                              : task.task_type === "price_check"
-                                ? "Priskoll"
-                                : task.task_type === "planogram_fix"
-                                  ? "Planogram"
-                                  : task.task_type === "cleanup"
-                                    ? "Städning"
-                                    : task.task_type === "audit"
-                                      ? "Revision"
-                                      : "Annat"}
-                          </Badge>
-                          {task.assigned_to && (
-                            <span className="text-[10px] text-muted-foreground">
-                              → {task.assignee?.display_name ?? task.assigned_to}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 shrink-0"
-                        onClick={() => onOpenDetail(spatialTaskToTask(task) as TaskFull)}
-                      >
-                        Öppna
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function localInputToUtcIso(localStr: string): string {
   if (!localStr) return "";
@@ -717,12 +486,6 @@ function TasksPage() {
   const isEmployee = user?.role === "employee";
 
   const [tasks, setTasks] = useState<TaskFull[]>([]);
-  const [spatialTasksByMarker, setSpatialTasksByMarker] = useState<
-    Array<{
-      marker: { id: string; name: string; marker_type: string } | null;
-      tasks: SpatialTask[];
-    }>
-  >([]);
   const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
   const [groups, setGroups] = useState<UserGroup[]>([]);
   const [stores, setStores] = useState<StoreType[]>([]);
@@ -743,7 +506,6 @@ function TasksPage() {
   );
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showPastTasks, setShowPastTasks] = useState(false);
-  const [handoverSaving, setHandoverSaving] = useState(false);
   const [horizonDays, setHorizonDays] = useState<number>(() => getRecurrenceHorizonDays());
   const horizonRef = useRef(horizonDays);
 
@@ -1061,45 +823,8 @@ function TasksPage() {
     const { data } = await q;
     if (data) setTasks(data as TaskFull[]);
 
-    // Also fetch spatial tasks for the handover tab
-    if (activeStore) {
-      try {
-        const spatialByMarker = await getSpatialTasksByMarker(activeStore.id);
-        setSpatialTasksByMarker(spatialByMarker);
-      } catch (e) {
-        console.warn("Failed to fetch spatial tasks:", e);
-      }
-    }
-
     setLoading(false);
   }, [activeStore, userStores]);
-
-  const handleHandoverSave = useCallback(
-    async (notes: string) => {
-      if (!activeStore || !user) return;
-      const { error } = await supabase.from("shift_handovers").insert({
-        store_id: activeStore.id,
-        outgoing_shift_id: user.id,
-        incoming_shift_id: null,
-        task_snapshots: spatialTasksByMarker.map((g) => ({
-          marker_id: g.marker?.id ?? null,
-          marker_name: g.marker?.name ?? "Ej kopplad",
-          tasks: g.tasks.map((t) => ({
-            id: t.id,
-            title: t.title,
-            status: t.status,
-            task_type: t.task_type,
-            priority: t.priority,
-            assigned_to: t.assigned_to,
-          })),
-        })),
-        notes,
-        handed_over_at: new Date().toISOString(),
-      });
-      if (error) throw error;
-    },
-    [activeStore, user, spatialTasksByMarker],
-  );
 
   const fetchUserGroups = useCallback(async () => {
     if (!user) return;
@@ -3689,14 +3414,6 @@ function TasksPage() {
             </p>
           </div>
         )
-      ) : tab === "handover" ? (
-        <ShiftHandoverView
-          spatialTasksByMarker={spatialTasksByMarker}
-          activeStore={activeStore}
-          user={user}
-          onSave={handleHandoverSave}
-          onOpenDetail={openDetail}
-        />
       ) : (
         <div className="space-y-6">
           {unconfirmedEventTasks.length > 0 && tab !== "done" && (
