@@ -12,6 +12,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     fetch: (url, options = {}) => {
       const headers = new Headers((options.headers as HeadersInit) ?? {});
       if (_sessionToken) headers.set("x-session-token", _sessionToken);
+      headers.set("apikey", supabaseAnonKey); // PostgREST kräver apikey-header
       return fetch(url, { ...options, headers });
     },
   },
