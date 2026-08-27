@@ -301,13 +301,21 @@ export type ProductMatchResult = {
   row: DeliveryNoteRow;
   product: {
     id: string;
-    ean: string;
-    sku: string;
+    sap_article_id: string;
+    ean: string | null;
+    bnr: string | null;
     name: string;
   } | null;
   isNewProduct: boolean;
 };
 
+/**
+ * Match delivery note rows to existing products.
+ * Matching order:
+ *   1. Mat-nr (SAP produkt-ID) — primary match
+ *   2. BNR (leverantörens artikelnummer) — fallback
+ * SKU-logik har tagits bort helt per ny spec.
+ */
 export async function matchDeliveryNoteToProducts(
   supabase: SupabaseClient,
   storeId: string,
@@ -316,15 +324,20 @@ export async function matchDeliveryNoteToProducts(
   // Hämta existerande produkter för butiken
   const { data: storeProducts, error } = await supabase
     .from("products")
-    .select("id, ean, sku, name")
+    .select("id, sap_article_id, ean, bnr, name")
     .eq("store_id", storeId);
 
   if (error) throw error;
 
   const results: ProductMatchResult[] = rows.map((row) => {
-    const sapId = row.sapProduktId;
+    const sapId = row.sapProduktId ?? "";
+    const bnr = row.bnr ?? "";
+
+    // Matcha först mot Mat-nr (SAP produkt-ID), sedan BNR
     const existing = (storeProducts ?? []).find(
-      (p) => p.ean === row.bnr || p.sku === sapId || p.name === row.produkt
+      (p) =>
+        (sapId && p.sap_article_id && p.sap_article_id === sapId) ||
+        (bnr && p.bnr && p.bnr === bnr)
     );
 
     if (existing) {

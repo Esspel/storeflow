@@ -582,13 +582,13 @@ function ARView({
   const navigationPath: NavigationPath3D | undefined = map.routes?.[0] ? {
     waypoints: map.routes[0].from && map.routes[0].to
       ? [
-          map.markers.find((m) => m.id === map.routes[0].from)?.position ?? { x: 0, y: 0, z: 0 },
-          ...(map.routes[0].intermediatePoints ?? []).map((p) => ({ x: p.x, y: p.y, z: p.z })),
-          map.markers.find((m) => m.id === map.routes[0].to)?.position ?? { x: 0, y: 0, z: 0 }
+          (map.markers.find((m) => m.id === map.routes[0].from)?.position ?? { x: 0, y: 0, z: 0 }) as any,
+          ...((map.routes[0] as any).intermediatePoints ?? []).map((p: any) => ({ x: p.x, y: p.y, z: p.z })),
+          (map.markers.find((m) => m.id === map.routes[0].to)?.position ?? { x: 0, y: 0, z: 0 }) as any
         ]
       : [],
-    totalDistance: map.routes[0].distance ?? 0,
-    estimatedTimeSeconds: (map.routes[0].distance ?? 0) / 1.4,
+    totalDistance: (map.routes[0]?.distance ?? 0) as number,
+    estimatedTimeSeconds: ((map.routes[0]?.distance ?? 0) as number) / 1.4,
     color: "#fbbf24"
   } : undefined;
 
@@ -598,7 +598,7 @@ function ARView({
         <ARNavigationView
           markers={markers}
           navigationPath={navigationPath}
-          targetMarkerId={selectedMarker?.id}
+          targetMarkerId={selectedMarker?.id ?? undefined}
           userPose={null}
           onSessionStart={() => {
             console.log('AR session started');
@@ -611,7 +611,6 @@ function ARView({
             if (marker) setSelectedMarker(marker);
           }}
           showDebug={false}
-          className="w-full h-full"
         />
         <button
           onClick={onClose}

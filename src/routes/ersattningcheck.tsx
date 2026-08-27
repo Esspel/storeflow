@@ -192,7 +192,7 @@ function ErstatningsCheckPage() {
         }));
 
       if (newProducts.length > 0) {
-        // Upsert produkter baserat på ean/bnr — uppdatera befintliga, skapa nya
+        // Spara nya produkter till products-tabellen via upsert
         const { error: upsertErr } = await supabase
           .from("products")
           .upsert(newProducts, { onConflict: "ean", ignoreDuplicates: false });
@@ -245,11 +245,21 @@ function ErstatningsCheckPage() {
     try {
       const { data, error } = await supabase
         .from("product_shelf_life")
-        .select("*")
-        .order("arrival_date", { ascending: false });
+        .select("sap_article_id, shelf_lifetime_days, temperature_zone, default_compensation_price_ore")
+        .order("updated_at", { ascending: false })
+        .limit(200);
 
       if (error) throw error;
-      setShelfLifeRecords(data || []);
+      setShelfLifeRecords((data ?? []).map((r: any) => ({
+        id: r.sap_article_id ?? r.id,
+        sap_article_id: r.sap_article_id ?? "",
+        shelf_lifetime_days: r.shelf_lifetime_days ?? 0,
+        expiry_date: "", // masterdata har inget expiry — leveranshistorik har det
+        arrival_date: "",
+        compensation_price_ore: r.default_compensation_price_ore ?? 2,
+        created_at: r.created_at ?? new Date().toISOString(),
+        updated_at: r.updated_at ?? new Date().toISOString(),
+      })));
     } catch (error) {
       console.error("Error loading shelf life:", error);
       setImportError("Kunde inte ladda hållbarhetsdata.");
@@ -293,13 +303,23 @@ function ErstatningsCheckPage() {
     setIsLoading(true);
     try {
       for (const u of updates) {
-        await supabase.from("product_shelf_life").upsert({
-          id: u.id,
-          shelf_lifetime_days: u.shelf_lifetime_days,
-          expiry_date: u.expiry_date,
+        // Skriv ny leveransrad till store_product_deliveries (inte upsert)
+        await supabase.from("store_product_deliveries").insert({
+          sap_article_id: u.id,
           store_id: activeStore.id,
+          arrival_date: new Date().toISOString(),
+          best_before_date: u.expiry_date,
+          quantity: 0,
+          status: "delivered",
+          created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        }, { onConflict: "id" });
+        });
+        // Uppdatera masterdata om nödvändigt
+        await supabase.from("product_shelf_life").upsert({
+          sap_article_id: u.id,
+          shelf_lifetime_days: u.shelf_lifetime_days,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "sap_article_id" });
       }
       toast.success("Hållbarhetsdata sparad.");
     } catch (e) {
@@ -319,18 +339,33 @@ function ErstatningsCheckPage() {
   }) => {
     setIsLoading(true);
     try {
-      // Direct DB insert instead of MCP wrapper
+      // Skriv leveransrad till store_product_deliveries (ny struktur)
+      // Använd INSERT (inte UPSERT) så leveranshistorik skrivs inte över
+      const { error: insertErr } = await supabase
+        .from("store_product_deliveries")
+        .insert({
+          sap_article_id: record.sap_article_id,
+          store_id: activeStore.id,
+          arrival_date: record.arrival_date,
+          best_before_date: record.expiry_date,
+          quantity: 0,
+          status: "delivered",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      if (insertErr) throw insertErr;
+
+      // Uppdatera masterdata (product_shelf_life) om det inte redan finns
       const { error: upsertErr } = await supabase
         .from("product_shelf_life")
         .upsert({
           sap_article_id: record.sap_article_id,
           shelf_lifetime_days: record.shelf_lifetime_days,
-          expiry_date: record.expiry_date,
-          arrival_date: record.arrival_date,
-          compensation_price_ore: record.compensation_price_ore ?? 0,
+          default_compensation_price_ore: record.compensation_price_ore ?? 2,
           updated_at: new Date().toISOString(),
-        });
+        }, { onConflict: "sap_article_id" });
       if (upsertErr) throw upsertErr;
+
       setImportSuccess("Hållbarhetsdata sparad!");
       await loadShelfLifeData();
     } catch (error) {
@@ -345,12 +380,13 @@ function ErstatningsCheckPage() {
   const generateCompensationZip = async () => {
     setIsLoading(true);
     try {
+      // Läs leveranshistorik från store_product_deliveries (inte masterdata-tabellen)
       const { data: shelfData, error: dbErr } = await supabase
-        .from("product_shelf_life")
-        .select("sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore, delivery_number, temperature_zone")
+        .from("store_product_deliveries")
+        .select("sap_article_id, best_before_date, arrival_date, quantity, status, delivery_number")
         .eq("store_id", activeStore.id)
-        .lt("expiry_date", new Date().toISOString())
-        .order("expiry_date");
+        .lt("best_before_date", new Date().toISOString())
+        .order("best_before_date", { ascending: true });
 
       if (dbErr) throw dbErr;
       const flagged = shelfData ?? [];
@@ -359,14 +395,24 @@ function ErstatningsCheckPage() {
         return;
       }
 
+      // Hämta masterdata för shelf_lifetime_days och temperature_zone
+      const { data: masterData, error: masterErr } = await supabase
+        .from("product_shelf_life")
+        .select("sap_article_id, shelf_lifetime_days, temperature_zone, default_compensation_price_ore");
+      if (masterErr) throw masterErr;
+      const masterMap = new Map((masterData ?? []).map((m: any) => [m.sap_article_id, m]));
+
       // Gruppera per leveransnummer + temperaturzon
-      const groups: Record<string, Array<typeof flagged[0]>> = {};
+      const groups: Record<string, Array<any>> = {};
       for (const r of flagged) {
+        const master = masterMap.get(r.sap_article_id) || {};
         const leverans = r.delivery_number ? String(r.delivery_number) : "okand";
-        const zon = r.temperature_zone || "okand";
+        const zon = (master as any)?.temperature_zone || "okand";
+        const shelfDays = (master as any)?.shelf_lifetime_days || 0;
+        const compPrice = (master as any)?.default_compensation_price_ore || 2;
         const key = `${leverans}__${zon}`;
         if (!groups[key]) groups[key] = [];
-        groups[key].push(r);
+        groups[key].push({ ...r, shelf_lifetime_days: shelfDays, compensation_price_ore: compPrice, temperature_zone: zon });
       }
 
       const files = Object.entries(groups).map(([key, rows]) => {
@@ -375,12 +421,12 @@ function ErstatningsCheckPage() {
           `LEVERANS: ${leverans}`,
           `TEMPERATURZON: ${zon}`,
           `SAP_ARTIKEL_ID|HALLBARHET_DAGAR|UTGANGSDATUM|ANKOMST|ERSATTNING_ORE`,
-          ...rows.map((row) =>
+          ...rows.map((row: any) =>
             [
               row.sap_article_id,
               row.shelf_lifetime_days,
-              row.expiry_date,
-              row.arrival_date,
+              row.best_before_date?.split("T")[0] || row.best_before_date,
+              row.arrival_date?.split("T")[0] || row.arrival_date,
               row.compensation_price_ore ?? 0,
             ].join("|")
           ),

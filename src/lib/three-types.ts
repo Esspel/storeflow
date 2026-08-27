@@ -102,7 +102,7 @@ export interface ARNavigationViewProps {
 /** Marker visual configuration per type */
 export const MARKER_VISUAL_CONFIG: Record<MarkerType, {
   geometry: "box" | "cylinder" | "plane" | "torus";
-  size: [number, number, number]; // [width, height, depth] or [radius, height]
+  size: [number, number, number] | [number, number, number, number]; // [width, height, depth] or [radius, tube, radialSegments, tubularSegments]
   color: string;
   emissive?: string;
   opacity?: number;

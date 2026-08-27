@@ -36,6 +36,7 @@ export default defineConfig({
           if (id.includes("jszip") || id.includes("xlsx") || id.includes("lucide")) return "vendor-utils";
         },
       },
+      external: [/^fs$/, /^path$/, /^crypto$/, /^posemesh/, /\/posemesh\//],
     },
   },
   resolve: {
@@ -56,10 +57,5 @@ export default defineConfig({
   },
   ssr: {
     noExternal: [],
-  },
-  build: {
-    rollupOptions: {
-      external: [/^fs$/, /^path$/, /^crypto$/, /^posemesh/, /\/posemesh\//],
-    },
   },
 });
