@@ -43,3 +43,14 @@ if (v3Proto && typeof v3Proto.addScaledVector !== "function" && typeof Vector3 !
     };
   } catch (_e) { /* defensive */ }
 }
+
+// Extra: säkerställ att klonade Vector3 får addScaledVector (drei/Bounds använder .clone())
+import { Vector3 } from "three";
+const v3 = new Vector3();
+if (typeof (v3 as any).addScaledVector !== "function") {
+  try {
+    (Vector3.prototype as any).addScaledVector = function (v: any, s: number) {
+      this.x += v.x * s; this.y += v.y * s; this.z += v.z * s; return this;
+    };
+  } catch (_e) {}
+}
