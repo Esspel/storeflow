@@ -14,7 +14,8 @@
   },
   "overrides": {
     "node-domexception": "2.0.2",
-    "tmp": "^0.2.6"
+    "tmp": "^0.2.6",
+    "pdfjs-dist": "^6.2.108"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

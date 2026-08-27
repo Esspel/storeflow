@@ -98,8 +98,13 @@ function CustomerNavPage() {
 
       if (err) throw err;
       if (data) {
-        // Defensive: ensure data has expected structure
-        setMap(data as SpatialMap);
+        // Defensive: guard against empty markers array (spatial_maps RLS / missing data)
+        const guardedData = {
+          ...data,
+          markers: Array.isArray(data.markers) ? data.markers : [],
+          routes: Array.isArray(data.routes) ? data.routes : [],
+        };
+        setMap(guardedData as SpatialMap);
         setViewMode("map");
       } else {
         setError("Hittade ingen butikskarta för denna butik");

@@ -10,6 +10,11 @@ import type { ShelfPlanogram, ExpectedProduct, Vector3 } from "@/lib/posemesh/ty
 let PDFParse: typeof import("pdf-parse").PDFParse | null = null;
 let pdfjsLib: typeof import("pdfjs-dist") | null = null;
 
+// Pin worker to the top-level pdfjs-dist version via ?url import.
+// This prevents the "API version X vs Worker Y" mismatch when pdf-parse
+// internally imports its own (older) pdfjs-dist copy.
+import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
 // Configure pdf.js worker (lazy-loaded when needed).
 // IMPORTANT: GlobalWorkerOptions.workerSrc MUST be set before any
 // getDocument() / PDFParse call, otherwise pdf.js throws
@@ -17,16 +22,12 @@ let pdfjsLib: typeof import("pdfjs-dist") | null = null;
 async function initPdfLib() {
   if (!pdfjsLib) {
     pdfjsLib = await import("pdfjs-dist") as any;
-    const workerSrcUrl = new URL(
-      "pdfjs-dist/build/pdf.worker.min.mjs",
-      import.meta.url
-    ).toString();
     if (!(pdfjsLib as any).GlobalWorkerOptions) {
       (pdfjsLib as any).GlobalWorkerOptions = {};
     }
-    (pdfjsLib as any).GlobalWorkerOptions.workerSrc = workerSrcUrl;
-    // Set on globalThis too so pdf-parse's bundled pdfjs reads it on init
-    (globalThis as any).pdfjsLib = pdfjsLib;
+    (pdfjsLib as any).GlobalWorkerOptions.workerSrc = workerSrc;
+    // Set on globalThis so pdf-parse's internally-imported pdfjs reads it on init
+    (globalThis as any).pdfjs = pdfjsLib;
   }
   return pdfjsLib;
 }
@@ -206,19 +207,24 @@ export async function parsePlanogramPdf(
   // Ladda pdf-parse dynamiskt
   const pdfModule = await import("pdf-parse");
 
-  // Sätt workerSrc på pdf-parse:s egna legacy-pdfjs (via statisk setWorker)
-  const legacyWorkerUrl = new URL(
-    "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
-    import.meta.url
-  ).toString();
+  // Pinna samma worker-version på pdf-parse:s interna legacy-pdfjs
   if (typeof (pdfModule.PDFParse as any).setWorker === "function") {
-    (pdfModule.PDFParse as any).setWorker(legacyWorkerUrl);
+    (pdfModule.PDFParse as any).setWorker(workerSrc);
   }
 
-  const parser = new pdfModule.PDFParse({ data: arrayBuffer });
-  const pdfData = await parser.getText();
-  const text = pdfData.text;
-  const pageCount = pdfData.total;
+  let text: string;
+  let pageCount: number;
+  try {
+    const parser = new pdfModule.PDFParse({ data: arrayBuffer });
+    const pdfData = await parser.getText();
+    text = pdfData.text;
+    pageCount = pdfData.total;
+  } catch (e) {
+    console.error("PDF parse error:", e);
+    throw new Error(
+      "Kunde inte tolka PDF: " + (e instanceof Error ? e.message : "okänt fel")
+    );
+  }
 
   // Parse the extracted text into structured data (zones, shelves, products)
   const parsed = parsePlanogramText(text, pageCount);
