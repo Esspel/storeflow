@@ -72,9 +72,7 @@ function MarkerMesh({
     }
   });
 
-  import { ThreeEvent } from "@react-three/fiber";
-
-const handleClick = (event: ThreeEvent<MouseEvent>) => {
+  const handleClick = (event: any) => {
     event.stopPropagation();
     onClick(marker);
   };
@@ -85,71 +83,45 @@ const handleClick = (event: ThreeEvent<MouseEvent>) => {
   // Render appropriate geometry based on marker type
   const renderGeometry = () => {
     const [w, h, d] = config.size;
-    const baseProps = {
+    const baseProps: any = {
       ref: meshRef,
       position: [marker.position.x, marker.position.y + h / 2, marker.position.z],
       rotation: marker.rotation ? [marker.rotation.x, marker.rotation.y, marker.rotation.z] : undefined,
       onClick: handleClick,
       onPointerOver: handlePointerOver,
       onPointerOut: handlePointerOut,
-      castShadow: true,
-      receiveShadow: true,
     };
 
     switch (config.geometry) {
       case "box":
         return (
-          <Box
-            {...baseProps}
-            args={[w, h, d]}
-            color={color}
-            opacity={config.opacity}
-            transparent={config.opacity !== undefined && config.opacity < 1}
-          />
+          <Box {...baseProps} args={[w, h, d]}>
+            <meshStandardMaterial color={color} opacity={config.opacity} transparent={config.opacity !== undefined && config.opacity < 1} />
+          </Box>
         );
       case "cylinder":
         return (
-          <Cylinder
-            {...baseProps}
-            args={[config.size[0], config.size[0], config.size[1], config.size[2]]}
-            color={color}
-            opacity={config.opacity}
-            transparent={config.opacity !== undefined && config.opacity < 1}
-          />
+          <Cylinder {...baseProps} args={[config.size[0], config.size[0], config.size[1], config.size[2]]}>
+            <meshStandardMaterial color={color} opacity={config.opacity} transparent={config.opacity !== undefined && config.opacity < 1} />
+          </Cylinder>
         );
       case "plane":
         return (
-          <Plane
-            {...baseProps}
-            args={[config.size[0], config.size[2]]}
-            color={color}
-            opacity={config.opacity}
-            transparent={config.opacity !== undefined && config.opacity < 1}
-            rotation={[-Math.PI / 2, 0, 0]}
-            position={[marker.position.x, marker.position.y + 0.01, marker.position.z]}
-          />
+          <Plane {...baseProps} args={[config.size[0], config.size[2]]} rotation={[-Math.PI / 2, 0, 0]} position={[marker.position.x, marker.position.y + 0.01, marker.position.z]}>
+            <meshStandardMaterial color={color} opacity={config.opacity} transparent={config.opacity !== undefined && config.opacity < 1} />
+          </Plane>
         );
       case "torus":
         return (
-          <Torus
-            {...baseProps}
-            args={[config.size[0], config.size[1], config.size[2], config.size[3]]}
-            color={color}
-            opacity={config.opacity}
-            transparent={config.opacity !== undefined && config.opacity < 1}
-            rotation={[-Math.PI / 2, 0, 0]}
-            position={[marker.position.x, marker.position.y + 0.05, marker.position.z]}
-          />
+          <Torus {...baseProps} args={[config.size[0], config.size[1], config.size[2], config.size[3]]} rotation={[-Math.PI / 2, 0, 0]} position={[marker.position.x, marker.position.y + 0.05, marker.position.z]}>
+            <meshStandardMaterial color={color} opacity={config.opacity} transparent={config.opacity !== undefined && config.opacity < 1} />
+          </Torus>
         );
       default:
         return (
-          <RoundedBox
-            {...baseProps}
-            args={[w, h, d, 0.05]}
-            color={color}
-            opacity={config.opacity}
-            transparent={config.opacity !== undefined && config.opacity < 1}
-          />
+          <RoundedBox {...baseProps} args={[w, h, d, 0.05]}>
+            <meshStandardMaterial color={color} opacity={config.opacity} transparent={config.opacity !== undefined && config.opacity < 1} />
+          </RoundedBox>
         );
     }
   };
@@ -173,7 +145,6 @@ const handleClick = (event: ThreeEvent<MouseEvent>) => {
           boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
           pointerEvents: "none",
         }}
-        fullscreen
         distanceFactor={10}
         zIndexRange={[100, 200]}
       >
@@ -186,9 +157,6 @@ const handleClick = (event: ThreeEvent<MouseEvent>) => {
     </group>
   );
 }
-
-// Need to import useState
-import { useState } from "react";
 
 // ============================================================================
 // Navigation Path Component
@@ -207,33 +175,20 @@ function NavigationPathMesh({ path }: NavigationPathMeshProps) {
   const lineRef = useRef<THREE.Line>(null);
 
   useFrame(() => {
-    if (lineRef.current) {
-      // Subtle animation for path
-      const dashOffset = (performance.now() * 0.001) % 1;
-      const material = lineRef.current.material as THREE.LineDashedMaterial;
-      if (material) material.dashOffset = dashOffset;
+    if (lineRef.current && "dashOffset" in (lineRef.current.material || {})) {
+      const material = lineRef.current.material as any;
+      material.dashOffset = material.dashOffset - 0.01;
     }
   });
 
   return (
-    <line
-      ref={lineRef}
+    <Line
+      ref={lineRef as any}
       points={points}
       color={path.color || SELECTION_COLORS.path}
       lineWidth={4}
-      dashed
-      dashSize={0.5}
-      gapSize={0.3}
-    >
-      <lineDashedMaterial
-        attach="material"
-        color={path.color || SELECTION_COLORS.path}
-        dashSize={0.5}
-        gapSize={0.3}
-        transparent
-        opacity={0.8}
-      />
-    </line>
+      dashScale={1}
+    />
   );
 }
 
@@ -375,7 +330,7 @@ export function StoreMap3D({
           shadow-camera-top={20}
           shadow-camera-bottom={-20}
         />
-        <hemisphereLight skyColor="#87ceeb" groundColor="#8fbc8f" intensity={0.6} />
+        <hemisphereLight args={["#87ceeb", "#8fbc8f", 0.6]} />
 
         {/* Grid floor */}
         {showGrid && bounds && <GridFloor bounds={{ min: { x: bounds.min.x, z: bounds.min.z }, max: { x: bounds.max.x, z: bounds.max.z } }} />}
@@ -391,8 +346,8 @@ export function StoreMap3D({
               marker={marker}
               onClick={handleMarkerClick}
               isSelected={marker.id === selectedMarkerId}
-              isTarget={marker.isTarget}
-              isUserPosition={marker.isUserPosition}
+              isTarget={!!marker.isTarget}
+              isUserPosition={!!marker.isUserPosition}
             />
           ))}
         </group>
@@ -413,7 +368,7 @@ export function StoreMap3D({
             minDistance={2}
             maxDistance={100}
             maxPolarAngle={Math.PI / 2 - 0.05}
-            target={initialCameraTarget}
+            target={initialCameraTarget as any}
           />
         )}
       </Canvas>
@@ -425,7 +380,7 @@ export function StoreMap3D({
 // Mobile-optimized wrapper
 // ============================================================================
 
-interface StoreMap3DMobileProps extends Omit<StoreMap3DProps, "enableOrbitControls" | "enableTouchControls"> {
+interface StoreMap3DMobileProps extends Omit<StoreMap3DProps, "map" | "selectedMarker" | "onMarkerSelect" | "show2D" | "show3D"> {
   /** Height of the 3D view (default: 400px) */
   height?: string | number;
 }

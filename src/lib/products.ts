@@ -41,7 +41,7 @@ export async function isRepeatedShortDate(
     .gte("leveransdag", since);
   if (error) throw error;
   if (!data || data.length < 2) return false;
-  const shortCount = data.filter((r) => {
+  const shortCount = data.filter((r: any) => {
     const diff = (new Date(r.best_före_datum).getTime() - new Date(r.leveransdag).getTime()) / 86400000;
     return diff < daysAhead;
   }).length;

@@ -29,8 +29,9 @@ export async function checkEanAtShelf(
   if (!expected) {
     return { level: "yellow", message: `${product.produktnamn} saknar godkänd placering.`, suggestion: "Kontrollera planogram." };
   }
-  if (expected.nivå === nivå) {
-    return { level: "green", message: `${product.produktnamn} står rätt.`, expected_position: { hylla_id: expected.hylla_id, nivå: expected.nivå } };
+  const exp = expected as any;
+  if (exp.nivå === nivå) {
+    return { level: "green", message: `${product.produktnamn} står rätt.`, expected_position: { hylla_id: exp.hylla_id, nivå: exp.nivå } };
   }
-  return { level: "yellow", message: `${product.produktnamn} står fel — borde vara nivå ${expected.nivå}.`, expected_position: { hylla_id: expected.hylla_id, nivå: expected.nivå }, suggestion: `Flytta till nivå ${expected.nivå}.` };
+  return { level: "yellow", message: `${product.produktnamn} står fel — borde vara nivå ${exp.nivå}.`, expected_position: { hylla_id: exp.hylla_id, nivå: exp.nivå }, suggestion: `Flytta till nivå ${exp.nivå}.` };
 }

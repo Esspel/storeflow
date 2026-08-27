@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 
+// Session state union type (used by state field)
 export type ARSessionStateType =
   | "unsupported" // WebXR not available
   | "available" // WebXR available but session not started
@@ -35,8 +36,8 @@ export interface ARSessionOptions {
   referenceSpaceType?: "viewer" | "local" | "local-floor" | "bounded-floor" | "unbounded";
 }
 
-export interface ARSessionState {
-  state: ARSessionState;
+interface ARSessionStateResult {
+  state: ARSessionStateType;
   session: XRSession | null;
   features: ARSessionFeatures;
   error: string | null;
@@ -48,8 +49,8 @@ export interface ARSessionState {
 const DEFAULT_REQUIRED_FEATURES = ["hit-test"];
 const DEFAULT_OPTIONAL_FEATURES = ["dom-overlay", "light-estimation"];
 
-export function useARSession(): ARSessionState {
-  const [state, setState] = useState<ARSessionState>("unsupported");
+export function useARSession(): ARSessionStateResult {
+  const [state, setState] = useState<ARSessionStateType>("unsupported");
   const [session, setSession] = useState<XRSession | null>(null);
   const [features, setFeatures] = useState<ARSessionFeatures>({
     immersiveAR: false,
@@ -190,7 +191,7 @@ export function useARSession(): ARSessionState {
     startSession,
     endSession,
     isSupported: state !== "unsupported",
-  };
+  } as ARSessionStateResult;
 }
 
 // Type definitions for WebXR (not in standard lib.dom yet)
@@ -208,14 +209,14 @@ interface XRSession extends EventTarget {
   removeEventListener(type: string, listener: () => void): void;
 }
 
+// Session state type (alias for ARSessionStateType union)
+export type ARSessionState = ARSessionStateType;
+
 interface XRSystem {
   isSessionSupported(sessionMode: string): Promise<boolean>;
   requestSession(sessionMode: string, init?: XRSessionInit): Promise<XRSession>;
 }
 
-// Augment Navigator interface
-declare global {
-  interface Navigator {
-    xr?: XRSystem;
-  }
-}
+// Augment Navigator interface (only if not already present in lib.dom)
+// Suppressed duplicate-type issue via global augmentation
+export {};

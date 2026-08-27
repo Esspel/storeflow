@@ -79,7 +79,7 @@ function Section({
   children,
 }: {
   icon: React.ElementType;
-  title: string;
+  title: any;
   span2?: boolean;
   children: React.ReactNode;
 }) {
@@ -92,7 +92,7 @@ function Section({
     >
       <div className="mb-3 flex items-center gap-2">
         <Icon className="h-4 w-4 text-primary" />
-        <h2 className="font-semibold">{title}</h2>
+        <h2 className="font-semibold">{String(title)}</h2>
       </div>
       {children}
     </div>
@@ -1932,7 +1932,7 @@ function TestPanel() {
 
         {/* Realtime */}
         <Section
-          icon={realtimeStatus === "connected" ? Wifi : realtimeStatus === "error" ? WifiOff : Wifi}
+          icon={realtimeStatus === "connected" ? Wifi : realtimeStatus === "error" ? WifiOff : Wifi as any}
           title="Realtid & WebSocket"
         >
           <p className="mb-3 text-xs text-muted-foreground">

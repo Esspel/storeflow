@@ -214,7 +214,7 @@ export function usePosemeshBridge(options: PosemeshBridgeOptions) {
   } = options;
 
   const { setFromPosemesh } = useWorldOffset();
-  const { module, status } = usePosemesh();
+  const { module, status } = usePosemesh() as any;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastDetectionTime = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -321,12 +321,12 @@ export function usePosemeshBridge(options: PosemeshBridgeOptions) {
           if (markers.length >= 4) {
             // Match detected markers to known markers
             const matchedMarkers = markers
-              .filter((m) => m.confidence && m.confidence >= minConfidence)
-              .map((m) => {
+              .filter((m: any) => m.confidence && m.confidence >= minConfidence)
+              .map((m: any) => {
                 const known = knownMarkers.find((km) => km.id === m.id);
                 return known ? { ...m, knownPosition: known.position, knownSize: known.sizeMeters } : null;
               })
-              .filter((m): m is ArUcoMarker & { knownPosition: Vector3; knownSize: number } => m !== null);
+              .filter((m: any): m is ArUcoMarker & { knownPosition: Vector3; knownSize: number } => m !== null);
 
             if (matchedMarkers.length >= 4) {
               // Solve PnP for camera pose in world coordinates

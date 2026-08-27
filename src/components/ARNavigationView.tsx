@@ -13,6 +13,7 @@ import {
 import {
   Html,
   useGLTF,
+  Line,
 } from "@react-three/drei";
 import { BoxGeometry, CylinderGeometry, PlaneGeometry, TorusGeometry } from "three";
 import * as THREE from "three";
@@ -171,21 +172,18 @@ function NavigationPath({ path }: NavigationPathProps) {
   const lineRef = useRef<THREE.Line>(null);
 
   useFrame(() => {
-    if (lineRef.current && lineRef.current.material instanceof THREE.LineDashedMaterial) {
-      const mat = lineRef.current.material;
+    if (lineRef.current && "dashOffset" in (lineRef.current.material || {})) {
+      const mat = lineRef.current.material as any;
       mat.dashOffset = (mat.dashOffset || 0) - 0.02;
     }
   });
 
   return (
-    <line
+    <Line
       ref={lineRef as any}
-      points={points as any}
+      points={points}
       color={path.color ?? "#fbbf24"}
-      linewidth={4}
-      dashed
-      dashSize={0.5}
-      gapSize={0.5}
+      lineWidth={4}
     />
   );
 }
@@ -237,7 +235,7 @@ export function ARNavigationView({
   onMarkerSelect,
   showDebug = false,
 }: ARNavigationViewProps) {
-  const { session, startSession, endSession } = useARSession();
+  const { session, startSession, endSession } = useARSession() as any;
   const [isSessionActive, setIsSessionActive] = useState(false);
 
   // Handle session lifecycle

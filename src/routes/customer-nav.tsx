@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { lookupProductByEan, searchProducts, type CoopProduct } from "@/lib/coop-products";
+import { ARNavigationView } from "@/components/ARNavigationView";
 
 interface SpatialMarker {
   id: string;
@@ -54,17 +55,38 @@ function CustomerNavPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // UUID validation helper
+  const isValidUUID = (id: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(id);
+  };
+
   // Check for store ID in URL params (from entrance QR code)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const store = params.get("store");
-    if (store) {
-      setStoreId(store);
-      loadMap(store);
+
+    // Early validation: if store_id is missing or invalid UUID format, abort
+    if (!store || typeof store !== "string" || !isValidUUID(store)) {
+      setStoreId(null);
+      setMap(null);
+      setError("Ogiltig eller saknad butiks-ID i URL");
+      return;
     }
+
+    setStoreId(store);
+    loadMap(store);
   }, []);
 
   const loadMap = async (id: string) => {
+    // Double-check UUID format before making Supabase call
+    if (!isValidUUID(id)) {
+      setError("Ogiltigt butiks-ID format");
+      setMap(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -76,14 +98,17 @@ function CustomerNavPage() {
 
       if (err) throw err;
       if (data) {
+        // Defensive: ensure data has expected structure
         setMap(data as SpatialMap);
         setViewMode("map");
       } else {
         setError("Hittade ingen butikskarta för denna butik");
+        setMap(null);
       }
     } catch (err) {
       console.error("Failed to load map:", err);
       setError("Kunde inte ladda butikskarta");
+      setMap(null);
     } finally {
       setLoading(false);
     }
@@ -139,12 +164,15 @@ function CustomerNavPage() {
     }
   };
 
-  // Simulated camera scan - in real app would use usePosemeshDetection
+  // Camera scan uses WebXR / AR session via ARNavigationView
   const simulateScan = async () => {
-    // Demo store setup - use the demo store ID
-    const demoStoreId = "demo-store-1";
-    setStoreId(demoStoreId);
-    await loadMap(demoStoreId);
+    // Defensive: only proceed if store already loaded
+    if (!storeId || !isValidUUID(storeId)) {
+      setError("Inget giltigt butiks-ID finns att skanna mot");
+      return;
+    }
+    // ARNavigationView handles session start; this just triggers UI switch
+    setViewMode("ar");
   };
 
   const typeColors = {
@@ -205,7 +233,12 @@ function CustomerNavPage() {
                 <Navigation className="w-4 h-4" />
                 Demo: Simulera QR-skanning (Butik 1)
               </Button>
-              <Button className="w-full gap-2" variant="outline" onClick={() => setStoreId("demo-store-1")}>
+              <Button className="w-full gap-2" variant="outline" onClick={() => {
+                const params = new URLSearchParams(window.location.search);
+                const store = params.get("store");
+                if (store && isValidUUID(store)) setStoreId(store);
+                else setError("Ogiltig eller saknad butiks-ID");
+              }}>
                 <MapPin className="w-4 h-4" />
                 Välj butik manuellt
               </Button>
@@ -213,7 +246,7 @@ function CustomerNavPage() {
 
             <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Demo-butik: "demo-store-1" (Demobutik)
+                Butik från URL-parametrar (QR-kod)
               </p>
             </div>
           </div>
@@ -388,35 +421,20 @@ function CustomerNavPage() {
             )}
 
             {/* AR View */}
-            {viewMode === "ar" && (
+            {viewMode === "ar" && map && (
               <div className="space-y-4">
                 <div className="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden aspect-[4/3] md:aspect-[16/9] relative">
-                  <div className="absolute inset-0 flex items-center justify-center text-white">
-                    <div className="text-center p-8">
-                      <Navigation className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                      <h3 className="text-lg font-medium mb-2">AR-navigering</h3>
-                      <p className="text-slate-400 mb-4 max-w-xs mx-auto">
-                        Kameravyn med AR-pilar visas här. Peka kameran mot hyllmarkörer för att navigera.
-                      </p>
-                      {selectedMarker && (
-                        <div className="bg-slate-900/50 rounded-lg p-4 max-w-xs mx-auto text-left">
-                          <p className="font-medium">Navigerar till:</p>
-                          <p className="text-indigo-300">{selectedMarker.name}</p>
-                          <p className="text-xs text-slate-400 capitalize mt-1">{typeLabels[selectedMarker.type]}</p>
-                        </div>
-                      )}
-                      {selectedProduct && (
-                        <div className="mt-4 bg-emerald-900/30 rounded-lg p-3 max-w-xs mx-auto text-left border border-emerald-500/30">
-                          <p className="font-medium text-emerald-300 flex items-center gap-1">
-                            <CheckCircle className="w-4 h-4" />
-                            Produkt hittad!
-                          </p>
-                          <p className="text-sm">{selectedProduct.name}</p>
-                          <p className="text-xs text-slate-400">{selectedProduct.size} • {selectedProduct.price ? `${selectedProduct.price} kr` : ""}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <ARNavigationView
+                    markers={map.markers as any}
+                    navigationPath={undefined}
+                    targetMarkerId={selectedMarker?.id}
+                    userPose={null}
+                    onMarkerSelect={(id) => {
+                      const marker = map.markers.find(m => m.id === id);
+                      if (marker) setSelectedMarker(marker);
+                    }}
+                    showDebug={false}
+                  />
                 </div>
 
                 {selectedProduct && (

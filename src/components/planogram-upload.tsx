@@ -212,8 +212,8 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
       const matched = await matchProductsWithDatabase(uploadedFile.parsed, storeProducts);
 
       // Check for conflicts (existing data differs from new planogram)
-      const conflicts = matched
-        .map((m) => {
+      const conflicts = (matched as unknown as any[])
+        .map((m: any) => {
           const existing = storeProducts.find((p) => p.id === m.product_id || p.ean === m.ean);
           if (!existing) return null;
           const diffs = [];
@@ -348,7 +348,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
     setFiles((prev) =>
       prev.map((f) => (f === uploadedFile ? { ...f, status: "pending", error: undefined } : f)),
     );
-    await parseFile(uploadedFile);
+    await parseFileWithImages(uploadedFile);
   };
 
   const getStatusIcon = (status: UploadedFile["status"]) => {

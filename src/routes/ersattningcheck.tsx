@@ -141,8 +141,8 @@ function ErstatningsCheckPage() {
   }
 
   // Handle file upload
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFileUpload = async (fileOrEvent: File | React.ChangeEvent<HTMLInputElement>) => {
+    const file = fileOrEvent instanceof File ? fileOrEvent : fileOrEvent.target.files?.[0];
     if (!file) return;
 
     setIsLoading(true);
@@ -531,8 +531,7 @@ function ErstatningsCheckPage() {
                   e.preventDefault();
                   const file = e.dataTransfer.files?.[0];
                   if (file && (file.name.endsWith(".xlsx") || file.name.endsWith(".xls") || file.name.endsWith(".csv"))) {
-                    const dummyEvent = { target: { files: [file] } } as React.ChangeEvent<HTMLInputElement>;
-                    await handleFileUpload(dummyEvent);
+                    await handleFileUpload(file);
                   }
                 }}
                 onDragOver={(e) => e.preventDefault()}
@@ -926,7 +925,7 @@ function ErstatningsCheckPage() {
                         {(["Ej skickad", "Granskas av butikssupporten", "Löst", "Nekad"] as ReclamationStatus[]).map((s) => (
                           <Button
                             key={s}
-                            size="xs"
+                            size="sm"
                             variant={r.status === s ? "default" : "outline"}
                             onClick={async () => {
                               await supabase.from("reclamations").update({ status: s, updated_at: new Date().toISOString() }).eq("id", r.id);

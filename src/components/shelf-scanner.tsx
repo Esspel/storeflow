@@ -166,11 +166,7 @@ export function ShelfScanner({
 
   const onArUcoDetected = useCallback((markers: ArUcoMarker[]) => {
     setDetectedArUcos(markers);
-    // Use ArUco marker for pose estimation if available
-    if (markers.length > 0) {
-      // For now, we just store the first marker's info
-      // Real pose estimation would use known 3D marker positions
-    }
+    // Use ArUco markers for pose estimation via usePosemeshToThree
   }, []);
 
   const onPoseEstimated = useCallback((pose: Pose) => {
@@ -209,7 +205,7 @@ export function ShelfScanner({
       captured_at: new Date().toISOString(),
     };
 
-    // Use real planogram from DB if available, otherwise fall back to mock
+    // Use planogram from DB if available
     let planogramToUse: PosemeshShelfPlanogram | null = null;
 
     if (planogram) {
@@ -266,8 +262,10 @@ export function ShelfScanner({
 
     // Get shelf life status for products that have SAP article IDs
     const sapIds = scanHistory
-      .filter((p): p is ObservedProduct & { sap_article_id: string } => p.sap_article_id != null)
-      .map((p) => p.sap_article_id!);
+      .filter((p): p is (ObservedProduct & { sap_article_id: string }) =>
+        (p as any).sap_article_id != null
+      )
+      .map((p) => (p as any).sap_article_id as string);
 
     // Fetch shelf life status
     const { shelfLifeBySap } = useShelfLifeForProducts(sapIds);

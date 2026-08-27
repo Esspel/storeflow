@@ -130,10 +130,10 @@ export function DigitalTwinWizard({ onComplete }: { onComplete?: () => void }) {
         {step === "complete" && (
           <Step4Products
             storeId={storeId}
-            markers={markers}
+            markers={markers as any}
             links={links}
             onLinksChange={setLinks}
-            onValid={onComplete}
+            onValid={onComplete as () => void}
           />
         )}
       </main>

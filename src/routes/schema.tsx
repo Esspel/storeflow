@@ -931,7 +931,7 @@ function SchemaPage() {
 
   // Ensure selected week is valid (not older than 2 weeks)
   useEffect(() => {
-    const unsubscribe = setSelectedWeek((prev) => {
+    setSelectedWeek((prev) => {
       const minAllowed = getMinAllowedWeek();
       if (selectedWeek.year < minAllowed.year ||
           (selectedWeek.year === minAllowed.year && selectedWeek.weekNumber < minAllowed.weekNumber)) {
@@ -941,7 +941,6 @@ function SchemaPage() {
       }
       return selectedWeek;
     });
-    return () => unsubscribe?.();
   }, [selectedWeek]);
   const [scheduleEmployees, setScheduleEmployees] = useState<ScheduleEmployee[]>([]);
   const [scheduleShifts, setScheduleShifts] = useState<ScheduleShift[]>([]);
@@ -2248,7 +2247,7 @@ function SchemaPage() {
         })
     : appUsers.map((u) => {
         // Fallback row when no schedule import exists — show user with their tasks
-        const fakeEmp: ScheduleEmployee = {
+        const fallbackEmp: ScheduleEmployee = {
           id: u.id,
           import_id: "",
           employee_nr: u.id,
@@ -2270,7 +2269,7 @@ function SchemaPage() {
           .join("")
           .toUpperCase();
         return {
-          emp: fakeEmp,
+          emp: fallbackEmp,
           dayShifts: [],
           workShifts: [],
           shadowShifts: [],

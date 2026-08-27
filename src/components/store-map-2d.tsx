@@ -4,6 +4,8 @@
  * - Standardmått: 80×200×60 cm. Grid-rastret är 20 cm.
  */
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Plus, Trash2 } from "lucide-react";
 
 export type Section2D = {
   id: string;
@@ -20,14 +22,24 @@ const SCALE = 1 / 3; // 1cm -> 1/3 px på skärmen
 export function StoreMap2D({
   initial,
   onChange,
+  onAddSection,
+  onDeleteSection,
+  selectedId,
+  readonly,
 }: {
   initial: Section2D[];
-  onChange?: (sections: Section2D[]) => void;
+  onChange?: (sections: Section2D[]) => void | Promise<void>;
+  onAddSection?: () => void;
+  onDeleteSection?: () => Promise<void> | void;
+  selectedId?: string | null;
+  readonly?: boolean;
 }) {
   const [sections, setSections] = useState<Section2D[]>(initial);
   const [drag, setDrag] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
+  const isReadonly = readonly ?? false;
 
   function onMouseDown(e: React.MouseEvent, s: Section2D) {
+    if (isReadonly) return;
     e.preventDefault();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setDrag({
@@ -38,9 +50,9 @@ export function StoreMap2D({
   }
 
   function onMouseMove(e: React.MouseEvent) {
-    if (!drag) return;
+    if (!drag || isReadonly) return;
     const container = e.currentTarget.getBoundingClientRect();
-    
+
     // Beräkna x och y med snap-to-grid baserat på GRID_CM
     const rawX = (e.clientX - container.left - drag.offsetX) / SCALE;
     const rawY = (e.clientY - container.top - drag.offsetY) / SCALE;
@@ -71,11 +83,46 @@ export function StoreMap2D({
         backgroundSize: `${gridPixelSize}px ${gridPixelSize}px`,
       }}
     >
+      {onAddSection && (
+        <Button
+          size="sm"
+          className="absolute top-2 left-2 z-10"
+          onClick={onAddSection}
+          disabled={isReadonly}
+        >
+          <Plus className="w-4 h-4 mr-1" /> Lägg till sektion
+        </Button>
+      )}
+      {onDeleteSection && selectedId && (
+        <Button
+          size="sm"
+          variant="destructive"
+          className="absolute top-2 right-2 z-10"
+          onClick={() => onDeleteSection?.()}
+          disabled={isReadonly}
+        >
+          <Trash2 className="w-4 h-4 mr-1" /> Ta bort
+        </Button>
+      )}
       {sections.map((s) => (
         <div
           key={s.id}
           onMouseDown={(e) => onMouseDown(e, s)}
-          className="absolute cursor-move rounded border border-blue-500 bg-blue-100/80 p-1 text-xs font-medium text-blue-900 shadow-sm transition-shadow hover:shadow-md"
+          className={`
+            absolute
+            ${isReadonly ? 'cursor-default' : 'cursor-move'}
+            rounded
+            border
+            ${s.id === selectedId ? 'border-indigo-500' : 'border-blue-500'}
+            bg-blue-100/80
+            p-1
+            text-xs
+            font-medium
+            text-blue-900
+            shadow-sm
+            transition-shadow
+            hover:shadow-md
+          `}
           style={{
             left: s.pos_x_cm * SCALE,
             top: s.pos_y_cm * SCALE,

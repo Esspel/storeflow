@@ -65,7 +65,7 @@ export function usePosemeshToThree(
     detectedMarkers: [],
   });
 
-  const { module, status, error: moduleError } = usePosemesh();
+  const { module, status, error: moduleError } = usePosemesh() as any;
   const cameraMatrixRef = useRef<THREE.Matrix4>(
     cameraMatrix
       ? new THREE.Matrix4().set(
@@ -150,10 +150,32 @@ export function usePosemeshToThree(
             luminance[i] = (imageData.data[idx] * 0.299 + imageData.data[idx + 1] * 0.587 + imageData.data[idx + 2] * 0.114) | 0;
           }
 
-          // Run pose estimation
+          // Detect ArUco markers from camera frame for 2D image points
+          const detectedMarkers = module.ArucoDetection?.detectArucoFromLuminance
+            ? module.ArucoDetection.detectArucoFromLuminance(luminance, canvas.width, canvas.height)
+            : [];
+
+          // Match detected markers to known markers by ID
+          const objectPoints: number[] = [];
+          const imagePoints: number[] = [];
+          for (const known of knownMarkers) {
+            const detected = detectedMarkers.find((d: any) => d.id === known.id);
+            if (detected && detected.corners && detected.corners.length >= 4) {
+              const [cx, cy] = detected.corners[0]; // top-left corner
+              objectPoints.push(known.position.x, known.position.y, known.position.z);
+              imagePoints.push(cx, cy);
+            }
+          }
+
+          if (objectPoints.length < 12) {
+            // Need at least 4 matched markers (4 × 3D + 4 × 2D = 12+ values)
+            return;
+          }
+
+          // Run pose estimation with real detected 2D points
           const pose = module.PoseEstimation.solvePnP(
-            knownMarkers.map((m) => [m.position.x, m.position.y, m.position.z]).flat(),
-            knownMarkers.map((m) => [0, 0]).flat(), // Would need detected 2D points
+            objectPoints,
+            imagePoints,
             cameraMatrixRef.current.toArray(),
             distCoeffsRef.current
           );

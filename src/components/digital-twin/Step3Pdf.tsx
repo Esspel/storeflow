@@ -59,7 +59,7 @@ export function Step3Pdf() {
       a.download = `aruco-markers-${count}.png`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success(`PDF/PDF-ark genererad med ${count} markörer`);
+      toast.success(`PNG-ark genererad med ${count} markörer`);
     } catch (e) {
       console.error(e);
       toast.error("Kunde inte generera PDF");
@@ -95,7 +95,7 @@ export function Step3Pdf() {
               className="w-32"
             />
           </div>
-          <Button onClick={generate} disabled={busy}>
+          <Button onClick={generate} disabled={busy} className="w-full">
             {busy ? "Genererar..." : "Ladda ner PNG"}
           </Button>
         </div>

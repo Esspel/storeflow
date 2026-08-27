@@ -32,8 +32,7 @@ import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { StoreMap3D } from "@/components/StoreMap3D";
-import { ARMapView } from "@/components/ARMapView";
-import { WorldOffsetProvider } from "@/hooks/useWorldOffset";
+import { ARNavigationView } from "@/components/ARNavigationView";
 import type { NavigationPath3D, Marker3DConfig } from "@/lib/three-types";
 
 interface SpatialMarker {
@@ -77,12 +76,13 @@ function SpatialNavigationPage() {
     const fetchMaps = async () => {
       const { data } = await supabase
         .from("spatial_maps")
-        .select("id, name, store_id, version, is_active")
+        .select("id, name, store_id, version, is_active, markers")
         .eq("store_id", activeStore.id)
         .eq("is_active", true);
       if (data && Array.isArray(data) && data.length > 0 && data[0]) {
-        setMaps(data as SpatialMap[]);
-        setSelectedMap(data[0] as SpatialMap);
+        const mapsWithMarkers = data.map((d: any) => ({ ...d, markers: d.markers || [] })) as SpatialMap[];
+        setMaps(mapsWithMarkers);
+        setSelectedMap(mapsWithMarkers[0]);
       }
     };
     fetchMaps();
@@ -122,11 +122,9 @@ function SpatialNavigationPage() {
               <CardContent>
                 <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
                   <StoreMap3D
-                    map={selectedMap}
-                    selectedMarker={selectedMarker}
-                    onMarkerSelect={setSelectedMarker}
-                    show2D={show2D}
-                    show3D={show3D}
+                    markers={filteredMarkers as any}
+                    selectedMarkerId={selectedMarker?.id}
+                    onMarkerClick={(m: any) => setSelectedMarker(m)}
                   />
                 </div>
               </CardContent>

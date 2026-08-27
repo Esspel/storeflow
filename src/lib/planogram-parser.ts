@@ -43,7 +43,7 @@ export async function extractProductImagesFromPdf(
   const arrayBuffer = file instanceof File ? await file.arrayBuffer() : file;
 
   try {
-    const lib = await initPdfLib();
+    const lib = (await initPdfLib()) as any;
     const pdf = await lib.getDocument({ data: arrayBuffer }).promise;
     const images: Record<string, string | null> = {};
 
@@ -245,7 +245,7 @@ export async function parsePlanogramPdf(
   return {
     ...parsed,
     zones: updatedZones,
-  };
+  } as any;
 }
 
 /**
