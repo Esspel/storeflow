@@ -152,7 +152,7 @@ function ShelfAnalyticsComponent() {
         });
 
         setShelves(combined);
-        setSelectedShelf(combined[0] || null);
+        setSelectedShelf(combined[0] !== undefined ? combined[0] : null);
       })
       .catch((err) => {
         console.error("Failed to load shelf data:", err);

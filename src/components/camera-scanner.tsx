@@ -151,7 +151,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
         isScanningFrame = true;
         try {
           const results = await detectorRef.current!.detect(videoRef.current);
-          if (results.length > 0) {
+          if (results && results.length > 0 && results[0]?.rawValue) {
             handleScan(results[0].rawValue);
             return;
           }

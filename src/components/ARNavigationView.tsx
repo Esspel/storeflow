@@ -171,9 +171,9 @@ function NavigationPath({ path }: NavigationPathProps) {
   const lineRef = useRef<THREE.Line>(null);
 
   useFrame(() => {
-    if (lineRef.current) {
-      const mat = lineRef.current.material as THREE.LineDashedMaterial;
-      if (mat) mat.dashOffset = (mat.dashOffset || 0) - 0.02;
+    if (lineRef.current && lineRef.current.material instanceof THREE.LineDashedMaterial) {
+      const mat = lineRef.current.material;
+      mat.dashOffset = (mat.dashOffset || 0) - 0.02;
     }
   });
 

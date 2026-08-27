@@ -456,7 +456,9 @@ export function AppShell() {
   const initials = user?.display_name
     ? user.display_name
         .split(" ")
+        .filter((n): n is string => typeof n === "string" && n.length > 0)
         .map((n) => n[0])
+        .filter((char): char is string => typeof char === "string" && char.length > 0)
         .join("")
         .toUpperCase()
         .slice(0, 2)
@@ -549,7 +551,7 @@ export function AppShell() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="relative rounded-full px-2 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:text-primary whitespace-nowrap"
+                  className="relative rounded-full px-2 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:text-primary whitespace-nowrap min-w-[100px]"
                 >
                   <Navigation className="h-4 w-4" />
                   <span className="ml-1 text-[10px]">Posemesh</span>

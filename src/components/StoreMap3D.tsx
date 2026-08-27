@@ -19,7 +19,7 @@ import {
   RoundedBox,
 } from "@react-three/drei";
 import * as THREE from "three";
-import type {
+import {
   StoreMap3DProps,
   Marker3DConfig,
   NavigationPath3D,

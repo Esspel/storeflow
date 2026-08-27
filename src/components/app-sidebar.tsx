@@ -90,7 +90,9 @@ export function AppSidebar() {
     displayName
       .split(" ")
       .filter(Boolean)
+      .filter((p) => p && p.length > 0)
       .map((p) => p[0])
+      .filter((char): char is string => typeof char === "string" && char.length > 0)
       .join("")
       .slice(0, 2)
       .toUpperCase() || "?";

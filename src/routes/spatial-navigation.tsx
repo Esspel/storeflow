@@ -80,7 +80,7 @@ function SpatialNavigationPage() {
         .select("id, name, store_id, version, is_active")
         .eq("store_id", activeStore.id)
         .eq("is_active", true);
-      if (data && data.length > 0) {
+      if (data && Array.isArray(data) && data.length > 0 && data[0]) {
         setMaps(data as SpatialMap[]);
         setSelectedMap(data[0] as SpatialMap);
       }

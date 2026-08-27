@@ -625,7 +625,7 @@ function HkDashboardPage() {
     setLoadingNational(true);
     if (isHkOrAdmin) {
       const { data, error } = await supabase.rpc("get_national_stats");
-      if (!error && data && Array.isArray(data) && data.length > 0) {
+      if (!error && data && Array.isArray(data) && data.length > 0 && data[0]) {
         const row = data[0] as Record<string, unknown>;
         setNational({
           total_stores: Number(row.total_stores ?? 0),
