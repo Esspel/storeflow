@@ -6,14 +6,13 @@ DO $$
 BEGIN
     -- 1. Säkerställ att sap_article_id har ett UNIQUE constraint i products
     IF NOT EXISTS (
-        SELECT 1 
         SELECT 1 FROM pg_constraint 
         WHERE conname = 'products_sap_article_id_key'
     ) THEN
         ALTER TABLE products ADD CONSTRAINT products_sap_article_id_key UNIQUE (sap_article_id);
     END IF;
 
-    -- 2. Skapa store_product_deliveries tabellen
+    -- 2. Skapa store_product_deliveries-tabellen
     IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'store_product_deliveries') THEN
         CREATE TABLE store_product_deliveries (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -31,7 +30,7 @@ BEGIN
         );
     END IF;
 
-    -- 3. Skapa index
+    -- 3. Skapa index för snabb sökning
     CREATE INDEX IF NOT EXISTS idx_store_product_deliveries_store ON store_product_deliveries(store_id);
     CREATE INDEX IF NOT EXISTS idx_store_product_deliveries_sap_article ON store_product_deliveries(sap_article_id);
     CREATE INDEX IF NOT EXISTS idx_store_product_deliveries_arrival ON store_product_deliveries(arrival_date);
