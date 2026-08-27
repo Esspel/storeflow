@@ -207,9 +207,21 @@ export async function parsePlanogramPdf(
   // Ladda pdf-parse dynamiskt
   const pdfModule = await import("pdf-parse");
 
-  // Pinna samma worker-version på pdf-parse:s interna legacy-pdfjs
+  // Pinna samma worker-version på pdf-parse:s interna legacy-pdfjs.
+  // CRITICAL: setWorker MÅSTE köras INNAN new PDFParse(), annars
+  // spawnar PDFParse en worker utan workerSrc (API-vs-worker mismatch).
   if (typeof (pdfModule.PDFParse as any).setWorker === "function") {
     (pdfModule.PDFParse as any).setWorker(workerSrc);
+  }
+  // Extra defensiv: säkerställ att globalThis.pdfjs har samma workerSrc
+  // (pdf-parse importerar en separat pdfjs-instans från legacy/build)
+  if (typeof globalThis !== "undefined" && (globalThis as any).pdfjs) {
+    try {
+      const g = (globalThis as any).pdfjs;
+      if (g.GlobalWorkerOptions && typeof g.GlobalWorkerOptions === "object") {
+        g.GlobalWorkerOptions.workerSrc = workerSrc;
+      }
+    } catch (_e) { /* defensive */ }
   }
 
   let text: string;

@@ -17,6 +17,7 @@ import {
 } from "@react-three/drei";
 import { BoxGeometry, CylinderGeometry, PlaneGeometry, TorusGeometry } from "three";
 import * as THREE from "three";
+import "@/lib/three-patches"; // Ensure THREE.Clock available for R3F
 import {
   ARNavigationViewProps,
   Marker3DConfig,

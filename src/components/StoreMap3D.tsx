@@ -20,6 +20,7 @@ import {
   Line,
 } from "@react-three/drei";
 import * as THREE from "three";
+import "@/lib/three-patches"; // Ensure THREE.Clock available for R3F
 import {
   StoreMap3DProps,
   Marker3DConfig,
