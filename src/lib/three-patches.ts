@@ -45,7 +45,6 @@ if (v3Proto && typeof v3Proto.addScaledVector !== "function" && typeof Vector3 !
 }
 
 // Extra: säkerställ att klonade Vector3 får addScaledVector (drei/Bounds använder .clone())
-import { Vector3 } from "three";
 const v3 = new Vector3();
 if (typeof (v3 as any).addScaledVector !== "function") {
   try {
