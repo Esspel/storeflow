@@ -50,6 +50,9 @@ export default defineConfig({
       "react/jsx-dev-runtime",
       "@tanstack/react-query",
       "@tanstack/query-core",
+      "three",
+      "@react-three/fiber",
+      "@react-three/drei",
     ],
   },
   server: {
