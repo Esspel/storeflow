@@ -14,6 +14,7 @@ export type Section2D = {
   pos_y_cm: number;
   width_cm: number;
   height_cm: number;
+  rotation_deg?: number;
 };
 
 const GRID_CM = 20;
@@ -122,15 +123,48 @@ export function StoreMap2D({
             shadow-sm
             transition-shadow
             hover:shadow-md
+            group
           `}
           style={{
             left: s.pos_x_cm * SCALE,
             top: s.pos_y_cm * SCALE,
             width: s.width_cm * SCALE,
             height: s.height_cm * SCALE,
+            transform: `rotate(${s.rotation_deg ?? 0}deg)`,
+            transformOrigin: "center center",
           }}
         >
-          {s.name}
+          <input
+            type="text"
+            value={s.name}
+            disabled={isReadonly}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onChange={(e) => {
+              const next = sections.map((x) => (x.id === s.id ? { ...x, name: e.target.value } : x));
+              setSections(next);
+              onChange?.(next);
+            }}
+            className="w-full bg-transparent border-none outline-none text-blue-900 font-medium text-xs p-0 focus:ring-1 focus:ring-indigo-400 rounded"
+          />
+          {!isReadonly && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const next = sections.map((x) =>
+                  x.id === s.id ? { ...x, rotation_deg: ((x.rotation_deg ?? 0) + 90) % 360 } : x,
+                );
+                setSections(next);
+                onChange?.(next);
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 bg-white border border-blue-500 text-blue-700 rounded-full w-5 h-5 text-[10px] flex items-center justify-center shadow hover:bg-blue-50"
+              title="Rotera 90°"
+            >
+              ↻
+            </button>
+          )}
         </div>
       ))}
     </div>

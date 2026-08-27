@@ -28,6 +28,14 @@ if (typeof ns["Clock"] === "undefined" && typeof ns["Timer"] === "function") {
   }
 }
 
+// Defensiv: se till att Canvas-klass från R3F inte kastas på THREE-namnet
+if (typeof (ns as any).Canvas === "undefined") {
+  try {
+    // Om R3F försöker referera THREE.Canvas, låt det fallera tyst
+    // utan att bryta hela appen. Ingen action behövs — R3F importerar Canvas själv.
+  } catch (_e) {}
+}
+
 // Defensiv polyfill för THREE.Vector3.addScaledVector.
 // @react-three/drei/Bounds använder .addScaledVector() på position-vektorer,
 // och i vissa Three.js-versioner kan metoden saknas på klonade vektorer.

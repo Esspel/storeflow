@@ -12,7 +12,7 @@ export async function loadSnapshot(storeId: string): Promise<DigitalTwinSnapshot
       .maybeSingle(),
     supabase
       .from("store_sections")
-      .select("id, name, pos_x_cm, pos_y_cm, width_cm, height_cm")
+      .select("id, name, pos_x_cm, pos_y_cm, width_cm, height_cm, rotation_deg")
       .eq("store_id", storeId),
   ]);
 
@@ -24,6 +24,7 @@ export async function loadSnapshot(storeId: string): Promise<DigitalTwinSnapshot
     pos_y_cm: s.pos_y_cm,
     width_cm: s.width_cm,
     height_cm: s.height_cm,
+    rotation_deg: s.rotation_deg ?? 0,
   }));
 
   let markers: PlacedMarker[] = [];
@@ -74,6 +75,7 @@ export async function saveSection(storeId: string, section: Section2D): Promise<
     pos_y_cm: section.pos_y_cm,
     width_cm: section.width_cm,
     height_cm: section.height_cm,
+    rotation_deg: section.rotation_deg ?? 0,
   });
   if (error) throw error;
 }
