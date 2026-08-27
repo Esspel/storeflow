@@ -55,7 +55,7 @@ export interface MarkerConfig {
 /** Generate customer navigation QR code content for entrance marker */
 export function generateCustomerNavContent(storeId: string, storeName: string): string {
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-  const navUrl = `${baseUrl}/customer-nav?store=${storeId}`;
+  const navUrl = `${baseUrl}/customer-nav?storeId=${storeId}`;
 
   const payload = {
     v: 1,

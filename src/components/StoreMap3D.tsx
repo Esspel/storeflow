@@ -49,11 +49,13 @@ function MarkerMesh({ marker, onClick, isSelected, isTarget, isUserPosition }: M
 
   // Determine color based on state
   const getColor = useCallback(() => {
+    if (marker.compliance === "nonCompliant") return SELECTION_COLORS.target; // red
+    if (marker.compliance === "warning") return "#f59e0b"; // amber
     if (isUserPosition) return SELECTION_COLORS.userPosition;
     if (isTarget) return SELECTION_COLORS.target;
     if (isSelected || hovered) return SELECTION_COLORS.selected;
     return config.color;
-  }, [config.color, isSelected, isTarget, isUserPosition, hovered]);
+  }, [config.color, isSelected, isTarget, isUserPosition, hovered, marker.compliance]);
 
   const color = getColor();
 

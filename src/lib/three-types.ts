@@ -33,6 +33,8 @@ export interface Marker3DConfig {
   isTarget?: boolean;
   /** Whether this marker is the user's current position (AR) */
   isUserPosition?: boolean;
+  /** Planogram compliance status (overrides color when set) */
+  compliance?: "compliant" | "warning" | "nonCompliant";
 }
 
 /** Navigation path in 3D space */
@@ -161,6 +163,13 @@ export const SELECTION_COLORS = {
   target: "#22c55e", // green-500
   userPosition: "#3b82f6", // blue-500
   path: "#fbbf24", // amber for navigation path
+} as const;
+
+/** Planogram compliance overlay colors */
+export const COMPLIANCE_COLORS = {
+  compliant: "#22c55e", // green
+  warning: "#f59e0b", // amber
+  nonCompliant: "#ef4444", // red
 } as const;
 
 /** Default camera settings */

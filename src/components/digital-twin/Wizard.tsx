@@ -11,6 +11,7 @@ import { Step1Map2D } from "./Step1Map2D";
 import { Step2Markers } from "./Step2Markers";
 import { Step3Pdf } from "./Step3Pdf";
 import { Step4Products } from "./Step4Products";
+import { Step5Qr } from "./Step5Qr";
 import { toast } from "sonner";
 
 const STEPS: { id: WizardStep; title: string; description: string }[] = [
@@ -18,6 +19,7 @@ const STEPS: { id: WizardStep; title: string; description: string }[] = [
   { id: "mapping", title: "Markörer", description: "Placera Aruco-markörer" },
   { id: "products", title: "PDF", description: "Generera utskrivbart ark" },
   { id: "complete", title: "Produkter", description: "Koppla planogram + tillval" },
+  { id: "qr", title: "QR", description: "Skriv ut butikens QR-kod" },
 ];
 
 export function DigitalTwinWizard({ onComplete }: { onComplete?: () => void }) {
@@ -132,8 +134,13 @@ export function DigitalTwinWizard({ onComplete }: { onComplete?: () => void }) {
             markers={markers as any}
             links={links}
             onLinksChange={setLinks}
-            onValid={onComplete as () => void}
+            onValid={(ok: boolean) => {
+              if (ok) setStep("qr");
+            }}
           />
+        )}
+        {step === "qr" && (
+          <Step5Qr storeId={storeId} storeName={activeStore?.name ?? ""} />
         )}
       </main>
 
@@ -145,9 +152,13 @@ export function DigitalTwinWizard({ onComplete }: { onComplete?: () => void }) {
         >
           <ChevronLeft className="mr-1" /> Tillbaka
         </Button>
-        {step === "complete" ? (
+        {step === "qr" ? (
           <Button onClick={onComplete}>
             <Check className="mr-1" /> Klar
+          </Button>
+        ) : step === "complete" ? (
+          <Button onClick={() => setStep("qr")}>
+            Nästa: QR-kod <ChevronRight className="ml-1" />
           </Button>
         ) : (
           <Button

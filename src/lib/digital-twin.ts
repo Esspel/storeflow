@@ -117,6 +117,75 @@ export async function removeMarker(markerId: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function getSpatialMap(storeId: string) {
+  const { data, error } = await supabase
+    .from("spatial_maps")
+    .select("id, name, markers, routes")
+    .eq("store_id", storeId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    id: data.id,
+    store_id: storeId,
+    name: data.name ?? "Digital Twin",
+    markers: Array.isArray(data.markers) ? (data.markers as any[]) : [],
+    routes: Array.isArray(data.routes) ? (data.routes as any[]) : [],
+  };
+}
+
+export async function getShelfCompliance(storeId: string, shelfMarkerId?: string) {
+  // Load planogram expectations for this store
+  const planRes = await supabase
+    .from("shelf_planograms")
+    .select("id, shelf_marker_id, expected_products")
+    .eq("store_id", storeId)
+    .eq("is_active", true);
+  if (planRes.error) throw planRes.error;
+  const plans = (planRes.data ?? []) as any[];
+
+  // Aggregate actual deliveries (store-specific history)
+  const delRes = await supabase
+    .from("store_product_deliveries")
+    .select("ean, quantity, arrival_date")
+    .eq("store_id", storeId);
+  const delData = (delRes.data ?? []) as any[];
+  const actualByEan = new Map<string, number>();
+  for (const d of delData) {
+    const qty = Number(d.quantity ?? 0);
+    actualByEan.set(d.ean, (actualByEan.get(d.ean) ?? 0) + qty);
+  }
+
+  let score = 100;
+  let missing = 0;
+  let misplaced = 0;
+  let extra = 0;
+
+  for (const p of plans) {
+    const expected = Array.isArray(p.expected_products) ? p.expected_products : [];
+    for (const e of expected) {
+      const expQty = Number(e.quantity ?? e.facings ?? 1);
+      const actQty = actualByEan.get(e.ean) ?? 0;
+      if (actQty < expQty) missing += (expQty - actQty);
+      if (actQty > expQty) extra += (actQty - expQty);
+    }
+  }
+
+  // Simple score heuristic based on missing/extra relative to total expected
+  const totalExpected = plans.reduce(
+    (s, p) => s + ((Array.isArray(p.expected_products) ? p.expected_products : []) as any[]).reduce((acc, e) => acc + (Number(e.quantity ?? e.facings ?? 1)), 0),
+    0,
+  );
+  const totalActual = Array.from(actualByEan.values()).reduce((a, b) => a + b, 0);
+  if (totalExpected > 0) {
+    const deviation = Math.abs(totalActual - totalExpected);
+    score = Math.max(0, Math.round(100 - (deviation / totalExpected) * 100));
+  }
+
+  return { score, missing, misplaced, extra, plans, actualByEan };
+}
+
 export async function listPlanogramsForStore(storeId: string) {
   const { data, error } = await supabase
     .from("shelf_planograms")

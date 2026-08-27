@@ -64,7 +64,7 @@ function CustomerNavPage() {
   // Check for store ID in URL params (from entrance QR code)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const store = params.get("store");
+    const store = params.get("storeId") || params.get("store");
 
     // Early validation: if store_id is missing or invalid UUID format, abort
     if (!store || typeof store !== "string" || !isValidUUID(store)) {
@@ -126,10 +126,46 @@ function CustomerNavPage() {
     }
     setLoading(true);
     try {
-      const results = await searchProducts(query);
-      setSearchResults(results);
+      // Prioritera produkter från butikens planogram (exakta matchningar)
+      const { data: shelfPlans } = await supabase
+        .from("shelf_planograms")
+        .select("expected_products")
+        .eq("store_id", storeId)
+        .eq("is_active", true);
+      const expectedProducts: any[] = [];
+      if (shelfPlans) {
+        for (const plan of shelfPlans) {
+          const list = Array.isArray(plan.expected_products) ? plan.expected_products : [];
+          for (const item of list) {
+            if (item.name && item.name.toLowerCase().includes(query.toLowerCase())) {
+              expectedProducts.push({ ...item, fromPlan: true });
+            }
+          }
+        }
+      }
+      // Fallback till Coop-produktkatalog
+      const catalogResults = await searchProducts(query);
+      const merged = new Map<string, CoopProduct>();
+      for (const ep of expectedProducts) {
+        const key = ep.ean || ep.bnr || ep.name;
+        merged.set(key, {
+          ean: ep.ean || "",
+          bnr: ep.bnr || "",
+          name: ep.name || "",
+          category: ep.category || "",
+        } as CoopProduct);
+      }
+      for (const cp of catalogResults) {
+        const key = cp.ean || cp.bnr || cp.name;
+        if (!merged.has(key)) {
+          merged.set(key, cp);
+        }
+      }
+      setSearchResults(Array.from(merged.values()));
     } catch (err) {
       console.error("Search failed:", err);
+      const results = await searchProducts(query);
+      setSearchResults(results);
     } finally {
       setLoading(false);
     }
@@ -137,7 +173,9 @@ function CustomerNavPage() {
 
   const handleProductSelect = (product: CoopProduct) => {
     setSelectedProduct(product);
-    // Find marker for this product
+    setSearchQuery("");
+    setSearchResults([]);
+    // Find marker for this product via planogram or metadata
     if (map) {
       const marker = map.markers.find(
         (m) =>
@@ -150,8 +188,6 @@ function CustomerNavPage() {
         setViewMode("ar");
       }
     }
-    setSearchQuery("");
-    setSearchResults([]);
   };
 
   const handleBarcodeScan = async (ean: string) => {

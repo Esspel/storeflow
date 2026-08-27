@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { StoreMap3D } from "@/components/StoreMap3D";
 import { ARNavigationView } from "@/components/ARNavigationView";
 import type { NavigationPath3D, Marker3DConfig } from "@/lib/three-types";
+import { getSpatialMap, getShelfCompliance } from "@/lib/digital-twin";
 
 interface SpatialMarker {
   id: string;
@@ -64,6 +65,7 @@ function SpatialNavigationPage() {
   const [show3D, setShow3D] = useState(false);
   const [navigationPath, setNavigationPath] = useState<NavigationPath3D | null>(null);
   const [markerConfig, setMarkerConfig] = useState<Marker3DConfig | null>(null);
+  const [complianceData, setComplianceData] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     if (!user && !authLoading) {
@@ -73,22 +75,19 @@ function SpatialNavigationPage() {
 
   useEffect(() => {
     if (!activeStore) return;
-    const fetchMaps = async () => {
-      const { data } = await supabase
-        .from("spatial_maps")
-        .select("id, name, store_id, version, is_active, markers")
-        .eq("store_id", activeStore.id)
-        .eq("is_active", true);
-      if (data && Array.isArray(data) && data.length > 0 && data[0]) {
-        const mapsWithMarkers = data.map((d: any) => ({
-          ...d,
-          markers: d.markers || [],
-        })) as SpatialMap[];
-        setMaps(mapsWithMarkers);
-        setSelectedMap(mapsWithMarkers[0]);
+    (async () => {
+      try {
+        const map = await getSpatialMap(activeStore.id);
+        if (map) {
+          setMaps([map]);
+          setSelectedMap(map);
+        }
+        const compliance = await getShelfCompliance(activeStore.id);
+        setComplianceData(compliance);
+      } catch (err) {
+        console.error("Failed to load spatial data:", err);
       }
-    };
-    fetchMaps();
+    })();
   }, [activeStore]);
 
   const filteredMarkers = useMemo(() => {
@@ -158,6 +157,59 @@ function SpatialNavigationPage() {
           </div>
 
           <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Personal – lager &amp; efterlevnad</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {complianceData ? (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Planogram-efterlevnad</span>
+                      <span
+                        className={`font-bold ${
+                          (complianceData as any).score >= 80
+                            ? "text-green-600"
+                            : (complianceData as any).score >= 50
+                              ? "text-amber-600"
+                              : "text-red-600"
+                        }`}
+                      >
+                        {(complianceData as any).score ?? 0}%
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-red-50 dark:bg-red-950 rounded px-2 py-1 text-center">
+                        <div className="text-xs text-muted-foreground">Saknas</div>
+                        <div className="font-semibold text-red-700 dark:text-red-300">
+                          {(complianceData as any).missing ?? 0}
+                        </div>
+                      </div>
+                      <div className="bg-amber-50 dark:bg-amber-950 rounded px-2 py-1 text-center">
+                        <div className="text-xs text-muted-foreground">Felplacerad</div>
+                        <div className="font-semibold text-amber-700 dark:text-amber-300">
+                          {(complianceData as any).misplaced ?? 0}
+                        </div>
+                      </div>
+                      <div className="bg-green-50 dark:bg-green-950 rounded px-2 py-1 text-center">
+                        <div className="text-xs text-muted-foreground">Extra</div>
+                        <div className="font-semibold text-green-700 dark:text-green-300">
+                          {(complianceData as any).extra ?? 0}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Laddar efterlevnadsdata...</p>
+                )}
+                <div className="border-t pt-3">
+                  <p className="text-xs text-muted-foreground">
+                    Lagerstatus per hylla visas när en markör väljs.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>Markörer</CardTitle>

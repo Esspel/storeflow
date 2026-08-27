@@ -1,6 +1,6 @@
 import type { Section2D } from "@/components/store-map-2d";
 
-export type WizardStep = "portals" | "mapping" | "products" | "complete";
+export type WizardStep = "portals" | "mapping" | "products" | "complete" | "qr";
 
 export interface PlacedMarker {
   id: string; // spatial_markers.id (uuid)

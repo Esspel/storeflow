@@ -40,11 +40,13 @@ function ARMarker({ marker, onSelect, isTarget, isUserPosition }: ARMarkerProps)
   const [hovered, setHovered] = useState(false);
 
   const getColor = useCallback(() => {
+    if (marker.compliance === "nonCompliant") return (_SC as any).target; // red
+    if (marker.compliance === "warning") return "#f59e0b"; // amber
     if (isUserPosition) return (_SC as any).userPosition;
     if (isTarget) return (_SC as any).target;
     if (hovered) return (_SC as any).selected;
     return config.color;
-  }, [config.color, isTarget, isUserPosition, hovered]);
+  }, [config.color, isTarget, isUserPosition, hovered, marker.compliance]);
 
   const color = getColor();
 
