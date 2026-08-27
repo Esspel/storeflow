@@ -67,6 +67,7 @@ export function Step4Products({
       const { error } = await supabase.from("shelf_observations").upsert(
         {
           store_id: storeId,
+          shelf_marker_id: markers[0]?.id ?? null,
           // shelf_marker_id must be set by caller via onLinksChange once user selects a marker
           sap_article_id: productForm.sap_article_id,
           detected_products: [
@@ -108,7 +109,7 @@ export function Step4Products({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Steg 4 — Koppla produkter</CardTitle>
+        <CardTitle>Steg 4 — Digital Twin 3D (drag & drop produkter till sektioner + hyllor)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-4">
