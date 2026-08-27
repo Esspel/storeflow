@@ -4,10 +4,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Loader2, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import {
-  ensureSpatialMap,
-  loadSnapshot,
-} from "@/lib/digital-twin";
+import { ensureSpatialMap, loadSnapshot } from "@/lib/digital-twin";
 import type { Section2D } from "@/components/store-map-2d";
 import type { PlacedMarker, ProductLink, WizardStep } from "@/types/digital-twin";
 import { Step1Map2D } from "./Step1Map2D";
@@ -91,7 +88,9 @@ export function DigitalTwinWizard({ onComplete }: { onComplete?: () => void }) {
                     : "border-slate-200"
               }`}
             >
-              <div className="font-medium">{i + 1}. {s.title}</div>
+              <div className="font-medium">
+                {i + 1}. {s.title}
+              </div>
               <div className="text-muted-foreground">{s.description}</div>
             </li>
           ))}

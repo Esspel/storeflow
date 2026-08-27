@@ -37,13 +37,13 @@ src/routes/store-setup.tsx          # entrypoint via DigitalTwinWizard
 
 ## Designval
 
-| Val | Begränsning | Skäl |
-|--------|----------|--------|
-| **Frontend-baserad Aruco-ordlista** | Ingen extern API-beroende, determinism, deterministisk | Tillförlitlig export, offline-kapabel, snabbtestbar |
-| **Canvas-baserad PDF/PNG** | Inget `jsPDF`, ingen extern tjänst | Minimal kapacitet, ingen extra network-dependency, snabb nedladdning |
-| **Supabase som enda data-层** | Inga REST-endpoints, ingen extra ORM, inga custom-serverfunktioner | Redundant, idemputentisk och mindre rörlighet, följer befintliga mönster i hela StoreFlow-appen |
-| **4-stegsguide** | Inget hopp över steg | Följjer användarnas mentala modell: karta → positionering → utskrift → koppling |
-| **Bäda editor i samma komponent** (`Step1Map2D`) | Ingen modaler, enklare flöde | Enklare bättre tillgänglig UI, inga glidande menyer som kan fånga användaren |
+| Val                                              | Begränsning                                                        | Skäl                                                                                            |
+| ------------------------------------------------ | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| **Frontend-baserad Aruco-ordlista**              | Ingen extern API-beroende, determinism, deterministisk             | Tillförlitlig export, offline-kapabel, snabbtestbar                                             |
+| **Canvas-baserad PDF/PNG**                       | Inget `jsPDF`, ingen extern tjänst                                 | Minimal kapacitet, ingen extra network-dependency, snabb nedladdning                            |
+| **Supabase som enda data-层**                    | Inga REST-endpoints, ingen extra ORM, inga custom-serverfunktioner | Redundant, idemputentisk och mindre rörlighet, följer befintliga mönster i hela StoreFlow-appen |
+| **4-stegsguide**                                 | Inget hopp över steg                                               | Följjer användarnas mentala modell: karta → positionering → utskrift → koppling                 |
+| **Bäda editor i samma komponent** (`Step1Map2D`) | Ingen modaler, enklare flöde                                       | Enklare bättre tillgänglig UI, inga glidande menyer som kan fånga användaren                    |
 
 ## Installation och användning
 
@@ -54,6 +54,7 @@ src/routes/store-setup.tsx          # entrypoint via DigitalTwinWizard
    - Verifiera att `DigitalTwinWizard` renderas för användare med aktivt lager
 
 2. **Kör development servern:**
+
    ```bash
    npm run dev
    ```
@@ -139,6 +140,7 @@ flowchart TD
 ## Kontakt
 
 För buggar, förslag eller frågan "var är något?":
+
 - Kontrollera `src/lib/digital-twin.ts` och `src/components/digital-twin/` för ofullständiga flöden.
 - Innehåller `store-map-2d.tsx` "add/delete/readonly"?
 - Innehåller `Step3Pdf.tsx` navigering till "Nästa: koppla produkter"?

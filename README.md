@@ -5,6 +5,7 @@ StoreFlow is a management tool for retail stores. It helps store managers and st
 ## What it does
 
 **Daily operations**
+
 - Tasks and checklists — create routines and track completion
 - Incidents — log issues with photos, severity, and follow-up
 - Customer rounds — structured store inspections on a schedule
@@ -12,10 +13,12 @@ StoreFlow is a management tool for retail stores. It helps store managers and st
 - Scheduling — shift planning and overview for managers
 
 **Reports and analytics**
+
 - Dashboard with KPIs (manager access only)
 - Shelf compliance scanning — compare planograms against actual shelf observations to find missing or misplaced products
 
 **Roles**
+
 - Admin (HK) — full access across all stores
 - Chef — manages a single store
 - Användare — employee with limited access
@@ -29,6 +32,7 @@ QR codes and ArUco markers placed on shelves enable spatial mapping — the app 
 ## Running locally
 
 **Prerequisites**
+
 - Node.js 20+
 - A Supabase project
 
@@ -55,11 +59,11 @@ The app runs at `http://localhost:3000`.
 
 **Environment variables**
 
-| Variable | Description |
-|---|---|
-| `VITE_SUPABASE_URL` | Your Supabase project URL |
+| Variable                 | Description                        |
+| ------------------------ | ---------------------------------- |
+| `VITE_SUPABASE_URL`      | Your Supabase project URL          |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon key (safe to expose) |
-| `VITE_VAPID_PUBLIC_KEY` | Web push public key (optional) |
+| `VITE_VAPID_PUBLIC_KEY`  | Web push public key (optional)     |
 
 ## Deploying
 

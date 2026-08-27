@@ -21,7 +21,7 @@ import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 // "No GlobalWorkerOptions.workerSrc specified".
 async function initPdfLib() {
   if (!pdfjsLib) {
-    pdfjsLib = await import("pdfjs-dist") as any;
+    pdfjsLib = (await import("pdfjs-dist")) as any;
     if (!(pdfjsLib as any).GlobalWorkerOptions) {
       (pdfjsLib as any).GlobalWorkerOptions = {};
     }
@@ -39,7 +39,7 @@ async function initPdfLib() {
  */
 export async function extractProductImagesFromPdf(
   file: File | ArrayBuffer,
-  productNames: string[]
+  productNames: string[],
 ): Promise<Record<string, string | null>> {
   const arrayBuffer = file instanceof File ? await file.arrayBuffer() : file;
 
@@ -188,9 +188,7 @@ export interface ParsedProduct {
 /**
  * Parse planogram PDF and extract structured data WITH images
  */
-export async function parsePlanogramPdf(
-  file: File | ArrayBuffer
-): Promise<ParsedPlanogram> {
+export async function parsePlanogramPdf(file: File | ArrayBuffer): Promise<ParsedPlanogram> {
   let arrayBuffer: ArrayBuffer;
 
   if (file instanceof File) {
@@ -221,7 +219,9 @@ export async function parsePlanogramPdf(
       if (g.GlobalWorkerOptions && typeof g.GlobalWorkerOptions === "object") {
         g.GlobalWorkerOptions.workerSrc = workerSrc;
       }
-    } catch (_e) { /* defensive */ }
+    } catch (_e) {
+      /* defensive */
+    }
   }
 
   let text: string;
@@ -233,17 +233,15 @@ export async function parsePlanogramPdf(
     pageCount = pdfData.total;
   } catch (e) {
     console.error("PDF parse error:", e);
-    throw new Error(
-      "Kunde inte tolka PDF: " + (e instanceof Error ? e.message : "okänt fel")
-    );
+    throw new Error("Kunde inte tolka PDF: " + (e instanceof Error ? e.message : "okänt fel"));
   }
 
   // Parse the extracted text into structured data (zones, shelves, products)
   const parsed = parsePlanogramText(text, pageCount);
 
   // Extract product images from the PDF based on product names
-  const productNames = parsed.zones.flatMap(
-    (zone) => zone.shelves.flatMap((shelf) => shelf.products).map((p) => p.name)
+  const productNames = parsed.zones.flatMap((zone) =>
+    zone.shelves.flatMap((shelf) => shelf.products).map((p) => p.name),
   );
   const images = await extractProductImagesFromPdf(file, productNames);
 
@@ -256,8 +254,8 @@ export async function parsePlanogramPdf(
       shelf.products.map((product) => ({
         ...product,
         imageUrl: images[product.name] ?? undefined,
-      }))
-    )
+      })),
+    ),
   );
 
   return {
@@ -274,22 +272,39 @@ function parsePlanogramText(text: string, pageCount: number): ParsedPlanogram {
   const fullText = text;
   // VIKTIGT: Extrahera ENDAST från sidor som innehåller "Notch" och/eller "Höjd" (de strukturerade datasidorna)
   const pageTextBlocks = fullText.split("-- ");
-  const dataPages = pageTextBlocks.filter((block) =>
-    block.includes("Notch") || block.includes("Höjd")
+  const dataPages = pageTextBlocks.filter(
+    (block) => block.includes("Notch") || block.includes("Höjd"),
   );
   const combinedDataText = dataPages.join("\n");
-  const lines = combinedDataText.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = combinedDataText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
 
   // Bygg hyllor från "Hyllnr: N Notch:..."-rader i datasidorna
-  const shelfDefs: Array<{ nr: number; notch: number; hojd: number; bredd: number; franGolv: number }> = [];
-  const shelfMap = new Map<number, { nr: number; notch: number; hojd: number; bredd: number; franGolv: number }>();
+  const shelfDefs: Array<{
+    nr: number;
+    notch: number;
+    hojd: number;
+    bredd: number;
+    franGolv: number;
+  }> = [];
+  const shelfMap = new Map<
+    number,
+    { nr: number; notch: number; hojd: number; bredd: number; franGolv: number }
+  >();
   for (const line of lines) {
-    const shelfMatch = line.match(/Hyllnr:\s*(\d+)\s+Notch:\s*(\d+)\s+Höjd:\s*(\d+)\s+in\s+Bredd:\s*(\d+)\s+in\s+Höjd från Golv:([\d.]+)\s+in/);
+    const shelfMatch = line.match(
+      /Hyllnr:\s*(\d+)\s+Notch:\s*(\d+)\s+Höjd:\s*(\d+)\s+in\s+Bredd:\s*(\d+)\s+in\s+Höjd från Golv:([\d.]+)\s+in/,
+    );
     if (shelfMatch) {
       const nr = parseInt(shelfMatch[1]);
       shelfMap.set(nr, {
-        nr, notch: parseInt(shelfMatch[2]), hojd: parseInt(shelfMatch[3]),
-        bredd: parseInt(shelfMatch[4]), franGolv: parseFloat(shelfMatch[5]),
+        nr,
+        notch: parseInt(shelfMatch[2]),
+        hojd: parseInt(shelfMatch[3]),
+        bredd: parseInt(shelfMatch[4]),
+        franGolv: parseFloat(shelfMatch[5]),
       });
     }
   }
@@ -303,7 +318,11 @@ function parsePlanogramText(text: string, pageCount: number): ParsedPlanogram {
     // Ny hylla när vi ser en shelf-def-rad eller POS-header
     if (line.match(/Hyllnr:\s*\d+/)) {
       if (currentProducts.length > 0) {
-        groups.push({ shelfName: currentShelfDef ? `Hylla ${currentShelfDef.nr}` : `Hylla ${groups.length + 1}`, shelfDef: currentShelfDef, products: currentProducts });
+        groups.push({
+          shelfName: currentShelfDef ? `Hylla ${currentShelfDef.nr}` : `Hylla ${groups.length + 1}`,
+          shelfDef: currentShelfDef,
+          products: currentProducts,
+        });
         currentProducts = [];
       }
       const shelfMatch = line.match(/Hyllnr:\s*(\d+)/);
@@ -315,7 +334,11 @@ function parsePlanogramText(text: string, pageCount: number): ParsedPlanogram {
     }
     if (line.includes("POS") && line.includes("EAN") && line.includes("BNR")) {
       if (currentProducts.length > 0) {
-        groups.push({ shelfName: currentShelfDef ? `Hylla ${currentShelfDef.nr}` : `Hylla ${groups.length + 1}`, shelfDef: currentShelfDef, products: currentProducts });
+        groups.push({
+          shelfName: currentShelfDef ? `Hylla ${currentShelfDef.nr}` : `Hylla ${groups.length + 1}`,
+          shelfDef: currentShelfDef,
+          products: currentProducts,
+        });
         currentProducts = [];
       }
       // Sök efter shelf-def i närliggande rader bakåt
@@ -329,7 +352,9 @@ function parsePlanogramText(text: string, pageCount: number): ParsedPlanogram {
       continue;
     }
     // Regex fångar 9 grupper: 1=POS, 2=EAN, 3=BNR, 4=Namn, 5=Varumärke, 6=Stl(450/500), 7=B-pack, 8=Ans, 9=Tot Kp
-    const posMatch = line.match(/^(\d{1,2})\s+(\d{13})\s+(\d{5,6})\s+(.+?)\s+([A-ZÅÄÖ][A-ZÅÄÖa-zåäö\s\-]*?)\s+0\.(450|500)\s+KG\s+(\d+)\s+(\d+)\s+(\d+)/);
+    const posMatch = line.match(
+      /^(\d{1,2})\s+(\d{13})\s+(\d{5,6})\s+(.+?)\s+([A-ZÅÄÖ][A-ZÅÄÖa-zåäö\s\-]*?)\s+0\.(450|500)\s+KG\s+(\d+)\s+(\d+)\s+(\d+)/,
+    );
     if (posMatch) {
       currentProducts.push({
         id: "p-" + posMatch[2],
@@ -338,9 +363,9 @@ function parsePlanogramText(text: string, pageCount: number): ParsedPlanogram {
         name: posMatch[4].trim(),
         brand: posMatch[5].trim(),
         size: "0." + posMatch[6] + " KG",
-        packSize: parseInt(posMatch[7]) || 0,    // B-pack (kolumn 7)
-        facings: parseInt(posMatch[8]) || 1,     // Ans (kolumn 8) - antal ansikten
-        capacity: parseInt(posMatch[9]) || 0,    // Tot Kp (kolumn 9) - total hyllkapacitet
+        packSize: parseInt(posMatch[7]) || 0, // B-pack (kolumn 7)
+        facings: parseInt(posMatch[8]) || 1, // Ans (kolumn 8) - antal ansikten
+        capacity: parseInt(posMatch[9]) || 0, // Tot Kp (kolumn 9) - total hyllkapacitet
         position: { x: (parseInt(posMatch[1]) % 4) / 4, index: parseInt(posMatch[1]) },
         dimensions: { width: 0.3, height: 0.2, depth: 0.15 },
         category: "Bryggkaffe",
@@ -355,19 +380,30 @@ function parsePlanogramText(text: string, pageCount: number): ParsedPlanogram {
     }
   }
   if (currentProducts.length > 0) {
-    groups.push({ shelfName: currentShelfDef ? `Hylla ${currentShelfDef.nr}` : `Hylla ${groups.length + 1}`, shelfDef: currentShelfDef, products: currentProducts });
+    groups.push({
+      shelfName: currentShelfDef ? `Hylla ${currentShelfDef.nr}` : `Hylla ${groups.length + 1}`,
+      shelfDef: currentShelfDef,
+      products: currentProducts,
+    });
   }
 
   // Samla alla grupper från hela dokumentet — INGEN avklippning
   const selectedGroups = groups;
-  const zones = [{
-    id: "zone-1", name: "Bryggkaffe Mellan Öster 2s",
-    shelves: selectedGroups.map((g, i) => ({
-      id: "shelf-" + (i + 1), zoneId: "zone-1", name: g.shelfName, level: i,
-      height: 1.8, products: g.products,
-    })),
-    bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 4, y: 2, z: 2 } },
-  }];
+  const zones = [
+    {
+      id: "zone-1",
+      name: "Bryggkaffe Mellan Öster 2s",
+      shelves: selectedGroups.map((g, i) => ({
+        id: "shelf-" + (i + 1),
+        zoneId: "zone-1",
+        name: g.shelfName,
+        level: i,
+        height: 1.8,
+        products: g.products,
+      })),
+      bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 4, y: 2, z: 2 } },
+    },
+  ];
   const totalProducts = selectedGroups.reduce((s, g) => s + g.products.length, 0);
   const totalShelves = selectedGroups.length;
   return {
@@ -383,10 +419,7 @@ function parsePlanogramText(text: string, pageCount: number): ParsedPlanogram {
  */
 function extractStoreName(lines: string[]): string | undefined {
   // Common patterns in planogram PDFs
-  const patterns = [
-    /^(?:Store|Butik|Shop)[:\s]+(.+)$/i,
-    /^(?:Location|Plats)[:\s]+(.+)$/i,
-  ];
+  const patterns = [/^(?:Store|Butik|Shop)[:\s]+(.+)$/i, /^(?:Location|Plats)[:\s]+(.+)$/i];
 
   for (const line of lines.slice(0, 20)) {
     for (const pattern of patterns) {
@@ -552,8 +585,8 @@ export function parsedToShelfPlanogram(parsed: ParsedPlanogram): ShelfPlanogram 
         facings: p.facings,
         quantity_per_facing: 1,
         total_quantity: p.facings,
-      }))
-    )
+      })),
+    ),
   );
 
   return {
@@ -575,7 +608,7 @@ export function parsedToShelfPlanogram(parsed: ParsedPlanogram): ShelfPlanogram 
  */
 export async function matchProductsWithDatabase(
   parsed: ParsedPlanogram,
-  storeProducts: Array<{ id: string; ean: string; sku: string; name: string }>
+  storeProducts: Array<{ id: string; ean: string; sku: string; name: string }>,
 ): Promise<ParsedPlanogram> {
   // Create lookup maps
   const byEan = new Map(storeProducts.map((p) => [p.ean, p]));

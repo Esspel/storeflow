@@ -30,7 +30,7 @@ export async function isRepeatedShortDate(
   storeId: string,
   material_nr: string,
   daysAhead = 7,
-  windowDays = 30
+  windowDays = 30,
 ): Promise<boolean> {
   const since = new Date(Date.now() - windowDays * 86400000).toISOString().slice(0, 10);
   const { data, error } = await supabase
@@ -42,7 +42,8 @@ export async function isRepeatedShortDate(
   if (error) throw error;
   if (!data || data.length < 2) return false;
   const shortCount = data.filter((r: any) => {
-    const diff = (new Date(r.best_före_datum).getTime() - new Date(r.leveransdag).getTime()) / 86400000;
+    const diff =
+      (new Date(r.best_före_datum).getTime() - new Date(r.leveransdag).getTime()) / 86400000;
     return diff < daysAhead;
   }).length;
   return shortCount >= 2;
@@ -50,7 +51,7 @@ export async function isRepeatedShortDate(
 
 export function diffProductPayload(
   existing: Partial<Product>,
-  incoming: Partial<Product>
+  incoming: Partial<Product>,
 ): string[] {
   const conflicts: string[] = [];
   for (const k of Object.keys(incoming) as (keyof Product)[]) {

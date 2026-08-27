@@ -30,9 +30,20 @@ import { ShelfScanner } from "@/components/shelf-scanner";
 import { PlanogramUpload } from "@/components/planogram-upload";
 import type { PlanogramCheckResult } from "@/lib/planogram-engine";
 import { useAuth } from "@/lib/auth-context";
-import { getShelfPlanograms, getSpatialMarkersForStore, linkPlanogramToMarker, unlinkPlanogramFromMarker } from "@/lib/supabase";
+import {
+  getShelfPlanograms,
+  getSpatialMarkersForStore,
+  linkPlanogramToMarker,
+  unlinkPlanogramFromMarker,
+} from "@/lib/supabase";
 import { exportCSV } from "@/lib/csv";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 
 interface ShelfPlanogram {
@@ -107,17 +118,16 @@ function ShelfAnalyticsComponent() {
   useEffect(() => {
     if (!activeStore?.id || !user) return;
     setLoading(true);
-    Promise.all([
-      getShelfPlanograms(activeStore.id),
-      getSpatialMarkersForStore(activeStore.id),
-    ])
+    Promise.all([getShelfPlanograms(activeStore.id), getSpatialMarkersForStore(activeStore.id)])
       .then(([p, m]) => {
         setPlanograms(p);
         setSpatialMarkers(m);
 
         // Combine planograms with markers for shelf list
         const combined: ShelfData[] = p.map((planogram) => {
-          const marker = planogram.shelf_marker_id ? m.find((sm) => sm.id === planogram.shelf_marker_id) : null;
+          const marker = planogram.shelf_marker_id
+            ? m.find((sm) => sm.id === planogram.shelf_marker_id)
+            : null;
           return {
             id: planogram.id,
             name: planogram.name,
@@ -208,7 +218,17 @@ function ShelfAnalyticsComponent() {
 
   const handleExportReport = () => {
     const rows: (string | number | boolean | null | undefined)[][] = [
-      ["Hylla", "Planogram", "Status", "Poäng", "Förväntade", "Saknade", "Felplacerade", "Övriga", "Senast skannad"],
+      [
+        "Hylla",
+        "Planogram",
+        "Status",
+        "Poäng",
+        "Förväntade",
+        "Saknade",
+        "Felplacerade",
+        "Övriga",
+        "Senast skannad",
+      ],
     ];
     for (const s of shelves) {
       rows.push([
@@ -468,8 +488,9 @@ function ShelfAnalyticsComponent() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Koppla dina planogram (från PDF-uppladdning) till de spatiala markörerna som skapades i Digital Twin.
-                  Detta möjliggör automatisk planogram-efterlevnadskontroll vid skanning.
+                  Koppla dina planogram (från PDF-uppladdning) till de spatiala markörerna som
+                  skapades i Digital Twin. Detta möjliggör automatisk planogram-efterlevnadskontroll
+                  vid skanning.
                 </p>
 
                 <div className="space-y-3">
@@ -492,7 +513,8 @@ function ShelfAnalyticsComponent() {
                             <div className="text-xs text-slate-500 dark:text-slate-400">
                               {planogram.expected_products?.length || 0} produkter{" "}
                               {planogram.shelf_marker_id
-                                ? " • Kopplad till " + (linkedMarker?.shelf_name || linkedMarker?.aruco_id)
+                                ? " • Kopplad till " +
+                                  (linkedMarker?.shelf_name || linkedMarker?.aruco_id)
                                 : " • Ej kopplad"}
                             </div>
                           </div>
@@ -503,25 +525,33 @@ function ShelfAnalyticsComponent() {
                                 value={planogram.shelf_marker_id || ""}
                                 onValueChange={(value) => {
                                   if (!value) {
-                                    unlinkPlanogramFromMarker(planogram.id).then(() => {
-                                      setPlanograms((prev) =>
-                                        prev.map((p) =>
-                                          p.id === planogram.id ? { ...p, shelf_marker_id: null } : p,
-                                        ),
-                                      );
-                                      setLinkingPlanogramId(null);
-                                      toast.success("Koppling borttagen");
-                                    }).catch(() => toast.error("Misslyckades"));
+                                    unlinkPlanogramFromMarker(planogram.id)
+                                      .then(() => {
+                                        setPlanograms((prev) =>
+                                          prev.map((p) =>
+                                            p.id === planogram.id
+                                              ? { ...p, shelf_marker_id: null }
+                                              : p,
+                                          ),
+                                        );
+                                        setLinkingPlanogramId(null);
+                                        toast.success("Koppling borttagen");
+                                      })
+                                      .catch(() => toast.error("Misslyckades"));
                                   } else {
-                                    linkPlanogramToMarker(planogram.id, value).then(() => {
-                                      setPlanograms((prev) =>
-                                        prev.map((p) =>
-                                          p.id === planogram.id ? { ...p, shelf_marker_id: value } : p,
-                                        ),
-                                      );
-                                      setLinkingPlanogramId(null);
-                                      toast.success("Planogram kopplat till markör");
-                                    }).catch(() => toast.error("Misslyckades att koppla"));
+                                    linkPlanogramToMarker(planogram.id, value)
+                                      .then(() => {
+                                        setPlanograms((prev) =>
+                                          prev.map((p) =>
+                                            p.id === planogram.id
+                                              ? { ...p, shelf_marker_id: value }
+                                              : p,
+                                          ),
+                                        );
+                                        setLinkingPlanogramId(null);
+                                        toast.success("Planogram kopplat till markör");
+                                      })
+                                      .catch(() => toast.error("Misslyckades att koppla"));
                                   }
                                 }}
                               >
@@ -530,15 +560,20 @@ function ShelfAnalyticsComponent() {
                                 </SelectTrigger>
                                 <SelectContent>
                                   {spatialMarkers
-                                    .filter((m) => !planograms.some((p) => p.shelf_marker_id === m.id && p.id !== planogram.id))
+                                    .filter(
+                                      (m) =>
+                                        !planograms.some(
+                                          (p) =>
+                                            p.shelf_marker_id === m.id && p.id !== planogram.id,
+                                        ),
+                                    )
                                     .map((marker) => (
                                       <SelectItem key={marker.id} value={marker.id}>
-                                        {marker.shelf_name || `ArUco ${marker.aruco_id}`} ({marker.marker_type})
+                                        {marker.shelf_name || `ArUco ${marker.aruco_id}`} (
+                                        {marker.marker_type})
                                       </SelectItem>
                                     ))}
-                                  <SelectItem value="">
-                                    Ta bort koppling
-                                  </SelectItem>
+                                  <SelectItem value="">Ta bort koppling</SelectItem>
                                 </SelectContent>
                               </Select>
                               <Button
@@ -586,7 +621,8 @@ function ShelfAnalyticsComponent() {
                   <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
                     <AlertTriangle className="w-5 h-5 text-amber-500 mb-2" />
                     <p className="text-sm text-amber-700 dark:text-amber-300">
-                      Inga spatiala markörer hittades. Skapa markörer i Butiksinstallation → Digital Twin först.
+                      Inga spatiala markörer hittades. Skapa markörer i Butiksinstallation → Digital
+                      Twin först.
                     </p>
                   </div>
                 )}

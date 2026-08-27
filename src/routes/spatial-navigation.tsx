@@ -80,7 +80,10 @@ function SpatialNavigationPage() {
         .eq("store_id", activeStore.id)
         .eq("is_active", true);
       if (data && Array.isArray(data) && data.length > 0 && data[0]) {
-        const mapsWithMarkers = data.map((d: any) => ({ ...d, markers: d.markers || [] })) as SpatialMap[];
+        const mapsWithMarkers = data.map((d: any) => ({
+          ...d,
+          markers: d.markers || [],
+        })) as SpatialMap[];
         setMaps(mapsWithMarkers);
         setSelectedMap(mapsWithMarkers[0]);
       }
@@ -93,9 +96,7 @@ function SpatialNavigationPage() {
     if (!searchQuery) return selectedMap.markers;
     const q = searchQuery.toLowerCase();
     return selectedMap.markers.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.type.toLowerCase().includes(q),
+      (m) => m.name.toLowerCase().includes(q) || m.type.toLowerCase().includes(q),
     );
   }, [selectedMap, searchQuery]);
 
@@ -133,20 +134,23 @@ function SpatialNavigationPage() {
             <div className="flex gap-2">
               <Button
                 variant={show2D ? "default" : "outline"}
-                onClick={() => { setShow2D(true); setShow3D(false); }}
+                onClick={() => {
+                  setShow2D(true);
+                  setShow3D(false);
+                }}
               >
                 2D
               </Button>
               <Button
                 variant={show3D ? "default" : "outline"}
-                onClick={() => { setShow3D(true); setShow2D(false); }}
+                onClick={() => {
+                  setShow3D(true);
+                  setShow2D(false);
+                }}
               >
                 3D
               </Button>
-              <Button
-                variant={showAR ? "default" : "outline"}
-                onClick={() => setShowAR(!showAR)}
-              >
+              <Button variant={showAR ? "default" : "outline"} onClick={() => setShowAR(!showAR)}>
                 <Smartphone className="h-4 w-4 mr-2" />
                 AR
               </Button>
@@ -178,7 +182,9 @@ function SpatialNavigationPage() {
                           <MapPinIcon className="h-4 w-4" />
                           <div className="flex-1">
                             <p className="text-sm font-medium">{marker.name}</p>
-                            <p className="text-xs text-muted-foreground capitalize">{marker.type}</p>
+                            <p className="text-xs text-muted-foreground capitalize">
+                              {marker.type}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -202,7 +208,9 @@ function SpatialNavigationPage() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Position:</span>
                       <span>
-                        {selectedMarker.position.x.toFixed(2)}, {selectedMarker.position.y.toFixed(2)}, {selectedMarker.position.z.toFixed(2)}
+                        {selectedMarker.position.x.toFixed(2)},{" "}
+                        {selectedMarker.position.y.toFixed(2)},{" "}
+                        {selectedMarker.position.z.toFixed(2)}
                       </span>
                     </div>
                   </div>

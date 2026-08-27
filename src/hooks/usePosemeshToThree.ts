@@ -47,9 +47,7 @@ export interface PosemeshBridgeOptions {
   fps?: number;
 }
 
-export function usePosemeshToThree(
-  options: PosemeshBridgeOptions
-): BridgeState & {
+export function usePosemeshToThree(options: PosemeshBridgeOptions): BridgeState & {
   /** Get current camera world matrix (for Three.js camera) */
   getCameraMatrix: () => THREE.Matrix4 | null;
   /** Reset tracking */
@@ -69,17 +67,24 @@ export function usePosemeshToThree(
   const cameraMatrixRef = useRef<THREE.Matrix4>(
     cameraMatrix
       ? new THREE.Matrix4().set(
-          cameraMatrix[0], 0, cameraMatrix[2], 0,
-          0, cameraMatrix[1], cameraMatrix[3], 0,
-          0, 0, 1, 0,
-          0, 0, 0, 1
+          cameraMatrix[0],
+          0,
+          cameraMatrix[2],
+          0,
+          0,
+          cameraMatrix[1],
+          cameraMatrix[3],
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
         )
-      : new THREE.Matrix4().set(
-          1000, 0, 640, 0,
-          0, 1000, 360, 0,
-          0, 0, 1, 0,
-          0, 0, 0, 1
-        ) // Default 1280x720 camera
+      : new THREE.Matrix4().set(1000, 0, 640, 0, 0, 1000, 360, 0, 0, 0, 1, 0, 0, 0, 0, 1), // Default 1280x720 camera
   );
 
   const distCoeffsRef = useRef<number[]>(distCoeffs || [0, 0, 0, 0, 0]);
@@ -147,7 +152,11 @@ export function usePosemeshToThree(
           const luminance = new Uint8Array(canvas.width * canvas.height);
           for (let i = 0; i < luminance.length; i++) {
             const idx = i * 4;
-            luminance[i] = (imageData.data[idx] * 0.299 + imageData.data[idx + 1] * 0.587 + imageData.data[idx + 2] * 0.114) | 0;
+            luminance[i] =
+              (imageData.data[idx] * 0.299 +
+                imageData.data[idx + 1] * 0.587 +
+                imageData.data[idx + 2] * 0.114) |
+              0;
           }
 
           // Detect ArUco markers from camera frame for 2D image points
@@ -177,7 +186,7 @@ export function usePosemeshToThree(
             objectPoints,
             imagePoints,
             cameraMatrixRef.current.toArray(),
-            distCoeffsRef.current
+            distCoeffsRef.current,
           );
 
           if (pose && enableDriftCorrection) {
@@ -187,14 +196,14 @@ export function usePosemeshToThree(
               pose.rotation.x,
               pose.rotation.y,
               pose.rotation.z,
-              pose.rotation.w
+              pose.rotation.w,
             );
             rotationMatrix.makeRotationFromQuaternion(quaternion);
 
             const translation = new THREE.Vector3(
               pose.position.x,
               pose.position.y,
-              pose.position.z
+              pose.position.z,
             );
 
             const cameraWorld = new THREE.Matrix4()

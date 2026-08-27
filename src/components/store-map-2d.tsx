@@ -62,7 +62,7 @@ export function StoreMap2D({
 
     setSections((prev) => {
       const next = prev.map((s) =>
-        s.id === drag.id ? { ...s, pos_x_cm: Math.max(0, x), pos_y_cm: Math.max(0, y) } : s
+        s.id === drag.id ? { ...s, pos_x_cm: Math.max(0, x), pos_y_cm: Math.max(0, y) } : s,
       );
       onChange?.(next);
       return next;
@@ -110,10 +110,10 @@ export function StoreMap2D({
           onMouseDown={(e) => onMouseDown(e, s)}
           className={`
             absolute
-            ${isReadonly ? 'cursor-default' : 'cursor-move'}
+            ${isReadonly ? "cursor-default" : "cursor-move"}
             rounded
             border
-            ${s.id === selectedId ? 'border-indigo-500' : 'border-blue-500'}
+            ${s.id === selectedId ? "border-indigo-500" : "border-blue-500"}
             bg-blue-100/80
             p-1
             text-xs

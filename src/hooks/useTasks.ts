@@ -10,11 +10,46 @@ import type { Task } from "@/lib/supabase";
 export type TaskFull = Task & {
   id: string;
   status: "todo" | "progress" | "done" | "late" | "cancelled";
-  steps: { id: string; task_id: string; label: string; is_done: boolean; requires_photo: boolean; sort_order: number; condition_question_id?: string | null; condition_answer?: string | null; link_url?: string | null }[];
-  questions: { id: string; task_id: string; label: string; question_type: string; is_required: boolean; answer?: string | null }[];
-  store?: { id: string; name: string; address: string | null; phone: string | null; email: string | null; sap_site_id: string | null; created_at: string };
-  assignees?: Array<{ user_id: string; user?: { id: string; display_name?: string | null; username?: string | null } | null; group?: { id: string; name: string } | null }>;
-  images?: { id: string; task_id: string; storage_path: string; caption: string | null; created_at: string }[];
+  steps: {
+    id: string;
+    task_id: string;
+    label: string;
+    is_done: boolean;
+    requires_photo: boolean;
+    sort_order: number;
+    condition_question_id?: string | null;
+    condition_answer?: string | null;
+    link_url?: string | null;
+  }[];
+  questions: {
+    id: string;
+    task_id: string;
+    label: string;
+    question_type: string;
+    is_required: boolean;
+    answer?: string | null;
+  }[];
+  store?: {
+    id: string;
+    name: string;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+    sap_site_id: string | null;
+    created_at: string;
+  };
+  assignees?: Array<{
+    user_id: string;
+    user?: { id: string; display_name?: string | null; username?: string | null } | null;
+    group?: { id: string; name: string } | null;
+  }>;
+  images?: {
+    id: string;
+    task_id: string;
+    storage_path: string;
+    caption: string | null;
+    created_at: string;
+  }[];
   event_trigger_description?: string | null;
   event_trigger_user_id?: string | null;
   event_triggered_at?: string | null;
@@ -34,7 +69,7 @@ export interface UnifiedTask extends TaskFull {
 export async function fetchUnifiedTasks(
   storeId: string,
   userStores: Array<{ id: string }>,
-  userId: string | null
+  userId: string | null,
 ): Promise<UnifiedTask[]> {
   // Fetch regular tasks
   let regularQuery = supabase
@@ -48,12 +83,13 @@ export async function fetchUnifiedTasks(
   if (storeId) {
     regularQuery = regularQuery.eq("store_id", storeId);
   } else if (userStores.length > 0) {
-    regularQuery = regularQuery.in("store_id", userStores.map((s) => s.id));
+    regularQuery = regularQuery.in(
+      "store_id",
+      userStores.map((s) => s.id),
+    );
   }
 
-  const [{ data: regularData }] = await Promise.all([
-    regularQuery,
-  ]);
+  const [{ data: regularData }] = await Promise.all([regularQuery]);
 
   const regularTasks = (regularData ?? []).map((t) => ({
     ...t,
@@ -61,7 +97,7 @@ export async function fetchUnifiedTasks(
   }));
 
   return regularTasks.sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   );
 }
 
@@ -73,38 +109,45 @@ export function useUnifiedTasks() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTasks = useCallback(async (storeId: string, userStores: Array<{ id: string }>, userId: string | null) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchUnifiedTasks(storeId, userStores, userId);
-      setTasks(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Fel vid hämtning av uppgifter");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const fetchTasks = useCallback(
+    async (storeId: string, userStores: Array<{ id: string }>, userId: string | null) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchUnifiedTasks(storeId, userStores, userId);
+        setTasks(data);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Fel vid hämtning av uppgifter");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   const addTask = useCallback((task: UnifiedTask) => {
     setTasks((prev) => [task, ...prev]);
   }, []);
 
   const updateTask = useCallback((id: string, updates: Partial<UnifiedTask>) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
-    );
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
   }, []);
 
   const removeTask = useCallback((id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const setTaskStatus = useCallback(async (id: string, status: UnifiedTask["status"]) => {
-    const { error } = await supabase.from("tasks").update({ status: statusMap[status] }).eq("id", id);
-    if (error) throw error;
-    updateTask(id, { status });
-  }, [updateTask]);
+  const setTaskStatus = useCallback(
+    async (id: string, status: UnifiedTask["status"]) => {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ status: statusMap[status] })
+        .eq("id", id);
+      if (error) throw error;
+      updateTask(id, { status });
+    },
+    [updateTask],
+  );
 
   return { tasks, loading, error, fetchTasks, addTask, updateTask, removeTask, setTaskStatus };
 }

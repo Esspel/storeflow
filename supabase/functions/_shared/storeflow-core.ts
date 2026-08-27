@@ -1177,7 +1177,8 @@ export async function setShelfLifeHandler(
 ) {
   requireScope(ctx, "products:write");
 
-  const { sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore } = input;
+  const { sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore } =
+    input;
 
   if (!sap_article_id) throw new ScopeError("sap_article_id is required", 400);
   if (shelf_lifetime_days == null || expiry_date == null || arrival_date == null) {
@@ -1215,17 +1216,15 @@ export async function setShelfLifeHandler(
     if (updateError) throw updateError;
   } else {
     // Skapa ny post
-    const { error: insertError } = await supabase
-      .from("product_shelf_life")
-      .insert({
-        sap_article_id,
-        shelf_lifetime_days,
-        expiry_date: expiry,
-        arrival_date: arrival,
-        compensation_price_ore: compensation_price_ore ?? 2,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
+    const { error: insertError } = await supabase.from("product_shelf_life").insert({
+      sap_article_id,
+      shelf_lifetime_days,
+      expiry_date: expiry,
+      arrival_date: arrival,
+      compensation_price_ore: compensation_price_ore ?? 2,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
 
     if (insertError) throw insertError;
   }
@@ -1264,7 +1263,8 @@ export async function calculateShelfLifeRulesHandler(
 
   // Beräkna minsta kravda hållbarhet
   let minRequiredDays;
-  if (shelf_lifetime_days <= 548) { // 18 månader ≈ 548 dagar
+  if (shelf_lifetime_days <= 548) {
+    // 18 månader ≈ 548 dagar
     minRequiredDays = Math.ceil(shelf_lifetime_days * 0.5);
   } else {
     minRequiredDays = 274; // 9 månader
@@ -1296,45 +1296,49 @@ export async function getShelfLifeForProductsHandler(
 
   const { data, error } = await supabase
     .from("product_shelf_life")
-    .select("sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore")
+    .select(
+      "sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore",
+    )
     .in("sap_article_id", sap_article_ids);
 
   if (error) throw error;
 
   // Beräkna status för varje produkt
-  const result = (data || []).map((record: {
-    sap_article_id: string;
-    shelf_lifetime_days: number;
-    expiry_date: string;
-    arrival_date: string;
-    compensation_price_ore: number;
-  }) => {
-    const arrival = new Date(record.arrival_date);
-    const expiry = new Date(record.expiry_date);
-    const daysRemaining = Math.floor(
-      (expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24)
-    );
+  const result = (data || []).map(
+    (record: {
+      sap_article_id: string;
+      shelf_lifetime_days: number;
+      expiry_date: string;
+      arrival_date: string;
+      compensation_price_ore: number;
+    }) => {
+      const arrival = new Date(record.arrival_date);
+      const expiry = new Date(record.expiry_date);
+      const daysRemaining = Math.floor(
+        (expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24),
+      );
 
-    let minRequired: number;
-    if (record.shelf_lifetime_days <= 548) {
-      minRequired = Math.ceil(record.shelf_lifetime_days * 0.5);
-    } else {
-      minRequired = 274;
-    }
+      let minRequired: number;
+      if (record.shelf_lifetime_days <= 548) {
+        minRequired = Math.ceil(record.shelf_lifetime_days * 0.5);
+      } else {
+        minRequired = 274;
+      }
 
-    const isFlagged = daysRemaining < minRequired;
+      const isFlagged = daysRemaining < minRequired;
 
-    return {
-      sap_article_id: record.sap_article_id,
-      shelf_lifetime_days: record.shelf_lifetime_days,
-      expiry_date: record.expiry_date,
-      arrival_date: record.arrival_date,
-      days_remaining: daysRemaining,
-      min_required_days: minRequired,
-      is_flagged: isFlagged,
-      compensation_price_ore: record.compensation_price_ore,
-    };
-  });
+      return {
+        sap_article_id: record.sap_article_id,
+        shelf_lifetime_days: record.shelf_lifetime_days,
+        expiry_date: record.expiry_date,
+        arrival_date: record.arrival_date,
+        days_remaining: daysRemaining,
+        min_required_days: minRequired,
+        is_flagged: isFlagged,
+        compensation_price_ore: record.compensation_price_ore,
+      };
+    },
+  );
 
   return result;
 }
@@ -1350,21 +1354,23 @@ export async function generateShelfLifeZipHandler(
   // Hämta alla produkter med shelf life data
   const { data: shelfLifeData, error: fetchError } = await supabase
     .from("product_shelf_life")
-    .select("sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore")
+    .select(
+      "sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore",
+    )
     .order("arrival_date", { ascending: false });
 
   if (fetchError) throw fetchError;
 
   // Hämta produktspecifik info (namn, EAN, BNR) från products-tabellen
-  const sapArticleIds = shelfLifeData.map(p => p.sap_article_id);
+  const sapArticleIds = shelfLifeData.map((p) => p.sap_article_id);
   const { data: products } = await supabase
     .from("products")
     .select("id, name, ean, bnr, sap_article_id, store_id")
     .in("sap_article_id", sapArticleIds);
 
   // Bygg en map för snabb uppslagning
-  const productMap = new Map<string, typeof products[0]>();
-  products?.forEach(p => productMap.set(p.sap_article_id, p));
+  const productMap = new Map<string, (typeof products)[0]>();
+  products?.forEach((p) => productMap.set(p.sap_article_id, p));
 
   // Flagga produkter som omfattas av regelverket
   const flaggedProducts: any[] = [];
@@ -1400,9 +1406,10 @@ export async function generateShelfLifeZipHandler(
         days_remaining: daysRemaining,
         min_required_days: minRequiredDays,
         compensation_price_ore: shelfLife.compensation_price_ore,
-        reason: daysRemaining < minRequiredDays
-          ? `Kvarvarande ${daysRemaining} dagar < minsta ${minRequiredDays} dagar (total hållbarhet ${shelf_lifetime_days} dagar)`
-          : "",
+        reason:
+          daysRemaining < minRequiredDays
+            ? `Kvarvarande ${daysRemaining} dagar < minsta ${minRequiredDays} dagar (total hållbarhet ${shelf_lifetime_days} dagar)`
+            : "",
       });
     }
   }
@@ -1419,10 +1426,10 @@ export async function generateShelfLifeZipHandler(
     "Kvarvarande dagar",
     "Minsta krävda dagar",
     "Ersättningspris (öre)",
-    "Orsak"
+    "Orsak",
   ];
 
-  const csvRows = flaggedProducts.map(p => [
+  const csvRows = flaggedProducts.map((p) => [
     p.bnr || "",
     p.ean || "",
     p.sap_article_id,
@@ -1433,10 +1440,10 @@ export async function generateShelfLifeZipHandler(
     p.days_remaining,
     p.min_required_days,
     p.compensation_price_ore,
-    p.reason
+    p.reason,
   ]);
 
-  const csvContent = [csvHeaders.join(";"), ...csvRows.map(row => row.join(";"))].join("\n");
+  const csvContent = [csvHeaders.join(";"), ...csvRows.map((row) => row.join(";"))].join("\n");
 
   // Lägg till BOM för Excel-kompatibilitet
   const csvWithBom = "﻿" + csvContent;
@@ -1465,21 +1472,23 @@ export async function groupShelfLifeByDeliveryHandler(
   // Hämta alla produkter med shelf life data för butiken
   const { data: shelfLifeData, error: fetchError } = await supabase
     .from("product_shelf_life")
-    .select("sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore, delivery_number, temperature_zone")
+    .select(
+      "sap_article_id, shelf_lifetime_days, expiry_date, arrival_date, compensation_price_ore, delivery_number, temperature_zone",
+    )
     .eq("store_id", input.store_id)
     .order("arrival_date", { ascending: false });
 
   if (fetchError) throw fetchError;
 
   // Hämta produktspecifik info
-  const sapArticleIds = shelfLifeData.map(p => p.sap_article_id);
+  const sapArticleIds = shelfLifeData.map((p) => p.sap_article_id);
   const { data: products } = await supabase
     .from("products")
     .select("id, name, ean, bnr, sap_article_id, store_id")
     .in("sap_article_id", sapArticleIds);
 
-  const productMap = new Map<string, typeof products[0]>();
-  products?.forEach(p => productMap.set(p.sap_article_id, p));
+  const productMap = new Map<string, (typeof products)[0]>();
+  products?.forEach((p) => productMap.set(p.sap_article_id, p));
 
   // Flagga produkter som omfattas av regelverket
   const flaggedProducts: any[] = [];
@@ -1550,7 +1559,7 @@ export async function groupShelfLifeByDeliveryHandler(
   const groups: Record<string, { csv: string; count: number }> = {};
 
   for (const [key, products] of grouped.entries()) {
-    const csvRows = products.map(p => [
+    const csvRows = products.map((p) => [
       p.bnr || "",
       p.ean || "",
       p.sap_article_id,
@@ -1568,7 +1577,7 @@ export async function groupShelfLifeByDeliveryHandler(
 
     const csvContent = [
       csvHeaders.join(","),
-      ...csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      ...csvRows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")),
     ].join("\n");
 
     const csvWithBom = "﻿" + csvContent;
@@ -1666,10 +1675,7 @@ export async function getProductReclamationStatsHandler(
   });
 
   // Hämta produktinfo för att få namn/EAN/BNR
-  const allSapIds = new Set([
-    ...reclamationCounts.keys(),
-    ...deliveryCounts.keys(),
-  ]);
+  const allSapIds = new Set([...reclamationCounts.keys(), ...deliveryCounts.keys()]);
 
   let productsMap = new Map<string, { name: string; ean: string; bnr: string }>();
   if (allSapIds.size > 0) {
@@ -1678,13 +1684,13 @@ export async function getProductReclamationStatsHandler(
       .select("name, ean, bnr, sap_article_id")
       .in("sap_article_id", Array.from(allSapIds));
 
-    products?.forEach(p => {
+    products?.forEach((p) => {
       productsMap.set(p.sap_article_id, { name: p.name, ean: p.ean, bnr: p.bnr });
     });
   }
 
   // Bygg resultat
-  const results = Array.from(allSapIds).map(sap_article_id => {
+  const results = Array.from(allSapIds).map((sap_article_id) => {
     const productInfo = productsMap.get(sap_article_id) || { name: "", ean: "", bnr: "" };
     return {
       sap_article_id,

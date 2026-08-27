@@ -602,12 +602,26 @@ const TOOLS: {
       type: "object",
       properties: {
         sap_article_id: { type: "string", description: "SAP/MAT-NR identifier" },
-        shelf_lifetime_days: { type: "integer", description: "Total shelf life in days from production to expiry" },
-        expiry_date: { type: "string", format: "date-time", description: "Best before date (Bäst-före-datum) in ISO 8601 format" },
-        arrival_date: { type: "string", format: "date-time", description: "Arrival date at store (Leveransdag) in ISO 8601 format" },
-        compensation_price_ore: { type: "integer", description: "Compensation price in öre per unit (default: 2)" }
+        shelf_lifetime_days: {
+          type: "integer",
+          description: "Total shelf life in days from production to expiry",
+        },
+        expiry_date: {
+          type: "string",
+          format: "date-time",
+          description: "Best before date (Bäst-före-datum) in ISO 8601 format",
+        },
+        arrival_date: {
+          type: "string",
+          format: "date-time",
+          description: "Arrival date at store (Leveransdag) in ISO 8601 format",
+        },
+        compensation_price_ore: {
+          type: "integer",
+          description: "Compensation price in öre per unit (default: 2)",
+        },
       },
-      required: ["sap_article_id", "shelf_lifetime_days", "expiry_date", "arrival_date"]
+      required: ["sap_article_id", "shelf_lifetime_days", "expiry_date", "arrival_date"],
     },
     handler: async (supabase, ctx, args) => setShelfLifeHandler(supabase, ctx, args as never),
   },
@@ -617,15 +631,17 @@ const TOOLS: {
     inputSchema: {
       type: "object",
       properties: {
-        sap_article_id: { type: "string", description: "SAP/MAT-NR identifier" }
+        sap_article_id: { type: "string", description: "SAP/MAT-NR identifier" },
       },
-      required: ["sap_article_id"]
+      required: ["sap_article_id"],
     },
-    handler: async (supabase, ctx, args) => calculateShelfLifeRulesHandler(supabase, ctx, args as never),
+    handler: async (supabase, ctx, args) =>
+      calculateShelfLifeRulesHandler(supabase, ctx, args as never),
   },
   {
     name: "get_shelf_life_for_products",
-    description: "Hämta hållbarhetsdata och status (flaggad/enligt datumregelverk) för en lista sap_article_id",
+    description:
+      "Hämta hållbarhetsdata och status (flaggad/enligt datumregelverk) för en lista sap_article_id",
     inputSchema: {
       type: "object",
       properties: {
@@ -646,20 +662,22 @@ const TOOLS: {
     inputSchema: {
       type: "object",
       properties: {
-        store_id: { type: "string", description: "Butiks-UUID för att filtrera produkter" }
-      }
+        store_id: { type: "string", description: "Butiks-UUID för att filtrera produkter" },
+      },
     },
-    handler: async (supabase, ctx, args) => generateShelfLifeZipHandler(supabase, ctx, args as never),
+    handler: async (supabase, ctx, args) =>
+      generateShelfLifeZipHandler(supabase, ctx, args as never),
   },
   {
     name: "group_shelf_life_by_delivery",
-    description: "Gruppera flaggade produkter efter leveransnummer och temperaturzon för zip-filorganisation",
+    description:
+      "Gruppera flaggade produkter efter leveransnummer och temperaturzon för zip-filorganisation",
     inputSchema: {
       type: "object",
       properties: {
-        store_id: { type: "string", description: "Butiks-UUID att gruppera för" }
+        store_id: { type: "string", description: "Butiks-UUID att gruppera för" },
       },
-      required: ["store_id"]
+      required: ["store_id"],
     },
     handler: async (supabase, ctx, args) =>
       groupShelfLifeByDeliveryHandler(supabase, ctx, args as never),
@@ -671,8 +689,8 @@ const TOOLS: {
       type: "object",
       properties: {
         store_id: { type: "string", description: "Butiks-UUID (valfritt)" },
-        sap_article_id: { type: "string", description: "SAP-artikel-ID (valfritt)" }
-      }
+        sap_article_id: { type: "string", description: "SAP-artikel-ID (valfritt)" },
+      },
     },
     handler: async (supabase, ctx, args) =>
       getProductReclamationStatsHandler(supabase, ctx, args as never),

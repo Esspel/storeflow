@@ -42,6 +42,7 @@ supabase/migrations/*.sql  (idempotenta, unika tidsstämplar)
 **Problem:** `PGRST205` (saknad `store_sections`), REST-anrop i wizard-komponent, tom markörknapp, produkter kopplas fel.
 
 **Lösning:**
+
 - **Migration:** `20260827_120000_add_store_sections_and_digital_twin_tables.sql` (idempotent, `CREATE TABLE IF NOT EXISTS`).
 - **RLS:** `CREATE POLICY IF NOT EXISTS` på `store_sections`, `spatial_markers`, `store_product_deliveries`.
 - **Kod:** `src/components/digital-twin/Step2Markers.tsx` – ersätt eventuell REST-curl med `supabase.from('spatial_markers').upsert(...)` per spec (`docs/superpowers/specs/2026-08-27-digital-twin-design.md`).
@@ -53,6 +54,7 @@ supabase/migrations/*.sql  (idempotenta, unika tidsstämplar)
 **Problem:** `42P10` (`ON CONFLICT` saknar unik constraint på `products`); `reclamations` 404.
 
 **Lösning:**
+
 - **Migration:** Lägg till unik constraint på `products(ean)` (eller `products(sap_article_id)` om EAN kan vara null, men specen säger `ean` – kontrollera schema). Om `ean` inte är unik → lägg `UNIQUE(sap_article_id, store_id)` och använd rätt `onConflict` i koden.
 - **Migration:** `20260827_120001_add_reclamations_and_constraints.sql` skapa `reclamations` med rätt RLS + index.
 - **Kod:** `src/routes/ersattningcheck.tsx` rad 198: `upsert(newProducts, { onConflict: "ean", ignoreDuplicates: false })` → verifiera att `ean` har `UNIQUE`. Om inte → byt till rätt kolumn eller lägg constraint.
@@ -63,6 +65,7 @@ supabase/migrations/*.sql  (idempotenta, unika tidsstämplar)
 **Problem (enligt användarens förtydligande):** Inte posemesh API, utan PDF-parsning som ger versionsmismatch (`5.4.296` vs `6.2.108`).
 
 **Lösning:**
+
 - **PDF-handler:** Leta upp PDF-tolk i `src/lib/planogram-parser.ts` eller `src/components/planogram-upload.tsx`. Om den använder en extern library (t.ex. `pdf-parse` eller `pdfjs-dist`) med hårdkodad version – uppdatera till matchande version, eller byt till en lokal SVG/Canvas-generator (enligt digital-twin-spec steg 3).
 - **Körning:** Verifiera att build/test använder rätt version av parsaren; lägg en `package-lock.json`-regel om nödvändigt.
 
@@ -71,6 +74,7 @@ supabase/migrations/*.sql  (idempotenta, unika tidsstämplar)
 **Problem:** `spatial_maps` REST 400; Three.js `CLOCK` deprecated; `addScaledVector` saknas.
 
 **Lösning:**
+
 - **Kod:** I `spatial-navigation.tsx` rad 78-89: `supabase.from('spatial_maps')...` används korrekt – 400 beror på att tabellen saknar rätt kolumner eller RLS; se migration.
 - **Three.js:** Byt `THREE.Clock` mot `THREE.Timer` (`src/components/StoreMap3D.tsx` eller `ARNavigationView.tsx`). Fixa `Vector3`-anrop: säkerställ att `target.addScaledVector` anropas på korrekt instans (`new THREE.Vector3()` eller från objekt som har metoden). Lägg defensiv check `if (typeof target?.addScaledVector === 'function')` innan anrop.
 - **Migration:** `20260827_120002_fix_spatial_maps_and_rls.sql` – säkerställ att `spatial_maps` har `store_id` (UUID, index), `markers` (jsonb), RLS (`authenticated`, `store_id = auth.uid()`).
@@ -80,6 +84,7 @@ supabase/migrations/*.sql  (idempotenta, unika tidsstämplar)
 **Problem:** React error #418 (`HTML`-element inuti annat), krash vid initiering, tomt resultat.
 
 **Lösning:**
+
 - **Ombyggnad:** Skriv om `src/routes/customer-nav.tsx`. Ersätt eventuella felaktiga HTML-innehåll (t.ex. `<div>` inuti `<p>`, `<button>` inuti `<a>`) med korrekt JSX-struktur. Säkerställ att `CustomerMapView` renderar `<svg>` korrekt utan hydrideringsfel.
 - **UUID-validering:** Behåll `isValidUUID` (rad 59) som redan finns; se till att `storeId`-laddning (rad 65-79) hanterar `window` korrekt vid SSR (TanStack Start). Använd `useEffect` + `typeof window !== 'undefined'` om nödvändigt.
 - **Data:** Lösning via `supabase.from('spatial_maps')` på rad 93 – redan korrekt, bara schema/migrations som behövs.
@@ -97,18 +102,18 @@ supabase/migrations/*.sql  (idempotenta, unika tidsstämplar)
 
 ## 4. Implementeringsplan (ordning)
 
-| Steg | Fil/Åtgärd | Syfte | Verifiering |
-|---|---|---|---|
-| 1 | `supabase/migrations/20260827_120000_add_store_sections...sql` + `20260827_120001_add_reclamations...sql` + `20260827_120002_fix_spatial_maps...sql` | Skapa saknade tabeller, constraints, RLS | `supabase db reset` eller `supabase migrate up` lokalt; kontrollera schema |
-| 2 | `src/lib/supabase.ts` – verifiera att ingen REST-url finns | Förhindra REST-anrop | `grep -rni "rest/v1" src/` ska vara tomt |
-| 3 | `src/routes/store-setup.tsx` + komponenter | Ersätt REST med `supabase.from`, fix markörknapp, koppla produkter | Rendera wizard; kontrollera att markörer sparas; kontrollera produkt-matchning på `sap_article_id` |
-| 4 | `src/routes/ersattningcheck.tsx` rad 198 + schema | Rätta `onConflict`; säkerställ `reclamations` | Importera fil → matcha → verifisera att `products` upsert lyckas; kontrollera `reclamations`-laddning |
-| 5 | `src/lib/planogram-parser.ts` / upload-komponent | Uppdatera PDF-parser / generator | Ladda upp PDF → kontrollera att ingen `UnknownErrorException` uppstår |
-| 6 | `src/components/StoreMap3D.tsx` + `ARNavigationView.tsx` | Byt `Clock` → `Timer`; fixa `addScaledVector` | Rendera 3D-vy; kontrollera console för deprecation + krasch |
-| 7 | `src/routes/spatial-navigation.tsx` | Verifiera `spatial_maps`-laddning | Ladda sida; kontrollera att karta visas; ingen 400 |
-| 8 | `src/routes/customer-nav.tsx` | Ombyggnad från grunden | Rendera; kontrollera att ingen React #418; kontrollera UUID-validering; kontrollera map-laddning |
-| 9 | `tests/` – nya testfiler | Förhindrande | `npm run test` passerar |
-| 10 | `npm run build` + `npm run lint` | Slutlig verifiering | Inga byggfel, inga typer, inga lint-feel |
+| Steg | Fil/Åtgärd                                                                                                                                           | Syfte                                                              | Verifiering                                                                                           |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| 1    | `supabase/migrations/20260827_120000_add_store_sections...sql` + `20260827_120001_add_reclamations...sql` + `20260827_120002_fix_spatial_maps...sql` | Skapa saknade tabeller, constraints, RLS                           | `supabase db reset` eller `supabase migrate up` lokalt; kontrollera schema                            |
+| 2    | `src/lib/supabase.ts` – verifiera att ingen REST-url finns                                                                                           | Förhindra REST-anrop                                               | `grep -rni "rest/v1" src/` ska vara tomt                                                              |
+| 3    | `src/routes/store-setup.tsx` + komponenter                                                                                                           | Ersätt REST med `supabase.from`, fix markörknapp, koppla produkter | Rendera wizard; kontrollera att markörer sparas; kontrollera produkt-matchning på `sap_article_id`    |
+| 4    | `src/routes/ersattningcheck.tsx` rad 198 + schema                                                                                                    | Rätta `onConflict`; säkerställ `reclamations`                      | Importera fil → matcha → verifisera att `products` upsert lyckas; kontrollera `reclamations`-laddning |
+| 5    | `src/lib/planogram-parser.ts` / upload-komponent                                                                                                     | Uppdatera PDF-parser / generator                                   | Ladda upp PDF → kontrollera att ingen `UnknownErrorException` uppstår                                 |
+| 6    | `src/components/StoreMap3D.tsx` + `ARNavigationView.tsx`                                                                                             | Byt `Clock` → `Timer`; fixa `addScaledVector`                      | Rendera 3D-vy; kontrollera console för deprecation + krasch                                           |
+| 7    | `src/routes/spatial-navigation.tsx`                                                                                                                  | Verifiera `spatial_maps`-laddning                                  | Ladda sida; kontrollera att karta visas; ingen 400                                                    |
+| 8    | `src/routes/customer-nav.tsx`                                                                                                                        | Ombyggnad från grunden                                             | Rendera; kontrollera att ingen React #418; kontrollera UUID-validering; kontrollera map-laddning      |
+| 9    | `tests/` – nya testfiler                                                                                                                             | Förhindrande                                                       | `npm run test` passerar                                                                               |
+| 10   | `npm run build` + `npm run lint`                                                                                                                     | Slutlig verifiering                                                | Inga byggfel, inga typer, inga lint-feel                                                              |
 
 ---
 

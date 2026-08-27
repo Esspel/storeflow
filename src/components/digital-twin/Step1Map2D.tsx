@@ -67,8 +67,7 @@ export function Step1Map2D({
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Lägg till sektioner och dra dem i rutnätet (20 cm). Allt sparas
-          automatiskt.
+          Lägg till sektioner och dra dem i rutnätet (20 cm). Allt sparas automatiskt.
         </p>
         <StoreMap2D
           initial={sections}

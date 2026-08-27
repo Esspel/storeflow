@@ -7,6 +7,8 @@ describe("planogram-parser", () => {
   });
 
   it("handles corrupt PDF data gracefully", async () => {
-    await expect(parsePlanogramPdf(new Uint8Array([0x00, 0x01, 0xff]).buffer)).rejects.toBeDefined();
+    await expect(
+      parsePlanogramPdf(new Uint8Array([0x00, 0x01, 0xff]).buffer),
+    ).rejects.toBeDefined();
   });
 });

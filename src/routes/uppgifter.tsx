@@ -127,7 +127,18 @@ const RECURRENCE_OPTIONS = [
 
 const WEEKDAYS = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 const MONTHS_SV = [
-  "Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "Maj",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Okt",
+  "Nov",
+  "Dec",
 ];
 const QUARTER_MONTHS = [
   { q: "Q1", months: [0, 1, 2] },

@@ -107,8 +107,12 @@ export async function buildVisibilityGraph(mapId: string): Promise<VisibilityGra
   const edges = new Map<string, RouteEdge[]>();
 
   // Create nodes
-  let minX = Infinity, minY = Infinity, minZ = Infinity;
-  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    minZ = Infinity;
+  let maxX = -Infinity,
+    maxY = -Infinity,
+    maxZ = -Infinity;
 
   for (const marker of markers) {
     const position: Vector3 = {
@@ -184,7 +188,7 @@ export async function buildVisibilityGraph(mapId: string): Promise<VisibilityGra
 async function applyRouteOverrides(
   mapId: string,
   nodes: Map<string, RouteNode>,
-  edges: Map<string, RouteEdge[]>
+  edges: Map<string, RouteEdge[]>,
 ): Promise<void> {
   const { data: routes, error } = await supabase
     .from("spatial_routes")
@@ -224,7 +228,7 @@ function segmentsIntersect(
   a: { x: number; z: number },
   b: { x: number; z: number },
   c: { x: number; z: number },
-  d: { x: number; z: number }
+  d: { x: number; z: number },
 ): boolean {
   const denom = (d.z - c.z) * (b.x - a.x) - (d.x - c.x) * (b.z - a.z);
   if (Math.abs(denom) < 1e-9) return false; // Parallel
@@ -237,11 +241,7 @@ function segmentsIntersect(
  * Check line of sight between two points by fetching wall geometry from Supabase.
  * Returns false if the direct segment crosses any wall; true otherwise (or if no walls).
  */
-async function checkLineOfSight(
-  mapId: string,
-  from: Vector3,
-  to: Vector3
-): Promise<boolean> {
+async function checkLineOfSight(mapId: string, from: Vector3, to: Vector3): Promise<boolean> {
   // 1. Hämta vägggeometri från DB
   const { data: walls, error } = await supabase
     .from("spatial_walls")
@@ -427,7 +427,9 @@ function calculatePathDistance(path: RouteNode[]): number {
 /**
  * Optimize multi-stop route using nearest neighbor + 2-opt improvement
  */
-export async function optimizeMultiStop(options: MultiStopOptimizeOptions): Promise<RouteResult | null> {
+export async function optimizeMultiStop(
+  options: MultiStopOptimizeOptions,
+): Promise<RouteResult | null> {
   const graph = await buildVisibilityGraph(options.map_id);
 
   const startNode = graph.nodes.get(options.start_marker_id);
@@ -549,7 +551,9 @@ export interface SpatialRouteOverride {
 /**
  * Save admin route override
  */
-export async function saveRouteOverride(override: SpatialRouteOverride): Promise<SpatialRouteOverride | null> {
+export async function saveRouteOverride(
+  override: SpatialRouteOverride,
+): Promise<SpatialRouteOverride | null> {
   const { data, error } = await supabase
     .from("spatial_routes")
     .upsert({
@@ -575,7 +579,11 @@ export async function saveRouteOverride(override: SpatialRouteOverride): Promise
 /**
  * Delete admin route override
  */
-export async function deleteRouteOverride(mapId: string, fromMarkerId: string, toMarkerId: string): Promise<boolean> {
+export async function deleteRouteOverride(
+  mapId: string,
+  fromMarkerId: string,
+  toMarkerId: string,
+): Promise<boolean> {
   const { error } = await supabase
     .from("spatial_routes")
     .delete()
@@ -590,10 +598,7 @@ export async function deleteRouteOverride(mapId: string, fromMarkerId: string, t
  * Get all route overrides for a map
  */
 export async function getRouteOverrides(mapId: string): Promise<SpatialRouteOverride[]> {
-  const { data, error } = await supabase
-    .from("spatial_routes")
-    .select("*")
-    .eq("map_id", mapId);
+  const { data, error } = await supabase.from("spatial_routes").select("*").eq("map_id", mapId);
 
   if (error) {
     console.error("Failed to fetch route overrides:", error);

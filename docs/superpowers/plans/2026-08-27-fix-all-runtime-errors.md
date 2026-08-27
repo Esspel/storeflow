@@ -22,40 +22,42 @@
 
 ## File Structure
 
-| Fil | Ansvar | Task |
-|---|---|---|
-| `supabase/migrations/20260827120000_store_sections.sql` | Skapa `store_sections` + RLS + index | 1 |
-| `supabase/migrations/20260827120001_reclamations_and_constraints.sql` | `reclamations`, `product_reclamation_stats`, unique constraint på `products(ean)` | 1 |
-| `supabase/migrations/20260827120002_spatial_maps_rls.sql` | Verifiera `spatial_maps` + RLS | 1 |
-| `scripts/check-no-rest.ts` | Prevention: sök `rest/v1` i `src/` | 2 |
-| `package.json` | Lägg till `check:no-rest`-script | 2 |
-| `src/lib/guard-no-rest.ts` | CI-hjälpfunktion (delad med script) | 2 |
-| `src/components/digital-twin/Step1Map2D.tsx` | Sektions-CRUD via supabase | 3 |
-| `src/components/digital-twin/Step2Markers.tsx` | Markör-CRUD via supabase (knapp fix) | 3 |
-| `src/components/digital-twin/Step3Pdf.tsx` | Verifiera PDF/SVG | 3 |
-| `src/components/digital-twin/Step4Products.tsx` | Produktkoppling via `sap_article_id` | 3 |
-| `src/routes/ersattningcheck.tsx` | Rätta `onConflict`, fält-säkring | 4 |
-| `src/lib/planogram-parser.ts` | PDF-version hantering | 5 |
-| `src/components/StoreMap3D.tsx` | Clock→Timer, Vector3-guards | 6 |
-| `src/components/ARNavigationView.tsx` | Clock→Timer, Vector3-guards | 6 |
-| `src/routes/spatial-navigation.tsx` | Verifiera, inga REST | 7 |
-| `src/routes/customer-nav.tsx` | Skriv om | 8 |
-| `tests/store-setup.test.tsx` | Wizard renderar utan krash | 9 |
-| `tests/ersattningcheck.test.tsx` | upsert-argument | 9 |
-| `tests/customer-nav.test.tsx` | Ingen React #418 | 9 |
-| `tests/spatial-navigation.test.tsx` | Ingen 400 | 9 |
-| `tests/planogram-parser.test.ts` | PDF-parser utan version-fel | 9 |
+| Fil                                                                   | Ansvar                                                                            | Task |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---- |
+| `supabase/migrations/20260827120000_store_sections.sql`               | Skapa `store_sections` + RLS + index                                              | 1    |
+| `supabase/migrations/20260827120001_reclamations_and_constraints.sql` | `reclamations`, `product_reclamation_stats`, unique constraint på `products(ean)` | 1    |
+| `supabase/migrations/20260827120002_spatial_maps_rls.sql`             | Verifiera `spatial_maps` + RLS                                                    | 1    |
+| `scripts/check-no-rest.ts`                                            | Prevention: sök `rest/v1` i `src/`                                                | 2    |
+| `package.json`                                                        | Lägg till `check:no-rest`-script                                                  | 2    |
+| `src/lib/guard-no-rest.ts`                                            | CI-hjälpfunktion (delad med script)                                               | 2    |
+| `src/components/digital-twin/Step1Map2D.tsx`                          | Sektions-CRUD via supabase                                                        | 3    |
+| `src/components/digital-twin/Step2Markers.tsx`                        | Markör-CRUD via supabase (knapp fix)                                              | 3    |
+| `src/components/digital-twin/Step3Pdf.tsx`                            | Verifiera PDF/SVG                                                                 | 3    |
+| `src/components/digital-twin/Step4Products.tsx`                       | Produktkoppling via `sap_article_id`                                              | 3    |
+| `src/routes/ersattningcheck.tsx`                                      | Rätta `onConflict`, fält-säkring                                                  | 4    |
+| `src/lib/planogram-parser.ts`                                         | PDF-version hantering                                                             | 5    |
+| `src/components/StoreMap3D.tsx`                                       | Clock→Timer, Vector3-guards                                                       | 6    |
+| `src/components/ARNavigationView.tsx`                                 | Clock→Timer, Vector3-guards                                                       | 6    |
+| `src/routes/spatial-navigation.tsx`                                   | Verifiera, inga REST                                                              | 7    |
+| `src/routes/customer-nav.tsx`                                         | Skriv om                                                                          | 8    |
+| `tests/store-setup.test.tsx`                                          | Wizard renderar utan krash                                                        | 9    |
+| `tests/ersattningcheck.test.tsx`                                      | upsert-argument                                                                   | 9    |
+| `tests/customer-nav.test.tsx`                                         | Ingen React #418                                                                  | 9    |
+| `tests/spatial-navigation.test.tsx`                                   | Ingen 400                                                                         | 9    |
+| `tests/planogram-parser.test.ts`                                      | PDF-parser utan version-fel                                                       | 9    |
 
 ---
 
 ## Task 1: Databas-migrationer för saknade tabeller och constraints
 
 **Files:**
+
 - Create: `supabase/migrations/20260827120000_store_sections.sql`
 - Create: `supabase/migrations/20260827120001_reclamations_and_constraints.sql`
 - Create: `supabase/migrations/20260827120002_spatial_maps_rls.sql`
 
 **Interfaces:**
+
 - Consumes: Befintlig `stores` (UUID PK), `app_users` (UUID PK)
 - Produces: `store_sections`, `reclamations`, `product_reclamation_stats`, `spatial_maps` (med garanterad kolumnstruktur)
 
@@ -201,6 +203,7 @@ CREATE POLICY spatial_maps_modify ON public.spatial_maps
 - [ ] **Step 4: Verifiera lokalt**
 
 Kör: `npx supabase db reset` (om lokalt) ELLER anslut mot dev-databasen och kör:
+
 ```bash
 psql "$DATABASE_URL" -f supabase/migrations/20260827120000_store_sections.sql
 psql "$DATABASE_URL" -f supabase/migrations/20260827120001_reclamations_and_constraints.sql
@@ -208,6 +211,7 @@ psql "$DATABASE_URL" -f supabase/migrations/20260827120002_spatial_maps_rls.sql
 ```
 
 Förväntat: Inga fel. Verifiera med:
+
 ```sql
 SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename IN ('store_sections','reclamations','product_reclamation_stats');
 SELECT conname FROM pg_constraint WHERE conname = 'products_ean_unique';
@@ -227,11 +231,13 @@ git commit -m "feat(db): lägg till store_sections, reclamations, product_reclam
 ## Task 2: Prevention-lint mot REST-anrop
 
 **Files:**
+
 - Create: `src/lib/guard-no-rest.ts`
 - Create: `scripts/check-no-rest.ts`
 - Modify: `package.json` (lägg till script)
 
 **Interfaces:**
+
 - Consumes: `process.cwd()`, `src/` katalog
 - Produces: `console.log` av antal hittade filer; exit-kod 0/1
 
@@ -307,6 +313,7 @@ console.log("Inga REST-anrop hittades. ✓");
 - [ ] **Step 3: Lägg till npm-script**
 
 Fil: `package.json` – i `scripts`-sektionen, lägg till:
+
 ```json
 "check:no-rest": "tsx scripts/check-no-rest.ts"
 ```
@@ -330,6 +337,7 @@ git commit -m "feat(lint): lägg till check:no-rest script som förbjuder Supaba
 ## Task 3: Reparera Digital Twin (Store-setup)
 
 **Files:**
+
 - Modify: `src/components/digital-twin/Step1Map2D.tsx`
 - Modify: `src/components/digital-twin/Step2Markers.tsx`
 - Modify: `src/components/digital-twin/Step3Pdf.tsx`
@@ -337,6 +345,7 @@ git commit -m "feat(lint): lägg till check:no-rest script som förbjuder Supaba
 - Read first: `src/lib/digital-twin.ts` (för befintliga helpers), `src/components/digital-twin/Wizard.tsx`
 
 **Interfaces:**
+
 - Consumes: `useAuth()` (ger `activeStore.id`), `supabase` klient
 - Produces: CRUD mot `store_sections`, `spatial_markers`, `shelf_observations`, `products`
 
@@ -373,9 +382,7 @@ const saveSection = async (section: {
   depth_cm: number;
   section_type: string;
 }) => {
-  const { error } = await supabase
-    .from("store_sections")
-    .upsert(section, { onConflict: "id" });
+  const { error } = await supabase.from("store_sections").upsert(section, { onConflict: "id" });
   if (error) throw error;
 };
 
@@ -391,6 +398,7 @@ const deleteSection = async (id: string) => {
 - [ ] **Step 3: Step2Markers – markör-knappen fungerar**
 
 I `src/components/digital-twin/Step2Markers.tsx`:
+
 - Hitta knappen som ska lägga till markör (den "tomma" som nämns i felrapporten).
 - Onclick: skapa markör lokalt med temporärt ID, anropa `supabase.from('spatial_markers').insert({ store_id, map_id, marker_type: 'aruco', aruco_id: nextId(), position: {x,y,z}, is_active: true })`.
 - Vid success → uppdatera lokalt state med det returnerade ID:t.
@@ -410,7 +418,10 @@ const onAddMarker = async (pos: { x: number; y: number; z: number }) => {
     })
     .select()
     .single();
-  if (error) { toast.error("Kunde inte skapa markör"); return; }
+  if (error) {
+    toast.error("Kunde inte skapa markör");
+    return;
+  }
   setMarkers((prev) => [...prev, data]);
 };
 ```
@@ -422,22 +433,32 @@ I `src/components/digital-twin/Step3Pdf.tsx`, kontrollera att den inte gör REST
 - [ ] **Step 5: Step4Products – produktkoppling**
 
 I `src/components/digital-twin/Step4Products.tsx`:
+
 - Planogram-koppling: läs `shelf_planograms.expected_products` (jsonb); länka via `supabase.from('shelf_observations').upsert(...)`.
 - Tillvalsartiklar: användaren väljer produkt (sökning på `name` eller `ean`); spara med `sap_article_id` (aldrig SKU enligt CLAUDE.md):
 
 ```typescript
-const linkProduct = async (product: { sap_article_id: string; ean: string; bnr: string; name: string }, shelfMarkerId: string) => {
+const linkProduct = async (
+  product: { sap_article_id: string; ean: string; bnr: string; name: string },
+  shelfMarkerId: string,
+) => {
   if (!product.sap_article_id) {
     toast.error("Produkten saknar SAP-ID och kan inte kopplas");
     return;
   }
-  const { error } = await supabase.from("shelf_observations").upsert({
-    store_id: activeStore.id,
-    shelf_marker_id: shelfMarkerId,
-    sap_article_id: product.sap_article_id,
-    observed_at: new Date().toISOString(),
-  }, { onConflict: "shelf_marker_id,sap_article_id" });
-  if (error) { toast.error("Kunde inte koppla produkt"); return; }
+  const { error } = await supabase.from("shelf_observations").upsert(
+    {
+      store_id: activeStore.id,
+      shelf_marker_id: shelfMarkerId,
+      sap_article_id: product.sap_article_id,
+      observed_at: new Date().toISOString(),
+    },
+    { onConflict: "shelf_marker_id,sap_article_id" },
+  );
+  if (error) {
+    toast.error("Kunde inte koppla produkt");
+    return;
+  }
   toast.success("Produkt kopplad");
 };
 ```
@@ -459,15 +480,18 @@ git commit -m "fix(store-setup): reparation av sektioner, markörer, PDF och pro
 ## Task 4: Reparera Ersättningscheck (ersattningcheck)
 
 **Files:**
+
 - Modify: `src/routes/ersattningcheck.tsx` (rad ~198)
 - Modify: `src/lib/excel-parser.ts` (verifiera att `matchDeliveryNoteToProducts` returnerar `sap_article_id`)
 
 - [ ] **Step 1: Verifiera `onConflict` matchar constraint**
 
 Öppna `src/routes/ersattningcheck.tsx` rad 198. Koden är:
+
 ```typescript
 .upsert(newProducts, { onConflict: "ean", ignoreDuplicates: false })
 ```
+
 Efter Task 1 finns nu `products_ean_unique`. Bekräfta i console vid import.
 
 - [ ] **Step 2: Hantera null-EAN**
@@ -485,6 +509,7 @@ if (newProducts.length > 0) {
   }
 }
 ```
+
 Lägg till försvar: filtrera bort rader utan EAN innan upsert för att undvika NULL-konflikter:
 
 ```typescript
@@ -515,6 +540,7 @@ git commit -m "fix(ersattningcheck): filtrera bort null EAN före upsert, hanter
 ## Task 5: Reparera PDF-parser (shelf-analytics versionsmismatch)
 
 **Files:**
+
 - Modify: `src/lib/planogram-parser.ts`
 - Read first: `package.json` för aktuell PDF-lib version
 
@@ -529,6 +555,7 @@ Om `pdfjs-dist` används, kontrollera att endast en version finns i `node_module
 - [ ] **Step 3: Lokal worker**
 
 Om worker laddas från CDN, byt till lokal asset. Exempel:
+
 ```typescript
 // Istället för att ladda från pdfjs-dist's CDN:
 import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -538,6 +565,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 - [ ] **Step 4: Defensiv parser**
 
 Lägg till felhantering:
+
 ```typescript
 try {
   const pdf = await pdfjs.getDocument({ url }).promise;
@@ -564,6 +592,7 @@ git commit -m "fix(planogram-parser): pinna worker-version, defensiv felhanterin
 ## Task 6: Three.js — Clock→Timer, Vector3-guards
 
 **Files:**
+
 - Modify: `src/components/StoreMap3D.tsx`
 - Modify: `src/components/ARNavigationView.tsx`
 - Read first: `src/lib/three-types.ts`
@@ -575,6 +604,7 @@ Kör: `grep -n "Clock" src/components/StoreMap3D.tsx src/components/ARNavigation
 - [ ] **Step 2: Byt till `Timer`**
 
 I varje fil:
+
 ```typescript
 // Före:
 import * as THREE from "three";
@@ -592,6 +622,7 @@ const elapsed = timer.getElapsed();
 - [ ] **Step 3: Guard `addScaledVector`**
 
 Lägg till defensiv check innan varje anrop:
+
 ```typescript
 // Före:
 target.addScaledVector(direction, speed);
@@ -602,11 +633,7 @@ if (target && typeof target.addScaledVector === "function") {
 } else {
   // Fallback: manuell skalning
   if (target && direction) {
-    target.set(
-      direction.x * speed,
-      direction.y * speed,
-      direction.z * speed,
-    );
+    target.set(direction.x * speed, direction.y * speed, direction.z * speed);
   }
 }
 ```
@@ -627,6 +654,7 @@ git commit -m "fix(three): byt Clock till Timer, defensiv Vector3.addScaledVecto
 ## Task 7: Spatial-navigation – verifiera inga REST
 
 **Files:**
+
 - Modify (om behov): `src/routes/spatial-navigation.tsx`
 
 - [ ] **Step 1: Verifiera**
@@ -662,11 +690,13 @@ git commit -m "fix(spatial-navigation): försvar mot tom spatial_maps, ingen RES
 ## Task 8: Bygg om customer-nav från grunden
 
 **Files:**
+
 - Rewrite: `src/routes/customer-nav.tsx`
 
 - [ ] **Step 1: Identifiera React #418-orsak**
 
 React error #418 = "Hydration failed because the initial UI does not match what was rendered on the server." Orsakas typiskt av:
+
 - HTML-element inuti annat element (t.ex. `<div>` inuti `<p>`)
 - Olika rendering mellan server och klient (t.ex. `window`-beroende)
 
@@ -675,12 +705,14 @@ I befintlig kod: kontrollera alla `CardContent` och se om någon `<div>` är inu
 - [ ] **Step 2: Skriv om komponenten**
 
 Hela `CustomerNavPage` ska ha:
+
 - UUID-validering upptill (redan korrekt, behåll `isValidUUID`).
 - Använd `useEffect` med `typeof window !== "undefined"`-guard för URL-param-läsning.
 - Inga HTML-element-inuti-element (validera JSX-struktur).
 - Korrekt `<svg>` med `viewBox` (inte HTML i svg).
 
 Minimal struktur:
+
 ```typescript
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
@@ -885,6 +917,7 @@ git commit -m "refactor(customer-nav): bygg om från grunden, åtgärda React #4
 ## Task 9: Tester för förhindrande
 
 **Files:**
+
 - Create: `tests/store-setup.test.tsx`
 - Create: `tests/ersattningcheck.test.tsx`
 - Create: `tests/customer-nav.test.tsx`
@@ -1020,7 +1053,7 @@ describe("planogram-parser", () => {
     // Skapa en minimal PDF-Blob
     const minimalPdf = new Blob(
       [new Uint8Array([0x25, 0x50, 0x44, 0x46])], // %PDF
-      { type: "application/pdf" }
+      { type: "application/pdf" },
     );
     await expect(parsePlanogramFromFile(minimalPdf)).resolves.toBeDefined();
   });
@@ -1065,6 +1098,7 @@ Förväntat: Inga typfel, inga byggfel.
 - [ ] **Step 4: manuell webbläsartest**
 
 Ladda i webbläsare:
+
 - `/store-setup` – wizard öppnar, kan lägga till sektion/markör/produkt.
 - `/ersattningcheck` – import + match fungerar, inga 400/42P10.
 - `/shelf-analytics` – laddar planogram utan `UnknownErrorException`.
@@ -1083,15 +1117,15 @@ git push origin main
 
 **1. Spec coverage:**
 
-| Spec-sektion | Task |
-|---|---|
-| 3.1 Store-setup | Task 3 |
-| 3.2 Ersättningscheck | Task 4 |
-| 3.3 Shelf-analytics PDF | Task 5 |
-| 3.4 Spatial-navigation | Tasks 6, 7 |
-| 3.5 Customer-nav | Task 8 |
-| 3.6 Prevention | Tasks 2, 9, 10 |
-| Migrationer (alla) | Task 1 |
+| Spec-sektion            | Task           |
+| ----------------------- | -------------- |
+| 3.1 Store-setup         | Task 3         |
+| 3.2 Ersättningscheck    | Task 4         |
+| 3.3 Shelf-analytics PDF | Task 5         |
+| 3.4 Spatial-navigation  | Tasks 6, 7     |
+| 3.5 Customer-nav        | Task 8         |
+| 3.6 Prevention          | Tasks 2, 9, 10 |
+| Migrationer (alla)      | Task 1         |
 
 ✓ Alla spec-punkter har en task.
 

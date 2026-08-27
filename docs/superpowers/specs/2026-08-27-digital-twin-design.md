@@ -17,28 +17,30 @@ Refaktorisera `src/routes/store-setup.tsx` för att bygga en **Digital Twin** av
 
 ## Datamodell (befintliga tabeller)
 
-| Tabell | Roll i Digital Twin |
-|--------|--------------------|
-| `spatial_maps` | Övergripande karta (en aktiv per butik) |
-| `spatial_markers` | ArUco-markörer med 3D-position |
-| `spatial_walls` | Väggar/hyllor (vektorssegment) |
-| `store_packaging` (tidigare `store_skepp`) | Fysiska hyllor/enheter med `marker_code` |
-| `store_sections` (tidigare `store_sektioner`) | 2D-layout (pos_x_cm, pos_y_cm, width/height/depth) |
-| `store_departments` (tidigare `store_avdelningar`) | Butiksavdelningar |
-| `store_shelves` (tidigare `store_hyllor`) | Hyllor kopplade till planogram |
-| `shelf_planograms` | Förväntade produkter per hylla (jsonb `expected_products`) |
-| `products` | Produktkatalog |
-| `shelf_observations` | Skanningsresultat |
+| Tabell                                             | Roll i Digital Twin                                        |
+| -------------------------------------------------- | ---------------------------------------------------------- |
+| `spatial_maps`                                     | Övergripande karta (en aktiv per butik)                    |
+| `spatial_markers`                                  | ArUco-markörer med 3D-position                             |
+| `spatial_walls`                                    | Väggar/hyllor (vektorssegment)                             |
+| `store_packaging` (tidigare `store_skepp`)         | Fysiska hyllor/enheter med `marker_code`                   |
+| `store_sections` (tidigare `store_sektioner`)      | 2D-layout (pos_x_cm, pos_y_cm, width/height/depth)         |
+| `store_departments` (tidigare `store_avdelningar`) | Butiksavdelningar                                          |
+| `store_shelves` (tidigare `store_hyllor`)          | Hyllor kopplade till planogram                             |
+| `shelf_planograms`                                 | Förväntade produkter per hylla (jsonb `expected_products`) |
+| `products`                                         | Produktkatalog                                             |
+| `shelf_observations`                               | Skanningsresultat                                          |
 
 ## 4-stegsflödet
 
 ### Steg 1 – 2D-butikskarta
+
 - Återanvänd `StoreMap2D`-komponenten
 - Ladda `store_sections` för aktuell butik → rendera som dragbara sektioner
 - Skapa/ta bort sektioner → spara direkt via `supabase.from('store_sections').upsert(...)`
 - Snabbknapp för "Lägg till sektion" som infogar en default-sektion
 
 ### Steg 2 – Placera ArUco-markörer på kartan
+
 - Visuell overlay ovanpå 2D-kartan
 - Klicka på kartan → ny markör skapas med `marker_type='aruco'`
 - Dra befintliga markörer → uppdatera `position.x/y`
@@ -46,12 +48,14 @@ Refaktorisera `src/routes/store-setup.tsx` för att bygga en **Digital Twin** av
 - Spara direkt till `spatial_markers` med `map_id = state.spatialMapId`
 
 ### Steg 3 – Generera Aruco PDF
+
 - Implementera en **lättviktig frontend-baserad SVG/Canvas-generator** (inga externa API-beroenden)
 - 4×4 binär ordlista (50 markörer) som `MARKER_SKEPP_01` till `MARKER_SKEPP_50`
 - Layout: 3 kolumner × N rader på A4
 - Nedladdning via `Blob` + `URL.createObjectURL` (ingen jsPDF, håller det lättviktigt)
 
 ### Steg 4 – Koppla produkter och hyllor
+
 - Två underlägen beroende på planogram-status:
   - **Planogram-slagna artiklar**: hämta `expected_products` från `shelf_planograms.expected_products` (jsonb), länka direkt via `shelf_observations`
   - **Tillvalsartiklar (option)**: användaren väljer hylla via dropdown + klickbar position på kartan
@@ -76,14 +80,14 @@ src/types/digital-twin.ts            ← lokala typer
 
 Allt går genom `supabase.from(...)` – **inga `fetch` mot REST-endpoints**.
 
-| Åtgärd | Supabase-anrop |
-|--------|----------------|
-| Ladda state vid mount | `select` på `spatial_maps`, `store_sections`, `spatial_markers` |
-| Spara sektion | `upsert` på `store_sections` |
-| Spara markör | `upsert` på `spatial_markers` |
-| Ladda planogram | `select` på `shelf_planograms` |
-| Spara observation | `insert` på `shelf_observations` |
-| Realtid | `supabase.channel('digital_twin_'+storeId).on('postgres_changes', ...)` för att lyssna på ändringar |
+| Åtgärd                | Supabase-anrop                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| Ladda state vid mount | `select` på `spatial_maps`, `store_sections`, `spatial_markers`                                     |
+| Spara sektion         | `upsert` på `store_sections`                                                                        |
+| Spara markör          | `upsert` på `spatial_markers`                                                                       |
+| Ladda planogram       | `select` på `shelf_planograms`                                                                      |
+| Spara observation     | `insert` på `shelf_observations`                                                                    |
+| Realtid               | `supabase.channel('digital_twin_'+storeId).on('postgres_changes', ...)` för att lyssna på ändringar |
 
 ## Felhantering
 

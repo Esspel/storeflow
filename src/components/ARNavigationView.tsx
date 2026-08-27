@@ -7,14 +7,8 @@
 "use client";
 
 import { useMemo, useRef, useCallback, useEffect, useState } from "react";
-import {
-  Canvas, useFrame, useThree
-} from "@react-three/fiber";
-import {
-  Html,
-  useGLTF,
-  Line,
-} from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Html, useGLTF, Line } from "@react-three/drei";
 import { BoxGeometry, CylinderGeometry, PlaneGeometry, TorusGeometry } from "three";
 import * as THREE from "three";
 import "@/lib/three-patches"; // Ensure THREE.Clock available for R3F
@@ -40,12 +34,7 @@ interface ARMarkerProps {
   isUserPosition: boolean;
 }
 
-function ARMarker({
-  marker,
-  onSelect,
-  isTarget,
-  isUserPosition,
-}: ARMarkerProps) {
+function ARMarker({ marker, onSelect, isTarget, isUserPosition }: ARMarkerProps) {
   const config = MARKER_VISUAL_CONFIG[marker.type];
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
@@ -80,8 +69,14 @@ function ARMarker({
     const [w, h, d] = config.size;
     const baseProps: any = {
       ref: meshRef,
-      position: [marker.position.x, marker.position.y + h / 2, marker.position.z] as [number, number, number],
-      rotation: marker.rotation ? [marker.rotation.x, marker.rotation.y, marker.rotation.z] as [number, number, number] : undefined,
+      position: [marker.position.x, marker.position.y + h / 2, marker.position.z] as [
+        number,
+        number,
+        number,
+      ],
+      rotation: marker.rotation
+        ? ([marker.rotation.x, marker.rotation.y, marker.rotation.z] as [number, number, number])
+        : undefined,
       onClick: handleClick,
       onPointerOver: handlePointerOver,
       onPointerOut: handlePointerOut,
@@ -91,12 +86,7 @@ function ARMarker({
 
     switch (config.geometry) {
       case "box":
-        return (
-          <mesh
-            {...baseProps}
-            args={[w, h, d]}
-          />
-        );
+        return <mesh {...baseProps} args={[w, h, d]} />;
       case "cylinder":
         return (
           <mesh
@@ -117,18 +107,18 @@ function ARMarker({
         return (
           <mesh
             {...baseProps}
-            args={[config.size[0], config.size[1], config.size[2], (config.size as number[])[3] ?? 16]}
+            args={[
+              config.size[0],
+              config.size[1],
+              config.size[2],
+              (config.size as number[])[3] ?? 16,
+            ]}
             rotation={[-Math.PI / 2, 0, 0]}
             position={[marker.position.x, marker.position.y + 0.05, marker.position.z]}
           />
         );
       default:
-        return (
-          <mesh
-            {...baseProps}
-            args={[w, h, d, 0.05]}
-          />
-        );
+        return <mesh {...baseProps} args={[w, h, d, 0.05]} />;
     }
   };
 
@@ -180,12 +170,7 @@ function NavigationPath({ path }: NavigationPathProps) {
   });
 
   return (
-    <Line
-      ref={lineRef as any}
-      points={points}
-      color={path.color ?? "#fbbf24"}
-      lineWidth={4}
-    />
+    <Line ref={lineRef as any} points={points} color={path.color ?? "#fbbf24"} lineWidth={4} />
   );
 }
 
@@ -262,7 +247,7 @@ export function ARNavigationView({
   // Find target marker position for path
   const targetMarker = useMemo(
     () => markers.find((m) => m.id === targetMarkerId),
-    [markers, targetMarkerId]
+    [markers, targetMarkerId],
   );
 
   return (
@@ -288,11 +273,13 @@ export function ARNavigationView({
         {/* Arrow pointing to target */}
         {targetMarker && userPose && (
           <Arrow
-            position={new THREE.Vector3(userPose.position.x, userPose.position.y, userPose.position.z)}
+            position={
+              new THREE.Vector3(userPose.position.x, userPose.position.y, userPose.position.z)
+            }
             direction={new THREE.Vector3(
               targetMarker.position.x - userPose.position.x,
               0,
-              targetMarker.position.z - userPose.position.z
+              targetMarker.position.z - userPose.position.z,
             ).normalize()}
           />
         )}
@@ -338,9 +325,7 @@ export function ARNavigationView({
 
       {isSessionActive && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-background/90 backdrop-blur rounded-xl px-4 py-2 shadow-lg border">
-          <p className="text-sm font-medium text-foreground">
-            AR-aktiv — gå runt för att navigera
-          </p>
+          <p className="text-sm font-medium text-foreground">AR-aktiv — gå runt för att navigera</p>
           <button
             onClick={() => endSession()}
             className="mt-2 text-xs text-primary hover:underline"

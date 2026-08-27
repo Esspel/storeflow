@@ -139,7 +139,10 @@ function HubPage() {
                   tone="green"
                 />
               </ErrorBoundary>
-              <ErrorBoundary section="Butiksinstallation" fallback={<WidgetFallback name="Butiksinstallation" />}>
+              <ErrorBoundary
+                section="Butiksinstallation"
+                fallback={<WidgetFallback name="Butiksinstallation" />}
+              >
                 <QuickCard
                   to="/store-setup"
                   icon={Settings}

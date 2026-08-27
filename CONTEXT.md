@@ -16,11 +16,13 @@ StoreFlow is a retail store management application for Swedish grocery stores (C
 ## Key Concepts
 
 ### User Roles & Hierarchy
+
 - **Admin** (HK - Huvudkontor) - Full access across all stores
 - **Chef** (Butikschef) - Store manager, manages single store
 - **Användare** (Anställd) - Employee, limited access
 
 ### Stores & Organization
+
 - Stores belong to **Förening** (cooperative association)
 - Föreningar belong to **Distrikt** (district)
 - Each user has a primary `store_id` and can have an `active_store_id`
@@ -28,18 +30,21 @@ StoreFlow is a retail store management application for Swedish grocery stores (C
 ### Core Features
 
 #### Planogram Compliance
+
 - PDF planograms uploaded and parsed into structured data
 - Spatial markers (ArUco/QR) placed on shelves for posemesh tracking
 - Shelf scans compare observed products vs expected planogram
 - Compliance score 0-100% with missing/misplaced/extra product detection
 
 #### posemesh Integration
+
 - Spatial mapping with ArUco markers and QR codes
 - 3D coordinate system per store
 - Real-time shelf scanning via mobile camera
 - Digital twin creation for spatial navigation
 
 #### Offline-First Architecture
+
 - All mutations go through offline queue
 - IndexedDB for local persistence
 - Background sync when online

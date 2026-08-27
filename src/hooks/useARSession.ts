@@ -146,10 +146,7 @@ export function useARSession(): ARSessionStateResult {
           };
         }
 
-        const newSession = await xr.requestSession(
-          "immersive-ar",
-          sessionInit
-        );
+        const newSession = await xr.requestSession("immersive-ar", sessionInit);
 
         sessionRef.current = newSession;
         setSession(newSession);
@@ -167,7 +164,7 @@ export function useARSession(): ARSessionStateResult {
         setState("error");
       }
     },
-    [state]
+    [state],
   );
 
   const endSession = useCallback(async () => {

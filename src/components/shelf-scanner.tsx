@@ -133,12 +133,22 @@ export function ShelfScanner({
         // Check if it's an EAN (13 or 8 digits)
         if (/^\d{13}$/.test(barcode.data) || /^\d{8}$/.test(barcode.data)) {
           const product = await lookupProductByEan(barcode.data);
-          if (product) productInfo = { name: product.name, bnr: product.bnr, sap_article_id: product.sap_article_id };
+          if (product)
+            productInfo = {
+              name: product.name,
+              bnr: product.bnr,
+              sap_article_id: product.sap_article_id,
+            };
         }
         // Check if it's a BNR (Coop article number, typically 6-7 digits)
         else if (/^\d{6,7}$/.test(barcode.data)) {
           const product = await lookupProductByBnr(barcode.data);
-          if (product) productInfo = { name: product.name, bnr: product.bnr, sap_article_id: product.sap_article_id };
+          if (product)
+            productInfo = {
+              name: product.name,
+              bnr: product.bnr,
+              sap_article_id: product.sap_article_id,
+            };
         }
 
         setScanHistory((prev) => {
@@ -262,8 +272,8 @@ export function ShelfScanner({
 
     // Get shelf life status for products that have SAP article IDs
     const sapIds = scanHistory
-      .filter((p): p is (ObservedProduct & { sap_article_id: string }) =>
-        (p as any).sap_article_id != null
+      .filter(
+        (p): p is ObservedProduct & { sap_article_id: string } => (p as any).sap_article_id != null,
       )
       .map((p) => (p as any).sap_article_id as string);
 
@@ -278,10 +288,11 @@ export function ShelfScanner({
       shelfLifeEnrichment[id] = shelfLifeBySap[id]?.is_flagged ?? false;
     });
 
-    const enrichedCompliance: PlanogramCheckResult & { shelfLifeFlags?: Record<string, boolean> } = {
-      ...compliance,
-      shelfLifeFlags: shelfLifeEnrichment,
-    };
+    const enrichedCompliance: PlanogramCheckResult & { shelfLifeFlags?: Record<string, boolean> } =
+      {
+        ...compliance,
+        shelfLifeFlags: shelfLifeEnrichment,
+      };
 
     setScanResult(enrichedCompliance);
 

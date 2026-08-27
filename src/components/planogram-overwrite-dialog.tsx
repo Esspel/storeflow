@@ -39,7 +39,9 @@ export function PlanogramOverwriteDialog({ open, conflicts, onConfirm, onCancel 
           ))}
         </ul>
         <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>Avbryt</Button>
+          <Button variant="outline" onClick={onCancel}>
+            Avbryt
+          </Button>
           <Button onClick={onConfirm}>Skriv över</Button>
         </DialogFooter>
       </DialogContent>

@@ -33,7 +33,8 @@ export default defineConfig({
           if (id.includes("pdfjs-dist") || id.includes("pdf-parse")) return "vendor-pdf";
           if (id.includes("three") || id.includes("posemesh")) return "vendor-three";
           if (id.includes("react") || id.includes("react-dom")) return "vendor-react";
-          if (id.includes("jszip") || id.includes("xlsx") || id.includes("lucide")) return "vendor-utils";
+          if (id.includes("jszip") || id.includes("xlsx") || id.includes("lucide"))
+            return "vendor-utils";
         },
       },
       external: [/^fs$/, /^path$/, /^crypto$/, /^posemesh/, /\/posemesh\//],

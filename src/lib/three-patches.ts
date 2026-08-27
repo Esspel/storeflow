@@ -41,7 +41,9 @@ if (v3Proto && typeof v3Proto.addScaledVector !== "function" && typeof Vector3 !
       this.z += v.z * s;
       return this;
     };
-  } catch (_e) { /* defensive */ }
+  } catch (_e) {
+    /* defensive */
+  }
 }
 
 // Extra: säkerställ att klonade Vector3 får addScaledVector (drei/Bounds använder .clone())
@@ -49,19 +51,25 @@ const v3 = new Vector3();
 if (typeof (v3 as any).addScaledVector !== "function") {
   try {
     (Vector3.prototype as any).addScaledVector = function (v: any, s: number) {
-      this.x += v.x * s; this.y += v.y * s; this.z += v.z * s; return this;
+      this.x += v.x * s;
+      this.y += v.y * s;
+      this.z += v.z * s;
+      return this;
     };
   } catch (_e) {}
 }
 
 // Patch Vector3.clone() så att klonade instanser behåller addScaledVector
-if (typeof Vector3 !== 'undefined') {
+if (typeof Vector3 !== "undefined") {
   const origClone = (Vector3.prototype as any).clone;
   if (origClone) {
     try {
       (Vector3.prototype as any).clone = function () {
         const c = origClone.call(this) as any;
-        if (typeof c.addScaledVector !== 'function' && typeof (Vector3.prototype as any).addScaledVector === 'function') {
+        if (
+          typeof c.addScaledVector !== "function" &&
+          typeof (Vector3.prototype as any).addScaledVector === "function"
+        ) {
           c.addScaledVector = (Vector3.prototype as any).addScaledVector;
         }
         return c;
@@ -69,4 +77,3 @@ if (typeof Vector3 !== 'undefined') {
     } catch (_e) {}
   }
 }
-

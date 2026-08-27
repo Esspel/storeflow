@@ -39,7 +39,7 @@ export function Step4Products({
         const { data } = await supabase
           .from("shelf_observations")
           .select("*, shelf_marker_id, sap_article_id, observed_at")
-          .eq("store_id", storeId)
+          .eq("store_id", storeId);
         setProductLinks(data || []);
       } catch (error) {
         console.error("Error loading links:", error);
@@ -52,7 +52,7 @@ export function Step4Products({
 
   const handleLinkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setProductForm(prev => ({ ...prev, [name]: value }));
+    setProductForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async () => {
@@ -64,21 +64,24 @@ export function Step4Products({
     setLoading(true);
     try {
       // Upsert shelf observation using sap_article_id as primary match (per CLAUDE.md: never SKU)
-      const { error } = await supabase
-        .from("shelf_observations")
-        .upsert({
+      const { error } = await supabase.from("shelf_observations").upsert(
+        {
           store_id: storeId,
           // shelf_marker_id must be set by caller via onLinksChange once user selects a marker
           sap_article_id: productForm.sap_article_id,
-          detected_products: [{
-            ean: productForm.ean,
-            bnr: productForm.bnr,
-            name: productForm.name,
-          }],
+          detected_products: [
+            {
+              ean: productForm.ean,
+              bnr: productForm.bnr,
+              name: productForm.name,
+            },
+          ],
           observed_at: new Date().toISOString(),
-        }, {
+        },
+        {
           onConflict: "store_id,sap_article_id",
-        });
+        },
+      );
 
       if (error) throw error;
 

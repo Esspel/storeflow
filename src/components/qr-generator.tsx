@@ -6,7 +6,17 @@
 
 import { useState } from "react";
 import QRCode from "qrcode";
-import { Download, Copy, Printer, RefreshCw, QrCode as QrCodeIcon, Save, Plus, Trash2, GripVertical } from "lucide-react";
+import {
+  Download,
+  Copy,
+  Printer,
+  RefreshCw,
+  QrCode as QrCodeIcon,
+  Save,
+  Plus,
+  Trash2,
+  GripVertical,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -61,7 +71,7 @@ export function generateCustomerNavContent(storeId: string, storeName: string): 
 export async function generateEntranceSign(
   storeId: string,
   storeName: string,
-  options: { widthMm?: number; heightMm?: number } = {}
+  options: { widthMm?: number; heightMm?: number } = {},
 ): Promise<string> {
   const { widthMm = 210, heightMm = 297 } = options; // A4 by default
 
@@ -386,7 +396,7 @@ export function QRGenerator({ onPortalsGenerated, storeId, storeName }: QRGenera
           type: "combined" as const,
           shelfId: shelf.id,
           shelfName: shelf.name,
-          arucoId: (i * 3) + posIndex + 1,
+          arucoId: i * 3 + posIndex + 1,
           sizeMeters: 0.1,
           position,
         }));
@@ -422,7 +432,10 @@ export function QRGenerator({ onPortalsGenerated, storeId, storeName }: QRGenera
     const shelfNum = ((nextNum - 1) % 3) + 1;
     setShelves([
       ...shelves,
-      { id: `shelf-${section.toLowerCase()}${shelfNum}`, name: `Hylla ${section}${shelfNum} - Ny hylla` },
+      {
+        id: `shelf-${section.toLowerCase()}${shelfNum}`,
+        name: `Hylla ${section}${shelfNum} - Ny hylla`,
+      },
     ]);
   };
 
@@ -466,7 +479,9 @@ export function QRGenerator({ onPortalsGenerated, storeId, storeName }: QRGenera
         {/* Shelf Management */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h4 className="font-medium text-slate-900 dark:text-slate-100">Hyllor att generera markörer för</h4>
+            <h4 className="font-medium text-slate-900 dark:text-slate-100">
+              Hyllor att generera markörer för
+            </h4>
             <Button size="sm" variant="outline" onClick={handleAddShelf} className="gap-1">
               <Plus className="w-3.5 h-3.5" />
               Lägg till hylla
@@ -484,13 +499,21 @@ export function QRGenerator({ onPortalsGenerated, storeId, storeName }: QRGenera
                 <div className="flex-1 min-w-0">
                   <Input
                     value={shelf.id}
-                    onChange={(e) => setShelves(shelves.map((s, i) => i === index ? { ...s, id: e.target.value } : s))}
+                    onChange={(e) =>
+                      setShelves(
+                        shelves.map((s, i) => (i === index ? { ...s, id: e.target.value } : s)),
+                      )
+                    }
                     placeholder="shelf-id"
                     className="text-sm"
                   />
                   <Input
                     value={shelf.name}
-                    onChange={(e) => setShelves(shelves.map((s, i) => i === index ? { ...s, name: e.target.value } : s))}
+                    onChange={(e) =>
+                      setShelves(
+                        shelves.map((s, i) => (i === index ? { ...s, name: e.target.value } : s)),
+                      )
+                    }
                     placeholder="Hylla namn"
                     className="text-sm mt-1"
                   />
@@ -625,7 +648,9 @@ export function QRGenerator({ onPortalsGenerated, storeId, storeName }: QRGenera
                     max="1"
                     step="0.01"
                     value={config.sizeMeters}
-                    onChange={(e) => setConfig({ ...config, sizeMeters: parseFloat(e.target.value) })}
+                    onChange={(e) =>
+                      setConfig({ ...config, sizeMeters: parseFloat(e.target.value) })
+                    }
                     placeholder="0.10 (10 cm)"
                   />
                 </div>

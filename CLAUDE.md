@@ -3,6 +3,7 @@
 Retail store management application built with TanStack Start, React, and Supabase.
 
 Deployment:
+
 - Netlify builds and deploys the application from GitHub.
 - Supabase database changes are deployed through the project's configured migration/deployment workflow.
 - Never assume that a local migration has been applied to production without verifying the database state.
@@ -12,9 +13,11 @@ Deployment:
 - **Defensive Programming:** Prevent null/undefined runtime errors with appropriate guards, optional chaining where semantically appropriate, explicit loading/error states, and safe fallback values. Do not use optional chaining merely to suppress errors.
 
 ### Issue Tracker
+
 GitHub Issues at https://github.com/Esspel/storeflow. See `docs/agents/issue-tracker.md`.
 
 ### Domain Docs
+
 Single-context layout with `CONTEXT.md` at repo root and ADRs in `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Git
@@ -33,6 +36,7 @@ Single-context layout with `CONTEXT.md` at repo root and ADRs in `docs/adr/`. Se
 # Project Guidelines & Claude Configuration
 
 ## Language & Communication
+
 - **Primary Language:** Swedish (Svenska).
 - Responses, explanations, and commit messages should be in Swedish.
 - Code comments, SQL scripts, variable names, and technical terms must remain in English.
@@ -47,12 +51,14 @@ Single-context layout with `CONTEXT.md` at repo root and ADRs in `docs/adr/`. Se
 ## Database & Supabase Rules
 
 ### Data Access Architecture
+
 - **Direct Supabase SDK Only:** All database operations inside the application MUST use `@supabase/supabase-js`. Never write custom REST `fetch()` calls or express endpoints for internal app features.
 - **Strict UUID Types:** UUID values must be validated at application boundaries before being used in queries against UUID columns. Reject invalid UUIDs rather than converting them, inventing them, or passing placeholder values.
 - Never use mock identifiers such as `"demo-store-1"` for UUID columns.
 - Tests may use generated valid UUIDs or explicitly defined test fixtures.
 
 ### Migration Rules (Idempotency & Timestamping)
+
 - **Migration Safety:** Migrations must be safe to apply to the intended schema state and must not fail because objects already exist when the migration explicitly supports existing installations.
 - Never modify an already-applied migration to fix a schema problem. Create a new migration instead.
 - **Unique Timestamps:** Every new migration file MUST have a unique, incremented timestamp filename to avoid `schema_migrations_pkey` duplicate key errors (e.g., `YYYYMMDDHHMMSS_description.sql`).
@@ -87,6 +93,7 @@ Single-context layout with `CONTEXT.md` at repo root and ADRs in `docs/adr/`. Se
 - Validate authorization server-side and through RLS where applicable.
 
 ## Business Domain & Data Mapping Rules
+
 - **Article Matching:**
   - **Delivery Note Import (Ersättningskontroll):** Primary match on `sap_article_id` (Mat-nr). Fallback match on `bnr`. NEVER use SKU for article mapping.
   - **Planogram Import:** Match on `bnr` and update/store `ean`.
@@ -103,6 +110,7 @@ Single-context layout with `CONTEXT.md` at repo root and ADRs in `docs/adr/`. Se
 - Reuse existing UI components and design-system patterns before creating new ones.
 - Every async UI flow must handle loading, success, empty, and error states where applicable.
 - Do not suppress hydration warnings. Identify and fix the underlying server/client rendering mismatch.
+
 ## No Fake or Partial Implementations
 
 - Never implement a feature visually without implementing its underlying functionality.
@@ -116,6 +124,7 @@ Single-context layout with `CONTEXT.md` at repo root and ADRs in `docs/adr/`. Se
 ## Agent Skills
 
 Use specialized agents when they materially improve the task, especially for:
+
 - Large multi-file implementations
 - Codebase exploration and dependency tracing
 - Security and RLS audits
@@ -141,6 +150,7 @@ Before modifying code:
 ## Verification
 
 After making changes:
+
 - Run the most relevant tests and type checks.
 - Run the production build when the change affects application code.
 - Run database validation/migration checks when the schema or RLS policies change.

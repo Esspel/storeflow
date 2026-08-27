@@ -12,7 +12,7 @@ export async function checkEanAtShelf(
   _storeId: string,
   ean: string,
   sektionId: string,
-  nivå: number
+  nivå: number,
 ): Promise<ComplianceResult> {
   const { data: product } = await supabase
     .from("products")
@@ -27,11 +27,24 @@ export async function checkEanAtShelf(
     .eq("sektion_id", sektionId)
     .maybeSingle();
   if (!expected) {
-    return { level: "yellow", message: `${product.produktnamn} saknar godkänd placering.`, suggestion: "Kontrollera planogram." };
+    return {
+      level: "yellow",
+      message: `${product.produktnamn} saknar godkänd placering.`,
+      suggestion: "Kontrollera planogram.",
+    };
   }
   const exp = expected as any;
   if (exp.nivå === nivå) {
-    return { level: "green", message: `${product.produktnamn} står rätt.`, expected_position: { hylla_id: exp.hylla_id, nivå: exp.nivå } };
+    return {
+      level: "green",
+      message: `${product.produktnamn} står rätt.`,
+      expected_position: { hylla_id: exp.hylla_id, nivå: exp.nivå },
+    };
   }
-  return { level: "yellow", message: `${product.produktnamn} står fel — borde vara nivå ${exp.nivå}.`, expected_position: { hylla_id: exp.hylla_id, nivå: exp.nivå }, suggestion: `Flytta till nivå ${exp.nivå}.` };
+  return {
+    level: "yellow",
+    message: `${product.produktnamn} står fel — borde vara nivå ${exp.nivå}.`,
+    expected_position: { hylla_id: exp.hylla_id, nivå: exp.nivå },
+    suggestion: `Flytta till nivå ${exp.nivå}.`,
+  };
 }

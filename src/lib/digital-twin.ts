@@ -65,29 +65,21 @@ export async function ensureSpatialMap(storeId: string): Promise<string> {
   return data.id;
 }
 
-export async function saveSection(
-  storeId: string,
-  section: Section2D,
-): Promise<void> {
-  const { error } = await supabase
-    .from("store_sections")
-    .upsert({
-      id: section.id,
-      store_id: storeId,
-      name: section.name,
-      pos_x_cm: section.pos_x_cm,
-      pos_y_cm: section.pos_y_cm,
-      width_cm: section.width_cm,
-      height_cm: section.height_cm,
-    });
+export async function saveSection(storeId: string, section: Section2D): Promise<void> {
+  const { error } = await supabase.from("store_sections").upsert({
+    id: section.id,
+    store_id: storeId,
+    name: section.name,
+    pos_x_cm: section.pos_x_cm,
+    pos_y_cm: section.pos_y_cm,
+    width_cm: section.width_cm,
+    height_cm: section.height_cm,
+  });
   if (error) throw error;
 }
 
 export async function deleteSection(sectionId: string): Promise<void> {
-  const { error } = await supabase
-    .from("store_sections")
-    .delete()
-    .eq("id", sectionId);
+  const { error } = await supabase.from("store_sections").delete().eq("id", sectionId);
   if (error) throw error;
 }
 
@@ -116,18 +108,12 @@ export async function moveMarker(
   markerId: string,
   position: { x: number; y: number; z: number },
 ): Promise<void> {
-  const { error } = await supabase
-    .from("spatial_markers")
-    .update({ position })
-    .eq("id", markerId);
+  const { error } = await supabase.from("spatial_markers").update({ position }).eq("id", markerId);
   if (error) throw error;
 }
 
 export async function removeMarker(markerId: string): Promise<void> {
-  const { error } = await supabase
-    .from("spatial_markers")
-    .delete()
-    .eq("id", markerId);
+  const { error } = await supabase.from("spatial_markers").delete().eq("id", markerId);
   if (error) throw error;
 }
 
@@ -141,16 +127,11 @@ export async function listPlanogramsForStore(storeId: string) {
   return data ?? [];
 }
 
-export async function recordObservation(
-  storeId: string,
-  link: ProductLink,
-): Promise<void> {
+export async function recordObservation(storeId: string, link: ProductLink): Promise<void> {
   const { error } = await supabase.from("shelf_observations").insert({
     store_id: storeId,
     shelf_marker_id: link.markerId,
-    detected_products: [
-      { ean: link.ean, bnr: link.bnr, name: link.name, facings: link.facings },
-    ],
+    detected_products: [{ ean: link.ean, bnr: link.bnr, name: link.name, facings: link.facings }],
     compliance_score: link.fromPlanogram ? 1.0 : 0.5,
   });
   if (error) throw error;

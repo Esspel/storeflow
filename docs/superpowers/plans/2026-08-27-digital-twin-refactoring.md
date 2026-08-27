@@ -22,6 +22,7 @@
 ## Task 1: Skapa Aruco-ordlista (4×4, 50 markörer)
 
 **Files:**
+
 - Create: `src/components/digital-twin/aruco-dictionary.ts`
 
 - [ ] **Step 1: Skapa filen med 50 deterministiska 4×4-mönster**
@@ -39,9 +40,7 @@ export type ArUcoGrid = boolean[][]; // 6x6 inkl. svart kant
 // Genererar 50 unika mönster via bit-mönster (4 bitar = 16, men vi behöver 50
 // så vi använder två 4-bitars block + checksum).
 function generatePattern(id: number): boolean[][] {
-  const grid: boolean[][] = Array.from({ length: 6 }, () =>
-    Array.from({ length: 6 }, () => false),
-  );
+  const grid: boolean[][] = Array.from({ length: 6 }, () => Array.from({ length: 6 }, () => false));
   // Svart kant
   for (let i = 0; i < 6; i++) {
     grid[0][i] = true;
@@ -52,7 +51,7 @@ function generatePattern(id: number): boolean[][] {
   // Inre 4x4 baserat på id (0..49) som 4 bitar kod + rest-bitar via enkel permutation
   const bits: boolean[] = [];
   for (let bit = 0; bit < 16; bit++) {
-    bits.push(((id * 7 + bit * 13 + 31) % 2) === 0);
+    bits.push((id * 7 + bit * 13 + 31) % 2 === 0);
   }
   let idx = 0;
   for (let r = 1; r <= 4; r++) {
@@ -106,6 +105,7 @@ git commit -m "feat(digital-twin): add 4x4 aruco dictionary with 50 deterministi
 ## Task 2: Skapa typer och Supabase-stödfunktioner
 
 **Files:**
+
 - Create: `src/types/digital-twin.ts`
 - Create: `src/lib/digital-twin.ts`
 
@@ -118,8 +118,8 @@ import type { Section2D } from "@/components/store-map-2d";
 export type WizardStep = "portals" | "mapping" | "products" | "complete";
 
 export interface PlacedMarker {
-  id: string;          // spatial_markers.id (uuid)
-  arucoId: number;     // 0..49
+  id: string; // spatial_markers.id (uuid)
+  arucoId: number; // 0..49
   position: { x: number; y: number; z: number };
   sizeMeters?: number;
 }
@@ -128,7 +128,7 @@ export interface ProductLink {
   ean: string;
   bnr?: string;
   name: string;
-  markerId: string;        // spatial_markers.id
+  markerId: string; // spatial_markers.id
   position: { x: number; y: number; z: number };
   facings: number;
   fromPlanogram: boolean;
@@ -152,9 +152,20 @@ import type { PlacedMarker, ProductLink, DigitalTwinSnapshot } from "@/types/dig
 
 export async function loadSnapshot(storeId: string): Promise<DigitalTwinSnapshot> {
   const [mapsRes, sectionsRes, markersRes] = await Promise.all([
-    supabase.from("spatial_maps").select("id").eq("store_id", storeId).eq("is_active", true).maybeSingle(),
-    supabase.from("store_sections").select("id, name, pos_x_cm, pos_y_cm, width_cm, height_cm").eq("store_id", storeId),
-    supabase.from("spatial_markers").select("id, aruco_id, position, size_meters, map_id").eq("map_id.in.()", []),
+    supabase
+      .from("spatial_maps")
+      .select("id")
+      .eq("store_id", storeId)
+      .eq("is_active", true)
+      .maybeSingle(),
+    supabase
+      .from("store_sections")
+      .select("id, name, pos_x_cm, pos_y_cm, width_cm, height_cm")
+      .eq("store_id", storeId),
+    supabase
+      .from("spatial_markers")
+      .select("id, aruco_id, position, size_meters, map_id")
+      .eq("map_id.in.()", []),
   ]);
 
   const mapId = mapsRes.data?.id ?? null;
@@ -203,17 +214,15 @@ export async function ensureSpatialMap(storeId: string): Promise<string> {
 }
 
 export async function saveSection(storeId: string, section: Section2D): Promise<void> {
-  const { error } = await supabase
-    .from("store_sections")
-    .upsert({
-      id: section.id,
-      store_id: storeId,
-      name: section.name,
-      pos_x_cm: section.pos_x_cm,
-      pos_y_cm: section.pos_y_cm,
-      width_cm: section.width_cm,
-      height_cm: section.height_cm,
-    });
+  const { error } = await supabase.from("store_sections").upsert({
+    id: section.id,
+    store_id: storeId,
+    name: section.name,
+    pos_x_cm: section.pos_x_cm,
+    pos_y_cm: section.pos_y_cm,
+    width_cm: section.width_cm,
+    height_cm: section.height_cm,
+  });
   if (error) throw error;
 }
 
@@ -247,10 +256,7 @@ export async function moveMarker(
   markerId: string,
   position: { x: number; y: number; z: number },
 ): Promise<void> {
-  const { error } = await supabase
-    .from("spatial_markers")
-    .update({ position })
-    .eq("id", markerId);
+  const { error } = await supabase.from("spatial_markers").update({ position }).eq("id", markerId);
   if (error) throw error;
 }
 
@@ -269,16 +275,11 @@ export async function listPlanogramsForStore(storeId: string) {
   return data ?? [];
 }
 
-export async function recordObservation(
-  storeId: string,
-  link: ProductLink,
-): Promise<void> {
+export async function recordObservation(storeId: string, link: ProductLink): Promise<void> {
   const { error } = await supabase.from("shelf_observations").insert({
     store_id: storeId,
     shelf_marker_id: link.markerId,
-    detected_products: [
-      { ean: link.ean, bnr: link.bnr, name: link.name, facings: link.facings },
-    ],
+    detected_products: [{ ean: link.ean, bnr: link.bnr, name: link.name, facings: link.facings }],
     compliance_score: link.fromPlanogram ? 1.0 : 0.5,
   });
   if (error) throw error;
@@ -303,6 +304,7 @@ git commit -m "feat(digital-twin): add snapshot types and supabase CRUD helpers"
 ## Task 3: Uppdatera `StoreMap2D` med nya props
 
 **Files:**
+
 - Modify: `src/components/store-map-2d.tsx`
 
 - [ ] **Step 1: Lägg till props för add/remove/select/readonly**
@@ -324,7 +326,9 @@ export function StoreMap2D({
   onDeleteSection?: (id: string) => void;
   selectedId?: string | null;
   readonly?: boolean;
-}) { /* ...befintlig kod... */ }
+}) {
+  /* ...befintlig kod... */
+}
 ```
 
 - I `onMouseMove`, hoppa över `setDrag` om `readonly` är `true`.
@@ -349,6 +353,7 @@ git commit -m "feat(store-map-2d): support add/delete/select/readonly for digita
 ## Task 4: Aruco PDF/SVG-generator (Step 3-komponent)
 
 **Files:**
+
 - Create: `src/components/digital-twin/Step3Pdf.tsx`
 
 - [ ] **Step 1: Skapa komponenten**
@@ -478,6 +483,7 @@ git commit -m "feat(digital-twin): frontend aruco PDF/PNG generator (no external
 ## Task 5: Step 1 — 2D-karta (kringkomponent)
 
 **Files:**
+
 - Create: `src/components/digital-twin/Step1Map2D.tsx`
 
 - [ ] **Step 1: Skapa Step1Map2D**
@@ -591,6 +597,7 @@ git commit -m "feat(digital-twin): step 1 - 2D map section editor"
 ## Task 6: Step 2 — Placera Aruco-markörer
 
 **Files:**
+
 - Create: `src/components/digital-twin/Step2Markers.tsx`
 
 - [ ] **Step 1: Skapa Step2Markers**
@@ -778,6 +785,7 @@ git commit -m "feat(digital-twin): step 2 - clickable aruco marker placement"
 ## Task 7: Step 4 — Koppla produkter
 
 **Files:**
+
 - Create: `src/components/digital-twin/Step4Products.tsx`
 
 - [ ] **Step 1: Skapa Step4Products**
@@ -1050,6 +1058,7 @@ git commit -m "feat(digital-twin): step 4 - product linking via planogram + manu
 ## Task 8: Wizard-wrapper med 4 steg
 
 **Files:**
+
 - Create: `src/components/digital-twin/Wizard.tsx`
 
 - [ ] **Step 1: Wizard**
@@ -1240,6 +1249,7 @@ git commit -m "feat(digital-twin): wizard wrapper with 4-step navigation"
 ## Task 9: Koppla wizard till `store-setup.tsx`
 
 **Files:**
+
 - Modify: `src/routes/store-setup.tsx`
 
 - [ ] **Step 1: Ersätt body med wizard**
@@ -1297,6 +1307,7 @@ npm run dev
 ```
 
 Verifiera:
+
 1. Steg 1: lägg till sektion, dra, ta bort → sparas
 2. Steg 2: klicka för att placera markör, dra för att flytta
 3. Steg 3: ladda ner PNG
@@ -1319,6 +1330,7 @@ git push origin main
 ## Resumé av ändrade filer
 
 **Nya:**
+
 - `src/components/digital-twin/aruco-dictionary.ts`
 - `src/components/digital-twin/Step1Map2D.tsx`
 - `src/components/digital-twin/Step2Markers.tsx`
@@ -1330,5 +1342,6 @@ git push origin main
 - `docs/superpowers/specs/2026-08-27-digital-twin-design.md`
 
 **Modifierade:**
+
 - `src/components/store-map-2d.tsx` (nya props)
 - `src/routes/store-setup.tsx` (använder wizard)

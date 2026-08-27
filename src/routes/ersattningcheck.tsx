@@ -52,7 +52,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
-import { parseDeliveryNoteExcel, matchDeliveryNoteToProducts, type DeliveryNoteRow, type ProductMatchResult } from "@/lib/excel-parser";
+import {
+  parseDeliveryNoteExcel,
+  matchDeliveryNoteToProducts,
+  type DeliveryNoteRow,
+  type ProductMatchResult,
+} from "@/lib/excel-parser";
 import { exportTextAsCSV, downloadAsZip } from "@/lib/csv";
 import { toast } from "sonner";
 
@@ -92,7 +97,9 @@ export const Route = createFileRoute("/ersattningcheck")({
 
 function ErstatningsCheckPage() {
   const { user, activeStore, loading: authLoading } = useAuth();
-  const [step, setStep] = useState<"import" | "manage" | "generate" | "weekly" | "reclamations">("import");
+  const [step, setStep] = useState<"import" | "manage" | "generate" | "weekly" | "reclamations">(
+    "import",
+  );
   const [reclamations, setReclamations] = useState<Reclamation[]>([]);
   const [statusFilter, setStatusFilter] = useState<ReclamationStatus>("Ej skickad");
   const [importError, setImportError] = useState<string | null>(null);
@@ -123,7 +130,9 @@ function ErstatningsCheckPage() {
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-foreground mb-2">Inloggning krävs</h2>
-          <p className="text-muted-foreground">Du måste vara inloggad för att komma åt ersättnings-kontrollen.</p>
+          <p className="text-muted-foreground">
+            Du måste vara inloggad för att komma åt ersättnings-kontrollen.
+          </p>
         </div>
       </div>
     );
@@ -178,9 +187,9 @@ function ErstatningsCheckPage() {
       // Auto-create unmatched products
       // Filtrera bort rader utan giltig EAN (null/empty) for att undvika products_ean_unique constraint-konflikt
       const newProducts = results
-        .filter(r => r.isNewProduct && (r.row.bnr || r.row.sapProduktId))
-        .filter(r => r.row.bnr && String(r.row.bnr).trim().length > 0)
-        .map(r => ({
+        .filter((r) => r.isNewProduct && (r.row.bnr || r.row.sapProduktId))
+        .filter((r) => r.row.bnr && String(r.row.bnr).trim().length > 0)
+        .map((r) => ({
           store_id: activeStore.id,
           sap_article_id: r.row.sapProduktId || null,
           ean: r.row.bnr ? String(r.row.bnr).trim() : null,
@@ -196,7 +205,7 @@ function ErstatningsCheckPage() {
       if (newProducts.length > 0) {
         // Deduplicera på bnr inom samma batch (21000-fix)
         const seenBnr = new Set();
-        const deduped = newProducts.filter(p => {
+        const deduped = newProducts.filter((p) => {
           const key = (p.bnr || p.store_id || "") + ":" + (p.sap_article_id || "");
           if (seenBnr.has(key)) return false;
           seenBnr.add(key);
@@ -212,7 +221,9 @@ function ErstatningsCheckPage() {
         }
       }
 
-      setImportSuccess(`Matchade ${results.filter(r => r.product).length} produkter. Skapade ${newProducts.length} nya.`);
+      setImportSuccess(
+        `Matchade ${results.filter((r) => r.product).length} produkter. Skapade ${newProducts.length} nya.`,
+      );
     } catch (error) {
       console.error("Match error:", error);
       setImportError("Kunde inte matcha produkter.");
@@ -254,21 +265,25 @@ function ErstatningsCheckPage() {
     try {
       const { data, error } = await supabase
         .from("product_shelf_life")
-        .select("sap_article_id, shelf_lifetime_days, temperature_zone, default_compensation_price_ore")
+        .select(
+          "sap_article_id, shelf_lifetime_days, temperature_zone, default_compensation_price_ore",
+        )
         .order("updated_at", { ascending: false })
         .limit(200);
 
       if (error) throw error;
-      setShelfLifeRecords((data ?? []).map((r: any) => ({
-        id: r.sap_article_id ?? r.id,
-        sap_article_id: r.sap_article_id ?? "",
-        shelf_lifetime_days: r.shelf_lifetime_days ?? 0,
-        expiry_date: "", // masterdata har inget expiry — leveranshistorik har det
-        arrival_date: "",
-        compensation_price_ore: r.default_compensation_price_ore ?? 2,
-        created_at: r.created_at ?? new Date().toISOString(),
-        updated_at: r.updated_at ?? new Date().toISOString(),
-      })));
+      setShelfLifeRecords(
+        (data ?? []).map((r: any) => ({
+          id: r.sap_article_id ?? r.id,
+          sap_article_id: r.sap_article_id ?? "",
+          shelf_lifetime_days: r.shelf_lifetime_days ?? 0,
+          expiry_date: "", // masterdata har inget expiry — leveranshistorik har det
+          arrival_date: "",
+          compensation_price_ore: r.default_compensation_price_ore ?? 2,
+          created_at: r.created_at ?? new Date().toISOString(),
+          updated_at: r.updated_at ?? new Date().toISOString(),
+        })),
+      );
     } catch (error) {
       console.error("Error loading shelf life:", error);
       setImportError("Kunde inte ladda hållbarhetsdata.");
@@ -289,7 +304,7 @@ function ErstatningsCheckPage() {
 
       // Filter for products with 0 reklamationes / missing shelf life data
       const productsWithoutShelfLife = (stats || [])
-        .filter(p => p.reclamation_count === 0 && p.delivery_count > 0)
+        .filter((p) => p.reclamation_count === 0 && p.delivery_count > 0)
         .slice(0, 10);
 
       if (productsWithoutShelfLife.length === 0) {
@@ -308,7 +323,9 @@ function ErstatningsCheckPage() {
   };
 
   // Save weekly shelf-life updates directly to DB
-  const saveWeeklyShelfLife = async (updates: Array<{ id: string; shelf_lifetime_days: number; expiry_date: string }>) => {
+  const saveWeeklyShelfLife = async (
+    updates: Array<{ id: string; shelf_lifetime_days: number; expiry_date: string }>,
+  ) => {
     setIsLoading(true);
     try {
       for (const u of updates) {
@@ -324,11 +341,14 @@ function ErstatningsCheckPage() {
           updated_at: new Date().toISOString(),
         });
         // Uppdatera masterdata om nödvändigt
-        await supabase.from("product_shelf_life").upsert({
-          sap_article_id: u.id,
-          shelf_lifetime_days: u.shelf_lifetime_days,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "sap_article_id" });
+        await supabase.from("product_shelf_life").upsert(
+          {
+            sap_article_id: u.id,
+            shelf_lifetime_days: u.shelf_lifetime_days,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "sap_article_id" },
+        );
       }
       toast.success("Hållbarhetsdata sparad.");
     } catch (e) {
@@ -350,29 +370,28 @@ function ErstatningsCheckPage() {
     try {
       // Skriv leveransrad till store_product_deliveries (ny struktur)
       // Använd INSERT (inte UPSERT) så leveranshistorik skrivs inte över
-      const { error: insertErr } = await supabase
-        .from("store_product_deliveries")
-        .insert({
-          sap_article_id: record.sap_article_id,
-          store_id: activeStore.id,
-          arrival_date: record.arrival_date,
-          best_before_date: record.expiry_date,
-          quantity: 0,
-          status: "delivered",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
+      const { error: insertErr } = await supabase.from("store_product_deliveries").insert({
+        sap_article_id: record.sap_article_id,
+        store_id: activeStore.id,
+        arrival_date: record.arrival_date,
+        best_before_date: record.expiry_date,
+        quantity: 0,
+        status: "delivered",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
       if (insertErr) throw insertErr;
 
       // Uppdatera masterdata (product_shelf_life) om det inte redan finns
-      const { error: upsertErr } = await supabase
-        .from("product_shelf_life")
-        .upsert({
+      const { error: upsertErr } = await supabase.from("product_shelf_life").upsert(
+        {
           sap_article_id: record.sap_article_id,
           shelf_lifetime_days: record.shelf_lifetime_days,
           default_compensation_price_ore: record.compensation_price_ore ?? 2,
           updated_at: new Date().toISOString(),
-        }, { onConflict: "sap_article_id" });
+        },
+        { onConflict: "sap_article_id" },
+      );
       if (upsertErr) throw upsertErr;
 
       setImportSuccess("Hållbarhetsdata sparad!");
@@ -407,7 +426,9 @@ function ErstatningsCheckPage() {
       // Hämta masterdata för shelf_lifetime_days och temperature_zone
       const { data: masterData, error: masterErr } = await supabase
         .from("product_shelf_life")
-        .select("sap_article_id, shelf_lifetime_days, temperature_zone, default_compensation_price_ore");
+        .select(
+          "sap_article_id, shelf_lifetime_days, temperature_zone, default_compensation_price_ore",
+        );
       if (masterErr) throw masterErr;
       const masterMap = new Map((masterData ?? []).map((m: any) => [m.sap_article_id, m]));
 
@@ -421,7 +442,12 @@ function ErstatningsCheckPage() {
         const compPrice = (master as any)?.default_compensation_price_ore || 2;
         const key = `${leverans}__${zon}`;
         if (!groups[key]) groups[key] = [];
-        groups[key].push({ ...r, shelf_lifetime_days: shelfDays, compensation_price_ore: compPrice, temperature_zone: zon });
+        groups[key].push({
+          ...r,
+          shelf_lifetime_days: shelfDays,
+          compensation_price_ore: compPrice,
+          temperature_zone: zon,
+        });
       }
 
       const files = Object.entries(groups).map(([key, rows]) => {
@@ -437,14 +463,19 @@ function ErstatningsCheckPage() {
               row.best_before_date?.split("T")[0] || row.best_before_date,
               row.arrival_date?.split("T")[0] || row.arrival_date,
               row.compensation_price_ore ?? 0,
-            ].join("|")
+            ].join("|"),
           ),
         ].join("\n");
         return { name: `ersattning_${leverans}_${zon}.txt`, content };
       });
 
-      await downloadAsZip(files, `ersattningsansokan_${new Date().toISOString().split("T")[0]}.zip`);
-      setImportSuccess(`Genererade ZIP med ${files.length} .txt-fil(er), ${flagged.length} produkter.`);
+      await downloadAsZip(
+        files,
+        `ersattningsansokan_${new Date().toISOString().split("T")[0]}.zip`,
+      );
+      setImportSuccess(
+        `Genererade ZIP med ${files.length} .txt-fil(er), ${flagged.length} produkter.`,
+      );
     } catch (error) {
       console.error("Error generating zip:", error);
       setImportError("Kunde inte generera ersättningsfil.");
@@ -527,8 +558,8 @@ function ErstatningsCheckPage() {
           <CardHeader>
             <CardTitle>Importera följesedel</CardTitle>
             <CardDescription>
-              Ladda upp följesedelsfilen (.xlsx) från leveransen. Systemet matchar automatiskt
-              mot befintliga produkter och skapar nya om det behövs.
+              Ladda upp följesedelsfilen (.xlsx) från leveransen. Systemet matchar automatiskt mot
+              befintliga produkter och skapar nya om det behövs.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -539,7 +570,12 @@ function ErstatningsCheckPage() {
                 onDrop={async (e) => {
                   e.preventDefault();
                   const file = e.dataTransfer.files?.[0];
-                  if (file && (file.name.endsWith(".xlsx") || file.name.endsWith(".xls") || file.name.endsWith(".csv"))) {
+                  if (
+                    file &&
+                    (file.name.endsWith(".xlsx") ||
+                      file.name.endsWith(".xls") ||
+                      file.name.endsWith(".csv"))
+                  ) {
                     await handleFileUpload(file);
                   }
                 }}
@@ -548,7 +584,9 @@ function ErstatningsCheckPage() {
               >
                 <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
                 <p className="text-sm font-medium">Dra och släpp Excel-filen här</p>
-                <p className="text-xs text-muted-foreground mt-1">eller klicka för att välja .xlsx / .xls / .csv</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  eller klicka för att välja .xlsx / .xls / .csv
+                </p>
               </div>
               <input
                 id="delivery-file"
@@ -571,59 +609,77 @@ function ErstatningsCheckPage() {
 
                 <div className="border rounded-lg overflow-x-auto">
                   <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Pallnummer</TableHead>
-                          <TableHead>SAP Produkt-ID</TableHead>
-                          <TableHead>BNR</TableHead>
-                          <TableHead>Produkt</TableHead>
-                          <TableHead>Varumärke</TableHead>
-                          <TableHead>Innehåll</TableHead>
-                          <TableHead>Beställningskvantitet</TableHead>
-                          <TableHead>Beställningsenhet</TableHead>
-                          <TableHead>Enhetsomvandling</TableHead>
-                          <TableHead>Levererad kvantitet</TableHead>
-                          <TableHead>Sann vikt (KG)</TableHead>
-                          <TableHead>Leveransdag</TableHead>
-                          <TableHead>Bäst-före-datum</TableHead>
-                          <TableHead>Leveransstatus</TableHead>
-                          <TableHead>Pris per enhet (SEK)</TableHead>
-                          <TableHead>Totalpris (SEK)</TableHead>
-                          <TableHead>Kategori</TableHead>
-                          <TableHead>Förväntad kvantitet</TableHead>
-                          <TableHead>Orderrad</TableHead>
-                          <TableHead>Ordernummer</TableHead>
-                          <TableHead>Leveransnummer</TableHead>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Pallnummer</TableHead>
+                        <TableHead>SAP Produkt-ID</TableHead>
+                        <TableHead>BNR</TableHead>
+                        <TableHead>Produkt</TableHead>
+                        <TableHead>Varumärke</TableHead>
+                        <TableHead>Innehåll</TableHead>
+                        <TableHead>Beställningskvantitet</TableHead>
+                        <TableHead>Beställningsenhet</TableHead>
+                        <TableHead>Enhetsomvandling</TableHead>
+                        <TableHead>Levererad kvantitet</TableHead>
+                        <TableHead>Sann vikt (KG)</TableHead>
+                        <TableHead>Leveransdag</TableHead>
+                        <TableHead>Bäst-före-datum</TableHead>
+                        <TableHead>Leveransstatus</TableHead>
+                        <TableHead>Pris per enhet (SEK)</TableHead>
+                        <TableHead>Totalpris (SEK)</TableHead>
+                        <TableHead>Kategori</TableHead>
+                        <TableHead>Förväntad kvantitet</TableHead>
+                        <TableHead>Orderrad</TableHead>
+                        <TableHead>Ordernummer</TableHead>
+                        <TableHead>Leveransnummer</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {deliveryNotes.slice(0, 10).map((row, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="whitespace-nowrap">{row.pallnummer}</TableCell>
+                          <TableCell className="font-mono text-sm whitespace-nowrap">
+                            {row.sapProduktId}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm whitespace-nowrap">
+                            {row.bnr}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap max-w-[200px] truncate">
+                            {row.produkt}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{row.varumärke}</TableCell>
+                          <TableCell className="whitespace-nowrap">{row.innehåll}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {row.beställningskvantitet}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {row.beställningsenhet}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {row.enhetsomvandling}
+                          </TableCell>
+                          <TableCell align="right" className="whitespace-nowrap">
+                            {row.levereradKvantitet}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{row.sannViktKg}</TableCell>
+                          <TableCell className="whitespace-nowrap">{row.leveransdag}</TableCell>
+                          <TableCell className="whitespace-nowrap">{row.bastForeDatum}</TableCell>
+                          <TableCell className="whitespace-nowrap">{row.leveransstatus}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {row.prisPerLeveransenhet}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{row.totalpris}</TableCell>
+                          <TableCell className="whitespace-nowrap">{row.kategori}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {row.förväntadKvantitet}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{row.orderrad}</TableCell>
+                          <TableCell className="whitespace-nowrap">{row.ordernummer}</TableCell>
+                          <TableCell className="whitespace-nowrap">{row.leveransnummer}</TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {deliveryNotes.slice(0, 10).map((row, i) => (
-                          <TableRow key={i}>
-                            <TableCell className="whitespace-nowrap">{row.pallnummer}</TableCell>
-                            <TableCell className="font-mono text-sm whitespace-nowrap">{row.sapProduktId}</TableCell>
-                            <TableCell className="font-mono text-sm whitespace-nowrap">{row.bnr}</TableCell>
-                            <TableCell className="whitespace-nowrap max-w-[200px] truncate">{row.produkt}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.varumärke}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.innehåll}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.beställningskvantitet}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.beställningsenhet}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.enhetsomvandling}</TableCell>
-                            <TableCell align="right" className="whitespace-nowrap">{row.levereradKvantitet}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.sannViktKg}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.leveransdag}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.bastForeDatum}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.leveransstatus}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.prisPerLeveransenhet}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.totalpris}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.kategori}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.förväntadKvantitet}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.orderrad}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.ordernummer}</TableCell>
-                            <TableCell className="whitespace-nowrap">{row.leveransnummer}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                      ))}
+                    </TableBody>
+                  </Table>
                   {deliveryNotes.length > 10 && (
                     <p className="text-sm text-muted-foreground text-center py-2">
                       Och {deliveryNotes.length - 10} fler rader...
@@ -642,8 +698,8 @@ function ErstatningsCheckPage() {
           <CardHeader>
             <CardTitle>Hantera hållbarhetsdata</CardTitle>
             <CardDescription>
-              Ange hållbarhetsdagar per artikel. Systemet beräknar automatiskt om produkter
-              omfattas av datumregelverket för ersättning.
+              Ange hållbarhetsdagar per artikel. Systemet beräknar automatiskt om produkter omfattas
+              av datumregelverket för ersättning.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -665,7 +721,7 @@ function ErstatningsCheckPage() {
                       const arrival = new Date(record.arrival_date);
                       const expiry = new Date(record.expiry_date);
                       const daysRemaining = Math.floor(
-                        (expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24)
+                        (expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24),
                       );
 
                       let minRequired: number;
@@ -683,8 +739,12 @@ function ErstatningsCheckPage() {
                             {record.sap_article_id}
                           </TableCell>
                           <TableCell>{record.shelf_lifetime_days}</TableCell>
-                          <TableCell>{new Date(record.expiry_date).toLocaleDateString("sv-SE")}</TableCell>
-                          <TableCell>{new Date(record.arrival_date).toLocaleDateString("sv-SE")}</TableCell>
+                          <TableCell>
+                            {new Date(record.expiry_date).toLocaleDateString("sv-SE")}
+                          </TableCell>
+                          <TableCell>
+                            {new Date(record.arrival_date).toLocaleDateString("sv-SE")}
+                          </TableCell>
                           <TableCell>
                             {isFlagged ? (
                               <Badge variant="destructive" className="flex items-center gap-1">
@@ -717,7 +777,9 @@ function ErstatningsCheckPage() {
               <div className="text-center py-8 text-muted-foreground">
                 <Clock size={48} className="mx-auto mb-4 opacity-50" />
                 <p>Ingen hållbarhetsdata registrerad ännu.</p>
-                <p className="text-sm mt-2">Importera följesedel först för att få produkter att hantera.</p>
+                <p className="text-sm mt-2">
+                  Importera följesedel först för att få produkter att hantera.
+                </p>
               </div>
             )}
           </CardContent>
@@ -729,9 +791,7 @@ function ErstatningsCheckPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Redigera hållbarhet</DialogTitle>
-            <DialogDescription>
-              {selectedRecord?.sap_article_id}
-            </DialogDescription>
+            <DialogDescription>{selectedRecord?.sap_article_id}</DialogDescription>
           </DialogHeader>
 
           {selectedRecord && (
@@ -741,10 +801,15 @@ function ErstatningsCheckPage() {
                 const form = e.target as HTMLFormElement;
                 await saveShelfLife({
                   sap_article_id: selectedRecord.sap_article_id,
-                  shelf_lifetime_days: parseInt((form.elements.namedItem("shelf_lifetime_days") as HTMLInputElement).value),
+                  shelf_lifetime_days: parseInt(
+                    (form.elements.namedItem("shelf_lifetime_days") as HTMLInputElement).value,
+                  ),
                   expiry_date: (form.elements.namedItem("expiry_date") as HTMLInputElement).value,
                   arrival_date: (form.elements.namedItem("arrival_date") as HTMLInputElement).value,
-                  compensation_price_ore: parseInt((form.elements.namedItem("compensation_price_ore") as HTMLInputElement).value) || 2,
+                  compensation_price_ore:
+                    parseInt(
+                      (form.elements.namedItem("compensation_price_ore") as HTMLInputElement).value,
+                    ) || 2,
                 });
                 setIsDialogOpen(false);
               }}
@@ -802,8 +867,8 @@ function ErstatningsCheckPage() {
           <CardHeader>
             <CardTitle>Generera ersättningsansökan</CardTitle>
             <CardDescription>
-              Skapa en ZIP-fil med produkter som omfattas av datumregelverket för
-              ersättning hos Butikssupport.
+              Skapa en ZIP-fil med produkter som omfattas av datumregelverket för ersättning hos
+              Butikssupport.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -899,7 +964,14 @@ function ErstatningsCheckPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-2 overflow-x-auto pb-2">
-              {(["Ej skickad", "Granskas av butikssupporten", "Löst", "Nekad"] as ReclamationStatus[]).map((s) => (
+              {(
+                [
+                  "Ej skickad",
+                  "Granskas av butikssupporten",
+                  "Löst",
+                  "Nekad",
+                ] as ReclamationStatus[]
+              ).map((s) => (
                 <Button
                   key={s}
                   size="sm"
@@ -921,36 +993,68 @@ function ErstatningsCheckPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {reclamations.filter((r) => (statusFilter ? r.status === statusFilter : true)).map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-mono text-sm">{r.sap_article_id}</TableCell>
-                      <TableCell>
-                        <Badge variant={r.status === "Löst" ? "default" : r.status === "Nekad" ? "destructive" : "secondary"}>
-                          {r.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{new Date(r.updated_at).toLocaleDateString("sv-SE")}</TableCell>
-                      <TableCell>
-                        {(["Ej skickad", "Granskas av butikssupporten", "Löst", "Nekad"] as ReclamationStatus[]).map((s) => (
-                          <Button
-                            key={s}
-                            size="sm"
-                            variant={r.status === s ? "default" : "outline"}
-                            onClick={async () => {
-                              await supabase.from("reclamations").update({ status: s, updated_at: new Date().toISOString() }).eq("id", r.id);
-                              setReclamations((prev) => prev.map((x) => (x.id === r.id ? { ...x, status: s, updated_at: new Date().toISOString() } : x)));
-                            }}
-                            className="mr-1 text-[10px]"
+                  {reclamations
+                    .filter((r) => (statusFilter ? r.status === statusFilter : true))
+                    .map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell className="font-mono text-sm">{r.sap_article_id}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              r.status === "Löst"
+                                ? "default"
+                                : r.status === "Nekad"
+                                  ? "destructive"
+                                  : "secondary"
+                            }
                           >
-                            {s}
-                          </Button>
-                        ))}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {reclamations.filter((r) => (statusFilter ? r.status === statusFilter : true)).length === 0 && (
+                            {r.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {new Date(r.updated_at).toLocaleDateString("sv-SE")}
+                        </TableCell>
+                        <TableCell>
+                          {(
+                            [
+                              "Ej skickad",
+                              "Granskas av butikssupporten",
+                              "Löst",
+                              "Nekad",
+                            ] as ReclamationStatus[]
+                          ).map((s) => (
+                            <Button
+                              key={s}
+                              size="sm"
+                              variant={r.status === s ? "default" : "outline"}
+                              onClick={async () => {
+                                await supabase
+                                  .from("reclamations")
+                                  .update({ status: s, updated_at: new Date().toISOString() })
+                                  .eq("id", r.id);
+                                setReclamations((prev) =>
+                                  prev.map((x) =>
+                                    x.id === r.id
+                                      ? { ...x, status: s, updated_at: new Date().toISOString() }
+                                      : x,
+                                  ),
+                                );
+                              }}
+                              className="mr-1 text-[10px]"
+                            >
+                              {s}
+                            </Button>
+                          ))}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  {reclamations.filter((r) => (statusFilter ? r.status === statusFilter : true))
+                    .length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-6">
+                      <TableCell
+                        colSpan={4}
+                        className="text-center text-sm text-muted-foreground py-6"
+                      >
                         Inga reklamationer med denna status.
                       </TableCell>
                     </TableRow>
@@ -970,9 +1074,7 @@ function ErstatningsCheckPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Ange hållbarhetsdata</DialogTitle>
-            <DialogDescription>
-              {selectedWeeklyProduct?.sap_article_id}
-            </DialogDescription>
+            <DialogDescription>{selectedWeeklyProduct?.sap_article_id}</DialogDescription>
           </DialogHeader>
 
           {selectedWeeklyProduct && (
@@ -983,13 +1085,14 @@ function ErstatningsCheckPage() {
                 await saveShelfLife({
                   sap_article_id: selectedWeeklyProduct.sap_article_id,
                   shelf_lifetime_days: parseInt(
-                    (form.elements.namedItem("shelf_lifetime_days") as HTMLInputElement).value
+                    (form.elements.namedItem("shelf_lifetime_days") as HTMLInputElement).value,
                   ),
                   expiry_date: (form.elements.namedItem("expiry_date") as HTMLInputElement).value,
                   arrival_date: (form.elements.namedItem("arrival_date") as HTMLInputElement).value,
-                  compensation_price_ore: parseInt(
-                    (form.elements.namedItem("compensation_price_ore") as HTMLInputElement).value
-                  ) || 2,
+                  compensation_price_ore:
+                    parseInt(
+                      (form.elements.namedItem("compensation_price_ore") as HTMLInputElement).value,
+                    ) || 2,
                 });
                 setSelectedWeeklyProduct(null);
               }}
@@ -997,37 +1100,19 @@ function ErstatningsCheckPage() {
             >
               <div>
                 <Label>Hållbarhet (dagar)</Label>
-                <Input
-                  name="shelf_lifetime_days"
-                  type="number"
-                  placeholder="T.ex. 365"
-                  required
-                />
+                <Input name="shelf_lifetime_days" type="number" placeholder="T.ex. 365" required />
               </div>
               <div>
                 <Label>Bäst-före-datum</Label>
-                <Input
-                  name="expiry_date"
-                  type="date"
-                  required
-                />
+                <Input name="expiry_date" type="date" required />
               </div>
               <div>
                 <Label>Leveransdatum</Label>
-                <Input
-                  name="arrival_date"
-                  type="date"
-                  required
-                />
+                <Input name="arrival_date" type="date" required />
               </div>
               <div>
                 <Label>Ersättningspris (öre)</Label>
-                <Input
-                  name="compensation_price_ore"
-                  type="number"
-                  defaultValue={2}
-                  required
-                />
+                <Input name="compensation_price_ore" type="number" defaultValue={2} required />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={isLoading}>

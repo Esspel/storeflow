@@ -12,7 +12,7 @@ describe("customer-nav UUID guard + loadMap", () => {
 
   it("verifies UUID guard exists and loadMap uses supabase.from('spatial_maps')", async () => {
     const text = await import("fs").then((m) =>
-      m.promises.readFile("src/routes/customer-nav.tsx", "utf-8")
+      m.promises.readFile("src/routes/customer-nav.tsx", "utf-8"),
     );
     expect(text).toMatch(/isValidUUID/);
 
@@ -38,7 +38,10 @@ describe("customer-nav UUID guard + loadMap", () => {
     const select = vi.fn().mockReturnValue({ eq });
     mockFrom.mockReturnValue({ select });
 
-    const result = await mockFrom("spatial_maps").select("*").eq("store_id", "11111111-2222-3333-4444-555555555555").maybeSingle();
+    const result = await mockFrom("spatial_maps")
+      .select("*")
+      .eq("store_id", "11111111-2222-3333-4444-555555555555")
+      .maybeSingle();
     expect(result.error).toBeNull();
     expect(result.data).toBeNull();
   });

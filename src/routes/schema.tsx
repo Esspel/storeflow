@@ -381,7 +381,7 @@ function isWeekTooOld(weekNumber: number, year: number): boolean {
 // Hitta närmaste giltiga vecka (närmast nu men inte äldre än 2 veckor)
 function findClosestValidWeek(
   allWeeks: Array<{ weekNumber: number; year: number }>,
-  targetWeek?: { weekNumber: number; year: number }
+  targetWeek?: { weekNumber: number; year: number },
 ): { weekNumber: number; year: number } {
   const now = new Date();
   const currentWeek = getISOWeek(now);
@@ -933,8 +933,10 @@ function SchemaPage() {
   useEffect(() => {
     setSelectedWeek((prev) => {
       const minAllowed = getMinAllowedWeek();
-      if (selectedWeek.year < minAllowed.year ||
-          (selectedWeek.year === minAllowed.year && selectedWeek.weekNumber < minAllowed.weekNumber)) {
+      if (
+        selectedWeek.year < minAllowed.year ||
+        (selectedWeek.year === minAllowed.year && selectedWeek.weekNumber < minAllowed.weekNumber)
+      ) {
         // Week is too old, use closest valid week
         const now = new Date();
         return { weekNumber: getISOWeek(now), year: now.getFullYear() };

@@ -140,7 +140,10 @@ function CustomerNavPage() {
     // Find marker for this product
     if (map) {
       const marker = map.markers.find(
-        (m) => m.metadata?.ean === product.ean || m.metadata?.bnr === product.bnr || m.name.toLowerCase().includes(product.name.toLowerCase())
+        (m) =>
+          m.metadata?.ean === product.ean ||
+          m.metadata?.bnr === product.bnr ||
+          m.name.toLowerCase().includes(product.name.toLowerCase()),
       );
       if (marker) {
         setSelectedMarker(marker);
@@ -205,7 +208,9 @@ function CustomerNavPage() {
         <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4 md:h-16 md:gap-4 md:px-8">
           <div className="flex shrink-0 items-center gap-2">
             <div className="flex flex-col leading-none">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Store</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                Store
+              </span>
               <span className="text-2xl font-black tracking-tight text-primary">Flow</span>
             </div>
           </div>
@@ -234,16 +239,23 @@ function CustomerNavPage() {
             </p>
 
             <div className="space-y-3">
-              <Button className="w-full gap-2 bg-indigo-600 hover:bg-indigo-500 text-white" onClick={simulateScan}>
+              <Button
+                className="w-full gap-2 bg-indigo-600 hover:bg-indigo-500 text-white"
+                onClick={simulateScan}
+              >
                 <Navigation className="w-4 h-4" />
                 Demo: Simulera QR-skanning (Butik 1)
               </Button>
-              <Button className="w-full gap-2" variant="outline" onClick={() => {
-                const params = new URLSearchParams(window.location.search);
-                const store = params.get("store");
-                if (store && isValidUUID(store)) setStoreId(store);
-                else setError("Ogiltig eller saknad butiks-ID");
-              }}>
+              <Button
+                className="w-full gap-2"
+                variant="outline"
+                onClick={() => {
+                  const params = new URLSearchParams(window.location.search);
+                  const store = params.get("store");
+                  if (store && isValidUUID(store)) setStoreId(store);
+                  else setError("Ogiltig eller saknad butiks-ID");
+                }}
+              >
                 <MapPin className="w-4 h-4" />
                 Välj butik manuellt
               </Button>
@@ -264,7 +276,16 @@ function CustomerNavPage() {
               <XCircle className="w-5 h-5" />
               <span>{error}</span>
             </div>
-            <Button variant="ghost" size="sm" className="mt-2" onClick={() => { setStoreId(null); setMap(null); setError(null); }}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2"
+              onClick={() => {
+                setStoreId(null);
+                setMap(null);
+                setError(null);
+              }}
+            >
               <ArrowLeft className="w-4 h-4 mr-1" />
               Byt butik
             </Button>
@@ -361,7 +382,9 @@ function CustomerNavPage() {
                             onClick={() => handleProductSelect(product)}
                           >
                             <div className="flex-1 text-left">
-                              <p className="font-medium text-slate-900 dark:text-slate-100">{product.name}</p>
+                              <p className="font-medium text-slate-900 dark:text-slate-100">
+                                {product.name}
+                              </p>
                               <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
                                 {product.brand && <span>{product.brand}</span>}
                                 {product.size && <span>• {product.size}</span>}
@@ -380,11 +403,24 @@ function CustomerNavPage() {
                 {/* Quick Categories */}
                 <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                   <CardHeader>
-                    <CardTitle className="text-sm font-medium text-slate-900 dark:text-slate-100">Populära kategorier</CardTitle>
+                    <CardTitle className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      Populära kategorier
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="flex flex-wrap gap-2">
-                      {["Kaffe", "Mjölk", "Bröd", "Frukt", "Grönsaker", "Mejeri", "Kött", "Fisk", "Frusen", "Snacks"].map((cat) => (
+                      {[
+                        "Kaffe",
+                        "Mjölk",
+                        "Bröd",
+                        "Frukt",
+                        "Grönsaker",
+                        "Mejeri",
+                        "Kött",
+                        "Fisk",
+                        "Frusen",
+                        "Snacks",
+                      ].map((cat) => (
                         <Button
                           key={cat}
                           variant="ghost"
@@ -416,7 +452,11 @@ function CustomerNavPage() {
                 {/* Legend */}
                 <div className="flex flex-wrap gap-3 justify-center">
                   {["entrance", "shelf", "product", "zone", "aisle", "exit"].map((type) => (
-                    <Badge key={type} variant="outline" className={cn("gap-1", typeColors[type as keyof typeof typeColors])}>
+                    <Badge
+                      key={type}
+                      variant="outline"
+                      className={cn("gap-1", typeColors[type as keyof typeof typeColors])}
+                    >
                       <span className="w-3 h-3 rounded-full bg-current" />
                       {typeLabels[type as keyof typeof typeLabels]}
                     </Badge>
@@ -435,7 +475,7 @@ function CustomerNavPage() {
                     targetMarkerId={selectedMarker?.id}
                     userPose={null}
                     onMarkerSelect={(id) => {
-                      const marker = map.markers.find(m => m.id === id);
+                      const marker = map.markers.find((m) => m.id === id);
                       if (marker) setSelectedMarker(marker);
                     }}
                     showDebug={false}
@@ -456,10 +496,16 @@ function CustomerNavPage() {
                           <ShoppingCart className="w-8 h-8 text-slate-400" />
                         </div>
                         <div>
-                          <p className="font-medium text-slate-900 dark:text-slate-100">{selectedProduct.name}</p>
-                          <p className="text-sm text-slate-500 dark:text-slate-400">{selectedProduct.brand} • {selectedProduct.size}</p>
+                          <p className="font-medium text-slate-900 dark:text-slate-100">
+                            {selectedProduct.name}
+                          </p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                            {selectedProduct.brand} • {selectedProduct.size}
+                          </p>
                           {selectedProduct.price && (
-                            <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{selectedProduct.price} kr</p>
+                            <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                              {selectedProduct.price} kr
+                            </p>
                           )}
                         </div>
                       </div>
@@ -483,7 +529,14 @@ function CustomerNavPage() {
                 {selectedMarker && !selectedProduct && (
                   <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 max-w-md mx-auto">
                     <CardContent className="pt-0">
-                      <Button className="w-full gap-2" variant="outline" onClick={() => { setSelectedMarker(null); setViewMode("map"); }}>
+                      <Button
+                        className="w-full gap-2"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedMarker(null);
+                          setViewMode("map");
+                        }}
+                      >
                         <ArrowLeft className="w-4 h-4" />
                         Tillbaka till karta
                       </Button>
@@ -560,14 +613,7 @@ function CustomerMapView({
   return (
     <svg viewBox="0 0 800 600" className="w-full h-full" style={{ background: "#f8fafc" }}>
       <defs>
-        <marker
-          id="arrowhead"
-          markerWidth="10"
-          markerHeight="7"
-          refX="9"
-          refY="3.5"
-          orient="auto"
-        >
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
           <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
         </marker>
       </defs>
@@ -600,11 +646,7 @@ function CustomerMapView({
         const y = marker.position.y * scale + offsetY;
         const isSelected = selectedMarker?.id === marker.id;
         return (
-          <g
-            key={marker.id}
-            onClick={() => onMarkerClick(marker)}
-            style={{ cursor: "pointer" }}
-          >
+          <g key={marker.id} onClick={() => onMarkerClick(marker)} style={{ cursor: "pointer" }}>
             <circle
               cx={x}
               cy={y}
@@ -615,13 +657,7 @@ function CustomerMapView({
               strokeWidth={isSelected ? 3 : 2}
               filter="drop-shadow(0 2px 4px rgba(0,0,0,0.1))"
             />
-            <text
-              x={x}
-              y={y + 4}
-              textAnchor="middle"
-              fontSize="16"
-              dominantBaseline="middle"
-            >
+            <text x={x} y={y + 4} textAnchor="middle" fontSize="16" dominantBaseline="middle">
               {typeIcons[marker.type as keyof typeof typeIcons] || "●"}
             </text>
             <text

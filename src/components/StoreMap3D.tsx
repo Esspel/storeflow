@@ -42,13 +42,7 @@ interface MarkerMeshProps {
   isUserPosition: boolean;
 }
 
-function MarkerMesh({
-  marker,
-  onClick,
-  isSelected,
-  isTarget,
-  isUserPosition,
-}: MarkerMeshProps) {
+function MarkerMesh({ marker, onClick, isSelected, isTarget, isUserPosition }: MarkerMeshProps) {
   const config = MARKER_VISUAL_CONFIG[marker.type];
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
@@ -64,7 +58,7 @@ function MarkerMesh({
   const color = getColor();
 
   // Animation for selected/target markers
-    useFrame((_, delta) => {
+  useFrame((_, delta) => {
     if (meshRef.current && (isSelected || isTarget || isUserPosition)) {
       const pulse = 1 + Math.sin(performance.now() * 0.003) * 0.1;
       meshRef.current.scale.setScalar(pulse);
@@ -87,7 +81,9 @@ function MarkerMesh({
     const baseProps: any = {
       ref: meshRef,
       position: [marker.position.x, marker.position.y + h / 2, marker.position.z],
-      rotation: marker.rotation ? [marker.rotation.x, marker.rotation.y, marker.rotation.z] : undefined,
+      rotation: marker.rotation
+        ? [marker.rotation.x, marker.rotation.y, marker.rotation.z]
+        : undefined,
       onClick: handleClick,
       onPointerOver: handlePointerOver,
       onPointerOut: handlePointerOut,
@@ -97,31 +93,64 @@ function MarkerMesh({
       case "box":
         return (
           <Box {...baseProps} args={[w, h, d]}>
-            <meshStandardMaterial color={color} opacity={config.opacity} transparent={config.opacity !== undefined && config.opacity < 1} />
+            <meshStandardMaterial
+              color={color}
+              opacity={config.opacity}
+              transparent={config.opacity !== undefined && config.opacity < 1}
+            />
           </Box>
         );
       case "cylinder":
         return (
-          <Cylinder {...baseProps} args={[config.size[0], config.size[0], config.size[1], config.size[2]]}>
-            <meshStandardMaterial color={color} opacity={config.opacity} transparent={config.opacity !== undefined && config.opacity < 1} />
+          <Cylinder
+            {...baseProps}
+            args={[config.size[0], config.size[0], config.size[1], config.size[2]]}
+          >
+            <meshStandardMaterial
+              color={color}
+              opacity={config.opacity}
+              transparent={config.opacity !== undefined && config.opacity < 1}
+            />
           </Cylinder>
         );
       case "plane":
         return (
-          <Plane {...baseProps} args={[config.size[0], config.size[2]]} rotation={[-Math.PI / 2, 0, 0]} position={[marker.position.x, marker.position.y + 0.01, marker.position.z]}>
-            <meshStandardMaterial color={color} opacity={config.opacity} transparent={config.opacity !== undefined && config.opacity < 1} />
+          <Plane
+            {...baseProps}
+            args={[config.size[0], config.size[2]]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[marker.position.x, marker.position.y + 0.01, marker.position.z]}
+          >
+            <meshStandardMaterial
+              color={color}
+              opacity={config.opacity}
+              transparent={config.opacity !== undefined && config.opacity < 1}
+            />
           </Plane>
         );
       case "torus":
         return (
-          <Torus {...baseProps} args={[config.size[0], config.size[1], config.size[2], config.size[3]]} rotation={[-Math.PI / 2, 0, 0]} position={[marker.position.x, marker.position.y + 0.05, marker.position.z]}>
-            <meshStandardMaterial color={color} opacity={config.opacity} transparent={config.opacity !== undefined && config.opacity < 1} />
+          <Torus
+            {...baseProps}
+            args={[config.size[0], config.size[1], config.size[2], config.size[3]]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[marker.position.x, marker.position.y + 0.05, marker.position.z]}
+          >
+            <meshStandardMaterial
+              color={color}
+              opacity={config.opacity}
+              transparent={config.opacity !== undefined && config.opacity < 1}
+            />
           </Torus>
         );
       default:
         return (
           <RoundedBox {...baseProps} args={[w, h, d, 0.05]}>
-            <meshStandardMaterial color={color} opacity={config.opacity} transparent={config.opacity !== undefined && config.opacity < 1} />
+            <meshStandardMaterial
+              color={color}
+              opacity={config.opacity}
+              transparent={config.opacity !== undefined && config.opacity < 1}
+            />
           </RoundedBox>
         );
     }
@@ -170,7 +199,7 @@ interface NavigationPathMeshProps {
 function NavigationPathMesh({ path }: NavigationPathMeshProps) {
   const points = useMemo(
     () => path.waypoints.map((wp) => new THREE.Vector3(wp.x, wp.y + 0.1, wp.z)),
-    [path.waypoints]
+    [path.waypoints],
   );
 
   const lineRef = useRef<THREE.Line>(null);
@@ -218,29 +247,31 @@ function GridFloor({ bounds, cellSize = 1 }: GridFloorProps) {
     }
   }, [bounds, cellSize]);
 
-  return (
-    <gridHelper
-      ref={gridRef}
-      args={[10, 10, "#e5e7eb", "#d1d5db"]}
-      position={[0, 0, 0]}
-    />
-  );
+  return <gridHelper ref={gridRef} args={[10, 10, "#e5e7eb", "#d1d5db"]} position={[0, 0, 0]} />;
 }
 
 // ============================================================================
 // Bounds Calculation Helper
 // ============================================================================
 
-function calculateBounds(markers: Marker3DConfig[]): { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } | null {
+function calculateBounds(
+  markers: Marker3DConfig[],
+): { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } | null {
   if (markers.length === 0) return null;
 
-  let minX = Infinity, minY = Infinity, minZ = Infinity;
-  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    minZ = Infinity;
+  let maxX = -Infinity,
+    maxY = -Infinity,
+    maxZ = -Infinity;
 
   for (const marker of markers) {
     const config = MARKER_VISUAL_CONFIG[marker.type];
     const [w, h, d] = config.size;
-    const halfW = w / 2, halfH = h / 2, halfD = d / 2;
+    const halfW = w / 2,
+      halfH = h / 2,
+      halfD = d / 2;
 
     minX = Math.min(minX, marker.position.x - halfW);
     minY = Math.min(minY, marker.position.y);
@@ -288,7 +319,11 @@ export function StoreMap3D({
     };
   }, [bounds]);
 
-  const initialCameraPosition = cameraPosition || { x: center.x, y: center.y + 8, z: center.z + 10 };
+  const initialCameraPosition = cameraPosition || {
+    x: center.x,
+    y: center.y + 8,
+    z: center.z + 10,
+  };
   const initialCameraTarget = cameraTarget || center;
 
   // Handle marker click - set as navigation target on double-click or long press
@@ -297,7 +332,7 @@ export function StoreMap3D({
       onMarkerClick?.(marker);
       // Could add logic for double-click -> set navigation target
     },
-    [onMarkerClick]
+    [onMarkerClick],
   );
 
   return (
@@ -334,7 +369,14 @@ export function StoreMap3D({
         <hemisphereLight args={["#87ceeb", "#8fbc8f", 0.6]} />
 
         {/* Grid floor */}
-        {showGrid && bounds && <GridFloor bounds={{ min: { x: bounds.min.x, z: bounds.min.z }, max: { x: bounds.max.x, z: bounds.max.z } }} />}
+        {showGrid && bounds && (
+          <GridFloor
+            bounds={{
+              min: { x: bounds.min.x, z: bounds.min.z },
+              max: { x: bounds.max.x, z: bounds.max.z },
+            }}
+          />
+        )}
 
         {/* Axes helper for debugging */}
         {showAxes && <axesHelper args={[5]} />}
@@ -381,15 +423,15 @@ export function StoreMap3D({
 // Mobile-optimized wrapper
 // ============================================================================
 
-interface StoreMap3DMobileProps extends Omit<StoreMap3DProps, "map" | "selectedMarker" | "onMarkerSelect" | "show2D" | "show3D"> {
+interface StoreMap3DMobileProps extends Omit<
+  StoreMap3DProps,
+  "map" | "selectedMarker" | "onMarkerSelect" | "show2D" | "show3D"
+> {
   /** Height of the 3D view (default: 400px) */
   height?: string | number;
 }
 
-export function StoreMap3DMobile({
-  height = "400px",
-  ...props
-}: StoreMap3DMobileProps) {
+export function StoreMap3DMobile({ height = "400px", ...props }: StoreMap3DMobileProps) {
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
   return (

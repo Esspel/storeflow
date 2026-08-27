@@ -559,7 +559,10 @@ export function AppShell() {
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-[200px]">
                 <DropdownMenuItem>
-                  <Link to="/spatial-navigation" className="block w-full text-left px-4 py-2 text-sm">
+                  <Link
+                    to="/spatial-navigation"
+                    className="block w-full text-left px-4 py-2 text-sm"
+                  >
                     3D Butiksvy
                   </Link>
                 </DropdownMenuItem>
@@ -568,8 +571,7 @@ export function AppShell() {
                     Planogram & Hyllanalys
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                </DropdownMenuItem>
+                <DropdownMenuItem></DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </nav>

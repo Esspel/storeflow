@@ -250,14 +250,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    if (token) { await doLogout(token);
-    setSessionToken(null);
-    setUser(null);
-    setToken(null);
-    setUserStores([]);
-    setActiveStoreState(null);
-    await clearSession();
-  } }, [token]);
+    if (token) {
+      await doLogout(token);
+      setSessionToken(null);
+      setUser(null);
+      setToken(null);
+      setUserStores([]);
+      setActiveStoreState(null);
+      await clearSession();
+    }
+  }, [token]);
 
   const refreshUser = useCallback(
     (updated: AppUser) => {

@@ -6,9 +6,7 @@
 export type ArUcoGrid = boolean[][]; // 6x6 incl. black border
 
 function generatePattern(id: number): boolean[][] {
-  const grid: boolean[][] = Array.from({ length: 6 }, () =>
-    Array.from({ length: 6 }, () => false),
-  );
+  const grid: boolean[][] = Array.from({ length: 6 }, () => Array.from({ length: 6 }, () => false));
   // Black border (1 cell thick)
   for (let i = 0; i < 6; i++) {
     grid[0][i] = true;

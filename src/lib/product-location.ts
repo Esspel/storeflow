@@ -84,15 +84,17 @@ export async function getProductLocations(
     marker_id?: string;
     is_primary?: boolean;
     limit?: number;
-  }
+  },
 ): Promise<ProductLocation[]> {
   let query = supabase
     .from("product_locations")
-    .select(`
+    .select(
+      `
       *,
       product:products!product_id(id, name, ean, article_number, brand, image_url),
       marker:spatial_markers!marker_id(id, name, marker_type, map_id, position_x, position_y, position_z)
-    `)
+    `,
+    )
     .eq("store_id", storeId)
     .order("is_primary", { ascending: false })
     .order("created_at", { ascending: false });
@@ -125,7 +127,7 @@ export async function getProductLocations(
  */
 export async function getProductLocationByProduct(
   storeId: string,
-  productId: string
+  productId: string,
 ): Promise<ProductNavigationResult | null> {
   const locations = await getProductLocations(storeId, {
     product_id: productId,
@@ -159,8 +161,8 @@ export async function getProductLocationByProduct(
       primary.product?.ean && sapSiteId
         ? mittCoopSearchUrl(primary.product.ean, sapSiteId)
         : primary.product?.article_number && sapSiteId
-        ? mittCoopSearchUrl(primary.product.article_number, sapSiteId)
-        : null,
+          ? mittCoopSearchUrl(primary.product.article_number, sapSiteId)
+          : null,
   };
 }
 
@@ -169,7 +171,7 @@ export async function getProductLocationByProduct(
  */
 export async function getProductLocationByEan(
   storeId: string,
-  ean: string
+  ean: string,
 ): Promise<ProductNavigationResult | null> {
   // First find product by EAN
   const { data: product } = await supabase
@@ -189,7 +191,7 @@ export async function getProductLocationByEan(
  */
 export async function getProductLocationByBnr(
   storeId: string,
-  bnr: string
+  bnr: string,
 ): Promise<ProductNavigationResult | null> {
   const { data: product } = await supabase
     .from("products")
@@ -207,7 +209,7 @@ export async function getProductLocationByBnr(
  * Create product location mapping
  */
 export async function createProductLocation(
-  input: CreateProductLocationInput
+  input: CreateProductLocationInput,
 ): Promise<ProductLocation | null> {
   // If this is primary, unset other primary for same product
   if (input.is_primary) {
@@ -229,11 +231,13 @@ export async function createProductLocation(
       facings: input.facings ?? 1,
       is_primary: input.is_primary ?? false,
     })
-    .select(`
+    .select(
+      `
       *,
       product:products!product_id(id, name, ean, article_number, brand, image_url),
       marker:spatial_markers!marker_id(id, name, marker_type, map_id, position_x, position_y, position_z)
-    `)
+    `,
+    )
     .single();
 
   if (error) {
@@ -249,7 +253,7 @@ export async function createProductLocation(
  */
 export async function updateProductLocation(
   locationId: string,
-  input: UpdateProductLocationInput
+  input: UpdateProductLocationInput,
 ): Promise<ProductLocation | null> {
   // If setting as primary, unset other primary for same product
   if (input.is_primary) {
@@ -278,11 +282,13 @@ export async function updateProductLocation(
       is_primary: input.is_primary ?? false,
     })
     .eq("id", locationId)
-    .select(`
+    .select(
+      `
       *,
       product:products!product_id(id, name, ean, article_number, brand, image_url),
       marker:spatial_markers!marker_id(id, name, marker_type, map_id, position_x, position_y, position_z)
-    `)
+    `,
+    )
     .single();
 
   if (error) {
@@ -297,10 +303,7 @@ export async function updateProductLocation(
  * Delete product location
  */
 export async function deleteProductLocation(locationId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from("product_locations")
-    .delete()
-    .eq("id", locationId);
+  const { error } = await supabase.from("product_locations").delete().eq("id", locationId);
 
   return !error;
 }
@@ -316,7 +319,7 @@ export async function bulkCreateFromPlanogram(
     shelf_number: number;
     position_index: number;
     facings: number;
-  }>
+  }>,
 ): Promise<number> {
   const inserts = planogramProducts.map((p, index) => ({
     store_id: storeId,
@@ -369,7 +372,7 @@ export async function searchProductsWithLocation(
   options?: {
     limit?: number;
     include_without_location?: boolean;
-  }
+  },
 ): Promise<ProductSearchResult[]> {
   const searchTerm = query.trim();
 
@@ -386,7 +389,7 @@ export async function searchProductsWithLocation(
       brand,
       image_url,
       product_locations!inner(id, marker_id, is_primary, marker:spatial_markers!marker_id(id, name, marker_type, map_id, position_x, position_y, position_z))
-    `
+    `,
     )
     .eq("store_id", storeId)
     .limit(options?.limit ?? 20);
@@ -438,9 +441,7 @@ export async function searchProductsWithLocation(
 /**
  * Get all products with locations for a store (for map rendering)
  */
-export async function getAllProductsWithLocations(
-  storeId: string
-): Promise<ProductSearchResult[]> {
+export async function getAllProductsWithLocations(storeId: string): Promise<ProductSearchResult[]> {
   const { data: products, error } = await supabase
     .from("products")
     .select(
@@ -452,7 +453,7 @@ export async function getAllProductsWithLocations(
       brand,
       image_url,
       product_locations!inner(id, marker_id, is_primary, marker:spatial_markers!marker_id(id, name, marker_type, map_id, position_x, position_y, position_z))
-    `
+    `,
     )
     .eq("store_id", storeId);
 
@@ -484,7 +485,7 @@ export async function getAllProductsWithLocations(
  */
 export function getMittCoopUrlForProduct(
   product: { ean?: string | null; article_number?: string | null },
-  sapSiteId: string
+  sapSiteId: string,
 ): string | null {
   if (product.ean) {
     return mittCoopSearchUrl(product.ean, sapSiteId);
@@ -500,7 +501,7 @@ export function getMittCoopUrlForProduct(
  */
 export function getShelfPosition3D(
   location: ProductLocation,
-  markerPosition: Vector3
+  markerPosition: Vector3,
 ): Vector3 | null {
   if (!location.shelf_position) return null;
 

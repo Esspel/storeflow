@@ -27,11 +27,13 @@ export interface CoopProduct {
  */
 export async function lookupProductByEan(
   ean: string,
-  storeId?: string
+  storeId?: string,
 ): Promise<CoopProduct | null> {
   let query = supabase
     .from("products")
-    .select("id, sap_article_id, name, ean, bnr, brand, size, category, price, image_url, product_url, store_id")
+    .select(
+      "id, sap_article_id, name, ean, bnr, brand, size, category, price, image_url, product_url, store_id",
+    )
     .eq("ean", ean);
   if (storeId) query = query.eq("store_id", storeId);
   const { data, error } = await query.maybeSingle();
@@ -41,11 +43,13 @@ export async function lookupProductByEan(
 
 export async function lookupProductByBnr(
   bnr: string,
-  storeId?: string
+  storeId?: string,
 ): Promise<CoopProduct | null> {
   let query = supabase
     .from("products")
-    .select("id, sap_article_id, name, ean, bnr, brand, size, category, price, image_url, product_url, store_id")
+    .select(
+      "id, sap_article_id, name, ean, bnr, brand, size, category, price, image_url, product_url, store_id",
+    )
     .eq("bnr", bnr);
   if (storeId) query = query.eq("store_id", storeId);
   const { data, error } = await query.maybeSingle();
@@ -53,13 +57,12 @@ export async function lookupProductByBnr(
   return data ? (data as CoopProduct) : null;
 }
 
-export async function searchProducts(
-  query: string,
-  storeId?: string
-): Promise<CoopProduct[]> {
+export async function searchProducts(query: string, storeId?: string): Promise<CoopProduct[]> {
   let q = supabase
     .from("products")
-    .select("id, sap_article_id, name, ean, bnr, brand, size, category, price, image_url, product_url, store_id")
+    .select(
+      "id, sap_article_id, name, ean, bnr, brand, size, category, price, image_url, product_url, store_id",
+    )
     .ilike("name", `%${query}%`);
   if (storeId) q = q.eq("store_id", storeId);
   const { data, error } = await q;
@@ -73,7 +76,7 @@ export async function searchProducts(
  */
 export async function upsertProductFromImport(
   product: Partial<CoopProduct>,
-  storeId: string
+  storeId: string,
 ): Promise<CoopProduct | null> {
   const payload = {
     ...product,

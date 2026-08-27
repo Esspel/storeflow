@@ -4,7 +4,12 @@ import { readFile } from "node:fs/promises";
 if (typeof globalThis.DOMMatrix === "undefined") {
   globalThis.DOMMatrix = class DOMMatrix {
     constructor(init = "matrix(1,0,0,1,0,0)") {
-      this.a = 1; this.b = 0; this.c = 0; this.d = 1; this.e = 0; this.f = 0;
+      this.a = 1;
+      this.b = 0;
+      this.c = 0;
+      this.d = 1;
+      this.e = 0;
+      this.f = 0;
     }
   };
 }
@@ -22,9 +27,13 @@ async function run() {
   console.log("=== TEST 1: textextrahering (pdf-parse) ===");
   console.log("Teckenlängd:", text.length);
 
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
   const groups = [];
-  let cur = 0, prods = [];
+  let cur = 0,
+    prods = [];
   for (const line of lines) {
     if (line.includes("POS") && line.includes("EAN") && line.includes("BNR")) {
       if (prods.length > 0) groups.push({ shelfName: "Hylla " + cur, products: prods });
@@ -32,9 +41,20 @@ async function run() {
       prods = [];
       continue;
     }
-    const m = line.match(/^(\d{1,2})\s+(\d{13})\s+(\d{5,6})\s+(.+?)\s+([A-ZÅÄÖ][A-ZÅÄÖa-zåäö\s\-]*?)\s+0\.(450|500)\s+KG/);
+    const m = line.match(
+      /^(\d{1,2})\s+(\d{13})\s+(\d{5,6})\s+(.+?)\s+([A-ZÅÄÖ][A-ZÅÄÖa-zåäö\s\-]*?)\s+0\.(450|500)\s+KG/,
+    );
     if (m) {
-      prods.push({ pos: parseInt(m[1]), ean: m[2], bnr: m[3], name: m[4].trim(), brand: m[5].trim(), bpack: m[6]||0, ans: m[7]||0, totkp: m[8]||0 });
+      prods.push({
+        pos: parseInt(m[1]),
+        ean: m[2],
+        bnr: m[3],
+        name: m[4].trim(),
+        brand: m[5].trim(),
+        bpack: m[6] || 0,
+        ans: m[7] || 0,
+        totkp: m[8] || 0,
+      });
     }
   }
   if (prods.length > 0) groups.push({ shelfName: "Hylla " + cur, products: prods });
@@ -56,9 +76,13 @@ async function run() {
 
   console.log("\n=== SLUTSATS ===");
   if (totalShelves === 7 && totalProducts >= 15) {
-    console.log(`✓ PARSING GODKÄND: ${totalShelves} hyllor, ${totalProducts} unika produkter (PDF-innehåll baserat på verklig text)`);
+    console.log(
+      `✓ PARSING GODKÄND: ${totalShelves} hyllor, ${totalProducts} unika produkter (PDF-innehåll baserat på verklig text)`,
+    );
   } else {
-    console.log(`✗ PARSING MISSLYCKAD: ${totalShelves} hyllor, ${totalProducts} produkter (krav: 7 hyllor, 22 produkter)`);
+    console.log(
+      `✗ PARSING MISSLYCKAD: ${totalShelves} hyllor, ${totalProducts} produkter (krav: 7 hyllor, 22 produkter)`,
+    );
     process.exitCode = 1;
   }
 }

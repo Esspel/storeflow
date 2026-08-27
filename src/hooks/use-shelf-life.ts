@@ -29,9 +29,7 @@ type UseShelfLifeResult = {
  * Fetch shelf life status for a list of SAP article IDs.
  * Returns a map keyed by sap_article_id.
  */
-export function useShelfLifeForProducts(
-  sapArticleIds: string[],
-): UseShelfLifeResult {
+export function useShelfLifeForProducts(sapArticleIds: string[]): UseShelfLifeResult {
   const [shelfLifeBySap, setShelfLifeBySap] = useState<ShelfLifeMap>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +62,9 @@ export function useShelfLifeForProducts(
               // Calculate derived fields
               const now = new Date();
               const exp = new Date(entry.expiry_date);
-              const daysRemaining = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              const daysRemaining = Math.ceil(
+                (exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+              );
               map[entry.sap_article_id] = {
                 ...entry,
                 days_remaining: daysRemaining,

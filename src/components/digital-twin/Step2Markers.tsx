@@ -46,10 +46,7 @@ export function Step2Markers({
     try {
       setBusy(true);
       const id = await placeMarker(mapId, arucoId, { x: cmX, y: cmY, z: 0 });
-      onMarkersChange([
-        ...markers,
-        { id, arucoId, position: { x: cmX, y: cmY, z: 0 } },
-      ]);
+      onMarkersChange([...markers, { id, arucoId, position: { x: cmX, y: cmY, z: 0 } }]);
     } catch (err) {
       console.error(err);
       toast.error("Kunde inte placera markör");
@@ -58,25 +55,13 @@ export function Step2Markers({
     }
   }
 
-  async function handleMarkerDrop(
-    markerId: string,
-    dx: number,
-    dy: number,
-  ) {
+  async function handleMarkerDrop(markerId: string, dx: number, dy: number) {
     const m = markers.find((x) => x.id === markerId);
     if (!m) return;
-    const snappedX = Math.max(
-      0,
-      Math.round((m.position.x + dx) / 20) * 20,
-    );
-    const snappedY = Math.max(
-      0,
-      Math.round((m.position.y + dy) / 20) * 20,
-    );
+    const snappedX = Math.max(0, Math.round((m.position.x + dx) / 20) * 20);
+    const snappedY = Math.max(0, Math.round((m.position.y + dy) / 20) * 20);
     const next = markers.map((x) =>
-      x.id === markerId
-        ? { ...x, position: { ...x.position, x: snappedX, y: snappedY } }
-        : x,
+      x.id === markerId ? { ...x, position: { ...x.position, x: snappedX, y: snappedY } } : x,
     );
     onMarkersChange(next);
     try {
@@ -104,8 +89,8 @@ export function Step2Markers({
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Klicka på kartan för att placera en ny markör. Dra för att flytta.
-          Totalt {markers.length}/{MAX_MARKERS}.
+          Klicka på kartan för att placera en ny markör. Dra för att flytta. Totalt {markers.length}
+          /{MAX_MARKERS}.
         </p>
 
         <div className="relative" onClick={handleMapClick}>
@@ -121,11 +106,7 @@ export function Step2Markers({
                 draggable
                 onDragStart={() => setDragging(m.id)}
                 onDragEnd={(e) => {
-                  handleMarkerDrop(
-                    m.id,
-                    e.nativeEvent.offsetX,
-                    e.nativeEvent.offsetY,
-                  );
+                  handleMarkerDrop(m.id, e.nativeEvent.offsetX, e.nativeEvent.offsetY);
                   setDragging(null);
                 }}
                 onClick={(e) => e.stopPropagation()}
@@ -138,11 +119,7 @@ export function Step2Markers({
         </div>
 
         <div className="flex justify-between">
-          <Button
-            variant="outline"
-            onClick={() => onMarkersChange([])}
-            disabled={busy}
-          >
+          <Button variant="outline" onClick={() => onMarkersChange([])} disabled={busy}>
             Rensa alla
           </Button>
           <Button onClick={onValid} disabled={busy || markers.length === 0}>
@@ -160,16 +137,10 @@ function ArUcoMini({ id }: { id: number }) {
     <div className="rounded shadow ring-1 ring-slate-300 bg-white p-1">
       <div className="grid grid-cols-6 gap-0">
         {grid.flat().map((on, i) => (
-          <div
-            key={i}
-            className="w-2 h-2"
-            style={{ background: on ? "#000" : "#fff" }}
-          />
+          <div key={i} className="w-2 h-2" style={{ background: on ? "#000" : "#fff" }} />
         ))}
       </div>
-      <div className="text-[8px] text-center mt-1 font-mono">
-        {markerCode(id)}
-      </div>
+      <div className="text-[8px] text-center mt-1 font-mono">{markerCode(id)}</div>
     </div>
   );
 }

@@ -56,7 +56,7 @@ export function Step3Pdf() {
       }
 
       const blob: Blob = await new Promise((resolve) =>
-        canvas.toBlob((b) => resolve(b!), "image/png")
+        canvas.toBlob((b) => resolve(b!), "image/png"),
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -80,8 +80,8 @@ export function Step3Pdf() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Genererar {MAX_MARKERS} möjliga 4×4-markörer. Välj antal och ladda ned.
-          Allt sker lokalt i webbläsaren utan externa API-beroenden.
+          Genererar {MAX_MARKERS} möjliga 4×4-markörer. Välj antal och ladda ned. Allt sker lokalt i
+          webbläsaren utan externa API-beroenden.
         </p>
         <div className="flex items-end gap-3">
           <div>
@@ -93,9 +93,7 @@ export function Step3Pdf() {
               max={MAX_MARKERS}
               value={count}
               onChange={(e) =>
-                setCount(
-                  Math.max(1, Math.min(MAX_MARKERS, Number(e.target.value) || 1))
-                )
+                setCount(Math.max(1, Math.min(MAX_MARKERS, Number(e.target.value) || 1)))
               }
               className="w-32"
             />
@@ -106,7 +104,8 @@ export function Step3Pdf() {
         </div>
         <div className="rounded border p-3 bg-slate-50">
           <p className="text-xs font-mono text-slate-700">
-            Förhandsvisning: {Array.from({ length: Math.min(5, count) }, (_, i) => markerCode(i)).join(", ")}
+            Förhandsvisning:{" "}
+            {Array.from({ length: Math.min(5, count) }, (_, i) => markerCode(i)).join(", ")}
             {count > 5 ? " …" : ""}
           </p>
         </div>

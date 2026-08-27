@@ -1932,7 +1932,13 @@ function TestPanel() {
 
         {/* Realtime */}
         <Section
-          icon={realtimeStatus === "connected" ? Wifi : realtimeStatus === "error" ? WifiOff : Wifi as any}
+          icon={
+            realtimeStatus === "connected"
+              ? Wifi
+              : realtimeStatus === "error"
+                ? WifiOff
+                : (Wifi as any)
+          }
           title="Realtid & WebSocket"
         >
           <p className="mb-3 text-xs text-muted-foreground">

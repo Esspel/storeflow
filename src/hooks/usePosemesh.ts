@@ -296,7 +296,9 @@ export function usePosemeshDetection(
         callbacks.onPoseEstimated({
           position: { x: 0, y: 0, z: 0 },
           rotation: { x: 0, y: 0, z: 0, w: 1 },
-          matrix: (window as any).THREE ? new (window as any).THREE.Matrix4() : { elements: [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1] } as any,
+          matrix: (window as any).THREE
+            ? new (window as any).THREE.Matrix4()
+            : ({ elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] } as any),
           confidence: 1,
         } as any);
       }

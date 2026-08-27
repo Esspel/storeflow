@@ -10,7 +10,15 @@
  * - NOT applied to camera (would break WebXR tracking)
  */
 
-import { createContext, useContext, useState, useCallback, useMemo, useEffect, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  ReactNode,
+} from "react";
 import * as THREE from "three";
 import type { Vector3, Quaternion } from "@/lib/posemesh/types";
 
@@ -35,7 +43,10 @@ export interface WorldOffsetState {
 
 export interface WorldOffsetActions {
   /** Set offset from posemesh absolute pose */
-  setFromPosemesh: (worldPose: { position: Vector3; rotation: Quaternion }, confidence?: number) => void;
+  setFromPosemesh: (
+    worldPose: { position: Vector3; rotation: Quaternion },
+    confidence?: number,
+  ) => void;
   /** Set offset manually (e.g., from QR code scan) */
   setManually: (matrix: THREE.Matrix4) => void;
   /** Reset offset */
@@ -80,14 +91,10 @@ export function WorldOffsetProvider({ children, initialMatrix }: WorldOffsetProv
         worldPose.rotation.x,
         worldPose.rotation.y,
         worldPose.rotation.z,
-        worldPose.rotation.w
+        worldPose.rotation.w,
       );
       worldMatrix.makeRotationFromQuaternion(quaternion);
-      worldMatrix.setPosition(
-        worldPose.position.x,
-        worldPose.position.y,
-        worldPose.position.z
-      );
+      worldMatrix.setPosition(worldPose.position.x, worldPose.position.y, worldPose.position.z);
 
       // World offset = worldToLocal (inverse of world matrix)
       // This transforms WebXR local coordinates to store world coordinates
@@ -102,7 +109,7 @@ export function WorldOffsetProvider({ children, initialMatrix }: WorldOffsetProv
         confidence,
       });
     },
-    []
+    [],
   );
 
   const setManually = useCallback((matrix: THREE.Matrix4) => {
@@ -137,7 +144,7 @@ export function WorldOffsetProvider({ children, initialMatrix }: WorldOffsetProv
         object.matrix.decompose(object.position, object.quaternion, object.scale);
       }
     },
-    [state.matrix, state.isValid]
+    [state.matrix, state.isValid],
   );
 
   const value = useMemo<WorldOffsetContextValue>(
@@ -148,14 +155,10 @@ export function WorldOffsetProvider({ children, initialMatrix }: WorldOffsetProv
       reset,
       applyToObject,
     }),
-    [state, setFromPosemesh, setManually, reset, applyToObject]
+    [state, setFromPosemesh, setManually, reset, applyToObject],
   );
 
-  return (
-    <WorldOffsetContext.Provider value={value}>
-      {children}
-    </WorldOffsetContext.Provider>
-  );
+  return <WorldOffsetContext.Provider value={value}>{children}</WorldOffsetContext.Provider>;
 }
 
 // ============================================================================
@@ -312,11 +315,19 @@ export function usePosemeshBridge(options: PosemeshBridgeOptions) {
           const luminance = new Uint8Array(canvas.width * canvas.height);
           for (let i = 0; i < luminance.length; i++) {
             const idx = i * 4;
-            luminance[i] = (imageData.data[idx] * 0.299 + imageData.data[idx + 1] * 0.587 + imageData.data[idx + 2] * 0.114) | 0;
+            luminance[i] =
+              (imageData.data[idx] * 0.299 +
+                imageData.data[idx + 1] * 0.587 +
+                imageData.data[idx + 2] * 0.114) |
+              0;
           }
 
           // Detect ArUco markers
-          const markers = module.ArucoDetection.detectArucoFromLuminance(luminance, canvas.width, canvas.height);
+          const markers = module.ArucoDetection.detectArucoFromLuminance(
+            luminance,
+            canvas.width,
+            canvas.height,
+          );
 
           if (markers.length >= 4) {
             // Match detected markers to known markers
@@ -324,9 +335,14 @@ export function usePosemeshBridge(options: PosemeshBridgeOptions) {
               .filter((m: any) => m.confidence && m.confidence >= minConfidence)
               .map((m: any) => {
                 const known = knownMarkers.find((km) => km.id === m.id);
-                return known ? { ...m, knownPosition: known.position, knownSize: known.sizeMeters } : null;
+                return known
+                  ? { ...m, knownPosition: known.position, knownSize: known.sizeMeters }
+                  : null;
               })
-              .filter((m: any): m is ArUcoMarker & { knownPosition: Vector3; knownSize: number } => m !== null);
+              .filter(
+                (m: any): m is ArUcoMarker & { knownPosition: Vector3; knownSize: number } =>
+                  m !== null,
+              );
 
             if (matchedMarkers.length >= 4) {
               // Solve PnP for camera pose in world coordinates
@@ -337,10 +353,26 @@ export function usePosemeshBridge(options: PosemeshBridgeOptions) {
                 const halfSize = m.knownSize / 2;
                 // Marker corners in world space (assuming marker lies flat on Y=0 plane)
                 const corners = [
-                  { x: m.knownPosition.x - halfSize, y: m.knownPosition.y, z: m.knownPosition.z - halfSize },
-                  { x: m.knownPosition.x + halfSize, y: m.knownPosition.y, z: m.knownPosition.z - halfSize },
-                  { x: m.knownPosition.x + halfSize, y: m.knownPosition.y, z: m.knownPosition.z + halfSize },
-                  { x: m.knownPosition.x - halfSize, y: m.knownPosition.y, z: m.knownPosition.z + halfSize },
+                  {
+                    x: m.knownPosition.x - halfSize,
+                    y: m.knownPosition.y,
+                    z: m.knownPosition.z - halfSize,
+                  },
+                  {
+                    x: m.knownPosition.x + halfSize,
+                    y: m.knownPosition.y,
+                    z: m.knownPosition.z - halfSize,
+                  },
+                  {
+                    x: m.knownPosition.x + halfSize,
+                    y: m.knownPosition.y,
+                    z: m.knownPosition.z + halfSize,
+                  },
+                  {
+                    x: m.knownPosition.x - halfSize,
+                    y: m.knownPosition.y,
+                    z: m.knownPosition.z + halfSize,
+                  },
                 ];
                 for (const c of corners) {
                   objectPoints.push(c.x, c.y, c.z);
@@ -351,20 +383,21 @@ export function usePosemeshBridge(options: PosemeshBridgeOptions) {
                 }
               }
 
-              const camMatrix = cameraMatrix || [
-                1000, 0, 640,
-                0, 1000, 360,
-                0, 0, 1,
-              ];
+              const camMatrix = cameraMatrix || [1000, 0, 640, 0, 1000, 360, 0, 0, 1];
               const distC = distCoeffs || [0, 0, 0, 0, 0];
 
-              const pose = module.PoseEstimation.solvePnP(objectPoints, imagePoints, camMatrix, distC);
+              const pose = module.PoseEstimation.solvePnP(
+                objectPoints,
+                imagePoints,
+                camMatrix,
+                distC,
+              );
 
               if (pose) {
                 // Convert to world offset
                 setFromPosemesh(
                   { position: pose.position, rotation: pose.rotation },
-                  pose.confidence || 0.8
+                  pose.confidence || 0.8,
                 );
               }
             }
@@ -383,7 +416,16 @@ export function usePosemeshBridge(options: PosemeshBridgeOptions) {
       mounted = false;
       cancelAnimationFrame(animationFrame);
     };
-  }, [enabled, module, knownMarkers, cameraMatrix, distCoeffs, minConfidence, detectionInterval, setFromPosemesh]);
+  }, [
+    enabled,
+    module,
+    knownMarkers,
+    cameraMatrix,
+    distCoeffs,
+    minConfidence,
+    detectionInterval,
+    setFromPosemesh,
+  ]);
 
   return { status };
 }
