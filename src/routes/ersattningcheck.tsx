@@ -197,7 +197,7 @@ function ErstatningsCheckPage() {
         // Spara nya produkter till products-tabellen via upsert
         const { error: upsertErr } = await supabase
           .from("products")
-          .upsert(newProducts, { onConflict: "ean", ignoreDuplicates: false });
+          .upsert(newProducts, { onConflict: "bnr", ignoreDuplicates: false });
 
         if (upsertErr) {
           console.error("Upsert error:", upsertErr);
