@@ -1,165 +1,75 @@
-// Helpers from src/lib/digital-twin.ts: listPlanogramsForStore, recordObservation
-// Product linking uses sap_article_id as PRIMARY match per CLAUDE.md (never SKU).
-import { useState, useEffect } from "react";
+// Step 4 — Digital Twin 3D: Koppla produkter till sektioner + hyllor
+// Använder StoreMap3D som bas + drag/drop från shelf_observations
+import { useState, useEffect, useCallback } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Html } from "@react-three/drei";
+import { StoreMap3D } from "@/components/StoreMap3D";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
-import type { Marker3DConfig } from "@/lib/three-types";
+import type { Section2D } from "@/components/store-map-2d";
+import * as THREE from "three";
 
-export function Step4Products({
-  storeId,
-  markers,
-  links: initialLinks,
-  onLinksChange,
-  onValid,
-}: {
-  storeId: string;
-  markers: Marker3DConfig[];
-  links: any[];
-  onLinksChange: (links: any[]) => void;
-  onValid: () => void;
-}) {
-  const [productLinks, setProductLinks] = useState<any[]>(initialLinks);
-  const [productForm, setProductForm] = useState({
-    sap_article_id: "",
-    ean: "",
-    bnr: "",
-    name: "",
-  });
-  const [loading, setLoading] = useState(false);
+export function Step4Products({ storeId, markers, links, onLinksChange, onValid }: any) {
+  const [sections, setSections] = useState<Section2D[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [draggedProduct, setDraggedProduct] = useState<any>(null);
 
-  // Load existing links for this store
   useEffect(() => {
-    const fetchLinks = async () => {
-      setLoading(true);
-      try {
-        const { data } = await supabase
-          .from("shelf_observations")
-          .select("*, shelf_marker_id, sap_article_id, observed_at")
-          .eq("store_id", storeId);
-        setProductLinks(data || []);
-      } catch (error) {
-        console.error("Error loading links:", error);
-      } finally {
-        setLoading(false);
-      }
+    const load = async () => {
+      const { data: sec } = await supabase.from("store_sections").select("*").eq("store_id", storeId);
+      setSections(sec ?? []);
+      const { data: prod } = await supabase.from("products").select("sap_article_id, name, bnr").eq("store_id", storeId);
+      setProducts(prod ?? []);
     };
-    fetchLinks();
+    load();
   }, [storeId]);
 
-  const handleLinkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setProductForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async () => {
-    if (!productForm.sap_article_id || !productForm.ean) {
-      toast.error("SAP artikel-ID och EAN är obligatoriska");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Upsert shelf observation using sap_article_id as primary match (per CLAUDE.md: never SKU)
-      const { error } = await supabase.from("shelf_observations").upsert(
-        {
-          store_id: storeId,
-          shelf_marker_id: markers[0]?.id ?? null,
-          // shelf_marker_id must be set by caller via onLinksChange once user selects a marker
-          sap_article_id: productForm.sap_article_id,
-          detected_products: [
-            {
-              ean: productForm.ean,
-              bnr: productForm.bnr,
-              name: productForm.name,
-            },
-          ],
-          observed_at: new Date().toISOString(),
-        },
-        {
-          onConflict: "store_id,sap_article_id",
-        },
-      );
-
-      if (error) throw error;
-
-      // Update links state so caller can assign shelf_marker_id
-      onLinksChange([...productLinks, { ...productForm, id: Date.now() }]);
-
-      // Reset form
-      setProductForm({
-        sap_article_id: "",
-        ean: "",
-        bnr: "",
-        name: "",
+  const handleDrop = useCallback((section: Section2D) => {
+    if (!draggedProduct) return;
+    const link = {
+      store_id: storeId,
+      sap_article_id: draggedProduct.sap_article_id,
+      shelf_marker_id: section.id,
+      observed_at: new Date().toISOString(),
+    };
+    supabase.from("shelf_observations").upsert(link, { onConflict: "store_id,sap_article_id" })
+      .then(({ error }) => {
+        if (error) throw error;
+        toast.success("Produkt kopplad till sektion: " + section.name);
+        onLinksChange([...links, link]);
+        setDraggedProduct(null);
       });
-
-      toast.success("Produkt länkad framgångsrikt");
-    } catch (error) {
-      console.error("Link creation error:", error);
-      toast.error("Kunde inte skapa produktlänk");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [draggedProduct, storeId, links, onLinksChange]);
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Steg 4 — Digital Twin 3D (drag & drop produkter till sektioner + hyllor)</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-4">
-          <Label htmlFor="sap-article-id">SAP Produkt-ID</Label>
-          <Input
-            id="sap-article-id"
-            name="sap_article_id"
-            type="text"
-            placeholder="T.ex. 1001-23456789"
-            value={productForm.sap_article_id}
-            onChange={handleLinkChange}
-            required
-          />
+      <CardHeader><CardTitle>Steg 4 — Digital Twin 3D (drag & drop)</CardTitle></CardHeader>
+      <CardContent className="space-y-6">
+        <div className="h-[500px] relative">
+          <Canvas camera={{ position: [0, 5, 10], fov: 50 }}>
+            <ambientLight intensity={0.5} />
+            <pointLight position={[10, 10, 10]} />
+            <OrbitControls />
+            <StoreMap3D markers={markers ?? []} />
+          </Canvas>
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="ean">EAN</Label>
-          <Input
-            id="ean"
-            name="ean"
-            type="text"
-            placeholder="13-digit EAN"
-            value={productForm.ean}
-            onChange={handleLinkChange}
-            required
-          />
+        <div className="grid grid-cols-2 gap-2">
+          {products.map(p => (
+            <div
+              key={p.sap_article_id}
+              draggable
+              onDragStart={() => setDraggedProduct(p)}
+              className="p-2 border rounded bg-card cursor-grab"
+            >
+              <Label>{p.name ?? p.sap_article_id}</Label>
+              <div className="text-xs text-muted-foreground">{p.bnr}</div>
+            </div>
+          ))}
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="name">Produktnamn</Label>
-          <Input
-            id="name"
-            name="name"
-            type="text"
-            placeholder="Produktnamn"
-            value={productForm.name}
-            onChange={handleLinkChange}
-            required
-          />
-        </div>
-
-        <div className="space-y-4">
-          <Button
-            onClick={handleSubmit}
-            disabled={loading || !productForm.sap_article_id || !productForm.ean}
-            className="w-full"
-          >
-            {loading ? "Länkar..." : "Skapa länk"}
-          </Button>
-        </div>
+        <Button onClick={() => onValid?.()} className="w-full">Slutför</Button>
       </CardContent>
     </Card>
   );
