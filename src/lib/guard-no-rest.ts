@@ -5,7 +5,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const FORBIDDEN_PATTERNS: Array<{ name: string; regex: RegExp }> = [
+export const FORBIDDEN_PATTERNS: Array<{ name: string; regex: RegExp }> = [
   { name: "supabase-rest-url", regex: /\.supabase\.co\/rest\/v1\//i },
   { name: "supabase-storage-url", regex: /\.supabase\.co\/storage\/v1\//i },
 ];
