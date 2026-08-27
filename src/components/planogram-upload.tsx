@@ -18,6 +18,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PlanogramOverwriteDialog } from "@/components/planogram-overwrite-dialog";
+import { checkPlanogramCompliance } from "@/lib/planogram-engine";
+import { type ShelfObservation, type ShelfPlanogram } from "@/lib/posemesh/types";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -207,6 +210,30 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
 
       // Match parsed products with database
       const matched = await matchProductsWithDatabase(uploadedFile.parsed, storeProducts);
+
+      // Check for conflicts (existing data differs from new planogram)
+      const conflicts = matched
+        .map((m) => {
+          const existing = storeProducts.find((p) => p.id === m.product_id || p.ean === m.ean);
+          if (!existing) return null;
+          const diffs = [];
+          if (existing.ean && m.ean && existing.ean !== m.ean) diffs.push("ean");
+          if (existing.name !== m.name) diffs.push("name");
+          return diffs.length ? { material_nr: m.product_id ?? m.ean ?? "unknown", fields: diffs } : null;
+        })
+        .filter(Boolean) as Array<{ material_nr: string; fields: string[] }> || [];
+
+      // If conflicts exist, prompt user before proceeding
+      if (conflicts.length > 0) {
+        const confirmed = window.confirm(
+          `Planogram har ${conflicts.length} konflikt(er) med befintliga produkter. Vill du skriva över?`
+        );
+        if (!confirmed) {
+          toast.info("Import avbruten — konflikter hittades.");
+          setFiles((prev) => prev.map((f) => (f === uploadedFile ? { ...f, status: "pending" } : f)));
+          return;
+        }
+      }
 
       // Convert to ShelfPlanogram format
       const shelfPlanogram = parsedToShelfPlanogram(matched);

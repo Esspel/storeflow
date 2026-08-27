@@ -40,6 +40,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { StoreMap2D } from "@/components/store-map-2d";
+import { ArucoMarker } from "@/components/aruco-marker";
 import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
@@ -84,6 +86,15 @@ interface StoreSetupState {
   spatialMapId: string | null;
   markersDetected: number;
   mappingComplete: boolean;
+  // Step 2b: Store Layout
+  storeLayoutSections: Array<{
+    id: string;
+    namn: string;
+    pos_x_cm: number;
+    pos_y_cm: number;
+    bredd_cm: number;
+    höjd_cm: number;
+  }>;
   // Step 3: Products
   productsRegistered: Array<{
     ean: string;
@@ -124,6 +135,7 @@ function StoreSetupPage() {
     spatialMapId: null,
     markersDetected: 0,
     mappingComplete: false,
+    storeLayoutSections: [],
     productsRegistered: [],
     currentScanningMarker: null,
   });
@@ -327,6 +339,37 @@ function StoreSetupPage() {
 
   const renderStepMapping = () => (
     <div className="space-y-6">
+      {/* Store layout editor + Aruco marker printer */}
+      {state.spatialMapId && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <StoreMap2D
+              initial={[]}
+              onChange={(sections) => {
+                setState((prev) => ({ ...prev, storeLayoutSections: sections }));
+              }}
+            />
+          </div>
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>ArUco markörer</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {state.storeLayoutSections.map((s, i) => (
+                  <div key={s.id} className="rounded border p-3">
+                    <p className="font-medium text-sm">{s.namn || `Skepp ${i + 1}`}</p>
+                    <ArucoMarker storeId={activeStore?.id ?? ""} skeppId={s.id} />
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground">
+                  Skriv ut varje markör och placera vid skeppets bas.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
       {!state.spatialMapId ? (
         <Card>
           <CardHeader>
