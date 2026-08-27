@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StoreMap2D, type Section2D } from "@/components/store-map-2d";
 import { getArUcoPattern, markerCode, MAX_MARKERS } from "./aruco-dictionary";
+// Helpers from src/lib/digital-twin.ts: placeMarker, moveMarker, removeMarker, loadSnapshot
 import { placeMarker, moveMarker, removeMarker } from "@/lib/digital-twin";
 import type { PlacedMarker } from "@/types/digital-twin";
 import { toast } from "sonner";

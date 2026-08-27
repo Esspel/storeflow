@@ -1,3 +1,5 @@
+// Helpers from src/lib/digital-twin.ts: listPlanogramsForStore, recordObservation
+// Product linking uses sap_article_id as PRIMARY match per CLAUDE.md (never SKU).
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,10 +37,9 @@ export function Step4Products({
       setLoading(true);
       try {
         const { data } = await supabase
-          .from("product_links")
-          .select("*")
+          .from("shelf_observations")
+          .select("*, shelf_marker_id, sap_article_id, observed_at")
           .eq("store_id", storeId)
-          .order("created_at", { ascending: true });
         setProductLinks(data || []);
       } catch (error) {
         console.error("Error loading links:", error);
@@ -62,21 +63,26 @@ export function Step4Products({
 
     setLoading(true);
     try {
-      // Create new link
+      // Upsert shelf observation using sap_article_id as primary match (per CLAUDE.md: never SKU)
       const { error } = await supabase
-        .from("product_links")
-        .insert({
+        .from("shelf_observations")
+        .upsert({
           store_id: storeId,
+          // shelf_marker_id must be set by caller via onLinksChange once user selects a marker
           sap_article_id: productForm.sap_article_id,
-          ean: productForm.ean,
-          bnr: productForm.bnr,
-          name: productForm.name,
-          created_at: new Date().toISOString(),
+          detected_products: [{
+            ean: productForm.ean,
+            bnr: productForm.bnr,
+            name: productForm.name,
+          }],
+          observed_at: new Date().toISOString(),
+        }, {
+          onConflict: "store_id,sap_article_id",
         });
 
       if (error) throw error;
 
-      // Update links state
+      // Update links state so caller can assign shelf_marker_id
       onLinksChange([...productLinks, { ...productForm, id: Date.now() }]);
 
       // Reset form

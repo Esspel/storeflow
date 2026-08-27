@@ -2,6 +2,11 @@
  * Light frontend-based ArUco code / PDF generator.
  * Uses Canvas + Blob (no external API dependencies, no jsPDF).
  */
+/*
+ * Step 3 — Light frontend PDF/SVG generator (no REST).
+ * Uses local Canvas + Blob per docs/superpowers/specs/2026-08-27-digital-twin-design.md step 3.
+ * 4×4 binary dictionary (50 markers), 3 columns, Blob + URL.createObjectURL.
+ */
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StoreMap2D, type Section2D } from "@/components/store-map-2d";
+// Helpers from src/lib/digital-twin.ts (Task 3 comment):
+// loadSnapshot, saveSection, deleteSection, ensureSpatialMap
 import { saveSection, deleteSection } from "@/lib/digital-twin";
 import { toast } from "sonner";
 
