@@ -9,22 +9,19 @@ function generatePattern(id: number): boolean[][] {
   const grid: boolean[][] = Array.from({ length: 6 }, () =>
     Array.from({ length: 6 }, () => false),
   );
-  // Black border
+  // Black border (1 cell thick)
   for (let i = 0; i < 6; i++) {
     grid[0][i] = true;
     grid[5][i] = true;
     grid[i][0] = true;
     grid[i][5] = true;
   }
-  // Inner 4x4 based on id (0..49)
-  const bits: boolean[] = [];
-  for (let bit = 0; bit < 16; bit++) {
-    bits.push(((id * 7 + bit * 13 + 31) % 2) === 0);
-  }
-  let idx = 0;
+  // Inner 4x4 based on id (0..49) — 50 deterministic patterns
+  // Use 16-bit binary representation of id for unique patterns
   for (let r = 1; r <= 4; r++) {
     for (let c = 1; c <= 4; c++) {
-      grid[r][c] = bits[idx++];
+      const bitIndex = (r - 1) * 4 + (c - 1); // 0..15
+      grid[r][c] = ((id >> bitIndex) & 1) === 1;
     }
   }
   return grid;

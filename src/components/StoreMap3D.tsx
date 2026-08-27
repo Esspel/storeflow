@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useMemo, useRef, useCallback, useEffect } from "react";
+import { useMemo, useRef, useCallback, useEffect, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   OrbitControls,
@@ -17,6 +17,7 @@ import {
   Plane,
   Torus,
   RoundedBox,
+  Line,
 } from "@react-three/drei";
 import * as THREE from "three";
 import {
@@ -62,8 +63,7 @@ function MarkerMesh({
   const color = getColor();
 
   // Animation for selected/target markers
-  const { scale } = useThree();
-  useFrame((_, delta) => {
+    useFrame((_, delta) => {
     if (meshRef.current && (isSelected || isTarget || isUserPosition)) {
       const pulse = 1 + Math.sin(performance.now() * 0.003) * 0.1;
       meshRef.current.scale.setScalar(pulse);
@@ -72,7 +72,9 @@ function MarkerMesh({
     }
   });
 
-  const handleClick = (event: THREE.Event) => {
+  import { ThreeEvent } from "@react-three/fiber";
+
+const handleClick = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
     onClick(marker);
   };
