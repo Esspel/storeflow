@@ -27,3 +27,19 @@ if (typeof ns["Clock"] === "undefined" && typeof ns["Timer"] === "function") {
     /* defensive: do not throw during module init */
   }
 }
+
+// Defensiv polyfill för THREE.Vector3.addScaledVector.
+// @react-three/drei/Bounds använder .addScaledVector() på position-vektorer,
+// och i vissa Three.js-versioner kan metoden saknas på klonade vektorer.
+import { Vector3 } from "three";
+const v3Proto = (Vector3 as any).prototype;
+if (v3Proto && typeof v3Proto.addScaledVector !== "function" && typeof Vector3 !== "undefined") {
+  try {
+    v3Proto.addScaledVector = function (v: any, s: number) {
+      this.x += v.x * s;
+      this.y += v.y * s;
+      this.z += v.z * s;
+      return this;
+    };
+  } catch (_e) { /* defensive */ }
+}
