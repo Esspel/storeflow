@@ -1677,7 +1677,7 @@ export async function getProductReclamationStatsHandler(
   // Hämta produktinfo för att få namn/EAN/BNR
   const allSapIds = new Set([...reclamationCounts.keys(), ...deliveryCounts.keys()]);
 
-  let productsMap = new Map<string, { name: string; ean: string; bnr: string }>();
+  const productsMap = new Map<string, { name: string; ean: string; bnr: string }>();
   if (allSapIds.size > 0) {
     const { data: products } = await supabase
       .from("products")

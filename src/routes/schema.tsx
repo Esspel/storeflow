@@ -857,7 +857,7 @@ function timeToPercent(time: string): number {
 function shiftWidthPercent(start: string, stop: string): number {
   const [sh, sm] = start.split(":").map(Number);
   const [eh, em] = stop.split(":").map(Number);
-  let s = sh * 60 + sm;
+  const s = sh * 60 + sm;
   let e = eh * 60 + em;
   if (e <= s) e += 24 * 60;
   return ((e - s) / (TOTAL_HOURS * 60)) * 100;

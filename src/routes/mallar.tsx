@@ -1815,7 +1815,7 @@ function MallarPage() {
           // Register in batch map so later dependencies can resolve to this task
           createdInBatch.set(tmpl.title.toLowerCase(), task.id);
 
-          let questionIdMap = new Map<string, string>();
+          const questionIdMap = new Map<string, string>();
           if (validQuestions.length > 0) {
             const { data: insertedQs } = await supabase
               .from("task_questions")

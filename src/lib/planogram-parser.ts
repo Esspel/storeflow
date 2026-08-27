@@ -7,7 +7,7 @@
 import type { ShelfPlanogram, ExpectedProduct, Vector3 } from "@/lib/posemesh/types";
 
 // Dynamic lazy import för tunga PDF-bibliotek (minimerar initial bundle)
-let PDFParse: typeof import("pdf-parse").PDFParse | null = null;
+const PDFParse: typeof import("pdf-parse").PDFParse | null = null;
 let pdfjsLib: typeof import("pdfjs-dist") | null = null;
 
 // Pin worker to the top-level pdfjs-dist version via ?url import.

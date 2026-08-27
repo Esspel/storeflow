@@ -78,8 +78,8 @@ function Section({
   span2 = false,
   children,
 }: {
-  icon: React.ElementType;
-  title: any;
+  icon: React.ComponentType<{className?:string}>;
+  title: string;
   span2?: boolean;
   children: React.ReactNode;
 }) {
