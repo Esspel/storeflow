@@ -82,7 +82,7 @@ export async function upsertProductFromImport(
   };
   const { data, error } = await supabase
     .from("products")
-    .upsert(payload, { onConflict: "bnr", ignoreDuplicates: false })
+    .upsert(payload, { onConflict: "sap_article_id", ignoreDuplicates: false })
     .select()
     .single();
   if (error) throw error;

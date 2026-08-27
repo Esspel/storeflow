@@ -204,7 +204,7 @@ function ErstatningsCheckPage() {
         });
         const { error: upsertErr } = await supabase
           .from("products")
-          .upsert(deduped, { onConflict: "bnr", ignoreDuplicates: false });
+          .upsert(deduped, { onConflict: "sap_article_id", ignoreDuplicates: false });
 
         if (upsertErr) {
           console.error("Upsert error:", upsertErr);
