@@ -194,10 +194,17 @@ function ErstatningsCheckPage() {
         }));
 
       if (newProducts.length > 0) {
-        // Spara nya produkter till products-tabellen via upsert
+        // Deduplicera på bnr inom samma batch (21000-fix)
+        const seenBnr = new Set();
+        const deduped = newProducts.filter(p => {
+          const key = (p.bnr || p.store_id || "") + ":" + (p.sap_article_id || "");
+          if (seenBnr.has(key)) return false;
+          seenBnr.add(key);
+          return true;
+        });
         const { error: upsertErr } = await supabase
           .from("products")
-          .upsert(newProducts, { onConflict: "bnr", ignoreDuplicates: false });
+          .upsert(deduped, { onConflict: "bnr", ignoreDuplicates: false });
 
         if (upsertErr) {
           console.error("Upsert error:", upsertErr);
