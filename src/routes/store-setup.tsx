@@ -89,11 +89,11 @@ interface StoreSetupState {
   // Step 2b: Store Layout
   storeLayoutSections: Array<{
     id: string;
-    namn: string;
+    name: string;
     pos_x_cm: number;
     pos_y_cm: number;
-    bredd_cm: number;
-    höjd_cm: number;
+    width_cm: number;
+    height_cm: number;
   }>;
   // Step 3: Products
   productsRegistered: Array<{
@@ -358,7 +358,7 @@ function StoreSetupPage() {
               <CardContent className="space-y-3">
                 {state.storeLayoutSections.map((s, i) => (
                   <div key={s.id} className="rounded border p-3">
-                    <p className="font-medium text-sm">{s.namn || `Skepp ${i + 1}`}</p>
+                    <p className="font-medium text-sm">{s.name || `Section ${i + 1}`}</p>
                     <ArucoMarker storeId={activeStore?.id ?? ""} skeppId={s.id} />
                   </div>
                 ))}

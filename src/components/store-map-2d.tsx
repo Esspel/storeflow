@@ -7,11 +7,11 @@ import { useState } from "react";
 
 export type Section2D = {
   id: string;
-  namn: string;
+  name: string;
   pos_x_cm: number;
   pos_y_cm: number;
-  bredd_cm: number;
-  hojd_cm: number;
+  width_cm: number;
+  height_cm: number;
 };
 
 const GRID_CM = 20;
@@ -79,11 +79,11 @@ export function StoreMap2D({
           style={{
             left: s.pos_x_cm * SCALE,
             top: s.pos_y_cm * SCALE,
-            width: s.bredd_cm * SCALE,
-            height: s.hojd_cm * SCALE,
+            width: s.width_cm * SCALE,
+            height: s.height_cm * SCALE,
           }}
         >
-          {s.namn}
+          {s.name}
         </div>
       ))}
     </div>
