@@ -176,8 +176,10 @@ function ErstatningsCheckPage() {
       setMatchResults(results);
 
       // Auto-create unmatched products
+      // Filtrera bort rader utan giltig EAN (null/empty) for att undvika products_ean_unique constraint-konflikt
       const newProducts = results
         .filter(r => r.isNewProduct && (r.row.bnr || r.row.sapProduktId))
+        .filter(r => r.row.bnr && String(r.row.bnr).trim().length > 0)
         .map(r => ({
           store_id: activeStore.id,
           sap_article_id: r.row.sapProduktId || null,
