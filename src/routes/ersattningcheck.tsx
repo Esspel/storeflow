@@ -25,6 +25,7 @@ import {
   TrendingDown,
   TrendingUp,
   X,
+  ArrowUpDown,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -109,6 +110,14 @@ type DeliveryCategoryMapping = {
   category: string;
   flow: DeliveryFlow;
 };
+
+type ShelfLifeSortKey =
+  | "product_name"
+  | "brand"
+  | "shelf_lifetime_days"
+  | "expiry_date"
+  | "arrival_date"
+  | "status";
 
 type ReplacementStatistics = {
   returnedValue: number;
@@ -236,6 +245,11 @@ function ErstatningsCheckPage() {
   const [deliveryCategories, setDeliveryCategories] = useState<string[]>([]);
   const [mappingLoading, setMappingLoading] = useState(false);
   const [testFixtureSapId, setTestFixtureSapId] = useState<string | null>(null);
+  const [shelfLifeSearch, setShelfLifeSearch] = useState("");
+  const [shelfLifeSort, setShelfLifeSort] = useState<{
+    key: ShelfLifeSortKey;
+    direction: "asc" | "desc";
+  }>({ key: "shelf_lifetime_days", direction: "asc" });
 
   useEffect(() => {
     if (!importSuccess) return;
@@ -466,7 +480,6 @@ function ErstatningsCheckPage() {
           .from("products")
           .select("id, sap_article_id, name, brand")
           .eq("store_id", activeStore.id)
-          .not("sap_article_id", "is", null)
           .limit(500),
         supabase
           .from("product_shelf_life")
@@ -489,35 +502,30 @@ function ErstatningsCheckPage() {
       );
       const latestDelivery = new Map<string, any>();
       for (const delivery of deliveriesResult.data ?? []) {
-        if (
-          !latestDelivery.has(delivery.sap_article_id) &&
-          delivery.best_before_date &&
-          isDelivered(delivery.status)
-        ) {
+        if (!latestDelivery.has(delivery.sap_article_id)) {
           latestDelivery.set(delivery.sap_article_id, delivery);
         }
       }
 
       setShelfLifeRecords(
         (productsResult.data ?? [])
-          .filter((product: any) => latestDelivery.has(product.sap_article_id))
           .map((product: any) => {
-          const master = masterMap.get(product.sap_article_id) ?? {};
-          const delivery = latestDelivery.get(product.sap_article_id) ?? {};
-          return {
-            id: delivery.id ?? product.id,
-            sap_article_id: product.sap_article_id,
-            shelf_lifetime_days: master.shelf_lifetime_days ?? 0,
-            expiry_date: delivery.best_before_date ?? "",
-            arrival_date: delivery.arrival_date ?? "",
-            compensation_price_ore: master.default_compensation_price_ore ?? 2,
-            product_name: product.name ?? delivery.product_name ?? "Okänd produkt",
-            brand: product.brand ?? delivery.brand ?? "",
-            product_url: getSapProductUrl(activeStore.sap_site_id, product.sap_article_id),
-            delivery_status: delivery.status ?? "",
-            created_at: product.created_at ?? new Date().toISOString(),
-            updated_at: product.updated_at ?? new Date().toISOString(),
-          };
+            const master = masterMap.get(product.sap_article_id) ?? {};
+            const delivery = latestDelivery.get(product.sap_article_id) ?? {};
+            return {
+              id: delivery.id ?? product.id,
+              sap_article_id: product.sap_article_id ?? "",
+              shelf_lifetime_days: master.shelf_lifetime_days ?? 0,
+              expiry_date: delivery.best_before_date ?? "",
+              arrival_date: delivery.arrival_date ?? "",
+              compensation_price_ore: master.default_compensation_price_ore ?? 2,
+              product_name: product.name ?? delivery.product_name ?? "Okänd produkt",
+              brand: product.brand ?? delivery.brand ?? "",
+              product_url: getSapProductUrl(activeStore.sap_site_id, product.sap_article_id ?? ""),
+              delivery_status: delivery.status ?? "",
+              created_at: product.created_at ?? new Date().toISOString(),
+              updated_at: product.updated_at ?? new Date().toISOString(),
+            };
           }),
       );
       setDeliveryStatistics(
@@ -1026,6 +1034,51 @@ function ErstatningsCheckPage() {
     }
   };
 
+  const getShelfLifeStatus = (record: ShelfLifeRecord) => {
+    if (!record.arrival_date || !record.expiry_date) return "Datum saknas";
+    if (!record.shelf_lifetime_days || record.shelf_lifetime_days <= 0) {
+      return "Hållbarhet saknas";
+    }
+    return assessDelivery(record.arrival_date, record.expiry_date, record.shelf_lifetime_days)
+      ?.isEligible
+      ? "Kräver ersättning"
+      : "OK";
+  };
+
+  const filteredShelfLifeRecords = shelfLifeRecords
+    .filter((record) => {
+      const search = shelfLifeSearch.trim().toLocaleLowerCase("sv");
+      if (!search) return true;
+      const status = getShelfLifeStatus(record);
+      return [
+        record.product_name,
+        record.brand,
+        String(record.shelf_lifetime_days || ""),
+        record.expiry_date,
+        record.arrival_date,
+        status,
+      ].some((value) => String(value).toLocaleLowerCase("sv").includes(search));
+    })
+    .sort((left, right) => {
+      const leftMissing = left.shelf_lifetime_days <= 0 ? 0 : 1;
+      const rightMissing = right.shelf_lifetime_days <= 0 ? 0 : 1;
+      if (leftMissing !== rightMissing) return leftMissing - rightMissing;
+      const leftValue = shelfLifeSort.key === "status" ? getShelfLifeStatus(left) : left[shelfLifeSort.key] ?? "";
+      const rightValue = shelfLifeSort.key === "status" ? getShelfLifeStatus(right) : right[shelfLifeSort.key] ?? "";
+      const comparison = String(leftValue).localeCompare(String(rightValue), "sv", {
+        numeric: true,
+        sensitivity: "base",
+      });
+      return shelfLifeSort.direction === "asc" ? comparison : -comparison;
+    });
+
+  const toggleShelfLifeSort = (key: ShelfLifeSortKey) => {
+    setShelfLifeSort((current) => ({
+      key,
+      direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
+    }));
+  };
+
   return (
     <div className="container mx-auto p-6 max-w-7xl">
       <PageHeader
@@ -1184,22 +1237,12 @@ function ErstatningsCheckPage() {
           </CardContent>
         </Card>
       )}
-
       {step === "dashboard" && (
         <div className="space-y-6">
           <section className="rounded-2xl bg-emerald-700 p-6 text-white shadow-sm md:p-8">
             <div>
-              <div>
-                <p className="text-sm font-medium uppercase tracking-wide text-emerald-100">
-                  {new Date().toLocaleDateString("sv-SE", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                  })}
-                </p>
                 <h2 className="mt-2 text-4xl font-semibold">Hej!</h2>
               </div>
-            </div>
           </section>
 
           <section className="grid gap-4 md:grid-cols-3">
@@ -1444,22 +1487,45 @@ function ErstatningsCheckPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <Input
+              value={shelfLifeSearch}
+              onChange={(event) => setShelfLifeSearch(event.target.value)}
+              placeholder="Sök produkt, varumärke, hållbarhet, datum eller status..."
+              aria-label="Sök i hållbarhetsdata"
+            />
             {shelfLifeRecords.length > 0 ? (
               <div className="border rounded-lg overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>SAP Produkt-ID</TableHead>
-                      <TableHead>Produkt</TableHead>
-                      <TableHead>Varumärke</TableHead>
-                      <TableHead>Total hållbarhet (dagar)</TableHead>
-                      <TableHead>Bäst-före-datum</TableHead>
-                      <TableHead>Leveransdatum</TableHead>
-                      <TableHead>Status</TableHead>
+                      {(
+                        [
+                          ["Produkt", "product_name"],
+                          ["Varumärke", "brand"],
+                          ["Total hållbarhet (dagar)", "shelf_lifetime_days"],
+                          ["Bäst-före-datum", "expiry_date"],
+                          ["Leveransdatum", "arrival_date"],
+                          ["Status", "status"],
+                        ] as [string, ShelfLifeSortKey][]
+                      ).map(([label, key]) => (
+                        <TableHead key={key}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto px-0 font-medium"
+                            onClick={() => toggleShelfLifeSort(key)}
+                          >
+                            {label}
+                            <ArrowUpDown size={14} className="ml-1" />
+                          </Button>
+                        </TableHead>
+                      ))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {shelfLifeRecords.map((record) => {
+                    {filteredShelfLifeRecords.map((record) => {
                       const arrival = new Date(record.arrival_date);
                       const expiry = new Date(record.expiry_date);
                       const hasValidDates =
@@ -1556,6 +1622,11 @@ function ErstatningsCheckPage() {
                     })}
                   </TableBody>
                 </Table>
+                {filteredShelfLifeRecords.length === 0 && (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    Inga artiklar matchar sökningen.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
