@@ -26,6 +26,8 @@ import {
   TrendingUp,
   X,
   ArrowUpDown,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -91,6 +93,7 @@ type ShelfLifeRecord = {
   brand: string;
   product_url: string | null;
   delivery_status: string;
+  category: string;
 };
 
 type DeliveryStatistic = {
@@ -112,12 +115,7 @@ type DeliveryCategoryMapping = {
 };
 
 type ShelfLifeSortKey =
-  | "product_name"
-  | "brand"
-  | "shelf_lifetime_days"
-  | "expiry_date"
-  | "arrival_date"
-  | "status";
+  "product_name" | "brand" | "shelf_lifetime_days" | "expiry_date" | "arrival_date" | "status";
 
 type ReplacementStatistics = {
   returnedValue: number;
@@ -155,7 +153,9 @@ type Reclamation = {
 };
 
 function isDelivered(status: string | null | undefined) {
-  const normalized = String(status ?? "").trim().toLowerCase();
+  const normalized = String(status ?? "")
+    .trim()
+    .toLowerCase();
   return normalized === "levererad" || normalized === "delivered";
 }
 
@@ -220,9 +220,7 @@ function ErstatningsCheckPage() {
     | "statistics"
     | "category-mapping"
     | "admin-test"
-  >(
-    "dashboard",
-  );
+  >("dashboard");
   const [reclamations, setReclamations] = useState<Reclamation[]>([]);
   const [statusFilter, setStatusFilter] = useState<ReclamationStatus>("Ej skickad");
   const [importError, setImportError] = useState<string | null>(null);
@@ -237,13 +235,16 @@ function ErstatningsCheckPage() {
   const [selectedWeeklyProduct, setSelectedWeeklyProduct] = useState<WeeklyTask | null>(null);
   const [weeklyDays, setWeeklyDays] = useState("");
   const [deliveryStatistics, setDeliveryStatistics] = useState<DeliveryStatistic[]>([]);
-  const [replacementStatistics, setReplacementStatistics] = useState<ReplacementStatistics | null>(null);
+  const [replacementStatistics, setReplacementStatistics] = useState<ReplacementStatistics | null>(
+    null,
+  );
   const [statisticsView, setStatisticsView] = useState<"value" | "count">("value");
   const [totalProductCount, setTotalProductCount] = useState(0);
   const [statisticsPeriod, setStatisticsPeriod] = useState<"ytd" | "last30" | "last12">("ytd");
   const [categoryMappings, setCategoryMappings] = useState<DeliveryCategoryMapping[]>([]);
   const [deliveryCategories, setDeliveryCategories] = useState<string[]>([]);
   const [mappingLoading, setMappingLoading] = useState(false);
+  const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set());
   const [testFixtureSapId, setTestFixtureSapId] = useState<string | null>(null);
   const [shelfLifeSearch, setShelfLifeSearch] = useState("");
   const [shelfLifeSort, setShelfLifeSort] = useState<{
@@ -299,7 +300,9 @@ function ErstatningsCheckPage() {
   const productPercentage =
     totalProductCount > 0 ? Math.round((goodProductCount / totalProductCount) * 100) : 0;
   const eligibleShelfLifeRecords = shelfLifeRecords.filter(
-    (record) => assessDelivery(record.arrival_date, record.expiry_date, record.shelf_lifetime_days)?.isEligible,
+    (record) =>
+      assessDelivery(record.arrival_date, record.expiry_date, record.shelf_lifetime_days)
+        ?.isEligible,
   );
   const hasImportedDeliveries = deliveryStatistics.length > 0;
 
@@ -478,19 +481,20 @@ function ErstatningsCheckPage() {
       const [productsResult, masterResult, deliveriesResult] = await Promise.all([
         supabase
           .from("products")
-          .select("id, sap_article_id, name, brand")
-          .eq("store_id", activeStore.id)
-          .limit(500),
+          .select("id, sap_article_id, name, brand, category")
+          .eq("store_id", activeStore.id),
         supabase
           .from("product_shelf_life")
           .select("sap_article_id, shelf_lifetime_days, default_compensation_price_ore")
           .limit(500),
         supabase
           .from("store_product_deliveries")
-          .select("id, sap_article_id, best_before_date, arrival_date, status, delivery_number, product_name, brand, category")
+          .select(
+            "id, sap_article_id, best_before_date, arrival_date, status, delivery_number, product_name, brand, category",
+          )
           .eq("store_id", activeStore.id)
           .order("arrival_date", { ascending: false })
-          .limit(1000),
+          .limit(5000),
       ]);
 
       if (productsResult.error) throw productsResult.error;
@@ -502,31 +506,37 @@ function ErstatningsCheckPage() {
       );
       const latestDelivery = new Map<string, any>();
       for (const delivery of deliveriesResult.data ?? []) {
-        if (!latestDelivery.has(delivery.sap_article_id)) {
+        const current = latestDelivery.get(delivery.sap_article_id);
+        const currentScore = current
+          ? Number(current.arrival_date ? 1 : 0) + Number(current.best_before_date ? 1 : 0)
+          : -1;
+        const newScore =
+          Number(delivery.arrival_date ? 1 : 0) + Number(delivery.best_before_date ? 1 : 0);
+        if (!current || newScore > currentScore) {
           latestDelivery.set(delivery.sap_article_id, delivery);
         }
       }
 
       setShelfLifeRecords(
-        (productsResult.data ?? [])
-          .map((product: any) => {
-            const master = masterMap.get(product.sap_article_id) ?? {};
-            const delivery = latestDelivery.get(product.sap_article_id) ?? {};
-            return {
-              id: delivery.id ?? product.id,
-              sap_article_id: product.sap_article_id ?? "",
-              shelf_lifetime_days: master.shelf_lifetime_days ?? 0,
-              expiry_date: delivery.best_before_date ?? "",
-              arrival_date: delivery.arrival_date ?? "",
-              compensation_price_ore: master.default_compensation_price_ore ?? 2,
-              product_name: product.name ?? delivery.product_name ?? "Okänd produkt",
-              brand: product.brand ?? delivery.brand ?? "",
-              product_url: getSapProductUrl(activeStore.sap_site_id, product.sap_article_id ?? ""),
-              delivery_status: delivery.status ?? "",
-              created_at: product.created_at ?? new Date().toISOString(),
-              updated_at: product.updated_at ?? new Date().toISOString(),
-            };
-          }),
+        (productsResult.data ?? []).map((product: any) => {
+          const master = masterMap.get(product.sap_article_id) ?? {};
+          const delivery = latestDelivery.get(product.sap_article_id) ?? {};
+          return {
+            id: delivery.id ?? product.id,
+            sap_article_id: product.sap_article_id ?? "",
+            shelf_lifetime_days: master.shelf_lifetime_days ?? 0,
+            expiry_date: delivery.best_before_date ?? "",
+            arrival_date: delivery.arrival_date ?? "",
+            compensation_price_ore: master.default_compensation_price_ore ?? 2,
+            product_name: product.name ?? delivery.product_name ?? "Okänd produkt",
+            brand: product.brand ?? delivery.brand ?? "",
+            product_url: getSapProductUrl(activeStore.sap_site_id, product.sap_article_id ?? ""),
+            delivery_status: delivery.status ?? "",
+            created_at: product.created_at ?? new Date().toISOString(),
+            updated_at: product.updated_at ?? new Date().toISOString(),
+            category: product.category ?? delivery.category ?? "",
+          };
+        }),
       );
       setDeliveryStatistics(
         (deliveriesResult.data ?? []).map((delivery: any) => ({
@@ -548,25 +558,31 @@ function ErstatningsCheckPage() {
   };
 
   const loadCategoryMappings = async () => {
-    const [{ data: mappings, error: mappingsError }, { data: categories, error: categoriesError }] =
-      await Promise.all([
-        supabase
-          .from("delivery_category_flow_mappings")
-          .select("id, category, flow")
-          .order("category"),
-        supabase
-          .from("store_product_deliveries")
-          .select("category")
-          .eq("store_id", activeStore.id),
-      ]);
+    const [
+      { data: mappings, error: mappingsError },
+      { data: deliveryCategories, error: categoriesError },
+      { data: productCategories, error: productCategoriesError },
+    ] = await Promise.all([
+      supabase
+        .from("delivery_category_flow_mappings")
+        .select("id, category, flow")
+        .order("category"),
+      supabase.from("store_product_deliveries").select("category").eq("store_id", activeStore.id),
+      supabase.from("products").select("category").eq("store_id", activeStore.id),
+    ]);
     if (mappingsError) throw mappingsError;
     if (categoriesError) throw categoriesError;
+    if (productCategoriesError) throw productCategoriesError;
     setCategoryMappings((mappings ?? []) as DeliveryCategoryMapping[]);
-    setDeliveryCategories(
-      [...new Set((categories ?? []).map((row: any) => String(row.category ?? "").trim()))]
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b, "sv")),
-    );
+    const allCategories = [
+      ...new Set([
+        ...(deliveryCategories ?? []).map((row: any) => String(row.category ?? "").trim()),
+        ...(productCategories ?? []).map((row: any) => String(row.category ?? "").trim()),
+      ]),
+    ]
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, "sv"));
+    setDeliveryCategories(allCategories);
   };
 
   const saveCategoryMapping = async (category: string, flow: DeliveryFlow) => {
@@ -574,14 +590,19 @@ function ErstatningsCheckPage() {
     try {
       const { data, error } = await supabase
         .from("delivery_category_flow_mappings")
-        .upsert({ category, flow, updated_at: new Date().toISOString() }, { onConflict: "category" })
+        .upsert(
+          { category, flow, updated_at: new Date().toISOString() },
+          { onConflict: "category" },
+        )
         .select("id, category, flow")
         .single();
       if (error) throw error;
-      setCategoryMappings((current) => [
-        ...current.filter((mapping) => mapping.category !== category),
-        data as DeliveryCategoryMapping,
-      ].sort((a, b) => a.category.localeCompare(b.category, "sv")));
+      setCategoryMappings((current) =>
+        [
+          ...current.filter((mapping) => mapping.category !== category),
+          data as DeliveryCategoryMapping,
+        ].sort((a, b) => a.category.localeCompare(b.category, "sv")),
+      );
       toast.success(`Kategorin ${category} kopplades till ${flow}.`);
     } catch (error) {
       console.error("Error saving category mapping:", error);
@@ -593,7 +614,9 @@ function ErstatningsCheckPage() {
 
   const getMappedFlow = (category: string | null | undefined): DeliveryFlow => {
     const normalizedCategory = String(category ?? "").trim();
-    const mapped = categoryMappings.find((mapping) => mapping.category === normalizedCategory)?.flow;
+    const mapped = categoryMappings.find(
+      (mapping) => mapping.category === normalizedCategory,
+    )?.flow;
     if (mapped) return mapped;
     const lowerCategory = normalizedCategory.toLowerCase();
     if (lowerCategory.includes("frys")) return "Fryst";
@@ -636,10 +659,12 @@ function ErstatningsCheckPage() {
       });
       if (deliveryError) throw deliveryError;
 
-      const { error: shelfLifeError } = await supabase.from("product_shelf_life").upsert(
-        { sap_article_id: sapArticleId, shelf_lifetime_days: 365 },
-        { onConflict: "sap_article_id" },
-      );
+      const { error: shelfLifeError } = await supabase
+        .from("product_shelf_life")
+        .upsert(
+          { sap_article_id: sapArticleId, shelf_lifetime_days: 365 },
+          { onConflict: "sap_article_id" },
+        );
       if (shelfLifeError) throw shelfLifeError;
 
       if (includeReclamation) {
@@ -655,7 +680,10 @@ function ErstatningsCheckPage() {
       setTestFixtureSapId(sapArticleId);
       await loadShelfLifeData();
       if (includeReclamation) {
-        const { data } = await supabase.from("reclamations").select("*").eq("store_id", activeStore.id);
+        const { data } = await supabase
+          .from("reclamations")
+          .select("*")
+          .eq("store_id", activeStore.id);
         if (data) setReclamations(data as Reclamation[]);
       }
       toast.success("Testdata skapad. Den är märkt TESTDATA och kan rensas från testsidan.");
@@ -673,13 +701,27 @@ function ErstatningsCheckPage() {
     if (!testFixtureSapId || user.role !== "admin") return;
     setIsLoading(true);
     try {
-      await supabase.from("reclamations").delete().eq("store_id", activeStore.id).eq("sap_article_id", testFixtureSapId);
-      await supabase.from("store_product_deliveries").delete().eq("store_id", activeStore.id).eq("sap_article_id", testFixtureSapId);
+      await supabase
+        .from("reclamations")
+        .delete()
+        .eq("store_id", activeStore.id)
+        .eq("sap_article_id", testFixtureSapId);
+      await supabase
+        .from("store_product_deliveries")
+        .delete()
+        .eq("store_id", activeStore.id)
+        .eq("sap_article_id", testFixtureSapId);
       await supabase.from("product_shelf_life").delete().eq("sap_article_id", testFixtureSapId);
-      await supabase.from("products").delete().eq("store_id", activeStore.id).eq("sap_article_id", testFixtureSapId);
+      await supabase
+        .from("products")
+        .delete()
+        .eq("store_id", activeStore.id)
+        .eq("sap_article_id", testFixtureSapId);
       setTestFixtureSapId(null);
       await loadShelfLifeData();
-      setReclamations((current) => current.filter((item) => item.sap_article_id !== testFixtureSapId));
+      setReclamations((current) =>
+        current.filter((item) => item.sap_article_id !== testFixtureSapId),
+      );
       toast.success("Testdata rensad.");
     } catch (error) {
       console.error("Error removing admin test fixture:", error);
@@ -699,17 +741,20 @@ function ErstatningsCheckPage() {
   const loadDeliveryStatistics = async (period = statisticsPeriod) => {
     setIsLoading(true);
     try {
-      const [{ data, error }, { data: reclamationData, error: reclamationError }] = await Promise.all([
-        supabase
-        .from("store_product_deliveries")
-        .select("sap_article_id, product_name, brand, category, total_price, arrival_date, best_before_date, status")
-        .eq("store_id", activeStore.id)
-        .order("arrival_date", { ascending: false }),
-        supabase
-          .from("reclamations")
-          .select("sap_article_id, status, created_at")
-          .eq("store_id", activeStore.id),
-      ]);
+      const [{ data, error }, { data: reclamationData, error: reclamationError }] =
+        await Promise.all([
+          supabase
+            .from("store_product_deliveries")
+            .select(
+              "sap_article_id, product_name, brand, category, total_price, arrival_date, best_before_date, status",
+            )
+            .eq("store_id", activeStore.id)
+            .order("arrival_date", { ascending: false }),
+          supabase
+            .from("reclamations")
+            .select("sap_article_id, status, created_at")
+            .eq("store_id", activeStore.id),
+        ]);
       if (error) throw error;
       if (reclamationError) throw reclamationError;
       setDeliveryStatistics(
@@ -739,15 +784,21 @@ function ErstatningsCheckPage() {
       const getReclamationAmount = (reclamation: any) => {
         const deliveries = deliveriesByArticle.get(reclamation.sap_article_id) ?? [];
         const createdAt = new Date(reclamation.created_at).getTime();
-        const matchingDelivery = deliveries.find(
-          (delivery) => new Date(delivery.arrival_date).getTime() <= createdAt,
-        ) ?? deliveries[0];
+        const matchingDelivery =
+          deliveries.find((delivery) => new Date(delivery.arrival_date).getTime() <= createdAt) ??
+          deliveries[0];
         return calculateReimbursement(matchingDelivery?.total_price) ?? 0;
       };
       const totalCount = reclamationsForPeriod.length;
-      const sentCount = reclamationsForPeriod.filter((row: any) => row.status !== "Ej skickad").length;
-      const decidedCount = reclamationsForPeriod.filter((row: any) => ["Löst", "Nekad"].includes(row.status)).length;
-      const approvedCount = reclamationsForPeriod.filter((row: any) => row.status === "Löst").length;
+      const sentCount = reclamationsForPeriod.filter(
+        (row: any) => row.status !== "Ej skickad",
+      ).length;
+      const decidedCount = reclamationsForPeriod.filter((row: any) =>
+        ["Löst", "Nekad"].includes(row.status),
+      ).length;
+      const approvedCount = reclamationsForPeriod.filter(
+        (row: any) => row.status === "Löst",
+      ).length;
       const returnedValue = reclamationsForPeriod
         .filter((row: any) => row.status === "Löst")
         .reduce((sum: number, row: any) => sum + getReclamationAmount(row), 0);
@@ -758,15 +809,18 @@ function ErstatningsCheckPage() {
         month: new Date(2000, month, 1).toLocaleDateString("sv-SE", { month: "short" }),
         value: reclamationsForPeriod
           .filter((row: any) => row.status === "Löst")
-          .filter((row: any) => period === "last30" || new Date(row.created_at).getMonth() === month)
+          .filter(
+            (row: any) => period === "last30" || new Date(row.created_at).getMonth() === month,
+          )
           .reduce((sum: number, row: any) => sum + getReclamationAmount(row), 0),
         count: reclamationsForPeriod.filter((row: any) =>
-          period === "last30"
-            ? true
-            : new Date(row.created_at).getMonth() === month,
+          period === "last30" ? true : new Date(row.created_at).getMonth() === month,
         ).length,
       }));
-      const recurringMap = new Map<string, { sap_article_id: string; name: string; count: number }>();
+      const recurringMap = new Map<
+        string,
+        { sap_article_id: string; name: string; count: number }
+      >();
       for (const row of reclamationsForPeriod) {
         const current = recurringMap.get(row.sap_article_id) ?? {
           sap_article_id: row.sap_article_id,
@@ -778,7 +832,10 @@ function ErstatningsCheckPage() {
       }
       const deliveryMap = new Map((data ?? []).map((row: any) => [row.sap_article_id, row]));
       const recurring = [...recurringMap.values()]
-        .map((item) => ({ ...item, name: deliveryMap.get(item.sap_article_id)?.product_name || item.name }))
+        .map((item) => ({
+          ...item,
+          name: deliveryMap.get(item.sap_article_id)?.product_name || item.name,
+        }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
       const flowCounts: Record<string, number> = { Färskvaru: 0, Fryst: 0, Torrt: 0 };
@@ -803,7 +860,9 @@ function ErstatningsCheckPage() {
         recurring,
         flowCounts,
         categoryCounts,
-        openCount: reclamationsForPeriod.filter((row: any) => !["Löst", "Nekad"].includes(row.status)).length,
+        openCount: reclamationsForPeriod.filter(
+          (row: any) => !["Löst", "Nekad"].includes(row.status),
+        ).length,
         averageApprovedValue: approvedCount > 0 ? returnedValue / approvedCount : null,
       });
       setStep("statistics");
@@ -882,10 +941,7 @@ function ErstatningsCheckPage() {
   };
 
   // Save shelf life data
-  const saveShelfLife = async (record: {
-    sap_article_id: string;
-    shelf_lifetime_days: number;
-  }) => {
+  const saveShelfLife = async (record: { sap_article_id: string; shelf_lifetime_days: number }) => {
     setIsLoading(true);
     try {
       const { error: upsertErr } = await supabase.from("product_shelf_life").upsert(
@@ -948,9 +1004,7 @@ function ErstatningsCheckPage() {
       // Hämta masterdata för shelf_lifetime_days och temperature_zone
       const { data: masterData, error: masterErr } = await supabase
         .from("product_shelf_life")
-        .select(
-          "sap_article_id, shelf_lifetime_days, temperature_zone",
-        );
+        .select("sap_article_id, shelf_lifetime_days, temperature_zone");
       if (masterErr) throw masterErr;
       const masterMap = new Map((masterData ?? []).map((m: any) => [m.sap_article_id, m]));
       const { data: products, error: productsErr } = await supabase
@@ -1059,12 +1113,22 @@ function ErstatningsCheckPage() {
         status,
       ].some((value) => String(value).toLocaleLowerCase("sv").includes(search));
     })
+    .filter((record) => {
+      if (hiddenCategories.size === 0) return true;
+      const category = String(record.category ?? "").trim();
+      if (!hiddenCategories.has(category)) return true;
+      return Boolean(record.expiry_date);
+    })
     .sort((left, right) => {
       const leftMissing = left.shelf_lifetime_days <= 0 ? 0 : 1;
       const rightMissing = right.shelf_lifetime_days <= 0 ? 0 : 1;
       if (leftMissing !== rightMissing) return leftMissing - rightMissing;
-      const leftValue = shelfLifeSort.key === "status" ? getShelfLifeStatus(left) : left[shelfLifeSort.key] ?? "";
-      const rightValue = shelfLifeSort.key === "status" ? getShelfLifeStatus(right) : right[shelfLifeSort.key] ?? "";
+      const leftValue =
+        shelfLifeSort.key === "status" ? getShelfLifeStatus(left) : (left[shelfLifeSort.key] ?? "");
+      const rightValue =
+        shelfLifeSort.key === "status"
+          ? getShelfLifeStatus(right)
+          : (right[shelfLifeSort.key] ?? "");
       const comparison = String(leftValue).localeCompare(String(rightValue), "sv", {
         numeric: true,
         sensitivity: "base",
@@ -1077,6 +1141,18 @@ function ErstatningsCheckPage() {
       key,
       direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
     }));
+  };
+
+  const toggleHiddenCategory = (category: string) => {
+    setHiddenCategories((current) => {
+      const next = new Set(current);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
   };
 
   return (
@@ -1241,8 +1317,8 @@ function ErstatningsCheckPage() {
         <div className="space-y-6">
           <section className="rounded-2xl bg-emerald-700 p-6 text-white shadow-sm md:p-8">
             <div>
-                <h2 className="mt-2 text-4xl font-semibold">Hej!</h2>
-              </div>
+              <h2 className="mt-2 text-4xl font-semibold">Hej!</h2>
+            </div>
           </section>
 
           <section className="grid gap-4 md:grid-cols-3">
@@ -1257,9 +1333,14 @@ function ErstatningsCheckPage() {
                 <span>
                   {totalProductCount > 0
                     ? Math.round((reclaimedProductCount / totalProductCount) * 100)
-                    : 0}% av totalt
+                    : 0}
+                  % av totalt
                 </span>
-                <Button variant="link" className="h-auto p-0" onClick={() => setStep("reclamations")}>
+                <Button
+                  variant="link"
+                  className="h-auto p-0"
+                  onClick={() => setStep("reclamations")}
+                >
                   Hantera <ChevronRight size={14} />
                 </Button>
               </CardContent>
@@ -1271,7 +1352,9 @@ function ErstatningsCheckPage() {
                   {goodProductCount} <TrendingUp size={20} />
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">{productPercentage}% av totalt</CardContent>
+              <CardContent className="text-sm text-muted-foreground">
+                {productPercentage}% av totalt
+              </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-3">
@@ -1280,7 +1363,9 @@ function ErstatningsCheckPage() {
                   {totalProductCount} <Box size={20} />
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">Alla aktiva produkter</CardContent>
+              <CardContent className="text-sm text-muted-foreground">
+                Alla aktiva produkter
+              </CardContent>
             </Card>
           </section>
 
@@ -1299,7 +1384,10 @@ function ErstatningsCheckPage() {
                         return counts;
                       }, {}),
                     ).map(([flow, count]) => (
-                      <div key={flow} className="flex justify-between border-b py-2 text-sm last:border-0">
+                      <div
+                        key={flow}
+                        className="flex justify-between border-b py-2 text-sm last:border-0"
+                      >
                         <span>{flow}</span>
                         <strong>{count}</strong>
                       </div>
@@ -1322,13 +1410,20 @@ function ErstatningsCheckPage() {
                 {deliveryStatistics.length > 0 ? (
                   <div className="space-y-2">
                     {deliveryStatistics.slice(0, 5).map((delivery, index) => (
-                      <div key={`${delivery.sap_article_id}-${delivery.arrival_date}-${index}`} className="flex items-center justify-between border-b py-2 last:border-0">
+                      <div
+                        key={`${delivery.sap_article_id}-${delivery.arrival_date}-${index}`}
+                        className="flex items-center justify-between border-b py-2 last:border-0"
+                      >
                         <div>
                           <p className="font-medium">{delivery.product_name}</p>
-                          <p className="font-mono text-xs text-muted-foreground">{delivery.sap_article_id}</p>
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {delivery.sap_article_id}
+                          </p>
                         </div>
                         <span className="text-sm text-muted-foreground">
-                          {delivery.arrival_date ? new Date(delivery.arrival_date).toLocaleDateString("sv-SE") : "Datum saknas"}
+                          {delivery.arrival_date
+                            ? new Date(delivery.arrival_date).toLocaleDateString("sv-SE")
+                            : "Datum saknas"}
                         </span>
                       </div>
                     ))}
@@ -1534,9 +1629,7 @@ function ErstatningsCheckPage() {
                         !Number.isNaN(arrival.getTime()) &&
                         !Number.isNaN(expiry.getTime());
                       const daysRemaining = hasValidDates
-                        ? Math.floor(
-                            (expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24),
-                          )
+                        ? Math.floor((expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24))
                         : null;
                       const hasShelfLife =
                         Number.isFinite(record.shelf_lifetime_days) &&
@@ -1582,7 +1675,9 @@ function ErstatningsCheckPage() {
                                 min="1"
                                 value={editingShelfLifeValue}
                                 onChange={(event) => setEditingShelfLifeValue(event.target.value)}
-                                onBlur={() => void saveInlineShelfLife(record, editingShelfLifeValue)}
+                                onBlur={() =>
+                                  void saveInlineShelfLife(record, editingShelfLifeValue)
+                                }
                                 onKeyDown={(event) => {
                                   if (event.key === "Enter") event.currentTarget.blur();
                                   if (event.key === "Escape") setEditingShelfLifeId(null);
@@ -1691,9 +1786,7 @@ function ErstatningsCheckPage() {
                   Inga leveranser understiger Coop:s hållbarhetskrav just nu.
                 </p>
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  Ingen leverans är importerad ännu.
-                </p>
+                <p className="text-sm text-muted-foreground">Ingen leverans är importerad ännu.</p>
               )}
             </div>
             <Alert className="mb-4">
@@ -1719,7 +1812,9 @@ function ErstatningsCheckPage() {
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 className="text-3xl font-semibold tracking-tight">Statistik</h2>
-              <p className="text-muted-foreground">Din butiks reklamationer och återförda värden över tid.</p>
+              <p className="text-muted-foreground">
+                Din butiks reklamationer och återförda värden över tid.
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <Select
@@ -1730,7 +1825,9 @@ function ErstatningsCheckPage() {
                   void loadDeliveryStatistics(nextPeriod);
                 }}
               >
-                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ytd">Hittills i år</SelectItem>
                   <SelectItem value="last30">Senaste 30 dagarna</SelectItem>
@@ -1754,25 +1851,187 @@ function ErstatningsCheckPage() {
           {replacementStatistics && (
             <>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <Card className="border-emerald-200 bg-emerald-50/70"><CardHeader className="pb-2"><CardDescription>ÅTERFÖRT VÄRDE</CardDescription><CardTitle className="text-3xl text-emerald-700">{formatSek(replacementStatistics.returnedValue)}</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">perioden pågår</CardContent></Card>
-                <Card><CardHeader className="pb-2"><CardDescription>I VÄNTAN</CardDescription><CardTitle className="text-3xl">{formatSek(replacementStatistics.pendingValue)}</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{replacementStatistics.sentCount} skickade reklamationer</CardContent></Card>
-                <Card><CardHeader className="pb-2"><CardDescription>GODKÄNNANDEGRAD</CardDescription><CardTitle className="text-3xl">{replacementStatistics.approvalRate}%</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{replacementStatistics.approvedCount} av {replacementStatistics.decidedCount} avgjorda</CardContent></Card>
-                <Card><CardHeader className="pb-2"><CardDescription>SNITT PER GODKÄND</CardDescription><CardTitle className="text-3xl">{formatSek(replacementStatistics.averageApprovedValue)}</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{replacementStatistics.totalCount} reklamationer totalt</CardContent></Card>
+                <Card className="border-emerald-200 bg-emerald-50/70">
+                  <CardHeader className="pb-2">
+                    <CardDescription>ÅTERFÖRT VÄRDE</CardDescription>
+                    <CardTitle className="text-3xl text-emerald-700">
+                      {formatSek(replacementStatistics.returnedValue)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    perioden pågår
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>I VÄNTAN</CardDescription>
+                    <CardTitle className="text-3xl">
+                      {formatSek(replacementStatistics.pendingValue)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    {replacementStatistics.sentCount} skickade reklamationer
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>GODKÄNNANDEGRAD</CardDescription>
+                    <CardTitle className="text-3xl">
+                      {replacementStatistics.approvalRate}%
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    {replacementStatistics.approvedCount} av {replacementStatistics.decidedCount}{" "}
+                    avgjorda
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>SNITT PER GODKÄND</CardDescription>
+                    <CardTitle className="text-3xl">
+                      {formatSek(replacementStatistics.averageApprovedValue)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    {replacementStatistics.totalCount} reklamationer totalt
+                  </CardContent>
+                </Card>
               </div>
 
               <Card>
-                <CardHeader className="flex-row items-center justify-between"><div><CardTitle>Återfört över tid</CardTitle><CardDescription>Godkänt värde per månad</CardDescription></div><div className="flex gap-2"><Button size="sm" variant={statisticsView === "value" ? "default" : "outline"} onClick={() => setStatisticsView("value")}>Värde</Button><Button size="sm" variant={statisticsView === "count" ? "default" : "outline"} onClick={() => setStatisticsView("count")}>Antal</Button></div></CardHeader>
+                <CardHeader className="flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Återfört över tid</CardTitle>
+                    <CardDescription>Godkänt värde per månad</CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant={statisticsView === "value" ? "default" : "outline"}
+                      onClick={() => setStatisticsView("value")}
+                    >
+                      Värde
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={statisticsView === "count" ? "default" : "outline"}
+                      onClick={() => setStatisticsView("count")}
+                    >
+                      Antal
+                    </Button>
+                  </div>
+                </CardHeader>
                 <CardContent>
-                  <div className="h-72 w-full"><ResponsiveContainer width="100%" height="100%"><LineChart data={replacementStatistics.monthly} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Line type="monotone" dataKey={statisticsView} stroke="#059669" strokeWidth={3} dot={{ r: 3 }} /></LineChart></ResponsiveContainer></div>
-                  <p className="text-sm text-muted-foreground">Vald period: {statisticsPeriod === "ytd" ? "Hittills i år" : statisticsPeriod === "last30" ? "Senaste 30 dagarna" : "Senaste 12 månaderna"} - pågående period (ej hel)</p>
+                  <div className="h-72 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={replacementStatistics.monthly}
+                        margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis allowDecimals={false} />
+                        <Tooltip />
+                        <Line
+                          type="monotone"
+                          dataKey={statisticsView}
+                          stroke="#059669"
+                          strokeWidth={3}
+                          dot={{ r: 3 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Vald period:{" "}
+                    {statisticsPeriod === "ytd"
+                      ? "Hittills i år"
+                      : statisticsPeriod === "last30"
+                        ? "Senaste 30 dagarna"
+                        : "Senaste 12 månaderna"}{" "}
+                    - pågående period (ej hel)
+                  </p>
                 </CardContent>
               </Card>
 
               <div className="grid gap-4 lg:grid-cols-2">
-                <Card><CardHeader><CardTitle>Fördelning per flöde</CardTitle><CardDescription>Färskvaru • Fryst • Torrt • {statisticsPeriod === "ytd" ? "Hittills i år" : statisticsPeriod === "last30" ? "Senaste 30 dagarna" : "Senaste 12 månaderna"}</CardDescription></CardHeader><CardContent>{Object.entries(replacementStatistics.flowCounts).map(([flow, count]) => <div key={flow} className="flex justify-between text-sm"><span>{flow}</span><strong>{count}</strong></div>)}</CardContent></Card>
-                <Card><CardHeader><CardTitle>Återfört per kategori</CardTitle><CardDescription>Fördelat på {Object.keys(replacementStatistics.categoryCounts).length} varugrupper</CardDescription></CardHeader><CardContent>{Object.entries(replacementStatistics.categoryCounts).length > 0 ? Object.entries(replacementStatistics.categoryCounts).map(([category, count]) => <div key={category} className="flex justify-between text-sm"><span>{category}</span><strong>{count}</strong></div>) : <p className="text-sm text-muted-foreground">Inga godkända reklamationer i perioden.</p>}</CardContent></Card>
-                <Card><CardHeader><CardTitle>Återkommande varor</CardTitle><CardDescription>Produkter du reklamerar oftast</CardDescription></CardHeader><CardContent>{replacementStatistics.recurring.length > 0 ? replacementStatistics.recurring.map((item) => <div key={item.sap_article_id} className="flex justify-between gap-4 text-sm"><span>{item.name}</span><strong>{item.count} st</strong></div>) : <p className="text-sm text-muted-foreground">Inga återkommande varor ännu.</p>}</CardContent></Card>
-                <Card><CardHeader><CardTitle>Väntar på svar</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{replacementStatistics.openCount > 0 ? `${replacementStatistics.openCount} öppna reklamationer` : "Inga öppna reklamationer."}</CardContent></Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Fördelning per flöde</CardTitle>
+                    <CardDescription>
+                      Färskvaru • Fryst • Torrt •{" "}
+                      {statisticsPeriod === "ytd"
+                        ? "Hittills i år"
+                        : statisticsPeriod === "last30"
+                          ? "Senaste 30 dagarna"
+                          : "Senaste 12 månaderna"}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {Object.entries(replacementStatistics.flowCounts).map(([flow, count]) => (
+                      <div key={flow} className="flex justify-between text-sm">
+                        <span>{flow}</span>
+                        <strong>{count}</strong>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Återfört per kategori</CardTitle>
+                    <CardDescription>
+                      Fördelat på {Object.keys(replacementStatistics.categoryCounts).length}{" "}
+                      varugrupper
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {Object.entries(replacementStatistics.categoryCounts).length > 0 ? (
+                      Object.entries(replacementStatistics.categoryCounts).map(
+                        ([category, count]) => (
+                          <div key={category} className="flex justify-between text-sm">
+                            <span>{category}</span>
+                            <strong>{count}</strong>
+                          </div>
+                        ),
+                      )
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Inga godkända reklamationer i perioden.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Återkommande varor</CardTitle>
+                    <CardDescription>Produkter du reklamerar oftast</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {replacementStatistics.recurring.length > 0 ? (
+                      replacementStatistics.recurring.map((item) => (
+                        <div
+                          key={item.sap_article_id}
+                          className="flex justify-between gap-4 text-sm"
+                        >
+                          <span>{item.name}</span>
+                          <strong>{item.count} st</strong>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Inga återkommande varor ännu.</p>
+                    )}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Väntar på svar</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    {replacementStatistics.openCount > 0
+                      ? `${replacementStatistics.openCount} öppna reklamationer`
+                      : "Inga öppna reklamationer."}
+                  </CardContent>
+                </Card>
               </div>
             </>
           )}
@@ -1793,12 +2052,28 @@ function ErstatningsCheckPage() {
               <div className="space-y-3">
                 {deliveryCategories.map((category) => {
                   const mapping = categoryMappings.find((item) => item.category === category);
+                  const isHidden = hiddenCategories.has(category);
                   return (
                     <div
                       key={category}
                       className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <span className="font-medium">{category}</span>
+                      <div className="flex items-center gap-3">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => toggleHiddenCategory(category)}
+                          title={
+                            isHidden
+                              ? "Visa produkter utan utgångsdatum"
+                              : "Dölj produkter utan utgångsdatum"
+                          }
+                        >
+                          {isHidden ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </Button>
+                        <span className="font-medium">{category}</span>
+                      </div>
                       <Select
                         value={mapping?.flow ?? "unmapped"}
                         onValueChange={(value) => {
@@ -1894,9 +2169,7 @@ function ErstatningsCheckPage() {
         <Card>
           <CardHeader>
             <CardTitle>Hantera varor — Reklamationsstatus</CardTitle>
-            <CardDescription>
-              Uppdatera status per reklamation.
-            </CardDescription>
+            <CardDescription>Uppdatera status per reklamation.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-2 overflow-x-auto pb-2">
@@ -2003,10 +2276,7 @@ function ErstatningsCheckPage() {
       )}
 
       {/* Weekly task dialog */}
-      <Dialog
-        open={false}
-        onOpenChange={(open) => !open && setSelectedWeeklyProduct(null)}
-      >
+      <Dialog open={false} onOpenChange={(open) => !open && setSelectedWeeklyProduct(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Ange hållbarhetsdata</DialogTitle>
