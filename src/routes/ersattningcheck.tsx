@@ -24,6 +24,7 @@ import {
   Package,
   TrendingDown,
   TrendingUp,
+  X,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -209,6 +210,7 @@ function ErstatningsCheckPage() {
     | "reclamations"
     | "statistics"
     | "category-mapping"
+    | "admin-test"
   >(
     "dashboard",
   );
@@ -233,6 +235,13 @@ function ErstatningsCheckPage() {
   const [categoryMappings, setCategoryMappings] = useState<DeliveryCategoryMapping[]>([]);
   const [deliveryCategories, setDeliveryCategories] = useState<string[]>([]);
   const [mappingLoading, setMappingLoading] = useState(false);
+  const [testFixtureSapId, setTestFixtureSapId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!importSuccess) return;
+    const timeoutId = window.setTimeout(() => setImportSuccess(null), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [importSuccess]);
 
   const supabaseClient = supabase;
 
@@ -278,6 +287,7 @@ function ErstatningsCheckPage() {
   const eligibleShelfLifeRecords = shelfLifeRecords.filter(
     (record) => assessDelivery(record.arrival_date, record.expiry_date, record.shelf_lifetime_days)?.isEligible,
   );
+  const hasImportedDeliveries = deliveryStatistics.length > 0;
 
   // Handle file upload
   const handleFileUpload = async (fileOrEvent: File | React.ChangeEvent<HTMLInputElement>) => {
@@ -581,6 +591,101 @@ function ErstatningsCheckPage() {
     if (lowerCategory.includes("frys")) return "Fryst";
     if (lowerCategory.includes("färsk") || lowerCategory.includes("farsk")) return "Färsk";
     return "Torrt";
+  };
+
+  const createAdminTestFixture = async (includeReclamation: boolean) => {
+    if (user.role !== "admin") return null;
+    setIsLoading(true);
+    const sapArticleId = `TEST-${Date.now()}`;
+    try {
+      const { error: productError } = await supabase.from("products").insert({
+        store_id: activeStore.id,
+        sap_article_id: sapArticleId,
+        bnr: `TEST-${Date.now()}`,
+        name: "TEST - Ersättningsartikel",
+        brand: "StoreFlow test",
+        category: "TEST",
+        is_active: true,
+      });
+      if (productError) throw productError;
+
+      const arrivalDate = new Date();
+      const expiryDate = new Date(arrivalDate);
+      expiryDate.setDate(expiryDate.getDate() + 30);
+      const { error: deliveryError } = await supabase.from("store_product_deliveries").insert({
+        store_id: activeStore.id,
+        sap_article_id: sapArticleId,
+        arrival_date: arrivalDate.toISOString(),
+        best_before_date: expiryDate.toISOString(),
+        quantity: 1,
+        status: "Levererad",
+        delivery_number: `TEST-${Date.now()}`,
+        product_name: "TEST - Ersättningsartikel",
+        brand: "StoreFlow test",
+        bnr: `TEST-${Date.now()}`,
+        category: "TEST",
+        total_price: "100.00",
+      });
+      if (deliveryError) throw deliveryError;
+
+      const { error: shelfLifeError } = await supabase.from("product_shelf_life").upsert(
+        { sap_article_id: sapArticleId, shelf_lifetime_days: 365 },
+        { onConflict: "sap_article_id" },
+      );
+      if (shelfLifeError) throw shelfLifeError;
+
+      if (includeReclamation) {
+        const { error: reclamationError } = await supabase.from("reclamations").insert({
+          store_id: activeStore.id,
+          sap_article_id: sapArticleId,
+          status: "Ej skickad",
+          notes: "TESTDATA - kan tas bort från testsidan",
+        });
+        if (reclamationError) throw reclamationError;
+      }
+
+      setTestFixtureSapId(sapArticleId);
+      await loadShelfLifeData();
+      if (includeReclamation) {
+        const { data } = await supabase.from("reclamations").select("*").eq("store_id", activeStore.id);
+        if (data) setReclamations(data as Reclamation[]);
+      }
+      toast.success("Testdata skapad. Den är märkt TESTDATA och kan rensas från testsidan.");
+      return sapArticleId;
+    } catch (error) {
+      console.error("Error creating admin test fixture:", error);
+      toast.error("Kunde inte skapa testdata.");
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const removeAdminTestFixture = async () => {
+    if (!testFixtureSapId || user.role !== "admin") return;
+    setIsLoading(true);
+    try {
+      await supabase.from("reclamations").delete().eq("store_id", activeStore.id).eq("sap_article_id", testFixtureSapId);
+      await supabase.from("store_product_deliveries").delete().eq("store_id", activeStore.id).eq("sap_article_id", testFixtureSapId);
+      await supabase.from("product_shelf_life").delete().eq("sap_article_id", testFixtureSapId);
+      await supabase.from("products").delete().eq("store_id", activeStore.id).eq("sap_article_id", testFixtureSapId);
+      setTestFixtureSapId(null);
+      await loadShelfLifeData();
+      setReclamations((current) => current.filter((item) => item.sap_article_id !== testFixtureSapId));
+      toast.success("Testdata rensad.");
+    } catch (error) {
+      console.error("Error removing admin test fixture:", error);
+      toast.error("Kunde inte rensa testdata.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testCompensationGeneration = async () => {
+    const sapArticleId = await createAdminTestFixture(false);
+    if (!sapArticleId) return;
+    await generateCompensationZip();
+    await removeAdminTestFixture();
   };
 
   const loadDeliveryStatistics = async (period = statisticsPeriod) => {
@@ -982,32 +1087,102 @@ function ErstatningsCheckPage() {
           5. Statistik
         </Button>
         {user.role === "admin" && (
-          <Button
-            variant={step === "category-mapping" ? "default" : "outline"}
-            onClick={() => {
-              void loadCategoryMappings();
-              setStep("category-mapping");
-            }}
-            className="flex items-center gap-2"
-          >
-            <Settings size={16} />
-            6. Koppla flöden
-          </Button>
+          <>
+            <Button
+              variant={step === "category-mapping" ? "default" : "outline"}
+              onClick={() => {
+                void loadCategoryMappings();
+                setStep("category-mapping");
+              }}
+              className="flex items-center gap-2"
+            >
+              <Settings size={16} />
+              6. Koppla flöden
+            </Button>
+            <Button
+              variant={step === "admin-test" ? "default" : "outline"}
+              onClick={() => setStep("admin-test")}
+              className="flex items-center gap-2"
+            >
+              <CheckCircle2 size={16} />
+              Testa flöden
+            </Button>
+          </>
         )}
       </div>
 
       {/* Alerts */}
       {importError && (
-        <Alert variant="destructive" className="mb-4">
+        <Alert variant="destructive" className="mb-4 flex items-start justify-between gap-3">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>{importError}</AlertDescription>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="-mr-2 -mt-2 shrink-0"
+            onClick={() => setImportError(null)}
+            aria-label="Stäng meddelande"
+            title="Stäng meddelande"
+          >
+            <X size={16} />
+          </Button>
         </Alert>
       )}
       {importSuccess && (
-        <Alert className="mb-4">
+        <Alert className="mb-4 flex items-start justify-between gap-3">
           <CheckCircle2 className="h-4 w-4" />
           <AlertDescription>{importSuccess}</AlertDescription>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="-mr-2 -mt-2 shrink-0"
+            onClick={() => setImportSuccess(null)}
+            aria-label="Stäng meddelande"
+            title="Stäng meddelande"
+          >
+            <X size={16} />
+          </Button>
         </Alert>
+      )}
+
+      {step === "admin-test" && user.role === "admin" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Testa ersättningsflödet</CardTitle>
+            <CardDescription>
+              Skapar verklig, tydligt märkt testdata i den aktiva butiken så att admin kan prova
+              hantering och generering. Testdata kan rensas efteråt.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-3">
+              <Button
+                onClick={async () => {
+                  const sapArticleId = await createAdminTestFixture(true);
+                  if (sapArticleId) setStep("reclamations");
+                }}
+                disabled={isLoading}
+              >
+                Testa Hantera varor
+              </Button>
+              <Button onClick={testCompensationGeneration} disabled={isLoading} variant="secondary">
+                Testa generera ersättning
+              </Button>
+              {testFixtureSapId && (
+                <Button onClick={removeAdminTestFixture} disabled={isLoading} variant="destructive">
+                  Rensa testdata
+                </Button>
+              )}
+            </div>
+            {testFixtureSapId && (
+              <p className="text-sm text-muted-foreground">
+                Aktiv testartikel: <span className="font-mono">{testFixtureSapId}</span>
+              </p>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {step === "dashboard" && (
@@ -1281,7 +1456,6 @@ function ErstatningsCheckPage() {
                       <TableHead>Bäst-före-datum</TableHead>
                       <TableHead>Leveransdatum</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Åtgärder</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1377,9 +1551,6 @@ function ErstatningsCheckPage() {
                               <Badge variant="secondary">OK</Badge>
                             )}
                           </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">
-                            Dubbelklicka på värdet
-                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -1444,6 +1615,10 @@ function ErstatningsCheckPage() {
                     );
                   })}
                 </div>
+              ) : hasImportedDeliveries ? (
+                <p className="text-sm text-muted-foreground">
+                  Inga leveranser understiger Coop:s hållbarhetskrav just nu.
+                </p>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Ingen leverans är importerad ännu.
