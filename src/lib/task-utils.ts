@@ -64,7 +64,8 @@ export function validateRecurrenceRange(
   endDate: string,
 ): string | null {
   if (!rule) return null;
-  if (!startDate || !endDate) return "Återkommande uppgifter måste ha både start- och slutdatum.";
+  if (!startDate) return "Återkommande uppgifter måste ha ett startdatum.";
+  if (!endDate) return "Återkommande uppgifter måste ha ett slutdatum.";
   const start = midnightStockholm(new Date(`${startDate}T00:00:00`));
   const end = midnightStockholm(new Date(`${endDate}T00:00:00`));
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
@@ -406,4 +407,51 @@ export async function spawnChildrenForParent(
       .update({ last_spawned_at: new Date(nowMs).toISOString() })
       .eq("id", parent.id);
   }
+}
+
+export function getWeekNumber(date: Date): number {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  copy.setDate(copy.getDate() + 3 - ((copy.getDay() + 6) % 7));
+  const firstThursday = new Date(copy.getFullYear(), 0, 4);
+  return (
+    1 +
+    Math.round(
+      ((copy.getTime() - firstThursday.getTime()) / 86400000 -
+        3 +
+        ((firstThursday.getDay() + 6) % 7)) /
+        7,
+    )
+  );
+}
+
+export function getDateFromISOWeek(year: number, week: number, dayOfWeek: number = 1): Date {
+  const date = new Date(year, 0, 1 + (week - 1) * 7);
+  const day = date.getDay();
+  const diff = (dayOfWeek - day + 7) % 7;
+  date.setDate(date.getDate() + (diff === 0 && dayOfWeek === 1 ? -7 : diff));
+  return midnightStockholm(date);
+}
+
+export function calculateEndDateFromMaxRepetitions(
+  rule: string,
+  startDate: string,
+  maxRepetitions: number,
+): string {
+  const start = midnightStockholm(new Date(`${startDate}T00:00:00`));
+  const end = new Date(start);
+  if (rule === "daily" || rule === "every_other_day") {
+    end.setDate(end.getDate() + maxRepetitions);
+  } else if (rule === "weekly" || rule === "biweekly") {
+    end.setDate(end.getDate() + maxRepetitions * 7);
+  } else if (rule === "monthly") {
+    end.setMonth(end.getMonth() + maxRepetitions);
+  } else if (rule === "quarterly") {
+    end.setMonth(end.getMonth() + maxRepetitions * 3);
+  } else if (rule === "yearly") {
+    end.setFullYear(end.getFullYear() + maxRepetitions);
+  } else {
+    end.setDate(end.getDate() + maxRepetitions);
+  }
+  return localDateStr(end);
 }

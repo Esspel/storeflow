@@ -27,8 +27,6 @@ StoreFlow is a management tool for retail stores. It helps store managers and st
 
 The frontend talks to Supabase (PostgreSQL + Row Level Security). Sessions are custom tokens stored in secure storage, validated through the `secure-login` edge function and the `app_sessions` table — RLS policies read the active token to authorize requests. Mutations queue offline and sync when connectivity returns.
 
-QR codes and ArUco markers placed on shelves enable spatial mapping — the app uses your camera to scan shelves and compare what it sees against the expected planogram.
-
 ## Running locally
 
 **Prerequisites**

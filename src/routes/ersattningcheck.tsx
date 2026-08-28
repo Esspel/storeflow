@@ -947,6 +947,7 @@ function ErstatningsCheckPage() {
         totalCount,
         monthly,
         recurring,
+        recurringBadDates,
         flowCounts,
         categoryCounts,
         openCount: reclamationsForPeriod.filter(

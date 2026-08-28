@@ -109,6 +109,9 @@ import {
   getRecurrencePreview,
   getRecurrenceHorizonDays,
   RECURRENCE_HORIZON_KEY,
+  getWeekNumber,
+  getDateFromISOWeek,
+  calculateEndDateFromMaxRepetitions,
 } from "@/lib/task-utils";
 
 export const Route = createFileRoute("/uppgifter")({
@@ -248,6 +251,10 @@ type NewTaskForm = {
   recurrence_month_day: number;
   recurrence_start: string;
   recurrence_end: string;
+  recurrence_end_mode: "max_repetitions" | "end_date";
+  recurrence_max_repetitions: number;
+  recurrence_start_week: number | "";
+  recurrence_end_week: number | "";
   sap_article_id: string;
   completion_mode: "manual" | "auto_from_children" | "auto_complete_children";
   steps: { label: string; requires_photo: boolean; link_url: string }[];
@@ -277,6 +284,10 @@ const emptyForm = (storeId: string): NewTaskForm => ({
   recurrence_month_day: 1,
   recurrence_start: "",
   recurrence_end: "",
+  recurrence_end_mode: "end_date" as "max_repetitions" | "end_date",
+  recurrence_max_repetitions: 0,
+  recurrence_start_week: "" as number | "",
+  recurrence_end_week: "" as number | "",
   sap_article_id: "",
   completion_mode: "manual" as "manual" | "auto_from_children" | "auto_complete_children",
   steps: [{ label: "", requires_photo: false, link_url: "" }] as {
@@ -1002,7 +1013,12 @@ function TasksPage() {
     const deletedPeriods = new Set<string>(parent.deleted_periods ?? []);
 
     const originKey = localDateStr(originDate);
-    if (originDate <= ceilDate && !deletedPeriods.has(originKey)) {
+    const originMatchesRule =
+      (parent.recurrence_rule !== "weekly" && parent.recurrence_rule !== "biweekly") ||
+      (parent.recurrence_days ?? []).includes(
+        originDate.getDay() === 0 ? 6 : originDate.getDay() - 1,
+      );
+    if (originMatchesRule && originDate <= ceilDate && !deletedPeriods.has(originKey)) {
       allPsKeys.add(originKey);
       allPeriods.push(originDate);
     }
@@ -1795,6 +1811,10 @@ function TasksPage() {
         (task as TaskFull & { recurrence_month_day?: number }).recurrence_month_day ?? 1,
       recurrence_start: task.recurrence_start ?? "",
       recurrence_end: recurrenceEnd,
+      recurrence_end_mode: "end_date" as "max_repetitions" | "end_date",
+      recurrence_max_repetitions: 0,
+      recurrence_start_week: "" as number | "",
+      recurrence_end_week: "" as number | "",
       sap_article_id: (task as TaskFull & { sap_article_id?: string }).sap_article_id ?? "",
       completion_mode: task.completion_mode ?? "manual",
       steps: (task.steps ?? []).map((s) => ({
@@ -4049,6 +4069,8 @@ function TasksPage() {
                       rule && !p.recurrence_start
                         ? localDateStr(new Date(getSimulatedNow()))
                         : p.recurrence_start,
+                    recurrence_end_mode: "end_date",
+                    recurrence_max_repetitions: 0,
                   }));
                 }}
               >
@@ -4196,13 +4218,151 @@ function TasksPage() {
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-muted-foreground w-10">Slut</span>
-                  <Input
-                    type="date"
-                    value={newTask.recurrence_end}
-                    onChange={(e) => setNewTask((p) => ({ ...p, recurrence_end: e.target.value }))}
-                    className="flex-1 h-7 text-xs"
+                  <span className="text-[11px] text-muted-foreground w-10">V.</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={53}
+                    value={newTask.recurrence_start_week}
+                    onChange={(e) => {
+                      const val =
+                        e.target.value === ""
+                          ? ""
+                          : Math.max(1, Math.min(53, parseInt(e.target.value) || 1));
+                      if (val === "") {
+                        setNewTask((p) => ({ ...p, recurrence_start_week: "" }));
+                      } else {
+                        const baseDate = newTask.recurrence_start
+                          ? new Date(newTask.recurrence_start)
+                          : new Date();
+                        const year = baseDate.getFullYear();
+                        const date = getDateFromISOWeek(year, val as number);
+                        setNewTask((p) => ({
+                          ...p,
+                          recurrence_start_week: val as number,
+                          recurrence_start: localDateStr(date),
+                        }));
+                      }
+                    }}
+                    placeholder="V."
+                    className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
                   />
+                  {newTask.recurrence_start_week && (
+                    <span className="text-[11px] text-muted-foreground/60">
+                      {newTask.recurrence_start}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground w-10">Slut</span>
+                  {newTask.recurrence_end_mode === "end_date" ? (
+                    <Input
+                      type="date"
+                      value={newTask.recurrence_end}
+                      onChange={(e) =>
+                        setNewTask((p) => ({ ...p, recurrence_end: e.target.value }))
+                      }
+                      className="flex-1 h-7 text-xs"
+                    />
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={newTask.recurrence_max_repetitions || ""}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setNewTask((p) => ({ ...p, recurrence_max_repetitions: val }));
+                          if (val > 0 && newTask.recurrence_start) {
+                            const endDate = calculateEndDateFromMaxRepetitions(
+                              newTask.recurrence_rule,
+                              newTask.recurrence_start,
+                              val,
+                            );
+                            setNewTask((p) => ({ ...p, recurrence_end: endDate }));
+                          }
+                        }}
+                        placeholder="Antal"
+                        className="w-20 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                      />
+                      <span className="text-[11px] text-muted-foreground">upprepningar</span>
+                    </div>
+                  )}
+                </div>
+                {newTask.recurrence_end_mode === "end_date" && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-muted-foreground w-10">V.</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={53}
+                      value={newTask.recurrence_end_week}
+                      onChange={(e) => {
+                        const val =
+                          e.target.value === ""
+                            ? ""
+                            : Math.max(1, Math.min(53, parseInt(e.target.value) || 1));
+                        if (val === "") {
+                          setNewTask((p) => ({ ...p, recurrence_end_week: "" }));
+                        } else {
+                          const baseDate = newTask.recurrence_end
+                            ? new Date(newTask.recurrence_end)
+                            : new Date();
+                          const year = baseDate.getFullYear();
+                          const date = getDateFromISOWeek(year, val as number);
+                          setNewTask((p) => ({
+                            ...p,
+                            recurrence_end_week: val as number,
+                            recurrence_end: localDateStr(date),
+                          }));
+                        }
+                      }}
+                      placeholder="V."
+                      className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                    />
+                    {newTask.recurrence_end_week && (
+                      <span className="text-[11px] text-muted-foreground/60">
+                        {newTask.recurrence_end}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {newTask.recurrence_end_mode === "max_repetitions" &&
+                  newTask.recurrence_max_repetitions > 0 &&
+                  newTask.recurrence_end && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Slutar efter {newTask.recurrence_max_repetitions} upprepningar (beräknat
+                      slutdatum: {newTask.recurrence_end})
+                    </p>
+                  )}
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setNewTask((p) => ({ ...p, recurrence_end_mode: "max_repetitions" }))
+                    }
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                      newTask.recurrence_end_mode === "max_repetitions"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border/60 text-muted-foreground hover:border-primary/50",
+                    )}
+                  >
+                    Max antal upprepningar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewTask((p) => ({ ...p, recurrence_end_mode: "end_date" }))}
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                      newTask.recurrence_end_mode === "end_date"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border/60 text-muted-foreground hover:border-primary/50",
+                    )}
+                  >
+                    Slutdatum
+                  </button>
                 </div>
                 {getRecurrencePreview(
                   newTask.recurrence_rule,

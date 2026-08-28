@@ -89,6 +89,11 @@ import {
   spawnChildrenForParent,
   getRecurrenceHorizonDays,
   validateRecurrenceRange,
+  getRecurrencePreview,
+  getWeekNumber,
+  getDateFromISOWeek,
+  calculateEndDateFromMaxRepetitions,
+  localDateStr,
 } from "@/lib/task-utils";
 import { exportTextAsCSV, parseCSVLine } from "@/lib/csv";
 import { toast } from "sonner";
@@ -251,6 +256,10 @@ type FormState = {
   recurrence_month_day: number;
   recurrence_start: string;
   recurrence_end: string;
+  recurrence_end_mode: "max_repetitions" | "end_date";
+  recurrence_max_repetitions: number;
+  recurrence_start_week: number | "";
+  recurrence_end_week: number | "";
   due_date_offset: string;
   due_date_time: string;
   sap_article_id: string;
@@ -301,6 +310,10 @@ const emptyForm = (): FormState => ({
   recurrence_month_day: 1,
   recurrence_start: "",
   recurrence_end: "",
+  recurrence_end_mode: "end_date" as "max_repetitions" | "end_date",
+  recurrence_max_repetitions: 0,
+  recurrence_start_week: "" as number | "",
+  recurrence_end_week: "" as number | "",
   due_date_offset: "",
   due_date_time: "",
   sap_article_id: "",
@@ -1967,6 +1980,10 @@ function MallarPage() {
       recurrence_start:
         (t as ChecklistTemplate & { recurrence_start?: string }).recurrence_start ?? "",
       recurrence_end: (t as ChecklistTemplate & { recurrence_end?: string }).recurrence_end ?? "",
+      recurrence_end_mode: "end_date" as "max_repetitions" | "end_date",
+      recurrence_max_repetitions: 0,
+      recurrence_start_week: "" as number | "",
+      recurrence_end_week: "" as number | "",
       due_date_offset: t.due_date_offset != null ? String(t.due_date_offset) : "",
       due_date_time: t.due_date_time ?? "",
       sap_article_id: (t as ChecklistTemplate & { sap_article_id?: string }).sap_article_id ?? "",
@@ -3752,6 +3769,8 @@ function MallarPage() {
                         ...p,
                         recurrence_rule: v === "__none" ? "" : v,
                         recurrence_interval: 1,
+                        recurrence_end_mode: "end_date",
+                        recurrence_max_repetitions: 0,
                       }))
                     }
                   >
@@ -3895,9 +3914,180 @@ function MallarPage() {
                   </div>
                 </div>
               )}
+              {f.recurrence_rule && (
+                <div className="space-y-2 pt-1 border-t border-border/40">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-muted-foreground w-10">Start</span>
+                    <Input
+                      type="date"
+                      value={f.recurrence_start}
+                      onChange={(e) => setF((p) => ({ ...p, recurrence_start: e.target.value }))}
+                      className="flex-1 h-7 text-xs"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-muted-foreground w-10">V.</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={53}
+                      value={f.recurrence_start_week}
+                      onChange={(e) => {
+                        const val =
+                          e.target.value === ""
+                            ? ""
+                            : Math.max(1, Math.min(53, parseInt(e.target.value) || 1));
+                        if (val === "") {
+                          setF((p) => ({ ...p, recurrence_start_week: "" }));
+                        } else {
+                          const baseDate = f.recurrence_start
+                            ? new Date(f.recurrence_start)
+                            : new Date();
+                          const year = baseDate.getFullYear();
+                          const date = getDateFromISOWeek(year, val as number);
+                          setF((p) => ({
+                            ...p,
+                            recurrence_start_week: val as number,
+                            recurrence_start: localDateStr(date),
+                          }));
+                        }
+                      }}
+                      placeholder="V."
+                      className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                    />
+                    {f.recurrence_start_week && (
+                      <span className="text-[11px] text-muted-foreground/60">
+                        {f.recurrence_start}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-muted-foreground w-10">Slut</span>
+                    {f.recurrence_end_mode === "end_date" ? (
+                      <Input
+                        type="date"
+                        value={f.recurrence_end}
+                        onChange={(e) => setF((p) => ({ ...p, recurrence_end: e.target.value }))}
+                        className="flex-1 h-7 text-xs"
+                      />
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={f.recurrence_max_repetitions || ""}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0;
+                            setF((p) => ({ ...p, recurrence_max_repetitions: val }));
+                            if (val > 0 && f.recurrence_start) {
+                              const endDate = calculateEndDateFromMaxRepetitions(
+                                f.recurrence_rule,
+                                f.recurrence_start,
+                                val,
+                              );
+                              setF((p) => ({ ...p, recurrence_end: endDate }));
+                            }
+                          }}
+                          placeholder="Antal"
+                          className="w-20 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                        />
+                        <span className="text-[11px] text-muted-foreground">upprepningar</span>
+                      </div>
+                    )}
+                  </div>
+                  {f.recurrence_end_mode === "end_date" && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground w-10">V.</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={53}
+                        value={f.recurrence_end_week}
+                        onChange={(e) => {
+                          const val =
+                            e.target.value === ""
+                              ? ""
+                              : Math.max(1, Math.min(53, parseInt(e.target.value) || 1));
+                          if (val === "") {
+                            setF((p) => ({ ...p, recurrence_end_week: "" }));
+                          } else {
+                            const baseDate = f.recurrence_end
+                              ? new Date(f.recurrence_end)
+                              : new Date();
+                            const year = baseDate.getFullYear();
+                            const date = getDateFromISOWeek(year, val as number);
+                            setF((p) => ({
+                              ...p,
+                              recurrence_end_week: val as number,
+                              recurrence_end: localDateStr(date),
+                            }));
+                          }
+                        }}
+                        placeholder="V."
+                        className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
+                      />
+                      {f.recurrence_end_week && (
+                        <span className="text-[11px] text-muted-foreground/60">
+                          {f.recurrence_end}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {f.recurrence_end_mode === "max_repetitions" &&
+                    f.recurrence_max_repetitions > 0 &&
+                    f.recurrence_end && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Slutar efter {f.recurrence_max_repetitions} upprepningar (beräknat
+                        slutdatum: {f.recurrence_end})
+                      </p>
+                    )}
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setF((p) => ({ ...p, recurrence_end_mode: "max_repetitions" }))
+                      }
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                        f.recurrence_end_mode === "max_repetitions"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border/60 text-muted-foreground hover:border-primary/50",
+                      )}
+                    >
+                      Max antal upprepningar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setF((p) => ({ ...p, recurrence_end_mode: "end_date" }))}
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
+                        f.recurrence_end_mode === "end_date"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border/60 text-muted-foreground hover:border-primary/50",
+                      )}
+                    >
+                      Slutdatum
+                    </button>
+                  </div>
+                  {getRecurrencePreview(
+                    f.recurrence_rule,
+                    f.recurrence_days,
+                    f.recurrence_start,
+                    f.recurrence_end,
+                  ) && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {getRecurrencePreview(
+                        f.recurrence_rule,
+                        f.recurrence_days,
+                        f.recurrence_start,
+                        f.recurrence_end,
+                      )}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
-
-            {/* Recurrence start/end dates — hidden in template form; start = today, end chosen at task creation */}
 
             {/* Förening selector — shown when scope is forening and user is admin */}
             {scope === "forening" && isAdmin && (
