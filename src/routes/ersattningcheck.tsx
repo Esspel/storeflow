@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   Clock,
   ChevronRight,
+  ExternalLink,
+  BarChart3,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -70,6 +72,19 @@ type ShelfLifeRecord = {
   compensation_price_ore: number;
   created_at: string;
   updated_at: string;
+  product_name: string;
+  brand: string;
+  product_url: string | null;
+  delivery_status: string;
+};
+
+type DeliveryStatistic = {
+  sap_article_id: string;
+  product_name: string;
+  brand: string;
+  arrival_date: string | null;
+  expiry_date: string | null;
+  delivery_status: string;
 };
 
 type WeeklyTask = {
@@ -91,13 +106,23 @@ type Reclamation = {
   notes?: string;
 };
 
+function isDelivered(status: string | null | undefined) {
+  const normalized = String(status ?? "").trim().toLowerCase();
+  return normalized === "levererad" || normalized === "delivered";
+}
+
+function getSapProductUrl(storeNumber: string | null | undefined, sapArticleId: string) {
+  if (!storeNumber || !sapArticleId) return null;
+  return `https://s4r.sap.coop.se/sap/bc/ui2/flp?sap-client=100&sap-language=SV#Article-manage&/Store/${encodeURIComponent(storeNumber)}/Product/${encodeURIComponent(sapArticleId)}`;
+}
+
 export const Route = createFileRoute("/ersattningcheck")({
   component: ErstatningsCheckPage,
 });
 
 function ErstatningsCheckPage() {
   const { user, activeStore, loading: authLoading } = useAuth();
-  const [step, setStep] = useState<"import" | "manage" | "generate" | "weekly" | "reclamations">(
+  const [step, setStep] = useState<"import" | "manage" | "generate" | "weekly" | "reclamations" | "statistics">(
     "import",
   );
   const [reclamations, setReclamations] = useState<Reclamation[]>([]);
@@ -113,6 +138,7 @@ function ErstatningsCheckPage() {
   const [weeklyTask, setWeeklyTask] = useState<WeeklyTask[]>([]);
   const [selectedWeeklyProduct, setSelectedWeeklyProduct] = useState<WeeklyTask | null>(null);
   const [weeklyDays, setWeeklyDays] = useState("");
+  const [deliveryStatistics, setDeliveryStatistics] = useState<DeliveryStatistic[]>([]);
 
   const supabaseClient = supabase;
 
@@ -153,6 +179,11 @@ function ErstatningsCheckPage() {
   const handleFileUpload = async (fileOrEvent: File | React.ChangeEvent<HTMLInputElement>) => {
     const file = fileOrEvent instanceof File ? fileOrEvent : fileOrEvent.target.files?.[0];
     if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+      setImportError("Endast .xlsx-filer kan laddas upp.");
+      return;
+    }
 
     setIsLoading(true);
     setImportError(null);
@@ -226,7 +257,7 @@ function ErstatningsCheckPage() {
         .map((result) => ({
           sap_article_id: result.row.sapProduktId?.trim(),
           store_id: activeStore.id,
-          arrival_date: result.row.leveransdag || new Date().toISOString(),
+          arrival_date: result.row.leveransdag,
           best_before_date: result.row.bastForeDatum,
           quantity: Number.parseInt(result.row.levereradKvantitet, 10) || 0,
           status: result.row.leveransstatus || "delivered",
@@ -235,8 +266,22 @@ function ErstatningsCheckPage() {
           order_line: result.row.orderrad || null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          pallet_number: result.row.pallnummer || null,
+          product_name: result.row.produkt || null,
+          brand: result.row.varumärke || null,
+          bnr: result.row.bnr || null,
+          content: result.row.innehåll || null,
+          order_quantity: result.row.beställningskvantitet || null,
+          order_unit: result.row.beställningsenhet || null,
+          unit_conversion: result.row.enhetsomvandling || null,
+          actual_weight_kg: result.row.sannViktKg || null,
+          price_per_delivery_unit: result.row.prisPerLeveransenhet || null,
+          total_price: result.row.totalpris || null,
+          category: result.row.kategori || null,
+          expected_quantity: result.row.förväntadKvantitet || null,
+          delivery_status: result.row.leveransstatus || null,
         }))
-        .filter((row) => row.sap_article_id && row.best_before_date);
+        .filter((row) => row.sap_article_id);
 
       if (deliveryRows.length > 0) {
         const { error: deliveryError } = await supabase
@@ -305,7 +350,7 @@ function ErstatningsCheckPage() {
       const [productsResult, masterResult, deliveriesResult] = await Promise.all([
         supabase
           .from("products")
-          .select("id, sap_article_id, name")
+          .select("id, sap_article_id, name, brand")
           .eq("store_id", activeStore.id)
           .not("sap_article_id", "is", null)
           .limit(500),
@@ -315,7 +360,7 @@ function ErstatningsCheckPage() {
           .limit(500),
         supabase
           .from("store_product_deliveries")
-          .select("id, sap_article_id, best_before_date, arrival_date")
+          .select("id, sap_article_id, best_before_date, arrival_date, status, delivery_number, product_name, brand")
           .eq("store_id", activeStore.id)
           .order("arrival_date", { ascending: false })
           .limit(1000),
@@ -330,13 +375,19 @@ function ErstatningsCheckPage() {
       );
       const latestDelivery = new Map<string, any>();
       for (const delivery of deliveriesResult.data ?? []) {
-        if (!latestDelivery.has(delivery.sap_article_id)) {
+        if (
+          !latestDelivery.has(delivery.sap_article_id) &&
+          delivery.best_before_date &&
+          isDelivered(delivery.status)
+        ) {
           latestDelivery.set(delivery.sap_article_id, delivery);
         }
       }
 
       setShelfLifeRecords(
-        (productsResult.data ?? []).map((product: any) => {
+        (productsResult.data ?? [])
+          .filter((product: any) => latestDelivery.has(product.sap_article_id))
+          .map((product: any) => {
           const master = masterMap.get(product.sap_article_id) ?? {};
           const delivery = latestDelivery.get(product.sap_article_id) ?? {};
           return {
@@ -346,14 +397,49 @@ function ErstatningsCheckPage() {
             expiry_date: delivery.best_before_date ?? "",
             arrival_date: delivery.arrival_date ?? "",
             compensation_price_ore: master.default_compensation_price_ore ?? 2,
+            product_name: product.name ?? delivery.product_name ?? "Okänd produkt",
+            brand: product.brand ?? delivery.brand ?? "",
+            product_url: getSapProductUrl(
+              activeStore.butiks_nr ?? activeStore.sap_site_id,
+              product.sap_article_id,
+            ),
+            delivery_status: delivery.status ?? "",
             created_at: product.created_at ?? new Date().toISOString(),
             updated_at: product.updated_at ?? new Date().toISOString(),
           };
-        }),
+          }),
       );
     } catch (error) {
       console.error("Error loading shelf life:", error);
       setImportError("Kunde inte ladda hållbarhetsdata.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadDeliveryStatistics = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("store_product_deliveries")
+        .select("sap_article_id, product_name, brand, arrival_date, best_before_date, status")
+        .eq("store_id", activeStore.id)
+        .order("arrival_date", { ascending: false });
+      if (error) throw error;
+      setDeliveryStatistics(
+        (data ?? []).map((row: any) => ({
+          sap_article_id: row.sap_article_id,
+          product_name: row.product_name || "Okänd produkt",
+          brand: row.brand || "",
+          arrival_date: row.arrival_date,
+          expiry_date: row.best_before_date,
+          delivery_status: row.status || "",
+        })),
+      );
+      setStep("statistics");
+    } catch (error) {
+      console.error("Error loading delivery statistics:", error);
+      setImportError("Kunde inte ladda leveranshistoriken.");
     } finally {
       setIsLoading(false);
     }
@@ -429,32 +515,13 @@ function ErstatningsCheckPage() {
   const saveShelfLife = async (record: {
     sap_article_id: string;
     shelf_lifetime_days: number;
-    expiry_date: string;
-    arrival_date: string;
-    compensation_price_ore?: number;
   }) => {
     setIsLoading(true);
     try {
-      // Skriv leveransrad till store_product_deliveries (ny struktur)
-      // Använd INSERT (inte UPSERT) så leveranshistorik skrivs inte över
-      const { error: insertErr } = await supabase.from("store_product_deliveries").insert({
-        sap_article_id: record.sap_article_id,
-        store_id: activeStore.id,
-        arrival_date: record.arrival_date,
-        best_before_date: record.expiry_date,
-        quantity: 0,
-        status: "delivered",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-      if (insertErr) throw insertErr;
-
-      // Uppdatera masterdata (product_shelf_life) om det inte redan finns
       const { error: upsertErr } = await supabase.from("product_shelf_life").upsert(
         {
           sap_article_id: record.sap_article_id,
           shelf_lifetime_days: record.shelf_lifetime_days,
-          default_compensation_price_ore: record.compensation_price_ore ?? 2,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "sap_article_id" },
@@ -478,14 +545,20 @@ function ErstatningsCheckPage() {
       // Läs leveranshistorik från store_product_deliveries (inte masterdata-tabellen)
       const { data: shelfData, error: dbErr } = await supabase
         .from("store_product_deliveries")
-        .select("sap_article_id, best_before_date, arrival_date, quantity, status, delivery_number")
+        .select(
+          "sap_article_id, best_before_date, arrival_date, quantity, status, delivery_number, product_name, brand",
+        )
         .eq("store_id", activeStore.id)
         .order("arrival_date", { ascending: false });
 
       if (dbErr) throw dbErr;
       const latestByArticle = new Map<string, (typeof shelfData)[number]>();
       for (const delivery of shelfData ?? []) {
-        if (!latestByArticle.has(delivery.sap_article_id)) {
+        if (
+          !latestByArticle.has(delivery.sap_article_id) &&
+          delivery.best_before_date &&
+          isDelivered(delivery.status)
+        ) {
           latestByArticle.set(delivery.sap_article_id, delivery);
         }
       }
@@ -505,6 +578,12 @@ function ErstatningsCheckPage() {
         );
       if (masterErr) throw masterErr;
       const masterMap = new Map((masterData ?? []).map((m: any) => [m.sap_article_id, m]));
+      const { data: products, error: productsErr } = await supabase
+        .from("products")
+        .select("sap_article_id, name, brand")
+        .eq("store_id", activeStore.id);
+      if (productsErr) throw productsErr;
+      const productMap = new Map((products ?? []).map((p: any) => [p.sap_article_id, p]));
 
       // Gruppera per leveransnummer + temperaturzon
       const groups: Record<string, Array<any>> = {};
@@ -514,6 +593,7 @@ function ErstatningsCheckPage() {
         const zon = (master as any)?.temperature_zone || "okand";
         const shelfDays = (master as any)?.shelf_lifetime_days || 0;
         const compPrice = (master as any)?.default_compensation_price_ore || 2;
+        const product = productMap.get(r.sap_article_id) || {};
         const key = `${leverans}__${zon}`;
         if (!groups[key]) groups[key] = [];
         groups[key].push({
@@ -521,6 +601,9 @@ function ErstatningsCheckPage() {
           shelf_lifetime_days: shelfDays,
           compensation_price_ore: compPrice,
           temperature_zone: zon,
+          product_name: product.name || r.product_name || "Okänd produkt",
+          brand: product.brand || r.brand || "",
+          reason: "Bäst-före-datum passerat",
         });
       }
 
@@ -529,13 +612,16 @@ function ErstatningsCheckPage() {
         const content = [
           `LEVERANS: ${leverans}`,
           `TEMPERATURZON: ${zon}`,
-          `SAP_ARTIKEL_ID|HALLBARHET_DAGAR|UTGANGSDATUM|ANKOMST|ERSATTNING_ORE`,
+          `SAP_ARTIKEL_ID|PRODUKT|VARUMARKE|HALLBARHET_DAGAR|UTGANGSDATUM|ANKOMST|ANLEDNING|ERSATTNING_ORE`,
           ...rows.map((row: any) =>
             [
               row.sap_article_id,
+              row.product_name,
+              row.brand,
               row.shelf_lifetime_days,
               row.best_before_date?.split("T")[0] || row.best_before_date,
               row.arrival_date?.split("T")[0] || row.arrival_date,
+              row.reason,
               row.compensation_price_ore ?? 0,
             ].join("|"),
           ),
@@ -602,6 +688,14 @@ function ErstatningsCheckPage() {
           <AlertTriangle size={16} />
           4. Hantera varor
         </Button>
+        <Button
+          variant={step === "statistics" ? "default" : "outline"}
+          onClick={loadDeliveryStatistics}
+          className="flex items-center gap-2"
+        >
+          <BarChart3 size={16} />
+          5. Statistik
+        </Button>
       </div>
 
       {/* Alerts */}
@@ -636,14 +730,7 @@ function ErstatningsCheckPage() {
                 onDrop={async (e) => {
                   e.preventDefault();
                   const file = e.dataTransfer.files?.[0];
-                  if (
-                    file &&
-                    (file.name.endsWith(".xlsx") ||
-                      file.name.endsWith(".xls") ||
-                      file.name.endsWith(".csv"))
-                  ) {
-                    await handleFileUpload(file);
-                  }
+                  if (file) await handleFileUpload(file);
                 }}
                 onDragOver={(e) => e.preventDefault()}
                 onClick={() => document.getElementById("delivery-file")?.click()}
@@ -651,13 +738,13 @@ function ErstatningsCheckPage() {
                 <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
                 <p className="text-sm font-medium">Dra och släpp Excel-filen här</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  eller klicka för att välja .xlsx / .xls / .csv
+                  eller klicka för att välja .xlsx
                 </p>
               </div>
               <input
                 id="delivery-file"
                 type="file"
-                accept=".xlsx,.xls,.csv"
+                accept=".xlsx"
                 className="hidden"
                 onChange={handleFileUpload}
                 disabled={isLoading}
@@ -772,6 +859,8 @@ function ErstatningsCheckPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>SAP Produkt-ID</TableHead>
+                      <TableHead>Produkt</TableHead>
+                      <TableHead>Varumärke</TableHead>
                       <TableHead>Total hållbarhet (dagar)</TableHead>
                       <TableHead>Bäst-före-datum</TableHead>
                       <TableHead>Leveransdatum</TableHead>
@@ -799,8 +888,22 @@ function ErstatningsCheckPage() {
                       return (
                         <TableRow key={record.id}>
                           <TableCell className="font-mono text-sm">
-                            {record.sap_article_id}
+                            {record.product_url ? (
+                              <a
+                                href={record.product_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+                              >
+                                {record.sap_article_id}
+                                <ExternalLink size={13} />
+                              </a>
+                            ) : (
+                              record.sap_article_id
+                            )}
                           </TableCell>
+                          <TableCell>{record.product_name}</TableCell>
+                          <TableCell>{record.brand || "-"}</TableCell>
                           <TableCell>{record.shelf_lifetime_days}</TableCell>
                           <TableCell>
                             {record.expiry_date
@@ -871,12 +974,6 @@ function ErstatningsCheckPage() {
                   shelf_lifetime_days: parseInt(
                     (form.elements.namedItem("shelf_lifetime_days") as HTMLInputElement).value,
                   ),
-                  expiry_date: (form.elements.namedItem("expiry_date") as HTMLInputElement).value,
-                  arrival_date: (form.elements.namedItem("arrival_date") as HTMLInputElement).value,
-                  compensation_price_ore:
-                    parseInt(
-                      (form.elements.namedItem("compensation_price_ore") as HTMLInputElement).value,
-                    ) || 2,
                 });
                 setIsDialogOpen(false);
               }}
@@ -888,33 +985,6 @@ function ErstatningsCheckPage() {
                   name="shelf_lifetime_days"
                   type="number"
                   defaultValue={selectedRecord.shelf_lifetime_days}
-                  required
-                />
-              </div>
-              <div>
-                <Label>Bäst-före-datum</Label>
-                <Input
-                  name="expiry_date"
-                  type="date"
-                  defaultValue={selectedRecord.expiry_date.split("T")[0]}
-                  required
-                />
-              </div>
-              <div>
-                <Label>Leveransdatum</Label>
-                <Input
-                  name="arrival_date"
-                  type="date"
-                  defaultValue={selectedRecord.arrival_date.split("T")[0]}
-                  required
-                />
-              </div>
-              <div>
-                <Label>Ersättningspris (öre)</Label>
-                <Input
-                  name="compensation_price_ore"
-                  type="number"
-                  defaultValue={selectedRecord.compensation_price_ore}
                   required
                 />
               </div>
@@ -950,10 +1020,18 @@ function ErstatningsCheckPage() {
                         key={record.id}
                         className="flex items-center justify-between border-b py-2 last:border-0"
                       >
-                        <span className="font-mono">{record.sap_article_id}</span>
-                        <span className="text-muted-foreground">
-                          {new Date(record.arrival_date).toLocaleDateString("sv-SE")}
-                        </span>
+                        <div>
+                          <div className="font-medium">
+                            {record.product_name} {record.brand && `- ${record.brand}`}
+                          </div>
+                          <div className="font-mono text-xs">{record.sap_article_id}</div>
+                        </div>
+                        <div className="text-right text-muted-foreground">
+                          <div>
+                            Bäst före: {new Date(record.expiry_date).toLocaleDateString("sv-SE")}
+                          </div>
+                          <div className="text-xs">Anledning: Bäst-före-datum passerat</div>
+                        </div>
                       </div>
                     ))}
                 </div>
@@ -977,6 +1055,58 @@ function ErstatningsCheckPage() {
             <Button onClick={generateCompensationZip} disabled={isLoading}>
               {isLoading ? "Genererar fil..." : "Generera ersättningsfil"}
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "statistics" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Leveransstatistik</CardTitle>
+            <CardDescription>
+              Komplett historik per leverans. Äldre leveranser används för statistik men inte för
+              nya ersättningsansökningar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {deliveryStatistics.length > 0 ? (
+              <div className="border rounded-lg overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>SAP Produkt-ID</TableHead>
+                      <TableHead>Produkt</TableHead>
+                      <TableHead>Varumärke</TableHead>
+                      <TableHead>Leveransdatum</TableHead>
+                      <TableHead>Bäst-före-datum</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {deliveryStatistics.map((row, index) => (
+                      <TableRow key={`${row.sap_article_id}-${row.arrival_date}-${index}`}>
+                        <TableCell className="font-mono text-sm">{row.sap_article_id}</TableCell>
+                        <TableCell>{row.product_name}</TableCell>
+                        <TableCell>{row.brand || "-"}</TableCell>
+                        <TableCell>
+                          {row.arrival_date
+                            ? new Date(row.arrival_date).toLocaleDateString("sv-SE")
+                            : "-"}
+                        </TableCell>
+                        <TableCell>
+                          {row.expiry_date
+                            ? new Date(row.expiry_date).toLocaleDateString("sv-SE")
+                            : "-"}
+                        </TableCell>
+                        <TableCell>{row.delivery_status || "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <p className="py-8 text-center text-muted-foreground">Ingen leveranshistorik finns ännu.</p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -1044,7 +1174,7 @@ function ErstatningsCheckPage() {
           <CardHeader>
             <CardTitle>Hantera varor — Reklamationsstatus</CardTitle>
             <CardDescription>
-              Uppdatera status per reklamation. Spara direkt till Supabase (reclamations-tabell).
+              Uppdatera status per reklamation.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1172,12 +1302,6 @@ function ErstatningsCheckPage() {
                   shelf_lifetime_days: parseInt(
                     (form.elements.namedItem("shelf_lifetime_days") as HTMLInputElement).value,
                   ),
-                  expiry_date: (form.elements.namedItem("expiry_date") as HTMLInputElement).value,
-                  arrival_date: (form.elements.namedItem("arrival_date") as HTMLInputElement).value,
-                  compensation_price_ore:
-                    parseInt(
-                      (form.elements.namedItem("compensation_price_ore") as HTMLInputElement).value,
-                    ) || 2,
                 });
                 setSelectedWeeklyProduct(null);
               }}
@@ -1186,18 +1310,6 @@ function ErstatningsCheckPage() {
               <div>
                 <Label>Hållbarhet (dagar)</Label>
                 <Input name="shelf_lifetime_days" type="number" placeholder="T.ex. 365" required />
-              </div>
-              <div>
-                <Label>Bäst-före-datum</Label>
-                <Input name="expiry_date" type="date" required />
-              </div>
-              <div>
-                <Label>Leveransdatum</Label>
-                <Input name="arrival_date" type="date" required />
-              </div>
-              <div>
-                <Label>Ersättningspris (öre)</Label>
-                <Input name="compensation_price_ore" type="number" defaultValue={2} required />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={isLoading}>
