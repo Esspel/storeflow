@@ -57,6 +57,71 @@ export const RECURRENCE_HORIZON_KEY = "sf-recurrence-horizon";
 export const DEFAULT_RECURRENCE_HORIZON_DAYS = 30;
 export const MAX_RECURRENCE_HORIZON_DAYS = 90;
 
+export function validateRecurrenceRange(
+  rule: string,
+  weekdays: number[],
+  startDate: string,
+  endDate: string,
+): string | null {
+  if (!rule) return null;
+  if (!startDate || !endDate) return "Återkommande uppgifter måste ha både start- och slutdatum.";
+  const start = midnightStockholm(new Date(`${startDate}T00:00:00`));
+  const end = midnightStockholm(new Date(`${endDate}T00:00:00`));
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
+    return "Slutdatum måste vara samma dag som eller efter startdatum.";
+  }
+  if ((rule === "weekly" || rule === "biweekly") && weekdays.length === 0) {
+    return "Välj minst en veckodag för veckovis upprepning.";
+  }
+  const matches = buildPeriodStarts(start, rule, weekdays, start, end, end);
+  if (matches.length === 0) {
+    const dayNames = ["måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag", "söndag"];
+    const selectedDays =
+      weekdays.length === 1
+        ? dayNames[weekdays[0]]
+        : weekdays.length > 0
+          ? "valda veckodagar"
+          : "matchande dagar";
+    return `Inga matchande dagar (${selectedDays}) finns i det valda intervallet. Justera start/slutdatum eller valda veckodagar.`;
+  }
+  return null;
+}
+
+export function getRecurrencePreview(
+  rule: string,
+  weekdays: number[],
+  startDate: string,
+  endDate: string,
+): string | null {
+  if (!rule || !startDate || !endDate) return null;
+  const start = midnightStockholm(new Date(`${startDate}T00:00:00`));
+  const end = midnightStockholm(new Date(`${endDate}T00:00:00`));
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return null;
+  const dates = buildPeriodStarts(start, rule, weekdays, start, end, end);
+  if (dates.length === 0) return null;
+  const dayNames = ["måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag", "söndag"];
+  const dayLabel = weekdays.length === 1 ? dayNames[weekdays[0]] : "valda veckodagar";
+  const isoWeek = (date: Date) => {
+    const copy = new Date(date);
+    copy.setHours(0, 0, 0, 0);
+    copy.setDate(copy.getDate() + 3 - ((copy.getDay() + 6) % 7));
+    const firstThursday = new Date(copy.getFullYear(), 0, 4);
+    return (
+      1 +
+      Math.round(
+        ((copy.getTime() - firstThursday.getTime()) / 86400000 -
+          3 +
+          ((firstThursday.getDay() + 6) % 7)) /
+          7,
+      )
+    );
+  };
+  if ((rule === "weekly" || rule === "biweekly") && weekdays.length > 0) {
+    return `Genererar ${dates.length} uppgifter totalt: ${dayLabel} v.${isoWeek(dates[0])}–v.${isoWeek(dates[dates.length - 1])}`;
+  }
+  return `Genererar ${dates.length} uppgifter totalt.`;
+}
+
 export function getRecurrenceHorizonDays(): number {
   try {
     const n = parseInt(localStorage.getItem(RECURRENCE_HORIZON_KEY) ?? "", 10);
@@ -88,12 +153,18 @@ export function buildPeriodStarts(
     floor.setDate(floor.getDate() + 1);
   }
   const results: Date[] = [];
-  if (rule === "weekly" && weekdays && weekdays.length > 0) {
+  if ((rule === "weekly" || rule === "biweekly") && weekdays && weekdays.length > 0) {
+    const anchorMonday = new Date(floor);
+    const anchorDay = anchorMonday.getDay() === 0 ? 6 : anchorMonday.getDay() - 1;
+    anchorMonday.setDate(anchorMonday.getDate() - anchorDay);
     const cur = new Date(floor);
     while (cur <= effectiveCeil && results.length < MAX_SPAWN_INSTANCES) {
       const jsDay = cur.getDay();
       const ourDay = jsDay === 0 ? 6 : jsDay - 1;
-      if (weekdays.includes(ourDay)) results.push(new Date(cur));
+      const weekNumber = Math.floor((cur.getTime() - anchorMonday.getTime()) / (7 * 86400000));
+      if (weekdays.includes(ourDay) && (rule === "weekly" || weekNumber % 2 === 0)) {
+        results.push(new Date(cur));
+      }
       cur.setDate(cur.getDate() + 1);
     }
     return results;
@@ -273,7 +344,12 @@ export async function spawnChildrenForParent(
   const allPeriods: Date[] = [];
 
   const originKey = localDateStr(originDate);
-  if (originDate <= ceilDate) {
+  const originMatchesRule =
+    (parent.recurrence_rule !== "weekly" && parent.recurrence_rule !== "biweekly") ||
+    (parent.recurrence_days ?? []).includes(
+      originDate.getDay() === 0 ? 6 : originDate.getDay() - 1,
+    );
+  if (originMatchesRule && originDate <= ceilDate) {
     allPsKeys.add(originKey);
     allPeriods.push(originDate);
   }

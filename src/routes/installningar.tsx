@@ -28,7 +28,6 @@ import {
   supabase,
   logAudit,
   HIERARCHY_LABELS,
-  insertSupportTicket,
   errorToSwedish,
 } from "@/lib/supabase";
 import { getQueueLength as getOfflineQueueLength } from "@/lib/offline-queue";
@@ -36,8 +35,6 @@ import { getRecentErrors, initErrorCapture } from "@/lib/error-capture";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { PushNotificationSetup } from "@/components/push-notification-setup";
-import { ApiKeysManager } from "@/components/api-keys-manager";
-import { CopyableId } from "@/components/copyable-id";
 import { toast } from "sonner";
 
 const APP_VERSION = "2.4.1";
@@ -374,13 +371,6 @@ function SettingsPage() {
                 className="bg-muted/40"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Användar-ID</Label>
-              <div className="flex items-center gap-2">
-                <CopyableId id={user?.id} prefix="användar" />
-                <span className="text-xs text-muted-foreground">Tryck för att kopiera</span>
-              </div>
-            </div>
             <div className="flex items-center gap-3">
               <Button onClick={saveDisplayName} disabled={nameSaving} className="rounded-full">
                 {nameSaving ? "Sparar…" : "Spara ändringar"}
@@ -415,13 +405,6 @@ function SettingsPage() {
                 disabled
                 className="bg-muted/40"
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Butiks-ID</Label>
-              <div className="flex items-center gap-2">
-                <CopyableId id={activeStore?.id} prefix="butiks" />
-                <span className="text-xs text-muted-foreground">Tryck för att kopiera</span>
-              </div>
             </div>
           </div>
         </div>
@@ -739,8 +722,6 @@ function SettingsPage() {
           </div>
         </div>
 
-        {user?.role === "admin" && <ApiKeysManager />}
-
         <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
@@ -907,31 +888,6 @@ function SettingsPage() {
               </p>
             </div>
             <div className="mt-3 space-y-2">
-              <Button
-                onClick={async () => {
-                  const message = window.prompt("Beskriv problemet (valfritt):") ?? "";
-                  try {
-                    await insertSupportTicket({
-                      user_id: user?.id ?? null,
-                      store_id: activeStore?.id ?? null,
-                      app_version: APP_VERSION,
-                      user_agent: navigator.userAgent,
-                      offline_queue_length: getOfflineQueueLength(),
-                      last_error: getRecentErrors().slice(-1)[0] ?? null,
-                      idb_usage: diagIdbUsage,
-                      message,
-                      components: ["installningar"],
-                    });
-                    toast.success("Skickat till support");
-                  } catch (err) {
-                    toast.error(errorToSwedish(err));
-                  }
-                }}
-                variant="outline"
-                className="w-full rounded-full gap-2"
-              >
-                <Bug className="h-4 w-4" /> Skicka till support
-              </Button>
               <Button
                 onClick={() => {
                   const info = [

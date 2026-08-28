@@ -7,7 +7,6 @@ import {
   FileText,
   FlaskConical,
   Hop as Home,
-  Circle as HelpCircle,
   LogOut,
   MoreHorizontal,
   Settings,
@@ -23,7 +22,6 @@ import {
   Store,
   X as XIcon,
   ChartBar,
-  QrCode,
   Layers,
   Box,
   Navigation,
@@ -367,7 +365,6 @@ export function AppShell() {
     ...(isManager
       ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }]
       : []),
-    { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: ClipboardList },
     { to: "/ersattningcheck", label: "Ersättningscheck", mobileHidden: true, Icon: AlertTriangle },
   ];
 
@@ -443,7 +440,6 @@ export function AppShell() {
     { to: "/kundonskemal", label: "Kundönskemål", Icon: ShoppingCart },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", Icon: FlaskConical }] : []),
     { to: "/mallar", label: "Mallar", Icon: ClipboardList },
-    { to: "/hjalp", label: "Hjälp", Icon: HelpCircle },
     { to: "/spatial-navigation", label: "3D Butiksvy", Icon: Navigation },
   ];
   const isMoreActive = moreRoutes.some((r) => isActive(r.to));
@@ -545,6 +541,19 @@ export function AppShell() {
                 )}
               </Link>
             ))}
+            {/* Tasks and templates submenu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="relative rounded-full px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-primary">
+                  Uppgifter & mallar
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem asChild><Link to="/uppgifter">Uppgifter</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link to="/mallar">Mallar</Link></DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             {/* Posemesh Submenu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -578,20 +587,6 @@ export function AppShell() {
 
           <div className="ml-auto flex items-center gap-1.5 md:gap-2">
             <GlobalStoreSelector />
-
-            {/* SAP Catalog Button */}
-            {activeStore?.sap_site_id && (
-              <a
-                href={`https://mittcoop.coop.se/sortiment/articles?siteId=${activeStore.sap_site_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-background px-3 py-1.5 text-xs font-medium text-foreground/80 transition-colors hover:bg-accent hover:text-accent-foreground active:opacity-75"
-              >
-                <ShoppingCart className="h-3.5 w-3.5" />
-                <span className="sm:hidden">Sortiment</span>
-                <span className="hidden sm:inline">Mitt Coop-sortiment</span>
-              </a>
-            )}
 
             {/* Notifications Popover */}
             <Popover open={notifOpen} onOpenChange={setNotifOpen}>
@@ -738,17 +733,6 @@ export function AppShell() {
                     </Link>
                   </DropdownMenuItem>
                 )}
-                {(isAdmin ||
-                  user?.hierarchy_level === "hk" ||
-                  user?.hierarchy_level === "forening" ||
-                  user?.hierarchy_level === "distrikt") && (
-                  <DropdownMenuItem asChild>
-                    <Link to="/hk-dashboard" className="cursor-pointer">
-                      <ChartBar className="mr-2 h-4 w-4" />
-                      Dashboard
-                    </Link>
-                  </DropdownMenuItem>
-                )}
                 {isAdmin && (
                   <DropdownMenuItem asChild>
                     <Link to="/testpanel" className="cursor-pointer">
@@ -757,13 +741,6 @@ export function AppShell() {
                     </Link>
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/hjalp" className="cursor-pointer">
-                    <HelpCircle className="mr-2 h-4 w-4" />
-                    Hjälp & Manual
-                  </Link>
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="cursor-pointer" onClick={openLockScreen}>
                   <ArrowLeftRight className="mr-2 h-4 w-4" />

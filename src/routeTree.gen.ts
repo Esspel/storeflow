@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminSupportRouteImport } from './routes/admin-support'
 import { Route as AnvandningsvillkorRouteImport } from './routes/anvandningsvillkor'
 import { Route as AvvikelserRouteImport } from './routes/avvikelser'
 import { Route as BelastningRouteImport } from './routes/belastning'
@@ -18,8 +17,6 @@ import { Route as ButiksregisterRouteImport } from './routes/butiksregister'
 import { Route as CustomerNavRouteImport } from './routes/customer-nav'
 import { Route as ErsattningcheckRouteImport } from './routes/ersattningcheck'
 import { Route as GdprRouteImport } from './routes/gdpr'
-import { Route as HjalpRouteImport } from './routes/hjalp'
-import { Route as HkDashboardRouteImport } from './routes/hk-dashboard'
 import { Route as InstallningarRouteImport } from './routes/installningar'
 import { Route as IntegritetspolicyRouteImport } from './routes/integritetspolicy'
 import { Route as KundonskemalRouteImport } from './routes/kundonskemal'
@@ -28,8 +25,6 @@ import { Route as LicensRouteImport } from './routes/licens'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as PersonalRouteImport } from './routes/personal'
-import { Route as PulstavlaRouteImport } from './routes/pulstavla'
-import { Route as QrAvvikelseRouteImport } from './routes/qr-avvikelse'
 import { Route as QrKundonskemalRouteImport } from './routes/qr-kundonskemal'
 import { Route as QrKundonskemalFormRouteImport } from './routes/qr-kundonskemal-form'
 import { Route as RapporterRouteImport } from './routes/rapporter'
@@ -43,11 +38,6 @@ import { Route as UppgifterRouteImport } from './routes/uppgifter'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminSupportRoute = AdminSupportRouteImport.update({
-  id: '/admin-support',
-  path: '/admin-support',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AnvandningsvillkorRoute = AnvandningsvillkorRouteImport.update({
@@ -83,16 +73,6 @@ const ErsattningcheckRoute = ErsattningcheckRouteImport.update({
 const GdprRoute = GdprRouteImport.update({
   id: '/gdpr',
   path: '/gdpr',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HjalpRoute = HjalpRouteImport.update({
-  id: '/hjalp',
-  path: '/hjalp',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HkDashboardRoute = HkDashboardRouteImport.update({
-  id: '/hk-dashboard',
-  path: '/hk-dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InstallningarRoute = InstallningarRouteImport.update({
@@ -133,16 +113,6 @@ const MallarRoute = MallarRouteImport.update({
 const PersonalRoute = PersonalRouteImport.update({
   id: '/personal',
   path: '/personal',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PulstavlaRoute = PulstavlaRouteImport.update({
-  id: '/pulstavla',
-  path: '/pulstavla',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QrAvvikelseRoute = QrAvvikelseRouteImport.update({
-  id: '/qr-avvikelse',
-  path: '/qr-avvikelse',
   getParentRoute: () => rootRouteImport,
 } as any)
 const QrKundonskemalRoute = QrKundonskemalRouteImport.update({
@@ -193,7 +163,6 @@ const UppgifterRoute = UppgifterRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin-support': typeof AdminSupportRoute
   '/anvandningsvillkor': typeof AnvandningsvillkorRoute
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
@@ -201,8 +170,6 @@ export interface FileRoutesByFullPath {
   '/customer-nav': typeof CustomerNavRoute
   '/ersattningcheck': typeof ErsattningcheckRoute
   '/gdpr': typeof GdprRoute
-  '/hjalp': typeof HjalpRoute
-  '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/integritetspolicy': typeof IntegritetspolicyRoute
   '/kundonskemal': typeof KundonskemalRoute
@@ -211,8 +178,6 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
-  '/pulstavla': typeof PulstavlaRoute
-  '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
@@ -225,7 +190,6 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin-support': typeof AdminSupportRoute
   '/anvandningsvillkor': typeof AnvandningsvillkorRoute
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
@@ -233,8 +197,6 @@ export interface FileRoutesByTo {
   '/customer-nav': typeof CustomerNavRoute
   '/ersattningcheck': typeof ErsattningcheckRoute
   '/gdpr': typeof GdprRoute
-  '/hjalp': typeof HjalpRoute
-  '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/integritetspolicy': typeof IntegritetspolicyRoute
   '/kundonskemal': typeof KundonskemalRoute
@@ -243,8 +205,6 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
-  '/pulstavla': typeof PulstavlaRoute
-  '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
@@ -258,7 +218,6 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin-support': typeof AdminSupportRoute
   '/anvandningsvillkor': typeof AnvandningsvillkorRoute
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
@@ -266,8 +225,6 @@ export interface FileRoutesById {
   '/customer-nav': typeof CustomerNavRoute
   '/ersattningcheck': typeof ErsattningcheckRoute
   '/gdpr': typeof GdprRoute
-  '/hjalp': typeof HjalpRoute
-  '/hk-dashboard': typeof HkDashboardRoute
   '/installningar': typeof InstallningarRoute
   '/integritetspolicy': typeof IntegritetspolicyRoute
   '/kundonskemal': typeof KundonskemalRoute
@@ -276,8 +233,6 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
-  '/pulstavla': typeof PulstavlaRoute
-  '/qr-avvikelse': typeof QrAvvikelseRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
@@ -292,7 +247,6 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/admin-support'
     | '/anvandningsvillkor'
     | '/avvikelser'
     | '/belastning'
@@ -300,8 +254,6 @@ export interface FileRouteTypes {
     | '/customer-nav'
     | '/ersattningcheck'
     | '/gdpr'
-    | '/hjalp'
-    | '/hk-dashboard'
     | '/installningar'
     | '/integritetspolicy'
     | '/kundonskemal'
@@ -310,8 +262,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/mallar'
     | '/personal'
-    | '/pulstavla'
-    | '/qr-avvikelse'
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
     | '/rapporter'
@@ -324,7 +274,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/admin-support'
     | '/anvandningsvillkor'
     | '/avvikelser'
     | '/belastning'
@@ -332,8 +281,6 @@ export interface FileRouteTypes {
     | '/customer-nav'
     | '/ersattningcheck'
     | '/gdpr'
-    | '/hjalp'
-    | '/hk-dashboard'
     | '/installningar'
     | '/integritetspolicy'
     | '/kundonskemal'
@@ -342,8 +289,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/mallar'
     | '/personal'
-    | '/pulstavla'
-    | '/qr-avvikelse'
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
     | '/rapporter'
@@ -356,7 +301,6 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/admin-support'
     | '/anvandningsvillkor'
     | '/avvikelser'
     | '/belastning'
@@ -364,8 +308,6 @@ export interface FileRouteTypes {
     | '/customer-nav'
     | '/ersattningcheck'
     | '/gdpr'
-    | '/hjalp'
-    | '/hk-dashboard'
     | '/installningar'
     | '/integritetspolicy'
     | '/kundonskemal'
@@ -374,8 +316,6 @@ export interface FileRouteTypes {
     | '/login'
     | '/mallar'
     | '/personal'
-    | '/pulstavla'
-    | '/qr-avvikelse'
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
     | '/rapporter'
@@ -389,7 +329,6 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminSupportRoute: typeof AdminSupportRoute
   AnvandningsvillkorRoute: typeof AnvandningsvillkorRoute
   AvvikelserRoute: typeof AvvikelserRoute
   BelastningRoute: typeof BelastningRoute
@@ -397,8 +336,6 @@ export interface RootRouteChildren {
   CustomerNavRoute: typeof CustomerNavRoute
   ErsattningcheckRoute: typeof ErsattningcheckRoute
   GdprRoute: typeof GdprRoute
-  HjalpRoute: typeof HjalpRoute
-  HkDashboardRoute: typeof HkDashboardRoute
   InstallningarRoute: typeof InstallningarRoute
   IntegritetspolicyRoute: typeof IntegritetspolicyRoute
   KundonskemalRoute: typeof KundonskemalRoute
@@ -407,8 +344,6 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MallarRoute: typeof MallarRoute
   PersonalRoute: typeof PersonalRoute
-  PulstavlaRoute: typeof PulstavlaRoute
-  QrAvvikelseRoute: typeof QrAvvikelseRoute
   QrKundonskemalRoute: typeof QrKundonskemalRoute
   QrKundonskemalFormRoute: typeof QrKundonskemalFormRoute
   RapporterRoute: typeof RapporterRoute
@@ -427,13 +362,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin-support': {
-      id: '/admin-support'
-      path: '/admin-support'
-      fullPath: '/admin-support'
-      preLoaderRoute: typeof AdminSupportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/anvandningsvillkor': {
@@ -483,20 +411,6 @@ declare module '@tanstack/react-router' {
       path: '/gdpr'
       fullPath: '/gdpr'
       preLoaderRoute: typeof GdprRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/hjalp': {
-      id: '/hjalp'
-      path: '/hjalp'
-      fullPath: '/hjalp'
-      preLoaderRoute: typeof HjalpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/hk-dashboard': {
-      id: '/hk-dashboard'
-      path: '/hk-dashboard'
-      fullPath: '/hk-dashboard'
-      preLoaderRoute: typeof HkDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/installningar': {
@@ -553,20 +467,6 @@ declare module '@tanstack/react-router' {
       path: '/personal'
       fullPath: '/personal'
       preLoaderRoute: typeof PersonalRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pulstavla': {
-      id: '/pulstavla'
-      path: '/pulstavla'
-      fullPath: '/pulstavla'
-      preLoaderRoute: typeof PulstavlaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/qr-avvikelse': {
-      id: '/qr-avvikelse'
-      path: '/qr-avvikelse'
-      fullPath: '/qr-avvikelse'
-      preLoaderRoute: typeof QrAvvikelseRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/qr-kundonskemal': {
@@ -637,7 +537,6 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminSupportRoute: AdminSupportRoute,
   AnvandningsvillkorRoute: AnvandningsvillkorRoute,
   AvvikelserRoute: AvvikelserRoute,
   BelastningRoute: BelastningRoute,
@@ -645,8 +544,6 @@ const rootRouteChildren: RootRouteChildren = {
   CustomerNavRoute: CustomerNavRoute,
   ErsattningcheckRoute: ErsattningcheckRoute,
   GdprRoute: GdprRoute,
-  HjalpRoute: HjalpRoute,
-  HkDashboardRoute: HkDashboardRoute,
   InstallningarRoute: InstallningarRoute,
   IntegritetspolicyRoute: IntegritetspolicyRoute,
   KundonskemalRoute: KundonskemalRoute,
@@ -655,8 +552,6 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MallarRoute: MallarRoute,
   PersonalRoute: PersonalRoute,
-  PulstavlaRoute: PulstavlaRoute,
-  QrAvvikelseRoute: QrAvvikelseRoute,
   QrKundonskemalRoute: QrKundonskemalRoute,
   QrKundonskemalFormRoute: QrKundonskemalFormRoute,
   RapporterRoute: RapporterRoute,

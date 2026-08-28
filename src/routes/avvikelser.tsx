@@ -51,7 +51,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ManageCommonDefects } from "@/components/manage-common-defects";
 import {
   supabase,
   type Incident,
@@ -302,7 +301,6 @@ function IssuesPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [commonDefects, setCommonDefects] = useState<CommonDefect[]>([]);
   const [showSnabbval, setShowSnabbval] = useState(false);
-  const [showManageDefects, setShowManageDefects] = useState(false);
   const [createStep, setCreateStep] = useState<1 | 2>(1);
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrZoneName, setQrZoneName] = useState("");
@@ -815,30 +813,11 @@ function IssuesPage() {
                 <Button
                   variant="outline"
                   className="rounded-full hidden lg:flex"
-                  onClick={() => setShowManageDefects(true)}
-                >
-                  Vanliga avvikelser
-                </Button>
-                <Button
-                  variant="outline"
-                  className="rounded-full hidden lg:flex"
                   onClick={exportCSV}
                 >
                   <Download className="mr-2 h-4 w-4" /> Exportera CSV
                 </Button>
               </>
-            )}
-            {isManager && activeStore && (
-              <Button
-                variant="outline"
-                className="rounded-full hidden lg:flex"
-                onClick={() => {
-                  setShowQrModal(true);
-                  fetchQrTokens();
-                }}
-              >
-                <QrCode className="mr-2 h-4 w-4" /> QR-koder
-              </Button>
             )}
             <Button className="rounded-full hidden lg:flex" onClick={() => setShowCreate(true)}>
               <Plus className="mr-2 h-4 w-4" /> Ny avvikelse
@@ -1086,18 +1065,6 @@ function IssuesPage() {
       )}
 
       {/* Mobile FABs */}
-      {isManager && activeStore && (
-        <button
-          className="fixed bottom-28 right-24 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-card border border-border/60 text-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
-          aria-label="QR-koder"
-          onClick={() => {
-            setShowQrModal(true);
-            fetchQrTokens();
-          }}
-        >
-          <QrCode className="h-5 w-5" />
-        </button>
-      )}
       <button
         className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-lg)] transition-transform active:scale-95 lg:hidden"
         aria-label="Ny avvikelse"
@@ -1228,57 +1195,6 @@ function IssuesPage() {
                   Ange en titel på avvikelsen
                 </p>
               )}
-              {/* Common defects quick-select */}
-              {commonDefects.length > 0 &&
-                (() => {
-                  const uniqueDefects = Array.from(
-                    new Map(commonDefects.map((d) => [d.label, d])).values(),
-                  );
-                  return (
-                    <div className="space-y-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setShowSnabbval((v) => !v)}
-                        className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        Snabbval — vanliga avvikelser
-                        <span className="text-[10px] rounded-full bg-muted px-1.5 py-0.5">
-                          {uniqueDefects.length}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground/60">
-                          {showSnabbval ? "▲" : "▼"}
-                        </span>
-                      </button>
-                      {showSnabbval && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {uniqueDefects.map((d) => (
-                            <button
-                              key={d.id}
-                              type="button"
-                              className={cn(
-                                "min-h-[36px] rounded-full border px-3 py-1.5 text-xs transition-colors",
-                                newIncident.description === d.label
-                                  ? "border-primary bg-primary/10 text-primary"
-                                  : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary",
-                              )}
-                              onClick={() =>
-                                setNewIncident((p) => ({
-                                  ...p,
-                                  description: p.description
-                                    ? `${p.description}\n${d.label}`
-                                    : d.label,
-                                  title: p.title || d.label,
-                                }))
-                              }
-                            >
-                              {d.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
               <Textarea
                 placeholder="Beskriv avvikelsen — vad hände, var, när?"
                 value={newIncident.description}
@@ -1992,17 +1908,9 @@ function IssuesPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <ManageCommonDefects
-        open={showManageDefects}
-        onOpenChange={setShowManageDefects}
-        storeId={isAdmin ? null : (activeStore?.id ?? null)}
-        isAdmin={isAdmin}
-        onDefectsChanged={fetchCommonDefects}
-      />
-
       {/* ── QR-KODER DIALOG ──────────────────────────────────────────────────── */}
       <Dialog
-        open={showQrModal}
+        open={false}
         onOpenChange={(o) => {
           setShowQrModal(o);
           if (!o) setSelectedQrToken(null);

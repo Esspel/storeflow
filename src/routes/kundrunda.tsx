@@ -57,7 +57,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ManageCommonDefects } from "@/components/manage-common-defects";
 import {
   supabase,
   type KundrundaZone,
@@ -65,7 +64,6 @@ import {
   type KundrundaSession,
   type KundrundaResponse,
   type KundrundaResponseImage,
-  type CommonDefect,
   type AppUser,
   logAudit,
   createNotification,
@@ -254,8 +252,6 @@ function KundrundaPage() {
   const [zones, setZones] = useState<ZoneWithCheckpoints[]>([]);
   const [sessions, setSessions] = useState<KundrundaSession[]>([]);
   const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
-  const [commonDefects, setCommonDefects] = useState<CommonDefect[]>([]);
-  const [showManageDefects, setShowManageDefects] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [activeSession, setActiveSession] = useState<KundrundaSession | null>(null);
@@ -271,7 +267,6 @@ function KundrundaPage() {
   const [savingDefect, setSavingDefect] = useState(false);
   const [viewerImages, setViewerImages] = useState<string[]>([]);
   const [viewerIdx, setViewerIdx] = useState<number | null>(null);
-  const [showCommonDefects, setShowCommonDefects] = useState(false);
 
   const defectPhotoRef = useRef<HTMLInputElement>(null);
   const refPhotoRef = useRef<HTMLInputElement>(null);
@@ -337,7 +332,7 @@ function KundrundaPage() {
   const [editScope, setEditScope] = useState<"global" | "local">("local");
 
   const fetchData = async () => {
-    const [zonesRes, sessionsRes, defectsRes, localVersionRes] = await Promise.all([
+    const [zonesRes, sessionsRes, localVersionRes] = await Promise.all([
       supabase
         .from("kundrunda_zones")
         .select("*, checkpoints:kundrunda_checkpoints(*, images:kundrunda_checkpoint_images(*))")
@@ -358,18 +353,6 @@ function KundrundaPage() {
             userStores.map((s) => s.id),
           );
         return q;
-      })(),
-      (async () => {
-        const storeId = activeStore?.id ?? null;
-        if (storeId) {
-          const { data: local } = await supabase
-            .from("common_defects")
-            .select("*")
-            .eq("store_id", storeId)
-            .order("sort_order");
-          if (local && local.length > 0) return { data: local };
-        }
-        return supabase.from("common_defects").select("*").is("store_id", null).order("sort_order");
       })(),
       activeStore
         ? supabase
@@ -394,7 +377,6 @@ function KundrundaPage() {
       setCheckpointRefImages(refMap);
     }
     if (sessionsRes.data) setSessions(sessionsRes.data as KundrundaSession[]);
-    if (defectsRes.data) setCommonDefects(defectsRes.data as CommonDefect[]);
     setLocalVersion((localVersionRes.data as LocalVersionRecord | null) ?? null);
 
     if (activeStore) {
@@ -501,6 +483,45 @@ function KundrundaPage() {
     }
     setEditScope(isAdmin ? "global" : "local");
   }, [activeStore]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`kundrunda-sync-${activeStore?.id ?? "all"}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "kundrunda_zones" },
+        () => void fetchData(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "kundrunda_checkpoints" },
+        () => void fetchData(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "kundrunda_responses" },
+        async () => {
+          await fetchData();
+          if (!activeSession?.id) return;
+          const { data } = await supabase
+            .from("kundrunda_responses")
+            .select("*")
+            .eq("session_id", activeSession.id);
+          if (data) {
+            setResponses(
+              Object.fromEntries(
+                (data as KundrundaResponse[]).map((response) => [response.checkpoint_id, response]),
+              ),
+            );
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [activeStore?.id, activeSession?.id]);
 
   // Auto-initialize local version for managers; show version dialog when pending flag transitions false→true
   useEffect(() => {
@@ -840,7 +861,6 @@ function KundrundaPage() {
       responsible_user_id: existing?.responsible_user_id ?? "",
       sap_article_id: existing?.sap_article_id ?? "",
     });
-    setShowCommonDefects(false);
   };
 
   const saveDefect = async () => {
@@ -1313,22 +1333,6 @@ function KundrundaPage() {
 
   const mergeHKDefects = async () => {
     if (!activeStore || !localVersion?.pending_defects_snapshot) return;
-    const snapshot = localVersion.pending_defects_snapshot as {
-      id: string;
-      label: string;
-      sort_order: number;
-    }[];
-    const existing = new Map(
-      commonDefects.filter((d) => d.store_id === activeStore.id).map((d) => [d.label, d]),
-    );
-    const toInsert = snapshot
-      .filter((hk) => !existing.has(hk.label))
-      .map((hk) => ({
-        store_id: activeStore.id,
-        label: hk.label,
-        sort_order: hk.sort_order,
-      }));
-    if (toInsert.length > 0) await supabase.from("common_defects").insert(toInsert);
     await supabase
       .from("kundrunda_local_versions")
       .update({
@@ -1827,7 +1831,6 @@ function KundrundaPage() {
           onOpenChange={(o) => {
             if (!o) {
               setDefectDialog(null);
-              setShowCommonDefects(false);
             }
           }}
         >
@@ -1837,52 +1840,6 @@ function KundrundaPage() {
                 <DialogTitle className="text-base">Avvikelse — detaljer</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                {/* Common defect quick-select — collapsible */}
-                {(() => {
-                  const filtered = commonDefects.filter(
-                    (d) =>
-                      !d.checkpoint_ids?.length ||
-                      d.checkpoint_ids.includes(defectDialog.checkpoint_id),
-                  );
-                  return filtered.length > 0 ? (
-                    <div className="space-y-1.5">
-                      <button
-                        type="button"
-                        aria-expanded={showCommonDefects}
-                        aria-controls="common-defects-panel"
-                        className="flex w-full items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
-                        onClick={() => setShowCommonDefects((v) => !v)}
-                      >
-                        <span>Vanliga avvikelser ({filtered.length})</span>
-                        <ChevronDown
-                          className={cn(
-                            "h-3.5 w-3.5 transition-transform",
-                            showCommonDefects && "rotate-180",
-                          )}
-                        />
-                      </button>
-                      {showCommonDefects && (
-                        <div id="common-defects-panel" className="flex flex-wrap gap-1.5 pt-1">
-                          {filtered.map((d) => (
-                            <button
-                              key={d.id}
-                              type="button"
-                              className="min-h-[36px] rounded-full border border-border/60 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
-                              onClick={() => {
-                                setDefectDialog((p) =>
-                                  p ? { ...p, defect_description: d.label } : null,
-                                );
-                                setShowCommonDefects(false);
-                              }}
-                            >
-                              {d.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : null;
-                })()}
                 <div className="space-y-1.5">
                   <Label htmlFor="defect-description" className="text-xs">
                     Beskriv avvikelsen
@@ -2160,7 +2117,6 @@ function KundrundaPage() {
                     className="rounded-full"
                     onClick={() => {
                       setDefectDialog(null);
-                      setShowCommonDefects(false);
                     }}
                   >
                     Avbryt
@@ -2332,14 +2288,6 @@ function KundrundaPage() {
                 "Importera CSV"
               )}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full"
-              onClick={() => setShowManageDefects(true)}
-            >
-              Vanliga avvikelser
-            </Button>
           </div>
         </div>
 
@@ -2383,7 +2331,7 @@ function KundrundaPage() {
         )}
 
         {/* Defects merge pending banner */}
-        {isManager &&
+        {false && isManager &&
           localVersion?.defects_pending_hk_update &&
           localVersion?.pending_defects_snapshot && (
             <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/20">
@@ -2405,7 +2353,7 @@ function KundrundaPage() {
                     await supabase
                       .from("kundrunda_local_versions")
                       .update({ defects_pending_hk_update: false, pending_defects_snapshot: null })
-                      .eq("id", localVersion.id);
+                      .eq("id", localVersion?.id ?? "");
                     setLocalVersion((p) =>
                       p
                         ? { ...p, defects_pending_hk_update: false, pending_defects_snapshot: null }
@@ -2871,19 +2819,6 @@ function KundrundaPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-
-        <ManageCommonDefects
-          open={showManageDefects}
-          onOpenChange={setShowManageDefects}
-          storeId={isAdmin ? null : (activeStore?.id ?? null)}
-          isAdmin={isAdmin}
-          checkpoints={allCheckpoints.map((cp) => ({
-            id: cp.id,
-            label: cp.label,
-            zoneName: cp.zoneName,
-          }))}
-          onDefectsChanged={fetchData}
-        />
 
         {/* Defects merge confirmation — must be in edit view since banner is here */}
         <AlertDialog

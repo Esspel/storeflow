@@ -29,7 +29,6 @@ const ALL_SHORTCUTS: Shortcut[] = [
   { key: "9", label: "Inställningar", to: "/installningar", access: "all" },
   { key: "m", label: "Mallar", to: "/mallar", access: "manager" },
   { key: "b", label: "Medarbetarbelastning", to: "/belastning", access: "manager" },
-  { key: "p", label: "Pulstavla", to: "/pulstavla", access: "all" },
 ];
 
 export function KeyboardShortcuts() {

@@ -149,10 +149,8 @@ function AppLayout() {
   const pathname = router.state.location.pathname;
   const isLoginPage = pathname === "/login";
   const isPublicRoute =
-    pathname === "/qr-avvikelse" ||
     pathname === "/qr-kundonskemal" ||
     pathname === "/qr-kundonskemal-form" ||
-    pathname === "/pulstavla" ||
     pathname === "/customer-nav";
 
   useEffect(() => {

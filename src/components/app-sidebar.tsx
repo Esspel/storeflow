@@ -68,12 +68,6 @@ export function AppSidebar() {
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "manager" || isAdmin;
 
-  const showHkDashboard =
-    isAdmin ||
-    hierarchyLevel === "hk" ||
-    hierarchyLevel === "forening" ||
-    hierarchyLevel === "distrikt";
-
   const renderItem = (item: MenuItem) => (
     <SidebarMenuItem key={item.url}>
       <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
@@ -132,29 +126,6 @@ export function AppSidebar() {
             <SidebarMenu>{mainRoutes.map(renderItem)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        {/* Övergripande styrning (HK/Förening/Distrikt) */}
-        {showHkDashboard && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Styrning</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive("/hk-dashboard")}
-                    tooltip="Dashboard HK"
-                  >
-                    <Link to="/hk-dashboard" className="gap-3">
-                      <ChartBar className="h-4 w-4 shrink-0" />
-                      <span>Dashboard HK</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
 
         {/* Operations */}
         <SidebarGroup>

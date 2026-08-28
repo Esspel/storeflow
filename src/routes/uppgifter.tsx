@@ -105,6 +105,8 @@ import {
   localDateStr,
   buildPeriodStarts,
   dueFromPeriodStart,
+  validateRecurrenceRange,
+  getRecurrencePreview,
   getRecurrenceHorizonDays,
   RECURRENCE_HORIZON_KEY,
 } from "@/lib/task-utils";
@@ -1116,7 +1118,14 @@ function TasksPage() {
 
         const originKey = localDateStr(originDate);
         const allPsMap = new Map<string, Date>();
-        if (originDate <= effectiveCeil) allPsMap.set(originKey, originDate);
+        const originMatchesRule =
+          (t.recurrence_rule !== "weekly" && t.recurrence_rule !== "biweekly") ||
+          (t.recurrence_days ?? []).includes(
+            originDate.getDay() === 0 ? 6 : originDate.getDay() - 1,
+          );
+        if (originMatchesRule && originDate <= effectiveCeil) {
+          allPsMap.set(originKey, originDate);
+        }
         for (const ps of futurePeriodStarts) {
           const k = localDateStr(ps);
           if (!allPsMap.has(k)) allPsMap.set(k, ps);
@@ -2111,6 +2120,18 @@ function TasksPage() {
     if (newTask.recurrence_rule && !newTask.recurrence_start) {
       setSaveError("Startdatum för repetition är obligatoriskt.");
       return;
+    }
+    if (newTask.recurrence_rule) {
+      const recurrenceError = validateRecurrenceRange(
+        newTask.recurrence_rule,
+        newTask.recurrence_days,
+        newTask.recurrence_start,
+        newTask.recurrence_end,
+      );
+      if (recurrenceError) {
+        setSaveError(recurrenceError);
+        return;
+      }
     }
     if (newTask.assigneeUserIds.length === 0 && newTask.assigneeGroupIds.length === 0) {
       setSaveError("Minst en tilldelad användare eller grupp är obligatorisk.");
@@ -4183,6 +4204,21 @@ function TasksPage() {
                     className="flex-1 h-7 text-xs"
                   />
                 </div>
+                {getRecurrencePreview(
+                  newTask.recurrence_rule,
+                  newTask.recurrence_days,
+                  newTask.recurrence_start,
+                  newTask.recurrence_end,
+                ) && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {getRecurrencePreview(
+                      newTask.recurrence_rule,
+                      newTask.recurrence_days,
+                      newTask.recurrence_start,
+                      newTask.recurrence_end,
+                    )}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -5198,6 +5234,21 @@ function TasksPage() {
                           className="flex-1 h-7 text-xs"
                         />
                       </div>
+                      {getRecurrencePreview(
+                        newTask.recurrence_rule,
+                        newTask.recurrence_days,
+                        newTask.recurrence_start,
+                        newTask.recurrence_end,
+                      ) && (
+                        <p className="text-[11px] text-muted-foreground">
+                          {getRecurrencePreview(
+                            newTask.recurrence_rule,
+                            newTask.recurrence_days,
+                            newTask.recurrence_start,
+                            newTask.recurrence_end,
+                          )}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

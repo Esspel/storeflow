@@ -16,7 +16,6 @@ import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
-import { CopyableId } from "@/components/copyable-id";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { getKundrundaAssignmentsThisWeek } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -58,7 +57,6 @@ function HubPage() {
           {activeStore && (
             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               {activeStore.name}
-              <CopyableId id={activeStore.id} prefix="butiks" />
             </p>
           )}
         </div>

@@ -161,7 +161,8 @@ function ErstatningsCheckPage() {
     try {
       const parsed = await parseDeliveryNoteExcel(file);
       setDeliveryNotes(parsed.rows);
-      setImportSuccess(`Importerade ${parsed.totalRows} artiklar`);
+      await handleMatchProducts(parsed.rows);
+      setImportSuccess(`Importerade och sparade ${parsed.totalRows} artiklar`);
     } catch (error) {
       console.error("Import error:", error);
       setImportError("Kunde inte importera filen. Kontrollera formatet.");
@@ -171,8 +172,8 @@ function ErstatningsCheckPage() {
   };
 
   // Handle product matching
-  const handleMatchProducts = async () => {
-    if (deliveryNotes.length === 0) {
+  const handleMatchProducts = async (rows = deliveryNotes) => {
+    if (rows.length === 0) {
       setImportError("Ingen följesedel att matcha. Importera först.");
       return;
     }
@@ -181,7 +182,7 @@ function ErstatningsCheckPage() {
     setImportError(null);
 
     try {
-      const results = await matchDeliveryNoteToProducts(supabase, activeStore.id, deliveryNotes);
+      const results = await matchDeliveryNoteToProducts(supabase, activeStore.id, rows);
       setMatchResults(results);
 
       // Auto-create unmatched products
@@ -221,6 +222,32 @@ function ErstatningsCheckPage() {
         }
       }
 
+      const deliveryRows = results
+        .map((result) => ({
+          sap_article_id: result.row.sapProduktId?.trim(),
+          store_id: activeStore.id,
+          arrival_date: result.row.leveransdag || new Date().toISOString(),
+          best_before_date: result.row.bastForeDatum,
+          quantity: Number.parseInt(result.row.levereradKvantitet, 10) || 0,
+          status: result.row.leveransstatus || "delivered",
+          delivery_number: result.row.leveransnummer || null,
+          order_number: result.row.ordernummer || null,
+          order_line: result.row.orderrad || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }))
+        .filter((row) => row.sap_article_id && row.best_before_date);
+
+      if (deliveryRows.length > 0) {
+        const { error: deliveryError } = await supabase
+          .from("store_product_deliveries")
+          .insert(deliveryRows);
+        if (deliveryError) throw deliveryError;
+      }
+
+      await loadShelfLifeData();
+      setStep("manage");
+
       setImportSuccess(
         `Matchade ${results.filter((r) => r.product).length} produkter. Skapade ${newProducts.length} nya.`,
       );
@@ -259,30 +286,70 @@ function ErstatningsCheckPage() {
       });
   }, [activeStore?.id]);
 
+  useEffect(() => {
+    if (!activeStore?.id) return;
+    void (async () => {
+      await loadShelfLifeData();
+      const { count } = await supabase
+        .from("products")
+        .select("id", { count: "exact", head: true })
+        .eq("store_id", activeStore.id);
+      if ((count ?? 0) > 0) setStep("manage");
+    })();
+  }, [activeStore?.id]);
+
   // Load shelf life data
   const loadShelfLifeData = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("product_shelf_life")
-        .select(
-          "sap_article_id, shelf_lifetime_days, temperature_zone, default_compensation_price_ore",
-        )
-        .order("updated_at", { ascending: false })
-        .limit(200);
+      const [productsResult, masterResult, deliveriesResult] = await Promise.all([
+        supabase
+          .from("products")
+          .select("id, sap_article_id, name")
+          .eq("store_id", activeStore.id)
+          .not("sap_article_id", "is", null)
+          .limit(500),
+        supabase
+          .from("product_shelf_life")
+          .select("sap_article_id, shelf_lifetime_days, default_compensation_price_ore")
+          .limit(500),
+        supabase
+          .from("store_product_deliveries")
+          .select("id, sap_article_id, best_before_date, arrival_date")
+          .eq("store_id", activeStore.id)
+          .order("arrival_date", { ascending: false })
+          .limit(1000),
+      ]);
 
-      if (error) throw error;
+      if (productsResult.error) throw productsResult.error;
+      if (masterResult.error) throw masterResult.error;
+      if (deliveriesResult.error) throw deliveriesResult.error;
+
+      const masterMap = new Map(
+        (masterResult.data ?? []).map((record: any) => [record.sap_article_id, record]),
+      );
+      const latestDelivery = new Map<string, any>();
+      for (const delivery of deliveriesResult.data ?? []) {
+        if (!latestDelivery.has(delivery.sap_article_id)) {
+          latestDelivery.set(delivery.sap_article_id, delivery);
+        }
+      }
+
       setShelfLifeRecords(
-        (data ?? []).map((r: any) => ({
-          id: r.sap_article_id ?? r.id,
-          sap_article_id: r.sap_article_id ?? "",
-          shelf_lifetime_days: r.shelf_lifetime_days ?? 0,
-          expiry_date: "", // masterdata har inget expiry — leveranshistorik har det
-          arrival_date: "",
-          compensation_price_ore: r.default_compensation_price_ore ?? 2,
-          created_at: r.created_at ?? new Date().toISOString(),
-          updated_at: r.updated_at ?? new Date().toISOString(),
-        })),
+        (productsResult.data ?? []).map((product: any) => {
+          const master = masterMap.get(product.sap_article_id) ?? {};
+          const delivery = latestDelivery.get(product.sap_article_id) ?? {};
+          return {
+            id: delivery.id ?? product.id,
+            sap_article_id: product.sap_article_id,
+            shelf_lifetime_days: master.shelf_lifetime_days ?? 0,
+            expiry_date: delivery.best_before_date ?? "",
+            arrival_date: delivery.arrival_date ?? "",
+            compensation_price_ore: master.default_compensation_price_ore ?? 2,
+            created_at: product.created_at ?? new Date().toISOString(),
+            updated_at: product.updated_at ?? new Date().toISOString(),
+          };
+        }),
       );
     } catch (error) {
       console.error("Error loading shelf life:", error);
@@ -413,11 +480,18 @@ function ErstatningsCheckPage() {
         .from("store_product_deliveries")
         .select("sap_article_id, best_before_date, arrival_date, quantity, status, delivery_number")
         .eq("store_id", activeStore.id)
-        .lt("best_before_date", new Date().toISOString())
-        .order("best_before_date", { ascending: true });
+        .order("arrival_date", { ascending: false });
 
       if (dbErr) throw dbErr;
-      const flagged = shelfData ?? [];
+      const latestByArticle = new Map<string, (typeof shelfData)[number]>();
+      for (const delivery of shelfData ?? []) {
+        if (!latestByArticle.has(delivery.sap_article_id)) {
+          latestByArticle.set(delivery.sap_article_id, delivery);
+        }
+      }
+      const flagged = Array.from(latestByArticle.values()).filter(
+        (delivery) => new Date(delivery.best_before_date).getTime() < Date.now(),
+      );
       if (flagged.length === 0) {
         setImportSuccess("Inga flaggade produkter för ersättningsansökan.");
         return;
@@ -521,20 +595,12 @@ function ErstatningsCheckPage() {
           3. Generera ersättning
         </Button>
         <Button
-          variant={step === "weekly" ? "default" : "outline"}
-          onClick={() => setStep("weekly")}
-          className="flex items-center gap-2"
-        >
-          <Clock size={16} />
-          4. Veckouppdrag
-        </Button>
-        <Button
           variant={step === "reclamations" ? "default" : "outline"}
           onClick={() => setStep("reclamations")}
           className="flex items-center gap-2"
         >
           <AlertTriangle size={16} />
-          5. Hantera varor
+          4. Hantera varor
         </Button>
       </div>
 
@@ -602,9 +668,6 @@ function ErstatningsCheckPage() {
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <h3 className="font-medium">Importerade {deliveryNotes.length} rader</h3>
-                  <Button onClick={handleMatchProducts} disabled={isLoading}>
-                    {isLoading ? "Matchar produkter..." : "Matcha produkter"}
-                  </Button>
                 </div>
 
                 <div className="border rounded-lg overflow-x-auto">
@@ -740,10 +803,14 @@ function ErstatningsCheckPage() {
                           </TableCell>
                           <TableCell>{record.shelf_lifetime_days}</TableCell>
                           <TableCell>
-                            {new Date(record.expiry_date).toLocaleDateString("sv-SE")}
+                            {record.expiry_date
+                              ? new Date(record.expiry_date).toLocaleDateString("sv-SE")
+                              : "Ej registrerat"}
                           </TableCell>
                           <TableCell>
-                            {new Date(record.arrival_date).toLocaleDateString("sv-SE")}
+                            {record.arrival_date
+                              ? new Date(record.arrival_date).toLocaleDateString("sv-SE")
+                              : "Ej registrerat"}
                           </TableCell>
                           <TableCell>
                             {isFlagged ? (
@@ -872,6 +939,30 @@ function ErstatningsCheckPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="mb-4 rounded-lg border p-4">
+              <h3 className="mb-2 font-medium">Aktuella artiklar från senaste leveranser</h3>
+              {shelfLifeRecords.filter((record) => record.arrival_date).length > 0 ? (
+                <div className="max-h-64 overflow-y-auto text-sm">
+                  {shelfLifeRecords
+                    .filter((record) => record.arrival_date)
+                    .map((record) => (
+                      <div
+                        key={record.id}
+                        className="flex items-center justify-between border-b py-2 last:border-0"
+                      >
+                        <span className="font-mono">{record.sap_article_id}</span>
+                        <span className="text-muted-foreground">
+                          {new Date(record.arrival_date).toLocaleDateString("sv-SE")}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Ingen leverans är importerad ännu.
+                </p>
+              )}
+            </div>
             <Alert className="mb-4">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
@@ -883,21 +974,15 @@ function ErstatningsCheckPage() {
                 </ul>
               </AlertDescription>
             </Alert>
-
-            <div className="flex justify-between items-center">
-              <p className="text-sm text-muted-foreground">
-                Systemet kommer att generera en fil med alla produkter som kräver ersättning.
-              </p>
-              <Button onClick={generateCompensationZip} disabled={isLoading}>
-                {isLoading ? "Genererar fil..." : "Generera ersättningsfil"}
-              </Button>
-            </div>
+            <Button onClick={generateCompensationZip} disabled={isLoading}>
+              {isLoading ? "Genererar fil..." : "Generera ersättningsfil"}
+            </Button>
           </CardContent>
         </Card>
       )}
 
       {/* Step 4: Weekly task */}
-      {step === "weekly" && (
+      {false && step === "weekly" && (
         <Card>
           <CardHeader>
             <CardTitle>Veckouppdrag</CardTitle>
@@ -1068,7 +1153,7 @@ function ErstatningsCheckPage() {
 
       {/* Weekly task dialog */}
       <Dialog
-        open={!!selectedWeeklyProduct}
+        open={false}
         onOpenChange={(open) => !open && setSelectedWeeklyProduct(null)}
       >
         <DialogContent className="sm:max-w-md">

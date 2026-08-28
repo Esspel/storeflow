@@ -85,7 +85,11 @@ import { useAuth } from "@/lib/auth-context";
 import { ImportDialog, type ImportDialogResult } from "@/components/import-dialog";
 import { cn, ensureHttps, sanitizeCsvCell } from "@/lib/utils";
 import { getSimulatedDate, getSimulatedNow } from "@/lib/time-simulation";
-import { spawnChildrenForParent, getRecurrenceHorizonDays } from "@/lib/task-utils";
+import {
+  spawnChildrenForParent,
+  getRecurrenceHorizonDays,
+  validateRecurrenceRange,
+} from "@/lib/task-utils";
 import { exportTextAsCSV, parseCSVLine } from "@/lib/csv";
 import { toast } from "sonner";
 
@@ -1131,6 +1135,18 @@ function MallarPage() {
       setError("Välj en förening.");
       return;
     }
+    if (form.recurrence_rule) {
+      const recurrenceError = validateRecurrenceRange(
+        form.recurrence_rule,
+        form.recurrence_days,
+        form.recurrence_start,
+        form.recurrence_end,
+      );
+      if (recurrenceError) {
+        setError(recurrenceError);
+        return;
+      }
+    }
     setSaving(true);
 
     const { data: tmpl } = await supabase
@@ -2016,6 +2032,18 @@ function MallarPage() {
     if (!editForm.title.trim()) {
       setError("Titel är obligatorisk.");
       return;
+    }
+    if (editForm.recurrence_rule) {
+      const recurrenceError = validateRecurrenceRange(
+        editForm.recurrence_rule,
+        editForm.recurrence_days,
+        editForm.recurrence_start,
+        editForm.recurrence_end,
+      );
+      if (recurrenceError) {
+        setError(recurrenceError);
+        return;
+      }
     }
     const scope = editTarget.hierarchy_scope ?? "store";
     setSaving(true);
