@@ -127,6 +127,7 @@ type ReplacementStatistics = {
   totalCount: number;
   monthly: Array<{ month: string; value: number; count: number }>;
   recurring: Array<{ sap_article_id: string; name: string; count: number }>;
+  recurringBadDates: Array<{ sap_article_id: string; name: string; badDeliveryCount: number; totalDeliveryCount: number }>;
   flowCounts: Record<string, number>;
   categoryCounts: Record<string, number>;
   openCount: number;
@@ -497,16 +498,14 @@ function ErstatningsCheckPage() {
           .eq("store_id", activeStore.id),
         supabase
           .from("product_shelf_life")
-          .select("sap_article_id, shelf_lifetime_days, default_compensation_price_ore")
-          .limit(500),
+          .select("sap_article_id, shelf_lifetime_days, default_compensation_price_ore"),
         supabase
           .from("store_product_deliveries")
           .select(
             "id, sap_article_id, best_before_date, arrival_date, status, delivery_number, product_name, brand, category",
           )
           .eq("store_id", activeStore.id)
-          .order("arrival_date", { ascending: false })
-          .limit(5000),
+          .order("arrival_date", { ascending: false }),
       ]);
 
       if (productsResult.error) throw productsResult.error;
@@ -516,17 +515,25 @@ function ErstatningsCheckPage() {
       const masterMap = new Map(
         (masterResult.data ?? []).map((record: any) => [record.sap_article_id, record]),
       );
-      const latestDelivery = new Map<string, any>();
+      const deliveriesByArticle = new Map<string, any[]>();
       for (const delivery of deliveriesResult.data ?? []) {
-        const current = latestDelivery.get(delivery.sap_article_id);
-        const currentScore = current
-          ? Number(current.arrival_date ? 1 : 0) + Number(current.best_before_date ? 1 : 0)
-          : -1;
-        const newScore =
-          Number(delivery.arrival_date ? 1 : 0) + Number(delivery.best_before_date ? 1 : 0);
-        if (!current || newScore > currentScore) {
-          latestDelivery.set(delivery.sap_article_id, delivery);
+        const list = deliveriesByArticle.get(delivery.sap_article_id) ?? [];
+        list.push(delivery);
+        deliveriesByArticle.set(delivery.sap_article_id, list);
+      }
+
+      const latestDelivery = new Map<string, any>();
+      for (const [sapArticleId, deliveries] of deliveriesByArticle) {
+        const sorted = deliveries;
+        const latest = sorted[0] ?? null;
+        if (!latest) continue;
+        let arrival = latest.arrival_date ?? "";
+        let bestBefore = latest.best_before_date ?? "";
+        for (const d of sorted) {
+          if (!arrival && d.arrival_date) arrival = d.arrival_date;
+          if (!bestBefore && d.best_before_date) bestBefore = d.best_before_date;
         }
+        latestDelivery.set(sapArticleId, { ...latest, arrival_date: arrival, best_before_date: bestBefore });
       }
 
       setShelfLifeRecords(
@@ -765,7 +772,7 @@ function ErstatningsCheckPage() {
   const loadDeliveryStatistics = async (period = statisticsPeriod) => {
     setIsLoading(true);
     try {
-      const [{ data, error }, { data: reclamationData, error: reclamationError }] =
+      const [{ data, error }, { data: reclamationData, error: reclamationError }, { data: masterData, error: masterError }] =
         await Promise.all([
           supabase
             .from("store_product_deliveries")
@@ -778,9 +785,14 @@ function ErstatningsCheckPage() {
             .from("reclamations")
             .select("sap_article_id, status, created_at")
             .eq("store_id", activeStore.id),
+          supabase
+            .from("product_shelf_life")
+            .select("sap_article_id, shelf_lifetime_days")
+            .limit(5000),
         ]);
       if (error) throw error;
       if (reclamationError) throw reclamationError;
+      if (masterError) throw masterError;
       setDeliveryStatistics(
         (data ?? []).map((row: any) => ({
           sap_article_id: row.sap_article_id,
@@ -868,10 +880,63 @@ function ErstatningsCheckPage() {
         flowCounts[flow === "Färsk" ? "Färskvaru" : flow] += 1;
       }
       const categoryCounts: Record<string, number> = {};
-      for (const reclamation of reclamationsForPeriod.filter((row: any) => row.status === "Löst")) {
-        const category = deliveryMap.get(reclamation.sap_article_id)?.category || "Okänd";
-        categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+      for (const reclamation of reclamationData ?? []) {
+        if (reclamation.status === "Löst") {
+          const category = deliveryMap.get(reclamation.sap_article_id)?.category || "Okänd";
+          categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+        }
       }
+      const masterMap = new Map((masterData ?? []).map((row: any) => [row.sap_article_id, row]));
+      const recurringBadDatesMap = new Map<
+        string,
+        { sap_article_id: string; name: string; badDeliveryCount: number; totalDeliveryCount: number }
+      >();
+      for (const delivery of data ?? []) {
+        const master = masterMap.get(delivery.sap_article_id);
+        const assessment = assessDelivery(
+          delivery.arrival_date,
+          delivery.best_before_date,
+          master?.shelf_lifetime_days ?? 0,
+        );
+        if (!assessment?.isEligible) continue;
+        const current = recurringBadDatesMap.get(delivery.sap_article_id) ?? {
+          sap_article_id: delivery.sap_article_id,
+          name: delivery.product_name || "Okänd produkt",
+          badDeliveryCount: 0,
+          totalDeliveryCount: 0,
+        };
+        current.totalDeliveryCount += 1;
+        current.badDeliveryCount += 1;
+        recurringBadDatesMap.set(delivery.sap_article_id, current);
+      }
+      for (const [sapArticleId, deliveries] of deliveriesByArticle) {
+        if (recurringBadDatesMap.has(sapArticleId)) continue;
+        let badCount = 0;
+        for (const delivery of deliveries) {
+          const master = masterMap.get(delivery.sap_article_id);
+          const assessment = assessDelivery(
+            delivery.arrival_date,
+            delivery.best_before_date,
+            master?.shelf_lifetime_days ?? 0,
+          );
+          if (assessment?.isEligible) badCount += 1;
+        }
+        if (badCount > 0) {
+          const current = recurringBadDatesMap.get(sapArticleId) ?? {
+            sap_article_id: sapArticleId,
+            name: deliveries[0]?.product_name || "Okänd produkt",
+            badDeliveryCount: 0,
+            totalDeliveryCount: 0,
+          };
+          current.totalDeliveryCount = deliveries.length;
+          current.badDeliveryCount = badCount;
+          recurringBadDatesMap.set(sapArticleId, current);
+        }
+      }
+      const recurringBadDates = [...recurringBadDatesMap.values()]
+        .filter((item) => item.badDeliveryCount >= 2)
+        .sort((a, b) => b.badDeliveryCount - a.badDeliveryCount)
+        .slice(0, 5);
       setReplacementStatistics({
         returnedValue,
         pendingValue,
@@ -1420,11 +1485,11 @@ function ErstatningsCheckPage() {
                 <CardTitle>Fördelning</CardTitle>
               </CardHeader>
               <CardContent>
-                {deliveryStatistics.length > 0 ? (
+                {shelfLifeRecords.length > 0 ? (
                   <div className="space-y-3">
                     {Object.entries(
-                      deliveryStatistics.reduce<Record<string, number>>((counts, delivery) => {
-                        const flow = getMappedFlow(delivery.category);
+                      shelfLifeRecords.reduce<Record<string, number>>((counts, record) => {
+                        const flow = getMappedFlow(record.category);
                         counts[flow] = (counts[flow] ?? 0) + 1;
                         return counts;
                       }, {}),

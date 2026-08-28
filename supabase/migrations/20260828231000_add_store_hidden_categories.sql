@@ -28,9 +28,9 @@ create policy "Store managers and admins can view hidden categories"
               and app_users.store_id = stores.id
           )
           or exists (
-            select 1 from app_user_store_memberships
-            where app_user_store_memberships.user_id = auth.uid()
-              and app_user_store_memberships.store_id = stores.id
+            select 1 from user_stores us
+            where us.user_id = auth.uid()
+              and us.store_id = stores.id
           )
         )
     )
@@ -50,9 +50,9 @@ create policy "Store managers and admins can upsert hidden categories"
               and app_users.store_id = stores.id
           )
           or exists (
-            select 1 from app_user_store_memberships
-            where app_user_store_memberships.user_id = auth.uid()
-              and app_user_store_memberships.store_id = stores.id
+            select 1 from user_stores us
+            where us.user_id = auth.uid()
+              and us.store_id = stores.id
           )
         )
     )
@@ -72,9 +72,9 @@ create policy "Store managers and admins can update hidden categories"
               and app_users.store_id = stores.id
           )
           or exists (
-            select 1 from app_user_store_memberships
-            where app_user_store_memberships.user_id = auth.uid()
-              and app_user_store_memberships.store_id = stores.id
+            select 1 from user_stores us
+            where us.user_id = auth.uid()
+              and us.store_id = stores.id
           )
         )
     )
@@ -94,9 +94,9 @@ create policy "Store managers and admins can delete hidden categories"
               and app_users.store_id = stores.id
           )
           or exists (
-            select 1 from app_user_store_memberships
-            where app_user_store_memberships.user_id = auth.uid()
-              and app_user_store_memberships.store_id = stores.id
+            select 1 from user_stores us
+            where us.user_id = auth.uid()
+              and us.store_id = stores.id
           )
         )
     )
