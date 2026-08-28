@@ -244,7 +244,7 @@ function ErstatningsCheckPage() {
   const [categoryMappings, setCategoryMappings] = useState<DeliveryCategoryMapping[]>([]);
   const [deliveryCategories, setDeliveryCategories] = useState<string[]>([]);
   const [mappingLoading, setMappingLoading] = useState(false);
-  const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set());
+  const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
   const [testFixtureSapId, setTestFixtureSapId] = useState<string | null>(null);
   const [shelfLifeSearch, setShelfLifeSearch] = useState("");
   const [shelfLifeSort, setShelfLifeSort] = useState<{
@@ -257,6 +257,18 @@ function ErstatningsCheckPage() {
     const timeoutId = window.setTimeout(() => setImportSuccess(null), 5000);
     return () => window.clearTimeout(timeoutId);
   }, [importSuccess]);
+
+  useEffect(() => {
+    if (!activeStore?.id) return;
+    void (async () => {
+      const { data } = await supabase
+        .from("store_hidden_categories")
+        .select("category")
+        .eq("store_id", activeStore.id)
+        .eq("is_hidden", true);
+      if (data) setHiddenCategories(data.map((row: any) => String(row.category)));
+    })();
+  }, [activeStore?.id]);
 
   const supabaseClient = supabase;
 
@@ -558,31 +570,43 @@ function ErstatningsCheckPage() {
   };
 
   const loadCategoryMappings = async () => {
-    const [
-      { data: mappings, error: mappingsError },
-      { data: deliveryCategories, error: categoriesError },
-      { data: productCategories, error: productCategoriesError },
-    ] = await Promise.all([
-      supabase
-        .from("delivery_category_flow_mappings")
-        .select("id, category, flow")
-        .order("category"),
-      supabase.from("store_product_deliveries").select("category").eq("store_id", activeStore.id),
-      supabase.from("products").select("category").eq("store_id", activeStore.id),
-    ]);
-    if (mappingsError) throw mappingsError;
-    if (categoriesError) throw categoriesError;
-    if (productCategoriesError) throw productCategoriesError;
-    setCategoryMappings((mappings ?? []) as DeliveryCategoryMapping[]);
-    const allCategories = [
-      ...new Set([
-        ...(deliveryCategories ?? []).map((row: any) => String(row.category ?? "").trim()),
-        ...(productCategories ?? []).map((row: any) => String(row.category ?? "").trim()),
-      ]),
-    ]
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b, "sv"));
-    setDeliveryCategories(allCategories);
+    try {
+      const [mappingsResult, deliveryResult, productResult] = await Promise.all([
+        supabase
+          .from("delivery_category_flow_mappings")
+          .select("id, category, flow")
+          .order("category"),
+        supabase
+          .from("store_product_deliveries")
+          .select("category")
+          .eq("store_id", activeStore.id)
+          .not("category", "is", null),
+        supabase
+          .from("products")
+          .select("category")
+          .eq("store_id", activeStore.id)
+          .not("category", "is", null),
+      ]);
+      if (mappingsResult.error) throw mappingsResult.error;
+      if (deliveryResult.error) throw deliveryResult.error;
+      if (productResult.error) throw productResult.error;
+      const mappings = mappingsResult.data ?? [];
+      const deliveryCategories = deliveryResult.data ?? [];
+      const productCategories = productResult.data ?? [];
+      setCategoryMappings(mappings);
+      const allCategories = [
+        ...new Set([
+          ...deliveryCategories.map((row: any) => String(row.category ?? "").trim()),
+          ...productCategories.map((row: any) => String(row.category ?? "").trim()),
+        ]),
+      ]
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, "sv"));
+      setDeliveryCategories(allCategories);
+    } catch (error) {
+      console.error("Error loading category mappings:", error);
+      toast.error("Kunde inte ladda kategorier.");
+    }
   };
 
   const saveCategoryMapping = async (category: string, flow: DeliveryFlow) => {
@@ -1114,9 +1138,12 @@ function ErstatningsCheckPage() {
       ].some((value) => String(value).toLocaleLowerCase("sv").includes(search));
     })
     .filter((record) => {
-      if (hiddenCategories.size === 0) return true;
-      const category = String(record.category ?? "").trim();
-      if (!hiddenCategories.has(category)) return true;
+      if (hiddenCategories.length === 0) return true;
+      const recordCategory = String(record.category ?? "").trim();
+      const isHidden = hiddenCategories.some(
+        (c) => c.toLowerCase() === recordCategory.toLowerCase(),
+      );
+      if (!isHidden) return true;
       return Boolean(record.expiry_date);
     })
     .sort((left, right) => {
@@ -1143,16 +1170,34 @@ function ErstatningsCheckPage() {
     }));
   };
 
-  const toggleHiddenCategory = (category: string) => {
-    setHiddenCategories((current) => {
-      const next = new Set(current);
-      if (next.has(category)) {
-        next.delete(category);
-      } else {
-        next.add(category);
-      }
-      return next;
-    });
+  const toggleHiddenCategory = async (category: string) => {
+    setMappingLoading(true);
+    try {
+      const current = hiddenCategories.find((c) => c.toLowerCase() === category.toLowerCase());
+      const nextHidden = !current;
+      const { error } = await supabase.from("store_hidden_categories").upsert(
+        {
+          store_id: activeStore.id,
+          category,
+          is_hidden: nextHidden,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "store_id,category" },
+      );
+      if (error) throw error;
+      setHiddenCategories((current) => {
+        if (nextHidden) {
+          const exists = current.some((c) => c.toLowerCase() === category.toLowerCase());
+          return exists ? current : [...current, category];
+        }
+        return current.filter((c) => c.toLowerCase() !== category.toLowerCase());
+      });
+    } catch (error) {
+      console.error("Error toggling hidden category:", error);
+      toast.error("Kunde inte uppdatera dold kategorival.");
+    } finally {
+      setMappingLoading(false);
+    }
   };
 
   return (
@@ -2052,7 +2097,9 @@ function ErstatningsCheckPage() {
               <div className="space-y-3">
                 {deliveryCategories.map((category) => {
                   const mapping = categoryMappings.find((item) => item.category === category);
-                  const isHidden = hiddenCategories.has(category);
+                  const isHidden = hiddenCategories.some(
+                    (c) => c.toLowerCase() === category.toLowerCase(),
+                  );
                   return (
                     <div
                       key={category}
