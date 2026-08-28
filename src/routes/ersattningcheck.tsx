@@ -20,6 +20,12 @@ import {
   ChevronRight,
   ExternalLink,
   BarChart3,
+  Box,
+  Package,
+  TrendingDown,
+  TrendingUp,
+  Zap,
+  Link2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -62,6 +68,15 @@ import {
 } from "@/lib/excel-parser";
 import { exportTextAsCSV, downloadAsZip } from "@/lib/csv";
 import { toast } from "sonner";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 type ShelfLifeRecord = {
   id: string;
@@ -85,6 +100,17 @@ type DeliveryStatistic = {
   arrival_date: string | null;
   expiry_date: string | null;
   delivery_status: string;
+};
+
+type ReplacementStatistics = {
+  returnedValue: number;
+  pendingValue: number;
+  sentCount: number;
+  approvalRate: number;
+  decidedCount: number;
+  approvedCount: number;
+  totalCount: number;
+  monthly: Array<{ month: string; value: number; count: number }>;
 };
 
 type WeeklyTask = {
@@ -122,8 +148,10 @@ export const Route = createFileRoute("/ersattningcheck")({
 
 function ErstatningsCheckPage() {
   const { user, activeStore, loading: authLoading } = useAuth();
-  const [step, setStep] = useState<"import" | "manage" | "generate" | "weekly" | "reclamations" | "statistics">(
-    "import",
+  const [step, setStep] = useState<
+    "dashboard" | "import" | "manage" | "generate" | "weekly" | "reclamations" | "statistics"
+  >(
+    "dashboard",
   );
   const [reclamations, setReclamations] = useState<Reclamation[]>([]);
   const [statusFilter, setStatusFilter] = useState<ReclamationStatus>("Ej skickad");
@@ -139,6 +167,9 @@ function ErstatningsCheckPage() {
   const [selectedWeeklyProduct, setSelectedWeeklyProduct] = useState<WeeklyTask | null>(null);
   const [weeklyDays, setWeeklyDays] = useState("");
   const [deliveryStatistics, setDeliveryStatistics] = useState<DeliveryStatistic[]>([]);
+  const [replacementStatistics, setReplacementStatistics] = useState<ReplacementStatistics | null>(null);
+  const [statisticsView, setStatisticsView] = useState<"value" | "count">("value");
+  const [totalProductCount, setTotalProductCount] = useState(0);
 
   const supabaseClient = supabase;
 
@@ -174,6 +205,22 @@ function ErstatningsCheckPage() {
       </div>
     );
   }
+
+  const flaggedProductCount = shelfLifeRecords.filter((record) => {
+    if (!record.arrival_date || !record.expiry_date || record.shelf_lifetime_days <= 0) return false;
+    const arrival = new Date(record.arrival_date).getTime();
+    const expiry = new Date(record.expiry_date).getTime();
+    if (Number.isNaN(arrival) || Number.isNaN(expiry)) return false;
+    const daysRemaining = Math.floor((expiry - arrival) / (1000 * 60 * 60 * 24));
+    const minimumDays = record.shelf_lifetime_days <= 548
+      ? Math.ceil(record.shelf_lifetime_days * 0.5)
+      : 274;
+    return daysRemaining < minimumDays;
+  }).length;
+  const goodProductCount = Math.max(totalProductCount - flaggedProductCount, 0);
+  const productPercentage = totalProductCount > 0
+    ? Math.round((goodProductCount / totalProductCount) * 100)
+    : 0;
 
   // Handle file upload
   const handleFileUpload = async (fileOrEvent: File | React.ChangeEvent<HTMLInputElement>) => {
@@ -339,7 +386,7 @@ function ErstatningsCheckPage() {
         .from("products")
         .select("id", { count: "exact", head: true })
         .eq("store_id", activeStore.id);
-      if ((count ?? 0) > 0) setStep("manage");
+      setTotalProductCount(count ?? 0);
     })();
   }, [activeStore?.id]);
 
@@ -399,10 +446,7 @@ function ErstatningsCheckPage() {
             compensation_price_ore: master.default_compensation_price_ore ?? 2,
             product_name: product.name ?? delivery.product_name ?? "Okänd produkt",
             brand: product.brand ?? delivery.brand ?? "",
-            product_url: getSapProductUrl(
-              activeStore.butiks_nr ?? activeStore.sap_site_id,
-              product.sap_article_id,
-            ),
+            product_url: getSapProductUrl(activeStore.sap_site_id, product.sap_article_id),
             delivery_status: delivery.status ?? "",
             created_at: product.created_at ?? new Date().toISOString(),
             updated_at: product.updated_at ?? new Date().toISOString(),
@@ -420,12 +464,19 @@ function ErstatningsCheckPage() {
   const loadDeliveryStatistics = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      const [{ data, error }, { data: reclamationData, error: reclamationError }] = await Promise.all([
+        supabase
         .from("store_product_deliveries")
         .select("sap_article_id, product_name, brand, arrival_date, best_before_date, status")
         .eq("store_id", activeStore.id)
-        .order("arrival_date", { ascending: false });
+        .order("arrival_date", { ascending: false }),
+        supabase
+          .from("reclamations")
+          .select("status, created_at")
+          .eq("store_id", activeStore.id),
+      ]);
       if (error) throw error;
+      if (reclamationError) throw reclamationError;
       setDeliveryStatistics(
         (data ?? []).map((row: any) => ({
           sap_article_id: row.sap_article_id,
@@ -436,6 +487,29 @@ function ErstatningsCheckPage() {
           delivery_status: row.status || "",
         })),
       );
+      const reclamationsForPeriod = (reclamationData ?? []).filter((row: any) => {
+        const createdAt = new Date(row.created_at);
+        return createdAt.getFullYear() === new Date().getFullYear();
+      });
+      const totalCount = reclamationsForPeriod.length;
+      const sentCount = reclamationsForPeriod.filter((row: any) => row.status !== "Ej skickad").length;
+      const decidedCount = reclamationsForPeriod.filter((row: any) => ["Löst", "Nekad"].includes(row.status)).length;
+      const approvedCount = reclamationsForPeriod.filter((row: any) => row.status === "Löst").length;
+      const monthly = Array.from({ length: 12 }, (_, month) => ({
+        month: new Date(2000, month, 1).toLocaleDateString("sv-SE", { month: "short" }),
+        value: 0,
+        count: reclamationsForPeriod.filter((row: any) => new Date(row.created_at).getMonth() === month).length,
+      }));
+      setReplacementStatistics({
+        returnedValue: 0,
+        pendingValue: 0,
+        sentCount,
+        approvalRate: decidedCount === 0 ? 0 : Math.round((approvedCount / decidedCount) * 100),
+        decidedCount,
+        approvedCount,
+        totalCount,
+        monthly,
+      });
       setStep("statistics");
     } catch (error) {
       console.error("Error loading delivery statistics:", error);
@@ -654,6 +728,14 @@ function ErstatningsCheckPage() {
       {/* Step navigation */}
       <div className="flex gap-4 mb-6 flex-wrap">
         <Button
+          variant={step === "dashboard" ? "default" : "outline"}
+          onClick={() => setStep("dashboard")}
+          className="flex items-center gap-2"
+        >
+          <Package size={16} />
+          Översikt
+        </Button>
+        <Button
           variant={step === "import" ? "default" : "outline"}
           onClick={() => setStep("import")}
           className="flex items-center gap-2"
@@ -710,6 +792,112 @@ function ErstatningsCheckPage() {
           <CheckCircle2 className="h-4 w-4" />
           <AlertDescription>{importSuccess}</AlertDescription>
         </Alert>
+      )}
+
+      {step === "dashboard" && (
+        <div className="space-y-6">
+          <section className="rounded-2xl bg-emerald-700 p-6 text-white shadow-sm md:p-8">
+            <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
+              <div>
+                <p className="text-sm font-medium uppercase tracking-wide text-emerald-100">
+                  {new Date().toLocaleDateString("sv-SE", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                  })}
+                </p>
+                <h2 className="mt-2 text-4xl font-semibold">Hej!</h2>
+              </div>
+              <div className="border-l border-emerald-500 pl-6 md:min-w-48">
+                <p className="text-sm text-emerald-100">Totalt i systemet</p>
+                <p className="mt-1 text-3xl font-semibold">{totalProductCount} produkter</p>
+              </div>
+            </div>
+          </section>
+
+          <section className="grid gap-4 md:grid-cols-2">
+            <Card className="border-blue-200 bg-blue-50/70">
+              <CardContent className="flex gap-4 p-5">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
+                  <Zap size={20} />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Information</CardTitle>
+                  <CardDescription className="mt-1">Senaste information från StoreFlow.</CardDescription>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-emerald-200 bg-emerald-50/70">
+              <CardContent className="flex gap-4 p-5">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
+                  <Link2 size={20} />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Ny uppdatering</CardTitle>
+                  <CardDescription className="mt-1">Nya funktioner finns tillgängliga.</CardDescription>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardDescription>REKLAMATION</CardDescription>
+                <CardTitle className="flex items-center gap-2 text-3xl text-red-600">
+                  {flaggedProductCount} <TrendingDown size={20} />
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>{totalProductCount > 0 ? Math.round((flaggedProductCount / totalProductCount) * 100) : 0}% av totalt</span>
+                <Button variant="link" className="h-auto p-0" onClick={() => setStep("reclamations")}>
+                  Hantera <ChevronRight size={14} />
+                </Button>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardDescription>BRA VAROR</CardDescription>
+                <CardTitle className="flex items-center gap-2 text-3xl text-emerald-600">
+                  {goodProductCount} <TrendingUp size={20} />
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground">{productPercentage}% av totalt</CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardDescription>TOTALT</CardDescription>
+                <CardTitle className="flex items-center gap-2 text-3xl">
+                  {totalProductCount} <Box size={20} />
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground">Alla aktiva produkter</CardContent>
+            </Card>
+          </section>
+
+          <section className="grid gap-4 lg:grid-cols-2">
+            <Card className="min-h-64">
+              <CardHeader>
+                <CardTitle>Fördelning</CardTitle>
+              </CardHeader>
+              <CardContent className="flex min-h-40 flex-col items-center justify-center text-center text-muted-foreground">
+                <Package size={34} className="mb-3 opacity-50" />
+                <p>Ingen data ännu</p>
+              </CardContent>
+            </Card>
+            <Card className="min-h-64">
+              <CardHeader className="flex-row items-center justify-between">
+                <CardTitle>Senaste leveranserna</CardTitle>
+                <Badge variant="outline">Senaste 5</Badge>
+              </CardHeader>
+              <CardContent className="flex min-h-40 flex-col items-center justify-center text-center text-muted-foreground">
+                <Upload size={34} className="mb-3 opacity-50" />
+                <p>Inga leveranser ännu.</p>
+                <p className="text-sm">Ladda upp en följesedel för att komma igång.</p>
+              </CardContent>
+            </Card>
+          </section>
+        </div>
       )}
 
       {/* Step 1: Import */}
@@ -872,9 +1060,19 @@ function ErstatningsCheckPage() {
                     {shelfLifeRecords.map((record) => {
                       const arrival = new Date(record.arrival_date);
                       const expiry = new Date(record.expiry_date);
-                      const daysRemaining = Math.floor(
-                        (expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24),
-                      );
+                      const hasValidDates =
+                        Boolean(record.arrival_date) &&
+                        Boolean(record.expiry_date) &&
+                        !Number.isNaN(arrival.getTime()) &&
+                        !Number.isNaN(expiry.getTime());
+                      const daysRemaining = hasValidDates
+                        ? Math.floor(
+                            (expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24),
+                          )
+                        : null;
+                      const hasShelfLife =
+                        Number.isFinite(record.shelf_lifetime_days) &&
+                        record.shelf_lifetime_days > 0;
 
                       let minRequired: number;
                       if (record.shelf_lifetime_days <= 548) {
@@ -883,7 +1081,8 @@ function ErstatningsCheckPage() {
                         minRequired = 274;
                       }
 
-                      const isFlagged = daysRemaining < minRequired;
+                      const isFlagged =
+                        hasShelfLife && daysRemaining !== null && daysRemaining < minRequired;
 
                       return (
                         <TableRow key={record.id}>
@@ -916,7 +1115,11 @@ function ErstatningsCheckPage() {
                               : "Ej registrerat"}
                           </TableCell>
                           <TableCell>
-                            {isFlagged ? (
+                            {!hasValidDates ? (
+                              <Badge variant="outline">Datum saknas</Badge>
+                            ) : !hasShelfLife ? (
+                              <Badge variant="outline">Hållbarhet saknas</Badge>
+                            ) : isFlagged ? (
                               <Badge variant="destructive" className="flex items-center gap-1">
                                 <AlertTriangle size={12} />
                                 Kräver ersättning
@@ -1014,7 +1217,12 @@ function ErstatningsCheckPage() {
               {shelfLifeRecords.filter((record) => record.arrival_date).length > 0 ? (
                 <div className="max-h-64 overflow-y-auto text-sm">
                   {shelfLifeRecords
-                    .filter((record) => record.arrival_date)
+                    .filter(
+                      (record) =>
+                        record.arrival_date &&
+                        record.expiry_date &&
+                        new Date(record.expiry_date).getTime() < Date.now(),
+                    )
                     .map((record) => (
                       <div
                         key={record.id}
@@ -1060,55 +1268,51 @@ function ErstatningsCheckPage() {
       )}
 
       {step === "statistics" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Leveransstatistik</CardTitle>
-            <CardDescription>
-              Komplett historik per leverans. Äldre leveranser används för statistik men inte för
-              nya ersättningsansökningar.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {deliveryStatistics.length > 0 ? (
-              <div className="border rounded-lg overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>SAP Produkt-ID</TableHead>
-                      <TableHead>Produkt</TableHead>
-                      <TableHead>Varumärke</TableHead>
-                      <TableHead>Leveransdatum</TableHead>
-                      <TableHead>Bäst-före-datum</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {deliveryStatistics.map((row, index) => (
-                      <TableRow key={`${row.sap_article_id}-${row.arrival_date}-${index}`}>
-                        <TableCell className="font-mono text-sm">{row.sap_article_id}</TableCell>
-                        <TableCell>{row.product_name}</TableCell>
-                        <TableCell>{row.brand || "-"}</TableCell>
-                        <TableCell>
-                          {row.arrival_date
-                            ? new Date(row.arrival_date).toLocaleDateString("sv-SE")
-                            : "-"}
-                        </TableCell>
-                        <TableCell>
-                          {row.expiry_date
-                            ? new Date(row.expiry_date).toLocaleDateString("sv-SE")
-                            : "-"}
-                        </TableCell>
-                        <TableCell>{row.delivery_status || "-"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="text-3xl font-semibold tracking-tight">Statistik</h2>
+              <p className="text-muted-foreground">Din butiks reklamationer och återförda värden över tid.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline">Spotlight</Button>
+              <Button variant="outline">Cockpit</Button>
+              <Select defaultValue="ytd">
+                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="ytd">Hittills i år</SelectItem></SelectContent>
+              </Select>
+              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => exportTextAsCSV("statistik.csv", "period,aterfort_varde\nHittills i ar,0") }>
+                <Download size={16} /> Exportera
+              </Button>
+            </div>
+          </div>
+
+          {replacementStatistics && (
+            <>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Card className="border-emerald-200 bg-emerald-50/70"><CardHeader className="pb-2"><CardDescription>ÅTERFÖRT VÄRDE</CardDescription><CardTitle className="text-3xl text-emerald-700">0 kr</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">perioden pågår</CardContent></Card>
+                <Card><CardHeader className="pb-2"><CardDescription>I VÄNTAN</CardDescription><CardTitle className="text-3xl">0 kr</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{replacementStatistics.sentCount} skickade reklamationer</CardContent></Card>
+                <Card><CardHeader className="pb-2"><CardDescription>GODKÄNNANDEGRAD</CardDescription><CardTitle className="text-3xl">{replacementStatistics.approvalRate}%</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{replacementStatistics.approvedCount} av {replacementStatistics.decidedCount} avgjorda</CardContent></Card>
+                <Card><CardHeader className="pb-2"><CardDescription>SNITT PER GODKÄND</CardDescription><CardTitle className="text-3xl">—</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{replacementStatistics.totalCount} reklamationer totalt</CardContent></Card>
               </div>
-            ) : (
-              <p className="py-8 text-center text-muted-foreground">Ingen leveranshistorik finns ännu.</p>
-            )}
-          </CardContent>
-        </Card>
+
+              <Card>
+                <CardHeader className="flex-row items-center justify-between"><div><CardTitle>Återfört över tid</CardTitle><CardDescription>Godkänt värde per månad</CardDescription></div><div className="flex gap-2"><Button size="sm" variant={statisticsView === "value" ? "default" : "outline"} onClick={() => setStatisticsView("value")}>Värde</Button><Button size="sm" variant={statisticsView === "count" ? "default" : "outline"} onClick={() => setStatisticsView("count")}>Antal</Button></div></CardHeader>
+                <CardContent>
+                  <div className="h-72 w-full"><ResponsiveContainer width="100%" height="100%"><LineChart data={replacementStatistics.monthly} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Line type="monotone" dataKey={statisticsView} stroke="#059669" strokeWidth={3} dot={{ r: 3 }} /></LineChart></ResponsiveContainer></div>
+                  <p className="text-sm text-muted-foreground">Vald period: Hittills i år - pågående månad (ej hel)</p>
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card><CardHeader><CardTitle>Fördelning per flöde</CardTitle><CardDescription>Färskvaru • Fryst • Torrt • Hittills i år</CardDescription></CardHeader><CardContent className="text-sm text-muted-foreground">Inga reklamationer i perioden.</CardContent></Card>
+                <Card><CardHeader><CardTitle>Återfört per kategori</CardTitle><CardDescription>Fördelat på 0 varugrupper • Hittills i år</CardDescription></CardHeader><CardContent className="text-sm text-muted-foreground">Inga godkända reklamationer i perioden.</CardContent></Card>
+                <Card><CardHeader><CardTitle>Återkommande varor</CardTitle><CardDescription>Produkter du reklamerar oftast - kandidater att se över med leverantören</CardDescription></CardHeader><CardContent className="text-sm text-muted-foreground">Inga återkommande varor ännu.</CardContent></Card>
+                <Card><CardHeader><CardTitle>Väntar på svar</CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">Inga öppna reklamationer.</CardContent></Card>
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       {/* Step 4: Weekly task */}
