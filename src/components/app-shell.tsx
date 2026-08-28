@@ -357,15 +357,18 @@ export function AppShell() {
 
   const nav = [
     { to: "/", label: "Översikt", mobileHidden: false, Icon: Home },
-    { to: "/uppgifter", label: "Uppgifter", mobileHidden: false, Icon: ClipboardList },
-    { to: "/schema", label: "Schema", mobileHidden: false, Icon: CalendarDays },
     { to: "/avvikelser", label: "Avvikelser", mobileHidden: true, Icon: TriangleAlert },
     { to: "/kundrunda", label: "Kundrunda", mobileHidden: true, Icon: UserRound },
     { to: "/kundonskemal", label: "Kundönskemål", mobileHidden: true, Icon: ShoppingCart },
     ...(isManager
       ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }]
       : []),
-    { to: "/ersattningcheck", label: "Ersättningscheck", mobileHidden: true, Icon: AlertTriangle },
+    {
+      to: "/ersattningcheck",
+      label: "Ersättningskontroll",
+      mobileHidden: true,
+      Icon: AlertTriangle,
+    },
   ];
 
   const fetchNotifications = useCallback(() => {
@@ -525,49 +528,69 @@ export function AppShell() {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden flex-1 items-center gap-1 md:flex">
-            {nav.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  "relative rounded-full px-2.5 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:text-primary whitespace-nowrap",
-                  isActive(item.to) && "text-primary",
-                )}
-              >
-                {item.label}
-                {isActive(item.to) && (
-                  <span className="absolute inset-x-3.5 -bottom-[14px] h-[3px] rounded-t-full bg-primary" />
-                )}
-              </Link>
-            ))}
-            {/* Tasks and templates submenu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="relative rounded-full px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-primary">
-                  Uppgifter & mallar
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem asChild><Link to="/uppgifter">Uppgifter</Link></DropdownMenuItem>
-                <DropdownMenuItem asChild><Link to="/mallar">Mallar</Link></DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <nav className="hidden min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto whitespace-nowrap md:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <Link
+              to="/"
+              className={cn(
+                "relative shrink-0 rounded-full px-2.5 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:text-primary",
+                isActive("/") && "text-primary",
+              )}
+            >
+              Översikt
+              {isActive("/") && (
+                <span className="absolute inset-x-3.5 -bottom-[14px] h-[3px] rounded-t-full bg-primary" />
+              )}
+            </Link>
 
-            {/* Posemesh Submenu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  size="icon"
-                  className="relative rounded-full px-2 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:text-primary whitespace-nowrap min-w-[100px]"
+                  className="relative shrink-0 rounded-full px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-primary"
                 >
-                  <Navigation className="h-4 w-4" />
-                  <span className="ml-1 text-[10px]">Posemesh</span>
+                  Uppgifter & mallar
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[200px]">
-                <DropdownMenuItem>
+              <DropdownMenuContent>
+                <DropdownMenuItem asChild>
+                  <Link to="/uppgifter">Uppgifter</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/mallar">Mallar</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {nav
+              .filter((item) => item.to !== "/" && item.to !== "/uppgifter")
+              .map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={cn(
+                    "relative shrink-0 rounded-full px-2.5 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:text-primary",
+                    isActive(item.to) && "text-primary",
+                  )}
+                >
+                  {item.label}
+                  {isActive(item.to) && (
+                    <span className="absolute inset-x-3.5 -bottom-[14px] h-[3px] rounded-t-full bg-primary" />
+                  )}
+                </Link>
+              ))}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="relative shrink-0 rounded-full px-2.5 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:text-primary"
+                >
+                  <Navigation className="mr-1.5 h-4 w-4" />
+                  Posemesh
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-[220px]">
+                <DropdownMenuItem asChild>
                   <Link
                     to="/spatial-navigation"
                     className="block w-full text-left px-4 py-2 text-sm"
@@ -575,17 +598,16 @@ export function AppShell() {
                     3D Butiksvy
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem asChild>
                   <Link to="/shelf-analytics" className="block w-full text-left px-4 py-2 text-sm">
                     Planogram & Hyllanalys
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem></DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </nav>
 
-          <div className="ml-auto flex items-center gap-1.5 md:gap-2">
+          <div className="ml-auto shrink-0 flex items-center gap-1.5 md:gap-2">
             <GlobalStoreSelector />
 
             {/* Notifications Popover */}
