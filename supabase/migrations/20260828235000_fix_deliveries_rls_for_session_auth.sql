@@ -5,6 +5,8 @@ drop policy if exists "deliveries_manager_insert" on store_product_deliveries;
 drop policy if exists "deliveries_manager_update" on store_product_deliveries;
 drop policy if exists "deliveries_manager_delete" on store_product_deliveries;
 
+grant select, insert, update, delete on store_product_deliveries to anon, authenticated;
+
 create policy "Session users can view deliveries"
   on store_product_deliveries for select
   to anon, authenticated
