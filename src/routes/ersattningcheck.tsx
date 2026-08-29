@@ -210,6 +210,48 @@ function assessDelivery(
   };
 }
 
+const SAP_BASE_URL = "https://s4r.sap.coop.se";
+
+function parseSapDate(dateValue: string | null | undefined): string | null {
+  if (!dateValue) return null;
+  const match = dateValue.match(/Date\((\d+)\)/);
+  if (match) {
+    return new Date(parseInt(match[1], 10)).toISOString();
+  }
+  const parsed = new Date(dateValue);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+interface SapProductData {
+  ProductID: string;
+  ProductName: string;
+  MerchandiseCategory: string;
+  MerchandiseCategoryName: string;
+  RemainingShelfLifeInDays: string;
+  Bnr: string;
+  DeliveryDate: string | null;
+  SalesPrice: string;
+  GlobalTradeItemNumber: string;
+}
+
+async function fetchSapProductData(
+  storeId: string,
+  sapArticleId: string,
+): Promise<SapProductData | null> {
+  const url = `${SAP_BASE_URL}/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(storeId)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`;
+  const resp = await fetch(url, {
+    method: "GET",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+      "x-csrf-token": "fetch",
+    },
+  });
+  if (!resp.ok) return null;
+  const json = await resp.json();
+  return json.d ?? null;
+}
+
 async function fetchAllRows(
   supabaseClient: typeof supabase,
   table: string,
@@ -652,6 +694,87 @@ function ErstatningsCheckPage() {
       setImportError("Kunde inte ladda hållbarhetsdata.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const importShelfLifeFromSap = async () => {
+    if (!activeStore) return;
+    let productsToFetch = [...shelfLifeRecords];
+    if (shelfLifeSearch.trim()) {
+      const search = shelfLifeSearch.trim().toLocaleLowerCase("sv");
+      productsToFetch = productsToFetch.filter(
+        (record) =>
+          getShelfLifeStatus(record) === "Hållbarhet saknas" ||
+          getShelfLifeStatus(record) === "Datum saknas",
+      );
+    } else {
+      productsToFetch = productsToFetch.filter(
+        (record) =>
+          getShelfLifeStatus(record) === "Hållbarhet saknas" ||
+          getShelfLifeStatus(record) === "Datum saknas",
+      );
+    }
+
+    if (productsToFetch.length === 0) {
+      toast.info("Inga artiklar saknar hållbarhetsdata att hämta.");
+      return;
+    }
+
+    setIsLoading(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const record of productsToFetch) {
+      try {
+        const sapData = await fetchSapProductData(
+          activeStore.sap_site_id ?? activeStore.id,
+          record.sap_article_id,
+        );
+
+        if (!sapData) {
+          errorCount += 1;
+          continue;
+        }
+
+        const shelfLifeDays = parseInt(sapData.RemainingShelfLifeInDays, 10);
+        const deliveryDate = parseSapDate(sapData.DeliveryDate);
+        const now = new Date().toISOString();
+
+        const { error } = await supabase.from("product_shelf_life").upsert(
+          {
+            sap_article_id: record.sap_article_id,
+            shelf_lifetime_days: Number.isFinite(shelfLifeDays) ? shelfLifeDays : 0,
+            expiry_date: deliveryDate ?? now,
+            arrival_date: deliveryDate ?? now,
+            temperature_zone: sapData.MerchandiseCategoryName,
+            updated_at: now,
+          },
+          { onConflict: "sap_article_id" },
+        );
+
+        if (error) {
+          console.error("Error upserting shelf life:", error);
+          errorCount += 1;
+          continue;
+        }
+
+        successCount += 1;
+      } catch (err) {
+        console.error("Error fetching from SAP:", err);
+        errorCount += 1;
+      }
+
+      if (successCount + errorCount % 10 === 0) {
+        toast.info(`Hämtad ${successCount}/${productsToFetch.length}...`);
+      }
+    }
+
+    await loadShelfLifeData();
+    if (successCount > 0) {
+      toast.success(`Hämtade hållbarhetsdata för ${successCount} artiklar.`);
+    }
+    if (errorCount > 0) {
+      toast.error(`Kunde inte hämta ${errorCount} artiklar (får fel från SAP).`);
     }
   };
 
@@ -1874,16 +1997,25 @@ function ErstatningsCheckPage() {
                >
                  {hideOkRecords ? "Visa OK" : "Dölj OK"}
                </Button>
-               {shelfLifeSort.length > 0 && (
-                 <Button
-                   type="button"
-                   variant="outline"
-                   size="sm"
-                   onClick={() => setShelfLifeSort([])}
-                 >
-                   Rensa sortering
-                 </Button>
-               )}
+                {shelfLifeSort.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShelfLifeSort([])}
+                  >
+                    Rensa sortering
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void importShelfLifeFromSap()}
+                  disabled={isLoading}
+                >
+                  Hämta från SAP
+                </Button>
              </div>
             {shelfLifeRecords.length > 0 ? (
               <div className="border rounded-lg overflow-x-auto">
