@@ -256,7 +256,8 @@ function ErstatningsCheckPage() {
   const [shelfLifeSort, setShelfLifeSort] = useState<{
     key: ShelfLifeSortKey;
     direction: "asc" | "desc";
-  }>({ key: "shelf_lifetime_days", direction: "asc" });
+  } | null>(null);
+  const [importDates, setImportDates] = useState<string[]>([]);
 
   useEffect(() => {
     if (!importSuccess) return;
@@ -273,6 +274,27 @@ function ErstatningsCheckPage() {
         .eq("store_id", activeStore.id)
         .eq("is_hidden", true);
       if (data) setHiddenCategories(data.map((row: any) => String(row.category)));
+    })();
+  }, [activeStore?.id]);
+
+  const refreshImportDates = async () => {
+    if (!activeStore?.id) return;
+    const { data } = await supabase
+      .from("store_product_deliveries")
+      .select("arrival_date")
+      .eq("store_id", activeStore.id)
+      .not("arrival_date", "is", null)
+      .order("arrival_date", { ascending: false })
+      .limit(1000);
+    if (!data) return;
+    const unique = Array.from(new Set(data.map((row: any) => String(row.arrival_date))));
+    setImportDates(unique);
+  };
+
+  useEffect(() => {
+    if (!activeStore?.id) return;
+    void (async () => {
+      await refreshImportDates();
     })();
   }, [activeStore?.id]);
 
@@ -433,6 +455,18 @@ function ErstatningsCheckPage() {
         .filter((row) => row.sap_article_id);
 
       if (deliveryRows.length > 0) {
+        const deliveryNumbers = Array.from(
+          new Set(
+            deliveryRows.map((r) => r.delivery_number).filter((n): n is string => Boolean(n)),
+          ),
+        );
+        if (deliveryNumbers.length > 0) {
+          await supabase
+            .from("store_product_deliveries")
+            .delete()
+            .eq("store_id", activeStore.id)
+            .in("delivery_number", deliveryNumbers);
+        }
         const { error: deliveryError } = await supabase
           .from("store_product_deliveries")
           .insert(deliveryRows);
@@ -441,6 +475,7 @@ function ErstatningsCheckPage() {
 
       await loadShelfLifeData();
       setStep("manage");
+      void refreshImportDates();
 
       setImportSuccess(
         `Matchade ${results.filter((r) => r.product).length} produkter. Skapade ${newProducts.length} nya.`,
@@ -1272,6 +1307,7 @@ function ErstatningsCheckPage() {
       const leftMissing = left.shelf_lifetime_days <= 0 ? 0 : 1;
       const rightMissing = right.shelf_lifetime_days <= 0 ? 0 : 1;
       if (leftMissing !== rightMissing) return leftMissing - rightMissing;
+      if (shelfLifeSort === null) return 0;
       const leftValue =
         shelfLifeSort.key === "status" ? getShelfLifeStatus(left) : (left[shelfLifeSort.key] ?? "");
       const rightValue =
@@ -1286,10 +1322,15 @@ function ErstatningsCheckPage() {
     });
 
   const toggleShelfLifeSort = (key: ShelfLifeSortKey) => {
-    setShelfLifeSort((current) => ({
-      key,
-      direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
-    }));
+    setShelfLifeSort((current) => {
+      if (current?.key === key) {
+        return {
+          key,
+          direction: current.direction === "asc" ? "desc" : "asc",
+        };
+      }
+      return { key, direction: "asc" };
+    });
   };
 
   const toggleHiddenCategory = async (category: string) => {
@@ -1652,6 +1693,28 @@ function ErstatningsCheckPage() {
                 <div className="flex justify-between items-center">
                   <h3 className="font-medium">Importerade {deliveryNotes.length} rader</h3>
                 </div>
+
+                {importDates.length > 0 && (
+                  <div className="mb-4">
+                    <Label className="text-sm font-medium text-muted-foreground">
+                      Senaste importerade leveransdatum
+                    </Label>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {importDates.slice(0, 20).map((date) => (
+                        <Button
+                          key={date}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="font-mono text-xs"
+                          onClick={() => setShelfLifeSearch(date)}
+                        >
+                          {date}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="border rounded-lg overflow-x-auto">
                   <Table>

@@ -333,7 +333,8 @@ export async function matchDeliveryNoteToProducts(
   const { data: storeProducts, error } = await supabase
     .from("products")
     .select("id, sap_article_id, ean, bnr, name")
-    .eq("store_id", storeId);
+    .eq("store_id", storeId)
+    .limit(5000);
 
   if (error) throw error;
 
