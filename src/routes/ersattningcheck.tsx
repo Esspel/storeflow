@@ -216,6 +216,7 @@ async function fetchAllRows(
   select: string,
   eq?: { column: string; value: unknown },
   order?: { column: string; ascending?: boolean },
+  idColumn = "id",
 ): Promise<any[]> {
   const batchSize = 1000;
   const all: any[] = [];
@@ -224,6 +225,7 @@ async function fetchAllRows(
     let query = supabaseClient.from(table).select(select).range(from, from + batchSize - 1);
     if (eq) query = query.eq(eq.column, eq.value);
     if (order) query = query.order(order.column, { ascending: order.ascending ?? false });
+    query = query.order(idColumn, { ascending: true });
     const { data, error } = await query;
     if (error) throw error;
     if (!data || data.length === 0) break;
@@ -277,10 +279,11 @@ function ErstatningsCheckPage() {
   const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
   const [testFixtureSapId, setTestFixtureSapId] = useState<string | null>(null);
   const [shelfLifeSearch, setShelfLifeSearch] = useState("");
-  const [shelfLifeSort, setShelfLifeSort] = useState<{
+  const [shelfLifeSort, setShelfLifeSort] = useState<Array<{
     key: ShelfLifeSortKey;
     direction: "asc" | "desc";
-  } | null>(null);
+  }>>([]);
+  const [hideOkRecords, setHideOkRecords] = useState(false);
   const [importDates, setImportDates] = useState<string[]>([]);
 
   useEffect(() => {
@@ -1327,33 +1330,50 @@ function ErstatningsCheckPage() {
       if (!isHidden) return true;
       return Boolean(record.expiry_date);
     })
+    .filter((record) => {
+      if (!hideOkRecords) return true;
+      return getShelfLifeStatus(record) !== "OK";
+    })
     .sort((left, right) => {
       const leftMissing = left.shelf_lifetime_days <= 0 ? 0 : 1;
       const rightMissing = right.shelf_lifetime_days <= 0 ? 0 : 1;
       if (leftMissing !== rightMissing) return leftMissing - rightMissing;
-      if (shelfLifeSort === null) return 0;
-      const leftValue =
-        shelfLifeSort.key === "status" ? getShelfLifeStatus(left) : (left[shelfLifeSort.key] ?? "");
-      const rightValue =
-        shelfLifeSort.key === "status"
-          ? getShelfLifeStatus(right)
-          : (right[shelfLifeSort.key] ?? "");
-      const comparison = String(leftValue).localeCompare(String(rightValue), "sv", {
-        numeric: true,
-        sensitivity: "base",
-      });
-      return shelfLifeSort.direction === "asc" ? comparison : -comparison;
+      for (const sort of shelfLifeSort) {
+        const leftValue =
+          sort.key === "status" ? getShelfLifeStatus(left) : (left[sort.key] ?? "");
+        const rightValue =
+          sort.key === "status"
+            ? getShelfLifeStatus(right)
+            : (right[sort.key] ?? "");
+        const comparison = String(leftValue).localeCompare(String(rightValue), "sv", {
+          numeric: true,
+          sensitivity: "base",
+        });
+        if (comparison !== 0) {
+          return sort.direction === "asc" ? comparison : -comparison;
+        }
+      }
+      return 0;
     });
 
-  const toggleShelfLifeSort = (key: ShelfLifeSortKey) => {
+  const toggleShelfLifeSort = (key: ShelfLifeSortKey, shiftKey = false) => {
     setShelfLifeSort((current) => {
-      if (current?.key === key) {
-        return {
-          key,
-          direction: current.direction === "asc" ? "desc" : "asc",
-        };
+      const existing = current.find((s) => s.key === key);
+      if (existing) {
+        if (shiftKey) {
+          return current.map((s) =>
+            s.key === key
+              ? { key, direction: s.direction === "asc" ? "desc" : "asc" }
+              : s,
+          );
+        }
+        const newDirection = existing.direction === "asc" ? "desc" : "asc";
+        return [...current.filter((s) => s.key !== key), { key, direction: newDirection }];
       }
-      return { key, direction: "asc" };
+      if (!shiftKey) {
+        return [{ key, direction: "asc" }];
+      }
+      return [...current, { key, direction: "asc" }];
     });
   };
 
@@ -1842,9 +1862,29 @@ function ErstatningsCheckPage() {
               placeholder="Sök produkt, varumärke, hållbarhet, datum eller status..."
               aria-label="Sök i hållbarhetsdata"
             />
-            <p className="text-sm text-muted-foreground">
-              Visar {filteredShelfLifeRecords.length} av {shelfLifeRecords.length} artiklar
-            </p>
+             <p className="text-sm text-muted-foreground">
+               Visar {filteredShelfLifeRecords.length} av {shelfLifeRecords.length} artiklar
+             </p>
+             <div className="flex gap-4">
+               <Button
+                 type="button"
+                 variant={hideOkRecords ? "default" : "outline"}
+                 size="sm"
+                 onClick={() => setHideOkRecords(!hideOkRecords)}
+               >
+                 {hideOkRecords ? "Visa OK" : "Dölj OK"}
+               </Button>
+               {shelfLifeSort.length > 0 && (
+                 <Button
+                   type="button"
+                   variant="outline"
+                   size="sm"
+                   onClick={() => setShelfLifeSort([])}
+                 >
+                   Rensa sortering
+                 </Button>
+               )}
+             </div>
             {shelfLifeRecords.length > 0 ? (
               <div className="border rounded-lg overflow-x-auto">
                 <Table>
@@ -1860,20 +1900,37 @@ function ErstatningsCheckPage() {
                           ["Leveransdatum", "arrival_date"],
                           ["Status", "status"],
                         ] as [string, ShelfLifeSortKey][]
-                      ).map(([label, key]) => (
-                        <TableHead key={key}>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-auto px-0 font-medium"
-                            onClick={() => toggleShelfLifeSort(key)}
-                          >
-                            {label}
-                            <ArrowUpDown size={14} className="ml-1" />
-                          </Button>
-                        </TableHead>
-                      ))}
+                      ).map(([label, key], idx) => {
+                        const sortEntry = shelfLifeSort.find((s) => s.key === key);
+                        const sortOrder = shelfLifeSort.findIndex((s) => s.key === key);
+                        return (
+                          <TableHead key={key}>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-auto px-0 font-medium"
+                              onClick={(e) => toggleShelfLifeSort(key, e.shiftKey)}
+                            >
+                              {label}
+                              {sortEntry ? (
+                                sortEntry.direction === "asc" ? (
+                                  <TrendingUp size={14} className="ml-1" />
+                                ) : (
+                                  <TrendingDown size={14} className="ml-1" />
+                                )
+                              ) : (
+                                <ArrowUpDown size={14} className="ml-1 opacity-30" />
+                              )}
+                              {sortOrder >= 0 && sortOrder > 0 && (
+                                <Badge variant="outline" className="ml-1 h-5 w-5 p-0 text-xs">
+                                  {sortOrder + 1}
+                                </Badge>
+                              )}
+                            </Button>
+                          </TableHead>
+                        );
+                      })}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
