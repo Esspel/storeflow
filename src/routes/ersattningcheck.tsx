@@ -6,6 +6,7 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
+import { fetchSapProductServerFn } from "@/routes/api/proxy/sap/$";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Upload,
@@ -210,7 +211,6 @@ function assessDelivery(
   };
 }
 
-const SAP_BASE_URL = "https://s4r.sap.coop.se";
 
 function parseSapDate(dateValue: string | null | undefined): string | null {
   if (!dateValue) return null;
@@ -238,18 +238,7 @@ async function fetchSapProductData(
   storeId: string,
   sapArticleId: string,
 ): Promise<SapProductData | null> {
-  const url = `${SAP_BASE_URL}/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(storeId)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`;
-  const resp = await fetch(url, {
-    method: "GET",
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-      "x-csrf-token": "fetch",
-    },
-  });
-  if (!resp.ok) return null;
-  const json = await resp.json();
-  return json.d ?? null;
+  return fetchSapProductServerFn({ data: { storeId, sapArticleId } });
 }
 
 async function fetchAllRows(
