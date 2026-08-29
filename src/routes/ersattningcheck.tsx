@@ -1688,33 +1688,33 @@ function ErstatningsCheckPage() {
               />
             </div>
 
+            {importDates.length > 0 && (
+              <div className="mb-4">
+                <Label className="text-sm font-medium text-muted-foreground">
+                  Senaste importerade leveransdatum
+                </Label>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {importDates.slice(0, 20).map((date) => (
+                    <Button
+                      key={date}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="font-mono text-xs"
+                      onClick={() => setShelfLifeSearch(date)}
+                    >
+                      {date}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {deliveryNotes.length > 0 && (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <h3 className="font-medium">Importerade {deliveryNotes.length} rader</h3>
                 </div>
-
-                {importDates.length > 0 && (
-                  <div className="mb-4">
-                    <Label className="text-sm font-medium text-muted-foreground">
-                      Senaste importerade leveransdatum
-                    </Label>
-                    <div className="mt-1 flex flex-wrap gap-2">
-                      {importDates.slice(0, 20).map((date) => (
-                        <Button
-                          key={date}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="font-mono text-xs"
-                          onClick={() => setShelfLifeSearch(date)}
-                        >
-                          {date}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 <div className="border rounded-lg overflow-x-auto">
                   <Table>
@@ -1818,6 +1818,9 @@ function ErstatningsCheckPage() {
               placeholder="Sök produkt, varumärke, hållbarhet, datum eller status..."
               aria-label="Sök i hållbarhetsdata"
             />
+            <p className="text-sm text-muted-foreground">
+              Visar {filteredShelfLifeRecords.length} av {shelfLifeRecords.length} artiklar
+            </p>
             {shelfLifeRecords.length > 0 ? (
               <div className="border rounded-lg overflow-x-auto">
                 <Table>
