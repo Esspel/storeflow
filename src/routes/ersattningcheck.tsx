@@ -1513,6 +1513,15 @@ function ErstatningsCheckPage() {
     });
   };
 
+  const moveSortToFront = (key: ShelfLifeSortKey) => {
+    setShelfLifeSort((current) => {
+      const entry = current.find((s) => s.key === key);
+      if (!entry) return current;
+      const others = current.filter((s) => s.key !== key);
+      return [{ ...entry }, ...others];
+    });
+  };
+
   const removeShelfLifeSort = (key: ShelfLifeSortKey) => {
     setShelfLifeSort((current) => current.filter((s) => s.key !== key));
   };
@@ -2038,11 +2047,13 @@ function ErstatningsCheckPage() {
               <div
                 className="border rounded-lg overflow-hidden"
                 style={{ height: "500px" }}
-                onScroll={(e) =>
-                  setShelfLifeScrollTop(e.currentTarget.scrollTop)
-                }
               >
-                <div className="overflow-x-auto h-full">
+                <div
+                  className="overflow-auto h-full"
+                  onScroll={(e) =>
+                    setShelfLifeScrollTop(e.currentTarget.scrollTop)
+                  }
+                >
                   <Table>
                     <TableHeader>
                      <TableRow>
@@ -2067,14 +2078,18 @@ function ErstatningsCheckPage() {
                                   variant="ghost"
                                   size="sm"
                                   className="h-auto px-0 font-medium"
-                                 onClick={(e) => {
-                                   if (e.shiftKey) {
-                                     e.preventDefault();
-                                     toggleShelfLifeSort(key, true);
-                                   } else {
-                                     toggleShelfLifeSort(key, false);
-                                   }
-                                 }}
+                                onClick={(e) => {
+                                  if (e.shiftKey) {
+                                    e.preventDefault();
+                                    if (sortEntry) {
+                                      moveSortToFront(key);
+                                    } else {
+                                      toggleShelfLifeSort(key, true);
+                                    }
+                                  } else {
+                                    toggleShelfLifeSort(key, false);
+                                  }
+                                }}
                                 >
                                   {label}
                                   {sortEntry ? (
