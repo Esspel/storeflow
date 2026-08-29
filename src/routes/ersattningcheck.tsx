@@ -1083,7 +1083,6 @@ function ErstatningsCheckPage() {
           { onConflict: "sap_article_id" },
         );
       }
-      toast.success("Hållbarhetsdata sparad.");
     } catch (e) {
       toast.error("Kunde inte spara hållbarhetsdata.");
     } finally {
@@ -1105,7 +1104,6 @@ function ErstatningsCheckPage() {
       );
       if (upsertErr) throw upsertErr;
 
-      setImportSuccess("Hållbarhetsdata sparad!");
       await loadShelfLifeData();
     } catch (error) {
       console.error("Error saving shelf life:", error);
