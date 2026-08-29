@@ -538,20 +538,28 @@ function ErstatningsCheckPage() {
         latestDelivery.set(sapArticleId, chosen);
       }
 
+      const productMap = new Map(
+        (productsResult.data ?? []).map((product: any) => [product.sap_article_id, product]),
+      );
+      const mergedArticleIds = new Set<string>([
+        ...(productsResult.data ?? []).map((p: any) => p.sap_article_id),
+        ...latestDelivery.keys(),
+      ]);
       setShelfLifeRecords(
-        (productsResult.data ?? []).map((product: any) => {
-          const master = masterMap.get(product.sap_article_id) ?? {};
-          const delivery = latestDelivery.get(product.sap_article_id) ?? {};
+        [...mergedArticleIds].map((sapArticleId) => {
+          const product = productMap.get(sapArticleId) ?? {};
+          const master = masterMap.get(sapArticleId) ?? {};
+          const delivery = latestDelivery.get(sapArticleId) ?? {};
           return {
-            id: delivery.id ?? product.id,
-            sap_article_id: product.sap_article_id ?? "",
+            id: delivery.id ?? product.id ?? sapArticleId,
+            sap_article_id: sapArticleId,
             shelf_lifetime_days: master.shelf_lifetime_days ?? 0,
             expiry_date: delivery.best_before_date ?? "",
             arrival_date: delivery.arrival_date ?? "",
             compensation_price_ore: master.default_compensation_price_ore ?? 2,
             product_name: product.name ?? delivery.product_name ?? "Okänd produkt",
             brand: product.brand ?? delivery.brand ?? "",
-            product_url: getSapProductUrl(activeStore.sap_site_id, product.sap_article_id ?? ""),
+            product_url: getSapProductUrl(activeStore.sap_site_id, sapArticleId),
             delivery_status: delivery.status ?? "",
             created_at: product.created_at ?? new Date().toISOString(),
             updated_at: product.updated_at ?? new Date().toISOString(),
@@ -915,10 +923,10 @@ function ErstatningsCheckPage() {
         }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
-      const flowCounts: Record<string, number> = { Färskvaru: 0, Fryst: 0, Torrt: 0 };
+      const flowCounts: Record<string, number> = { Färsk: 0, Fryst: 0, Torrt: 0 };
       for (const reclamation of reclamationsForPeriod) {
         const flow = getMappedFlow(deliveryMap.get(reclamation.sap_article_id)?.category);
-        flowCounts[flow === "Färsk" ? "Färskvaru" : flow] += 1;
+        flowCounts[flow] += 1;
       }
       const categoryCounts: Record<string, number> = {};
       for (const reclamation of reclamationData ?? []) {
@@ -1316,7 +1324,7 @@ function ErstatningsCheckPage() {
     <div className="container mx-auto p-6 max-w-7xl">
       <PageHeader
         title="Ersättningskontroll"
-        description="Hantera följesedel, hållbarhetsdatum och datumregelverk enligt Coop"
+        description="Hantera följesedel, hållbarhetsdata och leveranser"
       />
 
       {/* Step navigation */}
@@ -2021,7 +2029,7 @@ function ErstatningsCheckPage() {
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardDescription>I VÄNTAN</CardDescription>
+                    <CardDescription>EJ FÄRDIGA REKLAMATIONERS VÄRDE</CardDescription>
                     <CardTitle className="text-3xl">
                       {formatSek(replacementStatistics.pendingValue)}
                     </CardTitle>
