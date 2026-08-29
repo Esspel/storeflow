@@ -9,7 +9,6 @@ import {
   UserRound,
   ShoppingCart,
   RefreshCw,
-  Settings,
   Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -142,10 +141,10 @@ function HubPage() {
                 fallback={<WidgetFallback name="Butiksinstallation" />}
               >
                 <QuickCard
-                  to="/store-setup"
-                  icon={Settings}
-                  title="Butiksinstallation"
-                  desc="QR-portaler, Digital twin, Produkter"
+                  to="/shelf-analytics"
+                  icon={BarChart3}
+                  title="Hyllanalys"
+                  desc="Planogram- och hyllkontrolle"
                   tone="indigo"
                 />
               </ErrorBoundary>

@@ -21,7 +21,6 @@ import {
   UserCog,
   Users,
   X,
-  Link as LinkIcon,
 } from "lucide-react";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 
@@ -30,7 +29,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ensureHttps } from "@/lib/utils";
 import { exportTextAsCSV } from "@/lib/csv";
 import {
   Dialog,
@@ -223,12 +221,6 @@ function AccountsPage() {
   const isAdmin = currentUser?.role === "admin";
   const isManager = currentUser?.role === "manager" || isAdmin;
 
-  // Upshop URL state (managers and admins)
-  const [upshopUrl, setUpshopUrl] = useState("");
-  const [upshopSaving, setUpshopSaving] = useState(false);
-  const [upshopSuccess, setUpshopSuccess] = useState(false);
-  const [upshopError, setUpshopError] = useState("");
-
   const [users, setUsers] = useState<UserWithStores[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
@@ -374,37 +366,6 @@ function AccountsPage() {
         return aChecked - bChecked || a.name.localeCompare(b.name, "sv");
       });
   }, [stores, editUser, editStoreSearch]);
-
-  useEffect(() => {
-    if (!activeStore || !isManager) return;
-    supabase
-      .from("stores")
-      .select("upshop_url")
-      .eq("id", activeStore.id)
-      .maybeSingle()
-      .then(({ data }) =>
-        setUpshopUrl((data as { upshop_url?: string | null } | null)?.upshop_url ?? ""),
-      );
-  }, [activeStore?.id, isManager]);
-
-  const saveUpshopUrl = async () => {
-    if (!activeStore) return;
-    setUpshopError("");
-    setUpshopSaving(true);
-    const trimmed = upshopUrl.trim();
-    if (trimmed && !trimmed.startsWith("https://")) {
-      setUpshopError("URL måste börja med https://");
-      setUpshopSaving(false);
-      return;
-    }
-    await supabase
-      .from("stores")
-      .update({ upshop_url: trimmed || null })
-      .eq("id", activeStore.id);
-    setUpshopSaving(false);
-    setUpshopSuccess(true);
-    setTimeout(() => setUpshopSuccess(false), 2000);
-  };
 
   async function load() {
     const managerStoreIds = currentUserStores.map((s) => s.id);
@@ -1329,8 +1290,6 @@ function AccountsPage() {
         }
       />
 
-      {isAdmin && <div className="mt-6"><ApiKeysManager /></div>}
-
       <Tabs defaultValue="users" className="mt-6">
         <TabsList className="flex-wrap rounded-full bg-muted/60 p-1">
           <TabsTrigger
@@ -1730,47 +1689,10 @@ function AccountsPage() {
               </p>
             </div>
 
-            {/* Upshop styrtavla URL */}
-            {activeStore && (
-              <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)]">
-                <div className="mb-4 flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                    <LinkIcon className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">Upshop styrtavla</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Klistra in URL till Upshop styrtavlan för att visa den i Pulstavlan. T.ex.{" "}
-                      <code className="font-mono text-[10px]">https://app.whywaste.com/c/...</code>
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <input
-                    value={upshopUrl}
-                    onChange={(e) => {
-                      setUpshopUrl(e.target.value);
-                      setUpshopError("");
-                    }}
-                    onBlur={(e) => {
-                      const v = ensureHttps(e.target.value);
-                      if (v !== upshopUrl) setUpshopUrl(v);
-                    }}
-                    placeholder="https://app.whywaste.com/c/..."
-                    className="h-9 w-full rounded-lg border border-border/60 bg-background px-3 font-mono text-sm outline-none focus:border-primary/60"
-                  />
-                  {upshopError && <p className="text-sm text-destructive">{upshopError}</p>}
-                  <div className="flex items-center gap-3">
-                    <Button
-                      onClick={saveUpshopUrl}
-                      disabled={upshopSaving}
-                      className="rounded-full"
-                    >
-                      {upshopSaving ? "Sparar..." : "Spara URL"}
-                    </Button>
-                    {upshopSuccess && <span className="text-sm text-success">Sparat!</span>}
-                  </div>
-                </div>
+            {/* API-nyckelhantering */}
+            {isAdmin && (
+              <div className="mt-6">
+                <ApiKeysManager />
               </div>
             )}
 

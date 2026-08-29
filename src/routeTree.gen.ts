@@ -31,7 +31,6 @@ import { Route as RapporterRouteImport } from './routes/rapporter'
 import { Route as SchemaRouteImport } from './routes/schema'
 import { Route as ShelfAnalyticsRouteImport } from './routes/shelf-analytics'
 import { Route as SpatialNavigationRouteImport } from './routes/spatial-navigation'
-import { Route as StoreSetupRouteImport } from './routes/store-setup'
 import { Route as TestpanelRouteImport } from './routes/testpanel'
 import { Route as UppgifterRouteImport } from './routes/uppgifter'
 
@@ -145,11 +144,6 @@ const SpatialNavigationRoute = SpatialNavigationRouteImport.update({
   path: '/spatial-navigation',
   getParentRoute: () => rootRouteImport,
 } as any)
-const StoreSetupRoute = StoreSetupRouteImport.update({
-  id: '/store-setup',
-  path: '/store-setup',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TestpanelRoute = TestpanelRouteImport.update({
   id: '/testpanel',
   path: '/testpanel',
@@ -184,7 +178,6 @@ export interface FileRoutesByFullPath {
   '/schema': typeof SchemaRoute
   '/shelf-analytics': typeof ShelfAnalyticsRoute
   '/spatial-navigation': typeof SpatialNavigationRoute
-  '/store-setup': typeof StoreSetupRoute
   '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
@@ -211,7 +204,6 @@ export interface FileRoutesByTo {
   '/schema': typeof SchemaRoute
   '/shelf-analytics': typeof ShelfAnalyticsRoute
   '/spatial-navigation': typeof SpatialNavigationRoute
-  '/store-setup': typeof StoreSetupRoute
   '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
@@ -239,7 +231,6 @@ export interface FileRoutesById {
   '/schema': typeof SchemaRoute
   '/shelf-analytics': typeof ShelfAnalyticsRoute
   '/spatial-navigation': typeof SpatialNavigationRoute
-  '/store-setup': typeof StoreSetupRoute
   '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
@@ -268,7 +259,6 @@ export interface FileRouteTypes {
     | '/schema'
     | '/shelf-analytics'
     | '/spatial-navigation'
-    | '/store-setup'
     | '/testpanel'
     | '/uppgifter'
   fileRoutesByTo: FileRoutesByTo
@@ -295,7 +285,6 @@ export interface FileRouteTypes {
     | '/schema'
     | '/shelf-analytics'
     | '/spatial-navigation'
-    | '/store-setup'
     | '/testpanel'
     | '/uppgifter'
   id:
@@ -322,7 +311,6 @@ export interface FileRouteTypes {
     | '/schema'
     | '/shelf-analytics'
     | '/spatial-navigation'
-    | '/store-setup'
     | '/testpanel'
     | '/uppgifter'
   fileRoutesById: FileRoutesById
@@ -350,7 +338,6 @@ export interface RootRouteChildren {
   SchemaRoute: typeof SchemaRoute
   ShelfAnalyticsRoute: typeof ShelfAnalyticsRoute
   SpatialNavigationRoute: typeof SpatialNavigationRoute
-  StoreSetupRoute: typeof StoreSetupRoute
   TestpanelRoute: typeof TestpanelRoute
   UppgifterRoute: typeof UppgifterRoute
 }
@@ -511,13 +498,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SpatialNavigationRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/store-setup': {
-      id: '/store-setup'
-      path: '/store-setup'
-      fullPath: '/store-setup'
-      preLoaderRoute: typeof StoreSetupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/testpanel': {
       id: '/testpanel'
       path: '/testpanel'
@@ -558,7 +538,6 @@ const rootRouteChildren: RootRouteChildren = {
   SchemaRoute: SchemaRoute,
   ShelfAnalyticsRoute: ShelfAnalyticsRoute,
   SpatialNavigationRoute: SpatialNavigationRoute,
-  StoreSetupRoute: StoreSetupRoute,
   TestpanelRoute: TestpanelRoute,
   UppgifterRoute: UppgifterRoute,
 }
