@@ -529,9 +529,9 @@ function ErstatningsCheckPage() {
 
       const latestDelivery = new Map<string, any>();
       for (const [sapArticleId, deliveries] of deliveriesByArticle) {
-        const delivered = deliveries.filter((d) => d.status === "Levererad" && d.arrival_date);
-        if (delivered.length === 0) continue;
-        const chosen = delivered[0];
+        const withArrival = deliveries.filter((d) => d.arrival_date);
+        if (withArrival.length === 0) continue;
+        const chosen = withArrival[0];
         latestDelivery.set(sapArticleId, chosen);
       }
 
