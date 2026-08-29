@@ -321,7 +321,7 @@ function ErstatningsCheckPage() {
   const [categoryMappings, setCategoryMappings] = useState<DeliveryCategoryMapping[]>([]);
   const [deliveryCategories, setDeliveryCategories] = useState<string[]>([]);
   const [mappingLoading, setMappingLoading] = useState(false);
-  const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
+  const [hiddenCategories, setHiddenCategories] = useState<string[]>([])
   const [testFixtureSapId, setTestFixtureSapId] = useState<string | null>(null);
   const [shelfLifeSearch, setShelfLifeSearch] = useState("");
   const [shelfLifeSort, setShelfLifeSort] = useState<
@@ -1426,6 +1426,10 @@ function ErstatningsCheckPage() {
   const filteredShelfLifeRecords = useMemo(() => {
     const search = shelfLifeSearch.trim().toLocaleLowerCase("sv");
 
+    const autoHiddenCategories = new Set(
+      hiddenCategories.map((c) => c.toLowerCase()),
+    );
+
     const withStatus = shelfLifeRecords.map((record) => ({
       record,
       status: getShelfLifeStatus(record),
@@ -1444,13 +1448,13 @@ function ErstatningsCheckPage() {
         ].some((value) => String(value).toLocaleLowerCase("sv").includes(search));
       })
       .filter(({ record }) => {
-        if (hiddenCategories.length === 0) return true;
         const recordCategory = String(record.category ?? "").trim();
-        const isHidden = hiddenCategories.some(
-          (c) => c.toLowerCase() === recordCategory.toLowerCase(),
-        );
-        if (!isHidden) return true;
-        return Boolean(record.expiry_date);
+        const lowerCategory = recordCategory.toLowerCase();
+        if (hiddenCategories.some((c) => c.toLowerCase() === lowerCategory)) return false;
+        if (autoHiddenCategories.has(lowerCategory)) {
+          return Boolean(record.shelf_lifetime_days && record.shelf_lifetime_days > 0);
+        }
+        return true;
       })
       .filter(({ status }) => {
         if (!hideOkRecords) return true;
@@ -2511,8 +2515,8 @@ function ErstatningsCheckPage() {
                           onClick={() => toggleHiddenCategory(category)}
                           title={
                             isHidden
-                              ? "Visa produkter utan utgångsdatum"
-                              : "Dölj produkter utan utgångsdatum"
+                              ? "Visa produkter utan hållbarhetsdata"
+                              : "Dölj produkter utan hållbarhetsdata"
                           }
                         >
                           {isHidden ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -2542,15 +2546,15 @@ function ErstatningsCheckPage() {
                   );
                 })}
               </div>
-            ) : (
-              <div className="py-10 text-center text-muted-foreground">
-                <p>Inga kategorier från följesedlar finns ännu.</p>
-                <p className="mt-1 text-sm">Importera en följesedel för att börja koppla flöden.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+             ) : (
+               <div className="py-10 text-center text-muted-foreground">
+                 <p>Inga kategorier från följesedlar finns ännu.</p>
+                 <p className="mt-1 text-sm">Importera en följesedel för att börja koppla flöden.</p>
+               </div>
+             )}
+           </CardContent>
+         </Card>
+       )}
 
       {/* Step 4: Weekly task */}
       {false && step === "weekly" && (
