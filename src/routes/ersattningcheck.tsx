@@ -285,7 +285,7 @@ function ErstatningsCheckPage() {
       .eq("store_id", activeStore.id)
     .not("arrival_date", "is", null)
     .order("arrival_date", { ascending: false })
-    .limit(100000);
+    .limit(100000000);
     if (!data) return;
     const unique = Array.from(new Set(data.map((row: any) => String(row.arrival_date))));
     setImportDates(unique);
@@ -536,7 +536,7 @@ function ErstatningsCheckPage() {
           .from("products")
           .select("id, sap_article_id, name, brand, category")
           .eq("store_id", activeStore.id)
-          .limit(100000),
+          .limit(100000000),
         supabase
           .from("product_shelf_life")
           .select("sap_article_id, shelf_lifetime_days, default_compensation_price_ore"),
@@ -547,7 +547,7 @@ function ErstatningsCheckPage() {
           )
           .eq("store_id", activeStore.id)
           .order("arrival_date", { ascending: false })
-          .limit(100000),
+          .limit(100000000),
       ]);
 
       if (productsResult.error) throw productsResult.error;
@@ -846,7 +846,7 @@ function ErstatningsCheckPage() {
           )
           .eq("store_id", activeStore.id)
           .order("arrival_date", { ascending: false })
-          .limit(100000),
+          .limit(100000000),
         supabase
           .from("reclamations")
           .select("sap_article_id, status, created_at")
@@ -1168,7 +1168,7 @@ function ErstatningsCheckPage() {
         )
         .eq("store_id", activeStore.id)
         .order("arrival_date", { ascending: false })
-        .limit(100000);
+        .limit(100000000);
 
       if (dbErr) throw dbErr;
       const latestByArticle = new Map<string, (typeof shelfData)[number]>();
@@ -1191,7 +1191,7 @@ function ErstatningsCheckPage() {
         .from("products")
         .select("sap_article_id, name, brand, bnr")
         .eq("store_id", activeStore.id)
-        .limit(100000);
+        .limit(100000000);
       if (productsErr) throw productsErr;
       const productMap = new Map((products ?? []).map((p: any) => [p.sap_article_id, p]));
       const flagged = Array.from(latestByArticle.values())
