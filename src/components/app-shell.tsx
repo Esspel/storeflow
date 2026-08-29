@@ -357,6 +357,7 @@ export function AppShell() {
 
   const nav = [
     { to: "/", label: "Översikt", mobileHidden: false, Icon: Home },
+    { to: "/schema", label: "Schema", mobileHidden: true, Icon: CalendarDays },
     { to: "/avvikelser", label: "Avvikelser", mobileHidden: true, Icon: TriangleAlert },
     { to: "/kundrunda", label: "Kundrunda", mobileHidden: true, Icon: UserRound },
     { to: "/kundonskemal", label: "Kundönskemål", mobileHidden: true, Icon: ShoppingCart },
@@ -438,6 +439,7 @@ export function AppShell() {
   const isActive = (to: string) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
 
   const moreRoutes = [
+    { to: "/schema", label: "Schema", Icon: CalendarDays },
     { to: "/avvikelser", label: "Avvikelser", Icon: TriangleAlert },
     { to: "/kundrunda", label: "Kundrunda", Icon: UserRound },
     { to: "/kundonskemal", label: "Kundönskemål", Icon: ShoppingCart },

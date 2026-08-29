@@ -136,18 +136,6 @@ function HubPage() {
                   tone="green"
                 />
               </ErrorBoundary>
-              <ErrorBoundary
-                section="Butiksinstallation"
-                fallback={<WidgetFallback name="Butiksinstallation" />}
-              >
-                <QuickCard
-                  to="/shelf-analytics"
-                  icon={BarChart3}
-                  title="Hyllanalys"
-                  desc="Planogram- och hyllkontrolle"
-                  tone="indigo"
-                />
-              </ErrorBoundary>
             </>
           )}
         </div>
