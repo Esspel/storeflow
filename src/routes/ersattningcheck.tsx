@@ -283,9 +283,9 @@ function ErstatningsCheckPage() {
       .from("store_product_deliveries")
       .select("arrival_date")
       .eq("store_id", activeStore.id)
-      .not("arrival_date", "is", null)
-      .order("arrival_date", { ascending: false })
-      .limit(1000);
+    .not("arrival_date", "is", null)
+    .order("arrival_date", { ascending: false })
+    .limit(100000);
     if (!data) return;
     const unique = Array.from(new Set(data.map((row: any) => String(row.arrival_date))));
     setImportDates(unique);
