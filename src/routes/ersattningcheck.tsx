@@ -6,7 +6,7 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Upload,
   FileSpreadsheet,
@@ -264,7 +264,10 @@ async function fetchAllRows(
   const all: any[] = [];
   let from = 0;
   while (true) {
-    let query = supabaseClient.from(table).select(select).range(from, from + batchSize - 1);
+    let query = supabaseClient
+      .from(table)
+      .select(select)
+      .range(from, from + batchSize - 1);
     if (eq) query = query.eq(eq.column, eq.value);
     if (order) query = query.order(order.column, { ascending: order.ascending ?? false });
     query = query.order(idColumn, { ascending: true });
@@ -321,10 +324,12 @@ function ErstatningsCheckPage() {
   const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
   const [testFixtureSapId, setTestFixtureSapId] = useState<string | null>(null);
   const [shelfLifeSearch, setShelfLifeSearch] = useState("");
-  const [shelfLifeSort, setShelfLifeSort] = useState<Array<{
-    key: ShelfLifeSortKey;
-    direction: "asc" | "desc";
-  }>>([]);
+  const [shelfLifeSort, setShelfLifeSort] = useState<
+    Array<{
+      key: ShelfLifeSortKey;
+      direction: "asc" | "desc";
+    }>
+  >([]);
   const [hideOkRecords, setHideOkRecords] = useState(false);
   const [importDates, setImportDates] = useState<string[]>([]);
 
@@ -334,10 +339,12 @@ function ErstatningsCheckPage() {
     return () => window.clearTimeout(timeoutId);
   }, [importSuccess]);
 
+  const supabaseClient = supabase;
+
   useEffect(() => {
     if (!activeStore?.id) return;
     void (async () => {
-      const { data } = await supabase
+      const { data } = await supabaseClient
         .from("store_hidden_categories")
         .select("category")
         .eq("store_id", activeStore.id)
@@ -371,8 +378,6 @@ function ErstatningsCheckPage() {
       await refreshImportDates();
     })();
   }, [activeStore?.id]);
-
-  const supabaseClient = supabase;
 
   // Check for auth/store
   if (authLoading) {
@@ -601,17 +606,15 @@ function ErstatningsCheckPage() {
     })();
   }, [activeStore?.id]);
 
-   // Load shelf life data
+  // Load shelf life data
   const loadShelfLifeData = async () => {
     setIsLoading(true);
     try {
       const [productsData, masterResult, deliveriesData] = await Promise.all([
-        fetchAllRows(
-          supabaseClient,
-          "products",
-          "id, sap_article_id, name, brand, category",
-          { column: "store_id", value: activeStore.id },
-        ),
+        fetchAllRows(supabaseClient, "products", "id, sap_article_id, name, brand, category", {
+          column: "store_id",
+          value: activeStore.id,
+        }),
         supabase
           .from("product_shelf_life")
           .select("sap_article_id, shelf_lifetime_days, default_compensation_price_ore"),
@@ -699,21 +702,11 @@ function ErstatningsCheckPage() {
 
   const importShelfLifeFromSap = async () => {
     if (!activeStore) return;
-    let productsToFetch = [...shelfLifeRecords];
-    if (shelfLifeSearch.trim()) {
-      const search = shelfLifeSearch.trim().toLocaleLowerCase("sv");
-      productsToFetch = productsToFetch.filter(
-        (record) =>
-          getShelfLifeStatus(record) === "Hållbarhet saknas" ||
-          getShelfLifeStatus(record) === "Datum saknas",
-      );
-    } else {
-      productsToFetch = productsToFetch.filter(
-        (record) =>
-          getShelfLifeStatus(record) === "Hållbarhet saknas" ||
-          getShelfLifeStatus(record) === "Datum saknas",
-      );
-    }
+    const productsToFetch = shelfLifeRecords.filter(
+      (record) =>
+        getShelfLifeStatus(record) === "Hållbarhet saknas" ||
+        getShelfLifeStatus(record) === "Datum saknas",
+    );
 
     if (productsToFetch.length === 0) {
       toast.info("Inga artiklar saknar hållbarhetsdata att hämta.");
@@ -737,16 +730,14 @@ function ErstatningsCheckPage() {
         }
 
         const shelfLifeDays = parseInt(sapData.RemainingShelfLifeInDays, 10);
-        const deliveryDate = parseSapDate(sapData.DeliveryDate);
         const now = new Date().toISOString();
 
         const { error } = await supabase.from("product_shelf_life").upsert(
           {
             sap_article_id: record.sap_article_id,
             shelf_lifetime_days: Number.isFinite(shelfLifeDays) ? shelfLifeDays : 0,
-            expiry_date: deliveryDate ?? now,
-            arrival_date: deliveryDate ?? now,
-            temperature_zone: sapData.MerchandiseCategoryName,
+            expiry_date: now,
+            arrival_date: now,
             updated_at: now,
           },
           { onConflict: "sap_article_id" },
@@ -764,7 +755,7 @@ function ErstatningsCheckPage() {
         errorCount += 1;
       }
 
-      if (successCount + errorCount % 10 === 0) {
+      if (successCount + (errorCount % 10) === 0) {
         toast.info(`Hämtad ${successCount}/${productsToFetch.length}...`);
       }
     }
@@ -1104,7 +1095,9 @@ function ErstatningsCheckPage() {
         current.count += 1;
         recurringMap.set(row.sap_article_id, current);
       }
-      const deliveryMap = new Map((deliveriesData ?? []).map((row: any) => [row.sap_article_id, row]));
+      const deliveryMap = new Map(
+        (deliveriesData ?? []).map((row: any) => [row.sap_article_id, row]),
+      );
       const recurring = [...recurringMap.values()]
         .map((item) => ({
           ...item,
@@ -1430,44 +1423,47 @@ function ErstatningsCheckPage() {
       : "OK";
   };
 
-  const filteredShelfLifeRecords = shelfLifeRecords
-    .filter((record) => {
-      const search = shelfLifeSearch.trim().toLocaleLowerCase("sv");
-      if (!search) return true;
-      const status = getShelfLifeStatus(record);
-      return [
-        record.product_name,
-        record.brand,
-        String(record.shelf_lifetime_days || ""),
-        record.expiry_date,
-        record.arrival_date,
-        status,
-      ].some((value) => String(value).toLocaleLowerCase("sv").includes(search));
-    })
-    .filter((record) => {
-      if (hiddenCategories.length === 0) return true;
-      const recordCategory = String(record.category ?? "").trim();
-      const isHidden = hiddenCategories.some(
-        (c) => c.toLowerCase() === recordCategory.toLowerCase(),
-      );
-      if (!isHidden) return true;
-      return Boolean(record.expiry_date);
-    })
-    .filter((record) => {
-      if (!hideOkRecords) return true;
-      return getShelfLifeStatus(record) !== "OK";
-    })
-    .sort((left, right) => {
-      const leftMissing = left.shelf_lifetime_days <= 0 ? 0 : 1;
-      const rightMissing = right.shelf_lifetime_days <= 0 ? 0 : 1;
+  const filteredShelfLifeRecords = useMemo(() => {
+    const search = shelfLifeSearch.trim().toLocaleLowerCase("sv");
+
+    const withStatus = shelfLifeRecords.map((record) => ({
+      record,
+      status: getShelfLifeStatus(record),
+    }));
+
+    const filtered = withStatus
+      .filter(({ record, status }) => {
+        if (!search) return true;
+        return [
+          record.product_name,
+          record.brand,
+          String(record.shelf_lifetime_days || ""),
+          record.expiry_date,
+          record.arrival_date,
+          status,
+        ].some((value) => String(value).toLocaleLowerCase("sv").includes(search));
+      })
+      .filter(({ record }) => {
+        if (hiddenCategories.length === 0) return true;
+        const recordCategory = String(record.category ?? "").trim();
+        const isHidden = hiddenCategories.some(
+          (c) => c.toLowerCase() === recordCategory.toLowerCase(),
+        );
+        if (!isHidden) return true;
+        return Boolean(record.expiry_date);
+      })
+      .filter(({ status }) => {
+        if (!hideOkRecords) return true;
+        return status !== "OK";
+      });
+
+    filtered.sort((a, b) => {
+      const leftMissing = a.record.shelf_lifetime_days <= 0 ? 0 : 1;
+      const rightMissing = b.record.shelf_lifetime_days <= 0 ? 0 : 1;
       if (leftMissing !== rightMissing) return leftMissing - rightMissing;
       for (const sort of shelfLifeSort) {
-        const leftValue =
-          sort.key === "status" ? getShelfLifeStatus(left) : (left[sort.key] ?? "");
-        const rightValue =
-          sort.key === "status"
-            ? getShelfLifeStatus(right)
-            : (right[sort.key] ?? "");
+        const leftValue = sort.key === "status" ? a.status : (a.record[sort.key] ?? "");
+        const rightValue = sort.key === "status" ? b.status : (b.record[sort.key] ?? "");
         const comparison = String(leftValue).localeCompare(String(rightValue), "sv", {
           numeric: true,
           sensitivity: "base",
@@ -1479,15 +1475,16 @@ function ErstatningsCheckPage() {
       return 0;
     });
 
+    return filtered.map((item) => item.record);
+  }, [shelfLifeRecords, shelfLifeSearch, hiddenCategories, hideOkRecords, shelfLifeSort]);
+
   const toggleShelfLifeSort = (key: ShelfLifeSortKey, shiftKey = false) => {
     setShelfLifeSort((current) => {
       const existing = current.find((s) => s.key === key);
       if (existing) {
         if (shiftKey) {
           return current.map((s) =>
-            s.key === key
-              ? { key, direction: s.direction === "asc" ? "desc" : "asc" }
-              : s,
+            s.key === key ? { key, direction: s.direction === "asc" ? "desc" : "asc" } : s,
           );
         }
         const newDirection = existing.direction === "asc" ? "desc" : "asc";
@@ -1985,38 +1982,38 @@ function ErstatningsCheckPage() {
               placeholder="Sök produkt, varumärke, hållbarhet, datum eller status..."
               aria-label="Sök i hållbarhetsdata"
             />
-             <p className="text-sm text-muted-foreground">
-               Visar {filteredShelfLifeRecords.length} av {shelfLifeRecords.length} artiklar
-             </p>
-             <div className="flex gap-4">
-               <Button
-                 type="button"
-                 variant={hideOkRecords ? "default" : "outline"}
-                 size="sm"
-                 onClick={() => setHideOkRecords(!hideOkRecords)}
-               >
-                 {hideOkRecords ? "Visa OK" : "Dölj OK"}
-               </Button>
-                {shelfLifeSort.length > 0 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShelfLifeSort([])}
-                  >
-                    Rensa sortering
-                  </Button>
-                )}
+            <p className="text-sm text-muted-foreground">
+              Visar {filteredShelfLifeRecords.length} av {shelfLifeRecords.length} artiklar
+            </p>
+            <div className="flex gap-4">
+              <Button
+                type="button"
+                variant={hideOkRecords ? "default" : "outline"}
+                size="sm"
+                onClick={() => setHideOkRecords(!hideOkRecords)}
+              >
+                {hideOkRecords ? "Visa OK" : "Dölj OK"}
+              </Button>
+              {shelfLifeSort.length > 0 && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => void importShelfLifeFromSap()}
-                  disabled={isLoading}
+                  onClick={() => setShelfLifeSort([])}
                 >
-                  Hämta från SAP
+                  Rensa sortering
                 </Button>
-             </div>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void importShelfLifeFromSap()}
+                disabled={isLoading}
+              >
+                Hämta från SAP
+              </Button>
+            </div>
             {shelfLifeRecords.length > 0 ? (
               <div className="border rounded-lg overflow-x-auto">
                 <Table>
