@@ -529,12 +529,9 @@ function ErstatningsCheckPage() {
 
       const latestDelivery = new Map<string, any>();
       for (const [sapArticleId, deliveries] of deliveriesByArticle) {
-        const delivered = deliveries.filter((d) => d.status === "Levererad");
+        const delivered = deliveries.filter((d) => d.status === "Levererad" && d.arrival_date);
         if (delivered.length === 0) continue;
-        const withBoth = delivered.filter((d) => d.arrival_date && d.best_before_date);
-        const withArrival = delivered.filter((d) => d.arrival_date);
-        const chosen = withBoth[0] ?? withArrival[0] ?? null;
-        if (!chosen) continue;
+        const chosen = delivered[0];
         latestDelivery.set(sapArticleId, chosen);
       }
 
