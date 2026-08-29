@@ -1478,12 +1478,27 @@ function ErstatningsCheckPage() {
       const rightMissing = b.record.shelf_lifetime_days <= 0 ? 0 : 1;
       if (leftMissing !== rightMissing) return leftMissing - rightMissing;
       for (const sort of shelfLifeSort) {
-        const leftValue = sort.key === "status" ? a.status : (a.record[sort.key] ?? "");
-        const rightValue = sort.key === "status" ? b.status : (b.record[sort.key] ?? "");
-        const comparison = String(leftValue).localeCompare(String(rightValue), "sv", {
-          numeric: true,
-          sensitivity: "base",
-        });
+        const leftRaw = sort.key === "status" ? a.status : (a.record[sort.key] ?? "");
+        const rightRaw = sort.key === "status" ? b.status : (b.record[sort.key] ?? "");
+        let comparison: number;
+        if (sort.key === "shelf_lifetime_days") {
+          const leftNum = parseFloat(String(leftRaw));
+          const rightNum = parseFloat(String(rightRaw));
+          if (Number.isNaN(leftNum) || Number.isNaN(rightNum)) {
+            if (Number.isNaN(leftNum) && Number.isNaN(rightNum)) {
+              comparison = 0;
+            } else {
+              comparison = Number.isNaN(leftNum) ? -1 : 1;
+            }
+          } else {
+            comparison = leftNum - rightNum;
+          }
+        } else {
+          comparison = String(leftRaw).localeCompare(String(rightRaw), "sv", {
+            numeric: true,
+            sensitivity: "base",
+          });
+        }
         if (comparison !== 0) {
           return sort.direction === "asc" ? comparison : -comparison;
         }
