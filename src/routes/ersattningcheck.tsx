@@ -127,7 +127,12 @@ type ReplacementStatistics = {
   totalCount: number;
   monthly: Array<{ month: string; value: number; count: number }>;
   recurring: Array<{ sap_article_id: string; name: string; count: number }>;
-  recurringBadDates: Array<{ sap_article_id: string; name: string; badDeliveryCount: number; totalDeliveryCount: number }>;
+  recurringBadDates: Array<{
+    sap_article_id: string;
+    name: string;
+    badDeliveryCount: number;
+    totalDeliveryCount: number;
+  }>;
   flowCounts: Record<string, number>;
   categoryCounts: Record<string, number>;
   openCount: number;
@@ -524,16 +529,13 @@ function ErstatningsCheckPage() {
 
       const latestDelivery = new Map<string, any>();
       for (const [sapArticleId, deliveries] of deliveriesByArticle) {
-        const sorted = deliveries;
-        const latest = sorted[0] ?? null;
-        if (!latest) continue;
-        let arrival = latest.arrival_date ?? "";
-        let bestBefore = latest.best_before_date ?? "";
-        for (const d of sorted) {
-          if (!arrival && d.arrival_date) arrival = d.arrival_date;
-          if (!bestBefore && d.best_before_date) bestBefore = d.best_before_date;
-        }
-        latestDelivery.set(sapArticleId, { ...latest, arrival_date: arrival, best_before_date: bestBefore });
+        const delivered = deliveries.filter((d) => d.status === "Levererad");
+        if (delivered.length === 0) continue;
+        const withBoth = delivered.filter((d) => d.arrival_date && d.best_before_date);
+        const withArrival = delivered.filter((d) => d.arrival_date);
+        const chosen = withBoth[0] ?? withArrival[0] ?? null;
+        if (!chosen) continue;
+        latestDelivery.set(sapArticleId, chosen);
       }
 
       setShelfLifeRecords(
@@ -577,6 +579,9 @@ function ErstatningsCheckPage() {
   };
 
   const loadCategoryMappings = async () => {
+    let mappings: DeliveryCategoryMapping[] = [];
+    let deliveryCategoriesRaw: any[] = [];
+    let productCategoriesRaw: any[] = [];
     try {
       const [mappingsResult, deliveryResult, productResult] = await Promise.all([
         supabase
@@ -594,26 +599,39 @@ function ErstatningsCheckPage() {
           .eq("store_id", activeStore.id)
           .not("category", "is", null),
       ]);
-      if (mappingsResult.error) throw mappingsResult.error;
-      if (deliveryResult.error) throw deliveryResult.error;
-      if (productResult.error) throw productResult.error;
-      const mappings = mappingsResult.data ?? [];
-      const deliveryCategories = deliveryResult.data ?? [];
-      const productCategories = productResult.data ?? [];
-      setCategoryMappings(mappings);
-      const allCategories = [
-        ...new Set([
-          ...deliveryCategories.map((row: any) => String(row.category ?? "").trim()),
-          ...productCategories.map((row: any) => String(row.category ?? "").trim()),
-        ]),
-      ]
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b, "sv"));
-      setDeliveryCategories(allCategories);
+      if (!mappingsResult.error) {
+        mappings = mappingsResult.data ?? [];
+      } else {
+        console.error("Error loading mappings:", mappingsResult.error);
+      }
+      if (!deliveryResult.error) {
+        deliveryCategoriesRaw = deliveryResult.data ?? [];
+      } else {
+        console.error("Error loading delivery categories:", deliveryResult.error);
+      }
+      if (!productResult.error) {
+        productCategoriesRaw = productResult.data ?? [];
+      } else {
+        console.error("Error loading product categories:", productResult.error);
+      }
     } catch (error) {
       console.error("Error loading category mappings:", error);
       toast.error("Kunde inte ladda kategorier.");
     }
+    setCategoryMappings(mappings);
+    const seen = new Map<string, string>();
+    const merged: string[] = [];
+    for (const row of [...deliveryCategoriesRaw, ...productCategoriesRaw]) {
+      const raw = String(row.category ?? "").trim();
+      if (!raw) continue;
+      const key = raw.toLowerCase();
+      if (!seen.has(key)) {
+        seen.set(key, raw);
+        merged.push(raw);
+      }
+    }
+    merged.sort((a, b) => a.localeCompare(b, "sv"));
+    setDeliveryCategories(merged);
   };
 
   const saveCategoryMapping = async (category: string, flow: DeliveryFlow) => {
@@ -772,24 +790,26 @@ function ErstatningsCheckPage() {
   const loadDeliveryStatistics = async (period = statisticsPeriod) => {
     setIsLoading(true);
     try {
-      const [{ data, error }, { data: reclamationData, error: reclamationError }, { data: masterData, error: masterError }] =
-        await Promise.all([
-          supabase
-            .from("store_product_deliveries")
-            .select(
-              "sap_article_id, product_name, brand, category, total_price, arrival_date, best_before_date, status",
-            )
-            .eq("store_id", activeStore.id)
-            .order("arrival_date", { ascending: false }),
-          supabase
-            .from("reclamations")
-            .select("sap_article_id, status, created_at")
-            .eq("store_id", activeStore.id),
-          supabase
-            .from("product_shelf_life")
-            .select("sap_article_id, shelf_lifetime_days")
-            .limit(5000),
-        ]);
+      const [
+        { data, error },
+        { data: reclamationData, error: reclamationError },
+        { data: masterData, error: masterError },
+      ] = await Promise.all([
+        supabase
+          .from("store_product_deliveries")
+          .select(
+            "sap_article_id, product_name, brand, category, total_price, arrival_date, best_before_date, status",
+          )
+          .eq("store_id", activeStore.id)
+          .order("arrival_date", { ascending: false }),
+        supabase
+          .from("reclamations")
+          .select("sap_article_id, status, created_at")
+          .eq("store_id", activeStore.id),
+        supabase
+          .from("product_shelf_life")
+          .select("sap_article_id, shelf_lifetime_days, default_compensation_price_ore"),
+      ]);
       if (error) throw error;
       if (reclamationError) throw reclamationError;
       if (masterError) throw masterError;
@@ -841,18 +861,39 @@ function ErstatningsCheckPage() {
       const pendingValue = reclamationsForPeriod
         .filter((row: any) => !["Löst", "Nekad"].includes(row.status))
         .reduce((sum: number, row: any) => sum + getReclamationAmount(row), 0);
-      const monthly = Array.from({ length: period === "last30" ? 1 : 12 }, (_, month) => ({
-        month: new Date(2000, month, 1).toLocaleDateString("sv-SE", { month: "short" }),
-        value: reclamationsForPeriod
-          .filter((row: any) => row.status === "Löst")
-          .filter(
-            (row: any) => period === "last30" || new Date(row.created_at).getMonth() === month,
-          )
-          .reduce((sum: number, row: any) => sum + getReclamationAmount(row), 0),
-        count: reclamationsForPeriod.filter((row: any) =>
-          period === "last30" ? true : new Date(row.created_at).getMonth() === month,
-        ).length,
-      }));
+      const monthly = (() => {
+        if (period === "last30") {
+          const now = new Date();
+          return Array.from({ length: 30 }, (_, i) => {
+            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (29 - i));
+            const key = d.toISOString().split("T")[0];
+            const dayReclamations = reclamationsForPeriod.filter(
+              (row: any) => row.status === "Löst" && row.created_at?.startsWith(key),
+            );
+            const dayCount = reclamationsForPeriod.filter((row: any) =>
+              row.created_at?.startsWith(key),
+            ).length;
+            return {
+              month: d.toLocaleDateString("sv-SE", { day: "numeric", month: "short" }),
+              value: dayReclamations.reduce(
+                (sum: number, row: any) => sum + getReclamationAmount(row),
+                0,
+              ),
+              count: dayCount,
+            };
+          });
+        }
+        return Array.from({ length: 12 }, (_, month) => ({
+          month: new Date(2000, month, 1).toLocaleDateString("sv-SE", { month: "short" }),
+          value: reclamationsForPeriod
+            .filter((row: any) => row.status === "Löst")
+            .filter((row: any) => new Date(row.created_at).getMonth() === month)
+            .reduce((sum: number, row: any) => sum + getReclamationAmount(row), 0),
+          count: reclamationsForPeriod.filter(
+            (row: any) => new Date(row.created_at).getMonth() === month,
+          ).length,
+        }));
+      })();
       const recurringMap = new Map<
         string,
         { sap_article_id: string; name: string; count: number }
@@ -889,7 +930,12 @@ function ErstatningsCheckPage() {
       const masterMap = new Map((masterData ?? []).map((row: any) => [row.sap_article_id, row]));
       const recurringBadDatesMap = new Map<
         string,
-        { sap_article_id: string; name: string; badDeliveryCount: number; totalDeliveryCount: number }
+        {
+          sap_article_id: string;
+          name: string;
+          badDeliveryCount: number;
+          totalDeliveryCount: number;
+        }
       >();
       for (const delivery of data ?? []) {
         const master = masterMap.get(delivery.sap_article_id);
