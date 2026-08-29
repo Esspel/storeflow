@@ -590,39 +590,26 @@ function ErstatningsCheckPage() {
 
   const loadCategoryMappings = async () => {
     let mappings: DeliveryCategoryMapping[] = [];
-    let deliveryCategoriesRaw: any[] = [];
-    let productCategoriesRaw: any[] = [];
+    let categoryRowsRaw: any[] = [];
     try {
-      const [mappingsResult, deliveryResult, productResult] = await Promise.all([
+      const [mappingsResult, categoryResult] = await Promise.all([
         supabase
           .from("delivery_category_flow_mappings")
           .select("id, category, flow")
           .order("category"),
-        supabase
-          .from("store_product_deliveries")
-          .select("category")
-          .eq("store_id", activeStore.id)
-          .not("category", "is", null),
-        supabase
-          .from("products")
-          .select("category")
-          .eq("store_id", activeStore.id)
-          .not("category", "is", null),
+        supabase.rpc("get_store_distinct_categories", {
+          p_store_id: activeStore.id,
+        }),
       ]);
       if (!mappingsResult.error) {
         mappings = mappingsResult.data ?? [];
       } else {
         console.error("Error loading mappings:", mappingsResult.error);
       }
-      if (!deliveryResult.error) {
-        deliveryCategoriesRaw = deliveryResult.data ?? [];
+      if (!categoryResult.error) {
+        categoryRowsRaw = categoryResult.data ?? [];
       } else {
-        console.error("Error loading delivery categories:", deliveryResult.error);
-      }
-      if (!productResult.error) {
-        productCategoriesRaw = productResult.data ?? [];
-      } else {
-        console.error("Error loading product categories:", productResult.error);
+        console.error("Error loading distinct categories:", categoryResult.error);
       }
     } catch (error) {
       console.error("Error loading category mappings:", error);
@@ -631,7 +618,7 @@ function ErstatningsCheckPage() {
     setCategoryMappings(mappings);
     const seen = new Map<string, string>();
     const merged: string[] = [];
-    for (const row of [...deliveryCategoriesRaw, ...productCategoriesRaw]) {
+    for (const row of categoryRowsRaw) {
       const raw = String(row.category ?? "").trim();
       if (!raw) continue;
       const key = raw.toLowerCase();
