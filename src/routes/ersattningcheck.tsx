@@ -755,33 +755,43 @@ function ErstatningsCheckPage() {
   };
 
   const removeAdminTestFixture = async () => {
-    if (!testFixtureSapId || user.role !== "admin") return;
+    if (user.role !== "admin") return;
     setIsLoading(true);
     try {
+      const { data: testProducts } = await supabase
+        .from("products")
+        .select("sap_article_id")
+        .eq("store_id", activeStore.id)
+        .like("sap_article_id", "TEST-%");
+      const testSapIds = (testProducts ?? []).map((p: any) => p.sap_article_id);
+      if (testSapIds.length === 0) {
+        toast.info("Ingen testdata hittades.");
+        return;
+      }
       await supabase
         .from("reclamations")
         .delete()
         .eq("store_id", activeStore.id)
-        .eq("sap_article_id", testFixtureSapId);
+        .in("sap_article_id", testSapIds);
       await supabase
         .from("store_product_deliveries")
         .delete()
         .eq("store_id", activeStore.id)
-        .eq("sap_article_id", testFixtureSapId);
-      await supabase.from("product_shelf_life").delete().eq("sap_article_id", testFixtureSapId);
+        .in("sap_article_id", testSapIds);
+      await supabase.from("product_shelf_life").delete().in("sap_article_id", testSapIds);
       await supabase
         .from("products")
         .delete()
         .eq("store_id", activeStore.id)
-        .eq("sap_article_id", testFixtureSapId);
+        .in("sap_article_id", testSapIds);
       setTestFixtureSapId(null);
       await loadShelfLifeData();
       setReclamations((current) =>
-        current.filter((item) => item.sap_article_id !== testFixtureSapId),
+        current.filter((item) => !testSapIds.includes(item.sap_article_id)),
       );
-      toast.success("Testdata rensad.");
+      toast.success(`Rensade ${testSapIds.length} testartiklar.`);
     } catch (error) {
-      console.error("Error removing admin test fixture:", error);
+      console.error("Error removing admin test fixtures:", error);
       toast.error("Kunde inte rensa testdata.");
     } finally {
       setIsLoading(false);
@@ -855,7 +865,7 @@ function ErstatningsCheckPage() {
       };
       const totalCount = reclamationsForPeriod.length;
       const sentCount = reclamationsForPeriod.filter(
-        (row: any) => row.status !== "Ej skickad",
+        (row: any) => row.status === "Granskas av butikssupporten",
       ).length;
       const decidedCount = reclamationsForPeriod.filter((row: any) =>
         ["Löst", "Nekad"].includes(row.status),
