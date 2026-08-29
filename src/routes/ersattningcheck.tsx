@@ -500,7 +500,8 @@ function ErstatningsCheckPage() {
         supabase
           .from("products")
           .select("id, sap_article_id, name, brand, category")
-          .eq("store_id", activeStore.id),
+          .eq("store_id", activeStore.id)
+          .limit(5000),
         supabase
           .from("product_shelf_life")
           .select("sap_article_id, shelf_lifetime_days, default_compensation_price_ore"),
@@ -510,7 +511,8 @@ function ErstatningsCheckPage() {
             "id, sap_article_id, best_before_date, arrival_date, status, delivery_number, product_name, brand, category",
           )
           .eq("store_id", activeStore.id)
-          .order("arrival_date", { ascending: false }),
+          .order("arrival_date", { ascending: false })
+          .limit(100000),
       ]);
 
       if (productsResult.error) throw productsResult.error;
@@ -808,7 +810,8 @@ function ErstatningsCheckPage() {
             "sap_article_id, product_name, brand, category, total_price, arrival_date, best_before_date, status",
           )
           .eq("store_id", activeStore.id)
-          .order("arrival_date", { ascending: false }),
+          .order("arrival_date", { ascending: false })
+          .limit(100000),
         supabase
           .from("reclamations")
           .select("sap_article_id, status, created_at")
@@ -1129,7 +1132,8 @@ function ErstatningsCheckPage() {
           "sap_article_id, bnr, best_before_date, arrival_date, quantity, status, delivery_number, product_name, brand, category",
         )
         .eq("store_id", activeStore.id)
-        .order("arrival_date", { ascending: false });
+        .order("arrival_date", { ascending: false })
+        .limit(100000);
 
       if (dbErr) throw dbErr;
       const latestByArticle = new Map<string, (typeof shelfData)[number]>();
@@ -1151,7 +1155,8 @@ function ErstatningsCheckPage() {
       const { data: products, error: productsErr } = await supabase
         .from("products")
         .select("sap_article_id, name, brand, bnr")
-        .eq("store_id", activeStore.id);
+        .eq("store_id", activeStore.id)
+        .limit(5000);
       if (productsErr) throw productsErr;
       const productMap = new Map((products ?? []).map((p: any) => [p.sap_article_id, p]));
       const flagged = Array.from(latestByArticle.values())
