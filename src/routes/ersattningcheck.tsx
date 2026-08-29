@@ -536,7 +536,7 @@ function ErstatningsCheckPage() {
           .from("products")
           .select("id, sap_article_id, name, brand, category")
           .eq("store_id", activeStore.id)
-          .limit(5000),
+          .limit(100000),
         supabase
           .from("product_shelf_life")
           .select("sap_article_id, shelf_lifetime_days, default_compensation_price_ore"),
@@ -1191,7 +1191,7 @@ function ErstatningsCheckPage() {
         .from("products")
         .select("sap_article_id, name, brand, bnr")
         .eq("store_id", activeStore.id)
-        .limit(5000);
+        .limit(100000);
       if (productsErr) throw productsErr;
       const productMap = new Map((products ?? []).map((p: any) => [p.sap_article_id, p]));
       const flagged = Array.from(latestByArticle.values())
