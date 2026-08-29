@@ -210,6 +210,30 @@ function assessDelivery(
   };
 }
 
+async function fetchAllRows(
+  supabaseClient: typeof supabase,
+  table: string,
+  select: string,
+  eq?: { column: string; value: unknown },
+  order?: { column: string; ascending?: boolean },
+): Promise<any[]> {
+  const batchSize = 1000;
+  const all: any[] = [];
+  let from = 0;
+  while (true) {
+    let query = supabaseClient.from(table).select(select).range(from, from + batchSize - 1);
+    if (eq) query = query.eq(eq.column, eq.value);
+    if (order) query = query.order(order.column, { ascending: order.ascending ?? false });
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < batchSize) break;
+    from += batchSize;
+  }
+  return all;
+}
+
 export const Route = createFileRoute("/ersattningcheck")({
   component: ErstatningsCheckPage,
 });
@@ -279,15 +303,20 @@ function ErstatningsCheckPage() {
 
   const refreshImportDates = async () => {
     if (!activeStore?.id) return;
-    const { data } = await supabase
-      .from("store_product_deliveries")
-      .select("arrival_date")
-      .eq("store_id", activeStore.id)
-    .not("arrival_date", "is", null)
-    .order("arrival_date", { ascending: false })
-    .limit(100000000);
-    if (!data) return;
-    const unique = Array.from(new Set(data.map((row: any) => String(row.arrival_date))));
+    const allData = await fetchAllRows(
+      supabaseClient,
+      "store_product_deliveries",
+      "arrival_date",
+      { column: "store_id", value: activeStore.id },
+      { column: "arrival_date", ascending: false },
+    );
+    const unique = Array.from(
+      new Set(
+        (allData ?? [])
+          .filter((row: any) => row.arrival_date != null)
+          .map((row: any) => String(row.arrival_date)),
+      ),
+    );
     setImportDates(unique);
   };
 
@@ -527,38 +556,36 @@ function ErstatningsCheckPage() {
     })();
   }, [activeStore?.id]);
 
-  // Load shelf life data
+   // Load shelf life data
   const loadShelfLifeData = async () => {
     setIsLoading(true);
     try {
-      const [productsResult, masterResult, deliveriesResult] = await Promise.all([
-        supabase
-          .from("products")
-          .select("id, sap_article_id, name, brand, category")
-          .eq("store_id", activeStore.id)
-          .limit(100000000),
+      const [productsData, masterResult, deliveriesData] = await Promise.all([
+        fetchAllRows(
+          supabaseClient,
+          "products",
+          "id, sap_article_id, name, brand, category",
+          { column: "store_id", value: activeStore.id },
+        ),
         supabase
           .from("product_shelf_life")
           .select("sap_article_id, shelf_lifetime_days, default_compensation_price_ore"),
-        supabase
-          .from("store_product_deliveries")
-          .select(
-            "id, sap_article_id, best_before_date, arrival_date, status, delivery_number, product_name, brand, category",
-          )
-          .eq("store_id", activeStore.id)
-          .order("arrival_date", { ascending: false })
-          .limit(100000000),
+        fetchAllRows(
+          supabaseClient,
+          "store_product_deliveries",
+          "id, sap_article_id, best_before_date, arrival_date, status, delivery_number, product_name, brand, category",
+          { column: "store_id", value: activeStore.id },
+          { column: "arrival_date", ascending: false },
+        ),
       ]);
 
-      if (productsResult.error) throw productsResult.error;
       if (masterResult.error) throw masterResult.error;
-      if (deliveriesResult.error) throw deliveriesResult.error;
 
       const masterMap = new Map(
         (masterResult.data ?? []).map((record: any) => [record.sap_article_id, record]),
       );
       const deliveriesByArticle = new Map<string, any[]>();
-      for (const delivery of deliveriesResult.data ?? []) {
+      for (const delivery of deliveriesData ?? []) {
         const list = deliveriesByArticle.get(delivery.sap_article_id) ?? [];
         list.push(delivery);
         deliveriesByArticle.set(delivery.sap_article_id, list);
@@ -578,10 +605,10 @@ function ErstatningsCheckPage() {
       }
 
       const productMap = new Map(
-        (productsResult.data ?? []).map((product: any) => [product.sap_article_id, product]),
+        (productsData ?? []).map((product: any) => [product.sap_article_id, product]),
       );
       const mergedArticleIds = new Set<string>([
-        ...(productsResult.data ?? []).map((p: any) => p.sap_article_id),
+        ...(productsData ?? []).map((p: any) => p.sap_article_id),
         ...latestDelivery.keys(),
       ]);
       setShelfLifeRecords(
@@ -607,7 +634,7 @@ function ErstatningsCheckPage() {
         }),
       );
       setDeliveryStatistics(
-        (deliveriesResult.data ?? []).map((delivery: any) => ({
+        (deliveriesData ?? []).map((delivery: any) => ({
           sap_article_id: delivery.sap_article_id,
           product_name: delivery.product_name || "Okänd produkt",
           brand: delivery.brand || "",
@@ -835,18 +862,17 @@ function ErstatningsCheckPage() {
     setIsLoading(true);
     try {
       const [
-        { data, error },
+        deliveriesData,
         { data: reclamationData, error: reclamationError },
         { data: masterData, error: masterError },
       ] = await Promise.all([
-        supabase
-          .from("store_product_deliveries")
-          .select(
-            "sap_article_id, product_name, brand, category, total_price, arrival_date, best_before_date, status",
-          )
-          .eq("store_id", activeStore.id)
-          .order("arrival_date", { ascending: false })
-          .limit(100000000),
+        fetchAllRows(
+          supabaseClient,
+          "store_product_deliveries",
+          "sap_article_id, product_name, brand, category, total_price, arrival_date, best_before_date, status",
+          { column: "store_id", value: activeStore.id },
+          { column: "arrival_date", ascending: false },
+        ),
         supabase
           .from("reclamations")
           .select("sap_article_id, status, created_at")
@@ -855,11 +881,11 @@ function ErstatningsCheckPage() {
           .from("product_shelf_life")
           .select("sap_article_id, shelf_lifetime_days, default_compensation_price_ore"),
       ]);
-      if (error) throw error;
+      if (!deliveriesData) throw new Error("No delivery data returned");
       if (reclamationError) throw reclamationError;
       if (masterError) throw masterError;
       setDeliveryStatistics(
-        (data ?? []).map((row: any) => ({
+        (deliveriesData ?? []).map((row: any) => ({
           sap_article_id: row.sap_article_id,
           product_name: row.product_name || "Okänd produkt",
           brand: row.brand || "",
@@ -877,7 +903,7 @@ function ErstatningsCheckPage() {
         (row: any) => new Date(row.created_at) >= periodStart,
       );
       const deliveriesByArticle = new Map<string, any[]>();
-      for (const delivery of data ?? []) {
+      for (const delivery of deliveriesData ?? []) {
         const deliveries = deliveriesByArticle.get(delivery.sap_article_id) ?? [];
         deliveries.push(delivery);
         deliveriesByArticle.set(delivery.sap_article_id, deliveries);
@@ -952,7 +978,7 @@ function ErstatningsCheckPage() {
         current.count += 1;
         recurringMap.set(row.sap_article_id, current);
       }
-      const deliveryMap = new Map((data ?? []).map((row: any) => [row.sap_article_id, row]));
+      const deliveryMap = new Map((deliveriesData ?? []).map((row: any) => [row.sap_article_id, row]));
       const recurring = [...recurringMap.values()]
         .map((item) => ({
           ...item,
@@ -982,7 +1008,7 @@ function ErstatningsCheckPage() {
           totalDeliveryCount: number;
         }
       >();
-      for (const delivery of data ?? []) {
+      for (const delivery of deliveriesData ?? []) {
         const master = masterMap.get(delivery.sap_article_id);
         const assessment = assessDelivery(
           delivery.arrival_date,
@@ -1161,16 +1187,14 @@ function ErstatningsCheckPage() {
     setIsLoading(true);
     try {
       // Läs leveranshistorik från store_product_deliveries (inte masterdata-tabellen)
-      const { data: shelfData, error: dbErr } = await supabase
-        .from("store_product_deliveries")
-        .select(
-          "sap_article_id, bnr, best_before_date, arrival_date, quantity, status, delivery_number, product_name, brand, category",
-        )
-        .eq("store_id", activeStore.id)
-        .order("arrival_date", { ascending: false })
-        .limit(100000000);
+      const shelfData = await fetchAllRows(
+        supabaseClient,
+        "store_product_deliveries",
+        "sap_article_id, bnr, best_before_date, arrival_date, quantity, status, delivery_number, product_name, brand, category",
+        { column: "store_id", value: activeStore.id },
+        { column: "arrival_date", ascending: false },
+      );
 
-      if (dbErr) throw dbErr;
       const latestByArticle = new Map<string, (typeof shelfData)[number]>();
       for (const delivery of shelfData ?? []) {
         if (
@@ -1187,13 +1211,13 @@ function ErstatningsCheckPage() {
         .select("sap_article_id, shelf_lifetime_days, temperature_zone");
       if (masterErr) throw masterErr;
       const masterMap = new Map((masterData ?? []).map((m: any) => [m.sap_article_id, m]));
-      const { data: products, error: productsErr } = await supabase
-        .from("products")
-        .select("sap_article_id, name, brand, bnr")
-        .eq("store_id", activeStore.id)
-        .limit(100000000);
-      if (productsErr) throw productsErr;
-      const productMap = new Map((products ?? []).map((p: any) => [p.sap_article_id, p]));
+      const products = await fetchAllRows(
+        supabaseClient,
+        "products",
+        "sap_article_id, name, brand, bnr",
+        { column: "store_id", value: activeStore.id },
+      );
+      const productMap = new Map(products.map((p: any) => [p.sap_article_id, p]));
       const flagged = Array.from(latestByArticle.values())
         .map((delivery) => ({
           delivery,
