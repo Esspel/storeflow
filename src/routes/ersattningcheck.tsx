@@ -6,7 +6,6 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
-import { fetchSapProductServerFn } from "@/routes/api/proxy/sap/$";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Upload,
@@ -211,6 +210,7 @@ function assessDelivery(
   };
 }
 
+const SAP_BASE_URL = "https://s4r.sap.coop.se";
 
 function parseSapDate(dateValue: string | null | undefined): string | null {
   if (!dateValue) return null;
@@ -238,7 +238,29 @@ async function fetchSapProductData(
   storeId: string,
   sapArticleId: string,
 ): Promise<SapProductData | null> {
-  return fetchSapProductServerFn({ data: { storeId, sapArticleId } });
+  const url = `${SAP_BASE_URL}/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(storeId)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`;
+
+  try {
+    const resp = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "x-csrf-token": "fetch",
+      },
+    });
+
+    if (!resp.ok) {
+      console.warn(`SAP request failed for ${sapArticleId}: ${resp.status} ${resp.statusText}`);
+      return null;
+    }
+
+    const json = await resp.json();
+    return (json.d ?? null) as SapProductData | null;
+  } catch (err) {
+    console.warn(`Network error fetching SAP data for ${sapArticleId}:`, err);
+    return null;
+  }
 }
 
 async function fetchAllRows(
@@ -320,6 +342,7 @@ function ErstatningsCheckPage() {
     }>
   >([]);
   const [hideOkRecords, setHideOkRecords] = useState(false);
+  const [shelfLifeScrollTop, setShelfLifeScrollTop] = useState(0);
   const [importDates, setImportDates] = useState<string[]>([]);
 
   useEffect(() => {
@@ -1475,19 +1498,23 @@ function ErstatningsCheckPage() {
     setShelfLifeSort((current) => {
       const existing = current.find((s) => s.key === key);
       if (existing) {
-        if (shiftKey) {
-          return current.map((s) =>
-            s.key === key ? { key, direction: s.direction === "asc" ? "desc" : "asc" } : s,
-          );
-        }
         const newDirection = existing.direction === "asc" ? "desc" : "asc";
-        return [...current.filter((s) => s.key !== key), { key, direction: newDirection }];
+        if (!shiftKey) {
+          return [{ key, direction: newDirection }];
+        }
+        return current.map((s) =>
+          s.key === key ? { key, direction: newDirection } : s,
+        );
       }
       if (!shiftKey) {
         return [{ key, direction: "asc" }];
       }
       return [...current, { key, direction: "asc" }];
     });
+  };
+
+  const removeShelfLifeSort = (key: ShelfLifeSortKey) => {
+    setShelfLifeSort((current) => current.filter((s) => s.key !== key));
   };
 
   const toggleHiddenCategory = async (category: string) => {
@@ -2008,74 +2035,111 @@ function ErstatningsCheckPage() {
               </Button>
             </div>
             {shelfLifeRecords.length > 0 ? (
-              <div className="border rounded-lg overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>SAP Produkt-ID</TableHead>
-                      {(
-                        [
-                          ["Produkt", "product_name"],
-                          ["Varumärke", "brand"],
-                          ["Total hållbarhet (dagar)", "shelf_lifetime_days"],
-                          ["Bäst-före-datum", "expiry_date"],
-                          ["Leveransdatum", "arrival_date"],
-                          ["Status", "status"],
-                        ] as [string, ShelfLifeSortKey][]
-                      ).map(([label, key], idx) => {
-                        const sortEntry = shelfLifeSort.find((s) => s.key === key);
-                        const sortOrder = shelfLifeSort.findIndex((s) => s.key === key);
-                        return (
-                          <TableHead key={key}>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-auto px-0 font-medium"
-                              onClick={(e) => toggleShelfLifeSort(key, e.shiftKey)}
-                            >
-                              {label}
-                              {sortEntry ? (
-                                sortEntry.direction === "asc" ? (
-                                  <TrendingUp size={14} className="ml-1" />
-                                ) : (
-                                  <TrendingDown size={14} className="ml-1" />
-                                )
-                              ) : (
-                                <ArrowUpDown size={14} className="ml-1 opacity-30" />
-                              )}
-                              {sortOrder >= 0 && sortOrder > 0 && (
-                                <Badge variant="outline" className="ml-1 h-5 w-5 p-0 text-xs">
-                                  {sortOrder + 1}
-                                </Badge>
-                              )}
-                            </Button>
-                          </TableHead>
-                        );
-                      })}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredShelfLifeRecords.map((record) => {
-                      const arrival = new Date(record.arrival_date);
-                      const expiry = new Date(record.expiry_date);
-                      const hasValidDates =
-                        Boolean(record.arrival_date) &&
-                        Boolean(record.expiry_date) &&
-                        !Number.isNaN(arrival.getTime()) &&
-                        !Number.isNaN(expiry.getTime());
-                      const daysRemaining = hasValidDates
-                        ? Math.floor((expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24))
-                        : null;
-                      const hasShelfLife =
-                        Number.isFinite(record.shelf_lifetime_days) &&
-                        record.shelf_lifetime_days > 0;
-                      const assessment = assessDelivery(
-                        record.arrival_date,
-                        record.expiry_date,
-                        record.shelf_lifetime_days,
-                      );
-                      const isFlagged = assessment?.isEligible ?? false;
+              <div
+                className="border rounded-lg overflow-hidden"
+                style={{ height: "500px" }}
+                onScroll={(e) =>
+                  setShelfLifeScrollTop(e.currentTarget.scrollTop)
+                }
+              >
+                <div className="overflow-x-auto h-full">
+                  <Table>
+                    <TableHeader>
+                     <TableRow>
+                       <TableHead>SAP Produkt-ID</TableHead>
+                       {(
+                         [
+                           ["Produkt", "product_name"],
+                           ["Varumärke", "brand"],
+                           ["Total hållbarhet (dagar)", "shelf_lifetime_days"],
+                           ["Bäst-före-datum", "expiry_date"],
+                           ["Leveransdatum", "arrival_date"],
+                           ["Status", "status"],
+                         ] as [string, ShelfLifeSortKey][]
+                        ).map(([label, key], idx) => {
+                          const sortEntry = shelfLifeSort.find((s) => s.key === key);
+                          const sortOrder = shelfLifeSort.findIndex((s) => s.key === key);
+                          return (
+                            <TableHead key={key}>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-auto px-0 font-medium"
+                                 onClick={(e) => {
+                                   if (e.shiftKey) {
+                                     e.preventDefault();
+                                     toggleShelfLifeSort(key, true);
+                                   } else {
+                                     toggleShelfLifeSort(key, false);
+                                   }
+                                 }}
+                                >
+                                  {label}
+                                  {sortEntry ? (
+                                    sortEntry.direction === "asc" ? (
+                                      <TrendingUp size={14} className="ml-1" />
+                                    ) : (
+                                      <TrendingDown size={14} className="ml-1" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown size={14} className="ml-1 opacity-30" />
+                                  )}
+                                  {sortOrder >= 0 && (
+                                    <Badge variant="outline" className="ml-1 h-5 w-5 p-0 text-xs">
+                                      {sortOrder + 1}
+                                    </Badge>
+                                  )}
+                                </Button>
+                                {sortEntry && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-auto w-auto p-0 opacity-50 hover:opacity-100"
+                                    onClick={() => removeShelfLifeSort(key)}
+                                    title="Ta bort sortering"
+                                  >
+                                    <X size={12} />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableHead>
+                          );
+                        })}
+                     </TableRow>
+                   </TableHeader>
+                    <TableBody>
+                      {filteredShelfLifeRecords.map((record, idx) => {
+                        const _bufferStart = Math.max(0, Math.floor(shelfLifeScrollTop / 36) - 10);
+                        const _bufferEnd = Math.min(filteredShelfLifeRecords.length, Math.floor(shelfLifeScrollTop / 36) + Math.ceil(500 / 36) + 10);
+                        if (idx < _bufferStart || idx > _bufferEnd) {
+                          return (
+                            <TableRow key={record.id} className="h-[36px]">
+                              <TableCell colSpan={7} className="py-0" />
+                            </TableRow>
+                          );
+                        }
+                        const arrival = new Date(record.arrival_date);
+                        const expiry = new Date(record.expiry_date);
+                        const hasValidDates =
+                          Boolean(record.arrival_date) &&
+                          Boolean(record.expiry_date) &&
+                          !Number.isNaN(arrival.getTime()) &&
+                          !Number.isNaN(expiry.getTime());
+                        const daysRemaining = hasValidDates
+                          ? Math.floor((expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24))
+                          : null;
+                        const hasShelfLife =
+                         Number.isFinite(record.shelf_lifetime_days) &&
+                         record.shelf_lifetime_days > 0;
+                       const assessment = assessDelivery(
+                         record.arrival_date,
+                         record.expiry_date,
+                         record.shelf_lifetime_days,
+                       );
+                       const isFlagged = assessment?.isEligible ?? false;
 
                       return (
                         <TableRow key={record.id}>
@@ -2152,13 +2216,14 @@ function ErstatningsCheckPage() {
                       );
                     })}
                   </TableBody>
-                </Table>
-                {filteredShelfLifeRecords.length === 0 && (
-                  <p className="py-8 text-center text-sm text-muted-foreground">
-                    Inga artiklar matchar sökningen.
-                  </p>
-                )}
-              </div>
+                    </Table>
+                    {filteredShelfLifeRecords.length === 0 && (
+                      <p className="py-8 text-center text-sm text-muted-foreground">
+                        Inga artiklar matchar sökningen.
+                      </p>
+                    )}
+                  </div>
+                </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <Clock size={48} className="mx-auto mb-4 opacity-50" />
