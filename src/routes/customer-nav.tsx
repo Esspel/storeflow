@@ -26,6 +26,8 @@ import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { lookupProductByEan, searchProducts, type CoopProduct } from "@/lib/coop-products";
 import { ARNavigationView } from "@/components/ARNavigationView";
+import { AROverlay } from "@/components/AROverlay";
+import { AukiPosemeshNetwork } from "@/lib/posemesh/auki-network";
 
 interface SpatialMarker {
   id: string;
@@ -502,19 +504,16 @@ function CustomerNavPage() {
             )}
 
             {/* AR View */}
-            {viewMode === "ar" && map && (
+            {viewMode === "ar" && map && storeId && (
               <div className="space-y-4">
                 <div className="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden aspect-[4/3] md:aspect-[16/9] relative">
-                  <ARNavigationView
-                    markers={map.markers as any}
-                    navigationPath={undefined}
-                    targetMarkerId={selectedMarker?.id}
-                    userPose={null}
-                    onMarkerSelect={(id) => {
-                      const marker = map.markers.find((m) => m.id === id);
-                      if (marker) setSelectedMarker(marker);
-                    }}
-                    showDebug={false}
+                  <AROverlay
+                    network={new AukiPosemeshNetwork(
+                      import.meta.env.VITE_AUKI_APP_KEY || "",
+                      import.meta.env.VITE_AUKI_APP_SECRET || ""
+                    )}
+                    storeId={storeId}
+                    className="w-full h-full"
                   />
                 </div>
 

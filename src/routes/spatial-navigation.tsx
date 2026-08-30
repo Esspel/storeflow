@@ -33,6 +33,8 @@ import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { StoreMap3D } from "@/components/StoreMap3D";
 import { ARNavigationView } from "@/components/ARNavigationView";
+import { AROverlay } from "@/components/AROverlay";
+import { useARNetwork } from "@/hooks/useARNetwork";
 import type { NavigationPath3D, Marker3DConfig } from "@/lib/three-types";
 import { getSpatialMap, getShelfCompliance } from "@/lib/digital-twin";
 
@@ -66,6 +68,9 @@ function SpatialNavigationPage() {
   const [navigationPath, setNavigationPath] = useState<NavigationPath3D | null>(null);
   const [markerConfig, setMarkerConfig] = useState<Marker3DConfig | null>(null);
   const [complianceData, setComplianceData] = useState<Record<string, unknown> | null>(null);
+
+  // AR integration for spatial navigation
+  const { isConnected: arConnected, isConnecting: arConnecting } = useARNetwork();
 
   useEffect(() => {
     if (!user && !authLoading) {
@@ -155,6 +160,12 @@ function SpatialNavigationPage() {
               </Button>
             </div>
           </div>
+
+          {showAR && activeStore?.id && (
+            <div className="h-[600px] relative rounded-xl overflow-hidden" data-testid="spatial-ar-mode">
+              <AROverlay network={null} storeId={String(activeStore.id)} />
+            </div>
+          )}
 
           <div className="space-y-4">
             <Card>
