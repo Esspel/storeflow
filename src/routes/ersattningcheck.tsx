@@ -736,16 +736,23 @@ function ErstatningsCheckPage() {
   };
 
   const importShelfLifeFromSap = async () => {
-    if (!activeStore) return;
+    console.log("[importShelfLifeFromSap] Starting...");
+    if (!activeStore) {
+      console.log("[importShelfLifeFromSap] No active store, aborting");
+      return;
+    }
 
     // Use Chrome Extension proxy when available (bypasses CORS / PNA / SameSite)
     const useProxy = sapExtensionInstalled;
+    console.log("[importShelfLifeFromSap] useProxy:", useProxy, "sapExtensionInstalled:", sapExtensionInstalled);
 
     const productsToFetch = shelfLifeRecords.filter(
       (record) =>
         getShelfLifeStatus(record) === "Hållbarhet saknas" ||
         getShelfLifeStatus(record) === "Datum saknas",
     );
+
+    console.log("[importShelfLifeFromSap] productsToFetch:", productsToFetch.length, "articles");
 
     if (productsToFetch.length === 0) {
       toast.info("Inga artiklar saknar hållbarhetsdata att hämta.");
@@ -758,6 +765,11 @@ function ErstatningsCheckPage() {
       .filter((record) =>
         productsToFetch.map((p) => p.sap_article_id).includes(record.sap_article_id),
       );
+
+    console.log("[importShelfLifeFromSap] eligible (shelf_lifetime_days == null):", eligible.length, "articles");
+    if (eligible.length > 0) {
+      console.log("[importShelfLifeFromSap] First eligible:", eligible[0]);
+    }
 
     if (eligible.length === 0) {
       toast.info("Inga artiklar med 'Ej angiven' hållbarhet att uppdatera.");
@@ -774,12 +786,33 @@ function ErstatningsCheckPage() {
         // Fetch via proxy when extension is installed
         const sapData = useProxy
           ? await (async () => {
-              const json = await fetchViaProxy(
+              console.log(`[SAP Proxy] Fetching for article ${record.sap_article_id}`);
+              const proxyResponse = await fetchViaProxy(
                 `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore.sap_site_id ?? activeStore.id)}',ProductID='${encodeURIComponent(record.sap_article_id)}')?$format=json`,
                 "GET",
                 { Accept: "application/json" },
               );
-              return JSON.parse(json).d || null;
+              console.log(`[SAP Proxy] Response for ${record.sap_article_id}:`, proxyResponse);
+              if (!proxyResponse.success) {
+                console.error(`[SAP Proxy] Failed for ${record.sap_article_id}:`, proxyResponse.error);
+                return null;
+              }
+              const json = proxyResponse.data ?? "";
+              if (!json) {
+                console.error(`[SAP Proxy] No JSON data for ${record.sap_article_id}`);
+                return null;
+              }
+              console.log(`[SAP Proxy] Raw JSON for ${record.sap_article_id}:`, json.substring(0, 200));
+              let parsed;
+              try {
+                parsed = JSON.parse(json);
+              } catch (e) {
+                console.error(`[SAP Proxy] JSON parse error for ${record.sap_article_id}:`, e, json.substring(0, 200));
+                return null;
+              }
+              const result = parsed.d || null;
+              console.log(`[SAP Proxy] Extracted data for ${record.sap_article_id}:`, result);
+              return result;
             })()
           : await fetchSapProductData(
               activeStore.sap_site_id ?? activeStore.id,

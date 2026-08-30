@@ -81,7 +81,7 @@ export function fetchViaProxy(
   url: string,
   method: string = "GET",
   headers: Record<string, string> = {},
-): Promise<string> {
+): Promise<ProxyResponse> {
   return new Promise((resolve, reject) => {
     if (!window.chrome || !chrome.runtime) {
       return reject(new Error("Chrome Extension är inte installerat eller tillgängligt."));
@@ -98,12 +98,23 @@ export function fetchViaProxy(
       (response: unknown) => {
         const resp = response as SapProxyResponse | undefined;
         if (chrome.runtime?.lastError) {
+          console.error("[SAP Proxy] Runtime error:", chrome.runtime.lastError.message);
           return reject(new Error(chrome.runtime.lastError.message));
         }
-        if (resp?.success) {
-          resolve(resp.data ?? "");
+        if (!resp) {
+          console.error("[SAP Proxy] No response from extension");
+          return reject(new Error("Inget svar från extensionen"));
+        }
+        if (resp.success) {
+          console.log("[SAP Proxy] Success, status:", resp.status, "data length:", resp.data?.length);
+          resolve({
+            success: true,
+            status: typeof resp.status === "number" ? resp.status : parseInt(String(resp.status), 10),
+            data: resp.data,
+          });
         } else {
-          reject(new Error(resp?.error || "Okänt fel vid hämtning via proxy"));
+          console.error("[SAP Proxy] Extension returned error:", resp.error);
+          reject(new Error(resp.error || "Okänt fel vid hämtning via proxy"));
         }
       },
     );
@@ -151,8 +162,8 @@ export async function fetchSapProductData(
     const data = await fetchViaProxy(url, "GET", {
       Accept: "application/json",
     });
-
-    const json = JSON.parse(data);
+    const jsonStr = typeof data === "string" ? data : (data.data ?? "");
+    const json = JSON.parse(jsonStr);
     return (json.d ?? null) as SapProductData | null;
   } catch (err) {
     console.warn(`Error fetching SAP data for ${sapArticleId}:`, err);
