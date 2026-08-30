@@ -84,7 +84,11 @@ export function AukiDomainRenderer({
       });
     };
 
-    network.subscribeToPoseUpdates(handlePoseUpdate);
+    if (network) {
+      network.subscribeToPoseUpdates(handlePoseUpdate);
+    } else {
+      console.warn("AukiDomainRenderer: network is null, skipping pose subscription");
+    }
 
     return () => {
       isMounted.current = false;

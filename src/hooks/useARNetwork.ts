@@ -6,12 +6,18 @@ import type { AukiPosemeshNetwork } from "@/lib/posemesh/auki-network";
 import type { SpatialMap } from "@/lib/types/digital-twin";
 import { getSpatialMap } from "@/lib/digital-twin";
 
+interface Pose {
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number; w: number };
+}
+
 interface UseARNetworkReturn {
   isConnecting: boolean;
   isConnected: boolean;
   error: Error | null;
   pose: Pose | null;
   domain: SpatialMap | null;
+  network: AukiPosemeshNetwork | null;
   connect: () => Promise<void>;
   disconnect: () => void;
   updatePose: (pose: Pose) => void;
@@ -98,6 +104,7 @@ export function useARNetwork(): UseARNetworkReturn {
     error,
     pose,
     domain,
+    network: networkRef.current,
     connect: initializeNetwork,
     disconnect,
     updatePose,

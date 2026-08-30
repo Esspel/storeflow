@@ -71,7 +71,7 @@ function SpatialNavigationPage() {
   const [complianceData, setComplianceData] = useState<Record<string, unknown> | null>(null);
 
   // AR integration for spatial navigation
-  const { isConnected: arConnected, isConnecting: arConnecting } = useARNetwork();
+  const { isConnected: arConnected, isConnecting: arConnecting, network } = useARNetwork();
 
   useEffect(() => {
     if (!user && !authLoading) {
@@ -171,7 +171,13 @@ function SpatialNavigationPage() {
 
           {showAR && activeStore?.id && (
             <div className="h-[600px] relative rounded-xl overflow-hidden" data-testid="spatial-ar-mode">
-              <AROverlay network={null} storeId={String(activeStore.id)} />
+              {network ? (
+                <AROverlay network={network} storeId={String(activeStore.id)} />
+              ) : (
+                <div className="h-full flex items-center justify-center bg-slate-900 text-muted-foreground">
+                  <p>AR icke tillgängligt</p>
+                </div>
+              )}
             </div>
           )}
 
