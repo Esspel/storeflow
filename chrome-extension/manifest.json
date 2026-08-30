@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Intern Proxy Bridge",
+  "version": "1.0",
+  "description": "Chrome Extension for proxying internal API requests to bypass CORS and network restrictions",
+  "permissions": [
+    "cookies"
+  ],
+  "host_permissions": [
+    "http://s4r.sap.coop.se",
+    "https://s4r.sap.coop.se"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "externally_connectable": {
+    "matches": [
+      "https://storeflow.egnellsvag5.se/*"
+    ]
+  }
+}

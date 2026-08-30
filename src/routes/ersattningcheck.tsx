@@ -69,6 +69,7 @@ import {
   type ProductMatchResult,
 } from "@/lib/excel-parser";
 import { exportTextAsCSV, downloadAsZip } from "@/lib/csv";
+import { checkExtensionInstalled, fetchViaProxy } from "@/lib/sap-proxy";
 import { toast } from "sonner";
 import {
   CartesianGrid,
@@ -342,14 +343,36 @@ function ErstatningsCheckPage() {
     }>
   >([]);
   const [hideOkRecords, setHideOkRecords] = useState(false);
-  const [shelfLifeScrollTop, setShelfLifeScrollTop] = useState(0);
+    const [shelfLifeScrollTop, setShelfLifeScrollTop] = useState(0);
   const [importDates, setImportDates] = useState<string[]>([]);
+  const [sapExtensionInstalled, setSapExtensionInstalled] = useState(false);
+  const [sapExtensionChecked, setSapExtensionChecked] = useState(false);
 
   useEffect(() => {
     if (!importSuccess) return;
     const timeoutId = window.setTimeout(() => setImportSuccess(null), 5000);
     return () => window.clearTimeout(timeoutId);
   }, [importSuccess]);
+
+  // Check Chrome Extension status on mount and when needed
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkExtension = async () => {
+      if (!isMounted) return;
+      setSapExtensionChecked(false);
+      const installed = await checkExtensionInstalled();
+      if (isMounted) {
+        setSapExtensionInstalled(installed);
+        setSapExtensionChecked(true);
+      }
+    };
+
+    void checkExtension();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const supabaseClient = supabase;
 
@@ -714,6 +737,10 @@ function ErstatningsCheckPage() {
 
   const importShelfLifeFromSap = async () => {
     if (!activeStore) return;
+
+    // Use Chrome Extension proxy when available (bypasses CORS / PNA / SameSite)
+    const useProxy = sapExtensionInstalled;
+
     const productsToFetch = shelfLifeRecords.filter(
       (record) =>
         getShelfLifeStatus(record) === "Hållbarhet saknas" ||
@@ -725,16 +752,39 @@ function ErstatningsCheckPage() {
       return;
     }
 
+    // Only update articles whose current value is "Ej angiven" (null/undefined — not yet set)
+    const eligible = shelfLifeRecords
+      .filter((record) => record.shelf_lifetime_days == null)
+      .filter((record) =>
+        productsToFetch.map((p) => p.sap_article_id).includes(record.sap_article_id),
+      );
+
+    if (eligible.length === 0) {
+      toast.info("Inga artiklar med 'Ej angiven' hållbarhet att uppdatera.");
+      return;
+    }
+
     setIsLoading(true);
     let successCount = 0;
     let errorCount = 0;
 
-    for (const record of productsToFetch) {
+    for (let i = 0; i < eligible.length; i++) {
+      const record = eligible[i];
       try {
-        const sapData = await fetchSapProductData(
-          activeStore.sap_site_id ?? activeStore.id,
-          record.sap_article_id,
-        );
+        // Fetch via proxy when extension is installed
+        const sapData = useProxy
+          ? await (async () => {
+              const json = await fetchViaProxy(
+                `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore.sap_site_id ?? activeStore.id)}',ProductID='${encodeURIComponent(record.sap_article_id)}')?$format=json`,
+                "GET",
+                { Accept: "application/json" },
+              );
+              return JSON.parse(json).d || null;
+            })()
+          : await fetchSapProductData(
+              activeStore.sap_site_id ?? activeStore.id,
+              record.sap_article_id,
+            );
 
         if (!sapData) {
           errorCount += 1;
@@ -767,8 +817,13 @@ function ErstatningsCheckPage() {
         errorCount += 1;
       }
 
+      // 2 second interval to avoid rate limits
+      if (i < eligible.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+
       if (successCount + (errorCount % 10) === 0) {
-        toast.info(`Hämtad ${successCount}/${productsToFetch.length}...`);
+        toast.info(`Hämtad ${successCount}/${eligible.length}...`);
       }
     }
 
@@ -1474,25 +1529,23 @@ function ErstatningsCheckPage() {
       });
 
     filtered.sort((a, b) => {
-      const leftMissing = a.record.shelf_lifetime_days <= 0 ? 0 : 1;
-      const rightMissing = b.record.shelf_lifetime_days <= 0 ? 0 : 1;
+      const leftMissing = (a.record.shelf_lifetime_days == null || a.record.shelf_lifetime_days <= 0) ? 0 : 1;
+      const rightMissing = (b.record.shelf_lifetime_days == null || b.record.shelf_lifetime_days <= 0) ? 0 : 1;
       if (leftMissing !== rightMissing) return leftMissing - rightMissing;
       for (const sort of shelfLifeSort) {
         const leftRaw = sort.key === "status" ? a.status : (a.record[sort.key] ?? "");
         const rightRaw = sort.key === "status" ? b.status : (b.record[sort.key] ?? "");
         let comparison: number;
         if (sort.key === "shelf_lifetime_days") {
-          const leftNum = parseFloat(String(leftRaw));
-          const rightNum = parseFloat(String(rightRaw));
-          if (Number.isNaN(leftNum) || Number.isNaN(rightNum)) {
-            if (Number.isNaN(leftNum) && Number.isNaN(rightNum)) {
-              comparison = 0;
-            } else {
-              comparison = Number.isNaN(leftNum) ? -1 : 1;
-            }
-          } else {
-            comparison = leftNum - rightNum;
-          }
+          // Numeric sort: treat "Ej angiven" (null/0/NaN) as lowest so numbers come first
+          const aNum = a.record.shelf_lifetime_days ?? 0;
+          const bNum = b.record.shelf_lifetime_days ?? 0;
+          const aIsEmpty = !aNum || Number.isNaN(Number(aNum));
+          const bIsEmpty = !bNum || Number.isNaN(Number(bNum));
+
+          if (aIsEmpty && !bIsEmpty) comparison = -1;
+          else if (!aIsEmpty && bIsEmpty) comparison = 1;
+          else comparison = Number(aNum) - Number(bNum);
         } else {
           comparison = String(leftRaw).localeCompare(String(rightRaw), "sv", {
             numeric: true,
@@ -2048,16 +2101,47 @@ function ErstatningsCheckPage() {
                   Rensa sortering
                 </Button>
               )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void importShelfLifeFromSap()}
-                disabled={isLoading}
-              >
-                Hämta från SAP
-              </Button>
+              {sapExtensionChecked && sapExtensionInstalled && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void importShelfLifeFromSap()}
+                  disabled={isLoading}
+                >
+                  Hämta från SAP
+                </Button>
+              )}
             </div>
+            {shelfLifeSort.length > 0 && (
+              <div className="mt-2 text-xs text-muted-foreground flex flex-wrap items-center gap-2">
+                <span className="font-medium text-foreground">Sortering:</span>
+                {shelfLifeSort.map((entry, i) => (
+                  <span
+                    key={`${entry.key}-${i}`}
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800"
+                  >
+                    <span>{entry.direction === "asc" ? "↑" : "↓"}</span>
+                    <span>
+                      {entry.key === "shelf_lifetime_days"
+                        ? "Hållbarhet"
+                        : entry.key === "status"
+                          ? "Status"
+                          : entry.key === "expiry_date"
+                            ? "Bäst-före"
+                            : entry.key === "arrival_date"
+                              ? "Leverans"
+                              : entry.key === "product_name"
+                                ? "Produkt"
+                                : entry.key === "brand"
+                                  ? "Varumärke"
+                                  : entry.key}
+                    </span>
+                    <span className="ml-0.5 text-[10px] font-bold">{i + 1}</span>
+                  </span>
+                ))}
+              </div>
+            )}
             {shelfLifeRecords.length > 0 ? (
               <div
                 className="border rounded-lg overflow-hidden"
@@ -2117,7 +2201,7 @@ function ErstatningsCheckPage() {
                                     <ArrowUpDown size={14} className="ml-1 opacity-30" />
                                   )}
                                   {sortOrder >= 0 && (
-                                    <Badge variant="outline" className="ml-1 h-5 w-5 p-0 text-xs">
+                                    <Badge variant="outline" className="ml-1 h-5 w-5 p-0 text-xs rounded-full justify-center items-center leading-none">
                                       {sortOrder + 1}
                                     </Badge>
                                   )}
