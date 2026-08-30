@@ -24,7 +24,7 @@ declare global {
 
 // Extension ID for "Intern Proxy Bridge" - this is assigned by Chrome on installation.
 // The actual ID is shown in chrome://extensions after loading the unpacked extension.
-const EXTENSION_ID = "abcdefghijklmnopqrstuvwxyzabcdef"; // Placeholder - user must update with actual ID
+const EXTENSION_ID = "jfbjoaknkhddpdaeockdoediigpepbpo";
 
 export interface ProxyResponse {
   success: boolean;
