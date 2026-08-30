@@ -23,6 +23,7 @@ import {
   Route as RouteIcon,
   Box as CubeIcon,
   Smartphone,
+  QrCode,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -157,6 +158,13 @@ function SpatialNavigationPage() {
               <Button variant={showAR ? "default" : "outline"} onClick={() => setShowAR(!showAR)}>
                 <Smartphone className="h-4 w-4 mr-2" />
                 AR
+              </Button>
+              <Button variant="outline" onClick={() => {
+                // Navigate to QR generator for this store
+                navigate({ to: "/qr-generator" });
+              }}>
+                <QrCode className="h-4 w-4 mr-2" />
+                QR-kod
               </Button>
             </div>
           </div>
