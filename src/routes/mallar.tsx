@@ -3940,9 +3940,12 @@ function MallarPage() {
                         if (val === "") {
                           setF((p) => ({ ...p, recurrence_start_week: "" }));
                         } else {
-                          const baseDate = f.recurrence_start
+                          // Skydda mot ogiltiga recurrence_start-värden
+                          const isoCheck = f.recurrence_start?.match(/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?$/);
+                          const baseDate = (f.recurrence_start && isoCheck)
                             ? new Date(f.recurrence_start)
                             : new Date();
+                          if (isNaN(baseDate.getTime())) { return; }
                           const year = baseDate.getFullYear();
                           const date = getDateFromISOWeek(year, val as number);
                           setF((p) => ({

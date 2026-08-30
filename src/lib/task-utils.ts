@@ -66,6 +66,11 @@ export function validateRecurrenceRange(
   if (!rule) return null;
   if (!startDate) return "Återkommande uppgifter måste ha ett startdatum.";
   if (!endDate) return "Återkommande uppgifter måste ha ett slutdatum.";
+  // Validera att datumen är giltiga ISO8601 (YYYY-MM-DD)
+  const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!isoDateRegex.test(startDate) || !isoDateRegex.test(endDate)) {
+    return "Datum måste vara i formaten YYYY-MM-DD.";
+  }
   const start = midnightStockholm(new Date(`${startDate}T00:00:00`));
   const end = midnightStockholm(new Date(`${endDate}T00:00:00`));
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
@@ -95,6 +100,9 @@ export function getRecurrencePreview(
   endDate: string,
 ): string | null {
   if (!rule || !startDate || !endDate) return null;
+  // Validera att datumen är giltiga ISO8601 (YYYY-MM-DD)
+  const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!isoDateRegex.test(startDate) || !isoDateRegex.test(endDate)) return null;
   const start = midnightStockholm(new Date(`${startDate}T00:00:00`));
   const end = midnightStockholm(new Date(`${endDate}T00:00:00`));
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return null;

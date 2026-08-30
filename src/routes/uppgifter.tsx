@@ -223,8 +223,25 @@ type FormQuestion = {
 
 function localInputToUtcIso(localStr: string): string {
   if (!localStr) return "";
+  // Se till att input är YYYY-MM-DD format (ISO8601)
+  const isoMatch = localStr.match(/^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2})?$/);
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10);
+    const day = parseInt(isoMatch[3], 10);
+    // Blockera ogiltiga år (t.ex. år 0, år 9999, eller negativa år)
+    if (year < 100 || year > 9999) return localStr;
+    if (month < 1 || month > 12 || day < 1 || day > 31) return localStr;
+    const d = new Date(localStr);
+    if (isNaN(d.getTime())) return localStr;
+    return d.toISOString();
+  }
+  // För andra format, prova standard-parsning men skydda
   const d = new Date(localStr);
   if (isNaN(d.getTime())) return localStr;
+  // Efter parsning, kontrollera att år är giltigt
+  const year = d.getFullYear();
+  if (year < 100 || year > 9999) return localStr;
   return d.toISOString();
 }
 function utcIsoToLocalInput(utcStr: string): string {

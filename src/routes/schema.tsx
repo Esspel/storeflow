@@ -891,17 +891,33 @@ function addDays(dateStr: string, n: number): string {
 
 // Convert any ISO timestamp to local YYYY-MM-DD so UTC-offset dates match the schedule day
 function toLocalDateStr(isoStr: string): string {
+  if (!isoStr) return "";
+  // Validera att indata är ISO8601 (YYYY-MM-DD format)
+  const isoMatch = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})(?:T\d{2}:\d{2})?$/);
+  if (!isoMatch) return isoStr; // Return original if not valid ISO, prevents Invalid Date
+  const year = parseInt(isoMatch[1], 10);
+  const month = parseInt(isoMatch[2], 10);
+  const day = parseInt(isoMatch[3], 10);
+  // Blockerar ogiltiga år
+  if (year < 100 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) return isoStr;
   const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return isoStr;
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  const day2 = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day2}`;
 }
 
 function fmtDate(dateStr: string): string {
-  // Parse as local date to avoid UTC-offset shifting the day number
+  if (!dateStr) return "";
+  // Validera YYYY-MM-DD format innan parsing
+  const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!isoMatch) return dateStr; // Returnera original om ogiltig
   const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
+  if (y < 100 || y > 9999 || m < 1 || m > 12 || d < 1 || d > 31) return dateStr;
+  const dateObj = new Date(y, m - 1, d);
+  if (isNaN(dateObj.getTime())) return dateStr;
+  return dateObj.toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
 }
 
 function isLightColor(hex: string): boolean {

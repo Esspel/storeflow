@@ -217,7 +217,12 @@ function parseSapDate(dateValue: string | null | undefined): string | null {
   if (!dateValue) return null;
   const match = dateValue.match(/Date\((\d+)\)/);
   if (match) {
-    return new Date(parseInt(match[1], 10)).toISOString();
+    const timestamp = parseInt(match[1], 10);
+    // Skydda mot overflow/ogiltiga millisekundvärden
+    if (timestamp < 0 || timestamp > 86400000 * 365 * 100) return null;
+    const d = new Date(timestamp);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString();
   }
   const parsed = new Date(dateValue);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
@@ -453,10 +458,21 @@ function ErstatningsCheckPage() {
   const goodProductCount = Math.max(totalProductCount - reclaimedProductCount, 0);
   const productPercentage =
     totalProductCount > 0 ? Math.round((goodProductCount / totalProductCount) * 100) : 0;
+  // Filter: Only eligible records where arrival is within last 4 days (regulatory requirement)
+  // Users must apply for compensation within 4 days of delivery, otherwise no compensation
+  const fourDaysMs = 4 * 24 * 60 * 60 * 1000;
   const eligibleShelfLifeRecords = shelfLifeRecords.filter(
     (record) =>
       assessDelivery(record.arrival_date, record.expiry_date, record.shelf_lifetime_days)
-        ?.isEligible,
+        ?.isEligible &&
+      // Only include if arrival_date is within last 4 days
+      (() => {
+        const arrival = record.arrival_date ? new Date(record.arrival_date).getTime() : null;
+        if (arrival === null || Number.isNaN(arrival)) return false;
+        const now = Date.now();
+        const daysSinceArrival = Math.floor((now - arrival) / (1000 * 60 * 60 * 24));
+        return daysSinceArrival >= 0 && daysSinceArrival <= 4;
+      })(),
   );
   const hasImportedDeliveries = deliveryStatistics.length > 0;
 
@@ -502,39 +518,49 @@ function ErstatningsCheckPage() {
       setMatchResults(results);
 
       // Auto-create unmatched products
-      // Filtrera bort rader utan giltig EAN (null/empty) for att undvika products_ean_unique constraint-konflikt
+      // Inkludera ALLA nya produkter (även utan BNR) för att undvika FK-fel vid delivery-insert
+      // För BNR-användning (e.g. products_ean_unique), vi behåller ean=null om BNR saknas
       const newProducts = results
         .filter((r) => r.isNewProduct && (r.row.bnr || r.row.sapProduktId))
-        .filter((r) => r.row.bnr && String(r.row.bnr).trim().length > 0)
-        .map((r) => ({
-          store_id: activeStore.id,
-          sap_article_id: r.row.sapProduktId || null,
-          ean: r.row.bnr ? String(r.row.bnr).trim() : null,
-          bnr: r.row.bnr ? String(r.row.bnr).trim() : null,
-          name: r.row.produkt || "Okänd produkt",
-          brand: r.row.varumärke || null,
-          size: r.row.innehåll || null,
-          unit: r.row.beställningsenhet || null,
-          category: r.row.kategori || null,
-          updated_at: new Date().toISOString(),
-        }));
+        .map((r) => {
+          const bnr = r.row.bnr ? String(r.row.bnr).trim() : null;
+          const sapId = r.row.sapProduktId ? String(r.row.sapProduktId).trim() : null;
+          return {
+            store_id: activeStore.id,
+            sap_article_id: sapId,
+            ean: bnr && bnr.length > 0 ? bnr : null,
+            bnr: bnr && bnr.length > 0 ? bnr : null,
+            name: r.row.produkt || "Okänd produkt",
+            brand: r.row.varumärke || null,
+            size: r.row.innehåll || null,
+            unit: r.row.beställningsenhet || null,
+            category: r.row.kategori || null,
+            updated_at: new Date().toISOString(),
+          };
+        });
 
       if (newProducts.length > 0) {
-        // Deduplicera på bnr inom samma batch (21000-fix)
-        const seenBnr = new Set();
+        // Deduplicera på sap_article_id inom samma batch (förhindrar dubbletter)
+        const seenKeys = new Set();
         const deduped = newProducts.filter((p) => {
-          const key = (p.bnr || p.store_id || "") + ":" + (p.sap_article_id || "");
-          if (seenBnr.has(key)) return false;
-          seenBnr.add(key);
+          if (!p.sap_article_id) return false;
+          if (seenKeys.has(p.sap_article_id)) return false;
+          seenKeys.add(p.sap_article_id);
           return true;
         });
-        const { error: upsertErr } = await supabase
-          .from("products")
-          .upsert(deduped, { onConflict: "sap_article_id", ignoreDuplicates: false });
 
-        if (upsertErr) {
-          console.error("Upsert error:", upsertErr);
-          throw upsertErr;
+        // Batcha upsert i grupper om 500 för att hantera stora dataset
+        const UPSERT_BATCH_SIZE = 500;
+        for (let i = 0; i < deduped.length; i += UPSERT_BATCH_SIZE) {
+          const batch = deduped.slice(i, i + UPSERT_BATCH_SIZE);
+          const { error: upsertErr } = await supabase
+            .from("products")
+            .upsert(batch, { onConflict: "sap_article_id", ignoreDuplicates: false });
+
+          if (upsertErr) {
+            console.error("Upsert error:", upsertErr);
+            throw upsertErr;
+          }
         }
       }
 
@@ -569,11 +595,17 @@ function ErstatningsCheckPage() {
         .filter((row) => row.sap_article_id);
 
       if (deliveryRows.length > 0) {
+        // Samla leveransnummer först för delete
         const deliveryNumbers = Array.from(
           new Set(
             deliveryRows.map((r) => r.delivery_number).filter((n): n is string => Boolean(n)),
           ),
         );
+
+        // Batcha insert i grupper om 500 för att hantera stora filer (>10000 rader)
+        const INSERT_BATCH_SIZE = 500;
+
+        // Ta bort gamla leveranser för dessa leveransnummer
         if (deliveryNumbers.length > 0) {
           await supabase
             .from("store_product_deliveries")
@@ -581,10 +613,15 @@ function ErstatningsCheckPage() {
             .eq("store_id", activeStore.id)
             .in("delivery_number", deliveryNumbers);
         }
-        const { error: deliveryError } = await supabase
-          .from("store_product_deliveries")
-          .insert(deliveryRows);
-        if (deliveryError) throw deliveryError;
+
+        // Batcha inserts
+        for (let i = 0; i < deliveryRows.length; i += INSERT_BATCH_SIZE) {
+          const batch = deliveryRows.slice(i, i + INSERT_BATCH_SIZE);
+          const { error: deliveryError } = await supabase
+            .from("store_product_deliveries")
+            .insert(batch);
+          if (deliveryError) throw deliveryError;
+        }
       }
 
       await loadShelfLifeData();
@@ -1344,27 +1381,69 @@ function ErstatningsCheckPage() {
   ) => {
     setIsLoading(true);
     try {
-      for (const u of updates) {
-        // Skriv ny leveransrad till store_product_deliveries (inte upsert)
-        await supabase.from("store_product_deliveries").insert({
-          sap_article_id: u.id,
-          store_id: activeStore.id,
-          arrival_date: new Date().toISOString(),
-          best_before_date: u.expiry_date,
-          quantity: 0,
-          status: "delivered",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-        // Uppdatera masterdata om nödvändigt
-        await supabase.from("product_shelf_life").upsert(
-          {
-            sap_article_id: u.id,
-            shelf_lifetime_days: u.shelf_lifetime_days,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "sap_article_id" },
+      // Batch storlek: max 100 rader per batch för att undvika timeout/häng
+      const BATCH_SIZE = 100;
+      const batches = [];
+      for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+        batches.push(updates.slice(i, i + BATCH_SIZE));
+      }
+
+      for (const batch of batches) {
+        // Skapa produkter som saknas innan vi infogar leveransrader
+        const articleIds = batch.map((u) => u.id);
+        const { data: existingProducts, error: productError } = await supabase
+          .from("products")
+          .select("sap_article_id")
+          .in("sap_article_id", articleIds)
+          .eq("store_id", activeStore.id);
+
+        if (productError) throw productError;
+
+        const existingSapIds = new Set(
+          (existingProducts ?? []).map((p: any) => p.sap_article_id),
         );
+
+        // Skapa produkter som saknas
+        const newProducts = batch
+          .filter((u) => !existingSapIds.has(u.id))
+          .map((u) => ({
+            store_id: activeStore.id,
+            sap_article_id: u.id,
+            bnr: `TEMP-${u.id}`, // Temporärt BNR tills produkt uppdateras
+            name: `Produkt ${u.id}`,
+            category: "Drift",
+            is_active: true,
+          }));
+
+        if (newProducts.length > 0) {
+          await supabase
+            .from("products")
+            .upsert(newProducts, { onConflict: "sap_article_id" });
+        }
+
+        // Nu infoga leveransrader för denna batch
+        for (const u of batch) {
+          // Skriv ny leveransrad till store_product_deliveries
+          await supabase.from("store_product_deliveries").insert({
+            sap_article_id: u.id,
+            store_id: activeStore.id,
+            arrival_date: new Date().toISOString(),
+            best_before_date: u.expiry_date,
+            quantity: 0,
+            status: "delivered",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          // Uppdatera masterdata om nödvändigt
+          await supabase.from("product_shelf_life").upsert(
+            {
+              sap_article_id: u.id,
+              shelf_lifetime_days: u.shelf_lifetime_days,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "sap_article_id" },
+          );
+        }
       }
     } catch (e) {
       toast.error("Kunde inte spara hållbarhetsdata.");
