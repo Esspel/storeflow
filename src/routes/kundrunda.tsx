@@ -584,7 +584,10 @@ function KundrundaPage() {
     if (!lv) return;
     if (choice === "central") {
       // Replace store-local zones with current HK zones server-side
-      await supabase.rpc("apply_central_kundrunda_to_store", { p_store_id: activeStore.id });
+      // Use authenticated client to avoid 401 errors
+      const { data: { session } } = await supabase.auth.getSession();
+      const { error: rpcError } = await supabase.rpc("apply_central_kundrunda_to_store", { p_store_id: activeStore.id });
+      if (rpcError) throw rpcError;
     } else {
       const updates: Partial<LocalVersionRecord> = {
         central_version_pending: false,

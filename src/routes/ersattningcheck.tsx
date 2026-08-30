@@ -339,6 +339,7 @@ function ErstatningsCheckPage() {
   const [deliveryCategories, setDeliveryCategories] = useState<string[]>([]);
   const [mappingLoading, setMappingLoading] = useState(false);
   const [hiddenCategories, setHiddenCategories] = useState<string[]>([])
+  const [globalHiddenCategories, setGlobalHiddenCategories] = useState<string[]>([])
   const [testFixtureSapId, setTestFixtureSapId] = useState<string | null>(null);
   const [shelfLifeSearch, setShelfLifeSearch] = useState("");
   const [shelfLifeSort, setShelfLifeSort] = useState<
@@ -384,12 +385,19 @@ function ErstatningsCheckPage() {
   useEffect(() => {
     if (!activeStore?.id) return;
     void (async () => {
-      const { data } = await supabaseClient
-        .from("store_hidden_categories")
-        .select("category")
-        .eq("store_id", activeStore.id)
-        .eq("is_hidden", true);
-      if (data) setHiddenCategories(data.map((row: any) => String(row.category)));
+      const [localData, globalData] = await Promise.all([
+        supabaseClient
+          .from("store_hidden_categories")
+          .select("category")
+          .eq("store_id", activeStore.id)
+          .eq("is_hidden", true),
+        supabaseClient
+          .from("global_hidden_categories")
+          .select("category")
+          .eq("is_hidden", true),
+      ]);
+      if (localData.data) setHiddenCategories(localData.data.map((row: any) => String(row.category)));
+      if (globalData.data) setGlobalHiddenCategories(globalData.data.map((row: any) => String(row.category)));
     })();
   }, [activeStore?.id]);
 
@@ -1661,25 +1669,46 @@ function ErstatningsCheckPage() {
       for (const sort of shelfLifeSort) {
         const leftRaw = sort.key === "status" ? a.status : (a.record[sort.key] ?? "");
         const rightRaw = sort.key === "status" ? b.status : (b.record[sort.key] ?? "");
-        let comparison: number;
-        if (sort.key === "shelf_lifetime_days") {
-          // Numeric sort: treat "Ej angiven" (null/0/NaN) as lowest so numbers come first
-          const aNum = a.record.shelf_lifetime_days ?? 0;
-          const bNum = b.record.shelf_lifetime_days ?? 0;
-          const aIsEmpty = !aNum || Number.isNaN(Number(aNum));
-          const bIsEmpty = !bNum || Number.isNaN(Number(bNum));
 
-          if (aIsEmpty && !bIsEmpty) comparison = -1;
-          else if (!aIsEmpty && bIsEmpty) comparison = 1;
-          else comparison = Number(aNum) - Number(bNum);
+        // Handle date fields that may be null/undefined (shelves with missing dates)
+        if (sort.key === "expiry_date" || sort.key === "arrival_date") {
+          const leftDate = leftRaw ? new Date(String(leftRaw)).getTime() : 0;
+          const rightDate = rightRaw ? new Date(String(rightRaw)).getTime() : 0;
+          // Empty/missing dates should sort to bottom, dates with values sort properly
+          const hasLeft = !!leftRaw && !isNaN(leftDate) && leftDate > 0;
+          const hasRight = !!rightRaw && !isNaN(rightDate) && rightDate > 0;
+          if (hasLeft && !hasRight) comparison = 1; // Has date comes after missing
+          else if (!hasLeft && hasRight) comparison = -1;
+          else if (!hasLeft && !hasRight) comparison = 0;
+          else comparison = leftDate - rightDate;
         } else {
-          comparison = String(leftRaw).localeCompare(String(rightRaw), "sv", {
-            numeric: true,
-            sensitivity: "base",
-          });
-        }
-        if (comparison !== 0) {
-          return sort.direction === "asc" ? comparison : -comparison;
+          let comparison: number;
+          if (sort.key === "shelf_lifetime_days") {
+            // Numeric sort: treat "Ej angiven" (null/0/NaN) as lowest so numbers come first
+            const aNum = a.record.shelf_lifetime_days ?? 0;
+            const bNum = b.record.shelf_lifetime_days ?? 0;
+            const aIsEmpty = !aNum || Number.isNaN(Number(aNum));
+            const bIsEmpty = !bNum || Number.isNaN(Number(bNum));
+
+            if (aIsEmpty && !bIsEmpty) comparison = -1;
+            else if (!aIsEmpty && bIsEmpty) comparison = 1;
+            else comparison = Number(aNum) - Number(bNum);
+          } else if (sort.key === "status") {
+            // Status ordering: Datum saknas < Hållbarhet saknas < Kräver ersättning < OK
+            const statusOrder = { "Datum saknas": 0, "Hållbarhet saknas": 1, "Kräver ersättning": 2, "OK": 3, "": 4 };
+            const aStatus = String(a.status ?? "");
+            const bStatus = String(b.status ?? "");
+            comparison = (statusOrder[aStatus as keyof typeof statusOrder] ?? 99) - (statusOrder[bStatus as keyof typeof statusOrder] ?? 99);
+          } else {
+            comparison = String(leftRaw).localeCompare(String(rightRaw), "sv", {
+              numeric: true,
+              sensitivity: "base",
+            });
+          }
+
+          if (comparison !== 0) {
+            return sort.direction === "asc" ? comparison : -comparison;
+          }
         }
       }
       return 0;
@@ -1726,25 +1755,46 @@ function ErstatningsCheckPage() {
   const toggleHiddenCategory = async (category: string) => {
     setMappingLoading(true);
     try {
-      const current = hiddenCategories.find((c) => c.toLowerCase() === category.toLowerCase());
-      const nextHidden = !current;
-      const { error } = await supabase.from("store_hidden_categories").upsert(
-        {
-          store_id: activeStore.id,
-          category,
-          is_hidden: nextHidden,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "store_id,category" },
-      );
-      if (error) throw error;
-      setHiddenCategories((current) => {
-        if (nextHidden) {
-          const exists = current.some((c) => c.toLowerCase() === category.toLowerCase());
-          return exists ? current : [...current, category];
+      const isLocal = hiddenCategories.some((c) => c.toLowerCase() === category.toLowerCase());
+      const isGlobal = globalHiddenCategories.some((c) => c.toLowerCase() === category.toLowerCase());
+      const nextHidden = !(isLocal || isGlobal);
+
+      if (nextHidden) {
+        // Determine scope: if category is already in store-specific list toggle local, else global
+        if (isLocal) {
+          await supabase.from("store_hidden_categories").upsert(
+            { store_id: activeStore.id, category, is_hidden: true, updated_at: new Date().toISOString() },
+            { onConflict: "store_id,category" }
+          );
+          // If already local, no change needed
+        } else {
+          // Add to global (visible to all stores)
+          const { error } = await supabase.from("global_hidden_categories").upsert(
+            { category, is_hidden: true, updated_at: new Date().toISOString() },
+            { onConflict: "category" }
+          );
+          if (error) throw error;
+          setGlobalHiddenCategories((current) => [...current, category]);
+          // Remove from local if present
+          setHiddenCategories((current) => current.filter((c) => c.toLowerCase() !== category.toLowerCase()));
         }
-        return current.filter((c) => c.toLowerCase() !== category.toLowerCase());
-      });
+      } else {
+        // Remove from whichever scope it's in
+        if (isLocal) {
+          await supabase.from("store_hidden_categories").upsert(
+            { store_id: activeStore.id, category, is_hidden: false, updated_at: new Date().toISOString() },
+            { onConflict: "store_id,category" }
+          );
+          setHiddenCategories((current) => current.filter((c) => c.toLowerCase() !== category.toLowerCase()));
+        }
+        if (isGlobal) {
+          await supabase.from("global_hidden_categories").upsert(
+            { category, is_hidden: false, updated_at: new Date().toISOString() },
+            { onConflict: "category" }
+          );
+          setGlobalHiddenCategories((current) => current.filter((c) => c.toLowerCase() !== category.toLowerCase()));
+        }
+      }
     } catch (error) {
       console.error("Error toggling hidden category:", error);
       toast.error("Kunde inte uppdatera dold kategorival.");
