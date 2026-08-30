@@ -856,9 +856,9 @@ function ErstatningsCheckPage() {
         errorCount += 1;
       }
 
-      // 2 second interval to avoid rate limits
+      // Small interval to avoid rate limits (10ms)
       if (i < eligible.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 10));
       }
 
       if (successCount + (errorCount % 10) === 0) {
