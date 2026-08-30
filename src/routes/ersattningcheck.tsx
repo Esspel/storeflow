@@ -831,9 +831,7 @@ function ErstatningsCheckPage() {
           {
             sap_article_id: record.sap_article_id,
             shelf_lifetime_days: Number.isFinite(shelfLifeDays) ? shelfLifeDays : 0,
-            expiry_date: now,
-            arrival_date: now,
-            updated_at: now,
+            updated_at: new Date().toISOString(),
           },
           { onConflict: "sap_article_id" },
         );
@@ -1813,6 +1811,46 @@ function ErstatningsCheckPage() {
               </p>
             )}
           </CardContent>
+            <div className="pt-2 border-t mt-2">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Testa SAP-flöde för enskild artikel (materialnummer):</p>
+              <div className="flex items-end gap-2">
+                <input id="test-sap-id" type="text" placeholder="SAP materialnummer / artikel-ID"
+                  className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring w-64"
+                  defaultValue={testFixtureSapId || ""} />
+                <Button size="sm" variant="outline"
+                  onClick={async () => {
+                    const input = document.getElementById("test-sap-id") as HTMLInputElement | null;
+                    const sapArticleId = input?.value.trim();
+                    if (!sapArticleId) { toast.error("Ange ett SAP-product-ID / materialnummer."); return; }
+                    console.log("[Test SAP] Testing single article:", sapArticleId);
+                    try {
+                      const sapData = sapExtensionInstalled
+                        ? await (async () => {
+                            const proxyResponse = await fetchViaProxy(
+                              `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore?.sap_site_id ?? activeStore?.id ?? "")}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
+                              "GET", { Accept: "application/json" });
+                            console.log("[Test SAP] Proxy response:", proxyResponse);
+                            if (!proxyResponse.success) throw new Error(proxyResponse.error || "Proxy failed");
+                            const jsonStr = proxyResponse.data ?? "";
+                            const parsed = JSON.parse(jsonStr);
+                            return parsed.d || null;
+                          })()
+                        : await fetchSapProductData(activeStore?.sap_site_id ?? activeStore?.id ?? "", sapArticleId);
+                      console.log("[Test SAP] SAP data:", sapData);
+                      if (!sapData) { toast.error("Inga data från SAP för artikel: " + sapArticleId); return; }
+                      const shelfLifeDays = parseInt(sapData.RemainingShelfLifeInDays, 10);
+                      if (Number.isNaN(shelfLifeDays)) { toast.error("Ogiltigt hållbarhetsdatum från SAP."); return; }
+                      const { error } = await supabase.from("product_shelf_life").upsert({
+                        sap_article_id: sapArticleId, shelf_lifetime_days: shelfLifeDays,
+                        updated_at: new Date().toISOString(),
+                      }, { onConflict: "sap_article_id" });
+                      if (error) { console.error("[Test SAP] Supabase error:", error); toast.error("Kunde inte spara till Supabase."); }
+                      else { toast.success("Sparade hållbarhetsdata (" + shelfLifeDays + " dagar) för " + sapArticleId); console.log("[Test SAP] Saved to Supabase successfully"); }
+                    } catch (err: any) { console.error("[Test SAP] Exception:", err); toast.error("Fel vid SAP-test: " + (err?.message || err)); }
+                  }}
+                  disabled={isLoading}>Testa SAP → Supabase</Button>
+              </div>
+            </div>
         </Card>
       )}
       {step === "dashboard" && (
