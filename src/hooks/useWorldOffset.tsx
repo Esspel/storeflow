@@ -1,3 +1,4 @@
+import "@/lib/three-patches"; // Ensure THREE.Clock available for R3F
 /**
  * useWorldOffset Hook
  * Provides a React context for the world offset transform

@@ -1,3 +1,4 @@
+import "@/lib/three-patches"; // Ensure THREE.Clock available for R3F
 /**
  * usePosemeshToThree Bridge Hook
  * Bridges posemesh PoseEstimation with Three.js

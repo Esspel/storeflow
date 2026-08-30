@@ -44,9 +44,9 @@ function QRGeneratorRoute() {
               Skapa QR-kod för butikens ingång som kunder kan skanna för att komma till kundnavigeringssidan
             </p>
           </div>
-          <Button variant="outline" onClick={() => navigate({ to: "/" })}>
-            <Home className="h-4 w-4 mr-2" />
-            Tillbaka
+          <Button variant="outline" size="sm" onClick={() => navigate({ to: "/spatial-navigation" })}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Tillbaka till navigering
           </Button>
         </div>
 

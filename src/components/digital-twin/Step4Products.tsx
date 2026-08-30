@@ -1,5 +1,6 @@
 // Step 4 — Digital Twin 3D: Koppla produkter till sektioner + hyllor
 // Använder StoreMap3D som bas + drag/drop från shelf_observations
+import "@/lib/three-patches"; // Ensure THREE.Clock available for R3F
 import { useState, useEffect, useCallback } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";

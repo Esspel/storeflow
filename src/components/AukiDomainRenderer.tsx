@@ -12,6 +12,7 @@ import { ARNavigationView } from "@/components/ARNavigationView";
 import { AukiPosemeshNetwork } from "@/lib/posemesh/auki-network";
 import { getSpatialMap } from "@/lib/digital-twin";
 import * as THREE from "three";
+import "@/lib/three-patches"; // Ensure THREE.Clock available for R3F
 
 interface SpatialMarker {
   id: string;
@@ -136,7 +137,7 @@ export function AukiDomainRenderer({
 
   // Convert routes to navigation path
   const navigationPath =
-    domain.routes && domain.routes.length > 0
+    domain.routes && Array.isArray(domain.routes) && domain.routes.length > 0
       ? {
           waypoints: domain.routes.map((r) => ({
             x: 0,

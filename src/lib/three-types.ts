@@ -1,3 +1,4 @@
+import "@/lib/three-patches"; // Ensure THREE.Clock available for R3F
 /**
  * Three.js / React Three Fiber Shared Types
  * Types for 3D store map, markers, and navigation
