@@ -746,23 +746,35 @@ function ErstatningsCheckPage() {
     const useProxy = sapExtensionInstalled;
     console.log("[importShelfLifeFromSap] useProxy:", useProxy, "sapExtensionInstalled:", sapExtensionInstalled);
 
-    const productsToFetch = shelfLifeRecords.filter(
-      (record) =>
-        getShelfLifeStatus(record) === "Hållbarhet saknas" ||
-        getShelfLifeStatus(record) === "Datum saknas",
-    );
+    // Get all articles from shelfLifeRecords that need to be fetched from SAP
+    // Includes ALL records where shelf_lifetime_days is null/undefined/NaN/<=0
+    // BUT excludes articles that are ALREADY in product_shelf_life table
+    // (some records have shelf_lifetime_days=0 which means "data already fetched")
 
-    console.log("[importShelfLifeFromSap] productsToFetch:", productsToFetch.length, "articles");
-
-    if (productsToFetch.length === 0) {
-      toast.info("Inga artiklar saknar hållbarhetsdata att hämta.");
-      return;
+    // Step 1: Get all sap_article_ids that we want to skip (they already have data)
+    let existingSapIds = new Set<string>();
+    if (activeStore) {
+      const { data: existingIds } = await supabase
+        .from("product_shelf_life")
+        .select("sap_article_id")
+        .eq("store_id", activeStore.id); // Only for THIS store
+      existingSapIds = new Set(existingIds?.map((r: any) => r.sap_article_id) ?? []);
+      console.log("[importShelfLifeFromSap] Already have shelf_lifetime_days for:", existingSapIds.size, "articles");
     }
 
-    // Only update articles whose current value is "Ej angiven" (null/undefined — not yet set)
-    const eligible = productsToFetch.filter((record) => record.shelf_lifetime_days == null);
+    // Step 2: Filter shelfLifeRecords for eligible articles
+    const eligible = shelfLifeRecords.filter((record) => {
+      // Skip if already have data in product_shelf_life
+      if (existingSapIds.has(record.sap_article_id)) return false;
 
-    console.log("[importShelfLifeFromSap] eligible (shelf_lifetime_days == null):", eligible.length, "articles");
+      const status = getShelfLifeStatus(record);
+      return (status === "Hållbarhet saknas" || status === "Datum saknas") &&
+             (record.shelf_lifetime_days == null ||
+              Number.isNaN(record.shelf_lifetime_days) ||
+              record.shelf_lifetime_days <= 0);
+    });
+
+    console.log("[importShelfLifeFromSap] eligible (not in product_shelf_life):", eligible.length, "articles");
     if (eligible.length > 0) {
       console.log("[importShelfLifeFromSap] First eligible:", eligible[0]);
     }
