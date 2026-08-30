@@ -1596,19 +1596,22 @@ function ErstatningsCheckPage() {
 
   const toggleShelfLifeSort = (key: ShelfLifeSortKey, shiftKey = false) => {
     setShelfLifeSort((current) => {
-      const existing = current.find((s) => s.key === key);
-      if (existing) {
-        const newDirection = existing.direction === "asc" ? "desc" : "asc";
-        if (!shiftKey) {
-          return [{ key, direction: newDirection }];
-        }
-        return current.map((s) =>
-          s.key === key ? { key, direction: newDirection } : s,
-        );
+      const existingIndex = current.findIndex((s) => s.key === key);
+
+      if (existingIndex >= 0) {
+        // Column exists - toggle direction
+        const newDirection = current[existingIndex].direction === "asc" ? "desc" : "asc";
+        const updated = [...current];
+        updated[existingIndex] = { ...updated[existingIndex], direction: newDirection };
+        return updated;
       }
+
+      // Column doesn't exist - add with asc direction
       if (!shiftKey) {
+        // No shift key: only this column should be sorted
         return [{ key, direction: "asc" }];
       }
+      // Shift key: add to existing sort array
       return [...current, { key, direction: "asc" }];
     });
   };
