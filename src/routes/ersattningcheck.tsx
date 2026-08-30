@@ -645,14 +645,16 @@ function ErstatningsCheckPage() {
   const loadShelfLifeData = async () => {
     setIsLoading(true);
     try {
-      const [productsData, masterResult, deliveriesData] = await Promise.all([
+      const [productsData, masterData, deliveriesData] = await Promise.all([
         fetchAllRows(supabaseClient, "products", "id, sap_article_id, name, brand, category", {
           column: "store_id",
           value: activeStore.id,
         }),
-        supabase
-          .from("product_shelf_life")
-          .select("sap_article_id, shelf_lifetime_days, default_compensation_price_ore"),
+        fetchAllRows(
+          supabaseClient,
+          "product_shelf_life",
+          "sap_article_id, shelf_lifetime_days, default_compensation_price_ore",
+        ),
         fetchAllRows(
           supabaseClient,
           "store_product_deliveries",
@@ -662,10 +664,8 @@ function ErstatningsCheckPage() {
         ),
       ]);
 
-      if (masterResult.error) throw masterResult.error;
-
       const masterMap = new Map(
-        (masterResult.data ?? []).map((record: any) => [record.sap_article_id, record]),
+        (masterData ?? []).map((record: any) => [record.sap_article_id, record]),
       );
       const deliveriesByArticle = new Map<string, any[]>();
       for (const delivery of deliveriesData ?? []) {
@@ -1086,8 +1086,8 @@ function ErstatningsCheckPage() {
     try {
       const [
         deliveriesData,
-        { data: reclamationData, error: reclamationError },
-        { data: masterData, error: masterError },
+        reclamationResult,
+        masterData,
       ] = await Promise.all([
         fetchAllRows(
           supabaseClient,
@@ -1100,13 +1100,15 @@ function ErstatningsCheckPage() {
           .from("reclamations")
           .select("sap_article_id, status, created_at")
           .eq("store_id", activeStore.id),
-        supabase
-          .from("product_shelf_life")
-          .select("sap_article_id, shelf_lifetime_days, default_compensation_price_ore"),
+        fetchAllRows(
+          supabaseClient,
+          "product_shelf_life",
+          "sap_article_id, shelf_lifetime_days, default_compensation_price_ore",
+        ),
       ]);
       if (!deliveriesData) throw new Error("No delivery data returned");
-      if (reclamationError) throw reclamationError;
-      if (masterError) throw masterError;
+      if (reclamationResult?.error) throw reclamationResult.error;
+      const reclamationData = reclamationResult?.data ?? [];
       setDeliveryStatistics(
         (deliveriesData ?? []).map((row: any) => ({
           sap_article_id: row.sap_article_id,
@@ -2397,7 +2399,7 @@ function ErstatningsCheckPage() {
                                 className="h-8 w-28"
                               />
                             ) : (
-                              record.shelf_lifetime_days || "Ej angiven"
+                              record.shelf_lifetime_days > 0 ? record.shelf_lifetime_days : "Ej angiven"
                             )}
                           </TableCell>
                           <TableCell>
