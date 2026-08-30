@@ -760,11 +760,7 @@ function ErstatningsCheckPage() {
     }
 
     // Only update articles whose current value is "Ej angiven" (null/undefined — not yet set)
-    const eligible = shelfLifeRecords
-      .filter((record) => record.shelf_lifetime_days == null)
-      .filter((record) =>
-        productsToFetch.map((p) => p.sap_article_id).includes(record.sap_article_id),
-      );
+    const eligible = productsToFetch.filter((record) => record.shelf_lifetime_days == null);
 
     console.log("[importShelfLifeFromSap] eligible (shelf_lifetime_days == null):", eligible.length, "articles");
     if (eligible.length > 0) {
@@ -1512,7 +1508,11 @@ function ErstatningsCheckPage() {
 
   const getShelfLifeStatus = (record: ShelfLifeRecord) => {
     if (!record.arrival_date || !record.expiry_date) return "Datum saknas";
-    if (!record.shelf_lifetime_days || record.shelf_lifetime_days <= 0) {
+    if (
+      record.shelf_lifetime_days == null ||
+      Number.isNaN(record.shelf_lifetime_days) ||
+      record.shelf_lifetime_days <= 0
+    ) {
       return "Hållbarhet saknas";
     }
     return assessDelivery(record.arrival_date, record.expiry_date, record.shelf_lifetime_days)
@@ -1537,13 +1537,14 @@ function ErstatningsCheckPage() {
       .filter(({ record, status }) => {
         if (!search) return true;
         return [
+          record.sap_article_id,
           record.product_name,
           record.brand,
-          String(record.shelf_lifetime_days || ""),
+          String(record.shelf_lifetime_days ?? ""),
           record.expiry_date,
           record.arrival_date,
           status,
-        ].some((value) => String(value).toLocaleLowerCase("sv").includes(search));
+        ].some((value) => String(value ?? "").toLocaleLowerCase("sv").includes(search));
       })
       .filter(({ record }) => {
         const recordCategory = String(record.category ?? "").trim();
@@ -1560,8 +1561,8 @@ function ErstatningsCheckPage() {
       });
 
     filtered.sort((a, b) => {
-      const leftMissing = (a.record.shelf_lifetime_days == null || a.record.shelf_lifetime_days <= 0) ? 0 : 1;
-      const rightMissing = (b.record.shelf_lifetime_days == null || b.record.shelf_lifetime_days <= 0) ? 0 : 1;
+      const leftMissing = (a.record.shelf_lifetime_days == null || Number.isNaN(a.record.shelf_lifetime_days) || a.record.shelf_lifetime_days <= 0) ? 0 : 1;
+      const rightMissing = (b.record.shelf_lifetime_days == null || Number.isNaN(b.record.shelf_lifetime_days) || b.record.shelf_lifetime_days <= 0) ? 0 : 1;
       if (leftMissing !== rightMissing) return leftMissing - rightMissing;
       for (const sort of shelfLifeSort) {
         const leftRaw = sort.key === "status" ? a.status : (a.record[sort.key] ?? "");
