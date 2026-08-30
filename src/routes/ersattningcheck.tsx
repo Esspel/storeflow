@@ -1385,7 +1385,8 @@ function ErstatningsCheckPage() {
       );
       if (upsertErr) throw upsertErr;
 
-      await loadShelfLifeData();
+      // Do NOT reload shelfLifeData here - it would overwrite the user's edit
+      // User must click "Reload" button to sync with database
     } catch (error) {
       console.error("Error saving shelf life:", error);
       setImportError("Kunde inte spara hållbarhetsdata.");
@@ -2188,6 +2189,16 @@ function ErstatningsCheckPage() {
                   Rensa sortering
                 </Button>
               )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => loadShelfLifeData()}
+                disabled={isLoading}
+                title="Ladda om tabellen från databasen"
+              >
+                ⟳ Reload
+              </Button>
               {sapExtensionChecked && sapExtensionInstalled && (
                 <Button
                   type="button"
