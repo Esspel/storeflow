@@ -1,5 +1,8 @@
 import type { Section2D } from "@/components/store-map-2d";
 
+// Re-export SpatialMap from posemesh/types for convenience
+export type { SpatialMap } from "@/lib/posemesh/types";
+
 export type WizardStep = "portals" | "mapping" | "products" | "complete" | "qr";
 
 export interface PlacedMarker {

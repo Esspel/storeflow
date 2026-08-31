@@ -13,7 +13,6 @@ import {
   MapPin,
   ArrowUpRight,
   Target,
-  Home,
   RotateCw,
   Minimize,
   Package,
@@ -23,7 +22,6 @@ import {
   Route as RouteIcon,
   Box as CubeIcon,
   Smartphone,
-  QrCode,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -113,10 +111,6 @@ function SpatialNavigationPage() {
             <h1 className="text-2xl font-bold">3D Butiksvy</h1>
             <p className="text-muted-foreground">Navigera i butiken med 3D-modell eller AR</p>
           </div>
-          <Button variant="outline" onClick={() => navigate({ to: "/" })}>
-            <Home className="h-4 w-4 mr-2" />
-            Tillbaka
-          </Button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -158,13 +152,6 @@ function SpatialNavigationPage() {
               <Button variant={showAR ? "default" : "outline"} onClick={() => setShowAR(!showAR)}>
                 <Smartphone className="h-4 w-4 mr-2" />
                 AR
-              </Button>
-              <Button variant="outline" onClick={() => {
-                // Navigate to QR generator for this store
-                navigate({ to: "/qr-generator" });
-              }}>
-                <QrCode className="h-4 w-4 mr-2" />
-                QR-kod
               </Button>
             </div>
           </div>

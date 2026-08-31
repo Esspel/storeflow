@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import type { AukiPosemeshNetwork } from "@/lib/posemesh/auki-network";
-import type { SpatialMap } from "@/lib/types/digital-twin";
+import type { SpatialMap } from "@/types/digital-twin";
 import { getSpatialMap } from "@/lib/digital-twin";
 
 interface Pose {

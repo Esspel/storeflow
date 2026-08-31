@@ -1677,6 +1677,7 @@ function ErstatningsCheckPage() {
           // Empty/missing dates should sort to bottom, dates with values sort properly
           const hasLeft = !!leftRaw && !isNaN(leftDate) && leftDate > 0;
           const hasRight = !!rightRaw && !isNaN(rightDate) && rightDate > 0;
+          let comparison: number;
           if (hasLeft && !hasRight) comparison = 1; // Has date comes after missing
           else if (!hasLeft && hasRight) comparison = -1;
           else if (!hasLeft && !hasRight) comparison = 0;

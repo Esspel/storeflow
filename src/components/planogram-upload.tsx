@@ -147,7 +147,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
       const validation: ParsedPlanogramValidation = {
         valid:
           parsedWithImages.zones.length > 0 &&
-          parsedWithImages.zones.some((z) => z.shelves.length > 0),
+          parsedWithImages.zones.some((z) => (z.shelves?.length ?? 0) > 0),
         errors: parsedWithImages.zones.length === 0 ? ["Inga zoner hittades i PDF"] : [],
       };
 
@@ -486,7 +486,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                       <span>
                         Hyllor:{" "}
                         <span className="font-medium">
-                          {uploadedFile.parsed.zones.reduce((sum, z) => sum + z.shelves.length, 0)}
+                          {uploadedFile.parsed.zones.reduce((sum, z) => sum + (z.shelves?.length ?? 0), 0)}
                         </span>
                       </span>
                       <span>
@@ -494,7 +494,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                         <span className="font-medium">
                           {uploadedFile.parsed.zones.reduce(
                             (sum, z) =>
-                              sum + z.shelves.reduce((s, shelf) => s + shelf.products.length, 0),
+                              sum + (z.shelves?.reduce((s, shelf) => s + (shelf.products?.length ?? 0), 0) ?? 0),
                             0,
                           )}
                         </span>
@@ -647,7 +647,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                     <CardHeader>
                       <CardTitle>
                         Hyllayout (
-                        {showPreview.parsed.zones.reduce((sum, z) => sum + z.shelves.length, 0)}{" "}
+                        {showPreview.parsed.zones.reduce((sum, z) => sum + (z.shelves?.length ?? 0), 0)}{" "}
                         hyllor)
                       </CardTitle>
                     </CardHeader>
@@ -658,13 +658,13 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                             <div className="flex items-center justify-between mb-2">
                               <span className="font-medium">{zone.name}</span>
                               <span className="text-xs text-gray-500">
-                                {zone.shelves.length} hyllor,{" "}
-                                {zone.shelves.reduce((s, sh) => s + sh.products.length, 0)}{" "}
+                                {(zone.shelves?.length ?? 0)} hyllor,{" "}
+                                {(zone.shelves?.reduce((s, sh) => s + (sh.products?.length ?? 0), 0) ?? 0)}{" "}
                                 produkter
                               </span>
                             </div>
                             <div className="space-y-2">
-                              {zone.shelves.map((shelf) => (
+                              {(zone.shelves ?? []).map((shelf) => (
                                 <div key={shelf.id} className="border-t pt-2">
                                   <div className="flex items-center gap-4 text-xs text-gray-500 mb-1">
                                     <span>
