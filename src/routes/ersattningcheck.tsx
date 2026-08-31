@@ -140,8 +140,6 @@ type ReplacementStatistics = {
   categoryCounts: Record<string, number>;
   openCount: number;
   averageApprovedValue: number | null;
-  statisticsPrevYear?: number | null;
-  totalStoreCount?: number;
 };
 
 type WeeklyTask = {
@@ -338,17 +336,13 @@ function ErstatningsCheckPage() {
   );
   const [statisticsView, setStatisticsView] = useState<"value" | "count">("value");
   const [totalProductCount, setTotalProductCount] = useState(0);
-  const [statisticsPeriod, setStatisticsPeriod] = useState<"ytd" | "last30" | "last12" | "alltid">("ytd");
-  const [statisticsPrevYear, setStatisticsPrevYear] = useState<number | null>(null);
-  type StatisticsSortKey = "returnedValue" | "pendingValue" | "approvalRate" | "totalCount" | "averageApprovedValue";
-  const [statisticsSortBy, setStatisticsSortBy] = useState<StatisticsSortKey>("returnedValue");
-  const [statisticsSortDir, setStatisticsSortDir] = useState<"asc" | "desc">("desc");
+  const [statisticsPeriod, setStatisticsPeriod] = useState<"ytd" | "last30" | "last12">("ytd");
   const [categoryMappings, setCategoryMappings] = useState<DeliveryCategoryMapping[]>([]);
   const [deliveryCategories, setDeliveryCategories] = useState<string[]>([]);
   const [mappingLoading, setMappingLoading] = useState(false);
   const [hiddenCategories, setHiddenCategories] = useState<string[]>([])
+  const [globalHiddenCategories, setGlobalHiddenCategories] = useState<string[]>([])
   const [testFixtureSapId, setTestFixtureSapId] = useState<string | null>(null);
-  const [totalStoreCount, setTotalStoreCount] = useState(0);
   const [shelfLifeSearch, setShelfLifeSearch] = useState("");
   const [shelfLifeSort, setShelfLifeSort] = useState<
     Array<{
@@ -393,12 +387,19 @@ function ErstatningsCheckPage() {
   useEffect(() => {
     if (!activeStore?.id) return;
     void (async () => {
-      const localData = await supabaseClient
-        .from("store_hidden_categories")
-        .select("category")
-        .eq("store_id", activeStore.id)
-        .eq("is_hidden", true);
+      const [localData, globalData] = await Promise.all([
+        supabaseClient
+          .from("store_hidden_categories")
+          .select("category")
+          .eq("store_id", activeStore.id)
+          .eq("is_hidden", true),
+        supabaseClient
+          .from("global_hidden_categories")
+          .select("category")
+          .eq("is_hidden", true),
+      ]);
       if (localData.data) setHiddenCategories(localData.data.map((row: any) => String(row.category)));
+      if (globalData.data) setGlobalHiddenCategories(globalData.data.map((row: any) => String(row.category)));
     })();
   }, [activeStore?.id]);
 
@@ -1129,14 +1130,11 @@ function ErstatningsCheckPage() {
 
   const loadDeliveryStatistics = async (period = statisticsPeriod) => {
     setIsLoading(true);
-    const now = new Date();
     try {
       const [
         deliveriesData,
         reclamationResult,
         masterData,
-        previousYearReclamations,
-        totalStoreCountResult,
       ] = await Promise.all([
         fetchAllRows(
           supabaseClient,
@@ -1154,24 +1152,10 @@ function ErstatningsCheckPage() {
           "product_shelf_life",
           "sap_article_id, shelf_lifetime_days, default_compensation_price_ore",
         ),
-        // Previous year reclamations for comparison
-        supabase
-          .from("reclamations")
-          .select("sap_article_id, status, created_at")
-          .eq("store_id", activeStore.id)
-          .gte("created_at", `${new Date(now.getFullYear() - 1, 0, 1).toISOString()}`)
-          .lt("created_at", `${new Date(now.getFullYear(), 0, 1).toISOString()}`),
-        // Total active store count
-        supabase
-          .from("stores")
-          .select("id", { count: "exact" })
-          .eq("is_active", true),
       ]);
       if (!deliveriesData) throw new Error("No delivery data returned");
       if (reclamationResult?.error) throw reclamationResult.error;
       const reclamationData = reclamationResult?.data ?? [];
-      const previousYearReclamationsData = previousYearReclamations?.data ?? [];
-      const totalStoreCount = totalStoreCountResult?.count ?? 0;
       setDeliveryStatistics(
         (deliveriesData ?? []).map((row: any) => ({
           sap_article_id: row.sap_article_id,
@@ -1183,23 +1167,12 @@ function ErstatningsCheckPage() {
           category: row.category || "Okänd",
         })),
       );
+      const now = new Date();
       const periodStart = new Date(now.getFullYear(), 0, 1);
       if (period === "last30") periodStart.setDate(now.getDate() - 30);
       if (period === "last12") periodStart.setMonth(now.getMonth() - 11, 1);
-      // "alltid" — no period filter, include all historical data
-      // Compute previous year stats for comparison (same period shifted back one year)
-      const prevYearStart = new Date(now.getFullYear() - 1, 0, 1);
-      const prevYearEnd = new Date(now.getFullYear(), 0, 1);
-      const prevPeriodStart = new Date(now.getFullYear() - 1, 0, 1);
-      if (period === "last30") prevPeriodStart.setDate(prevPeriodStart.getDate() - 30);
-      if (period === "last12") prevPeriodStart.setMonth(prevPeriodStart.getMonth() - 11, 1);
-      const reclamationsPrevYear = (reclamationData ?? []).filter((row: any) =>
-        period === "alltid"
-          ? new Date(row.created_at) >= prevYearStart && new Date(row.created_at) < prevYearEnd
-          : new Date(row.created_at) >= prevPeriodStart && new Date(row.created_at) < prevYearEnd,
-      );
-      const reclamationsForPeriod = (reclamationData ?? []).filter((row: any) =>
-        period === "alltid" ? true : new Date(row.created_at) >= periodStart,
+      const reclamationsForPeriod = (reclamationData ?? []).filter(
+        (row: any) => new Date(row.created_at) >= periodStart,
       );
       const deliveriesByArticle = new Map<string, any[]>();
       for (const delivery of deliveriesData ?? []) {
@@ -1231,18 +1204,6 @@ function ErstatningsCheckPage() {
       const pendingValue = reclamationsForPeriod
         .filter((row: any) => !["Löst", "Nekad"].includes(row.status))
         .reduce((sum: number, row: any) => sum + getReclamationAmount(row), 0);
-      const previousYearReturnedValue = reclamationsPrevYear
-        .filter((row: any) => row.status === "Löst")
-        .reduce((sum: number, row: any) => sum + getReclamationAmount(row), 0);
-      const previousYearPendingValue = reclamationsPrevYear
-        .filter((row: any) => !["Löst", "Nekad"].includes(row.status))
-        .reduce((sum: number, row: any) => sum + getReclamationAmount(row), 0);
-      const previousYearApprovedCount = reclamationsPrevYear.filter(
-        (row: any) => row.status === "Löst",
-      ).length;
-      const previousYearDecidedCount = reclamationsPrevYear.filter((row: any) =>
-        ["Löst", "Nekad"].includes(row.status),
-      ).length;
       const monthly = (() => {
         if (period === "last30") {
           const now = new Date();
@@ -1384,11 +1345,7 @@ function ErstatningsCheckPage() {
           (row: any) => !["Löst", "Nekad"].includes(row.status),
         ).length,
         averageApprovedValue: approvedCount > 0 ? returnedValue / approvedCount : null,
-        statisticsPrevYear,
-        totalStoreCount,
       });
-      setTotalStoreCount(totalStoreCount);
-      setStatisticsPrevYear(previousYearReturnedValue);
       setStep("statistics");
     } catch (error) {
       console.error("Error loading delivery statistics:", error);
@@ -1802,22 +1759,44 @@ function ErstatningsCheckPage() {
     setMappingLoading(true);
     try {
       const isLocal = hiddenCategories.some((c) => c.toLowerCase() === category.toLowerCase());
-      const nextHidden = !isLocal;
+      const isGlobal = globalHiddenCategories.some((c) => c.toLowerCase() === category.toLowerCase());
+      const nextHidden = !(isLocal || isGlobal);
 
       if (nextHidden) {
-        // Add to local store only
-        await supabase.from("store_hidden_categories").upsert(
-          { store_id: activeStore.id, category, is_hidden: true, updated_at: new Date().toISOString() },
-          { onConflict: "store_id,category" }
-        );
-        setHiddenCategories((current) => [...current, category]);
+        // Determine scope: if category is already in store-specific list toggle local, else global
+        if (isLocal) {
+          await supabase.from("store_hidden_categories").upsert(
+            { store_id: activeStore.id, category, is_hidden: true, updated_at: new Date().toISOString() },
+            { onConflict: "store_id,category" }
+          );
+          // If already local, no change needed
+        } else {
+          // Add to global (visible to all stores)
+          const { error } = await supabase.from("global_hidden_categories").upsert(
+            { category, is_hidden: true, updated_at: new Date().toISOString() },
+            { onConflict: "category" }
+          );
+          if (error) throw error;
+          setGlobalHiddenCategories((current) => [...current, category]);
+          // Remove from local if present
+          setHiddenCategories((current) => current.filter((c) => c.toLowerCase() !== category.toLowerCase()));
+        }
       } else {
-        // Remove from local
-        await supabase.from("store_hidden_categories").upsert(
-          { store_id: activeStore.id, category, is_hidden: false, updated_at: new Date().toISOString() },
-          { onConflict: "store_id,category" }
-        );
-        setHiddenCategories((current) => current.filter((c) => c.toLowerCase() !== category.toLowerCase()));
+        // Remove from whichever scope it's in
+        if (isLocal) {
+          await supabase.from("store_hidden_categories").upsert(
+            { store_id: activeStore.id, category, is_hidden: false, updated_at: new Date().toISOString() },
+            { onConflict: "store_id,category" }
+          );
+          setHiddenCategories((current) => current.filter((c) => c.toLowerCase() !== category.toLowerCase()));
+        }
+        if (isGlobal) {
+          await supabase.from("global_hidden_categories").upsert(
+            { category, is_hidden: false, updated_at: new Date().toISOString() },
+            { onConflict: "category" }
+          );
+          setGlobalHiddenCategories((current) => current.filter((c) => c.toLowerCase() !== category.toLowerCase()));
+        }
       }
     } catch (error) {
       console.error("Error toggling hidden category:", error);
@@ -2700,7 +2679,6 @@ function ErstatningsCheckPage() {
                   <SelectItem value="ytd">Hittills i år</SelectItem>
                   <SelectItem value="last30">Senaste 30 dagarna</SelectItem>
                   <SelectItem value="last12">Senaste 12 månaderna</SelectItem>
-                  <SelectItem value="alltid">Alltid</SelectItem>
                 </SelectContent>
               </Select>
               <Button
@@ -2719,11 +2697,60 @@ function ErstatningsCheckPage() {
 
           {replacementStatistics && (
             <>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Card className="border-emerald-200 bg-emerald-50/70">
+                  <CardHeader className="pb-2">
+                    <CardDescription>ÅTERFÖRT VÄRDE</CardDescription>
+                    <CardTitle className="text-3xl text-emerald-700">
+                      {formatSek(replacementStatistics.returnedValue)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    perioden pågår
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>EJ FÄRDIGA REKLAMATIONERS VÄRDE</CardDescription>
+                    <CardTitle className="text-3xl">
+                      {formatSek(replacementStatistics.pendingValue)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    {replacementStatistics.sentCount} skickade reklamationer
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>GODKÄNNANDEGRAD</CardDescription>
+                    <CardTitle className="text-3xl">
+                      {replacementStatistics.approvalRate}%
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    {replacementStatistics.approvedCount} av {replacementStatistics.decidedCount}{" "}
+                    avgjorda
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>SNITT PER GODKÄND</CardDescription>
+                    <CardTitle className="text-3xl">
+                      {formatSek(replacementStatistics.averageApprovedValue)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    {replacementStatistics.totalCount} reklamationer totalt
+                  </CardContent>
+                </Card>
+              </div>
+
+              <h3 className="text-xl font-semibold tracking-tight">Min butik</h3>
               <div className="grid gap-4 md:grid-cols-3">
                 <Card className="border-emerald-200 bg-emerald-50/70">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardDescription className="text-base">ÅTERVUNNET VÄRDE</CardDescription>
+                      <CardDescription className="text-base">ÅTERFÖRT VÄRDE</CardDescription>
                       <Coins className="h-5 w-5 text-emerald-600" />
                     </div>
                     <CardTitle className="text-3xl text-emerald-700">
@@ -2732,33 +2759,12 @@ function ErstatningsCheckPage() {
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground">
                     Godkända reklamationer
-                    {statisticsPrevYear !== null && (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        (jämför förra året: {formatSek(statisticsPrevYear)})
-                      </span>
-                    )}
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardDescription className="text-base">SNITT PER BUTIK</CardDescription>
-                      <Store className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <CardTitle className="text-3xl">
-                      {totalStoreCount > 0
-                        ? formatSek(replacementStatistics.returnedValue / totalStoreCount)
-                        : formatSek(0)}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground">
-                    {totalStoreCount} aktiva butiker
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardDescription className="text-base">VÄRDE I PIPELINE</CardDescription>
+                      <CardDescription className="text-base">EJ FÄRDIGA REKLAMATIONERS VÄRDE</CardDescription>
                       <TrendingUp className="h-5 w-5 text-blue-600" />
                     </div>
                     <CardTitle className="text-3xl">
@@ -2766,13 +2772,62 @@ function ErstatningsCheckPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground">
-                    {replacementStatistics.sentCount} väntar på beslut
-                    {statisticsPrevYear !== null && (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        (jämför förra året: {formatSek(statisticsPrevYear)})
-                      </span>
-                    )}
+                    {replacementStatistics.sentCount} skickade
                   </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardDescription className="text-base">GODKÄNNANDEGRAD</CardDescription>
+                      <CardTitle className="text-3xl">{replacementStatistics.approvalRate}%</CardTitle>
+                    </div>
+                    <CardContent className="text-sm text-muted-foreground">
+                      {replacementStatistics.approvedCount} av {replacementStatistics.decidedCount} avgjorda
+                    </CardContent>
+                  </CardHeader>
+                </Card>
+              </div>
+
+              <h3 className="text-xl font-semibold tracking-tight">Totalt för alla butiker</h3>
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card className="border-emerald-200 bg-emerald-50/70">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardDescription className="text-base">ÅTERFÖRT VÄRDE</CardDescription>
+                      <Coins className="h-5 w-5 text-emerald-600" />
+                    </div>
+                    <CardTitle className="text-3xl text-emerald-700">
+                      {formatSek(replacementStatistics.returnedValue)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    Godkända reklamationer
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardDescription className="text-base">EJ FÄRDIGA REKLAMATIONERS VÄRDE</CardDescription>
+                      <TrendingUp className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <CardTitle className="text-3xl">
+                      {formatSek(replacementStatistics.pendingValue)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    {replacementStatistics.sentCount} skickade
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardDescription className="text-base">GODKÄNNANDEGRAD</CardDescription>
+                      <CardTitle className="text-3xl">{replacementStatistics.approvalRate}%</CardTitle>
+                    </div>
+                    <CardContent className="text-sm text-muted-foreground">
+                      {replacementStatistics.approvedCount} av {replacementStatistics.decidedCount} avgjorda
+                    </CardContent>
+                  </CardHeader>
                 </Card>
               </div>
 
@@ -2796,22 +2851,6 @@ function ErstatningsCheckPage() {
                       onClick={() => setStatisticsView("count")}
                     >
                       Antal
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => setStatisticsSortDir("desc")}
-                      variant={statisticsSortBy === "returnedValue" && statisticsSortDir === "desc" ? "default" : "outline"}
-                    >
-                      Värde ↓
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => setStatisticsSortDir("asc")}
-                      variant={statisticsSortBy === "returnedValue" && statisticsSortDir === "asc" ? "default" : "outline"}
-                    >
-                      Värde ↑
                     </Button>
                   </div>
                 </CardHeader>
@@ -2839,12 +2878,10 @@ function ErstatningsCheckPage() {
                   <p className="text-sm text-muted-foreground">
                     Vald period:{" "}
                     {statisticsPeriod === "ytd"
-                      ? "Hittills iår"
+                      ? "Hittills i år"
                       : statisticsPeriod === "last30"
                         ? "Senaste 30 dagarna"
-                        : statisticsPeriod === "last12"
-                          ? "Senaste 12 månaderna"
-                          : "Alltid"}{" "}
+                        : "Senaste 12 månaderna"}{" "}
                     - pågående period (ej hel)
                   </p>
                 </CardContent>
