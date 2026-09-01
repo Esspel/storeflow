@@ -97,6 +97,8 @@ type ShelfLifeRecord = {
   product_url: string | null;
   delivery_status: string;
   category: string;
+  sap_data_missing?: boolean;
+  next_sap_check?: string | null;
 };
 
 type DeliveryStatistic = {
@@ -140,6 +142,16 @@ type ReplacementStatistics = {
   categoryCounts: Record<string, number>;
   openCount: number;
   averageApprovedValue: number | null;
+  allStoresReturnedValue: number;
+  allStoresPendingValue: number;
+  allStoresSentCount: number;
+  allStoresApprovalRate: number;
+  allStoresDecidedCount: number;
+  allStoresApprovedCount: number;
+  allStoresTotalCount: number;
+  allStoresMonthly: Array<{ month: string; value: number; count: number }>;
+  allStoresStoreCount: number;
+  allStoresAverageApprovedValue: number | null;
 };
 
 type WeeklyTask = {
@@ -340,8 +352,8 @@ function ErstatningsCheckPage() {
   const [categoryMappings, setCategoryMappings] = useState<DeliveryCategoryMapping[]>([]);
   const [deliveryCategories, setDeliveryCategories] = useState<string[]>([]);
   const [mappingLoading, setMappingLoading] = useState(false);
-  const [hiddenCategories, setHiddenCategories] = useState<string[]>([])
-  const [globalHiddenCategories, setGlobalHiddenCategories] = useState<string[]>([])
+  const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
+  const [globalHiddenCategories, setGlobalHiddenCategories] = useState<string[]>([]);
   const [testFixtureSapId, setTestFixtureSapId] = useState<string | null>(null);
   const [shelfLifeSearch, setShelfLifeSearch] = useState("");
   const [shelfLifeSort, setShelfLifeSort] = useState<
@@ -351,7 +363,7 @@ function ErstatningsCheckPage() {
     }>
   >([]);
   const [hideOkRecords, setHideOkRecords] = useState(false);
-    const [shelfLifeScrollTop, setShelfLifeScrollTop] = useState(0);
+  const [shelfLifeScrollTop, setShelfLifeScrollTop] = useState(0);
   const [importDates, setImportDates] = useState<string[]>([]);
   const [sapExtensionInstalled, setSapExtensionInstalled] = useState(false);
   const [sapExtensionChecked, setSapExtensionChecked] = useState(false);
@@ -393,13 +405,12 @@ function ErstatningsCheckPage() {
           .select("category")
           .eq("store_id", activeStore.id)
           .eq("is_hidden", true),
-        supabaseClient
-          .from("global_hidden_categories")
-          .select("category")
-          .eq("is_hidden", true),
+        supabaseClient.from("global_hidden_categories").select("category").eq("is_hidden", true),
       ]);
-      if (localData.data) setHiddenCategories(localData.data.map((row: any) => String(row.category)));
-      if (globalData.data) setGlobalHiddenCategories(globalData.data.map((row: any) => String(row.category)));
+      if (localData.data)
+        setHiddenCategories(localData.data.map((row: any) => String(row.category)));
+      if (globalData.data)
+        setGlobalHiddenCategories(globalData.data.map((row: any) => String(row.category)));
     })();
   }, [activeStore?.id]);
 
@@ -700,7 +711,7 @@ function ErstatningsCheckPage() {
         fetchAllRows(
           supabaseClient,
           "product_shelf_life",
-          "sap_article_id, shelf_lifetime_days, default_compensation_price_ore",
+          "sap_article_id, shelf_lifetime_days, default_compensation_price_ore, sap_data_missing, next_sap_check",
         ),
         fetchAllRows(
           supabaseClient,
@@ -760,6 +771,8 @@ function ErstatningsCheckPage() {
             created_at: product.created_at ?? new Date().toISOString(),
             updated_at: product.updated_at ?? new Date().toISOString(),
             category: product.category ?? delivery.category ?? "",
+            sap_data_missing: master.sap_data_missing ?? false,
+            next_sap_check: master.next_sap_check ?? null,
           };
         }),
       );
@@ -789,56 +802,63 @@ function ErstatningsCheckPage() {
       return;
     }
 
-    // Use Chrome Extension proxy when available (bypasses CORS / PNA / SameSite)
     const useProxy = sapExtensionInstalled;
-    console.log("[importShelfLifeFromSap] useProxy:", useProxy, "sapExtensionInstalled:", sapExtensionInstalled);
+    console.log(
+      "[importShelfLifeFromSap] useProxy:",
+      useProxy,
+      "sapExtensionInstalled:",
+      sapExtensionInstalled,
+    );
 
-    // Get all articles from shelfLifeRecords that need to be fetched from SAP
-    // Includes ALL records where shelf_lifetime_days is null/undefined/NaN/<=0
-    // BUT excludes articles that are ALREADY in product_shelf_life table
-    // (some records have shelf_lifetime_days=0 which means "data already fetched")
+    const now = new Date();
 
-    // Step 1: Get all sap_article_ids that we want to skip (they already have data)
-    let existingSapIds = new Set<string>();
-    if (activeStore) {
-      const { data: existingIds } = await supabase
-        .from("product_shelf_life")
-        .select("sap_article_id")
-        .eq("store_id", activeStore.id); // Only for THIS store
-      existingSapIds = new Set(existingIds?.map((r: any) => r.sap_article_id) ?? []);
-      console.log("[importShelfLifeFromSap] Already have shelf_lifetime_days for:", existingSapIds.size, "articles");
-    }
+    const { data: existingShelfLife } = await supabase
+      .from("product_shelf_life")
+      .select("sap_article_id, shelf_lifetime_days, next_sap_check, sap_data_missing")
+      .eq("store_id", activeStore.id);
 
-    // Step 2: Filter shelfLifeRecords for eligible articles
+    const existingMap = new Map(
+      (existingShelfLife ?? []).map((r: any) => [
+        r.sap_article_id,
+        {
+          shelf_lifetime_days: r.shelf_lifetime_days,
+          next_sap_check: r.next_sap_check,
+          sap_data_missing: r.sap_data_missing ?? false,
+        },
+      ]),
+    );
+
     const eligible = shelfLifeRecords.filter((record) => {
-      // Skip if already have data in product_shelf_life
-      if (existingSapIds.has(record.sap_article_id)) return false;
-
-      const status = getShelfLifeStatus(record);
-      return (status === "Hållbarhet saknas" || status === "Datum saknas") &&
-             (record.shelf_lifetime_days == null ||
-              Number.isNaN(record.shelf_lifetime_days) ||
-              record.shelf_lifetime_days <= 0);
+      const existing = existingMap.get(record.sap_article_id);
+      const nextCheck = existing?.next_sap_check;
+      if (nextCheck && new Date(nextCheck) > now) return false;
+      return Boolean(record.sap_article_id);
     });
 
-    console.log("[importShelfLifeFromSap] eligible (not in product_shelf_life):", eligible.length, "articles");
+    console.log(
+      "[importShelfLifeFromSap] eligible (cooldown expired or not set):",
+      eligible.length,
+      "articles",
+    );
     if (eligible.length > 0) {
       console.log("[importShelfLifeFromSap] First eligible:", eligible[0]);
     }
 
     if (eligible.length === 0) {
-      toast.info("Inga artiklar med 'Ej angiven' hållbarhet att uppdatera.");
+      toast.info("Inga artiklar att uppdatera från SAP just nu.");
       return;
     }
 
     setIsLoading(true);
     let successCount = 0;
     let errorCount = 0;
+    let firstTimeCount = 0;
+    let changedCount = 0;
+    let missingInSapCount = 0;
 
     for (let i = 0; i < eligible.length; i++) {
       const record = eligible[i];
       try {
-        // Fetch via proxy when extension is installed
         const sapData = useProxy
           ? await (async () => {
               console.log(`[SAP Proxy] Fetching for article ${record.sap_article_id}`);
@@ -849,7 +869,10 @@ function ErstatningsCheckPage() {
               );
               console.log(`[SAP Proxy] Response for ${record.sap_article_id}:`, proxyResponse);
               if (!proxyResponse.success) {
-                console.error(`[SAP Proxy] Failed for ${record.sap_article_id}:`, proxyResponse.error);
+                console.error(
+                  `[SAP Proxy] Failed for ${record.sap_article_id}:`,
+                  proxyResponse.error,
+                );
                 return null;
               }
               const json = proxyResponse.data ?? "";
@@ -857,12 +880,19 @@ function ErstatningsCheckPage() {
                 console.error(`[SAP Proxy] No JSON data for ${record.sap_article_id}`);
                 return null;
               }
-              console.log(`[SAP Proxy] Raw JSON for ${record.sap_article_id}:`, json.substring(0, 200));
+              console.log(
+                `[SAP Proxy] Raw JSON for ${record.sap_article_id}:`,
+                json.substring(0, 200),
+              );
               let parsed;
               try {
                 parsed = JSON.parse(json);
               } catch (e) {
-                console.error(`[SAP Proxy] JSON parse error for ${record.sap_article_id}:`, e, json.substring(0, 200));
+                console.error(
+                  `[SAP Proxy] JSON parse error for ${record.sap_article_id}:`,
+                  e,
+                  json.substring(0, 200),
+                );
                 return null;
               }
               const result = parsed.d || null;
@@ -880,13 +910,40 @@ function ErstatningsCheckPage() {
         }
 
         const shelfLifeDays = parseInt(sapData.RemainingShelfLifeInDays, 10);
-        const now = new Date().toISOString();
+        const hasValidSapData = Number.isFinite(shelfLifeDays) && shelfLifeDays > 0;
+        const updatedAt = new Date().toISOString();
+
+        const existing = existingMap.get(record.sap_article_id);
+        const isFirstTime =
+          !existing ||
+          existing.shelf_lifetime_days == null ||
+          Number.isNaN(existing.shelf_lifetime_days) ||
+          existing.shelf_lifetime_days <= 0;
+        const hasChanged =
+          existing && hasValidSapData && existing.shelf_lifetime_days !== shelfLifeDays;
+
+        if (isFirstTime) firstTimeCount += 1;
+        if (hasChanged) changedCount += 1;
+        if (!hasValidSapData) missingInSapCount += 1;
+
+        let cooldownDays: number;
+        if (hasValidSapData) {
+          cooldownDays = Math.floor(Math.random() * (60 - 14 + 1)) + 14;
+        } else {
+          cooldownDays = Math.floor(Math.random() * (90 - 60 + 1)) + 60;
+        }
+
+        const nextSapCheck = new Date();
+        nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
 
         const { error } = await supabase.from("product_shelf_life").upsert(
           {
+            store_id: activeStore.id,
             sap_article_id: record.sap_article_id,
-            shelf_lifetime_days: Number.isFinite(shelfLifeDays) ? shelfLifeDays : 0,
-            updated_at: new Date().toISOString(),
+            shelf_lifetime_days: hasValidSapData ? shelfLifeDays : 0,
+            sap_data_missing: !hasValidSapData,
+            next_sap_check: nextSapCheck.toISOString(),
+            updated_at: updatedAt,
           },
           { onConflict: "sap_article_id" },
         );
@@ -903,7 +960,6 @@ function ErstatningsCheckPage() {
         errorCount += 1;
       }
 
-      // Small interval to avoid rate limits (10ms)
       if (i < eligible.length - 1) {
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
@@ -915,7 +971,11 @@ function ErstatningsCheckPage() {
 
     await loadShelfLifeData();
     if (successCount > 0) {
-      toast.success(`Hämtade hållbarhetsdata för ${successCount} artiklar.`);
+      const parts = [`Hämtade hållbarhetsdata för ${successCount} artiklar.`];
+      if (firstTimeCount > 0) parts.push(`${firstTimeCount} nya.`);
+      if (changedCount > 0) parts.push(`${changedCount} uppdaterade.`);
+      if (missingInSapCount > 0) parts.push(`${missingInSapCount} saknades i SAP.`);
+      toast.success(parts.join(" "));
     }
     if (errorCount > 0) {
       toast.error(`Kunde inte hämta ${errorCount} artiklar (får fel från SAP).`);
@@ -1039,12 +1099,17 @@ function ErstatningsCheckPage() {
       });
       if (deliveryError) throw deliveryError;
 
-      const { error: shelfLifeError } = await supabase
-        .from("product_shelf_life")
-        .upsert(
-          { sap_article_id: sapArticleId, shelf_lifetime_days: 365 },
-          { onConflict: "sap_article_id" },
-        );
+      const { error: shelfLifeError } = await supabase.from("product_shelf_life").upsert(
+        {
+          store_id: activeStore.id,
+          sap_article_id: sapArticleId,
+          shelf_lifetime_days: 365,
+          sap_data_missing: false,
+          next_sap_check: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "sap_article_id" },
+      );
       if (shelfLifeError) throw shelfLifeError;
 
       if (includeReclamation) {
@@ -1135,6 +1200,9 @@ function ErstatningsCheckPage() {
         deliveriesData,
         reclamationResult,
         masterData,
+        storesWithProductsResult,
+        allReclamationsResult,
+        allDeliveriesData,
       ] = await Promise.all([
         fetchAllRows(
           supabaseClient,
@@ -1151,6 +1219,15 @@ function ErstatningsCheckPage() {
           supabaseClient,
           "product_shelf_life",
           "sap_article_id, shelf_lifetime_days, default_compensation_price_ore",
+        ),
+        supabase.from("products").select("store_id").not("store_id", "is", null),
+        supabase.from("reclamations").select("*").not("store_id", "is", null),
+        fetchAllRows(
+          supabaseClient,
+          "store_product_deliveries",
+          "sap_article_id, product_name, brand, category, total_price, arrival_date, best_before_date, status, store_id",
+          undefined,
+          { column: "arrival_date", ascending: false },
         ),
       ]);
       if (!deliveriesData) throw new Error("No delivery data returned");
@@ -1179,6 +1256,12 @@ function ErstatningsCheckPage() {
         const deliveries = deliveriesByArticle.get(delivery.sap_article_id) ?? [];
         deliveries.push(delivery);
         deliveriesByArticle.set(delivery.sap_article_id, deliveries);
+      }
+      const allDeliveriesByArticle = new Map<string, any[]>();
+      for (const delivery of allDeliveriesData ?? []) {
+        const deliveries = allDeliveriesByArticle.get(delivery.sap_article_id) ?? [];
+        deliveries.push(delivery);
+        allDeliveriesByArticle.set(delivery.sap_article_id, deliveries);
       }
       const getReclamationAmount = (reclamation: any) => {
         const deliveries = deliveriesByArticle.get(reclamation.sap_article_id) ?? [];
@@ -1328,6 +1411,98 @@ function ErstatningsCheckPage() {
         .filter((item) => item.badDeliveryCount >= 2)
         .sort((a, b) => b.badDeliveryCount - a.badDeliveryCount)
         .slice(0, 5);
+
+      const storeIdsWithProducts = new Set(
+        (storesWithProductsResult?.data ?? []).map((r: any) => r.store_id),
+      );
+      const allReclamations = allReclamationsResult?.data ?? [];
+      const allStoresReclamationsForPeriod = allReclamations.filter(
+        (row: any) => new Date(row.created_at) >= periodStart,
+      );
+      const allStoresStoreCount = storeIdsWithProducts.size;
+      const allStoresTotalCount = allStoresReclamationsForPeriod.length;
+      const allStoresSentCount = allStoresReclamationsForPeriod.filter(
+        (row: any) => row.status === "Granskas av butikssupporten",
+      ).length;
+      const allStoresDecidedCount = allStoresReclamationsForPeriod.filter((row: any) =>
+        ["Löst", "Nekad"].includes(row.status),
+      ).length;
+      const allStoresApprovedCount = allStoresReclamationsForPeriod.filter(
+        (row: any) => row.status === "Löst",
+      ).length;
+      const allStoresReturnedValue = allStoresReclamationsForPeriod
+        .filter((row: any) => row.status === "Löst")
+        .reduce((sum: number, row: any) => {
+          const deliveries = allDeliveriesByArticle.get(row.sap_article_id) ?? [];
+          const createdAt = new Date(row.created_at).getTime();
+          const matchingDelivery =
+            deliveries.find((delivery) => new Date(delivery.arrival_date).getTime() <= createdAt) ??
+            deliveries[0];
+          return sum + (calculateReimbursement(matchingDelivery?.total_price) ?? 0);
+        }, 0);
+      const allStoresPendingValue = allStoresReclamationsForPeriod
+        .filter((row: any) => !["Löst", "Nekad"].includes(row.status))
+        .reduce((sum: number, row: any) => {
+          const deliveries = allDeliveriesByArticle.get(row.sap_article_id) ?? [];
+          const createdAt = new Date(row.created_at).getTime();
+          const matchingDelivery =
+            deliveries.find((delivery) => new Date(delivery.arrival_date).getTime() <= createdAt) ??
+            deliveries[0];
+          return sum + (calculateReimbursement(matchingDelivery?.total_price) ?? 0);
+        }, 0);
+      const allStoresApprovalRate =
+        allStoresDecidedCount === 0
+          ? 0
+          : Math.round((allStoresApprovedCount / allStoresDecidedCount) * 100);
+      const allStoresAverageApprovedValue =
+        allStoresApprovedCount > 0 ? allStoresReturnedValue / allStoresApprovedCount : null;
+      const allStoresMonthly = (() => {
+        if (period === "last30") {
+          const now = new Date();
+          return Array.from({ length: 30 }, (_, i) => {
+            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (29 - i));
+            const key = d.toISOString().split("T")[0];
+            const dayReclamations = allStoresReclamationsForPeriod.filter(
+              (row: any) => row.status === "Löst" && row.created_at?.startsWith(key),
+            );
+            const dayCount = allStoresReclamationsForPeriod.filter((row: any) =>
+              row.created_at?.startsWith(key),
+            ).length;
+            return {
+              month: d.toLocaleDateString("sv-SE", { day: "numeric", month: "short" }),
+              value: dayReclamations.reduce((sum: number, row: any) => {
+                const deliveries = allDeliveriesByArticle.get(row.sap_article_id) ?? [];
+                const createdAt = new Date(row.created_at).getTime();
+                const matchingDelivery =
+                  deliveries.find(
+                    (delivery) => new Date(delivery.arrival_date).getTime() <= createdAt,
+                  ) ?? deliveries[0];
+                return sum + (calculateReimbursement(matchingDelivery?.total_price) ?? 0);
+              }, 0),
+              count: dayCount,
+            };
+          });
+        }
+        return Array.from({ length: 12 }, (_, month) => ({
+          month: new Date(2000, month, 1).toLocaleDateString("sv-SE", { month: "short" }),
+          value: allStoresReclamationsForPeriod
+            .filter((row: any) => row.status === "Löst")
+            .filter((row: any) => new Date(row.created_at).getMonth() === month)
+            .reduce((sum: number, row: any) => {
+              const deliveries = allDeliveriesByArticle.get(row.sap_article_id) ?? [];
+              const createdAt = new Date(row.created_at).getTime();
+              const matchingDelivery =
+                deliveries.find(
+                  (delivery) => new Date(delivery.arrival_date).getTime() <= createdAt,
+                ) ?? deliveries[0];
+              return sum + (calculateReimbursement(matchingDelivery?.total_price) ?? 0);
+            }, 0),
+          count: allStoresReclamationsForPeriod.filter(
+            (row: any) => new Date(row.created_at).getMonth() === month,
+          ).length,
+        }));
+      })();
+
       setReplacementStatistics({
         returnedValue,
         pendingValue,
@@ -1345,6 +1520,16 @@ function ErstatningsCheckPage() {
           (row: any) => !["Löst", "Nekad"].includes(row.status),
         ).length,
         averageApprovedValue: approvedCount > 0 ? returnedValue / approvedCount : null,
+        allStoresReturnedValue,
+        allStoresPendingValue,
+        allStoresSentCount,
+        allStoresApprovalRate,
+        allStoresDecidedCount,
+        allStoresApprovedCount,
+        allStoresTotalCount,
+        allStoresMonthly,
+        allStoresStoreCount,
+        allStoresAverageApprovedValue,
       });
       setStep("statistics");
     } catch (error) {
@@ -1409,9 +1594,7 @@ function ErstatningsCheckPage() {
 
         if (productError) throw productError;
 
-        const existingSapIds = new Set(
-          (existingProducts ?? []).map((p: any) => p.sap_article_id),
-        );
+        const existingSapIds = new Set((existingProducts ?? []).map((p: any) => p.sap_article_id));
 
         // Skapa produkter som saknas
         const newProducts = batch
@@ -1426,9 +1609,7 @@ function ErstatningsCheckPage() {
           }));
 
         if (newProducts.length > 0) {
-          await supabase
-            .from("products")
-            .upsert(newProducts, { onConflict: "sap_article_id" });
+          await supabase.from("products").upsert(newProducts, { onConflict: "sap_article_id" });
         }
 
         // Nu infoga leveransrader för denna batch
@@ -1445,10 +1626,14 @@ function ErstatningsCheckPage() {
             updated_at: new Date().toISOString(),
           });
           // Uppdatera masterdata om nödvändigt
+          const nextSapCheck = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
           await supabase.from("product_shelf_life").upsert(
             {
+              store_id: activeStore.id,
               sap_article_id: u.id,
               shelf_lifetime_days: u.shelf_lifetime_days,
+              sap_data_missing: false,
+              next_sap_check: nextSapCheck,
               updated_at: new Date().toISOString(),
             },
             { onConflict: "sap_article_id" },
@@ -1466,10 +1651,14 @@ function ErstatningsCheckPage() {
   const saveShelfLife = async (record: { sap_article_id: string; shelf_lifetime_days: number }) => {
     setIsLoading(true);
     try {
+      const nextSapCheck = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
       const { error: upsertErr } = await supabase.from("product_shelf_life").upsert(
         {
+          store_id: activeStore.id,
           sap_article_id: record.sap_article_id,
           shelf_lifetime_days: record.shelf_lifetime_days,
+          sap_data_missing: false,
+          next_sap_check: nextSapCheck,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "sap_article_id" },
@@ -1611,6 +1800,7 @@ function ErstatningsCheckPage() {
   };
 
   const getShelfLifeStatus = (record: ShelfLifeRecord) => {
+    if (record.sap_data_missing) return "SAKNAS I SAP";
     if (!record.arrival_date || !record.expiry_date) return "Datum saknas";
     if (
       record.shelf_lifetime_days == null ||
@@ -1628,9 +1818,7 @@ function ErstatningsCheckPage() {
   const filteredShelfLifeRecords = useMemo(() => {
     const search = shelfLifeSearch.trim().toLocaleLowerCase("sv");
 
-    const autoHiddenCategories = new Set(
-      hiddenCategories.map((c) => c.toLowerCase()),
-    );
+    const autoHiddenCategories = new Set(hiddenCategories.map((c) => c.toLowerCase()));
 
     const withStatus = shelfLifeRecords.map((record) => ({
       record,
@@ -1648,7 +1836,11 @@ function ErstatningsCheckPage() {
           record.expiry_date,
           record.arrival_date,
           status,
-        ].some((value) => String(value ?? "").toLocaleLowerCase("sv").includes(search));
+        ].some((value) =>
+          String(value ?? "")
+            .toLocaleLowerCase("sv")
+            .includes(search),
+        );
       })
       .filter(({ record }) => {
         const recordCategory = String(record.category ?? "").trim();
@@ -1660,13 +1852,24 @@ function ErstatningsCheckPage() {
         return true;
       })
       .filter(({ status }) => {
+        if (status === "SAKNAS I SAP") return false;
         if (!hideOkRecords) return true;
         return status !== "OK";
       });
 
     filtered.sort((a, b) => {
-      const leftMissing = (a.record.shelf_lifetime_days == null || Number.isNaN(a.record.shelf_lifetime_days) || a.record.shelf_lifetime_days <= 0) ? 0 : 1;
-      const rightMissing = (b.record.shelf_lifetime_days == null || Number.isNaN(b.record.shelf_lifetime_days) || b.record.shelf_lifetime_days <= 0) ? 0 : 1;
+      const leftMissing =
+        a.record.shelf_lifetime_days == null ||
+        Number.isNaN(a.record.shelf_lifetime_days) ||
+        a.record.shelf_lifetime_days <= 0
+          ? 0
+          : 1;
+      const rightMissing =
+        b.record.shelf_lifetime_days == null ||
+        Number.isNaN(b.record.shelf_lifetime_days) ||
+        b.record.shelf_lifetime_days <= 0
+          ? 0
+          : 1;
       if (leftMissing !== rightMissing) return leftMissing - rightMissing;
       for (const sort of shelfLifeSort) {
         const leftRaw = sort.key === "status" ? a.status : (a.record[sort.key] ?? "");
@@ -1680,7 +1883,8 @@ function ErstatningsCheckPage() {
           const hasLeft = !!leftRaw && !isNaN(leftDate) && leftDate > 0;
           const hasRight = !!rightRaw && !isNaN(rightDate) && rightDate > 0;
           let comparison: number;
-          if (hasLeft && !hasRight) comparison = 1; // Has date comes after missing
+          if (hasLeft && !hasRight)
+            comparison = 1; // Has date comes after missing
           else if (!hasLeft && hasRight) comparison = -1;
           else if (!hasLeft && !hasRight) comparison = 0;
           else comparison = leftDate - rightDate;
@@ -1697,11 +1901,20 @@ function ErstatningsCheckPage() {
             else if (!aIsEmpty && bIsEmpty) comparison = 1;
             else comparison = Number(aNum) - Number(bNum);
           } else if (sort.key === "status") {
-            // Status ordering: Datum saknas < Hållbarhet saknas < Kräver ersättning < OK
-            const statusOrder = { "Datum saknas": 0, "Hållbarhet saknas": 1, "Kräver ersättning": 2, "OK": 3, "": 4 };
+            // Status ordering: Datum saknas < Hållbarhet saknas < SAKNAS I SAP < Kräver ersättning < OK
+            const statusOrder = {
+              "Datum saknas": 0,
+              "Hållbarhet saknas": 1,
+              "SAKNAS I SAP": 2,
+              "Kräver ersättning": 3,
+              OK: 4,
+              "": 5,
+            };
             const aStatus = String(a.status ?? "");
             const bStatus = String(b.status ?? "");
-            comparison = (statusOrder[aStatus as keyof typeof statusOrder] ?? 99) - (statusOrder[bStatus as keyof typeof statusOrder] ?? 99);
+            comparison =
+              (statusOrder[aStatus as keyof typeof statusOrder] ?? 99) -
+              (statusOrder[bStatus as keyof typeof statusOrder] ?? 99);
           } else {
             comparison = String(leftRaw).localeCompare(String(rightRaw), "sv", {
               numeric: true,
@@ -1759,43 +1972,65 @@ function ErstatningsCheckPage() {
     setMappingLoading(true);
     try {
       const isLocal = hiddenCategories.some((c) => c.toLowerCase() === category.toLowerCase());
-      const isGlobal = globalHiddenCategories.some((c) => c.toLowerCase() === category.toLowerCase());
+      const isGlobal = globalHiddenCategories.some(
+        (c) => c.toLowerCase() === category.toLowerCase(),
+      );
       const nextHidden = !(isLocal || isGlobal);
 
       if (nextHidden) {
         // Determine scope: if category is already in store-specific list toggle local, else global
         if (isLocal) {
           await supabase.from("store_hidden_categories").upsert(
-            { store_id: activeStore.id, category, is_hidden: true, updated_at: new Date().toISOString() },
-            { onConflict: "store_id,category" }
+            {
+              store_id: activeStore.id,
+              category,
+              is_hidden: true,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "store_id,category" },
           );
           // If already local, no change needed
         } else {
           // Add to global (visible to all stores)
-          const { error } = await supabase.from("global_hidden_categories").upsert(
-            { category, is_hidden: true, updated_at: new Date().toISOString() },
-            { onConflict: "category" }
-          );
+          const { error } = await supabase
+            .from("global_hidden_categories")
+            .upsert(
+              { category, is_hidden: true, updated_at: new Date().toISOString() },
+              { onConflict: "category" },
+            );
           if (error) throw error;
           setGlobalHiddenCategories((current) => [...current, category]);
           // Remove from local if present
-          setHiddenCategories((current) => current.filter((c) => c.toLowerCase() !== category.toLowerCase()));
+          setHiddenCategories((current) =>
+            current.filter((c) => c.toLowerCase() !== category.toLowerCase()),
+          );
         }
       } else {
         // Remove from whichever scope it's in
         if (isLocal) {
           await supabase.from("store_hidden_categories").upsert(
-            { store_id: activeStore.id, category, is_hidden: false, updated_at: new Date().toISOString() },
-            { onConflict: "store_id,category" }
+            {
+              store_id: activeStore.id,
+              category,
+              is_hidden: false,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "store_id,category" },
           );
-          setHiddenCategories((current) => current.filter((c) => c.toLowerCase() !== category.toLowerCase()));
+          setHiddenCategories((current) =>
+            current.filter((c) => c.toLowerCase() !== category.toLowerCase()),
+          );
         }
         if (isGlobal) {
-          await supabase.from("global_hidden_categories").upsert(
-            { category, is_hidden: false, updated_at: new Date().toISOString() },
-            { onConflict: "category" }
+          await supabase
+            .from("global_hidden_categories")
+            .upsert(
+              { category, is_hidden: false, updated_at: new Date().toISOString() },
+              { onConflict: "category" },
+            );
+          setGlobalHiddenCategories((current) =>
+            current.filter((c) => c.toLowerCase() !== category.toLowerCase()),
           );
-          setGlobalHiddenCategories((current) => current.filter((c) => c.toLowerCase() !== category.toLowerCase()));
         }
       }
     } catch (error) {
@@ -1962,46 +2197,95 @@ function ErstatningsCheckPage() {
               </p>
             )}
           </CardContent>
-            <div className="pt-2 border-t mt-2">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Testa SAP-flöde för enskild artikel (materialnummer):</p>
-              <div className="flex items-end gap-2">
-                <input id="test-sap-id" type="text" placeholder="SAP materialnummer / artikel-ID"
-                  className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring w-64"
-                  defaultValue={testFixtureSapId || ""} />
-                <Button size="sm" variant="outline"
-                  onClick={async () => {
-                    const input = document.getElementById("test-sap-id") as HTMLInputElement | null;
-                    const sapArticleId = input?.value.trim();
-                    if (!sapArticleId) { toast.error("Ange ett SAP-product-ID / materialnummer."); return; }
-                    console.log("[Test SAP] Testing single article:", sapArticleId);
-                    try {
-                      const sapData = sapExtensionInstalled
-                        ? await (async () => {
-                            const proxyResponse = await fetchViaProxy(
-                              `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore?.sap_site_id ?? activeStore?.id ?? "")}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
-                              "GET", { Accept: "application/json" });
-                            console.log("[Test SAP] Proxy response:", proxyResponse);
-                            if (!proxyResponse.success) throw new Error(proxyResponse.error || "Proxy failed");
-                            const jsonStr = proxyResponse.data ?? "";
-                            const parsed = JSON.parse(jsonStr);
-                            return parsed.d || null;
-                          })()
-                        : await fetchSapProductData(activeStore?.sap_site_id ?? activeStore?.id ?? "", sapArticleId);
-                      console.log("[Test SAP] SAP data:", sapData);
-                      if (!sapData) { toast.error("Inga data från SAP för artikel: " + sapArticleId); return; }
-                      const shelfLifeDays = parseInt(sapData.RemainingShelfLifeInDays, 10);
-                      if (Number.isNaN(shelfLifeDays)) { toast.error("Ogiltigt hållbarhetsdatum från SAP."); return; }
-                      const { error } = await supabase.from("product_shelf_life").upsert({
-                        sap_article_id: sapArticleId, shelf_lifetime_days: shelfLifeDays,
+          <div className="pt-2 border-t mt-2">
+            <p className="text-xs font-medium text-muted-foreground mb-2">
+              Testa SAP-flöde för enskild artikel (materialnummer):
+            </p>
+            <div className="flex items-end gap-2">
+              <input
+                id="test-sap-id"
+                type="text"
+                placeholder="SAP materialnummer / artikel-ID"
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring w-64"
+                defaultValue={testFixtureSapId || ""}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  const input = document.getElementById("test-sap-id") as HTMLInputElement | null;
+                  const sapArticleId = input?.value.trim();
+                  if (!sapArticleId) {
+                    toast.error("Ange ett SAP-product-ID / materialnummer.");
+                    return;
+                  }
+                  console.log("[Test SAP] Testing single article:", sapArticleId);
+                  try {
+                    const sapData = sapExtensionInstalled
+                      ? await (async () => {
+                          const proxyResponse = await fetchViaProxy(
+                            `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore?.sap_site_id ?? activeStore?.id ?? "")}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
+                            "GET",
+                            { Accept: "application/json" },
+                          );
+                          console.log("[Test SAP] Proxy response:", proxyResponse);
+                          if (!proxyResponse.success)
+                            throw new Error(proxyResponse.error || "Proxy failed");
+                          const jsonStr = proxyResponse.data ?? "";
+                          const parsed = JSON.parse(jsonStr);
+                          return parsed.d || null;
+                        })()
+                      : await fetchSapProductData(
+                          activeStore?.sap_site_id ?? activeStore?.id ?? "",
+                          sapArticleId,
+                        );
+                    console.log("[Test SAP] SAP data:", sapData);
+                    if (!sapData) {
+                      toast.error("Inga data från SAP för artikel: " + sapArticleId);
+                      return;
+                    }
+                    const shelfLifeDays = parseInt(sapData.RemainingShelfLifeInDays, 10);
+                    if (Number.isNaN(shelfLifeDays)) {
+                      toast.error("Ogiltigt hållbarhetsdatum från SAP.");
+                      return;
+                    }
+                    const hasValidSapData = Number.isFinite(shelfLifeDays) && shelfLifeDays > 0;
+                    const cooldownDays = hasValidSapData
+                      ? Math.floor(Math.random() * (60 - 14 + 1)) + 14
+                      : Math.floor(Math.random() * (90 - 60 + 1)) + 60;
+                    const nextSapCheck = new Date();
+                    nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
+                    const { error } = await supabase.from("product_shelf_life").upsert(
+                      {
+                        store_id: activeStore.id,
+                        sap_article_id: sapArticleId,
+                        shelf_lifetime_days: hasValidSapData ? shelfLifeDays : 0,
+                        sap_data_missing: !hasValidSapData,
+                        next_sap_check: nextSapCheck.toISOString(),
                         updated_at: new Date().toISOString(),
-                      }, { onConflict: "sap_article_id" });
-                      if (error) { console.error("[Test SAP] Supabase error:", error); toast.error("Kunde inte spara till Supabase."); }
-                      else { toast.success("Sparade hållbarhetsdata (" + shelfLifeDays + " dagar) för " + sapArticleId); console.log("[Test SAP] Saved to Supabase successfully"); }
-                    } catch (err: any) { console.error("[Test SAP] Exception:", err); toast.error("Fel vid SAP-test: " + (err?.message || err)); }
-                  }}
-                  disabled={isLoading}>Testa SAP → Supabase</Button>
-              </div>
+                      },
+                      { onConflict: "sap_article_id" },
+                    );
+                    if (error) {
+                      console.error("[Test SAP] Supabase error:", error);
+                      toast.error("Kunde inte spara till Supabase.");
+                    } else {
+                      toast.success(
+                        "Sparade hållbarhetsdata (" + shelfLifeDays + " dagar) för " + sapArticleId,
+                      );
+                      console.log("[Test SAP] Saved to Supabase successfully");
+                    }
+                  } catch (err: any) {
+                    console.error("[Test SAP] Exception:", err);
+                    toast.error("Fel vid SAP-test: " + (err?.message || err));
+                  }
+                }}
+                disabled={isLoading}
+              >
+                Testa SAP → Supabase
+              </Button>
             </div>
+          </div>
         </Card>
       )}
       {step === "dashboard" && (
@@ -2375,29 +2659,24 @@ function ErstatningsCheckPage() {
               </div>
             )}
             {shelfLifeRecords.length > 0 ? (
-              <div
-                className="border rounded-lg overflow-hidden"
-                style={{ height: "500px" }}
-              >
+              <div className="border rounded-lg overflow-hidden" style={{ height: "500px" }}>
                 <div
                   className="overflow-auto h-full"
-                  onScroll={(e) =>
-                    setShelfLifeScrollTop(e.currentTarget.scrollTop)
-                  }
+                  onScroll={(e) => setShelfLifeScrollTop(e.currentTarget.scrollTop)}
                 >
                   <Table>
                     <TableHeader>
-                     <TableRow>
-                       <TableHead>SAP Produkt-ID</TableHead>
-                       {(
-                         [
-                           ["Produkt", "product_name"],
-                           ["Varumärke", "brand"],
-                           ["Total hållbarhet (dagar)", "shelf_lifetime_days"],
-                           ["Bäst-före-datum", "expiry_date"],
-                           ["Leveransdatum", "arrival_date"],
-                           ["Status", "status"],
-                         ] as [string, ShelfLifeSortKey][]
+                      <TableRow>
+                        <TableHead>SAP Produkt-ID</TableHead>
+                        {(
+                          [
+                            ["Produkt", "product_name"],
+                            ["Varumärke", "brand"],
+                            ["Total hållbarhet (dagar)", "shelf_lifetime_days"],
+                            ["Bäst-före-datum", "expiry_date"],
+                            ["Leveransdatum", "arrival_date"],
+                            ["Status", "status"],
+                          ] as [string, ShelfLifeSortKey][]
                         ).map(([label, key], idx) => {
                           const sortEntry = shelfLifeSort.find((s) => s.key === key);
                           const sortOrder = shelfLifeSort.findIndex((s) => s.key === key);
@@ -2409,18 +2688,18 @@ function ErstatningsCheckPage() {
                                   variant="ghost"
                                   size="sm"
                                   className="h-auto px-0 font-medium"
-                                onClick={(e) => {
-                                  if (e.shiftKey) {
-                                    e.preventDefault();
-                                    if (sortEntry) {
-                                      moveSortToFront(key);
+                                  onClick={(e) => {
+                                    if (e.shiftKey) {
+                                      e.preventDefault();
+                                      if (sortEntry) {
+                                        moveSortToFront(key);
+                                      } else {
+                                        toggleShelfLifeSort(key, true);
+                                      }
                                     } else {
-                                      toggleShelfLifeSort(key, true);
+                                      toggleShelfLifeSort(key, false);
                                     }
-                                  } else {
-                                    toggleShelfLifeSort(key, false);
-                                  }
-                                }}
+                                  }}
                                 >
                                   {label}
                                   {sortEntry ? (
@@ -2433,7 +2712,10 @@ function ErstatningsCheckPage() {
                                     <ArrowUpDown size={14} className="ml-1 opacity-30" />
                                   )}
                                   {sortOrder >= 0 && (
-                                    <Badge variant="outline" className="ml-1 h-5 w-5 p-0 text-xs rounded-full justify-center items-center leading-none">
+                                    <Badge
+                                      variant="outline"
+                                      className="ml-1 h-5 w-5 p-0 text-xs rounded-full justify-center items-center leading-none"
+                                    >
                                       {sortOrder + 1}
                                     </Badge>
                                   )}
@@ -2454,12 +2736,15 @@ function ErstatningsCheckPage() {
                             </TableHead>
                           );
                         })}
-                     </TableRow>
-                   </TableHeader>
+                      </TableRow>
+                    </TableHeader>
                     <TableBody>
                       {filteredShelfLifeRecords.map((record, idx) => {
                         const _bufferStart = Math.max(0, Math.floor(shelfLifeScrollTop / 36) - 10);
-                        const _bufferEnd = Math.min(filteredShelfLifeRecords.length, Math.floor(shelfLifeScrollTop / 36) + Math.ceil(500 / 36) + 10);
+                        const _bufferEnd = Math.min(
+                          filteredShelfLifeRecords.length,
+                          Math.floor(shelfLifeScrollTop / 36) + Math.ceil(500 / 36) + 10,
+                        );
                         if (idx < _bufferStart || idx > _bufferEnd) {
                           return (
                             <TableRow key={record.id} className="h-[36px]">
@@ -2475,101 +2760,105 @@ function ErstatningsCheckPage() {
                           !Number.isNaN(arrival.getTime()) &&
                           !Number.isNaN(expiry.getTime());
                         const daysRemaining = hasValidDates
-                          ? Math.floor((expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24))
+                          ? Math.floor(
+                              (expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24),
+                            )
                           : null;
                         const hasShelfLife =
-                         Number.isFinite(record.shelf_lifetime_days) &&
-                         record.shelf_lifetime_days > 0;
-                       const assessment = assessDelivery(
-                         record.arrival_date,
-                         record.expiry_date,
-                         record.shelf_lifetime_days,
-                       );
-                       const isFlagged = assessment?.isEligible ?? false;
+                          Number.isFinite(record.shelf_lifetime_days) &&
+                          record.shelf_lifetime_days > 0;
+                        const assessment = assessDelivery(
+                          record.arrival_date,
+                          record.expiry_date,
+                          record.shelf_lifetime_days,
+                        );
+                        const isFlagged = assessment?.isEligible ?? false;
 
-                      return (
-                        <TableRow key={record.id}>
-                          <TableCell className="font-mono text-sm">
-                            {record.product_url ? (
-                              <a
-                                href={record.product_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
-                              >
-                                {record.sap_article_id}
-                                <ExternalLink size={13} />
-                              </a>
-                            ) : (
-                              record.sap_article_id
-                            )}
-                          </TableCell>
-                          <TableCell>{record.product_name}</TableCell>
-                          <TableCell>{record.brand || "-"}</TableCell>
-                          <TableCell
-                            onDoubleClick={() => {
-                              setEditingShelfLifeId(record.id);
-                              setEditingShelfLifeValue(String(record.shelf_lifetime_days || ""));
-                            }}
-                            className="cursor-text"
-                            title="Dubbelklicka för att ändra"
-                          >
-                            {editingShelfLifeId === record.id ? (
-                              <Input
-                                autoFocus
-                                type="number"
-                                min="1"
-                                value={editingShelfLifeValue}
-                                onChange={(event) => setEditingShelfLifeValue(event.target.value)}
-                                onBlur={() =>
-                                  void saveInlineShelfLife(record, editingShelfLifeValue)
-                                }
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter") event.currentTarget.blur();
-                                  if (event.key === "Escape") setEditingShelfLifeId(null);
-                                }}
-                                className="h-8 w-28"
-                              />
-                            ) : (
-                              record.shelf_lifetime_days > 0 ? record.shelf_lifetime_days : "Ej angiven"
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {record.expiry_date
-                              ? new Date(record.expiry_date).toLocaleDateString("sv-SE")
-                              : "Ej registrerat"}
-                          </TableCell>
-                          <TableCell>
-                            {record.arrival_date
-                              ? new Date(record.arrival_date).toLocaleDateString("sv-SE")
-                              : "Ej registrerat"}
-                          </TableCell>
-                          <TableCell>
-                            {!hasValidDates ? (
-                              <Badge variant="outline">Datum saknas</Badge>
-                            ) : !hasShelfLife ? (
-                              <Badge variant="outline">Hållbarhet saknas</Badge>
-                            ) : isFlagged ? (
-                              <Badge variant="destructive" className="flex items-center gap-1">
-                                <AlertTriangle size={12} />
-                                Kräver ersättning
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary">OK</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                    </Table>
-                    {filteredShelfLifeRecords.length === 0 && (
-                      <p className="py-8 text-center text-sm text-muted-foreground">
-                        Inga artiklar matchar sökningen.
-                      </p>
-                    )}
-                  </div>
+                        return (
+                          <TableRow key={record.id}>
+                            <TableCell className="font-mono text-sm">
+                              {record.product_url ? (
+                                <a
+                                  href={record.product_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+                                >
+                                  {record.sap_article_id}
+                                  <ExternalLink size={13} />
+                                </a>
+                              ) : (
+                                record.sap_article_id
+                              )}
+                            </TableCell>
+                            <TableCell>{record.product_name}</TableCell>
+                            <TableCell>{record.brand || "-"}</TableCell>
+                            <TableCell
+                              onDoubleClick={() => {
+                                setEditingShelfLifeId(record.id);
+                                setEditingShelfLifeValue(String(record.shelf_lifetime_days || ""));
+                              }}
+                              className="cursor-text"
+                              title="Dubbelklicka för att ändra"
+                            >
+                              {editingShelfLifeId === record.id ? (
+                                <Input
+                                  autoFocus
+                                  type="number"
+                                  min="1"
+                                  value={editingShelfLifeValue}
+                                  onChange={(event) => setEditingShelfLifeValue(event.target.value)}
+                                  onBlur={() =>
+                                    void saveInlineShelfLife(record, editingShelfLifeValue)
+                                  }
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") event.currentTarget.blur();
+                                    if (event.key === "Escape") setEditingShelfLifeId(null);
+                                  }}
+                                  className="h-8 w-28"
+                                />
+                              ) : record.shelf_lifetime_days > 0 ? (
+                                record.shelf_lifetime_days
+                              ) : (
+                                "Ej angiven"
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {record.expiry_date
+                                ? new Date(record.expiry_date).toLocaleDateString("sv-SE")
+                                : "Ej registrerat"}
+                            </TableCell>
+                            <TableCell>
+                              {record.arrival_date
+                                ? new Date(record.arrival_date).toLocaleDateString("sv-SE")
+                                : "Ej registrerat"}
+                            </TableCell>
+                            <TableCell>
+                              {!hasValidDates ? (
+                                <Badge variant="outline">Datum saknas</Badge>
+                              ) : !hasShelfLife ? (
+                                <Badge variant="outline">Hållbarhet saknas</Badge>
+                              ) : isFlagged ? (
+                                <Badge variant="destructive" className="flex items-center gap-1">
+                                  <AlertTriangle size={12} />
+                                  Kräver ersättning
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary">OK</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  {filteredShelfLifeRecords.length === 0 && (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      Inga artiklar matchar sökningen.
+                    </p>
+                  )}
                 </div>
+              </div>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <Clock size={48} className="mx-auto mb-4 opacity-50" />
@@ -2702,7 +2991,7 @@ function ErstatningsCheckPage() {
                   <CardHeader className="pb-2">
                     <CardDescription>ÅTERFÖRT VÄRDE</CardDescription>
                     <CardTitle className="text-3xl text-emerald-700">
-                      {formatSek(replacementStatistics.returnedValue)}
+                      {formatSek(replacementStatistics.allStoresReturnedValue)}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground">
@@ -2713,35 +3002,140 @@ function ErstatningsCheckPage() {
                   <CardHeader className="pb-2">
                     <CardDescription>EJ FÄRDIGA REKLAMATIONERS VÄRDE</CardDescription>
                     <CardTitle className="text-3xl">
-                      {formatSek(replacementStatistics.pendingValue)}
+                      {formatSek(replacementStatistics.allStoresPendingValue)}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground">
-                    {replacementStatistics.sentCount} skickade reklamationer
+                    {replacementStatistics.allStoresSentCount} skickade reklamationer
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
                     <CardDescription>GODKÄNNANDEGRAD</CardDescription>
                     <CardTitle className="text-3xl">
-                      {replacementStatistics.approvalRate}%
+                      {replacementStatistics.allStoresApprovalRate}%
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground">
-                    {replacementStatistics.approvedCount} av {replacementStatistics.decidedCount}{" "}
-                    avgjorda
+                    {replacementStatistics.allStoresApprovedCount} av{" "}
+                    {replacementStatistics.allStoresDecidedCount} avgjorda
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
                     <CardDescription>SNITT PER GODKÄND</CardDescription>
                     <CardTitle className="text-3xl">
-                      {formatSek(replacementStatistics.averageApprovedValue)}
+                      {formatSek(replacementStatistics.allStoresAverageApprovedValue)}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground">
-                    {replacementStatistics.totalCount} reklamationer totalt
+                    {replacementStatistics.allStoresTotalCount} reklamationer totalt
                   </CardContent>
+                </Card>
+              </div>
+
+              <h3 className="text-xl font-semibold tracking-tight">Totalt för alla butiker</h3>
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card className="border-emerald-200 bg-emerald-50/70">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardDescription className="text-base">ÅTERFÖRT VÄRDE</CardDescription>
+                      <Coins className="h-5 w-5 text-emerald-600" />
+                    </div>
+                    <CardTitle className="text-3xl text-emerald-700">
+                      {formatSek(replacementStatistics.allStoresReturnedValue)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    Godkända reklamationer
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardDescription className="text-base">
+                        EJ FÄRDIGA REKLAMATIONERS VÄRDE
+                      </CardDescription>
+                      <TrendingUp className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <CardTitle className="text-3xl">
+                      {formatSek(replacementStatistics.allStoresPendingValue)}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    {replacementStatistics.allStoresSentCount} skickade
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardDescription className="text-base">GODKÄNNANDEGRAD</CardDescription>
+                      <CardTitle className="text-3xl">
+                        {replacementStatistics.allStoresApprovalRate}%
+                      </CardTitle>
+                    </div>
+                    <CardContent className="text-sm text-muted-foreground">
+                      {replacementStatistics.allStoresApprovedCount} av{" "}
+                      {replacementStatistics.allStoresDecidedCount} avgjorda
+                    </CardContent>
+                  </CardHeader>
+                </Card>
+              </div>
+
+              <h3 className="text-xl font-semibold tracking-tight">Snitt per butik</h3>
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card className="border-emerald-200 bg-emerald-50/70">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardDescription className="text-base">ÅTERFÖRT VÄRDE</CardDescription>
+                      <Coins className="h-5 w-5 text-emerald-600" />
+                    </div>
+                    <CardTitle className="text-3xl text-emerald-700">
+                      {replacementStatistics.allStoresStoreCount > 0
+                        ? formatSek(
+                            replacementStatistics.allStoresReturnedValue /
+                              replacementStatistics.allStoresStoreCount,
+                          )
+                        : "—"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    Snitt per butik
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardDescription className="text-base">
+                        EJ FÄRDIGA REKLAMATIONERS VÄRDE
+                      </CardDescription>
+                      <TrendingUp className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <CardTitle className="text-3xl">
+                      {replacementStatistics.allStoresStoreCount > 0
+                        ? formatSek(
+                            replacementStatistics.allStoresPendingValue /
+                              replacementStatistics.allStoresStoreCount,
+                          )
+                        : "—"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">
+                    Snitt per butik
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardDescription className="text-base">GODKÄNNANDEGRAD</CardDescription>
+                      <CardTitle className="text-3xl">
+                        {replacementStatistics.allStoresApprovalRate}%
+                      </CardTitle>
+                    </div>
+                    <CardContent className="text-sm text-muted-foreground">
+                      Snitt över {replacementStatistics.allStoresStoreCount} butiker
+                    </CardContent>
+                  </CardHeader>
                 </Card>
               </div>
 
@@ -2764,7 +3158,9 @@ function ErstatningsCheckPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardDescription className="text-base">EJ FÄRDIGA REKLAMATIONERS VÄRDE</CardDescription>
+                      <CardDescription className="text-base">
+                        EJ FÄRDIGA REKLAMATIONERS VÄRDE
+                      </CardDescription>
                       <TrendingUp className="h-5 w-5 text-blue-600" />
                     </div>
                     <CardTitle className="text-3xl">
@@ -2779,53 +3175,13 @@ function ErstatningsCheckPage() {
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardDescription className="text-base">GODKÄNNANDEGRAD</CardDescription>
-                      <CardTitle className="text-3xl">{replacementStatistics.approvalRate}%</CardTitle>
+                      <CardTitle className="text-3xl">
+                        {replacementStatistics.approvalRate}%
+                      </CardTitle>
                     </div>
                     <CardContent className="text-sm text-muted-foreground">
-                      {replacementStatistics.approvedCount} av {replacementStatistics.decidedCount} avgjorda
-                    </CardContent>
-                  </CardHeader>
-                </Card>
-              </div>
-
-              <h3 className="text-xl font-semibold tracking-tight">Totalt för alla butiker</h3>
-              <div className="grid gap-4 md:grid-cols-3">
-                <Card className="border-emerald-200 bg-emerald-50/70">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardDescription className="text-base">ÅTERFÖRT VÄRDE</CardDescription>
-                      <Coins className="h-5 w-5 text-emerald-600" />
-                    </div>
-                    <CardTitle className="text-3xl text-emerald-700">
-                      {formatSek(replacementStatistics.returnedValue)}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground">
-                    Godkända reklamationer
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardDescription className="text-base">EJ FÄRDIGA REKLAMATIONERS VÄRDE</CardDescription>
-                      <TrendingUp className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <CardTitle className="text-3xl">
-                      {formatSek(replacementStatistics.pendingValue)}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground">
-                    {replacementStatistics.sentCount} skickade
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <CardDescription className="text-base">GODKÄNNANDEGRAD</CardDescription>
-                      <CardTitle className="text-3xl">{replacementStatistics.approvalRate}%</CardTitle>
-                    </div>
-                    <CardContent className="text-sm text-muted-foreground">
-                      {replacementStatistics.approvedCount} av {replacementStatistics.decidedCount} avgjorda
+                      {replacementStatistics.approvedCount} av {replacementStatistics.decidedCount}{" "}
+                      avgjorda
                     </CardContent>
                   </CardHeader>
                 </Card>
@@ -2858,7 +3214,7 @@ function ErstatningsCheckPage() {
                   <div className="h-72 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart
-                        data={replacementStatistics.monthly}
+                        data={replacementStatistics.allStoresMonthly}
                         margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" />
@@ -3032,15 +3388,15 @@ function ErstatningsCheckPage() {
                   );
                 })}
               </div>
-             ) : (
-               <div className="py-10 text-center text-muted-foreground">
-                 <p>Inga kategorier från följesedlar finns ännu.</p>
-                 <p className="mt-1 text-sm">Importera en följesedel för att börja koppla flöden.</p>
-               </div>
-             )}
-           </CardContent>
-         </Card>
-       )}
+            ) : (
+              <div className="py-10 text-center text-muted-foreground">
+                <p>Inga kategorier från följesedlar finns ännu.</p>
+                <p className="mt-1 text-sm">Importera en följesedel för att börja koppla flöden.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Step 4: Weekly task */}
       {false && step === "weekly" && (
