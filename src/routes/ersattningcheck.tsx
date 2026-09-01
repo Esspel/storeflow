@@ -1703,14 +1703,23 @@ function ErstatningsCheckPage() {
         { column: "arrival_date", ascending: false },
       );
 
-      const latestByArticle = new Map<string, (typeof shelfData)[number]>();
+      const deliveriesByArticle = new Map<string, any[]>();
       for (const delivery of shelfData ?? []) {
-        if (
-          !latestByArticle.has(delivery.sap_article_id) &&
-          delivery.best_before_date &&
-          isDelivered(delivery.status)
-        ) {
-          latestByArticle.set(delivery.sap_article_id, delivery);
+        const list = deliveriesByArticle.get(delivery.sap_article_id) ?? [];
+        list.push(delivery);
+        deliveriesByArticle.set(delivery.sap_article_id, list);
+      }
+
+      const latestByArticle = new Map<string, any>();
+      for (const [, deliveries] of deliveriesByArticle) {
+        const delivered = deliveries.filter((d) => d.status === "Levererad" && d.arrival_date);
+        if (delivered.length > 0) {
+          latestByArticle.set(delivered[0].sap_article_id, delivered[0]);
+          continue;
+        }
+        const withArrival = deliveries.filter((d) => d.arrival_date);
+        if (withArrival.length > 0) {
+          latestByArticle.set(withArrival[0].sap_article_id, withArrival[0]);
         }
       }
       // Hämta masterdata för shelf_lifetime_days och temperature_zone
@@ -1738,7 +1747,12 @@ function ErstatningsCheckPage() {
         .filter((item) => item.assessment?.isEligible)
         .map((item) => item.delivery);
       if (flagged.length === 0) {
-        setImportSuccess("Inga leveranser understiger Coop:s hållbarhetskrav.");
+        const totalArticles = latestByArticle.size;
+        const reason =
+          totalArticles === 0
+            ? "Inga leveranser hittades i store_product_deliveries för denna butik."
+            : `Inga av de ${totalArticles} senaste leveranserna understiger Coop:s hållbarhetskrav (50% / 9 månader).`;
+        setImportSuccess(reason);
         return;
       }
 
