@@ -30,6 +30,7 @@ import {
   EyeOff,
   Coins,
   Store,
+  Send,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -367,6 +368,7 @@ function ErstatningsCheckPage() {
   const [shelfLifeScrollTop, setShelfLifeScrollTop] = useState(0);
   const [importDates, setImportDates] = useState<string[]>([]);
   const [sapExtensionInstalled, setSapExtensionInstalled] = useState(false);
+  const [reclamationStatuses, setReclamationStatuses] = useState<Map<string, string>>(new Map());
   const [sapExtensionChecked, setSapExtensionChecked] = useState(false);
 
   useEffect(() => {
@@ -483,19 +485,23 @@ function ErstatningsCheckPage() {
   // Filter: Only eligible records where arrival is within last 4 days (regulatory requirement)
   // Users must apply for compensation within 4 days of delivery, otherwise no compensation
   const fourDaysMs = 4 * 24 * 60 * 60 * 1000;
-  const eligibleShelfLifeRecords = shelfLifeRecords.filter(
-    (record) =>
+  const eligibleShelfLifeRecords = shelfLifeRecords.filter((record) => {
+    const status = reclamationStatuses.get(record.sap_article_id);
+    if (status && status !== "Ej skickat") {
+      return false;
+    }
+    return (
       assessDelivery(record.arrival_date, record.expiry_date, record.shelf_lifetime_days)
         ?.isEligible &&
-      // Only include if arrival_date is within last 4 days
       (() => {
         const arrival = record.arrival_date ? new Date(record.arrival_date).getTime() : null;
         if (arrival === null || Number.isNaN(arrival)) return false;
         const now = Date.now();
         const daysSinceArrival = Math.floor((now - arrival) / (1000 * 60 * 60 * 24));
         return daysSinceArrival >= 0 && daysSinceArrival <= 4;
-      })(),
-  );
+      })()
+    );
+  });
   const hasImportedDeliveries = deliveryStatistics.length > 0;
 
   // Handle file upload
@@ -691,6 +697,7 @@ function ErstatningsCheckPage() {
     void (async () => {
       await loadShelfLifeData();
       await loadCategoryMappings();
+      await loadReclamationStatuses();
       const { count } = await supabase
         .from("products")
         .select("id", { count: "exact", head: true })
@@ -794,6 +801,30 @@ function ErstatningsCheckPage() {
       setImportError("Kunde inte ladda hållbarhetsdata.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadReclamationStatuses = async () => {
+    if (!activeStore?.id) return;
+    try {
+      const { data, error } = await supabase
+        .from("reclamations")
+        .select("sap_article_id, status")
+        .eq("store_id", activeStore.id);
+      if (error) {
+        console.error("Error loading reclamations:", error);
+        return;
+      }
+      const map = new Map<string, string>();
+      for (const row of data ?? []) {
+        const existing = map.get(row.sap_article_id);
+        if (!existing) {
+          map.set(row.sap_article_id, row.status);
+        }
+      }
+      setReclamationStatuses(map);
+    } catch (error) {
+      console.error("Error loading reclamations:", error);
     }
   };
 
@@ -1688,6 +1719,30 @@ function ErstatningsCheckPage() {
       shelf_lifetime_days: days,
     });
     setEditingShelfLifeId((currentId) => (currentId === record.id ? null : currentId));
+  };
+
+  // Send a single product to Butikssupport for reimbursement
+  const sendToButikssupport = async (record: ShelfLifeRecord) => {
+    if (!activeStore?.id) return;
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.from("reclamations").insert({
+        store_id: activeStore.id,
+        sap_article_id: record.sap_article_id,
+        status: "Granskas av butikssupporten",
+        notes: `Automatiskt genererad: ${new Date().toISOString()}`,
+      });
+      if (error) throw error;
+      setReclamationStatuses((prev) =>
+        new Map(prev).set(record.sap_article_id, "Granskas av butikssupporten"),
+      );
+      toast.success("Artikel skickades till Butikssupport.");
+    } catch (error) {
+      console.error("Error sending to Butikssupport:", error);
+      toast.error("Kunde inte skicka artikel till Butikssupport.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Generate compensation zip (.txt per leverans + temperaturzon)
@@ -2901,8 +2956,15 @@ function ErstatningsCheckPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="mb-4 rounded-lg border p-4">
-              <h3 className="mb-2 font-medium">Aktuella artiklar från senaste leveranser</h3>
+            <div className="space-y-4">
+              <div className="mb-4 rounded-lg border p-4">
+                <h3 className="mb-2 font-medium">Aktuella artiklar för ersättning</h3>
+                <p className="text-sm text-muted-foreground">
+                  Dessa artiklar uppfyller inte Coop:s hållbarhetskrav och bör reklameras. Ange
+                  artiklarna i Butikssupportportalen och klicka på "Skickat till Butikssupport" när
+                  du gjort detta.
+                </p>
+              </div>
               {eligibleShelfLifeRecords.length > 0 ? (
                 <div className="max-h-64 overflow-y-auto text-sm">
                   {eligibleShelfLifeRecords.map((record) => {
@@ -2938,14 +3000,24 @@ function ErstatningsCheckPage() {
                             </span>
                           </div>
                         </div>
-                        <div className="text-right text-muted-foreground">
-                          <div>
-                            Bäst före: {new Date(record.expiry_date).toLocaleDateString("sv-SE")}
+                        <div className="flex items-center gap-4">
+                          <div className="text-right text-muted-foreground">
+                            <div>
+                              Bäst före: {new Date(record.expiry_date).toLocaleDateString("sv-SE")}
+                            </div>
+                            <div className="text-xs">
+                              Anledning: Kvarvarande {assessment?.daysRemaining} dagar är under
+                              miniminivån {assessment?.minimumDays} dagar
+                            </div>
                           </div>
-                          <div className="text-xs">
-                            Anledning: Kvarvarande {assessment?.daysRemaining} dagar är under
-                            miniminivån {assessment?.minimumDays} dagar
-                          </div>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            disabled={isLoading}
+                            onClick={() => void sendToButikssupport(record)}
+                          >
+                            <Send size={14} /> Skickat till Butikssupport
+                          </Button>
                         </div>
                       </div>
                     );
@@ -2965,14 +3037,11 @@ function ErstatningsCheckPage() {
                 Enligt Coop:s regelverk:
                 <ul className="list-disc list-inside mt-2 space-y-1">
                   <li>Varor med ≤18 månaders hållbarhet behöver ≥50% kvar vid ankomst</li>
-                  <li>Varor med &gt;18 månaders hållbarhet behöver ≥9 månader kvar vid ankomst</li>
+                  <li>Varor med &gt;18 månenders hållbarhet behöver ≥9 månader kvar vid ankomst</li>
                   <li>Undantagsartiklar med kortare hållbarhet hanteras separat</li>
                 </ul>
               </AlertDescription>
             </Alert>
-            <Button onClick={generateCompensationZip} disabled={isLoading}>
-              {isLoading ? "Genererar fil..." : "Generera ersättningsfil"}
-            </Button>
           </CardContent>
         </Card>
       )}
