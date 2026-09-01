@@ -2638,9 +2638,9 @@ function SchemaPage() {
 
       {/* Softone Go import disclaimer */}
       {selectedWeekImport && (
-        <div className="flex items-start gap-3 border-b border-sky-200/70 bg-sky-50/60 px-6 py-2.5 dark:border-sky-800/30 dark:bg-sky-950/15">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
-          <p className="text-xs text-sky-800 dark:text-sky-300">
+        <div className="flex items-start gap-3 border-b border-coop-blue-300 bg-coop-blue-100 px-6 py-3">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-coop-gron-700" />
+          <p className="text-xs font-medium text-coop-gray-900">
             Schemat i Storeflow är baserat på en import från Softone Go och ska inte ses som en
             definitiv källa till sanning.{" "}
             <span className="font-medium">
@@ -2659,9 +2659,9 @@ function SchemaPage() {
 
       {/* Delivery plan disclaimer */}
       {activeWeekPlan && (
-        <div className="flex items-start gap-3 border-b border-amber-200/70 bg-amber-50/50 px-6 py-2.5 dark:border-amber-800/30 dark:bg-amber-950/15">
-          <Truck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-          <p className="text-xs text-amber-800 dark:text-amber-300">
+        <div className="flex items-start gap-3 border-b border-coop-orange-300 bg-coop-orange-100 px-6 py-3">
+          <Truck className="mt-0.5 h-4 w-4 shrink-0 text-coop-gron-700" />
+          <p className="text-xs font-medium text-coop-gray-900">
             Leveransplanen är baserad på en importerad mall och ska inte ses som definitiv
             information.{" "}
             <span className="font-medium">

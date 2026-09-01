@@ -51,7 +51,7 @@ export function StatCard({
           <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-600">
             {label}
           </p>
-          <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
+          <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums coop-font-price">{value}</p>
           {(delta || hint) && (
             <p className={cn("mt-1 text-xs", delta ? "text-success" : "text-coop-gray-600")}>
               {delta ?? hint}
