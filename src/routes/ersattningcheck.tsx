@@ -3327,7 +3327,7 @@ function ErstatningsCheckPage() {
                         <Line
                           type="monotone"
                           dataKey={statisticsView}
-                          stroke="#059669"
+                          stroke="#008A14"
                           strokeWidth={3}
                           dot={{ r: 3 }}
                         />

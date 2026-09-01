@@ -101,9 +101,9 @@ export function AukiDomainRenderer({
       <div
         className={className}
         data-testid="domain-renderer"
-        style={{ backgroundColor: "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center" }}
+        style={{ backgroundColor: "#38332e", display: "flex", alignItems: "center", justifyContent: "center" }}
       >
-        <div style={{ textAlign: "center", color: "#888" }}>
+        <div style={{ textAlign: "center", color: "#857867" }}>
           <p>Laddar domändata...</p>
         </div>
       </div>
@@ -115,7 +115,7 @@ export function AukiDomainRenderer({
       <div
         className={className}
         data-testid="domain-renderer"
-        style={{ backgroundColor: "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center" }}
+        style={{ backgroundColor: "#38332e", display: "flex", alignItems: "center", justifyContent: "center" }}
       >
         <div style={{ textAlign: "center", color: "#888" }}>
           <h3>Offline-läge</h3>
@@ -146,7 +146,7 @@ export function AukiDomainRenderer({
           })),
           totalDistance: domain.routes.reduce((sum, r) => sum + r.distance, 0),
           estimatedTimeSeconds: domain.routes.reduce((sum, r) => sum + r.distance, 0) * 60,
-          color: "#fbbf24",
+          color: "#FFF000",
         }
       : undefined;
 

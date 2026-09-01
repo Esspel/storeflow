@@ -116,61 +116,61 @@ export const MARKER_VISUAL_CONFIG: Record<
   shelf: {
     geometry: "box",
     size: [0.8, 1.6, 0.4], // width, height, depth (meters)
-    color: "#3b82f6", // blue
-    emissive: "#1e40af",
+    color: "#3eabf3", // Coop Blå 600
+    emissive: "#1f76b0", // Coop Blå 800
     opacity: 0.9,
   },
   product: {
     geometry: "box",
     size: [0.15, 0.15, 0.15], // small cube
-    color: "#22c55e", // green
-    emissive: "#166534",
+    color: "#299d3a", // Coop Grön 500
+    emissive: "#1a5c2e", // Coop Grön 800
     opacity: 1.0,
   },
   zone: {
     geometry: "plane",
     size: [2.0, 0.01, 2.0], // large flat area marker
-    color: "#f59e0b", // amber
-    emissive: "#92400e",
+    color: "#FF934B", // Coop Orange 500
+    emissive: "#C75102", // Coop Orange 800
     opacity: 0.5,
   },
   entrance: {
     geometry: "cylinder",
     size: [0.6, 0.3, 16], // radius, height, radialSegments
-    color: "#10b981", // emerald
-    emissive: "#065f46",
+    color: "#008A14", // Coop Grön 600
+    emissive: "#005E0E", // Coop Grön 800
     opacity: 0.9,
   },
   exit: {
     geometry: "cylinder",
     size: [0.6, 0.3, 16],
-    color: "#ef4444", // red
-    emissive: "#991b1b",
+    color: "#D33636", // Coop Röd 500
+    emissive: "#AB0000", // Coop Röd 700
     opacity: 0.9,
   },
   aisle: {
     geometry: "torus",
     size: [1.0, 0.05, 16, 32], // radius, tube, radialSegments, tubularSegments
-    color: "#8b5cf6", // violet
-    emissive: "#5b21b6",
+    color: "#00416B", // Coop Blå 1000
+    emissive: "#0C5C92", // Coop Blå 900
     opacity: 0.6,
   },
 };
 
 /** Selection highlight colors */
 export const SELECTION_COLORS = {
-  default: "#ffffff",
-  selected: "#fbbf24", // amber-400
-  target: "#22c55e", // green-500
-  userPosition: "#3b82f6", // blue-500
-  path: "#fbbf24", // amber for navigation path
+  default: "#FBF8F4", // Coop Grå 100
+  selected: "#FFF000", // Coop Gul 600
+  target: "#299D3A", // Coop Grön 500
+  userPosition: "#3EABF3", // Coop Blå 600
+  path: "#FFF000", // Coop Gul 600 for navigation path
 } as const;
 
 /** Planogram compliance overlay colors */
 export const COMPLIANCE_COLORS = {
-  compliant: "#22c55e", // green
-  warning: "#f59e0b", // amber
-  nonCompliant: "#ef4444", // red
+  compliant: "#299D3A", // Coop Grön 500
+  warning: "#FF934B", // Coop Orange 500
+  nonCompliant: "#D33636", // Coop Röd 500
 } as const;
 
 /** Default camera settings */
@@ -184,13 +184,13 @@ export const DEFAULT_CAMERA_CONFIG = {
 
 /** Lighting configuration */
 export const LIGHTING_CONFIG = {
-  ambient: { color: "#ffffff", intensity: 0.5 },
+  ambient: { color: "#FBF8F4", intensity: 0.5 },
   directional: {
-    color: "#ffffff",
+    color: "#FFFFFF",
     intensity: 1.0,
     position: { x: 5, y: 10, z: 7 } as Vector3,
   },
-  hemisphere: { skyColor: "#87ceeb", groundColor: "#8fbc8f", intensity: 0.6 },
+  hemisphere: { skyColor: "#DDF0FD", groundColor: "#CCE8D0", intensity: 0.6 },
 } as const;
 // Helper: konvertera posemesh Vector3 till THREE.Vector3 med metoder
 export function toThreeVector3(v: Vector3): THREE.Vector3 {

@@ -80,7 +80,7 @@ export function StoreMap2D({
       className="relative h-[600px] w-full overflow-auto rounded-md border bg-white select-none"
       style={{
         backgroundImage:
-          "linear-gradient(to right, #e5e7eb 1px, transparent 1px), linear-gradient(to bottom, #e5e7eb 1px, transparent 1px)",
+          "linear-gradient(to right, #E2D8CA 1px, transparent 1px), linear-gradient(to bottom, #E2D8CA 1px, transparent 1px)",
         backgroundSize: `${gridPixelSize}px ${gridPixelSize}px`,
       }}
     >

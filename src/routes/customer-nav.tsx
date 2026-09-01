@@ -632,12 +632,12 @@ function CustomerMapView({
   const offsetY = (600 - height * scale) / 2 - bounds.minY * scale;
 
   const typeColors = {
-    shelf: "#3b82f6",
-    product: "#22c55e",
-    zone: "#a855f7",
+    shelf: "#3eabf3",
+    product: "#299d3a",
+    zone: "#FF934B",
     entrance: "#10b981",
-    exit: "#f43f5e",
-    aisle: "#f59e0b",
+    exit: "#D33636",
+    aisle: "#FFF000",
   };
 
   const typeIcons = {

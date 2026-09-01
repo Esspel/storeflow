@@ -6,9 +6,254 @@
 
 /*
  * ============================================
- * COOP TYPOGRAFISKA KLASSER
+ * COOP FÄRGKARTA — CSS CUSTOM PROPERTIES
  * ============================================
+ *
+ * Baserat på Coop:s officiella färgkarta.
+ * Använd dessa variabler överallt i appen.
+ *
+ * Grundpalett
+ *   --coop-gron:      Coop Grön 600 — #008A14 (primär)
+ *   --coop-accent:    Coop Accent — #8EF54F
+ *   --coop-vit:       Vit — #FFFFFF
+ *   --coop-svart:     Svart (Grå 1000) — #38332E
+ *   --coop-morkgron:  Mörkgrön (Grön 1000) — #003D09
+ *
+ * Färgfamiljer (100=ljusast, 1200=mörkast)
+ *   Grön:  #CCE8D0 → #002906
+ *   Grå:   #FBF8F4 → #000000
+ *   Beige: #FAEDDC → #251709
+ *   Orange:#FFE9DB → #321300
+ *   Röd:   #FAE1E1 → #290000
+ *   Lila:  #FBE0F4 → #280B20
+ *   Blå:   #DDF0FD → #031B2B
+ *   Gul:   #FFFDDA → #332900
+ */
 
+/* ── GRUNDPALETT ─────────────────────────────── */
+:root {
+  /* Coop-färger (exakta namn) */
+  --coop-gron: #008A14;
+  --coop-accent: #8EF54F;
+  --coop-vit: #ffffff;
+  --coop-svart: #38332e;
+  --coop-morkgron: #003d09;
+
+  /* ── GRÖN ─────────────────────────────────── */
+  --coop-gron-100: #cce8d0;
+  --coop-gron-200: #a3d5ab;
+  --coop-gron-300: #7ac285;
+  --coop-gron-400: #52af60;
+  --coop-gron-500: #299d3a;
+  --coop-gron-600: #008a14; /* Coop Grön — primär */
+  --coop-gron-700: #007411;
+  --coop-gron-800: #005e0e;
+  --coop-gron-900: #004d0b;
+  --coop-gron-1000: #003d09;
+  --coop-gron-1100: #003307;
+  --coop-gron-1200: #002906;
+
+  /* ── GRÅ ──────────────────────────────────── */
+  --coop-gray-100: #fbf8f4;
+  --coop-gray-200: #efe9e1;
+  --coop-gray-300: #e2d8ca;
+  --coop-gray-400: #d7c9b8;
+  --coop-gray-500: #cebda7;
+  --coop-gray-600: #c4b097;
+  --coop-gray-700: #a5947f;
+  --coop-gray-800: #857867;
+  --coop-gray-900: #5c5347;
+  --coop-gray-1000: #38332e; /* Svart */
+  --coop-gray-1100: #26221d;
+  --coop-gray-1200: #000000;
+
+  /* ── BEIGE ────────────────────────────────── */
+  --coop-beige-100: #faeddc;
+  --coop-beige-200: #f1d5ad;
+  --coop-beige-300: #e9c28b;
+  --coop-beige-400: #e4ae65;
+  --coop-beige-500: #dd9c41;
+  --coop-beige-600: #cb8729;
+  --coop-beige-700: #ae711f;
+  --coop-beige-800: #8d5d19;
+  --coop-beige-900: #6c4613;
+  --coop-beige-1000: #49310f;
+  --coop-beige-1100: #37250b;
+  --coop-beige-1200: #251709;
+
+  /* ── ORANGE ───────────────────────────────── */
+  --coop-orange-100: #ffe9db;
+  --coop-orange-200: #ffd1b2;
+  --coop-orange-300: #ffbc90;
+  --coop-orange-400: #ffa76d;
+  --coop-orange-500: #ff934b;
+  --coop-orange-600: #ff7e29;
+  --coop-orange-700: #f46404;
+  --coop-orange-800: #c75102;
+  --coop-orange-900: #9a3e00;
+  --coop-orange-1000: #6b2b00;
+  --coop-orange-1100: #471c00;
+  --coop-orange-1200: #321300;
+
+  /* ── RÖD ─────────────────────────────────── */
+  --coop-red-100: #fae1e1;
+  --coop-red-200: #eeaaaa;
+  --coop-red-300: #eb8e8e;
+  --coop-red-400: #db5757;
+  --coop-red-500: #d33636;
+  --coop-red-600: #cc0000;
+  --coop-red-700: #ab0000;
+  --coop-red-800: #8b0000;
+  --coop-red-900: #6a0000;
+  --coop-red-1000: #490000;
+  --coop-red-1100: #3d0000;
+  --coop-red-1200: #290000;
+
+  /* ── LILA ─────────────────────────────────── */
+  --coop-purple-100: #fbe0f4;
+  --coop-purple-200: #f4c0e7;
+  --coop-purple-300: #eba8d9;
+  --coop-purple-400: #e58ece;
+  --coop-purple-500: #e270c4;
+  --coop-purple-600: #d859b6;
+  --coop-purple-700: #ca36a3;
+  --coop-purple-800: #9e3181;
+  --coop-purple-900: #762962;
+  --coop-purple-1000: #531b44;
+  --coop-purple-1100: #3f1234;
+  --coop-purple-1200: #280b20;
+
+  /* ── BLÅ ─────────────────────────────────── */
+  --coop-blue-100: #ddf0fd;
+  --coop-blue-200: #bae1fb;
+  --coop-blue-300: #9ad4fa;
+  --coop-blue-400: #7bc6f8;
+  --coop-blue-500: #5cb8f6;
+  --coop-blue-600: #3eabf3;
+  --coop-blue-700: #2792d9;
+  --coop-blue-800: #1f76b0;
+  --coop-blue-900: #0c5c92;
+  --coop-blue-1000: #00416b;
+  --coop-blue-1100: #002a47;
+  --coop-blue-1200: #031b2b;
+
+  /* ── GUL ──────────────────────────────────── */
+  --coop-yellow-100: #fffdda;
+  --coop-yellow-200: #fffcc8;
+  --coop-yellow-300: #fff9a4;
+  --coop-yellow-400: #fff67f;
+  --coop-yellow-500: #fff349;
+  --coop-yellow-600: #fff000;
+  --coop-yellow-700: #fbe204;
+  --coop-yellow-800: #d5b800;
+  --coop-yellow-900: #ba9b00;
+  --coop-yellow-1000: #8e7601;
+  --coop-yellow-1100: #504000;
+  --coop-yellow-1200: #332900;
+
+  /* ── TAILWIND MAPPNING ─────────────────────── */
+  /* primary = Coop Grön 600 */
+  --primary: var(--coop-gron-600);
+  --primary-foreground: var(--coop-vit);
+
+  /* soft-variant för bakgrunder */
+  --primary-soft: var(--coop-gron-100);
+
+  /* secondary = Grå 200 */
+  --secondary: var(--coop-gray-200);
+  --secondary-foreground: var(--coop-gray-1000);
+
+  /* muted = Grå 100 */
+  --muted: var(--coop-gray-100);
+  --muted-foreground: var(--coop-gray-700);
+
+  /* accent = Coop Accent + Grå 200 */
+  --accent: var(--coop-gray-200);
+  --accent-foreground: var(--coop-gray-1000);
+  --accent-strong: var(--coop-accent);
+
+  /* destructive = Röd 600 */
+  --destructive: var(--coop-red-600);
+  --destructive-foreground: var(--coop-vit);
+
+  /* success = Grön 500 */
+  --success: var(--coop-gron-500);
+  --success-foreground: var(--coop-vit);
+  --success-soft: var(--coop-gron-100);
+
+  /* warning = Orange 500 */
+  --warning: var(--coop-orange-500);
+  --warning-foreground: var(--coop-vit);
+  --warning-soft: var(--coop-orange-100);
+
+  /* info = Blå 600 */
+  --info: var(--coop-blue-600);
+  --info-foreground: var(--coop-vit);
+  --info-soft: var(--coop-blue-100);
+
+  /* border & ring */
+  --border: var(--coop-gray-300);
+  --input: var(--coop-gray-300);
+  --ring: var(--coop-gron-600);
+
+  /* card */
+  --card: var(--coop-vit);
+  --card-foreground: var(--coop-gray-1000);
+  --popover: var(--coop-vit);
+  --popover-foreground: var(--coop-gray-1000);
+
+  /* background */
+  --background: var(--coop-gray-100);
+  --foreground: var(--coop-gray-1000);
+
+  /* shadow (Coop använder inga svarta shadows, utan Grå 900) */
+  --shadow-sm: 0 1px 2px 0 rgb(56 51 46 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(56 51 46 / 0.08), 0 2px 4px -2px rgb(56 51 46 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(56 51 46 / 0.08), 0 4px 6px -4px rgb(56 51 46 / 0.05);
+
+  /* radius */
+  --radius: 0.5rem;
+}
+
+/* ── GLOBALT TYPSnitt — Coop Sans är ENDAST typsnitt ─── */
+html, body {
+  font-family: 'Coop Sans', system-ui, -apple-system, sans-serif !important;
+  font-weight: 400; /* Regular */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Överskriv Tailwinds font-sans, font-serif, font-mono till Coop */
+.font-sans,
+.font-serif,
+.font-mono,
+.font-mono * {
+  font-family: 'Coop Sans', system-ui, -apple-system, sans-serif !important;
+  font-weight: 400;
+}
+
+/* Prissättning och marker behåller sina egna familjer när de explicit anges */
+.coop-font-price,
+.coop-font-price-sm,
+.coop-font-price-lg {
+  font-family: 'Coop Sans Price', 'Coop Sans', sans-serif !important;
+}
+.coop-font-marker,
+.coop-font-marker-strong {
+  font-family: 'Coop Marker', 'Coop Sans', cursive, sans-serif !important;
+}
+
+/* Mono för kod/ID — använd Coop Sans Regular med tabular-nums istället */
+.font-mono,
+.font-mono span,
+.font-mono * {
+  font-family: 'Coop Sans', system-ui, -apple-system, sans-serif !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* ── COOP TYPOGRAFISKA KLASSER ──────────────── */
+/*
  * Regler enligt Coop:s manual:
  * - Coop Sans Black (900): Stora rubriker
  * - Coop Sans Bold (700): Mellanstora/små rubriker
@@ -17,6 +262,8 @@
  * - Coop Sans Price Black (900): Prissättning
  * - Coop Marker Regular (400): Handgjord känsla, komplement
  * - Coop Marker Bold (700): Stark betoning i handgjord stil
+ *
+ * GLOBAL STANDARD: Coop Sans är ENDAST typsnittet i appen — överskrider Tailwind's font-sans, font-serif, font-mono
  */
 
 /* Textjustering direkt i klasser (enligt manual) */
@@ -107,3 +354,100 @@
   font-size: 1.5rem;
   line-height: 1.3;
 }
+
+/* ── COOP-GRADIENT ───────────────────────────── */
+.bg-coop-gradient {
+  background: linear-gradient(135deg, var(--coop-gron-600) 0%, var(--coop-gron-700) 100%);
+}
+
+.bg-coop-gradient-accent {
+  background: linear-gradient(135deg, var(--coop-accent) 0%, var(--coop-gron-400) 100%);
+}
+
+/* ── COOP-FÄRGER SOM BAKGRUNDSKLASSER ──────── */
+/* Grön */
+.bg-coop-gron { background-color: var(--coop-gron-600); }
+.bg-coop-gron-100 { background-color: var(--coop-gron-100); }
+.bg-coop-gron-200 { background-color: var(--coop-gron-200); }
+.bg-coop-gron-300 { background-color: var(--coop-gron-300); }
+.bg-coop-gron-400 { background-color: var(--coop-gron-400); }
+.bg-coop-gron-500 { background-color: var(--coop-gron-500); }
+.bg-coop-gron-600 { background-color: var(--coop-gron-600); }
+.bg-coop-gron-700 { background-color: var(--coop-gron-700); }
+.bg-coop-gron-800 { background-color: var(--coop-gron-800); }
+.bg-coop-gron-900 { background-color: var(--coop-gron-900); }
+.bg-coop-gron-1000 { background-color: var(--coop-gron-1000); }
+
+/* Grå */
+.bg-coop-gray { background-color: var(--coop-gray-1000); }
+.bg-coop-gray-100 { background-color: var(--coop-gray-100); }
+.bg-coop-gray-200 { background-color: var(--coop-gray-200); }
+.bg-coop-gray-300 { background-color: var(--coop-gray-300); }
+.bg-coop-gray-400 { background-color: var(--coop-gray-400); }
+.bg-coop-gray-500 { background-color: var(--coop-gray-500); }
+.bg-coop-gray-600 { background-color: var(--coop-gray-600); }
+.bg-coop-gray-700 { background-color: var(--coop-gray-700); }
+.bg-coop-gray-800 { background-color: var(--coop-gray-800); }
+.bg-coop-gray-900 { background-color: var(--coop-gray-900); }
+.bg-coop-gray-1000 { background-color: var(--coop-gray-1000); }
+
+/* Beige */
+.bg-coop-beige-100 { background-color: var(--coop-beige-100); }
+.bg-coop-beige-200 { background-color: var(--coop-beige-200); }
+.bg-coop-beige-300 { background-color: var(--coop-beige-300); }
+
+/* Orange */
+.bg-coop-orange-100 { background-color: var(--coop-orange-100); }
+.bg-coop-orange-200 { background-color: var(--coop-orange-200); }
+.bg-coop-orange-300 { background-color: var(--coop-orange-300); }
+.bg-coop-orange-400 { background-color: var(--coop-orange-400); }
+.bg-coop-orange-500 { background-color: var(--coop-orange-500); }
+.bg-coop-orange-600 { background-color: var(--coop-orange-600); }
+
+/* Röd */
+.bg-coop-red { background-color: var(--coop-red-600); }
+.bg-coop-red-100 { background-color: var(--coop-red-100); }
+.bg-coop-red-200 { background-color: var(--coop-red-200); }
+.bg-coop-red-300 { background-color: var(--coop-red-300); }
+.bg-coop-red-400 { background-color: var(--coop-red-400); }
+.bg-coop-red-500 { background-color: var(--coop-red-500); }
+.bg-coop-red-600 { background-color: var(--coop-red-600); }
+
+/* Blå */
+.bg-coop-blue-100 { background-color: var(--coop-blue-100); }
+.bg-coop-blue-200 { background-color: var(--coop-blue-200); }
+.bg-coop-blue-300 { background-color: var(--coop-blue-300); }
+.bg-coop-blue-400 { background-color: var(--coop-blue-400); }
+.bg-coop-blue-500 { background-color: var(--coop-blue-500); }
+.bg-coop-blue-600 { background-color: var(--coop-blue-600); }
+
+/* Gul */
+.bg-coop-yellow-100 { background-color: var(--coop-yellow-100); }
+.bg-coop-yellow-200 { background-color: var(--coop-yellow-200); }
+.bg-coop-yellow-300 { background-color: var(--coop-yellow-300); }
+.bg-coop-yellow-400 { background-color: var(--coop-yellow-400); }
+.bg-coop-yellow-500 { background-color: var(--coop-yellow-500); }
+
+/* Accent */
+.bg-coop-accent { background-color: var(--coop-accent); }
+
+/* ── COOP-FÄRGER SOM TEXTKLASSER ───────────── */
+.text-coop-gron { color: var(--coop-gron-600); }
+.text-coop-gray { color: var(--coop-gray-1000); }
+.text-coop-gray-400 { color: var(--coop-gray-400); }
+.text-coop-gray-500 { color: var(--coop-gray-500); }
+.text-coop-gray-600 { color: var(--coop-gray-600); }
+.text-coop-gray-700 { color: var(--coop-gray-700); }
+.text-coop-gray-800 { color: var(--coop-gray-800); }
+.text-coop-accent { color: var(--coop-accent); }
+.text-coop-red { color: var(--coop-red-600); }
+.text-coop-orange { color: var(--coop-orange-500); }
+
+/* ── COOP-FÄRGER SOM BORDERKLASSER ─────────── */
+.border-coop-gron { border-color: var(--coop-gron-600); }
+.border-coop-gray { border-color: var(--coop-gray-300); }
+.border-coop-gray-200 { border-color: var(--coop-gray-200); }
+.border-coop-gray-300 { border-color: var(--coop-gray-300); }
+.border-coop-gray-400 { border-color: var(--coop-gray-400); }
+.border-coop-red { border-color: var(--coop-red-600); }
+.border-coop-orange { border-color: var(--coop-orange-500); }

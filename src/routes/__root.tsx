@@ -113,7 +113,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Modern retail operations management för butikskedjor: uppgifter, avvikelser och realtidsuppföljning.",
       },
-      { name: "theme-color", content: "#3d8c5e" },
+      { name: "theme-color", content: "#008A14" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "default" },

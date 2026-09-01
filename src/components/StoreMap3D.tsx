@@ -50,7 +50,7 @@ function MarkerMesh({ marker, onClick, isSelected, isTarget, isUserPosition }: M
   // Determine color based on state
   const getColor = useCallback(() => {
     if (marker.compliance === "nonCompliant") return SELECTION_COLORS.target; // red
-    if (marker.compliance === "warning") return "#f59e0b"; // amber
+    if (marker.compliance === "warning") return "#FF934B"; // Coop Orange 500
     if (isUserPosition) return SELECTION_COLORS.userPosition;
     if (isTarget) return SELECTION_COLORS.target;
     if (isSelected || hovered) return SELECTION_COLORS.selected;
@@ -169,7 +169,7 @@ function MarkerMesh({ marker, onClick, isSelected, isTarget, isUserPosition }: M
           transform: "translate(-50%, -100%)",
           fontSize: "12px",
           fontWeight: 600,
-          color: "#1f2937",
+          color: "#00416B",
           background: "rgba(255,255,255,0.9)",
           padding: "2px 6px",
           borderRadius: "4px",
@@ -249,7 +249,7 @@ function GridFloor({ bounds, cellSize = 1 }: GridFloorProps) {
     }
   }, [bounds, cellSize]);
 
-  return <gridHelper ref={gridRef} args={[10, 10, "#e5e7eb", "#d1d5db"]} position={[0, 0, 0]} />;
+  return <gridHelper ref={gridRef} args={[10, 10, "#e2d8ca", "#d7c9b8"]} position={[0, 0, 0]} />;
 }
 
 // ============================================================================

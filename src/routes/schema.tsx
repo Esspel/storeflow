@@ -217,11 +217,11 @@ type MatchedEmployee = {
 // ─── Shift colour mapping ─────────────────────────────────────────────────────
 
 const SHIFT_COLORS: Record<string, { bg: string; label: string }> = {
-  kassa: { bg: "#b5c9a1", label: "Kassa" },
-  "kassa reserv": { bg: "#b5c9a1", label: "Kassa Reserv" },
-  "kassa reserv 1": { bg: "#b5c9a1", label: "Kassa Reserv 1" },
-  förbutik: { bg: "#f0c87a", label: "Förbutik" },
-  teamplock: { bg: "#7d6547", label: "Teamplock" },
+  kassa: { bg: "#EFE9E1", label: "Kassa" },
+  "kassa reserv": { bg: "#EFE9E1", label: "Kassa Reserv" },
+  "kassa reserv 1": { bg: "#EFE9E1", label: "Kassa Reserv 1" },
+  förbutik: { bg: "#E4AE65", label: "Förbutik" },
+  teamplock: { bg: "#8D5D19", label: "Teamplock" },
   butikskök: { bg: "#4a7c4e", label: "Butikskök" },
   butik: { bg: "#b5c9a1", label: "Butik" },
   lager: { bg: "#9aab85", label: "Lager" },

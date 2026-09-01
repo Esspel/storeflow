@@ -1,0 +1,6 @@
+src/routes/ersattningcheck.tsx
+src/components/qr-generator.tsx
+src/routes/qr-generator.tsx
+chrome-extension/chrome-extension.crx
+chrome-extension/chrome-extension.pem
+supabase/migrations/20260830224634_add_routes_column_to_spatial_maps.sql
