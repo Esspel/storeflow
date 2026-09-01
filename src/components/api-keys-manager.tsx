@@ -37,7 +37,6 @@ import { cn } from "@/lib/utils";
 type ScopeGroup = { label: string; read: string; write: string | null };
 
 const SCOPE_GROUPS: ScopeGroup[] = [
-  { label: "Mallar", read: "templates:read", write: "templates:write" },
   { label: "Uppgifter", read: "tasks:read", write: "tasks:write" },
   { label: "Kundönskemål", read: "customer_requests:read", write: "customer_requests:write" },
   { label: "Kundrundor", read: "customer_rounds:read", write: null },

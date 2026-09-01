@@ -64,7 +64,7 @@ export function BarcodeProvider({ children }: { children: React.ReactNode }) {
 
       if (taskMatch) {
         label = taskMatch.title;
-        navigate({ to: "/uppgifter" });
+        navigate({ to: "/" });
         return;
       }
 

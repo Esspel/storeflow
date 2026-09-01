@@ -14,7 +14,6 @@ import { Route as AnvandningsvillkorRouteImport } from './routes/anvandningsvill
 import { Route as AvvikelserRouteImport } from './routes/avvikelser'
 import { Route as BelastningRouteImport } from './routes/belastning'
 import { Route as ButiksregisterRouteImport } from './routes/butiksregister'
-import { Route as CustomerNavRouteImport } from './routes/customer-nav'
 import { Route as ErsattningcheckRouteImport } from './routes/ersattningcheck'
 import { Route as GdprRouteImport } from './routes/gdpr'
 import { Route as InstallningarRouteImport } from './routes/installningar'
@@ -23,16 +22,12 @@ import { Route as KundonskemalRouteImport } from './routes/kundonskemal'
 import { Route as KundrundaRouteImport } from './routes/kundrunda'
 import { Route as LicensRouteImport } from './routes/licens'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as PersonalRouteImport } from './routes/personal'
 import { Route as QrKundonskemalRouteImport } from './routes/qr-kundonskemal'
 import { Route as QrKundonskemalFormRouteImport } from './routes/qr-kundonskemal-form'
 import { Route as RapporterRouteImport } from './routes/rapporter'
 import { Route as SchemaRouteImport } from './routes/schema'
-import { Route as ShelfAnalyticsRouteImport } from './routes/shelf-analytics'
-import { Route as SpatialNavigationRouteImport } from './routes/spatial-navigation'
 import { Route as TestpanelRouteImport } from './routes/testpanel'
-import { Route as UppgifterRouteImport } from './routes/uppgifter'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -57,11 +52,6 @@ const BelastningRoute = BelastningRouteImport.update({
 const ButiksregisterRoute = ButiksregisterRouteImport.update({
   id: '/butiksregister',
   path: '/butiksregister',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CustomerNavRoute = CustomerNavRouteImport.update({
-  id: '/customer-nav',
-  path: '/customer-nav',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ErsattningcheckRoute = ErsattningcheckRouteImport.update({
@@ -104,11 +94,6 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MallarRoute = MallarRouteImport.update({
-  id: '/mallar',
-  path: '/mallar',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const PersonalRoute = PersonalRouteImport.update({
   id: '/personal',
   path: '/personal',
@@ -134,24 +119,9 @@ const SchemaRoute = SchemaRouteImport.update({
   path: '/schema',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ShelfAnalyticsRoute = ShelfAnalyticsRouteImport.update({
-  id: '/shelf-analytics',
-  path: '/shelf-analytics',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SpatialNavigationRoute = SpatialNavigationRouteImport.update({
-  id: '/spatial-navigation',
-  path: '/spatial-navigation',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const TestpanelRoute = TestpanelRouteImport.update({
   id: '/testpanel',
   path: '/testpanel',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const UppgifterRoute = UppgifterRouteImport.update({
-  id: '/uppgifter',
-  path: '/uppgifter',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -161,7 +131,6 @@ export interface FileRoutesByFullPath {
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
-  '/customer-nav': typeof CustomerNavRoute
   '/ersattningcheck': typeof ErsattningcheckRoute
   '/gdpr': typeof GdprRoute
   '/installningar': typeof InstallningarRoute
@@ -170,16 +139,12 @@ export interface FileRoutesByFullPath {
   '/kundrunda': typeof KundrundaRoute
   '/licens': typeof LicensRoute
   '/login': typeof LoginRoute
-  '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
-  '/shelf-analytics': typeof ShelfAnalyticsRoute
-  '/spatial-navigation': typeof SpatialNavigationRoute
   '/testpanel': typeof TestpanelRoute
-  '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -187,7 +152,6 @@ export interface FileRoutesByTo {
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
-  '/customer-nav': typeof CustomerNavRoute
   '/ersattningcheck': typeof ErsattningcheckRoute
   '/gdpr': typeof GdprRoute
   '/installningar': typeof InstallningarRoute
@@ -196,16 +160,12 @@ export interface FileRoutesByTo {
   '/kundrunda': typeof KundrundaRoute
   '/licens': typeof LicensRoute
   '/login': typeof LoginRoute
-  '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
-  '/shelf-analytics': typeof ShelfAnalyticsRoute
-  '/spatial-navigation': typeof SpatialNavigationRoute
   '/testpanel': typeof TestpanelRoute
-  '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -214,7 +174,6 @@ export interface FileRoutesById {
   '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
-  '/customer-nav': typeof CustomerNavRoute
   '/ersattningcheck': typeof ErsattningcheckRoute
   '/gdpr': typeof GdprRoute
   '/installningar': typeof InstallningarRoute
@@ -223,16 +182,12 @@ export interface FileRoutesById {
   '/kundrunda': typeof KundrundaRoute
   '/licens': typeof LicensRoute
   '/login': typeof LoginRoute
-  '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
-  '/shelf-analytics': typeof ShelfAnalyticsRoute
-  '/spatial-navigation': typeof SpatialNavigationRoute
   '/testpanel': typeof TestpanelRoute
-  '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -242,7 +197,6 @@ export interface FileRouteTypes {
     | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
-    | '/customer-nav'
     | '/ersattningcheck'
     | '/gdpr'
     | '/installningar'
@@ -251,16 +205,12 @@ export interface FileRouteTypes {
     | '/kundrunda'
     | '/licens'
     | '/login'
-    | '/mallar'
     | '/personal'
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
     | '/rapporter'
     | '/schema'
-    | '/shelf-analytics'
-    | '/spatial-navigation'
     | '/testpanel'
-    | '/uppgifter'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -268,7 +218,6 @@ export interface FileRouteTypes {
     | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
-    | '/customer-nav'
     | '/ersattningcheck'
     | '/gdpr'
     | '/installningar'
@@ -277,16 +226,12 @@ export interface FileRouteTypes {
     | '/kundrunda'
     | '/licens'
     | '/login'
-    | '/mallar'
     | '/personal'
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
     | '/rapporter'
     | '/schema'
-    | '/shelf-analytics'
-    | '/spatial-navigation'
     | '/testpanel'
-    | '/uppgifter'
   id:
     | '__root__'
     | '/'
@@ -294,7 +239,6 @@ export interface FileRouteTypes {
     | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
-    | '/customer-nav'
     | '/ersattningcheck'
     | '/gdpr'
     | '/installningar'
@@ -303,16 +247,12 @@ export interface FileRouteTypes {
     | '/kundrunda'
     | '/licens'
     | '/login'
-    | '/mallar'
     | '/personal'
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
     | '/rapporter'
     | '/schema'
-    | '/shelf-analytics'
-    | '/spatial-navigation'
     | '/testpanel'
-    | '/uppgifter'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -321,7 +261,6 @@ export interface RootRouteChildren {
   AvvikelserRoute: typeof AvvikelserRoute
   BelastningRoute: typeof BelastningRoute
   ButiksregisterRoute: typeof ButiksregisterRoute
-  CustomerNavRoute: typeof CustomerNavRoute
   ErsattningcheckRoute: typeof ErsattningcheckRoute
   GdprRoute: typeof GdprRoute
   InstallningarRoute: typeof InstallningarRoute
@@ -330,16 +269,12 @@ export interface RootRouteChildren {
   KundrundaRoute: typeof KundrundaRoute
   LicensRoute: typeof LicensRoute
   LoginRoute: typeof LoginRoute
-  MallarRoute: typeof MallarRoute
   PersonalRoute: typeof PersonalRoute
   QrKundonskemalRoute: typeof QrKundonskemalRoute
   QrKundonskemalFormRoute: typeof QrKundonskemalFormRoute
   RapporterRoute: typeof RapporterRoute
   SchemaRoute: typeof SchemaRoute
-  ShelfAnalyticsRoute: typeof ShelfAnalyticsRoute
-  SpatialNavigationRoute: typeof SpatialNavigationRoute
   TestpanelRoute: typeof TestpanelRoute
-  UppgifterRoute: typeof UppgifterRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -377,13 +312,6 @@ declare module '@tanstack/react-router' {
       path: '/butiksregister'
       fullPath: '/butiksregister'
       preLoaderRoute: typeof ButiksregisterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/customer-nav': {
-      id: '/customer-nav'
-      path: '/customer-nav'
-      fullPath: '/customer-nav'
-      preLoaderRoute: typeof CustomerNavRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ersattningcheck': {
@@ -442,13 +370,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/mallar': {
-      id: '/mallar'
-      path: '/mallar'
-      fullPath: '/mallar'
-      preLoaderRoute: typeof MallarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/personal': {
       id: '/personal'
       path: '/personal'
@@ -484,32 +405,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SchemaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/shelf-analytics': {
-      id: '/shelf-analytics'
-      path: '/shelf-analytics'
-      fullPath: '/shelf-analytics'
-      preLoaderRoute: typeof ShelfAnalyticsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/spatial-navigation': {
-      id: '/spatial-navigation'
-      path: '/spatial-navigation'
-      fullPath: '/spatial-navigation'
-      preLoaderRoute: typeof SpatialNavigationRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/testpanel': {
       id: '/testpanel'
       path: '/testpanel'
       fullPath: '/testpanel'
       preLoaderRoute: typeof TestpanelRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/uppgifter': {
-      id: '/uppgifter'
-      path: '/uppgifter'
-      fullPath: '/uppgifter'
-      preLoaderRoute: typeof UppgifterRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -521,7 +421,6 @@ const rootRouteChildren: RootRouteChildren = {
   AvvikelserRoute: AvvikelserRoute,
   BelastningRoute: BelastningRoute,
   ButiksregisterRoute: ButiksregisterRoute,
-  CustomerNavRoute: CustomerNavRoute,
   ErsattningcheckRoute: ErsattningcheckRoute,
   GdprRoute: GdprRoute,
   InstallningarRoute: InstallningarRoute,
@@ -530,16 +429,12 @@ const rootRouteChildren: RootRouteChildren = {
   KundrundaRoute: KundrundaRoute,
   LicensRoute: LicensRoute,
   LoginRoute: LoginRoute,
-  MallarRoute: MallarRoute,
   PersonalRoute: PersonalRoute,
   QrKundonskemalRoute: QrKundonskemalRoute,
   QrKundonskemalFormRoute: QrKundonskemalFormRoute,
   RapporterRoute: RapporterRoute,
   SchemaRoute: SchemaRoute,
-  ShelfAnalyticsRoute: ShelfAnalyticsRoute,
-  SpatialNavigationRoute: SpatialNavigationRoute,
   TestpanelRoute: TestpanelRoute,
-  UppgifterRoute: UppgifterRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

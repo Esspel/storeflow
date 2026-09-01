@@ -14,7 +14,7 @@ type Shortcut = {
 // Order matches sidebar exactly:
 // Drift: Dashboard, Uppgifter, Schema, Avvikelser, Kundönskemål
 // then Möten, Kundrunda (accessible to all store users)
-// Operations: Rapporter, Mallar
+// Operations: Rapporter
 // Admin: Personal, Inställningar
 // Special: Belastning (manager), Pulstavla
 const ALL_SHORTCUTS: Shortcut[] = [
@@ -27,7 +27,6 @@ const ALL_SHORTCUTS: Shortcut[] = [
   { key: "7", label: "Rapporter", to: "/rapporter", access: "all" },
   { key: "8", label: "Personal", to: "/personal", access: "manager" },
   { key: "9", label: "Inställningar", to: "/installningar", access: "all" },
-  { key: "m", label: "Mallar", to: "/mallar", access: "manager" },
   { key: "b", label: "Medarbetarbelastning", to: "/belastning", access: "manager" },
 ];
 

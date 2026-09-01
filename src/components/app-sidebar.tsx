@@ -13,7 +13,6 @@ import {
   CalendarDays,
   ChartBar,
   ShoppingCart,
-  FileText,
 } from "lucide-react";
 
 import {
@@ -49,7 +48,6 @@ const operationsRoutes: MenuItem[] = [
   { title: "Butiker", url: "/butiker", icon: Store },
   { title: "Revisioner", url: "/revisioner", icon: ClipboardCheck },
   { title: "Styrtavlor", url: "/styrtavlor", icon: Monitor },
-  { title: "Mallar", url: "/mallar", icon: FileText },
   { title: "Rapporter", url: "/rapporter", icon: ChartBar },
 ];
 

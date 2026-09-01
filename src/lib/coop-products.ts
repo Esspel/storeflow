@@ -71,7 +71,7 @@ export async function searchProducts(query: string, storeId?: string): Promise<C
 }
 
 /**
- * Upsert-produkt från import (XLSX/TSV/PDF-planogram).
+ * Upsert-produkt från import (XLSX/TSV).
  * Uppdaterar eller skapar baserat på ean/bnr.
  */
 export async function upsertProductFromImport(

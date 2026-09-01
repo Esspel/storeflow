@@ -1,7 +1,7 @@
 /**
  * Product matching and upsert helpers.
  * - material_nr is the primary key for delivery imports.
- * - ean / bnr come from planograms and deliveries.
+ * - ean / bnr come from deliveries.
  */
 import { supabase } from "@/lib/supabase";
 

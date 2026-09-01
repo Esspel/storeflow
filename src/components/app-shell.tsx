@@ -444,8 +444,6 @@ export function AppShell() {
     { to: "/kundrunda", label: "Kundrunda", Icon: UserRound },
     { to: "/kundonskemal", label: "Kundönskemål", Icon: ShoppingCart },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", Icon: FlaskConical }] : []),
-    { to: "/mallar", label: "Mallar", Icon: ClipboardList },
-    { to: "/spatial-navigation", label: "3D Butiksvy", Icon: Navigation },
   ];
   const isMoreActive = moreRoutes.some((r) => isActive(r.to));
 
@@ -550,21 +548,16 @@ export function AppShell() {
                   variant="outline"
                   className="relative shrink-0 rounded-full px-3 py-1.5 text-sm font-medium text-coop-gray-900/70 hover:text-primary"
                 >
-                  Uppgifter & mallar
+                  Uppgifter
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
-                <DropdownMenuItem asChild>
-                  <Link to="/uppgifter">Uppgifter</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/mallar">Mallar</Link>
-                </DropdownMenuItem>
+                <DropdownMenuItem disabled>Uppgifter (inte tillgängligt)</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
             {nav
-              .filter((item) => item.to !== "/" && item.to !== "/uppgifter")
+              .filter((item) => item.to !== "/")
               .map((item) => (
                 <Link
                   key={item.to}
@@ -581,32 +574,6 @@ export function AppShell() {
                 </Link>
               ))}
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="relative shrink-0 rounded-full px-2.5 py-1.5 text-sm font-medium text-coop-gray-900/70 transition-colors hover:text-primary"
-                >
-                  <Navigation className="mr-1.5 h-4 w-4" />
-                  Posemesh
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[220px]">
-                <DropdownMenuItem asChild>
-                  <Link
-                    to="/spatial-navigation"
-                    className="block w-full text-left px-4 py-2 text-sm"
-                  >
-                    3D Butiksvy
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/shelf-analytics" className="block w-full text-left px-4 py-2 text-sm">
-                    Planogram & Hyllanalys
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </nav>
 
           <div className="ml-auto shrink-0 flex items-center gap-1.5 md:gap-2">
@@ -725,9 +692,9 @@ export function AppShell() {
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild className="md:hidden">
-                  <Link to="/mallar" className="cursor-pointer">
-                    <FileText className="mr-2 h-4 w-4" />
-                    Mallar
+                  <Link to="/rapporter" className="cursor-pointer">
+                    <ChartBar className="mr-2 h-4 w-4" />
+                    Rapporter
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild className="md:hidden">
