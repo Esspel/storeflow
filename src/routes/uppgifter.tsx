@@ -2856,7 +2856,7 @@ function TasksPage() {
                       </span>
                     )}
                     {t.event_trigger_description && !t.event_triggered_at && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-coop-orange-600/10 px-1.5 py-0.5 text-[10px] font-medium text-coop-orange-800 dark:text-coop-orange-500">
                         <Zap className="h-2.5 w-2.5" />
                         Väntar på händelse
                       </span>
@@ -3063,8 +3063,8 @@ function TasksPage() {
         {unconfirmedEventTasks.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-0.5">
-              <Zap className="h-3.5 w-3.5 text-amber-500" />
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-400">
+              <Zap className="h-3.5 w-3.5 text-coop-orange-600" />
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-coop-orange-800 dark:text-coop-orange-500">
                 Händelser att bekräfta
               </h2>
               <span className="ml-auto text-[11px] text-coop-gray-600">
@@ -3075,13 +3075,13 @@ function TasksPage() {
               {unconfirmedEventTasks.map((t) => (
                 <div
                   key={t.id}
-                  className="rounded-2xl border border-amber-400/40 bg-amber-50/60 dark:bg-amber-900/10 px-4 py-3 space-y-2"
+                  className="rounded-2xl border border-amber-400/40 bg-coop-orange-100/60 dark:bg-coop-orange-900/10 px-4 py-3 space-y-2"
                 >
                   <p className="text-sm font-semibold text-coop-gray-900">{t.title}</p>
                   <p className="text-xs text-coop-gray-600">{t.event_trigger_description}</p>
                   <div className="flex items-center gap-2">
                     <button
-                      className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-medium text-coop-vit hover:bg-amber-600 transition-colors"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-coop-orange-600 px-3 py-1.5 text-xs font-medium text-coop-vit hover:bg-coop-orange-600 transition-colors"
                       onClick={() => void confirmEventTrigger(t)}
                     >
                       <ShieldCheck className="h-3.5 w-3.5" />
@@ -3203,16 +3203,16 @@ function TasksPage() {
       </div>
 
       {isManager && unconfirmedTasks.length > 0 && !assigneeConfirmDismissed && (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-coop-orange-100 px-4 py-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+            <AlertTriangle className="h-4 w-4 text-coop-orange-700 shrink-0" />
             <div className="min-w-0">
-              <p className="text-sm font-medium text-amber-900">
+              <p className="text-sm font-medium text-coop-orange-600">
                 {unconfirmedTasks.length} uppgift{unconfirmedTasks.length !== 1 ? "er" : ""} behöver
                 bekräftelse av tilldelad person
               </p>
               {unconfirmedTasks.some((t) => t.due_date?.slice(0, 10) === tomorrowStr) && (
-                <p className="text-xs text-amber-700 mt-0.5">
+                <p className="text-xs text-coop-orange-800 mt-0.5">
                   Varav{" "}
                   {unconfirmedTasks.filter((t) => t.due_date?.slice(0, 10) === tomorrowStr).length}{" "}
                   är planerade imorgon
@@ -3224,7 +3224,7 @@ function TasksPage() {
             <Button
               size="sm"
               variant="outline"
-              className="rounded-full text-xs border-amber-300 bg-coop-vit text-amber-800 hover:bg-amber-100"
+              className="rounded-full text-xs border-amber-300 bg-coop-vit text-coop-orange-900 hover:bg-coop-orange-200"
               onClick={() => {
                 setConfirmSelectedIds(new Set(unconfirmedTasks.map((t) => t.id)));
                 setAssigneeConfirmOpen(true);
@@ -3233,7 +3233,7 @@ function TasksPage() {
               Granska
             </Button>
             <button
-              className="text-amber-600 hover:text-amber-800 p-1"
+              className="text-coop-orange-700 hover:text-coop-orange-900 p-1"
               onClick={() => setAssigneeConfirmDismissed(true)}
             >
               <X className="h-3.5 w-3.5" />
@@ -3488,8 +3488,8 @@ function TasksPage() {
           {unconfirmedEventTasks.length > 0 && tab !== "done" && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 px-0.5">
-                <Zap className="h-3.5 w-3.5 text-amber-500" />
-                <h2 className="text-xs font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-400">
+                <Zap className="h-3.5 w-3.5 text-coop-orange-600" />
+                <h2 className="text-xs font-semibold uppercase tracking-widest text-coop-orange-800 dark:text-coop-orange-500">
                   Händelser att bekräfta
                 </h2>
                 <span className="ml-auto text-[11px] text-coop-gray-600">
@@ -3500,13 +3500,13 @@ function TasksPage() {
                 {unconfirmedEventTasks.map((t) => (
                   <div
                     key={t.id}
-                    className="rounded-2xl border border-amber-400/40 bg-amber-50/60 dark:bg-amber-900/10 px-4 py-3 space-y-2"
+                    className="rounded-2xl border border-amber-400/40 bg-coop-orange-100/60 dark:bg-coop-orange-900/10 px-4 py-3 space-y-2"
                   >
                     <p className="text-sm font-semibold text-coop-gray-900">{t.title}</p>
                     <p className="text-xs text-coop-gray-600">{t.event_trigger_description}</p>
                     <div className="flex items-center gap-2">
                       <button
-                        className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-medium text-coop-vit hover:bg-amber-600 transition-colors"
+                        className="inline-flex items-center gap-1.5 rounded-full bg-coop-orange-600 px-3 py-1.5 text-xs font-medium text-coop-vit hover:bg-coop-orange-600 transition-colors"
                         onClick={() => void confirmEventTrigger(t)}
                       >
                         <ShieldCheck className="h-3.5 w-3.5" />
@@ -3665,7 +3665,7 @@ function TasksPage() {
                     "rounded-xl border p-3 space-y-2",
                     detailTask.event_triggered_at
                       ? "border-success/40 bg-success/5"
-                      : "border-amber-400/40 bg-amber-50/50 dark:bg-amber-900/10",
+                      : "border-amber-400/40 bg-coop-orange-100/50 dark:bg-coop-orange-900/10",
                   )}
                 >
                   <div className="flex items-center gap-2">
@@ -3674,7 +3674,7 @@ function TasksPage() {
                         "h-4 w-4 shrink-0",
                         detailTask.event_triggered_at
                           ? "text-success"
-                          : "text-amber-600 dark:text-amber-400",
+                          : "text-coop-orange-700 dark:text-coop-orange-500",
                       )}
                     />
                     <p className="text-xs font-semibold text-coop-gray-900">Händelsebaserad uppgift</p>
@@ -3696,7 +3696,7 @@ function TasksPage() {
                       !detailTask.event_trigger_user_id ||
                       isManager) && (
                       <button
-                        className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-medium text-coop-vit hover:bg-amber-600 transition-colors"
+                        className="inline-flex items-center gap-1.5 rounded-full bg-coop-orange-600 px-3 py-1.5 text-xs font-medium text-coop-vit hover:bg-coop-orange-600 transition-colors"
                         onClick={() => void confirmEventTrigger(detailTask)}
                       >
                         <ShieldCheck className="h-3.5 w-3.5" />
@@ -5457,7 +5457,7 @@ function TasksPage() {
 
                 <div className="px-4 py-3 space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <Zap className="h-4 w-4 shrink-0 text-amber-500" />
+                    <Zap className="h-4 w-4 shrink-0 text-coop-orange-600" />
                     <span className="text-xs text-coop-gray-600 flex-1">Händelsevillkor</span>
                   </div>
                   <input
@@ -6263,7 +6263,7 @@ function TasksPage() {
 
                   <div className="px-4 py-3 space-y-1.5">
                     <div className="flex items-center gap-2">
-                      <Zap className="h-4 w-4 shrink-0 text-amber-500" />
+                      <Zap className="h-4 w-4 shrink-0 text-coop-orange-600" />
                       <span className="text-xs text-coop-gray-600 flex-1">Händelsevillkor</span>
                     </div>
                     <input
@@ -6640,7 +6640,7 @@ function TasksPage() {
         <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-amber-600" />
+              <Users className="h-4 w-4 text-coop-orange-700" />
               Bekräfta tilldelade medarbetare
             </DialogTitle>
             <p className="text-sm text-coop-gray-600 mt-1">
@@ -6718,7 +6718,7 @@ function TasksPage() {
                           {dueTomorrow && (
                             <Badge
                               variant="outline"
-                              className="text-[10px] border-amber-300 text-amber-700 bg-amber-50"
+                              className="text-[10px] border-amber-300 text-coop-orange-800 bg-coop-orange-100"
                             >
                               Imorgon
                             </Badge>

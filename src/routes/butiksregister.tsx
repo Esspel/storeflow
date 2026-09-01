@@ -74,7 +74,7 @@ function StoreCard({ store }: { store: StoreType }) {
                 </span>
               )}
               {store.franchise && (
-                <span className="shrink-0 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                <span className="shrink-0 rounded-full bg-coop-orange-200 dark:bg-coop-orange-900/30 px-2 py-0.5 text-[10px] font-semibold text-coop-orange-800 dark:text-coop-orange-400">
                   Franchise
                 </span>
               )}

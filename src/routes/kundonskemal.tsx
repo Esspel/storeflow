@@ -628,7 +628,7 @@ function CustomerRequestsPage() {
                   {/* Customer notes */}
                   {r.notes && (
                     <div className="rounded-xl bg-muted/50 px-3 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600/90 dark:text-amber-400/90 mb-0.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-orange-700/90 dark:text-coop-orange-500/90 mb-0.5">
                         Anteckning (visas för kunden)
                       </p>
                       <p className="text-xs text-coop-gray-600 leading-relaxed">{r.notes}</p>
@@ -890,7 +890,7 @@ function CustomerRequestsPage() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-medium">Anteckning (valfritt)</Label>
-                <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                <span className="text-[10px] font-semibold text-coop-orange-700 dark:text-coop-orange-500 bg-coop-orange-1000/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                   Visas på kundens sida
                 </span>
               </div>
@@ -901,7 +901,7 @@ function CustomerRequestsPage() {
                 rows={3}
                 className="resize-none text-sm"
               />
-              <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+              <p className="text-[11px] text-coop-orange-700 dark:text-coop-orange-500 font-medium">
                 Obs: Det du skriver här kommer att visas för kunden på deras statuslänk.
               </p>
             </div>
@@ -1003,7 +1003,7 @@ function CustomerRequestsPage() {
                 <p className="font-medium text-sm">{editTarget.product_name}</p>
                 {editTarget.notes && (
                   <div className="mt-2 border-t border-border/40 pt-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600/90 dark:text-amber-400/90 mb-0.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-orange-700/90 dark:text-coop-orange-500/90 mb-0.5">
                       Anteckning (visas för kunden)
                     </p>
                     <p className="text-xs text-coop-gray-600">{editTarget.notes}</p>

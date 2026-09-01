@@ -181,31 +181,31 @@ function SpatialNavigationPage() {
                       <span
                         className={`font-bold ${
                           (complianceData as any).score >= 80
-                            ? "text-green-600"
+                            ? "text-coop-gron-600"
                             : (complianceData as any).score >= 50
-                              ? "text-amber-600"
-                              : "text-red-600"
+                              ? "text-coop-orange-700"
+                              : "text-coop-red-600"
                         }`}
                       >
                         {(complianceData as any).score ?? 0}%
                       </span>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
-                      <div className="bg-red-50 dark:bg-red-950 rounded px-2 py-1 text-center">
+                      <div className="bg-coop-red-50 dark:bg-coop-red-950 rounded px-2 py-1 text-center">
                         <div className="text-xs text-coop-gray-600">Saknas</div>
-                        <div className="font-semibold text-red-700 dark:text-red-300">
+                        <div className="font-semibold text-coop-red-700 dark:text-coop-red-300">
                           {(complianceData as any).missing ?? 0}
                         </div>
                       </div>
-                      <div className="bg-amber-50 dark:bg-amber-950 rounded px-2 py-1 text-center">
+                      <div className="bg-coop-orange-100 dark:bg-coop-orange-1000 rounded px-2 py-1 text-center">
                         <div className="text-xs text-coop-gray-600">Felplacerad</div>
-                        <div className="font-semibold text-amber-700 dark:text-amber-300">
+                        <div className="font-semibold text-coop-orange-800 dark:text-coop-orange-400">
                           {(complianceData as any).misplaced ?? 0}
                         </div>
                       </div>
-                      <div className="bg-green-50 dark:bg-green-950 rounded px-2 py-1 text-center">
+                      <div className="bg-coop-gron-50 dark:bg-coop-gron-950 rounded px-2 py-1 text-center">
                         <div className="text-xs text-coop-gray-600">Extra</div>
-                        <div className="font-semibold text-green-700 dark:text-green-300">
+                        <div className="font-semibold text-coop-gron-700 dark:text-coop-gron-300">
                           {(complianceData as any).extra ?? 0}
                         </div>
                       </div>

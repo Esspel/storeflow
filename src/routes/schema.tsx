@@ -2533,7 +2533,7 @@ function SchemaPage() {
                 <Truck className="h-4 w-4" />
                 {activeWeekPlan?.is_special_week ? "Specialleveranser" : "Leveranser"}
                 {(missingAnyPlan || missingSpecialPlan) && (
-                  <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
+                  <AlertCircle className="h-3.5 w-3.5 text-coop-orange-500" />
                 )}
               </Button>
             )}
@@ -2680,9 +2680,9 @@ function SchemaPage() {
 
       {/* Delivery plan warning banners */}
       {showDeliveries && missingAnyPlan && (
-        <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 dark:border-amber-800/40 dark:bg-amber-950/20">
-          <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <p className="text-sm text-amber-800 dark:text-amber-300">
+        <div className="flex items-center gap-3 border-b border-amber-200 bg-coop-orange-100 px-6 py-2.5 dark:border-amber-800/40 dark:bg-coop-orange-1000/20">
+          <AlertCircle className="h-4 w-4 shrink-0 text-coop-orange-700 dark:text-coop-orange-500" />
+          <p className="text-sm text-coop-orange-900 dark:text-coop-orange-400">
             {isAdmin
               ? "Ingen leveransplan importerad. Importera en leveransplan (CSV) för att se leveranser."
               : "Leveransplan saknas för denna vecka. Kontakta din chef för information om leveranser."}
@@ -2691,7 +2691,7 @@ function SchemaPage() {
             <Button
               size="sm"
               variant="ghost"
-              className="ml-auto h-7 text-xs text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
+              className="ml-auto h-7 text-xs text-coop-orange-800 hover:bg-coop-orange-200 dark:text-coop-orange-500 dark:hover:bg-coop-orange-900/40"
               onClick={() => setImportDialogOpen(true)}
             >
               Importera
@@ -2700,9 +2700,9 @@ function SchemaPage() {
         </div>
       )}
       {showDeliveries && missingSpecialPlan && (
-        <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-6 py-2.5 dark:border-amber-800/40 dark:bg-amber-950/20">
-          <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <p className="text-sm text-amber-800 dark:text-amber-300">
+        <div className="flex items-center gap-3 border-b border-amber-200 bg-coop-orange-100 px-6 py-2.5 dark:border-amber-800/40 dark:bg-coop-orange-1000/20">
+          <AlertCircle className="h-4 w-4 shrink-0 text-coop-orange-700 dark:text-coop-orange-500" />
+          <p className="text-sm text-coop-orange-900 dark:text-coop-orange-400">
             {isAdmin ? (
               <>
                 <span className="font-medium">Helgvecka ({activeWeekIsHoliday})</span> — ingen
@@ -2721,7 +2721,7 @@ function SchemaPage() {
             <Button
               size="sm"
               variant="ghost"
-              className="ml-auto h-7 text-xs text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
+              className="ml-auto h-7 text-xs text-coop-orange-800 hover:bg-coop-orange-200 dark:text-coop-orange-500 dark:hover:bg-coop-orange-900/40"
               onClick={() => setImportDialogOpen(true)}
             >
               Importera specialplan
@@ -3203,7 +3203,7 @@ function SchemaPage() {
                           className={cn(
                             "rounded-2xl border bg-coop-gray-100 p-4 transition-colors",
                             isSemester
-                              ? "border-red-200/60 bg-red-50/40"
+                              ? "border-coop-red-200/60 bg-coop-red-50/40"
                               : isAbsent
                                 ? "border-warning/30 bg-warning/5"
                                 : "border-border/60",
@@ -3250,19 +3250,19 @@ function SchemaPage() {
                                       .toLowerCase()
                                       .includes("butik");
                                     return isButikBorrowed ? (
-                                      <span className="flex items-center gap-0.5 text-[10px] font-medium text-violet-700 bg-violet-50 rounded-full px-1.5 py-0.5 leading-none">
+                                      <span className="flex items-center gap-0.5 text-[10px] font-medium text-coop-purple-600 bg-coop-purple-100 rounded-full px-1.5 py-0.5 leading-none">
                                         <ArrowLeftRight className="h-2.5 w-2.5" />
                                         Utlånad
                                       </span>
                                     ) : (
-                                      <span className="flex items-center gap-0.5 text-[10px] font-medium text-sky-600 bg-sky-50 rounded-full px-1.5 py-0.5 leading-none">
+                                      <span className="flex items-center gap-0.5 text-[10px] font-medium text-coop-blue-600 bg-coop-blue-100 rounded-full px-1.5 py-0.5 leading-none">
                                         <ArrowLeftRight className="h-2.5 w-2.5" />
                                         Inlånad
                                       </span>
                                     );
                                   })()}
                                 {primaryShift?.is_preliminary && (
-                                  <span className="text-[10px] font-medium text-amber-600 bg-amber-50 rounded-full px-1.5 py-0.5 leading-none">
+                                  <span className="text-[10px] font-medium text-coop-orange-700 bg-coop-orange-100 rounded-full px-1.5 py-0.5 leading-none">
                                     Preliminär
                                   </span>
                                 )}
@@ -3279,7 +3279,7 @@ function SchemaPage() {
                                 </p>
                               )}
                               {isSemester && (
-                                <p className="text-xs font-medium text-red-500">Semester</p>
+                                <p className="text-xs font-medium text-coop-red-500">Semester</p>
                               )}
                               {isAbsent && !isSemester && (
                                 <p className="text-xs text-warning-foreground">
@@ -3370,7 +3370,7 @@ function SchemaPage() {
                               {dayTasks.map((t) => (
                                 <div
                                   key={t.id}
-                                  className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800"
+                                  className="flex items-center gap-1 rounded-full bg-coop-orange-200 px-2 py-0.5 text-[11px] font-medium text-coop-orange-900"
                                 >
                                   <Timer className="h-2.5 w-2.5 shrink-0" />
                                   {t.title}
@@ -3465,7 +3465,7 @@ function SchemaPage() {
               {/* Tasks row in day timeline */}
               {scheduleTasks.filter((t) => t.due_date && toLocalDateStr(t.due_date) === currentDate)
                 .length > 0 && (
-                <div className="flex border-b border-border/20 bg-amber-50/40 dark:bg-amber-950/10">
+                <div className="flex border-b border-border/20 bg-coop-orange-100/40 dark:bg-coop-orange-1000/10">
                   <div className="flex w-48 shrink-0 items-center border-r border-border/30 px-4 py-1.5">
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600 flex items-center gap-1">
                       <Timer className="h-3 w-3" /> Uppgifter
@@ -3815,7 +3815,7 @@ function SchemaPage() {
                                       "flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold shadow-sm whitespace-nowrap",
                                       isLate
                                         ? "bg-destructive text-destructive-foreground"
-                                        : "bg-amber-500 text-coop-vit",
+                                        : "bg-coop-orange-1000 text-coop-vit",
                                     ].join(" ")}
                                   >
                                     <Timer className="h-2.5 w-2.5 shrink-0" />
@@ -4150,11 +4150,11 @@ function SchemaPage() {
               {/* Tasks row in week view */}
               {scheduleTasks.length > 0 && (
                 <div
-                  className="grid border-t border-border/20 bg-amber-50/20 dark:bg-amber-950/10"
+                  className="grid border-t border-border/20 bg-coop-orange-100/20 dark:bg-coop-orange-1000/10"
                   style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}
                 >
                   <div className="border-r border-border/40 px-4 py-2 flex items-center gap-1.5">
-                    <Timer className="h-3.5 w-3.5 text-amber-600" />
+                    <Timer className="h-3.5 w-3.5 text-coop-orange-700" />
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600">
                       Uppgifter
                     </span>
@@ -4463,7 +4463,7 @@ function SchemaPage() {
                             <div
                               className={[
                                 "border-t border-border/40 px-3 py-2.5 space-y-2",
-                                holiday ? "bg-amber-50/40 dark:bg-amber-950/10" : "bg-muted/20",
+                                holiday ? "bg-coop-orange-100/40 dark:bg-coop-orange-1000/10" : "bg-muted/20",
                               ].join(" ")}
                             >
                               <div className="flex flex-wrap items-center gap-2">
@@ -4531,7 +4531,7 @@ function SchemaPage() {
                                 </label>
                               </div>
                               {holiday && (
-                                <div className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                                <div className="flex items-center gap-1.5 text-[11px] text-coop-orange-800 dark:text-coop-orange-500">
                                   <AlertCircle className="h-3 w-3 shrink-0" />
                                   <span>
                                     Helgdag: <strong>{holiday}</strong>

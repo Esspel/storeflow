@@ -3154,7 +3154,7 @@ function MallarPage() {
       visibleGroups.push({
         label: "HK-mallar",
         badge: "HK",
-        badgeClass: "border-blue-300 text-blue-600",
+        badgeClass: "border-coop-blue-300 text-coop-blue-600",
         items: hkTemplates,
       });
     }
@@ -3164,7 +3164,7 @@ function MallarPage() {
       visibleGroups.push({
         label: "Föreningsmallar",
         badge: "Förening",
-        badgeClass: "border-teal-300 text-teal-600",
+        badgeClass: "border-coop-gron-300 text-coop-gron-600",
         items: foreningTemplates,
       });
     }
@@ -3183,10 +3183,10 @@ function MallarPage() {
   const getTemplateBadge = (t: TemplateWithMeta) => {
     const scope = t.hierarchy_scope ?? "store";
     if (scope === "hk" || t.is_global)
-      return { label: "HK-mall", cls: "border-blue-300 text-blue-600" };
+      return { label: "HK-mall", cls: "border-coop-blue-300 text-coop-blue-600" };
     if (scope === "forening") {
       const f = allForeningar.find((x) => x.id === t.forening_id);
-      return { label: `${f?.name ?? "Förening"}-mall`, cls: "border-teal-300 text-teal-600" };
+      return { label: `${f?.name ?? "Förening"}-mall`, cls: "border-coop-gron-300 text-coop-gron-600" };
     }
     return null;
   };
@@ -3505,7 +3505,7 @@ function MallarPage() {
                       "flex-1 rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors",
                       f.template_type === type
                         ? type === "base"
-                          ? "bg-amber-500 text-coop-vit border-amber-500"
+                          ? "bg-coop-orange-600 text-coop-vit border-amber-500"
                           : "bg-primary text-primary-foreground border-primary"
                         : "border-border/60 text-coop-gray-600 hover:border-primary/40",
                     )}
@@ -4345,7 +4345,7 @@ function MallarPage() {
                   </SelectContent>
                 </Select>
                 {f.depends_on_template_title && (
-                  <p className="text-[10px] text-blue-600 pl-1">
+                  <p className="text-[10px] text-coop-blue-600 pl-1">
                     Kräver att "{f.depends_on_template_title}" skapas i samma batch eller redan
                     existerar.
                   </p>
@@ -4495,7 +4495,7 @@ function MallarPage() {
             {canCreateHK && (
               <Button
                 variant="outline"
-                className="hidden sm:flex rounded-full border-blue-300 text-blue-600 hover:bg-blue-50"
+                className="hidden sm:flex rounded-full border-coop-blue-300 text-coop-blue-600 hover:bg-coop-blue-50"
                 onClick={() => openCreate("hk")}
               >
                 <Plus className="mr-2 h-4 w-4" /> Ny HK-mall
@@ -4504,7 +4504,7 @@ function MallarPage() {
             {canCreateForening && (
               <Button
                 variant="outline"
-                className="hidden sm:flex rounded-full border-teal-300 text-teal-600 hover:bg-teal-50"
+                className="hidden sm:flex rounded-full border-coop-gron-300 text-coop-gron-600 hover:bg-coop-gron-50"
                 onClick={() => openCreate("forening")}
               >
                 <Building2 className="mr-2 h-4 w-4" /> Ny föreningsmall
@@ -4737,21 +4737,21 @@ function MallarPage() {
                           "flex items-center justify-between gap-3 rounded-xl border px-4 py-3",
                           overdue
                             ? "border-destructive/30 bg-destructive/5"
-                            : "border-amber-200 bg-amber-50/60",
+                            : "border-coop-orange-200 bg-coop-orange-100/60",
                         )}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <AlertTriangle
                             className={cn(
                               "h-4 w-4 shrink-0",
-                              overdue ? "text-destructive" : "text-amber-600",
+                              overdue ? "text-destructive" : "text-coop-orange-700",
                             )}
                           />
                           <div className="min-w-0">
                             <p
                               className={cn(
                                 "text-sm font-medium truncate",
-                                overdue ? "text-destructive" : "text-amber-800",
+                                overdue ? "text-destructive" : "text-coop-orange-700",
                               )}
                             >
                               {overdue
@@ -4762,7 +4762,7 @@ function MallarPage() {
                             <p
                               className={cn(
                                 "text-xs",
-                                overdue ? "text-destructive/70" : "text-amber-700/70",
+                                overdue ? "text-destructive/70" : "text-coop-orange-800/70",
                               )}
                             >
                               Mallen har kört sedan skapandet. Bekräfta att rutinen fortfarande
@@ -4775,7 +4775,7 @@ function MallarPage() {
                           variant={overdue ? "destructive" : "outline"}
                           className={cn(
                             "shrink-0 rounded-full h-7 text-xs",
-                            !overdue && "border-amber-400 text-amber-800 hover:bg-amber-100",
+                            !overdue && "border-coop-orange-400 text-coop-orange-700 hover:bg-coop-orange-200",
                           )}
                           onClick={() => setReviewTarget(t)}
                         >
@@ -4793,7 +4793,7 @@ function MallarPage() {
             <div>
               <div className="mb-3 flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-coop-gray-900">Mallpaket</h2>
-                <Badge variant="outline" className="text-xs border-amber-300 text-amber-600">
+                <Badge variant="outline" className="text-xs border-coop-orange-300 text-coop-orange-700">
                   Paket
                 </Badge>
                 <button
@@ -4825,7 +4825,7 @@ function MallarPage() {
                     return (
                       <div
                         key={pkg.id}
-                        className="rounded-2xl border border-amber-200/60 bg-coop-gray-100 p-4 space-y-2"
+                        className="rounded-2xl border border-coop-orange-200/60 bg-coop-gray-100 p-4 space-y-2"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
@@ -4840,7 +4840,7 @@ function MallarPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="shrink-0 rounded-full h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                            className="shrink-0 rounded-full h-7 text-xs border-coop-orange-300 text-coop-orange-800 hover:bg-coop-orange-100"
                             onClick={() => {
                               setActivatePackageTarget(pkg);
                               openBulkCreate(pkgTemplates.map((t) => t.id));
@@ -4936,7 +4936,7 @@ function MallarPage() {
                                     .template_type === "base" && (
                                     <Badge
                                       variant="outline"
-                                      className="text-xs border-amber-400 text-amber-700 bg-amber-50"
+                                      className="text-xs border-coop-orange-400 text-coop-orange-800 bg-coop-orange-100"
                                     >
                                       Grundmall
                                     </Badge>
@@ -4945,7 +4945,7 @@ function MallarPage() {
                                     .is_critical && (
                                     <Badge
                                       variant="outline"
-                                      className="text-xs border-red-300 text-red-600"
+                                      className="text-xs border-coop-red-300 text-coop-red-600"
                                     >
                                       Kritisk
                                     </Badge>
@@ -4972,7 +4972,7 @@ function MallarPage() {
                                   {t.locked_by_admin && !t.is_global && (
                                     <Badge
                                       variant="outline"
-                                      className="text-xs border-amber-300 text-amber-600"
+                                      className="text-xs border-coop-orange-300 text-coop-orange-700"
                                     >
                                       Skrivskyddad
                                     </Badge>
@@ -5016,7 +5016,7 @@ function MallarPage() {
                                   className={cn(
                                     "rounded-full",
                                     isHidden
-                                      ? "text-amber-500 hover:text-amber-600"
+                                      ? "text-coop-orange-600 hover:text-coop-orange-700"
                                       : "text-coop-gray-600 hover:text-coop-gray-900",
                                   )}
                                   onClick={(e) => {
@@ -5111,7 +5111,7 @@ function MallarPage() {
                               <div className="flex flex-wrap gap-2">
                                 {(t as ChecklistTemplate & { is_delivery_task?: boolean })
                                   .is_delivery_task && (
-                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700">
+                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-coop-blue-200 bg-coop-blue-50 px-2.5 py-1 text-[11px] font-medium text-coop-blue-700">
                                     <Truck className="h-3 w-3" />
                                     Leveransuppgift
                                     {(t as ChecklistTemplate & { delivery_supplier_name?: string })
@@ -5146,7 +5146,7 @@ function MallarPage() {
                                 )}
                                 {(t as ChecklistTemplate & { event_trigger_description?: string })
                                   .event_trigger_description && (
-                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
+                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-coop-orange-200 bg-coop-orange-100 px-2.5 py-1 text-[11px] font-medium text-coop-orange-800">
                                     <Zap className="h-3 w-3" />
                                     {
                                       (
@@ -5328,7 +5328,7 @@ function MallarPage() {
                             <div key={v.id} className="ml-6 mt-1.5">
                               {/* Stale variant banner */}
                               {isStale && (
-                                <div className="mb-1.5 flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+                                <div className="mb-1.5 flex items-center justify-between rounded-xl border border-coop-orange-200 bg-coop-orange-100 px-3 py-2 text-xs text-coop-orange-800 dark:border-amber-800 dark:bg-coop-orange-600/40 dark:text-coop-orange-500">
                                   <span className="flex items-center gap-1.5">
                                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                                     Den centrala mallen har uppdaterats sedan din lokala variant
@@ -5664,7 +5664,7 @@ function MallarPage() {
               mallen?
               <br />
               <br />
-              <span className="text-amber-600 dark:text-amber-400 font-medium">
+              <span className="text-coop-orange-700 dark:text-coop-orange-500 font-medium">
                 Dina egna ändringar i varianten skrivs över.
               </span>{" "}
               Butikstilldelning och historik bevaras.
@@ -6437,7 +6437,7 @@ function MallarPage() {
                   key={cfg.templateId}
                   className={cn(
                     "rounded-2xl border bg-coop-gray-100 p-4 space-y-4",
-                    isDeliveryTmpl ? "border-amber-300/60 bg-amber-50/30" : "border-border/60",
+                    isDeliveryTmpl ? "border-coop-orange-300/60 bg-coop-orange-100/30" : "border-border/60",
                   )}
                 >
                   <div className="flex items-start gap-3">
@@ -6466,7 +6466,7 @@ function MallarPage() {
                         {isDeliveryTmpl && (
                           <Badge
                             variant="outline"
-                            className="text-xs border-amber-400 text-amber-700 bg-amber-50"
+                            className="text-xs border-coop-orange-400 text-coop-orange-800 bg-coop-orange-100"
                           >
                             <Truck className="h-3 w-3 mr-1" />
                             Leveransmall
@@ -6530,11 +6530,11 @@ function MallarPage() {
 
                   {/* Warning for subsequent batch: template already has tasks created */}
                   {isDeliveryTmpl && templatesWithExistingTasks.has(cfg.templateId) && (
-                    <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50/60 px-3 py-2.5">
-                      <AlertTriangle className="h-3.5 w-3.5 text-amber-600 mt-0.5 shrink-0" />
+                    <div className="flex items-start gap-2 rounded-lg border border-coop-orange-300 bg-coop-orange-100/60 px-3 py-2.5">
+                      <AlertTriangle className="h-3.5 w-3.5 text-coop-orange-700 mt-0.5 shrink-0" />
                       <div>
-                        <p className="text-xs font-medium text-amber-800">Uppgifter finns redan</p>
-                        <p className="text-[11px] text-amber-700 mt-0.5">
+                        <p className="text-xs font-medium text-coop-orange-700">Uppgifter finns redan</p>
+                        <p className="text-[11px] text-coop-orange-800 mt-0.5">
                           Kontrollera vem som jobbar dagen innan uppgiften ska göras och justera
                           tilldelningen nedan om det behövs.
                         </p>
@@ -6625,7 +6625,7 @@ function MallarPage() {
                                 Välj leveranser (veckans plan)
                               </label>
                               {hasSuggestions && (
-                                <span className="text-[10px] text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">
+                                <span className="text-[10px] text-coop-blue-600 bg-coop-blue-50 rounded-full px-2 py-0.5">
                                   Förvalda markerade
                                 </span>
                               )}
@@ -6656,7 +6656,7 @@ function MallarPage() {
                             )}
                           </div>
                           {deliveryWeekEntries.length === 0 ? (
-                            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                            <p className="text-xs text-coop-orange-800 bg-coop-orange-100 border border-coop-orange-200 rounded-lg px-3 py-2">
                               Ingen aktiv leveransplan hittades. Importera en leveransplan under
                               Inställningar.
                             </p>
@@ -6709,7 +6709,7 @@ function MallarPage() {
                                           key={e.id}
                                           className={cn(
                                             "flex cursor-pointer items-center gap-2.5 rounded px-1.5 py-1.5 pl-6 hover:bg-muted/50",
-                                            suggested && hasSuggestions && "bg-blue-50/50",
+                                            suggested && hasSuggestions && "bg-coop-blue-50/50",
                                           )}
                                         >
                                           <Checkbox
@@ -6743,7 +6743,7 @@ function MallarPage() {
                                               </span>
                                             )}
                                             {suggested && hasSuggestions && (
-                                              <span className="text-[10px] text-blue-600">●</span>
+                                              <span className="text-[10px] text-coop-blue-600">●</span>
                                             )}
                                           </div>
                                         </label>
@@ -6900,7 +6900,7 @@ function MallarPage() {
                     .event_trigger_description && (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <Zap className="h-3.5 w-3.5 text-amber-500" />
+                        <Zap className="h-3.5 w-3.5 text-coop-orange-600" />
                         <label className="text-xs font-medium text-coop-gray-600">
                           Bekräftare för:{" "}
                           <span className="text-coop-gray-900 font-semibold">
@@ -6924,9 +6924,9 @@ function MallarPage() {
                             [cfg.templateId + "_confirm"]: e.target.value,
                           }))
                         }
-                        className="w-full rounded-md border border-amber-200 bg-background px-2 py-1 text-xs placeholder:text-coop-gray-600/50 focus:outline-none focus:ring-1 focus:ring-amber-400/40"
+                        className="w-full rounded-md border border-coop-orange-200 bg-background px-2 py-1 text-xs placeholder:text-coop-gray-600/50 focus:outline-none focus:ring-1 focus:ring-amber-400/40"
                       />
-                      <div className="space-y-0.5 max-h-28 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50/30 p-2">
+                      <div className="space-y-0.5 max-h-28 overflow-y-auto rounded-lg border border-coop-orange-200 bg-coop-orange-100/30 p-2">
                         <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
                           <Checkbox
                             checked={cfg.eventTriggerUserId === ""}
@@ -7255,7 +7255,7 @@ function MallarPage() {
               </button>
             )}
             {(reviewTarget as ChecklistTemplate & { is_critical?: boolean })?.is_critical && (
-              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <p className="text-xs text-coop-orange-700 bg-coop-orange-100 border border-coop-orange-200 rounded-lg px-3 py-2">
                 Kritisk rutin — kan inte arkiveras automatiskt.
               </p>
             )}

@@ -181,10 +181,10 @@ function ShelfAnalyticsComponent() {
   // Show loading or access denied while checking auth
   if (authLoading) {
     return (
-      <div className="min-h-full bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+      <div className="min-h-full bg-coop-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent mx-auto mb-4" />
-          <p className="text-slate-600 dark:text-slate-400">Kontrollerar autentisering...</p>
+          <p className="text-coop-gray-600 dark:text-coop-gray-400">Kontrollerar autentisering...</p>
         </div>
       </div>
     );
@@ -192,13 +192,13 @@ function ShelfAnalyticsComponent() {
 
   if (!user) {
     return (
-      <div className="min-h-full bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+      <div className="min-h-full bg-coop-gray-100 flex items-center justify-center">
         <div className="text-center p-8">
           <Lock className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
+          <h2 className="text-xl font-semibold text-coop-gray-900 dark:text-coop-gray-100 mb-2">
             Autentisering krävs
           </h2>
-          <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-md">
+          <p className="text-coop-gray-600 dark:text-coop-gray-400 mb-6 max-w-md">
             Planogramdata är konfidentiell och kräver inloggning. Logga in för att komma åt
             hyllanalys och planogram-efterlevnad.
           </p>
@@ -254,16 +254,16 @@ function ShelfAnalyticsComponent() {
   );
 
   return (
-    <div className="min-h-full bg-slate-50 dark:bg-slate-950 p-4 md:p-6">
+    <div className="min-h-full bg-coop-gray-100 p-4 md:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-coop-gray-900 dark:text-coop-gray-100 flex items-center gap-2">
               <ScanLine className="w-6 h-6 text-indigo-500" />
               Planogram & Hyllanalys
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-coop-gray-500 dark:text-coop-gray-400 mt-1">
               Skanna hyllor med posemesh CV för att kontrollera planogram-efterlevnad
             </p>
           </div>
@@ -283,7 +283,7 @@ function ShelfAnalyticsComponent() {
           {/* Left Column: Shelf List */}
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-coop-gray-900 dark:text-coop-gray-100">
                 Hyllor ({shelves.length})
               </h2>
               <div className="relative w-full sm:w-64">
@@ -293,7 +293,7 @@ function ShelfAnalyticsComponent() {
                   placeholder="Sök hylla..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-coop-gray-900 dark:text-coop-gray-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
             </div>
@@ -313,11 +313,11 @@ function ShelfAnalyticsComponent() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <Layers className="w-4 h-4 text-slate-400" />
-                        <h3 className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                        <h3 className="font-medium text-coop-gray-900 dark:text-coop-gray-100 truncate">
                           {shelf.name}
                         </h3>
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">{shelf.category}</p>
+                      <p className="text-xs text-coop-gray-500 dark:text-coop-gray-400">{shelf.category}</p>
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -361,7 +361,7 @@ function ShelfAnalyticsComponent() {
                         shelf.status === "compliant"
                           ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
                           : shelf.status === "warning"
-                            ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                            ? "bg-coop-orange-1000/20 text-coop-orange-400 border-amber-500/30"
                             : "bg-rose-500/20 text-rose-300 border-rose-500/30"
                       }
                     >
@@ -380,14 +380,14 @@ function ShelfAnalyticsComponent() {
             {selectedShelf ? (
               <Card className="bg-coop-vit dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                 <CardHeader border-b border-slate-200 dark:border-slate-700>
-                  <CardTitle className="text-base text-slate-900 dark:text-slate-100 flex items-center justify-between">
+                  <CardTitle className="text-base text-coop-gray-900 dark:text-coop-gray-100 flex items-center justify-between">
                     <span>{selectedShelf.name}</span>
                     <Badge
                       className={
                         selectedShelf.status === "compliant"
                           ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
                           : selectedShelf.status === "warning"
-                            ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                            ? "bg-coop-orange-1000/20 text-coop-orange-400 border-amber-500/30"
                             : "bg-rose-500/20 text-rose-300 border-rose-500/30"
                       }
                     >
@@ -417,7 +417,7 @@ function ShelfAnalyticsComponent() {
                       Identifierade Avvikelser
                     </h4>
                     <div className="space-y-2 text-xs">
-                      <div className="p-2.5 bg-slate-50 dark:bg-slate-950/60 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                      <div className="p-2.5 bg-coop-gray-100/60 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center justify-between">
                         <span className="text-slate-600 dark:text-slate-300 flex items-center gap-2">
                           <XCircle className="w-4 h-4 text-rose-400" /> Gevalia Mellanrost (Saknas)
                         </span>
@@ -425,12 +425,12 @@ function ShelfAnalyticsComponent() {
                           2 facings
                         </Badge>
                       </div>
-                      <div className="p-2.5 bg-slate-50 dark:bg-slate-950/60 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                      <div className="p-2.5 bg-coop-gray-100/60 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center justify-between">
                         <span className="text-slate-600 dark:text-slate-300 flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-amber-400" /> Zoégas Skånerost
+                          <AlertTriangle className="w-4 h-4 text-coop-orange-500" /> Zoégas Skånerost
                           (Felplacerad)
                         </span>
-                        <Badge className="bg-amber-500/10 text-amber-300 border-amber-500/20 text-[10px]">
+                        <Badge className="bg-coop-orange-1000/10 text-coop-orange-400 border-amber-500/20 text-[10px]">
                           Hyllplan 2
                         </Badge>
                       </div>
@@ -448,7 +448,7 @@ function ShelfAnalyticsComponent() {
             ) : (
               <Card className="bg-coop-vit dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-center py-12">
                 <BarChart3 className="w-12 h-12 mx-auto text-slate-400 mb-3" />
-                <p className="text-slate-500 dark:text-slate-400">
+                <p className="text-coop-gray-500 dark:text-coop-gray-400">
                   Välj en hylla för att se detaljer
                 </p>
               </Card>
@@ -460,19 +460,19 @@ function ShelfAnalyticsComponent() {
                 <div className="text-2xl font-bold text-indigo-500">
                   {shelves.filter((s) => s.status === "compliant").length}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">Godkända</div>
+                <div className="text-xs text-coop-gray-500 dark:text-coop-gray-400">Godkända</div>
               </Card>
               <Card className="bg-coop-vit dark:bg-slate-900 border-slate-200 dark:border-slate-700 p-4 text-center">
-                <div className="text-2xl font-bold text-amber-500">
+                <div className="text-2xl font-bold text-coop-orange-1000">
                   {shelves.filter((s) => s.status === "warning").length}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">Varning</div>
+                <div className="text-xs text-coop-gray-500 dark:text-coop-gray-400">Varning</div>
               </Card>
               <Card className="bg-coop-vit dark:bg-slate-900 border-slate-200 dark:border-slate-700 p-4 text-center">
                 <div className="text-2xl font-bold text-rose-500">
                   {shelves.filter((s) => s.status === "critical").length}
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">Kritiskt</div>
+                <div className="text-xs text-coop-gray-500 dark:text-coop-gray-400">Kritiskt</div>
               </Card>
             </div>
 
@@ -487,7 +487,7 @@ function ShelfAnalyticsComponent() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <p className="text-sm text-coop-gray-500 dark:text-coop-gray-400">
                   Koppla dina planogram (från PDF-uppladdning) till de spatiala markörerna som
                   skapades i Digital Twin. Detta möjliggör automatisk planogram-efterlevnadskontroll
                   vid skanning.
@@ -507,10 +507,10 @@ function ShelfAnalyticsComponent() {
                       >
                         <div className="flex items-center justify-between gap-4">
                           <div className="flex-1 min-w-0">
-                            <div className="font-medium text-slate-900 dark:text-slate-100 truncate">
+                            <div className="font-medium text-coop-gray-900 dark:text-coop-gray-100 truncate">
                               {planogram.name}
                             </div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                            <div className="text-xs text-coop-gray-500 dark:text-coop-gray-400">
                               {planogram.expected_products?.length || 0} produkter{" "}
                               {planogram.shelf_marker_id
                                 ? " • Kopplad till " +
@@ -611,16 +611,16 @@ function ShelfAnalyticsComponent() {
                 </div>
 
                 {planograms.length === 0 && (
-                  <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                  <div className="text-center py-8 text-coop-gray-500 dark:text-coop-gray-400">
                     <Layers className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>Inga planogram uppladdade ännu. Ladda upp PDF på Rapporter-sidan.</p>
                   </div>
                 )}
 
                 {spatialMarkers.length === 0 && planograms.length > 0 && (
-                  <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
-                    <AlertTriangle className="w-5 h-5 text-amber-500 mb-2" />
-                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                  <div className="rounded-lg bg-coop-orange-100 dark:bg-coop-orange-900/20 border border-amber-200 dark:border-amber-800 p-4">
+                    <AlertTriangle className="w-5 h-5 text-coop-orange-1000 mb-2" />
+                    <p className="text-sm text-coop-orange-800 dark:text-coop-orange-400">
                       Inga spatiala markörer hittades. Skapa markörer i Butiksinstallation → Digital
                       Twin först.
                     </p>

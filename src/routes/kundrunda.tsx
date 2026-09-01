@@ -2337,13 +2337,13 @@ function KundrundaPage() {
         {false && isManager &&
           localVersion?.defects_pending_hk_update &&
           localVersion?.pending_defects_snapshot && (
-            <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/20">
-              <Info className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+            <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-coop-orange-100 px-4 py-3 dark:border-amber-800/40 dark:bg-coop-orange-1000/20">
+              <Info className="h-4 w-4 shrink-0 text-coop-orange-700 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                <p className="text-sm font-medium text-coop-orange-900 dark:text-coop-orange-400">
                   HK har uppdaterat sina vanliga avvikelser
                 </p>
-                <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                <p className="mt-0.5 text-xs text-coop-orange-800 dark:text-coop-orange-500">
                   Välj om du vill slå ihop HKs uppdateringar med din butiks lokala avvikelser.
                 </p>
               </div>
@@ -2351,7 +2351,7 @@ function KundrundaPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="rounded-full text-xs h-8 border-amber-300 text-amber-700 hover:bg-amber-100"
+                  className="rounded-full text-xs h-8 border-amber-300 text-coop-orange-800 hover:bg-coop-orange-200"
                   onClick={async () => {
                     await supabase
                       .from("kundrunda_local_versions")

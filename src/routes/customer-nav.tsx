@@ -507,7 +507,7 @@ function CustomerNavPage() {
             {/* AR View */}
             {viewMode === "ar" && map && storeId && (
               <div className="space-y-4">
-                <div className="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden aspect-[4/3] md:aspect-[16/9] relative">
+                <div className="bg-coop-gray-950 rounded-xl border border-coop-gray-800 overflow-hidden aspect-[4/3] md:aspect-[16/9] relative">
                   <ARNavigationView
                     markers={map.markers as any}
                     navigationPath={undefined}
@@ -531,7 +531,7 @@ function CustomerNavPage() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
+                        <div className="w-16 h-16 bg-coop-gray-100 dark:bg-coop-gray-800 rounded-lg flex items-center justify-center">
                           <ShoppingCart className="w-8 h-8 text-coop-gray-400" />
                         </div>
                         <div>

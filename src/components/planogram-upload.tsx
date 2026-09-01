@@ -402,7 +402,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
       <div
         className={cn(
           "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
-          "border-gray-300 hover:border-blue-500 dark:border-gray-600 dark:hover:border-blue-400",
+          "border-coop-gray-300 hover:border-coop-blue-500 dark:border-coop-gray-600 dark:hover:border-coop-blue-400",
         )}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
@@ -418,13 +418,13 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
         />
         <label htmlFor="planogram-upload" className="cursor-pointer">
           <Upload className="w-12 h-12 mx-auto text-coop-gray-400 mb-4" />
-          <p className="text-lg font-medium text-gray-900 dark:text-gray-100">
+          <p className="text-lg font-medium text-coop-gray-900">
             Dra och släpp planogram-PDF här
           </p>
-          <p className="text-sm text-gray-500 dark:text-coop-gray-400 mt-1">
+          <p className="text-sm text-coop-gray-600 mt-1">
             eller klicka för att välja filer
           </p>
-          <p className="text-xs text-coop-gray-400 dark:text-gray-500 mt-2">
+          <p className="text-xs text-coop-gray-400 mt-2">
             Accepterar: PDF (max 10MB per fil)
           </p>
         </label>
@@ -433,7 +433,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
       {/* File List */}
       {files.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          <h3 className="text-sm font-medium text-coop-gray-900">
             Uppladdade filer ({files.length})
           </h3>
           <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -443,10 +443,10 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                 className={cn(
                   "flex items-center gap-3 p-3 rounded-lg border transition-colors",
                   uploadedFile.status === "error" &&
-                    "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-900/20",
+                    "border-coop-red-200 bg-coop-red-50 dark:border-coop-red-900 dark:bg-coop-red-900/20",
                   uploadedFile.status === "completed" &&
-                    "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-900/20",
-                  "border-gray-200 bg-coop-vit dark:border-gray-700 dark:bg-gray-800",
+                    "border-coop-gron-200 bg-coop-gron-50 dark:border-coop-gron-900 dark:bg-coop-gron-900/20",
+                  "border-coop-gray-200 bg-coop-vit dark:border-coop-gray-700 dark:bg-coop-gray-900",
                 )}
               >
                 <div className="flex-shrink-0">{getStatusIcon(uploadedFile.status)}</div>
@@ -454,7 +454,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-coop-gray-400" />
-                    <span className="font-medium text-gray-900 dark:text-coop-vit truncate">
+                    <span className="font-medium text-coop-gray-900 truncate">
                       {uploadedFile.file.name}
                     </span>
                     <Badge
@@ -472,7 +472,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                   </div>
 
                   {uploadedFile.parsed && (
-                    <div className="mt-1 text-sm text-gray-500 dark:text-coop-gray-400 space-y-1">
+                    <div className="mt-1 text-sm text-coop-gray-600 space-y-1">
                       <span>
                         Planogram:{" "}
                         <span className="font-medium">
@@ -508,7 +508,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                   )}
 
                   {uploadedFile.error && (
-                    <div className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    <div className="mt-1 text-sm text-coop-red-600 dark:text-coop-red-400">
                       {uploadedFile.error}
                     </div>
                   )}
@@ -545,7 +545,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                       href={uploadedFile.pdfUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 text-coop-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      className="p-2 text-coop-gray-400 hover:text-coop-gray-600 dark:hover:text-gray-300"
                       title="Visa original PDF"
                     >
                       <Eye className="w-4 h-4" />
@@ -588,19 +588,19 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                   </CardHeader>
                   <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
-                      <Label className="text-gray-500 dark:text-coop-gray-400">Namn</Label>
+                      <Label className="text-coop-gray-600">Namn</Label>
                       <p className="font-medium">{showPreview.parsed.planogramName ?? "Okänt"}</p>
                     </div>
                     <div>
-                      <Label className="text-gray-500 dark:text-coop-gray-400">Butik</Label>
+                      <Label className="text-coop-gray-600">Butik</Label>
                       <p className="font-medium">{showPreview.parsed.storeName ?? "Okänd"}</p>
                     </div>
                     <div>
-                      <Label className="text-gray-500 dark:text-coop-gray-400">Zoner</Label>
+                      <Label className="text-coop-gray-600">Zoner</Label>
                       <p className="font-medium">{showPreview.parsed.zones.length}</p>
                     </div>
                     <div>
-                      <Label className="text-gray-500 dark:text-coop-gray-400">Sidor</Label>
+                      <Label className="text-coop-gray-600">Sidor</Label>
                       <p className="font-medium">{showPreview.parsed.metadata.pageCount}</p>
                     </div>
                   </CardContent>
@@ -626,8 +626,8 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                     <CardContent className="space-y-2">
                       {showPreview.validation.errors.length > 0 && (
                         <div className="space-y-1">
-                          <Label className="text-red-600 dark:text-red-400 font-medium">Fel:</Label>
-                          <ul className="list-disc list-inside text-sm text-red-600 dark:text-red-400">
+                          <Label className="text-coop-red-600 dark:text-coop-red-400 font-medium">Fel:</Label>
+                          <ul className="list-disc list-inside text-sm text-coop-red-600 dark:text-coop-red-400">
                             {showPreview.validation.errors.map((e, i) => (
                               <li key={i}>{e}</li>
                             ))}
@@ -635,7 +635,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                         </div>
                       )}
                       {showPreview.validation.errors.length === 0 && (
-                        <p className="text-green-600 dark:text-green-400">Inga problem hittades</p>
+                        <p className="text-coop-gron-600 dark:text-coop-gron-400">Inga problem hittades</p>
                       )}
                     </CardContent>
                   </Card>
@@ -657,7 +657,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                           <div key={zone.id} className="border rounded-lg p-3">
                             <div className="flex items-center justify-between mb-2">
                               <span className="font-medium">{zone.name}</span>
-                              <span className="text-xs text-gray-500">
+                              <span className="text-xs text-coop-gray-600">
                                 {(zone.shelves?.length ?? 0)} hyllor,{" "}
                                 {(zone.shelves?.reduce((s, sh) => s + (sh.products?.length ?? 0), 0) ?? 0)}{" "}
                                 produkter
@@ -666,7 +666,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                             <div className="space-y-2">
                               {(zone.shelves ?? []).map((shelf) => (
                                 <div key={shelf.id} className="border-t pt-2">
-                                  <div className="flex items-center gap-4 text-xs text-gray-500 mb-1">
+                                  <div className="flex items-center gap-4 text-xs text-coop-gray-600 mb-1">
                                     <span>
                                       Hylla: {shelf.name} (nivå {shelf.level})
                                     </span>
@@ -675,7 +675,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                                   <div className="overflow-x-auto">
                                     <table className="w-full text-sm">
                                       <thead>
-                                        <tr className="border-b text-left text-gray-500 whitespace-nowrap">
+                                        <tr className="border-b text-left text-coop-gray-600 whitespace-nowrap">
                                           <th className="pb-1 pr-3">POS</th>
                                           <th className="pb-1 pr-3">EAN</th>
                                           <th className="pb-1 pr-3">SKU</th>
@@ -731,7 +731,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
 
                 {/* StoreFlow Import Preview */}
                 {showPreview.storeFlowData && (
-                  <Card className="border-blue-200 dark:border-blue-900">
+                  <Card className="border-coop-blue-200 dark:border-coop-blue-900">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Download className="w-5 h-5 text-coop-blue-500" />
@@ -741,26 +741,26 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                     <CardContent className="space-y-3">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
-                          <Label className="text-gray-500 dark:text-coop-gray-400">Butik</Label>
+                          <Label className="text-coop-gray-600">Butik</Label>
                           <p className="font-medium">{storeId}</p>
                         </div>
                         <div>
-                          <Label className="text-gray-500 dark:text-coop-gray-400">Namn</Label>
+                          <Label className="text-coop-gray-600">Namn</Label>
                           <p className="font-medium">{showPreview.storeFlowData.name}</p>
                         </div>
                         <div>
-                          <Label className="text-gray-500 dark:text-coop-gray-400">Produkter</Label>
+                          <Label className="text-coop-gray-600">Produkter</Label>
                           <p className="font-medium">
                             {showPreview.storeFlowData.expected_products.length}
                           </p>
                         </div>
                         <div>
-                          <Label className="text-gray-500 dark:text-coop-gray-400">Version</Label>
+                          <Label className="text-coop-gray-600">Version</Label>
                           <p className="font-medium">{showPreview.storeFlowData.version}</p>
                         </div>
                       </div>
                       <details className="text-sm">
-                        <summary className="cursor-pointer text-blue-600 dark:text-blue-400 mb-2">
+                        <summary className="cursor-pointer text-coop-blue-600 dark:text-coop-blue-400 mb-2">
                           Visa alla förväntade produkter (
                           {showPreview.storeFlowData.expected_products.length})
                         </summary>
@@ -768,7 +768,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                           {showPreview.storeFlowData.expected_products.map((p, i) => (
                             <div
                               key={i}
-                              className="text-xs text-gray-600 dark:text-coop-gray-400 font-mono"
+                              className="text-xs text-coop-gray-600 font-mono"
                             >
                               {p.ean} - {p.name} (Facings: {p.expectedFacings})
                             </div>
