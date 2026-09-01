@@ -1,0 +1,86 @@
+# Coop Typsnitt i StoreFlow
+
+## Installation
+
+1. **Ladda upp typsnittsfiler** till Supabase Storage bucketen `fonts`:
+   - `CoopSans-Regular.woff2`
+   - `CoopSans-Medium.woff2`
+   - `CoopSans-Bold.woff2`
+   - `CoopSans-Black.woff2`
+   - `CoopSansPrice-Black.woff2`
+   - `CoopMarker-Regular.woff2`
+   - `CoopMarker-Bold.woff2`
+
+2. **Gör bucketen publik**:
+   - Supabase Dashboard → Storage → `fonts` → Settings → Make Public
+
+3. **Initiering**: `initializeFonts()` anropas automatiskt i `__root.tsx`
+
+## Användning
+
+### CSS-klasser
+
+| Klass | Vikt | Användning |
+|-------|------|------------|
+| `coop-font-display` | 900 | Stora rubriker |
+| `coop-font-heading` | 700 | Mellanstora rubriker |
+| `coop-font-heading-sm` | 700 | Små rubriker |
+| `coop-font-emphasis` | 500 | Ingresser & betoning |
+| `coop-font-body` | 400 | Brödtext |
+| `coop-font-price` | 900 | Prissättning |
+| `coop-font-price-sm` | 900 | Mindre priser |
+| `coop-font-price-lg` | 900 | Stora priser/erbjudanden |
+| `coop-font-marker` | 400 | Handgjord komplement |
+| `coop-font-marker-strong` | 700 | Stark handgjord betoning |
+
+### React-komponent
+
+```tsx
+import { Typography } from "@/components/typography";
+
+<Typography variant="display" centered>Stor rubrik</Typography>
+<Typography variant="price">99 kr</Typography>
+<Typography variant="marker">Handgjord notering</Typography>
+```
+
+### Kolon-tecken i Coop Sans Price
+**Viktigt:** `Coop Sans Price` typsnittet innehåller **inte kolon-tecken (`:`)**. 
+Om du visar priser eller tider som innehåller kolon (t.ex. `09:30`, `99:-%`), ersätter `Typography`-komponenten automatiskt kolon med `Coop Marker Bold` (handgjord stil) för att undvika ersättningstecken som `:%`.
+
+Exempel:
+```tsx
+<Typography variant="price">09:30</Typography> 
+// Renderar som: [Coop Sans Price]09[Coop Marker Bold]:[Coop Sans Price]30
+```
+
+### Programmatisk API
+
+```tsx
+import { getTypographyClass, initializeFonts } from "@/lib/fonts";
+
+initializeFonts();
+const klass = getTypographyClass("heading");
+```
+
+## Justering (enligt manual)
+
+- **Standard**: Vänsterställd (`text-left`) eller Centrerad (`text-center`)
+- **Asymmetrisk layout** (undantag): `text-asymmetric` (t.ex. justify)
+
+## Typsnittsregler
+
+### Coop Sans
+- **Black (900)**: Stora rubriker
+- **Bold (700)**: Mellanstora/små rubriker
+- **Medium (500)**: Ingresser & betoning
+- **Regular (400)**: Brödtext
+
+### Coop Sans Price
+- **Black (900)**: Prissättning och erbjudanden
+- Smalare, kraftigare siffror för synlighet
+- `font-variant-numeric: tabular-nums` för enhetlig sifferbredd
+
+### Coop Marker
+- **Regular (400) & Bold (700)**: Handgjord komplement
+- Använd ALDRIG som ersättning för Coop Sans
+- Använd för att framhäva specifika ord eller kortare budskap

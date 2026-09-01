@@ -14,7 +14,11 @@ import { AppShell } from "@/components/app-shell";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { FirstTimeSetup } from "@/components/first-time-setup";
 import { BarcodeProvider } from "@/lib/barcode-context";
+import { initializeFonts } from "@/lib/fonts";
 import appCss from "../styles.css?url";
+
+// Initiera Coop-typsnitt vid app-start
+initializeFonts();
 
 function NotFoundComponent() {
   return (
