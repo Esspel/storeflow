@@ -112,7 +112,9 @@ export function AppSidebar() {
             <Sparkles className="h-4 w-4" />
           </div>
           <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-semibold tracking-tight">StoreFlow</span>
+            <span className="text-sm font-semibold tracking-tight">
+              <span className="coop-font-marker">Store</span><span className="font-sans">Flow</span>
+            </span>
             <span className="text-[11px] text-muted-foreground">Retail Operations</span>
           </div>
         </Link>
