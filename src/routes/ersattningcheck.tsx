@@ -97,6 +97,7 @@ type ShelfLifeRecord = {
   product_url: string | null;
   delivery_status: string;
   category: string;
+  delivery_number?: string | null;
   sap_data_missing?: boolean;
   next_sap_check?: string | null;
 };
@@ -771,6 +772,7 @@ function ErstatningsCheckPage() {
             created_at: product.created_at ?? new Date().toISOString(),
             updated_at: product.updated_at ?? new Date().toISOString(),
             category: product.category ?? delivery.category ?? "",
+            delivery_number: delivery.delivery_number ?? null,
             sap_data_missing: master.sap_data_missing ?? false,
             next_sap_check: master.next_sap_check ?? null,
           };
@@ -1767,16 +1769,18 @@ function ErstatningsCheckPage() {
         const content = [
           `LEVERANS: ${leverans}`,
           `TEMPERATURZON: ${zon}`,
-          `SAP_ARTIKEL_ID|BNR|PRODUKT|VARUMARKE|HALLBARHET_DAGAR|UTGANGSDATUM|ANKOMST|ANLEDNING`,
+          `SAP_ARTIKEL_ID|BNR|LEVERANSNUMMER|LEVERANSDATUM|KATEGORI|PRODUKT|VARUMARKE|HALLBARHET_DAGAR|UTGANGSDATUM|ANLEDNING`,
           ...rows.map((row: any) =>
             [
               row.sap_article_id,
               row.bnr,
+              row.delivery_number || "",
+              row.arrival_date?.split("T")[0] || row.arrival_date || "",
+              row.category || "",
               row.product_name,
               row.brand,
               row.shelf_lifetime_days,
               row.best_before_date?.split("T")[0] || row.best_before_date,
-              row.arrival_date?.split("T")[0] || row.arrival_date,
               row.reason,
             ].join("|"),
           ),
@@ -2893,16 +2897,32 @@ function ErstatningsCheckPage() {
                       record.expiry_date,
                       record.shelf_lifetime_days,
                     );
+                    const arrivalDateText = record.arrival_date
+                      ? new Date(record.arrival_date).toLocaleDateString("sv-SE")
+                      : "—";
                     return (
                       <div
                         key={record.id}
-                        className="flex items-center justify-between border-b py-2 last:border-0"
+                        className="flex items-center justify-between gap-4 border-b py-2 last:border-0"
                       >
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <div className="font-medium">
                             {record.product_name} {record.brand && `- ${record.brand}`}
                           </div>
                           <div className="font-mono text-xs">{record.sap_article_id}</div>
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                            <span>
+                              <span className="font-medium">Leveransnr:</span>{" "}
+                              {record.delivery_number || "—"}
+                            </span>
+                            <span>
+                              <span className="font-medium">Leveransdatum:</span> {arrivalDateText}
+                            </span>
+                            <span>
+                              <span className="font-medium">Kategori:</span>{" "}
+                              {record.category || "—"}
+                            </span>
+                          </div>
                         </div>
                         <div className="text-right text-muted-foreground">
                           <div>
