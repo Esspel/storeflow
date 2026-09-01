@@ -102,8 +102,8 @@ export function Step3Pdf() {
             {busy ? "Genererar..." : "Ladda ner PNG"}
           </Button>
         </div>
-        <div className="rounded border p-3 bg-slate-50">
-          <p className="text-xs font-mono text-slate-700">
+        <div className="rounded border p-3 bg-coop-gray-100">
+          <p className="text-xs font-mono text-coop-gray-700">
             Förhandsvisning:{" "}
             {Array.from({ length: Math.min(5, count) }, (_, i) => markerCode(i)).join(", ")}
             {count > 5 ? " …" : ""}

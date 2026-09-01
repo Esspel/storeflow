@@ -188,7 +188,7 @@ function SwUpdateBanner() {
   return (
     <div
       role="alert"
-      className="sticky top-0 z-[60] flex items-center justify-between gap-3 border-b-2 border-amber-400 bg-amber-400 px-4 py-3 text-sm font-semibold text-amber-950"
+      className="sticky top-0 z-[60] flex items-center justify-between gap-3 border-b-2 border-coop-orange-500 bg-coop-orange-500 px-4 py-3 text-sm font-semibold text-coop-orange-1200"
     >
       <span>
         En ny säkerhetsuppdatering är tillgänglig. Appen startas om automatiskt om{" "}
@@ -196,7 +196,7 @@ function SwUpdateBanner() {
       </span>
       <button
         onClick={() => applyUpdate(waiting)}
-        className="shrink-0 rounded-full bg-amber-950 px-3 py-1 text-xs font-bold text-amber-50 transition-opacity hover:opacity-80 active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-950"
+        className="shrink-0 rounded-full bg-coop-gray-1000 px-3 py-1 text-xs font-bold text-coop-vit transition-opacity hover:opacity-80 active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coop-gray-1000"
       >
         Starta om nu
       </button>
@@ -244,7 +244,7 @@ function OfflineSnackbar() {
         "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium shadow-lg transition-all",
         status === "offline"
           ? "bg-destructive text-destructive-foreground"
-          : "bg-emerald-600 text-white",
+          : "bg-coop-gron-600 text-coop-vit",
       )}
     >
       {status === "offline" ? (
@@ -786,7 +786,7 @@ export function AppShell() {
 
       {/* Time simulation bar */}
       {simActive && (
-        <div className="sticky top-14 z-30 flex items-center justify-between gap-3 border-b border-amber-500/40 bg-amber-500/10 px-5 py-2 text-xs font-medium text-amber-900 dark:text-amber-200 md:top-16 md:px-8">
+        <div className="sticky top-14 z-30 flex items-center justify-between gap-3 border-b border-coop-orange-500/40 bg-coop-orange-500/10 px-5 py-2 text-xs font-medium text-coop-gray-1000 dark:text-coop-gray-900 md:top-16 md:px-8">
           <span>
             Tidssimulering aktiv — simulerad tid:{" "}
             <strong>
@@ -797,7 +797,7 @@ export function AppShell() {
             </strong>
           </span>
           <button
-            className="rounded-full border border-amber-500/40 px-3 py-1 hover:bg-amber-500/20 transition-colors"
+            className="rounded-full border border-coop-orange-500/40 px-3 py-1 hover:bg-coop-orange-500/20 transition-colors"
             onClick={async () => {
               await supabase.from("tasks").delete().not("parent_task_id", "is", null);
               setTimeOffsetMs(0);

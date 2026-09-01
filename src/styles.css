@@ -2,7 +2,7 @@
 @source "../src";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+/* dark mode disabled - Coop colors fixed */
 
 /*
  * ============================================

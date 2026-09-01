@@ -84,10 +84,10 @@ export function DigitalTwinWizard({ onComplete }: { onComplete?: () => void }) {
               key={s.id}
               className={`rounded border p-2 text-xs ${
                 i === currentIdx
-                  ? "border-blue-500 bg-blue-50"
+                  ? "border-coop-blue-500 bg-coop-blue-100"
                   : i < currentIdx
-                    ? "border-emerald-300 bg-emerald-50"
-                    : "border-slate-200"
+                    ? "border-coop-gron-300 bg-coop-gron-100"
+                    : "border-coop-gray-200"
               }`}
             >
               <div className="font-medium">

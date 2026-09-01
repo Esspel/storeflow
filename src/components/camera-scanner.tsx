@@ -329,7 +329,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
             onClick={toggleTorch}
             className={cn(
               "flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-md transition-all active:scale-95",
-              torchOn ? "bg-yellow-400 text-black" : "bg-white/10 text-white",
+              torchOn ? "bg-coop-yellow-400 text-coop-yellow-900" : "bg-white/10 text-white",
             )}
             aria-label="Tänd/släck ficklampa"
           >
@@ -343,8 +343,8 @@ export function CameraScanner({ onScan, onClose }: Props) {
       {/* Undre informationstext */}
       <div className="relative z-10 mt-auto px-6 pb-12 text-center pb-safe">
         {error ? (
-          <div className="rounded-2xl border border-red-400/30 bg-red-500/20 px-4 py-3 backdrop-blur-md">
-            <p className="text-sm text-red-200">{error}</p>
+          <div className="rounded-2xl border border-coop-red-400/30 bg-coop-red-500/20 px-4 py-3 backdrop-blur-md">
+            <p className="text-sm text-coop-red-200">{error}</p>
           </div>
         ) : (
           <p className="text-sm text-white/60">EAN-13 · EAN-8 · Code 128 · QR · med flera</p>

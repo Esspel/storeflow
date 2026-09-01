@@ -223,12 +223,12 @@ function CustomerNavPage() {
   };
 
   const typeColors = {
-    shelf: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-    product: "bg-green-500/20 text-green-300 border-green-500/30",
+    shelf: "bg-coop-blue-500/20 text-coop-blue-300 border-coop-blue-500/30",
+    product: "bg-coop-gron-500/20 text-coop-gron-300 border-coop-gron-500/30",
     zone: "bg-purple-500/20 text-purple-300 border-purple-500/30",
-    entrance: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-    exit: "bg-rose-500/20 text-rose-300 border-rose-500/30",
-    aisle: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+    entrance: "bg-coop-gron-500/20 text-coop-gron-300 border-coop-gron-500/30",
+    exit: "bg-coop-red-500/20 text-coop-red-300 border-coop-red-500/30",
+    aisle: "bg-coop-orange-500/20 text-coop-orange-300 border-coop-orange-500/30",
   };
 
   const typeLabels = {
@@ -241,7 +241,7 @@ function CustomerNavPage() {
   };
 
   return (
-    <div className="min-h-full bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-full bg-coop-gray-100 dark:bg-coop-gray-1200">
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border/60 bg-card/95 backdrop-blur-sm">
         <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4 md:h-16 md:gap-4 md:px-8">
@@ -255,7 +255,7 @@ function CustomerNavPage() {
           </div>
           <div className="flex-1" />
           {storeId && (
-            <Badge className="gap-1.5 bg-indigo-500/20 text-indigo-300 border-indigo-500/30">
+            <Badge className="gap-1.5 bg-coop-blue-500/20 text-coop-blue-300 border-coop-blue-500/30">
               <Store className="w-3 h-3" />
               {map?.name || "Demobutik"}
             </Badge>
@@ -270,16 +270,16 @@ function CustomerNavPage() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[image:var(--gradient-primary)] text-primary-foreground shadow-[var(--shadow-md)]">
               <QrCode className="h-8 w-8" />
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            <h1 className="text-3xl font-bold tracking-tight text-coop-gray-1000 dark:text-coop-gray-100">
               Välkommen till StoreFlow kundnavigering
             </h1>
-            <p className="text-slate-500 dark:text-slate-400">
+            <p className="text-coop-gray-500 dark:text-coop-gray-400">
               Skanna QR-koden vid butikens ingång eller välj butik nedan för att börja navigera.
             </p>
 
             <div className="space-y-3">
               <Button
-                className="w-full gap-2 bg-indigo-600 hover:bg-indigo-500 text-white"
+                className="w-full gap-2 bg-coop-blue-600 hover:bg-coop-blue-500 text-coop-vit"
                 onClick={simulateScan}
               >
                 <Navigation className="w-4 h-4" />
@@ -300,8 +300,8 @@ function CustomerNavPage() {
               </Button>
             </div>
 
-            <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="pt-4 border-t border-coop-gray-200 dark:border-coop-gray-700">
+              <p className="text-xs text-coop-gray-500 dark:text-coop-gray-400">
                 Butik från URL-parametrar (QR-kod)
               </p>
             </div>
@@ -310,8 +310,8 @@ function CustomerNavPage() {
 
         {/* Error State */}
         {error && storeId && (
-          <div className="max-w-md mx-auto mb-6 p-4 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
-            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+          <div className="max-w-md mx-auto mb-6 p-4 rounded-xl bg-coop-red-100 dark:bg-coop-red-1000/20 border border-coop-red-200 dark:border-coop-red-800">
+            <div className="flex items-center gap-2 text-coop-red-600 dark:text-coop-red-400">
               <XCircle className="w-5 h-5" />
               <span>{error}</span>
             </div>
@@ -335,8 +335,8 @@ function CustomerNavPage() {
         {loading && (
           <div className="flex items-center justify-center min-h-[300px]">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent mx-auto mb-4" />
-              <p className="text-slate-600 dark:text-slate-400">Laddar butikskarta...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-coop-blue-500 border-t-transparent mx-auto mb-4" />
+              <p className="text-coop-gray-600 dark:text-coop-gray-400">Laddar butikskarta...</p>
             </div>
           </div>
         )}
@@ -345,7 +345,7 @@ function CustomerNavPage() {
         {storeId && map && !loading && (
           <div className="space-y-6">
             {/* View Mode Tabs */}
-            <div className="flex items-center gap-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-2 max-w-md">
+            <div className="flex items-center gap-2 bg-white dark:bg-coop-gray-1000 rounded-xl border border-coop-gray-200 dark:border-coop-gray-700 p-2 max-w-md">
               <Button
                 variant={viewMode === "search" ? "default" : "ghost"}
                 size="sm"
@@ -379,16 +379,16 @@ function CustomerNavPage() {
             {/* Search View */}
             {viewMode === "search" && (
               <div className="max-w-md mx-auto space-y-4">
-                <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                <Card className="bg-white dark:bg-coop-gray-1000 border-coop-gray-200 dark:border-coop-gray-700">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Search className="w-5 h-5 text-indigo-500" />
+                      <Search className="w-5 h-5 text-coop-blue-500" />
                       Hitta produkt
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-coop-gray-400" />
                       <Input
                         placeholder="Sök produkt, EAN eller BNR..."
                         value={searchQuery}
@@ -421,17 +421,17 @@ function CustomerNavPage() {
                             onClick={() => handleProductSelect(product)}
                           >
                             <div className="flex-1 text-left">
-                              <p className="font-medium text-slate-900 dark:text-slate-100">
+                              <p className="font-medium text-coop-gray-1000 dark:text-coop-gray-100">
                                 {product.name}
                               </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                              <p className="text-xs text-coop-gray-500 dark:text-coop-gray-400 flex items-center gap-1">
                                 {product.brand && <span>{product.brand}</span>}
                                 {product.size && <span>• {product.size}</span>}
                                 {product.ean && <span>• EAN: {product.ean}</span>}
                                 {product.bnr && <span>• BNR: {product.bnr}</span>}
                               </p>
                             </div>
-                            <ArrowUpRight className="w-4 h-4 text-slate-400" />
+                            <ArrowUpRight className="w-4 h-4 text-coop-gray-400" />
                           </Button>
                         ))}
                       </div>
@@ -440,9 +440,9 @@ function CustomerNavPage() {
                 </Card>
 
                 {/* Quick Categories */}
-                <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                <Card className="bg-white dark:bg-coop-gray-1000 border-coop-gray-200 dark:border-coop-gray-700">
                   <CardHeader>
-                    <CardTitle className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                    <CardTitle className="text-sm font-medium text-coop-gray-1000 dark:text-coop-gray-100">
                       Populära kategorier
                     </CardTitle>
                   </CardHeader>
@@ -480,7 +480,7 @@ function CustomerNavPage() {
             {/* Map View */}
             {viewMode === "map" && (
               <div className="space-y-4">
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden aspect-[4/3] md:aspect-[16/9]">
+                <div className="bg-white dark:bg-coop-gray-1000 rounded-xl border border-coop-gray-200 dark:border-coop-gray-700 overflow-hidden aspect-[4/3] md:aspect-[16/9]">
                   <CustomerMapView
                     map={map}
                     selectedMarker={selectedMarker}
@@ -532,13 +532,13 @@ function CustomerNavPage() {
                     <CardContent className="space-y-3">
                       <div className="flex items-center gap-3">
                         <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
-                          <ShoppingCart className="w-8 h-8 text-slate-400" />
+                          <ShoppingCart className="w-8 h-8 text-coop-gray-400" />
                         </div>
                         <div>
-                          <p className="font-medium text-slate-900 dark:text-slate-100">
+                          <p className="font-medium text-coop-gray-1000 dark:text-coop-gray-100">
                             {selectedProduct.name}
                           </p>
-                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                          <p className="text-sm text-coop-gray-500 dark:text-coop-gray-400">
                             {selectedProduct.brand} • {selectedProduct.size}
                           </p>
                           {selectedProduct.price && (
@@ -566,7 +566,7 @@ function CustomerNavPage() {
                 )}
 
                 {selectedMarker && !selectedProduct && (
-                  <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 max-w-md mx-auto">
+                  <Card className="bg-white dark:bg-coop-gray-1000 border-coop-gray-200 dark:border-coop-gray-700 max-w-md mx-auto">
                     <CardContent className="pt-0">
                       <Button
                         className="w-full gap-2"

@@ -365,15 +365,15 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
       case "pending":
       case "parsing":
       case "validating":
-        return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />;
+        return <Loader2 className="w-4 h-4 animate-spin text-coop-blue-500" />;
       case "parsed":
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
+        return <CheckCircle className="w-4 h-4 text-coop-gron-500" />;
       case "importing":
-        return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />;
+        return <Loader2 className="w-4 h-4 animate-spin text-coop-blue-500" />;
       case "completed":
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
+        return <CheckCircle className="w-4 h-4 text-coop-gron-500" />;
       case "error":
-        return <AlertTriangle className="w-4 h-4 text-red-500" />;
+        return <AlertTriangle className="w-4 h-4 text-coop-red-500" />;
     }
   };
 
@@ -417,14 +417,14 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
           id="planogram-upload"
         />
         <label htmlFor="planogram-upload" className="cursor-pointer">
-          <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+          <Upload className="w-12 h-12 mx-auto text-coop-gray-400 mb-4" />
           <p className="text-lg font-medium text-gray-900 dark:text-gray-100">
             Dra och släpp planogram-PDF här
           </p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm text-gray-500 dark:text-coop-gray-400 mt-1">
             eller klicka för att välja filer
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+          <p className="text-xs text-coop-gray-400 dark:text-gray-500 mt-2">
             Accepterar: PDF (max 10MB per fil)
           </p>
         </label>
@@ -453,7 +453,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-gray-400" />
+                    <FileText className="w-4 h-4 text-coop-gray-400" />
                     <span className="font-medium text-gray-900 dark:text-white truncate">
                       {uploadedFile.file.name}
                     </span>
@@ -472,7 +472,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                   </div>
 
                   {uploadedFile.parsed && (
-                    <div className="mt-1 text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                    <div className="mt-1 text-sm text-gray-500 dark:text-coop-gray-400 space-y-1">
                       <span>
                         Planogram:{" "}
                         <span className="font-medium">
@@ -500,7 +500,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                         </span>
                       </span>
                       {uploadedFile.validation && uploadedFile.validation.errors.length > 0 && (
-                        <span className="text-amber-600 dark:text-amber-400">
+                        <span className="text-coop-orange-600 dark:text-coop-orange-400">
                           ⚠ {uploadedFile.validation.errors.length} varningar
                         </span>
                       )}
@@ -545,7 +545,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                       href={uploadedFile.pdfUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      className="p-2 text-coop-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                       title="Visa original PDF"
                     >
                       <Eye className="w-4 h-4" />
@@ -588,19 +588,19 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                   </CardHeader>
                   <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
-                      <Label className="text-gray-500 dark:text-gray-400">Namn</Label>
+                      <Label className="text-gray-500 dark:text-coop-gray-400">Namn</Label>
                       <p className="font-medium">{showPreview.parsed.planogramName ?? "Okänt"}</p>
                     </div>
                     <div>
-                      <Label className="text-gray-500 dark:text-gray-400">Butik</Label>
+                      <Label className="text-gray-500 dark:text-coop-gray-400">Butik</Label>
                       <p className="font-medium">{showPreview.parsed.storeName ?? "Okänd"}</p>
                     </div>
                     <div>
-                      <Label className="text-gray-500 dark:text-gray-400">Zoner</Label>
+                      <Label className="text-gray-500 dark:text-coop-gray-400">Zoner</Label>
                       <p className="font-medium">{showPreview.parsed.zones.length}</p>
                     </div>
                     <div>
-                      <Label className="text-gray-500 dark:text-gray-400">Sidor</Label>
+                      <Label className="text-gray-500 dark:text-coop-gray-400">Sidor</Label>
                       <p className="font-medium">{showPreview.parsed.metadata.pageCount}</p>
                     </div>
                   </CardContent>
@@ -616,9 +616,9 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         {showPreview.validation.valid ? (
-                          <CheckCircle className="w-5 h-5 text-green-500" />
+                          <CheckCircle className="w-5 h-5 text-coop-gron-500" />
                         ) : (
-                          <AlertTriangle className="w-5 h-5 text-red-500" />
+                          <AlertTriangle className="w-5 h-5 text-coop-red-500" />
                         )}
                         Validering
                       </CardTitle>
@@ -734,28 +734,28 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                   <Card className="border-blue-200 dark:border-blue-900">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                        <Download className="w-5 h-5 text-blue-500" />
+                        <Download className="w-5 h-5 text-coop-blue-500" />
                         StoreFlow Import Data
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
-                          <Label className="text-gray-500 dark:text-gray-400">Butik</Label>
+                          <Label className="text-gray-500 dark:text-coop-gray-400">Butik</Label>
                           <p className="font-medium">{storeId}</p>
                         </div>
                         <div>
-                          <Label className="text-gray-500 dark:text-gray-400">Namn</Label>
+                          <Label className="text-gray-500 dark:text-coop-gray-400">Namn</Label>
                           <p className="font-medium">{showPreview.storeFlowData.name}</p>
                         </div>
                         <div>
-                          <Label className="text-gray-500 dark:text-gray-400">Produkter</Label>
+                          <Label className="text-gray-500 dark:text-coop-gray-400">Produkter</Label>
                           <p className="font-medium">
                             {showPreview.storeFlowData.expected_products.length}
                           </p>
                         </div>
                         <div>
-                          <Label className="text-gray-500 dark:text-gray-400">Version</Label>
+                          <Label className="text-gray-500 dark:text-coop-gray-400">Version</Label>
                           <p className="font-medium">{showPreview.storeFlowData.version}</p>
                         </div>
                       </div>
@@ -768,7 +768,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                           {showPreview.storeFlowData.expected_products.map((p, i) => (
                             <div
                               key={i}
-                              className="text-xs text-gray-600 dark:text-gray-400 font-mono"
+                              className="text-xs text-gray-600 dark:text-coop-gray-400 font-mono"
                             >
                               {p.ean} - {p.name} (Facings: {p.expectedFacings})
                             </div>

@@ -102,11 +102,11 @@ export function Step5Qr({ storeId, storeName }: { storeId: string; storeName?: s
         <CardTitle>Butikens QR-kod</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-sm text-coop-gray-600 dark:text-coop-gray-400">
           Skriv ut denna QR och placera den i entrén. När kunden skannar koden öppnas
           butikens 3D/AR-kundvy direkt med rätt digital tvilling.
         </p>
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-coop-gray-200 bg-coop-vit p-6 dark:border-coop-gray-800 dark:bg-coop-gray-900">
           <canvas
             ref={canvasRef}
             role="img"

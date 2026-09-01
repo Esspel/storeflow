@@ -134,7 +134,7 @@ export function Step2Markers({
 function ArUcoMini({ id }: { id: number }) {
   const grid = getArUcoPattern(id);
   return (
-    <div className="rounded shadow ring-1 ring-slate-300 bg-white p-1">
+    <div className="rounded shadow ring-1 ring-coop-gray-300 bg-coop-vit p-1">
       <div className="grid grid-cols-6 gap-0">
         {grid.flat().map((on, i) => (
           <div key={i} className="w-2 h-2" style={{ background: on ? "#000" : "#fff" }} />

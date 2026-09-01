@@ -47,14 +47,14 @@ export function ArucoMarker({ storeId, skeppId }: { storeId: string; skeppId: st
     };
   }, [storeId, skeppId]);
 
-  if (error) return <p className="text-sm text-red-500">{error}</p>;
-  if (!markerId) return <p className="text-sm text-gray-500">Genererar markör…</p>;
+  if (error) return <p className="text-sm text-coop-red-600">{error}</p>;
+  if (!markerId) return <p className="text-sm text-coop-gray-500">Genererar markör…</p>;
   return (
     <div className="rounded border p-3 text-sm">
       <p>
         <strong>{markerId}</strong>
       </p>
-      <p className="text-xs text-gray-500">Skriv ut och placera vid skeppets bas.</p>
+      <p className="text-xs text-coop-gray-500">Skriv ut och placera vid skeppets bas.</p>
     </div>
   );
 }

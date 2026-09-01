@@ -15,9 +15,9 @@ export function PushNotificationSetup() {
     return (
       <div
         role="alert"
-        className="flex items-center gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
+        className="flex items-center gap-2.5 rounded-lg border border-coop-orange-500/30 bg-coop-orange-500/10 px-3 py-2 text-xs text-coop-orange-900 dark:text-coop-orange-200"
       >
-        <BellOff className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <BellOff className="h-4 w-4 shrink-0 text-coop-orange-600 dark:text-coop-orange-400" />
         <span>Notiser är blockerade. Ändra i webbläsarens inställningar för att aktivera.</span>
       </div>
     );

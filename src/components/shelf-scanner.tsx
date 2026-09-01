@@ -302,19 +302,19 @@ export function ShelfScanner({
   }, [scanHistory, shelfId, shelfName, onScanComplete, planogram]);
 
   return (
-    <div className="relative flex flex-col h-full bg-slate-950 text-white rounded-xl overflow-hidden border border-slate-800 shadow-2xl">
+    <div className="relative flex flex-col h-full bg-coop-gray-1200 text-coop-vit rounded-xl overflow-hidden border border-coop-gray-800 shadow-lg">
       {/* Top Header */}
-      <div className="flex items-center justify-between p-4 bg-slate-900/90 border-b border-slate-800 z-10">
+      <div className="flex items-center justify-between p-4 bg-coop-gray-1000/90 border-b border-coop-gray-800 z-10">
         <div className="flex items-center gap-2">
-          <ScanLine className="w-5 h-5 text-indigo-400 animate-pulse" />
+          <ScanLine className="w-5 h-5 text-coop-blue-400 animate-pulse" />
           <h3 className="font-semibold text-sm sm:text-base">
             {shelfName} — Hyllskanning (posemesh)
           </h3>
         </div>
         <div className="flex items-center gap-2">
           {planogramLoading && (
-            <div className="flex items-center gap-1 text-xs text-slate-400">
-              <div className="animate-spin rounded-full h-3 w-3 border-2 border-indigo-500 border-t-transparent" />
+            <div className="flex items-center gap-1 text-xs text-coop-gray-400">
+              <div className="animate-spin rounded-full h-3 w-3 border-2 border-coop-blue-500 border-t-transparent" />
               Laddar planogram...
             </div>
           )}
@@ -322,8 +322,8 @@ export function ShelfScanner({
             variant={isScanning ? "default" : "outline"}
             className={
               isScanning
-                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                : "text-slate-400"
+                ? "bg-coop-gron-500/20 text-coop-gron-300 border-coop-gron-400/40"
+                : "text-coop-gray-400"
             }
           >
             {isScanning ? "CV Aktiv" : "Pausad"}
@@ -331,7 +331,7 @@ export function ShelfScanner({
           {planogram && !planogramLoading && (
             <Badge
               variant="secondary"
-              className="text-emerald-300 bg-emerald-500/20 border-emerald-500/30"
+              className="text-coop-gron-300 bg-coop-gron-500/20 border-coop-gron-300/30"
             >
               Planogram laddat
             </Badge>
@@ -340,7 +340,7 @@ export function ShelfScanner({
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 text-slate-400 hover:text-white"
+              className="h-8 w-8 text-coop-gray-400 hover:text-coop-vit"
               onClick={onClose}
             >
               <X className="w-4 h-4" />
@@ -360,9 +360,9 @@ export function ShelfScanner({
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
 
         {!isScanning && !scanResult && (
-          <div className="z-10 text-center p-6 bg-slate-900/80 backdrop-blur rounded-xl border border-slate-700 mx-4">
-            <Camera className="w-12 h-12 mx-auto text-slate-400 mb-3" />
-            <p className="text-slate-300 mb-4">
+          <div className="z-10 text-center p-6 bg-coop-gray-1000/80 backdrop-blur rounded-xl border border-coop-gray-700 mx-4">
+            <Camera className="w-12 h-12 mx-auto text-coop-gray-400 mb-3" />
+            <p className="text-coop-gray-300 mb-4">
               Tryck på "Starta skanning" för att börja detektera QR-koder och ArUco-markörer
             </p>
             <Button onClick={start} size="lg" className="w-full sm:w-auto">
@@ -373,13 +373,13 @@ export function ShelfScanner({
         )}
 
         {error && (
-          <div className="z-10 absolute bottom-4 left-4 right-4 mx-4 p-3 bg-red-500/90 text-white rounded-lg border border-red-400 flex items-center gap-2">
+          <div className="z-10 absolute bottom-4 left-4 right-4 mx-4 p-3 bg-coop-red-500/90 text-coop-vit rounded-lg border border-coop-red-400 flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 shrink-0" />
             <span className="text-sm flex-1">{error.message}</span>
             <Button
               size="sm"
               variant="ghost"
-              className="text-white hover:bg-white/10"
+              className="text-coop-vit hover:bg-white/10"
               onClick={() => {
                 stop();
                 start();
@@ -393,7 +393,7 @@ export function ShelfScanner({
         {/* Detection overlay info */}
         {isScanning && (
           <div className="z-10 absolute bottom-4 left-4 right-4 mx-4 flex flex-col gap-2">
-            <div className="bg-slate-900/80 backdrop-blur rounded-lg border border-slate-700 p-3 flex flex-wrap gap-4 text-xs">
+            <div className="bg-coop-gray-1000/80 backdrop-blur rounded-lg border border-coop-gray-700 p-3 flex flex-wrap gap-4 text-xs">
               <span className="flex items-center gap-1">
                 <QrCode className="w-3.5 h-3.5" /> QR: {detectedQRs.length}
               </span>
@@ -423,7 +423,7 @@ export function ShelfScanner({
 
         {/* Results Panel */}
         {scanResult && !isScanning && (
-          <div className="z-10 absolute inset-4 m-4 p-4 bg-slate-900/95 backdrop-blur rounded-xl border border-slate-700 overflow-auto max-h-[80%]">
+          <div className="z-10 absolute inset-4 m-4 p-4 bg-coop-gray-1000/95 backdrop-blur rounded-xl border border-coop-gray-700 overflow-auto max-h-[80%]">
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-semibold">Planogram Compliance</h4>
               <Button variant="ghost" size="icon" onClick={() => setScanResult(null)}>
@@ -431,37 +431,37 @@ export function ShelfScanner({
               </Button>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
-              <div className="bg-slate-800 rounded-lg p-4 text-center">
-                <div className="text-3xl font-bold text-emerald-400">
+              <div className="bg-coop-gray-800 rounded-lg p-4 text-center">
+                <div className="text-3xl font-bold text-coop-gron-400">
                   {Math.round(scanResult.complianceScore)}%
                 </div>
-                <div className="text-slate-400 text-xs mt-1">Compliance Score</div>
+                <div className="text-coop-gray-400 text-xs mt-1">Compliance Score</div>
               </div>
-              <div className="bg-slate-800 rounded-lg p-4 text-center">
-                <div className="text-3xl font-bold text-amber-400">
+              <div className="bg-coop-gray-800 rounded-lg p-4 text-center">
+                <div className="text-3xl font-bold text-coop-orange-400">
                   {scanResult.missingProducts.length}
                 </div>
-                <div className="text-slate-400 text-xs mt-1">Missing</div>
+                <div className="text-coop-gray-400 text-xs mt-1">Missing</div>
               </div>
-              <div className="bg-slate-800 rounded-lg p-4 text-center">
-                <div className="text-3xl font-bold text-rose-400">
+              <div className="bg-coop-gray-800 rounded-lg p-4 text-center">
+                <div className="text-3xl font-bold text-coop-red-400">
                   {scanResult.misplacedProducts.length}
                 </div>
-                <div className="text-slate-400 text-xs mt-1">Misplaced</div>
+                <div className="text-coop-gray-400 text-xs mt-1">Misplaced</div>
               </div>
             </div>
             {scanResult.missingProducts.length > 0 && (
               <div className="mt-4">
-                <h5 className="font-medium text-amber-300 mb-2">Missing Products</h5>
-                <ul className="space-y-1 text-sm text-slate-300">
+                <h5 className="font-medium text-coop-orange-300 mb-2">Missing Products</h5>
+                <ul className="space-y-1 text-sm text-coop-gray-300">
                   {scanResult.missingProducts.slice(0, 5).map((m, i) => (
                     <li key={i} className="flex justify-between">
                       <span>{m.name}</span>
-                      <span className="text-amber-400">{m.expected_facings} facings</span>
+                      <span className="text-coop-orange-400">{m.expected_facings} facings</span>
                     </li>
                   ))}
                   {scanResult.missingProducts.length > 5 && (
-                    <li className="text-slate-500">
+                    <li className="text-coop-gray-500">
                       +{scanResult.missingProducts.length - 5} more...
                     </li>
                   )}
@@ -470,16 +470,16 @@ export function ShelfScanner({
             )}
             {scanResult.misplacedProducts.length > 0 && (
               <div className="mt-4">
-                <h5 className="font-medium text-rose-300 mb-2">Misplaced Products</h5>
-                <ul className="space-y-1 text-sm text-slate-300">
+                <h5 className="font-medium text-coop-red-300 mb-2">Misplaced Products</h5>
+                <ul className="space-y-1 text-sm text-coop-gray-300">
                   {scanResult.misplacedProducts.slice(0, 5).map((m, i) => (
                     <li key={i} className="flex justify-between">
                       <span>{m.name}</span>
-                      <span className="text-rose-400">{m.distance_meters.toFixed(2)}m off</span>
+                      <span className="text-coop-red-400">{m.distance_meters.toFixed(2)}m off</span>
                     </li>
                   ))}
                   {scanResult.misplacedProducts.length > 5 && (
-                    <li className="text-slate-500">
+                    <li className="text-coop-gray-500">
                       +{scanResult.misplacedProducts.length - 5} more...
                     </li>
                   )}
