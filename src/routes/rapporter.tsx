@@ -36,8 +36,8 @@ const CATEGORY_CONFIG: Record<string, { color: string }> = {
   Arbetsmiljö: { color: "text-warning-foreground" },
   Ekonomi: { color: "text-success" },
   Kassa: { color: "text-success" },
-  Rengöring: { color: "text-muted-foreground" },
-  Städning: { color: "text-muted-foreground" },
+  Rengöring: { color: "text-coop-gray-600" },
+  Städning: { color: "text-coop-gray-600" },
   Varupåfyllning: { color: "text-info" },
 };
 
@@ -236,7 +236,7 @@ function ReportsPage() {
   if (user && user.role === "employee") {
     return (
       <div className="flex h-full flex-col items-center justify-center px-5 py-20 text-center">
-        <p className="text-sm font-medium text-muted-foreground">
+        <p className="text-sm font-medium text-coop-gray-600">
           Du har inte behörighet att se rapporter.
         </p>
       </div>
@@ -246,7 +246,7 @@ function ReportsPage() {
   if (!activeStore) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-5 py-20 text-center">
-        <p className="text-sm font-medium text-muted-foreground">
+        <p className="text-sm font-medium text-coop-gray-600">
           Välj en butik för att se rapporter.
         </p>
       </div>
@@ -271,7 +271,7 @@ function ReportsPage() {
       {/* Date filter */}
       <div className="mb-6 flex flex-wrap items-end gap-3">
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Från</Label>
+          <Label className="text-xs text-coop-gray-600">Från</Label>
           <Input
             type="date"
             value={dateFrom}
@@ -280,7 +280,7 @@ function ReportsPage() {
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Till</Label>
+          <Label className="text-xs text-coop-gray-600">Till</Label>
           <Input
             type="date"
             value={dateTo}
@@ -325,7 +325,7 @@ function ReportsPage() {
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-2xl bg-card" />
+            <div key={i} className="h-20 animate-pulse rounded-2xl bg-coop-gray-100" />
           ))}
         </div>
       ) : (
@@ -333,19 +333,19 @@ function ReportsPage() {
           <TabsList className="rounded-full bg-muted/60 p-1">
             <TabsTrigger
               value="tasks"
-              className="rounded-full px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm"
+              className="rounded-full px-4 data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
             >
               Uppgifter
             </TabsTrigger>
             <TabsTrigger
               value="incidents"
-              className="rounded-full px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm"
+              className="rounded-full px-4 data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
             >
               Avvikelser
             </TabsTrigger>
             <TabsTrigger
               value="kundrunda"
-              className="rounded-full px-4 data-[state=active]:bg-card data-[state=active]:shadow-sm"
+              className="rounded-full px-4 data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
             >
               Kundrundan
             </TabsTrigger>
@@ -363,7 +363,7 @@ function ReportsPage() {
                 {
                   label: "Ej påbörjad",
                   value: tasks.filter((t) => t.status === "todo").length,
-                  cls: "text-muted-foreground",
+                  cls: "text-coop-gray-600",
                 },
                 {
                   label: "Pågående",
@@ -383,10 +383,10 @@ function ReportsPage() {
               ].map(({ label, value, cls }) => (
                 <div
                   key={label}
-                  className="rounded-2xl bg-card p-5 text-center shadow-[var(--shadow-sm)]"
+                  className="rounded-2xl bg-coop-gray-100 p-5 text-center shadow-[var(--shadow-sm)]"
                 >
                   <p className={`text-2xl font-black ${cls}`}>{value}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-xs text-coop-gray-600">{label}</p>
                 </div>
               ))}
             </div>
@@ -405,12 +405,12 @@ function ReportsPage() {
                   .map(([cat, count]) => (
                     <div
                       key={cat}
-                      className="flex items-center justify-between rounded-2xl bg-card px-5 py-4 shadow-[var(--shadow-sm)]"
+                      className="flex items-center justify-between rounded-2xl bg-coop-gray-100 px-5 py-4 shadow-[var(--shadow-sm)]"
                     >
                       <span
                         className={cn(
                           "text-sm font-medium",
-                          CATEGORY_CONFIG[cat]?.color ?? "text-foreground",
+                          CATEGORY_CONFIG[cat]?.color ?? "text-coop-gray-900",
                         )}
                       >
                         {cat}
@@ -421,7 +421,7 @@ function ReportsPage() {
               </div>
             )}
             {tasks.length === 0 && (
-              <p className="mt-8 text-center text-sm text-muted-foreground">
+              <p className="mt-8 text-center text-sm text-coop-gray-600">
                 Inga uppgifter för vald period.
               </p>
             )}
@@ -444,7 +444,7 @@ function ReportsPage() {
                 {
                   label: "Ny",
                   value: incidents.filter((i) => i.status === "open").length,
-                  cls: "text-muted-foreground",
+                  cls: "text-coop-gray-600",
                 },
                 {
                   label: "Pågår",
@@ -464,10 +464,10 @@ function ReportsPage() {
               ].map(({ label, value, cls }) => (
                 <div
                   key={label}
-                  className="rounded-2xl bg-card p-5 text-center shadow-[var(--shadow-sm)]"
+                  className="rounded-2xl bg-coop-gray-100 p-5 text-center shadow-[var(--shadow-sm)]"
                 >
                   <p className={`text-2xl font-black ${cls}`}>{value}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-xs text-coop-gray-600">{label}</p>
                 </div>
               ))}
             </div>
@@ -475,7 +475,7 @@ function ReportsPage() {
               {["Låg", "Medel", "Hög", "Kritisk"].map((prio) => (
                 <div
                   key={prio}
-                  className="flex items-center justify-between rounded-2xl bg-card px-5 py-4 shadow-[var(--shadow-sm)]"
+                  className="flex items-center justify-between rounded-2xl bg-coop-gray-100 px-5 py-4 shadow-[var(--shadow-sm)]"
                 >
                   <span className="text-sm font-medium">{prio}</span>
                   <span className="text-sm font-semibold text-primary">
@@ -499,12 +499,12 @@ function ReportsPage() {
                   .map(([cat, count]) => (
                     <div
                       key={cat}
-                      className="flex items-center justify-between rounded-2xl bg-card px-5 py-4 shadow-[var(--shadow-sm)]"
+                      className="flex items-center justify-between rounded-2xl bg-coop-gray-100 px-5 py-4 shadow-[var(--shadow-sm)]"
                     >
                       <span
                         className={cn(
                           "text-sm font-medium",
-                          CATEGORY_CONFIG[cat]?.color ?? "text-foreground",
+                          CATEGORY_CONFIG[cat]?.color ?? "text-coop-gray-900",
                         )}
                       >
                         {cat}
@@ -515,7 +515,7 @@ function ReportsPage() {
               </div>
             )}
             {incidents.length === 0 && (
-              <p className="mt-8 text-center text-sm text-muted-foreground">
+              <p className="mt-8 text-center text-sm text-coop-gray-600">
                 Inga avvikelser för vald period.
               </p>
             )}
@@ -524,7 +524,7 @@ function ReportsPage() {
           {/* KUNDRUNDAN */}
           <TabsContent value="kundrunda" className="mt-6">
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-coop-gray-600">
                 Genomförda kundrundesessioner och avvikelseutfall.
               </p>
               {kundrunSessions.length > 0 && (
@@ -540,44 +540,44 @@ function ReportsPage() {
             </div>
 
             <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-              <div className="rounded-2xl bg-card p-5 text-center shadow-[var(--shadow-sm)]">
+              <div className="rounded-2xl bg-coop-gray-100 p-5 text-center shadow-[var(--shadow-sm)]">
                 <p className="text-2xl font-black text-success">{completedRundor}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Genomförda rundor</p>
+                <p className="mt-1 text-xs text-coop-gray-600">Genomförda rundor</p>
               </div>
-              <div className="rounded-2xl bg-card p-5 text-center shadow-[var(--shadow-sm)]">
+              <div className="rounded-2xl bg-coop-gray-100 p-5 text-center shadow-[var(--shadow-sm)]">
                 <p className="text-2xl font-black text-warning-foreground">{totalDefects}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Totalt antal avvikelser</p>
+                <p className="mt-1 text-xs text-coop-gray-600">Totalt antal avvikelser</p>
               </div>
-              <div className="rounded-2xl bg-card p-5 text-center shadow-[var(--shadow-sm)]">
+              <div className="rounded-2xl bg-coop-gray-100 p-5 text-center shadow-[var(--shadow-sm)]">
                 <p className="text-2xl font-black text-info">{avgDefectsPerRunda}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Snitt avvikelser/runda</p>
+                <p className="mt-1 text-xs text-coop-gray-600">Snitt avvikelser/runda</p>
               </div>
-              <div className="rounded-2xl bg-card p-5 text-center shadow-[var(--shadow-sm)]">
-                <p className="text-2xl font-black text-muted-foreground">
+              <div className="rounded-2xl bg-coop-gray-100 p-5 text-center shadow-[var(--shadow-sm)]">
+                <p className="text-2xl font-black text-coop-gray-600">
                   {kundrunSessions.filter((s) => s.status === "in_progress").length}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">Pågående rundor</p>
+                <p className="mt-1 text-xs text-coop-gray-600">Pågående rundor</p>
               </div>
             </div>
 
             {kundrunSessions.length > 0 ? (
-              <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
+              <div className="overflow-hidden rounded-2xl border border-border/60 bg-coop-gray-100 shadow-[var(--shadow-sm)]">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border/60 bg-muted/30">
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-coop-gray-600">
                         Datum
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-coop-gray-600">
                         Utförd av
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-coop-gray-600">
                         Status
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-coop-gray-600">
                         OK
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-coop-gray-600">
                         Avvikelser
                       </th>
                     </tr>
@@ -591,7 +591,7 @@ function ReportsPage() {
                           idx % 2 === 1 && "bg-muted/10",
                         )}
                       >
-                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                        <td className="px-4 py-3 text-xs text-coop-gray-600">
                           {new Date(s.started_at).toLocaleDateString("sv-SE", {
                             dateStyle: "medium",
                           })}
@@ -607,7 +607,7 @@ function ReportsPage() {
                               Pågår
                             </span>
                           ) : (
-                            <span className="text-xs text-muted-foreground">{s.status}</span>
+                            <span className="text-xs text-coop-gray-600">{s.status}</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -617,7 +617,7 @@ function ReportsPage() {
                           <span
                             className={cn(
                               "text-xs font-semibold",
-                              s.zone_defects > 0 ? "text-destructive" : "text-muted-foreground",
+                              s.zone_defects > 0 ? "text-destructive" : "text-coop-gray-600",
                             )}
                           >
                             {s.zone_defects > 0 ? s.zone_defects : "—"}
@@ -629,9 +629,9 @@ function ReportsPage() {
                 </table>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
-                <ShoppingCart className="mb-3 h-10 w-10 text-muted-foreground/30" />
-                <p className="text-sm font-medium text-muted-foreground">
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-16 text-center">
+                <ShoppingCart className="mb-3 h-10 w-10 text-coop-gray-600/30" />
+                <p className="text-sm font-medium text-coop-gray-600">
                   Inga kundrundesessioner för vald period
                 </p>
               </div>

@@ -96,7 +96,7 @@ export function KeyboardShortcuts() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-coop-svart/50 backdrop-blur-sm"
       onClick={() => setShowHelp(false)}
     >
       <div
@@ -105,19 +105,19 @@ export function KeyboardShortcuts() {
         aria-label="Kortkommandon"
         tabIndex={-1}
         ref={dialogRef}
-        className="mx-4 w-full max-w-sm overflow-hidden rounded-2xl border border-border/60 bg-card shadow-2xl outline-none"
+        className="mx-4 w-full max-w-sm overflow-hidden rounded-2xl border border-border/60 bg-coop-gray-100 shadow-2xl outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
           <div className="flex items-center gap-2">
-            <Keyboard className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-semibold text-foreground">Tangentbordsgenvägar</span>
+            <Keyboard className="h-4 w-4 text-coop-gray-600" />
+            <span className="text-sm font-semibold text-coop-gray-900">Tangentbordsgenvägar</span>
           </div>
           <button
             type="button"
             aria-label="Stäng"
             onClick={() => setShowHelp(false)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/60"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-coop-gray-600 hover:bg-muted/60"
           >
             <X className="h-4 w-4" />
           </button>
@@ -132,21 +132,21 @@ export function KeyboardShortcuts() {
                 setShowHelp(false);
               }}
             >
-              <span className="text-foreground">{s.label}</span>
-              <kbd className="rounded-md border border-border/60 bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+              <span className="text-coop-gray-900">{s.label}</span>
+              <kbd className="rounded-md border border-border/60 bg-muted px-2 py-0.5 font-mono text-xs text-coop-gray-600">
                 {s.key}
               </kbd>
             </button>
           ))}
           <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-            <span className="text-muted-foreground">Stäng</span>
-            <kbd className="rounded-md border border-border/60 bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+            <span className="text-coop-gray-600">Stäng</span>
+            <kbd className="rounded-md border border-border/60 bg-muted px-2 py-0.5 font-mono text-xs text-coop-gray-600">
               Esc
             </kbd>
           </div>
         </div>
         <div className="border-t border-border/40 px-4 py-2.5">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-coop-gray-600">
             Tryck{" "}
             <kbd className="rounded border border-border/60 bg-muted px-1 py-0.5 font-mono text-[10px]">
               ?

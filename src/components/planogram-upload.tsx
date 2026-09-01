@@ -446,7 +446,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                     "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-900/20",
                   uploadedFile.status === "completed" &&
                     "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-900/20",
-                  "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800",
+                  "border-gray-200 bg-coop-vit dark:border-gray-700 dark:bg-gray-800",
                 )}
               >
                 <div className="flex-shrink-0">{getStatusIcon(uploadedFile.status)}</div>
@@ -454,7 +454,7 @@ export function PlanogramUpload({ storeId, onImportSuccess, className }: Planogr
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <FileText className="w-4 h-4 text-coop-gray-400" />
-                    <span className="font-medium text-gray-900 dark:text-white truncate">
+                    <span className="font-medium text-gray-900 dark:text-coop-vit truncate">
                       {uploadedFile.file.name}
                     </span>
                     <Badge

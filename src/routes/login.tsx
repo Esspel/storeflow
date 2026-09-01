@@ -124,14 +124,14 @@ function LoginPage() {
               <KeyRound className="h-7 w-7" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Byt lösenord</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-sm text-coop-gray-600">
               Välj ett nytt lösenord för att fortsätta.
             </p>
           </div>
 
           <form
             onSubmit={handleForceChangePw}
-            className="rounded-2xl border border-border/60 bg-card p-8 shadow-[var(--shadow-md)]"
+            className="rounded-2xl border border-border/60 bg-coop-gray-100 p-8 shadow-[var(--shadow-md)]"
           >
             <div className="space-y-5">
               <div className="rounded-lg bg-warning/15 px-4 py-3 text-sm text-warning-foreground">
@@ -153,7 +153,7 @@ function LoginPage() {
                   />
                   <button
                     type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-coop-gray-600 hover:text-coop-gray-900"
                     onClick={() => setShowNewPw((v) => !v)}
                     aria-label={showNewPw ? "Dölj lösenord" : "Visa lösenord"}
                     aria-pressed={showNewPw}
@@ -223,12 +223,12 @@ function LoginPage() {
             <Sparkles className="h-7 w-7" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">StoreFlow</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Logga in för att fortsätta</p>
+          <p className="mt-1 text-sm text-coop-gray-600">Logga in för att fortsätta</p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="rounded-2xl border border-border/60 bg-card p-8 shadow-[var(--shadow-md)]"
+          className="rounded-2xl border border-border/60 bg-coop-gray-100 p-8 shadow-[var(--shadow-md)]"
         >
           <div className="space-y-5">
             <div className="space-y-2">
@@ -262,7 +262,7 @@ function LoginPage() {
                 />
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-coop-gray-600 hover:text-coop-gray-900"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? "Dölj lösenord" : "Visa lösenord"}
                   aria-pressed={showPassword}

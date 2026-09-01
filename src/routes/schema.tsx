@@ -2414,11 +2414,11 @@ function SchemaPage() {
   return (
     <div className="flex min-h-full flex-col bg-background">
       {/* Page header */}
-      <div className="border-b border-border/60 bg-card px-6 py-4">
+      <div className="border-b border-border/60 bg-coop-gray-100 px-6 py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Schema</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-coop-gray-900">Schema</h1>
+            <p className="mt-0.5 text-sm text-coop-gray-600">
               {selectedWeekImport
                 ? `Vecka ${selectedWeek.weekNumber}, ${selectedWeek.year} · ${selectedWeekImport.raw_employee_count} medarbetare`
                 : `Vecka ${selectedWeek.weekNumber}, ${selectedWeek.year} · ${new Date(selectedWeekStart).toLocaleDateString("sv-SE", { day: "numeric", month: "short" })}`}
@@ -2453,7 +2453,7 @@ function SchemaPage() {
               return (
                 <div className="flex items-center gap-1">
                   <button
-                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-coop-gray-100 text-coop-gray-600 hover:bg-muted/60 disabled:opacity-30 transition-colors"
                     disabled={currIdx <= 0}
                     onClick={() => {
                       if (currIdx > 0) {
@@ -2496,9 +2496,9 @@ function SchemaPage() {
                             >
                               <span className="flex items-center gap-2">
                                 <span>V{wk.weekNumber}</span>
-                                <span className="text-muted-foreground text-xs">{monthStr}</span>
+                                <span className="text-coop-gray-600 text-xs">{monthStr}</span>
                                 {!hasImport && (
-                                  <span className="text-[10px] text-muted-foreground/50">–</span>
+                                  <span className="text-[10px] text-coop-gray-600/50">–</span>
                                 )}
                               </span>
                             </SelectItem>
@@ -2507,7 +2507,7 @@ function SchemaPage() {
                     </SelectContent>
                   </Select>
                   <button
-                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-card text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 bg-coop-gray-100 text-coop-gray-600 hover:bg-muted/60 disabled:opacity-30 transition-colors"
                     disabled={currIdx >= allWeeks.length - 1}
                     onClick={() => {
                       if (currIdx < allWeeks.length - 1) {
@@ -2591,7 +2591,7 @@ function SchemaPage() {
               </Button>
             )}
             {!isAdmin && (
-              <div className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs text-coop-gray-600">
                 <Lock className="h-3.5 w-3.5" />
                 Enbart visning
               </div>
@@ -2614,7 +2614,7 @@ function SchemaPage() {
 
       {/* Stats bar */}
       {activeImport && (
-        <div className="grid grid-cols-2 gap-3 border-b border-border/40 bg-card/50 px-6 py-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 border-b border-border/40 bg-coop-gray-100/50 px-6 py-3 sm:grid-cols-4">
           <StatPill
             icon={<Users className="h-4 w-4" />}
             label="Arbetar idag"
@@ -2741,11 +2741,11 @@ function SchemaPage() {
       {imports.length === 0 && (
         <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-24">
           <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-muted">
-            <Calendar className="h-10 w-10 text-muted-foreground/50" />
+            <Calendar className="h-10 w-10 text-coop-gray-600/50" />
           </div>
           <div className="text-center">
-            <h3 className="text-lg font-semibold text-foreground">Inget schema importerat</h3>
-            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+            <h3 className="text-lg font-semibold text-coop-gray-900">Inget schema importerat</h3>
+            <p className="mt-1 max-w-sm text-sm text-coop-gray-600">
               {isAdmin
                 ? "Exportera ett schema från SoftOne GO som XML och importera det för att se skiftöversikten."
                 : "Schema importeras av administratören. Kontrollera att rätt butik är vald."}
@@ -2782,10 +2782,10 @@ function SchemaPage() {
                 <CalendarClock className="h-8 w-8 text-primary/60" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-foreground">
+                <p className="text-lg font-semibold text-coop-gray-900">
                   Inget schema importerat för vecka {selectedWeek.weekNumber}
                 </p>
-                <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
+                <p className="mt-1.5 max-w-sm text-sm text-coop-gray-600">
                   Exportera schema för vecka {selectedWeek.weekNumber}, {selectedWeek.year} från
                   SoftOne GO och importera det här.
                 </p>
@@ -2805,15 +2805,15 @@ function SchemaPage() {
               </Button>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/60 bg-card px-6 py-10 text-center">
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/60 bg-coop-gray-100 px-6 py-10 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
-                <Calendar className="h-7 w-7 text-muted-foreground/50" />
+                <Calendar className="h-7 w-7 text-coop-gray-600/50" />
               </div>
               <div>
-                <p className="font-semibold text-foreground">
+                <p className="font-semibold text-coop-gray-900">
                   Inget schema för vecka {selectedWeek.weekNumber}
                 </p>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-sm text-coop-gray-600">
                   Schemat för denna vecka har ännu inte lagts till. Fråga din chef om du behöver
                   information.
                 </p>
@@ -2829,7 +2829,7 @@ function SchemaPage() {
           {/* Sticky day strip — touch-action: pan-x so only horizontal swipe changes day */}
           <div className="sticky top-14 z-20 -mx-3 mb-3 flex items-center gap-1 border-b border-border/40 bg-background/95 px-2 py-2 backdrop-blur-sm sm:-mx-6 sm:top-16 sm:px-4">
             <button
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-coop-gray-600 hover:bg-muted/60 disabled:opacity-30 transition-colors"
               onClick={() => setSelectedDayIndex((i) => Math.max(0, i - 1))}
               disabled={selectedDayIndex === 0}
               aria-label="Föregående dag"
@@ -2861,7 +2861,7 @@ function SchemaPage() {
                         ? "bg-primary text-primary-foreground shadow-[var(--shadow-md)]"
                         : isToday
                           ? "bg-primary-soft text-primary border border-primary/30"
-                          : "bg-card text-foreground hover:bg-muted border border-border/60",
+                          : "bg-coop-gray-100 text-coop-gray-900 hover:bg-muted border border-border/60",
                     ].join(" ")}
                   >
                     <span className="text-[9px] font-semibold uppercase tracking-widest leading-none">
@@ -2878,7 +2878,7 @@ function SchemaPage() {
                           <span
                             className={[
                               "text-[9px] font-medium leading-none mt-0.5",
-                              isSelected ? "text-primary-foreground/70" : "text-muted-foreground",
+                              isSelected ? "text-primary-foreground/70" : "text-coop-gray-600",
                             ].join(" ")}
                           >
                             {dateObj.toLocaleDateString("sv-SE", { month: "short" })}
@@ -2892,8 +2892,8 @@ function SchemaPage() {
                         isSelected
                           ? "text-primary-foreground/70"
                           : count > 0
-                            ? "text-muted-foreground"
-                            : "text-muted-foreground/40",
+                            ? "text-coop-gray-600"
+                            : "text-coop-gray-600/40",
                       ].join(" ")}
                     >
                       {activeImport ? (count > 0 ? `${count}p` : "–") : ""}
@@ -2916,7 +2916,7 @@ function SchemaPage() {
               })}
             </div>
             <button
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted/60 disabled:opacity-30 transition-colors"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-coop-gray-600 hover:bg-muted/60 disabled:opacity-30 transition-colors"
               onClick={() => setSelectedDayIndex((i) => Math.min(6, i + 1))}
               disabled={selectedDayIndex === 6}
               aria-label="Nästa dag"
@@ -2931,8 +2931,8 @@ function SchemaPage() {
                 className={[
                   "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
                   viewMode === "day"
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "bg-coop-gray-100 text-coop-gray-900 shadow-sm"
+                    : "text-coop-gray-600 hover:text-coop-gray-900",
                 ].join(" ")}
               >
                 <List className="h-3.5 w-3.5" />
@@ -2944,8 +2944,8 @@ function SchemaPage() {
                 className={[
                   "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
                   viewMode === "week"
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "bg-coop-gray-100 text-coop-gray-900 shadow-sm"
+                    : "text-coop-gray-600 hover:text-coop-gray-900",
                 ].join(" ")}
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
@@ -2957,16 +2957,16 @@ function SchemaPage() {
           {/* Day heading + controls */}
           <div className="mb-3 flex items-start justify-between gap-2">
             <div>
-              <h2 className="text-base font-semibold text-foreground">
+              <h2 className="text-base font-semibold text-coop-gray-900">
                 {viewMode === "day" ? DAY_NAMES[selectedDayIndex] : "Veckovy"}
                 {viewMode === "day" && weekDates[selectedDayIndex] && (
-                  <span className="ml-2 font-normal text-muted-foreground">
+                  <span className="ml-2 font-normal text-coop-gray-600">
                     {fmtDate(weekDates[selectedDayIndex])}
                   </span>
                 )}
               </h2>
               {viewMode === "day" && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-coop-gray-600">
                   {workingToday} arbetar · {absentToday > 0 ? `${absentToday} frånvaro · ` : ""}
                   {totalStaff - workingToday - absentToday} lediga
                   {todayDeliveries.length > 0 && ` · ${todayDeliveries.length} leveranser`}
@@ -2982,7 +2982,7 @@ function SchemaPage() {
                     "hidden sm:block rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors min-h-[36px]",
                     hideLedig
                       ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-card text-muted-foreground border-border/60 hover:border-primary/50",
+                      : "bg-coop-gray-100 text-coop-gray-600 border-border/60 hover:border-primary/50",
                   ].join(" ")}
                 >
                   Dölj lediga
@@ -2996,8 +2996,8 @@ function SchemaPage() {
                       className={[
                         "px-2.5 py-1.5 text-xs font-medium transition-colors",
                         sortMode === m
-                          ? "bg-card text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground",
+                          ? "bg-coop-gray-100 text-coop-gray-900 shadow-sm"
+                          : "text-coop-gray-600 hover:text-coop-gray-900",
                       ].join(" ")}
                     >
                       {m === "default" ? "Standard" : m === "start" ? "Starttid" : "Sluttid"}
@@ -3038,8 +3038,8 @@ function SchemaPage() {
                 <AlertCircle className="h-8 w-8 text-destructive/70" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-foreground">Schemat saknar pass</p>
-                <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
+                <p className="text-lg font-semibold text-coop-gray-900">Schemat saknar pass</p>
+                <p className="mt-1.5 max-w-sm text-sm text-coop-gray-600">
                   Vecka {activeImport.week_number}, {activeImport.year} verkar vara tomt eller
                   felaktigt importerat. Vänligen exportera denna vecka från SoftOne GO igen och
                   importera på nytt.
@@ -3068,19 +3068,19 @@ function SchemaPage() {
           {viewMode === "day" && (
             <div className="sm:hidden mb-4">
               {deliveryEntries.length === 0 ? (
-                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-14 text-center">
-                  <Truck className="mb-3 h-8 w-8 text-muted-foreground/30" />
-                  <p className="text-sm font-medium text-muted-foreground">
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-14 text-center">
+                  <Truck className="mb-3 h-8 w-8 text-coop-gray-600/30" />
+                  <p className="text-sm font-medium text-coop-gray-600">
                     Ingen leveransplan importerad
                   </p>
-                  <p className="mt-1 text-xs text-muted-foreground/70">
+                  <p className="mt-1 text-xs text-coop-gray-600/70">
                     Importera en CSV-fil för att se leveranserna
                   </p>
                 </div>
               ) : todayDeliveries.length === 0 ? (
-                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-14 text-center">
-                  <Truck className="mb-3 h-8 w-8 text-muted-foreground/30" />
-                  <p className="text-sm font-medium text-muted-foreground">Inga leveranser idag</p>
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-14 text-center">
+                  <Truck className="mb-3 h-8 w-8 text-coop-gray-600/30" />
+                  <p className="text-sm font-medium text-coop-gray-600">Inga leveranser idag</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -3090,14 +3090,14 @@ function SchemaPage() {
                     return (
                       <div
                         key={d.id}
-                        className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3"
+                        className="flex items-center gap-3 rounded-2xl border border-border/60 bg-coop-gray-100 px-4 py-3"
                         style={{ borderLeftWidth: 4, borderLeftColor: c.text }}
                       >
                         <Truck className="h-5 w-5 shrink-0" style={{ color: c.text }} />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-foreground">{label}</p>
+                          <p className="text-sm font-semibold text-coop-gray-900">{label}</p>
                           {d.supplier && (
-                            <p className="text-xs text-muted-foreground">{d.supplier}</p>
+                            <p className="text-xs text-coop-gray-600">{d.supplier}</p>
                           )}
                         </div>
                         <span
@@ -3122,7 +3122,7 @@ function SchemaPage() {
                   {[1, 2, 3, 4, 5].map((i) => (
                     <div
                       key={i}
-                      className="rounded-2xl border border-border/60 bg-card p-4 flex items-center gap-4"
+                      className="rounded-2xl border border-border/60 bg-coop-gray-100 p-4 flex items-center gap-4"
                     >
                       <div className="h-10 w-10 animate-pulse rounded-full bg-muted shrink-0 motion-reduce:animate-none" />
                       <div className="flex-1 space-y-2">
@@ -3134,13 +3134,13 @@ function SchemaPage() {
                   ))}
                 </div>
               ) : displayRows.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
+                <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-16 text-center">
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
-                    <Calendar className="h-6 w-6 text-muted-foreground/50" />
+                    <Calendar className="h-6 w-6 text-coop-gray-600/50" />
                   </div>
                   <div>
-                    <p className="font-semibold text-foreground">Inga pass schemalagda</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <p className="font-semibold text-coop-gray-900">Inga pass schemalagda</p>
+                    <p className="mt-1 text-sm text-coop-gray-600">
                       Kontrollera att rätt butik är vald eller uppdatera sidan.
                     </p>
                   </div>
@@ -3148,7 +3148,7 @@ function SchemaPage() {
                     onClick={() => {
                       if (activeImport) loadScheduleData(activeImport.id);
                     }}
-                    className="flex items-center gap-2 rounded-full border border-border/60 bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/60 transition-colors min-h-[48px]"
+                    className="flex items-center gap-2 rounded-full border border-border/60 bg-coop-gray-100 px-4 py-2.5 text-sm font-medium text-coop-gray-900 hover:bg-muted/60 transition-colors min-h-[48px]"
                   >
                     <RefreshCw className="h-4 w-4" /> Uppdatera schema
                   </button>
@@ -3201,7 +3201,7 @@ function SchemaPage() {
                           data-shift-start={startMins}
                           data-shift-stop={stopMins}
                           className={cn(
-                            "rounded-2xl border bg-card p-4 transition-colors",
+                            "rounded-2xl border bg-coop-gray-100 p-4 transition-colors",
                             isSemester
                               ? "border-red-200/60 bg-red-50/40"
                               : isAbsent
@@ -3233,12 +3233,12 @@ function SchemaPage() {
                             {/* Name + dept */}
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <p className="font-semibold text-sm leading-snug text-foreground">
+                                <p className="font-semibold text-sm leading-snug text-coop-gray-900">
                                   {name}
                                 </p>
                                 {emp.employment_percent != null && (
                                   <span
-                                    className="text-[10px] font-medium text-muted-foreground bg-muted/60 rounded-full px-1.5 py-0.5 leading-none"
+                                    className="text-[10px] font-medium text-coop-gray-600 bg-muted/60 rounded-full px-1.5 py-0.5 leading-none"
                                     title={`Sysselsättningsgrad: ${emp.employment_percent}%`}
                                   >
                                     {emp.employment_percent}%
@@ -3268,7 +3268,7 @@ function SchemaPage() {
                                 )}
                               </div>
                               {primaryShift && (
-                                <p className="text-xs text-muted-foreground mt-0.5">
+                                <p className="text-xs text-coop-gray-600 mt-0.5">
                                   {primaryShift.shift_name}
                                   {primaryShift.shift_description
                                     ? ` · ${primaryShift.shift_description}`
@@ -3296,7 +3296,7 @@ function SchemaPage() {
                                   0,
                                 );
                                 return (
-                                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                                  <p className="text-[10px] text-coop-gray-600/60 mt-0.5">
                                     {dayMins > 0 ? `${minsToHours(dayMins)} idag` : ""}
                                     {dayMins > 0 && weekMinutes > 0 ? " · " : ""}
                                     {weekMinutes > 0 ? `V: ${minsToHours(weekMinutes)}` : ""}
@@ -3309,11 +3309,11 @@ function SchemaPage() {
                             <div className="shrink-0 text-right">
                               {primaryShift ? (
                                 <>
-                                  <p className="text-sm font-bold text-foreground tabular-nums leading-snug">
+                                  <p className="text-sm font-bold text-coop-gray-900 tabular-nums leading-snug">
                                     {primaryShift.start_time}–{primaryShift.stop_time}
                                   </p>
                                   {workShifts.length > 1 && (
-                                    <p className="text-[10px] text-muted-foreground">
+                                    <p className="text-[10px] text-coop-gray-600">
                                       +{workShifts.length - 1} pass
                                     </p>
                                   )}
@@ -3392,12 +3392,12 @@ function SchemaPage() {
             <div
               ref={dayVirtual.scrollRef}
               onScroll={dayVirtual.onScroll}
-              className="hidden overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)] sm:flex sm:flex-col"
+              className="hidden overflow-auto rounded-xl border border-border/60 bg-coop-gray-100 shadow-[var(--shadow-card)] sm:flex sm:flex-col"
               style={{ maxHeight: "calc(100vh - 18rem)" }}
             >
-              <div className="sticky top-0 z-10 flex bg-card/95 backdrop-blur-sm border-b border-border/60">
+              <div className="sticky top-0 z-10 flex bg-coop-gray-100/95 backdrop-blur-sm border-b border-border/60">
                 <div className="w-48 shrink-0 border-r border-border/40 px-4 py-2.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-coop-gray-600">
                     Medarbetare
                   </span>
                 </div>
@@ -3408,7 +3408,7 @@ function SchemaPage() {
                         key={h}
                         className="flex-1 border-r border-border/30 px-1 py-2.5 last:border-r-0"
                       >
-                        <span className="text-[11px] font-mono text-muted-foreground/60">
+                        <span className="text-[11px] font-mono text-coop-gray-600/60">
                           {String(h).padStart(2, "0")}:00
                         </span>
                       </div>
@@ -3421,7 +3421,7 @@ function SchemaPage() {
               {showDeliveries && todayDeliveries.length > 0 && (
                 <div className="flex border-b border-border/20 bg-muted/10">
                   <div className="flex w-48 shrink-0 items-center border-r border-border/30 px-4 py-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600 flex items-center gap-1">
                       <Truck className="h-3 w-3" /> Leveranser
                     </span>
                   </div>
@@ -3467,7 +3467,7 @@ function SchemaPage() {
                 .length > 0 && (
                 <div className="flex border-b border-border/20 bg-amber-50/40 dark:bg-amber-950/10">
                   <div className="flex w-48 shrink-0 items-center border-r border-border/30 px-4 py-1.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600 flex items-center gap-1">
                       <Timer className="h-3 w-3" /> Uppgifter
                     </span>
                   </div>
@@ -3513,8 +3513,8 @@ function SchemaPage() {
 
               {displayRows.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-16">
-                  <Clock className="h-8 w-8 text-muted-foreground/30" />
-                  <p className="text-sm text-muted-foreground">Inga pass schemalagda denna dag</p>
+                  <Clock className="h-8 w-8 text-coop-gray-600/30" />
+                  <p className="text-sm text-coop-gray-600">Inga pass schemalagda denna dag</p>
                 </div>
               ) : (
                 <div
@@ -3574,13 +3574,13 @@ function SchemaPage() {
                               {initials}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-semibold text-foreground leading-tight">
+                              <p className="truncate text-xs font-semibold text-coop-gray-900 leading-tight">
                                 {appUser?.display_name ?? emp.employee_name}
                               </p>
                               <div className="flex items-center gap-1 flex-wrap mt-0.5">
                                 {emp.employment_percent != null && (
                                   <span
-                                    className="text-[9px] text-muted-foreground/70"
+                                    className="text-[9px] text-coop-gray-600/70"
                                     title={`Sysselsättningsgrad: ${emp.employment_percent}%`}
                                   >
                                     {emp.employment_percent}%
@@ -3588,7 +3588,7 @@ function SchemaPage() {
                                 )}
                                 {weekMinutes > 0 && (
                                   <span
-                                    className="text-[9px] text-muted-foreground/70"
+                                    className="text-[9px] text-coop-gray-600/70"
                                     title="Schemalagd tid denna vecka"
                                   >
                                     {minsToHours(weekMinutes)}/v
@@ -3605,7 +3605,7 @@ function SchemaPage() {
                                   );
                                   return dayMins > 0 ? (
                                     <span
-                                      className="text-[9px] font-medium text-foreground/60"
+                                      className="text-[9px] font-medium text-coop-gray-900/60"
                                       title="Schemalagd tid idag"
                                     >
                                       {minsToHours(dayMins)}/dag
@@ -3686,7 +3686,7 @@ function SchemaPage() {
                               </>
                             ) : workShifts.length === 0 ? (
                               <div className="flex h-full items-center px-3">
-                                <span className="text-[11px] italic text-muted-foreground/40">
+                                <span className="text-[11px] italic text-coop-gray-600/40">
                                   {absenceShift?.deviation_cause || "Ledig"}
                                 </span>
                               </div>
@@ -3815,7 +3815,7 @@ function SchemaPage() {
                                       "flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold shadow-sm whitespace-nowrap",
                                       isLate
                                         ? "bg-destructive text-destructive-foreground"
-                                        : "bg-amber-500 text-white",
+                                        : "bg-amber-500 text-coop-vit",
                                     ].join(" ")}
                                   >
                                     <Timer className="h-2.5 w-2.5 shrink-0" />
@@ -3840,15 +3840,15 @@ function SchemaPage() {
             <div
               ref={weekVirtual.scrollRef}
               onScroll={weekVirtual.onScroll}
-              className="overflow-auto rounded-xl border border-border/60 bg-card shadow-[var(--shadow-card)]"
+              className="overflow-auto rounded-xl border border-border/60 bg-coop-gray-100 shadow-[var(--shadow-card)]"
               style={{ maxHeight: "calc(100vh - 18rem)" }}
             >
               <div
-                className="sticky top-0 z-10 grid bg-card/95 backdrop-blur-sm border-b border-border/60"
+                className="sticky top-0 z-10 grid bg-coop-gray-100/95 backdrop-blur-sm border-b border-border/60"
                 style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}
               >
                 <div className="border-r border-border/40 px-4 py-2.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-coop-gray-600">
                     Medarbetare
                   </span>
                 </div>
@@ -3881,7 +3881,7 @@ function SchemaPage() {
                       <p
                         className={[
                           "text-[10px] font-semibold uppercase tracking-wide",
-                          isToday ? "text-primary" : "text-muted-foreground",
+                          isToday ? "text-primary" : "text-coop-gray-600",
                         ].join(" ")}
                       >
                         {DAY_SHORT[idx]}
@@ -3889,7 +3889,7 @@ function SchemaPage() {
                       <p
                         className={[
                           "text-sm font-bold",
-                          isToday ? "text-primary" : "text-foreground",
+                          isToday ? "text-primary" : "text-coop-gray-900",
                         ].join(" ")}
                       >
                         {fmtDate(date).split(" ")[0]}
@@ -3904,8 +3904,8 @@ function SchemaPage() {
 
               {displayRows.length === 0 ? (
                 <div className="flex items-center justify-center gap-2 py-12">
-                  <Clock className="h-6 w-6 text-muted-foreground/30" />
-                  <p className="text-sm text-muted-foreground">Inga schemalagda pass</p>
+                  <Clock className="h-6 w-6 text-coop-gray-600/30" />
+                  <p className="text-sm text-coop-gray-600">Inga schemalagda pass</p>
                 </div>
               ) : (
                 <div
@@ -3931,17 +3931,17 @@ function SchemaPage() {
                           {initials}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-semibold text-foreground">
+                          <p className="truncate text-xs font-semibold text-coop-gray-900">
                             {appUser?.display_name ?? emp.employee_name}
                           </p>
                           <div className="flex items-center gap-1 mt-0.5">
                             {emp.employment_percent != null && (
-                              <span className="text-[9px] text-muted-foreground/60">
+                              <span className="text-[9px] text-coop-gray-600/60">
                                 {emp.employment_percent}%
                               </span>
                             )}
                             {weekMinutes > 0 && (
-                              <span className="text-[9px] text-muted-foreground/60">
+                              <span className="text-[9px] text-coop-gray-600/60">
                                 {minsToHours(weekMinutes)}
                               </span>
                             )}
@@ -3984,7 +3984,7 @@ function SchemaPage() {
                             }}
                           >
                             {work.length === 0 && !absence && (
-                              <span className="text-center text-[10px] text-muted-foreground/30">
+                              <span className="text-center text-[10px] text-coop-gray-600/30">
                                 –
                               </span>
                             )}
@@ -4064,7 +4064,7 @@ function SchemaPage() {
                     if (unscheduled.length === 0) return null;
                     return (
                       <div className="rounded-xl border border-border/40 bg-muted/20 px-3 py-2.5">
-                        <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-coop-gray-600">
                           <Timer className="h-3 w-3" /> Uppgifter utan schemarad
                         </p>
                         <div className="flex flex-wrap gap-1.5">
@@ -4073,16 +4073,16 @@ function SchemaPage() {
                             return (
                               <div
                                 key={t.id}
-                                className="flex items-center gap-1.5 rounded-full border border-border/50 bg-card px-2.5 py-1 text-[11px] font-medium"
+                                className="flex items-center gap-1.5 rounded-full border border-border/50 bg-coop-gray-100 px-2.5 py-1 text-[11px] font-medium"
                               >
                                 <CheckCircle2
-                                  className={`h-3 w-3 shrink-0 ${t.status === "done" ? "text-green-500" : "text-muted-foreground/40"}`}
+                                  className={`h-3 w-3 shrink-0 ${t.status === "done" ? "text-green-500" : "text-coop-gray-600/40"}`}
                                 />
-                                <span className="truncate max-w-[180px] text-foreground">
+                                <span className="truncate max-w-[180px] text-coop-gray-900">
                                   {t.title}
                                 </span>
                                 {u && (
-                                  <span className="shrink-0 text-muted-foreground">
+                                  <span className="shrink-0 text-coop-gray-600">
                                     · {u.display_name.split(" ")[0]}
                                   </span>
                                 )}
@@ -4103,8 +4103,8 @@ function SchemaPage() {
                   style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}
                 >
                   <div className="border-r border-border/40 px-4 py-2 flex items-center gap-1.5">
-                    <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Truck className="h-3.5 w-3.5 text-coop-gray-600" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600">
                       Leveranser
                     </span>
                   </div>
@@ -4137,7 +4137,7 @@ function SchemaPage() {
                           );
                         })}
                         {dayDeliveries.length === 0 && (
-                          <span className="text-center text-[10px] text-muted-foreground/20">
+                          <span className="text-center text-[10px] text-coop-gray-600/20">
                             –
                           </span>
                         )}
@@ -4155,7 +4155,7 @@ function SchemaPage() {
                 >
                   <div className="border-r border-border/40 px-4 py-2 flex items-center gap-1.5">
                     <Timer className="h-3.5 w-3.5 text-amber-600" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600">
                       Uppgifter
                     </span>
                   </div>
@@ -4192,7 +4192,7 @@ function SchemaPage() {
                           );
                         })}
                         {dayTasksForDate.length === 0 && (
-                          <span className="text-center text-[10px] text-muted-foreground/20">
+                          <span className="text-center text-[10px] text-coop-gray-600/20">
                             –
                           </span>
                         )}
@@ -4208,7 +4208,7 @@ function SchemaPage() {
                 style={{ gridTemplateColumns: "12rem repeat(7, 1fr)" }}
               >
                 <div className="border-r border-border/40 px-4 py-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600">
                     Totalt per dag
                   </span>
                 </div>
@@ -4237,12 +4237,12 @@ function SchemaPage() {
                       <p
                         className={[
                           "text-xs font-bold tabular-nums",
-                          isToday ? "text-primary" : "text-foreground",
+                          isToday ? "text-primary" : "text-coop-gray-900",
                         ].join(" ")}
                       >
                         {count}p
                       </p>
-                      <p className="text-[10px] text-muted-foreground tabular-nums">
+                      <p className="text-[10px] text-coop-gray-600 tabular-nums">
                         {mins > 0 ? minsToHours(mins) : "–"}
                       </p>
                     </div>
@@ -4274,12 +4274,12 @@ function SchemaPage() {
             </div>
             <div className="flex-1">
               <h2 className="text-sm font-semibold">Importera filer</h2>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-coop-gray-600">
                 Schema (XML) och/eller leveransplan (CSV)
               </p>
             </div>
             <button
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted transition-colors"
+              className="rounded-md p-1.5 text-coop-gray-600 hover:bg-muted transition-colors"
               aria-label="Stäng"
               onClick={() => {
                 if (!importProcessing) {
@@ -4299,8 +4299,8 @@ function SchemaPage() {
               <div className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-muted/30 p-3">
                 <FileCode2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div>
-                  <p className="text-xs font-semibold text-foreground">Schema (XML)</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  <p className="text-xs font-semibold text-coop-gray-900">Schema (XML)</p>
+                  <p className="mt-0.5 text-[11px] text-coop-gray-600">
                     SoftOne GO-export med anställda och skift
                   </p>
                 </div>
@@ -4308,8 +4308,8 @@ function SchemaPage() {
               <div className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-muted/30 p-3">
                 <FileText className="mt-0.5 h-4 w-4 shrink-0 text-info" />
                 <div>
-                  <p className="text-xs font-semibold text-foreground">Leveransplan (CSV)</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  <p className="text-xs font-semibold text-coop-gray-900">Leveransplan (CSV)</p>
+                  <p className="mt-0.5 text-[11px] text-coop-gray-600">
                     Export från leveransportalen — välj veckonummer nedan
                   </p>
                 </div>
@@ -4318,8 +4318,8 @@ function SchemaPage() {
 
             {/* Default week picker — used as starting values for newly added CSV files */}
             <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
-              <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="text-xs font-medium text-foreground shrink-0">
+              <Clock className="h-4 w-4 shrink-0 text-coop-gray-600" />
+              <span className="text-xs font-medium text-coop-gray-900 shrink-0">
                 Standardvecka för ny CSV
               </span>
               <div className="flex items-center gap-2">
@@ -4332,9 +4332,9 @@ function SchemaPage() {
                     setCsvWeekNumber(Math.max(1, Math.min(53, parseInt(e.target.value) || 1)))
                   }
                   aria-label="Veckonummer"
-                  className="w-16 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="w-16 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-coop-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/50"
                 />
-                <span className="text-xs text-muted-foreground">/</span>
+                <span className="text-xs text-coop-gray-600">/</span>
                 <input
                   type="number"
                   min={2020}
@@ -4342,10 +4342,10 @@ function SchemaPage() {
                   value={csvYear}
                   onChange={(e) => setCsvYear(parseInt(e.target.value) || new Date().getFullYear())}
                   aria-label="År"
-                  className="w-20 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="w-20 rounded-lg border border-border/60 bg-background px-2 py-1 text-center text-sm font-semibold text-coop-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/50"
                 />
               </div>
-              <span className="text-[11px] text-muted-foreground ml-auto">
+              <span className="text-[11px] text-coop-gray-600 ml-auto">
                 Ange vecka/år per fil nedan
               </span>
             </div>
@@ -4386,14 +4386,14 @@ function SchemaPage() {
                   "flex h-10 w-10 items-center justify-center rounded-2xl transition-colors",
                   importDragOver
                     ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground",
+                    : "bg-muted text-coop-gray-600",
                 ].join(" ")}
               >
                 <FilePlus2 className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground">Dra och släpp filer här</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <p className="text-sm font-semibold text-coop-gray-900">Dra och släpp filer här</p>
+                <p className="mt-0.5 text-xs text-coop-gray-600">
                   eller klicka för att välja · .xml och .csv
                 </p>
               </div>
@@ -4408,7 +4408,7 @@ function SchemaPage() {
                   return (
                     <div
                       key={f.name}
-                      className="rounded-xl border border-border/60 bg-card overflow-hidden"
+                      className="rounded-xl border border-border/60 bg-coop-gray-100 overflow-hidden"
                     >
                       {/* File header row */}
                       <div className="flex items-center gap-2.5 px-3 py-2.5">
@@ -4418,8 +4418,8 @@ function SchemaPage() {
                           <FileCode2 className="h-4 w-4 shrink-0 text-primary" />
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-medium text-foreground">{f.name}</p>
-                          <p className="text-[10px] text-muted-foreground">
+                          <p className="truncate text-xs font-medium text-coop-gray-900">{f.name}</p>
+                          <p className="text-[10px] text-coop-gray-600">
                             {isCsv ? "Leveransplan CSV" : "Schema XML"} ·{" "}
                             {(f.size / 1024).toFixed(0)} KB
                             {isCsv && preview !== undefined && (
@@ -4434,12 +4434,12 @@ function SchemaPage() {
                               </span>
                             )}
                             {isCsv && preview === undefined && (
-                              <span className="text-muted-foreground"> · läser…</span>
+                              <span className="text-coop-gray-600"> · läser…</span>
                             )}
                           </p>
                         </div>
                         <button
-                          className="shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-destructive transition-colors"
+                          className="shrink-0 rounded p-0.5 text-coop-gray-600/50 hover:text-destructive transition-colors"
                           onClick={(e) => {
                             e.stopPropagation();
                             removeImportFile(f.name);
@@ -4467,8 +4467,8 @@ function SchemaPage() {
                               ].join(" ")}
                             >
                               <div className="flex flex-wrap items-center gap-2">
-                                <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                <span className="text-[11px] font-medium text-foreground shrink-0">
+                                <Clock className="h-3.5 w-3.5 shrink-0 text-coop-gray-600" />
+                                <span className="text-[11px] font-medium text-coop-gray-900 shrink-0">
                                   Vecka:
                                 </span>
                                 <input
@@ -4489,9 +4489,9 @@ function SchemaPage() {
                                     }))
                                   }
                                   aria-label="Veckonummer"
-                                  className="w-14 rounded border border-border/60 bg-background px-1.5 py-0.5 text-center text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                                  className="w-14 rounded border border-border/60 bg-background px-1.5 py-0.5 text-center text-xs font-semibold text-coop-gray-900 focus:outline-none focus:ring-1 focus:ring-primary/50"
                                 />
-                                <span className="text-[11px] text-muted-foreground">/</span>
+                                <span className="text-[11px] text-coop-gray-600">/</span>
                                 <input
                                   type="number"
                                   min={2020}
@@ -4507,7 +4507,7 @@ function SchemaPage() {
                                     }))
                                   }
                                   aria-label="År"
-                                  className="w-18 rounded border border-border/60 bg-background px-1.5 py-0.5 text-center text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                                  className="w-18 rounded border border-border/60 bg-background px-1.5 py-0.5 text-center text-xs font-semibold text-coop-gray-900 focus:outline-none focus:ring-1 focus:ring-primary/50"
                                 />
                                 <label className="ml-2 flex items-center gap-1.5 cursor-pointer select-none">
                                   <input
@@ -4525,7 +4525,7 @@ function SchemaPage() {
                                     }
                                     className="rounded accent-amber-600"
                                   />
-                                  <span className="text-[11px] font-medium text-foreground">
+                                  <span className="text-[11px] font-medium text-coop-gray-900">
                                     Specialvecka
                                   </span>
                                 </label>
@@ -4546,7 +4546,7 @@ function SchemaPage() {
                       {isCsv && preview && preview.length > 0 && (
                         <div className="border-t border-border/40">
                           <div className="grid grid-cols-[1fr_auto_auto_auto_1fr] gap-0 text-[10px]">
-                            <div className="col-span-5 grid grid-cols-[1fr_auto_auto_auto_1fr] bg-muted/40 px-3 py-1.5 font-semibold uppercase tracking-wide text-muted-foreground">
+                            <div className="col-span-5 grid grid-cols-[1fr_auto_auto_auto_1fr] bg-muted/40 px-3 py-1.5 font-semibold uppercase tracking-wide text-coop-gray-600">
                               <span>Leveransdag</span>
                               <span className="px-3">Tid</span>
                               <span className="px-3">Beställ</span>
@@ -4561,16 +4561,16 @@ function SchemaPage() {
                                   key={i}
                                   className="col-span-5 grid grid-cols-[1fr_auto_auto_auto_1fr] items-center border-t border-border/20 px-3 py-1.5 hover:bg-muted/20 transition-colors"
                                 >
-                                  <span className="font-medium text-foreground capitalize">
+                                  <span className="font-medium text-coop-gray-900 capitalize">
                                     {d.deliveryDay}
                                   </span>
-                                  <span className="px-3 font-mono text-foreground">
+                                  <span className="px-3 font-mono text-coop-gray-900">
                                     {d.deliveryTime}
                                   </span>
-                                  <span className="px-3 text-muted-foreground capitalize">
+                                  <span className="px-3 text-coop-gray-600 capitalize">
                                     {d.orderDay}
                                   </span>
-                                  <span className="px-3 font-mono text-muted-foreground">
+                                  <span className="px-3 font-mono text-coop-gray-600">
                                     {d.stopTime}
                                   </span>
                                   <span className="flex items-center gap-1.5 min-w-0">
@@ -4580,7 +4580,7 @@ function SchemaPage() {
                                     >
                                       {label || "–"}
                                     </span>
-                                    <span className="truncate text-muted-foreground">
+                                    <span className="truncate text-coop-gray-600">
                                       {d.supplier}
                                     </span>
                                   </span>
@@ -4656,11 +4656,11 @@ function SchemaPage() {
               <Users className="h-4 w-4 text-primary" />
             </div>
             <div className="flex-1 pr-8">
-              <h2 className="text-sm font-semibold text-foreground">
+              <h2 className="text-sm font-semibold text-coop-gray-900">
                 {parsed ? "Granska och bekräfta import" : "Personalmatching"}
               </h2>
               {parsed && parsed.length > 0 && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-coop-gray-600">
                   {parsed[0].storeName && `${parsed[0].storeName} · `}
                   {parsed.length === 1
                     ? `Vecka ${parsed[0].weekNumber}, ${parsed[0].year}`
@@ -4694,7 +4694,7 @@ function SchemaPage() {
                 {/* Existing matches */}
                 {matchedEmployees.some((m) => m.matchType === "existing") && (
                   <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-coop-gray-600">
                       Matchade användare
                     </p>
                     <div className="divide-y divide-border/40 rounded-xl border border-border/60 overflow-hidden">
@@ -4715,19 +4715,19 @@ function SchemaPage() {
                                   .toUpperCase()}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-foreground">
+                                <p className="text-sm font-medium text-coop-gray-900">
                                   {me.employeeName}
                                 </p>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="text-xs text-coop-gray-600">
                                   {me.employeeGroup || "—"}
                                 </p>
                               </div>
                               <CheckCircle2 className="h-4 w-4 shrink-0 text-success/60" />
                               <div className="min-w-0 text-right">
-                                <p className="text-xs font-medium text-foreground">
+                                <p className="text-xs font-medium text-coop-gray-900">
                                   {matched?.display_name ?? "–"}
                                 </p>
-                                <p className="text-[10px] text-muted-foreground">{roleLabel}</p>
+                                <p className="text-[10px] text-coop-gray-600">{roleLabel}</p>
                               </div>
                               <Select
                                 value={me.appUserId ?? "__none__"}
@@ -4750,7 +4750,7 @@ function SchemaPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="__none__">
-                                    <span className="text-muted-foreground">Inget konto</span>
+                                    <span className="text-coop-gray-600">Inget konto</span>
                                   </SelectItem>
                                   {allUsers.map((u) => (
                                     <SelectItem key={u.id} value={u.id}>
@@ -4769,7 +4769,7 @@ function SchemaPage() {
                 {/* New users to create */}
                 {matchedEmployees.some((m) => m.matchType === "new") && (
                   <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-coop-gray-600">
                       Nya konton skapas
                     </p>
                     <div className="divide-y divide-border/40 rounded-xl border border-border/60 overflow-hidden">
@@ -4791,7 +4791,7 @@ function SchemaPage() {
                                 </div>
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium text-foreground">
+                                    <p className="text-sm font-medium text-coop-gray-900">
                                       {me.employeeName}
                                     </p>
                                     <span
@@ -4799,13 +4799,13 @@ function SchemaPage() {
                                         "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
                                         role === "manager"
                                           ? "bg-info/15 text-info"
-                                          : "bg-muted text-muted-foreground",
+                                          : "bg-muted text-coop-gray-600",
                                       ].join(" ")}
                                     >
                                       {roleLabel}
                                     </span>
                                   </div>
-                                  <p className="text-xs text-muted-foreground">
+                                  <p className="text-xs text-coop-gray-600">
                                     {me.employeeGroup || "—"}
                                   </p>
                                 </div>
@@ -4841,7 +4841,7 @@ function SchemaPage() {
                               </div>
                               <div className="grid grid-cols-2 gap-2 pl-11">
                                 <div>
-                                  <Label className="text-[11px] text-muted-foreground">
+                                  <Label className="text-[11px] text-coop-gray-600">
                                     Användarnamn
                                   </Label>
                                   <Input
@@ -4860,7 +4860,7 @@ function SchemaPage() {
                                   />
                                 </div>
                                 <div>
-                                  <Label className="text-[11px] text-muted-foreground">
+                                  <Label className="text-[11px] text-coop-gray-600">
                                     Lösenord
                                   </Label>
                                   <Input
@@ -4892,8 +4892,8 @@ function SchemaPage() {
             {/* View existing mappings (no pending import) */}
             {!parsed && (
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-16">
-                <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
-                <p className="text-center text-sm text-muted-foreground">
+                <AlertCircle className="h-8 w-8 text-coop-gray-600/40" />
+                <p className="text-center text-sm text-coop-gray-600">
                   Matchningar hanteras vid import. Importera ett nytt schema för att uppdatera
                   matchningar.
                 </p>
@@ -5090,7 +5090,7 @@ function StatPill({
 }) {
   const colors = {
     primary: "text-primary bg-primary-soft",
-    default: "text-muted-foreground bg-muted",
+    default: "text-coop-gray-600 bg-muted",
     warning: "text-warning-foreground bg-warning/15",
   };
   return (
@@ -5104,8 +5104,8 @@ function StatPill({
         {icon}
       </div>
       <div>
-        <p className="text-[11px] text-muted-foreground">{label}</p>
-        <p className="text-sm font-semibold text-foreground tabular-nums">{value}</p>
+        <p className="text-[11px] text-coop-gray-600">{label}</p>
+        <p className="text-sm font-semibold text-coop-gray-900 tabular-nums">{value}</p>
       </div>
     </div>
   );
@@ -5144,7 +5144,7 @@ function MappingRow({
 
   const role = groupToRole(employeeGroup);
   const roleLabel = role === "manager" ? "Chef" : "Anställd";
-  const roleBg = role === "manager" ? "bg-info/15 text-info" : "bg-muted text-muted-foreground";
+  const roleBg = role === "manager" ? "bg-info/15 text-info" : "bg-muted text-coop-gray-600";
 
   async function handleCreate() {
     if (!storeId) return;
@@ -5226,7 +5226,7 @@ function MappingRow({
   return (
     <div className="px-4 py-3">
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-coop-gray-600">
           {employeeName
             .split(" ")
             .map((p) => p[0])
@@ -5236,7 +5236,7 @@ function MappingRow({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-medium text-foreground">{employeeName}</p>
+            <p className="truncate text-sm font-medium text-coop-gray-900">{employeeName}</p>
             {employeeGroup && (
               <span
                 className={[
@@ -5248,7 +5248,7 @@ function MappingRow({
               </span>
             )}
           </div>
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="truncate text-xs text-coop-gray-600">
             #{employeeNr}
             {employeeGroup ? ` · ${employeeGroup}` : ""}
           </p>
@@ -5268,7 +5268,7 @@ function MappingRow({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__none__">
-              <span className="text-muted-foreground">Ingen koppling</span>
+              <span className="text-coop-gray-600">Ingen koppling</span>
             </SelectItem>
             {appUsers.map((u) => (
               <SelectItem key={u.id} value={u.id}>
@@ -5286,12 +5286,12 @@ function MappingRow({
       </div>
       {showCreate && (
         <div className="mt-3 rounded-lg border border-border/60 bg-muted/20 p-3">
-          <p className="mb-2.5 text-xs font-medium text-foreground">
+          <p className="mb-2.5 text-xs font-medium text-coop-gray-900">
             Skapa <span className="text-primary">{roleLabel}</span> för {employeeName}
           </p>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-[11px] text-muted-foreground">Användarnamn</Label>
+              <Label className="text-[11px] text-coop-gray-600">Användarnamn</Label>
               <Input
                 value={newUsername}
                 aria-label={`Användarnamn för ${employeeName}`}
@@ -5300,7 +5300,7 @@ function MappingRow({
               />
             </div>
             <div>
-              <Label className="text-[11px] text-muted-foreground">Lösenord</Label>
+              <Label className="text-[11px] text-coop-gray-600">Lösenord</Label>
               <Input
                 type="password"
                 value={newPassword}

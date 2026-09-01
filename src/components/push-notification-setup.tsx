@@ -36,7 +36,7 @@ export function PushNotificationSetup() {
       {isLoading ? (
         <Loader2 className="h-4 w-4 shrink-0 animate-spin motion-reduce:animate-none" />
       ) : isSubscribed ? (
-        <BellOff className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <BellOff className="h-4 w-4 shrink-0 text-coop-gray-600" />
       ) : (
         <Bell className="h-4 w-4 shrink-0" />
       )}

@@ -54,7 +54,7 @@ export function DigitalTwinWizard({ onComplete }: { onComplete?: () => void }) {
   if (!storeId) {
     return (
       <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
+        <CardContent className="py-8 text-center text-coop-gray-600">
           Välj en aktiv butik först.
         </CardContent>
       </Card>
@@ -93,7 +93,7 @@ export function DigitalTwinWizard({ onComplete }: { onComplete?: () => void }) {
               <div className="font-medium">
                 {i + 1}. {s.title}
               </div>
-              <div className="text-muted-foreground">{s.description}</div>
+              <div className="text-coop-gray-600">{s.description}</div>
             </li>
           ))}
         </ol>

@@ -327,7 +327,7 @@ export function ARNavigationView({
 
       {isSessionActive && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-background/90 backdrop-blur rounded-xl px-4 py-2 shadow-lg border">
-          <p className="text-sm font-medium text-foreground">AR-aktiv — gå runt för att navigera</p>
+          <p className="text-sm font-medium text-coop-gray-900">AR-aktiv — gå runt för att navigera</p>
           <button
             onClick={() => endSession()}
             className="mt-2 text-xs text-primary hover:underline"

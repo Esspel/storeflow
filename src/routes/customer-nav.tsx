@@ -241,9 +241,9 @@ function CustomerNavPage() {
   };
 
   return (
-    <div className="min-h-full bg-card dark:bg-coop-gray-1200">
+    <div className="min-h-full bg-coop-gray-100 dark:bg-coop-gray-1200">
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-card/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-coop-gray-100/95 backdrop-blur-sm">
         <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4 md:h-16 md:gap-4 md:px-8">
           <div className="flex shrink-0 items-center gap-2">
             <div className="flex flex-col leading-none">
@@ -345,7 +345,7 @@ function CustomerNavPage() {
         {storeId && map && !loading && (
           <div className="space-y-6">
             {/* View Mode Tabs */}
-            <div className="flex items-center gap-2 bg-white dark:bg-coop-gray-1000 rounded-xl border border-coop-gray-200 dark:border-coop-gray-700 p-2 max-w-md">
+            <div className="flex items-center gap-2 bg-coop-vit dark:bg-coop-gray-1000 rounded-xl border border-coop-gray-200 dark:border-coop-gray-700 p-2 max-w-md">
               <Button
                 variant={viewMode === "search" ? "default" : "ghost"}
                 size="sm"
@@ -379,7 +379,7 @@ function CustomerNavPage() {
             {/* Search View */}
             {viewMode === "search" && (
               <div className="max-w-md mx-auto space-y-4">
-                <Card className="bg-white dark:bg-coop-gray-1000 border-coop-gray-200 dark:border-coop-gray-700">
+                <Card className="bg-coop-vit dark:bg-coop-gray-1000 border-coop-gray-200 dark:border-coop-gray-700">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Search className="w-5 h-5 text-coop-blue-500" />
@@ -440,7 +440,7 @@ function CustomerNavPage() {
                 </Card>
 
                 {/* Quick Categories */}
-                <Card className="bg-white dark:bg-coop-gray-1000 border-coop-gray-200 dark:border-coop-gray-700">
+                <Card className="bg-coop-vit dark:bg-coop-gray-1000 border-coop-gray-200 dark:border-coop-gray-700">
                   <CardHeader>
                     <CardTitle className="text-sm font-medium text-coop-gray-1000 dark:text-coop-gray-100">
                       Populära kategorier
@@ -480,7 +480,7 @@ function CustomerNavPage() {
             {/* Map View */}
             {viewMode === "map" && (
               <div className="space-y-4">
-                <div className="bg-white dark:bg-coop-gray-1000 rounded-xl border border-coop-gray-200 dark:border-coop-gray-700 overflow-hidden aspect-[4/3] md:aspect-[16/9]">
+                <div className="bg-coop-vit dark:bg-coop-gray-1000 rounded-xl border border-coop-gray-200 dark:border-coop-gray-700 overflow-hidden aspect-[4/3] md:aspect-[16/9]">
                   <CustomerMapView
                     map={map}
                     selectedMarker={selectedMarker}
@@ -566,7 +566,7 @@ function CustomerNavPage() {
                 )}
 
                 {selectedMarker && !selectedProduct && (
-                  <Card className="bg-white dark:bg-coop-gray-1000 border-coop-gray-200 dark:border-coop-gray-700 max-w-md mx-auto">
+                  <Card className="bg-coop-vit dark:bg-coop-gray-1000 border-coop-gray-200 dark:border-coop-gray-700 max-w-md mx-auto">
                     <CardContent className="pt-0">
                       <Button
                         className="w-full gap-2"

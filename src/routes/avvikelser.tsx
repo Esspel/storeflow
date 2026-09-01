@@ -91,7 +91,7 @@ function priorityClass(p: string) {
     case "Medel":
       return "bg-info/15 text-info";
     default:
-      return "bg-muted text-muted-foreground";
+      return "bg-muted text-coop-gray-600";
   }
 }
 
@@ -153,12 +153,12 @@ function ResponsiblePicker({
   return (
     <div className="space-y-1.5">
       <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-coop-gray-600 pointer-events-none" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Sök person eller grupp..."
-          className="h-7 w-full rounded-lg border border-border/60 bg-background pl-7 pr-3 text-xs outline-none placeholder:text-muted-foreground/50 focus:border-primary/40"
+          className="h-7 w-full rounded-lg border border-border/60 bg-background pl-7 pr-3 text-xs outline-none placeholder:text-coop-gray-600/50 focus:border-primary/40"
         />
       </div>
       <div className="max-h-36 overflow-y-auto rounded-lg border border-border/60 bg-background divide-y divide-border/40">
@@ -168,7 +168,7 @@ function ResponsiblePicker({
             "flex w-full items-center px-3 py-2 text-xs transition-colors hover:bg-muted/40",
             !selectedUserId && !selectedGroupId
               ? "bg-primary-soft text-primary font-medium"
-              : "text-muted-foreground",
+              : "text-coop-gray-600",
           )}
           onClick={() => {
             onSelectUser("");
@@ -190,7 +190,7 @@ function ResponsiblePicker({
               onSelectUser("");
             }}
           >
-            <Users className="h-3 w-3 shrink-0 text-muted-foreground/70" />
+            <Users className="h-3 w-3 shrink-0 text-coop-gray-600/70" />
             {g.name}
           </button>
         ))}
@@ -207,14 +207,14 @@ function ResponsiblePicker({
               onSelectGroup("");
             }}
           >
-            <span className="h-4 w-4 shrink-0 inline-flex items-center justify-center rounded-full bg-muted text-[9px] font-bold text-muted-foreground">
+            <span className="h-4 w-4 shrink-0 inline-flex items-center justify-center rounded-full bg-muted text-[9px] font-bold text-coop-gray-600">
               {u.display_name.charAt(0).toUpperCase()}
             </span>
             {u.display_name}
           </button>
         ))}
         {filteredGroups.length === 0 && filteredUsers.length === 0 && (
-          <p className="px-3 py-3 text-center text-xs text-muted-foreground">Inga träffar</p>
+          <p className="px-3 py-3 text-center text-xs text-coop-gray-600">Inga träffar</p>
         )}
       </div>
     </div>
@@ -836,7 +836,7 @@ function IssuesPage() {
       {/* Filters */}
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600" />
           <Input
             placeholder="Sök avvikelser..."
             value={search}
@@ -882,7 +882,7 @@ function IssuesPage() {
             "rounded-full px-3 py-1.5 text-sm transition-colors",
             quickFilter === "Mina"
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "bg-muted text-muted-foreground hover:bg-muted/80",
+              : "bg-muted text-coop-gray-600 hover:bg-muted/80",
           )}
         >
           Mina
@@ -894,7 +894,7 @@ function IssuesPage() {
             "rounded-full px-3 py-1.5 text-sm transition-colors",
             quickFilter === "Öppna"
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "bg-muted text-muted-foreground hover:bg-muted/80",
+              : "bg-muted text-coop-gray-600 hover:bg-muted/80",
           )}
         >
           Öppna
@@ -906,7 +906,7 @@ function IssuesPage() {
             "rounded-full px-3 py-1.5 text-sm transition-colors",
             quickFilter === "Alla"
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "bg-muted text-muted-foreground hover:bg-muted/80",
+              : "bg-muted text-coop-gray-600 hover:bg-muted/80",
           )}
         >
           Alla
@@ -928,34 +928,34 @@ function IssuesPage() {
             actionTo="/avvikelser"
           />
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
-            <AlertTriangle className="mb-3 h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm font-medium text-muted-foreground">
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-16 text-center">
+            <AlertTriangle className="mb-3 h-10 w-10 text-coop-gray-600/40" />
+            <p className="text-sm font-medium text-coop-gray-600">
               Inga avvikelser matchar filtren
             </p>
           </div>
         )
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-coop-gray-100 shadow-[var(--shadow-sm)]">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border/60">
-                <th className="px-5 py-3.5 text-left text-xs font-medium text-muted-foreground">
+                <th className="px-5 py-3.5 text-left text-xs font-medium text-coop-gray-600">
                   Avvikelse
                 </th>
-                <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground md:table-cell">
+                <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-coop-gray-600 md:table-cell">
                   Butik
                 </th>
-                <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground lg:table-cell">
+                <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-coop-gray-600 lg:table-cell">
                   Ansvarig
                 </th>
-                <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground sm:table-cell">
+                <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-coop-gray-600 sm:table-cell">
                   Prioritet
                 </th>
-                <th className="px-5 py-3.5 text-center text-xs font-medium text-muted-foreground">
+                <th className="px-5 py-3.5 text-center text-xs font-medium text-coop-gray-600">
                   Status
                 </th>
-                <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-muted-foreground lg:table-cell">
+                <th className="hidden px-5 py-3.5 text-left text-xs font-medium text-coop-gray-600 lg:table-cell">
                   Datum
                 </th>
                 {isManager && <th className="px-3 py-3.5" />}
@@ -991,11 +991,11 @@ function IssuesPage() {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground font-mono">{inc.ref_number}</p>
+                        <p className="text-xs text-coop-gray-600 font-mono">{inc.ref_number}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="hidden px-5 py-3.5 text-muted-foreground md:table-cell">
+                  <td className="hidden px-5 py-3.5 text-coop-gray-600 md:table-cell">
                     {inc.store ? (
                       <span className="inline-flex items-center gap-1">
                         <Store className="h-3.5 w-3.5" />
@@ -1005,7 +1005,7 @@ function IssuesPage() {
                       "—"
                     )}
                   </td>
-                  <td className="hidden px-5 py-3.5 text-xs text-muted-foreground lg:table-cell">
+                  <td className="hidden px-5 py-3.5 text-xs text-coop-gray-600 lg:table-cell">
                     {inc.responsible ? (
                       <span className="inline-flex items-center gap-1">
                         <User className="h-3.5 w-3.5" />
@@ -1031,7 +1031,7 @@ function IssuesPage() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-center">{statusBadge(inc.status)}</td>
-                  <td className="hidden px-5 py-3.5 text-xs text-muted-foreground lg:table-cell">
+                  <td className="hidden px-5 py-3.5 text-xs text-coop-gray-600 lg:table-cell">
                     <span className="inline-flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5" />
                       {new Date(inc.created_at).toLocaleDateString("sv-SE")}
@@ -1041,14 +1041,14 @@ function IssuesPage() {
                     <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary"
+                          className="flex h-7 w-7 items-center justify-center rounded-full text-coop-gray-600 hover:bg-muted/60 hover:text-primary"
                           onClick={() => openEditIncident(inc)}
                           aria-label="Redigera"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button
-                          className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-destructive"
+                          className="flex h-7 w-7 items-center justify-center rounded-full text-coop-gray-600 hover:bg-muted/60 hover:text-destructive"
                           onClick={() => setDeleteTarget(inc)}
                           aria-label="Ta bort"
                         >
@@ -1087,12 +1087,12 @@ function IssuesPage() {
         <DialogContent className="sm:max-h-[92vh] sm:max-w-4xl overflow-hidden p-0 gap-0">
           {/* Header bar */}
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
-            <AlertTriangle className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="text-sm font-medium text-muted-foreground hidden sm:block">
+            <AlertTriangle className="h-4 w-4 text-coop-gray-600 shrink-0" />
+            <span className="text-sm font-medium text-coop-gray-600 hidden sm:block">
               Ny avvikelse
             </span>
             {newIncident.title && (
-              <span className="text-sm font-semibold text-foreground truncate max-w-[140px] sm:max-w-xs">
+              <span className="text-sm font-semibold text-coop-gray-900 truncate max-w-[140px] sm:max-w-xs">
                 {newIncident.title}
               </span>
             )}
@@ -1115,7 +1115,7 @@ function IssuesPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs text-muted-foreground hidden sm:flex"
+                className="text-xs text-coop-gray-600 hidden sm:flex"
                 onClick={() => setShowCreate(false)}
               >
                 Avbryt
@@ -1136,7 +1136,7 @@ function IssuesPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="rounded-full text-xs text-muted-foreground"
+                      className="rounded-full text-xs text-coop-gray-600"
                       onClick={() => setCreateStep(1)}
                     >
                       Tillbaka
@@ -1184,7 +1184,7 @@ function IssuesPage() {
                 aria-invalid={createStep === 1 && newIncident.title.trim().length === 0}
                 aria-describedby="incident-title-error"
                 className={cn(
-                  "w-full border-0 bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground/50 outline-none focus:outline-none",
+                  "w-full border-0 bg-transparent text-xl font-bold text-coop-gray-900 placeholder:text-coop-gray-600/50 outline-none focus:outline-none",
                   createStep === 1 &&
                     newIncident.title.trim().length === 0 &&
                     "border-b-2 border-destructive/60 pb-1",
@@ -1203,7 +1203,7 @@ function IssuesPage() {
                 aria-invalid={createStep === 2 && newIncident.description.trim().length === 0}
                 aria-describedby="incident-desc-error"
                 className={cn(
-                  "resize-none border-0 bg-transparent px-0 text-sm text-muted-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 shadow-none",
+                  "resize-none border-0 bg-transparent px-0 text-sm text-coop-gray-600 placeholder:text-coop-gray-600/40 focus-visible:ring-0 shadow-none",
                   createStep === 2 &&
                     newIncident.description.trim().length === 0 &&
                     "border-b-2 border-destructive/60 pb-1",
@@ -1217,7 +1217,7 @@ function IssuesPage() {
 
               {/* Images */}
               <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-600">
                   Bilder
                 </p>
                 <GdprImageReminder />
@@ -1243,7 +1243,7 @@ function IssuesPage() {
                         />
                         <button
                           type="button"
-                          className="absolute -top-1 -right-1 rounded-full bg-destructive p-0.5 text-white"
+                          className="absolute -top-1 -right-1 rounded-full bg-destructive p-0.5 text-coop-vit"
                           onClick={() =>
                             setUploadFiles((prev) => prev.filter((_, idx) => idx !== i))
                           }
@@ -1256,7 +1256,7 @@ function IssuesPage() {
                 )}
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-600 transition-colors hover:border-primary/40 hover:text-primary"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <ImageIcon className="h-3.5 w-3.5" /> Välj bilder
@@ -1274,8 +1274,8 @@ function IssuesPage() {
               <div className="divide-y divide-border/50">
                 {/* Prioritet */}
                 <div className="flex items-center gap-3 px-4 py-3">
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Prioritet</span>
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
+                  <span className="w-20 shrink-0 text-xs text-coop-gray-600">Prioritet</span>
                   <Select
                     value={newIncident.priority}
                     onValueChange={(v) => setNewIncident((p) => ({ ...p, priority: v }))}
@@ -1295,8 +1295,8 @@ function IssuesPage() {
 
                 {/* Kategori */}
                 <div className="flex items-center gap-3 px-4 py-3">
-                  <Store className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Kategori</span>
+                  <Store className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
+                  <span className="w-20 shrink-0 text-xs text-coop-gray-600">Kategori</span>
                   <Select
                     value={newIncident.category}
                     onValueChange={(v) => setNewIncident((p) => ({ ...p, category: v }))}
@@ -1316,8 +1316,8 @@ function IssuesPage() {
 
                 {/* Butik */}
                 <div className="flex items-center gap-3 px-4 py-3">
-                  <Store className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Butik</span>
+                  <Store className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
+                  <span className="w-20 shrink-0 text-xs text-coop-gray-600">Butik</span>
                   <Select
                     value={newIncident.store_id || "__none"}
                     onValueChange={(v) =>
@@ -1341,8 +1341,8 @@ function IssuesPage() {
                 {/* Ansvarig — sökbar */}
                 <div className="px-4 py-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <User className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                    <span className="text-xs text-muted-foreground">Ansvarig</span>
+                    <User className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
+                    <span className="text-xs text-coop-gray-600">Ansvarig</span>
                   </div>
                   <ResponsiblePicker
                     users={storeUsers}
@@ -1369,8 +1369,8 @@ function IssuesPage() {
                 {/* Materialnummer */}
                 <div className="px-4 py-3 min-w-0 space-y-1">
                   <div className="flex items-center gap-2">
-                    <Hash className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                    <span className="text-xs text-muted-foreground shrink-0">
+                    <Hash className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
+                    <span className="text-xs text-coop-gray-600 shrink-0">
                       {incidentArticleType === "ean"
                         ? "EAN"
                         : incidentArticleType === "bnr"
@@ -1398,12 +1398,12 @@ function IssuesPage() {
                         autoCorrect="off"
                         autoCapitalize="none"
                         spellCheck={false}
-                        className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none overflow-hidden"
+                        className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-coop-gray-900 placeholder:text-coop-gray-600/40 outline-none focus:outline-none overflow-hidden"
                       />
                       <select
                         value={incidentArticleType}
                         onChange={(e) => setIncidentArticleType(e.target.value as ArticleIdType)}
-                        className="border-0 bg-transparent text-[10px] text-muted-foreground outline-none cursor-pointer shrink-0"
+                        className="border-0 bg-transparent text-[10px] text-coop-gray-600 outline-none cursor-pointer shrink-0"
                       >
                         <option value="mat-nr">Mat-nr</option>
                         <option value="ean">EAN</option>
@@ -1413,7 +1413,7 @@ function IssuesPage() {
                         <button
                           type="button"
                           onClick={() => setNewIncident((p) => ({ ...p, sap_article_id: "" }))}
-                          className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/60 hover:text-destructive shrink-0"
+                          className="flex h-5 w-5 items-center justify-center rounded-full text-coop-gray-600/60 hover:text-destructive shrink-0"
                         >
                           <X className="h-3 w-3" />
                         </button>
@@ -1466,7 +1466,7 @@ function IssuesPage() {
                       </span>
                     )}
                   </div>
-                  <p className="font-mono text-xs text-muted-foreground">{showDetail.ref_number}</p>
+                  <p className="font-mono text-xs text-coop-gray-600">{showDetail.ref_number}</p>
                 </div>
                 {statusBadge(showDetail.status)}
               </div>
@@ -1483,23 +1483,23 @@ function IssuesPage() {
                 >
                   {showDetail.priority}
                 </span>
-                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">
+                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-coop-gray-600">
                   {showDetail.category}
                 </span>
                 {showDetail.store && (
-                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 text-xs text-coop-gray-600">
                     <Store className="h-3.5 w-3.5" />
                     {showDetail.store.name}
                   </span>
                 )}
-                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1 text-xs text-coop-gray-600">
                   <Clock className="h-3.5 w-3.5" />
                   {new Date(showDetail.created_at).toLocaleDateString("sv-SE")}
                 </span>
               </div>
 
               {showDetail.description && (
-                <p className="text-sm text-muted-foreground">{showDetail.description}</p>
+                <p className="text-sm text-coop-gray-600">{showDetail.description}</p>
               )}
 
               {/* SAP product catalog deep link */}
@@ -1576,7 +1576,7 @@ function IssuesPage() {
                 <div className="flex flex-wrap gap-3">
                   {showDetail.responsible && (
                     <div className="flex items-center gap-2 text-sm">
-                      <User className="h-4 w-4 text-muted-foreground" />
+                      <User className="h-4 w-4 text-coop-gray-600" />
                       <span>
                         Ansvarig: <strong>{showDetail.responsible.display_name}</strong>
                       </span>
@@ -1584,7 +1584,7 @@ function IssuesPage() {
                   )}
                   {showDetail.responsible_group && (
                     <div className="flex items-center gap-2 text-sm">
-                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <Users className="h-4 w-4 text-coop-gray-600" />
                       <span>
                         Grupp: <strong>{showDetail.responsible_group.name}</strong>
                       </span>
@@ -1596,7 +1596,7 @@ function IssuesPage() {
               {/* Images */}
               {detailImages.length > 0 && (
                 <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">
+                  <p className="text-xs font-medium text-coop-gray-600">
                     Bilder ({detailImages.length})
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -1612,8 +1612,8 @@ function IssuesPage() {
                           alt=""
                           className="h-20 w-20 object-cover transition-transform group-hover:scale-105"
                         />
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
-                          <ZoomIn className="h-5 w-5 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-coop-svart/0 transition-colors group-hover:bg-coop-svart/20">
+                          <ZoomIn className="h-5 w-5 text-coop-vit opacity-0 transition-opacity group-hover:opacity-100" />
                         </div>
                       </button>
                     ))}
@@ -1624,7 +1624,7 @@ function IssuesPage() {
               {/* Status actions */}
               {isManager && STATUS_TRANSITIONS[showDetail.status]?.length > 0 && (
                 <div className="flex flex-wrap gap-2">
-                  <p className="w-full text-xs font-medium text-muted-foreground">Ändra status:</p>
+                  <p className="w-full text-xs font-medium text-coop-gray-600">Ändra status:</p>
                   {STATUS_TRANSITIONS[showDetail.status].map((s) => (
                     <Button
                       key={s}
@@ -1642,7 +1642,7 @@ function IssuesPage() {
               {/* Comments */}
               <div>
                 <div className="mb-2 flex items-center gap-1.5">
-                  <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                  <MessageSquare className="h-3.5 w-3.5 text-coop-gray-600" />
                   <span className="text-xs font-medium">Kommentarer ({comments.length})</span>
                 </div>
                 {comments.length > 0 && (
@@ -1655,11 +1655,11 @@ function IssuesPage() {
                           c.author_id === user?.id ? "ml-6 bg-primary-soft" : "mr-6 bg-muted/50",
                         )}
                       >
-                        <p className="mb-1 text-xs font-medium text-muted-foreground">
+                        <p className="mb-1 text-xs font-medium text-coop-gray-600">
                           {c.author?.display_name ?? "Okänd"}
                         </p>
                         <p>{c.content}</p>
-                        <p className="mt-1 text-xs text-muted-foreground/60">
+                        <p className="mt-1 text-xs text-coop-gray-600/60">
                           {new Date(c.created_at).toLocaleString("sv-SE", {
                             dateStyle: "short",
                             timeStyle: "short",
@@ -1924,7 +1924,7 @@ function IssuesPage() {
               </div>
               <div>
                 <DialogTitle className="text-base">QR-koder för avvikelser</DialogTitle>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-coop-gray-600">
                   Generera QR-koder per avdelning/zon för snabbregistrering utan inloggning.
                 </p>
               </div>
@@ -1933,7 +1933,7 @@ function IssuesPage() {
           <div className="space-y-4">
             {/* Create new */}
             <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              <p className="text-xs font-semibold text-coop-gray-600 uppercase tracking-wide">
                 Ny QR-kod
               </p>
               <div className="flex gap-2">
@@ -1977,7 +1977,7 @@ function IssuesPage() {
                 ))}
               </div>
             ) : qrTokens.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground py-6">
+              <p className="text-center text-sm text-coop-gray-600 py-6">
                 Inga QR-koder skapade ännu.
               </p>
             ) : (
@@ -1988,14 +1988,14 @@ function IssuesPage() {
                   return (
                     <div
                       key={t.id}
-                      className="rounded-xl border border-border/60 bg-card overflow-hidden"
+                      className="rounded-xl border border-border/60 bg-coop-gray-100 overflow-hidden"
                     >
                       <div className="flex items-center gap-3 p-3">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-foreground">
+                          <p className="text-sm font-medium text-coop-gray-900">
                             {t.meta.zone_name ?? "Okänd zon"}
                           </p>
-                          <p className="text-xs text-muted-foreground">{t.meta.category}</p>
+                          <p className="text-xs text-coop-gray-600">{t.meta.category}</p>
                         </div>
                         <button
                           onClick={() => setSelectedQrToken(isExpanded ? null : t.id)}
@@ -2003,7 +2003,7 @@ function IssuesPage() {
                             "shrink-0 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
                             isExpanded
                               ? "border-primary/30 bg-primary/10 text-primary"
-                              : "border-border/60 bg-muted text-muted-foreground hover:bg-muted/80",
+                              : "border-border/60 bg-muted text-coop-gray-600 hover:bg-muted/80",
                           )}
                         >
                           {isExpanded ? "Dölj" : "Visa QR"}
@@ -2014,7 +2014,7 @@ function IssuesPage() {
                             setCopiedId(t.id);
                             setTimeout(() => setCopiedId(null), 2000);
                           }}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-primary transition-colors"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-coop-gray-600 hover:text-primary transition-colors"
                           title="Kopiera länk"
                         >
                           {copiedId === t.id ? (
@@ -2025,7 +2025,7 @@ function IssuesPage() {
                         </button>
                         <button
                           onClick={() => deleteQrToken(t.id)}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive transition-colors"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-coop-gray-600 hover:text-destructive transition-colors"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -2033,7 +2033,7 @@ function IssuesPage() {
                       {isExpanded && (
                         <div className="border-t border-border/60 bg-muted/20 p-4 flex flex-col items-center gap-3">
                           <QrDisplay url={qrUrl} size={180} />
-                          <p className="text-[11px] text-muted-foreground text-center break-all max-w-[200px] font-mono">
+                          <p className="text-[11px] text-coop-gray-600 text-center break-all max-w-[200px] font-mono">
                             {qrUrl}
                           </p>
                           <a
@@ -2051,7 +2051,7 @@ function IssuesPage() {
                 })}
               </div>
             )}
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-coop-gray-600">
               Sätt upp QR-koden i butiken — personal och kunder kan rapportera utan att logga in.
             </p>
           </div>

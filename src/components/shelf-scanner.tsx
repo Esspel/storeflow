@@ -350,7 +350,7 @@ export function ShelfScanner({
       </div>
 
       {/* Video Feed Area */}
-      <div className="relative flex-1 bg-black flex items-center justify-center min-h-[300px] overflow-hidden">
+      <div className="relative flex-1 bg-coop-svart flex items-center justify-center min-h-[300px] overflow-hidden">
         <video
           ref={videoRef}
           className="absolute inset-0 w-full h-full object-cover"
@@ -379,7 +379,7 @@ export function ShelfScanner({
             <Button
               size="sm"
               variant="ghost"
-              className="text-coop-vit hover:bg-white/10"
+              className="text-coop-vit hover:bg-coop-vit/10"
               onClick={() => {
                 stop();
                 start();

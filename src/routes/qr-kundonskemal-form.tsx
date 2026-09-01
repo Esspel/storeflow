@@ -174,8 +174,8 @@ function QrKundonskemalFormPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10">
             <AlertTriangle className="h-8 w-8 text-destructive" />
           </div>
-          <h1 className="text-xl font-semibold text-foreground">Ogiltig QR-kod</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <h1 className="text-xl font-semibold text-coop-gray-900">Ogiltig QR-kod</h1>
+          <p className="mt-2 text-sm text-coop-gray-600">
             Den här QR-koden är inte längre giltig eller har tagits bort.
           </p>
         </div>
@@ -190,21 +190,21 @@ function QrKundonskemalFormPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-success/10">
             <CheckCircle2 className="h-8 w-8 text-success" />
           </div>
-          <h1 className="text-xl font-semibold text-foreground">Tack för ditt önskemål!</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <h1 className="text-xl font-semibold text-coop-gray-900">Tack för ditt önskemål!</h1>
+          <p className="mt-2 text-sm text-coop-gray-600">
             Vi har tagit emot ditt önskemål och återkommer när vi har mer information.
           </p>
           {statusUrl && (
-            <div className="mt-5 rounded-2xl border border-border/60 bg-card p-4 text-left space-y-3">
-              <p className="text-sm font-medium text-foreground">Följ ditt önskemål</p>
-              <p className="text-xs text-muted-foreground">
+            <div className="mt-5 rounded-2xl border border-border/60 bg-coop-gray-100 p-4 text-left space-y-3">
+              <p className="text-sm font-medium text-coop-gray-900">Följ ditt önskemål</p>
+              <p className="text-xs text-coop-gray-600">
                 Spara länken nedan för att se status på ditt önskemål:
               </p>
               <div className="flex items-center gap-2">
                 <input
                   readOnly
                   value={statusUrl}
-                  className="flex-1 rounded-xl border border-border/60 bg-muted px-3 py-2 text-xs font-mono text-foreground outline-none"
+                  className="flex-1 rounded-xl border border-border/60 bg-muted px-3 py-2 text-xs font-mono text-coop-gray-900 outline-none"
                   onClick={(e) => (e.target as HTMLInputElement).select()}
                 />
                 <button
@@ -213,7 +213,7 @@ function QrKundonskemalFormPage() {
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
-                  className="shrink-0 rounded-xl border border-border/60 bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                  className="shrink-0 rounded-xl border border-border/60 bg-coop-gray-100 px-3 py-2 text-xs font-medium text-coop-gray-900 transition-colors hover:bg-muted"
                 >
                   {copied ? "Kopierat!" : "Kopiera"}
                 </button>
@@ -227,7 +227,7 @@ function QrKundonskemalFormPage() {
             </div>
           )}
           <button
-            className="mt-5 rounded-full border border-border/60 bg-card px-6 py-2.5 text-sm font-medium text-foreground"
+            className="mt-5 rounded-full border border-border/60 bg-coop-gray-100 px-6 py-2.5 text-sm font-medium text-coop-gray-900"
             onClick={() => {
               setDone(false);
               setStatusUrl(null);
@@ -246,15 +246,15 @@ function QrKundonskemalFormPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="border-b border-border/60 bg-card px-4 py-4">
+      <div className="border-b border-border/60 bg-coop-gray-100 px-4 py-4">
         <div className="mx-auto max-w-lg">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
               <ShoppingCart className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="font-semibold text-foreground">Skicka in kundönskemål</h1>
-              <p className="text-xs text-muted-foreground">{storeName}</p>
+              <h1 className="font-semibold text-coop-gray-900">Skicka in kundönskemål</h1>
+              <p className="text-xs text-coop-gray-600">{storeName}</p>
             </div>
           </div>
         </div>
@@ -317,7 +317,7 @@ function QrKundonskemalFormPage() {
                   <button
                     type="button"
                     onClick={() => removeImage(i)}
-                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white"
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-coop-svart/60 text-coop-vit"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -330,7 +330,7 @@ function QrKundonskemalFormPage() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-3 text-sm text-coop-gray-600 transition-colors hover:border-primary/40 hover:bg-muted/50"
               >
                 <ImagePlus className="h-4 w-4" />
                 Välj bild
@@ -338,7 +338,7 @@ function QrKundonskemalFormPage() {
               <button
                 type="button"
                 onClick={() => cameraRef.current?.click()}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-3 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-3 text-sm text-coop-gray-600 transition-colors hover:border-primary/40 hover:bg-muted/50"
               >
                 <ImagePlus className="h-4 w-4" />
                 Ta foto
@@ -373,7 +373,7 @@ function QrKundonskemalFormPage() {
           {saving ? "Skickar..." : "Skicka in önskemål"}
         </Button>
 
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-xs text-coop-gray-600">
           Ditt önskemål skickas direkt till butikspersonalen
         </p>
       </div>

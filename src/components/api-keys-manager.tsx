@@ -277,7 +277,7 @@ export function ApiKeysManager() {
   };
 
   return (
-    <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-6 shadow-[var(--shadow-sm)]">
+    <div className="rounded-2xl border border-border/60 bg-coop-gray-100 p-4 sm:p-6 shadow-[var(--shadow-sm)]">
       <div className="mb-5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
@@ -285,7 +285,7 @@ export function ApiKeysManager() {
           </div>
           <div>
             <h2 className="font-semibold">API-nycklar</h2>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-coop-gray-600">
               Hantera roterbara API-nycklar för automation (Power Automate, MCP, egna skript).
             </p>
           </div>
@@ -305,14 +305,14 @@ export function ApiKeysManager() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center py-10 text-muted-foreground">
+        <div className="flex items-center justify-center py-10 text-coop-gray-600">
           <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" />
           <span className="sr-only" aria-busy="true">
             Laddar…
           </span>
         </div>
       ) : keys.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+        <p className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-coop-gray-600">
           Inga API-nycklar ännu. Skapa en för att låsa upp automation via storeflow-api eller
           MCP-servern.
         </p>
@@ -330,7 +330,7 @@ export function ApiKeysManager() {
                         {status.label}
                       </Badge>
                     </div>
-                    <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                    <p className="mt-0.5 font-mono text-xs text-coop-gray-600">
                       {key.key_prefix}…
                     </p>
                   </div>
@@ -360,19 +360,19 @@ export function ApiKeysManager() {
 
                 <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-4">
                   <div>
-                    <p className="text-muted-foreground">Butik</p>
+                    <p className="text-coop-gray-600">Butik</p>
                     <p className="font-medium">{storeName(key.store_id)}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Skapad</p>
+                    <p className="text-coop-gray-600">Skapad</p>
                     <p className="font-medium">{formatDate(key.created_at)}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Senast använd</p>
+                    <p className="text-coop-gray-600">Senast använd</p>
                     <p className="font-medium">{formatDate(key.last_used_at)}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground">Utgår</p>
+                    <p className="text-coop-gray-600">Utgår</p>
                     <p className="font-medium">
                       {key.expires_at ? formatDate(key.expires_at) : "Aldrig"}
                     </p>
@@ -453,7 +453,7 @@ export function ApiKeysManager() {
                   <div key={g.label} className="flex items-center justify-between gap-3 py-0.5">
                     <span className="text-sm">{g.label}</span>
                     <div className="flex items-center gap-4">
-                      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <label className="flex items-center gap-1.5 text-xs text-coop-gray-600">
                         <Checkbox
                           aria-label={`${g.label} – Läs`}
                           checked={!!formScopes[g.read]}
@@ -462,7 +462,7 @@ export function ApiKeysManager() {
                         Läs
                       </label>
                       {g.write && (
-                        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <label className="flex items-center gap-1.5 text-xs text-coop-gray-600">
                           <Checkbox
                             aria-label={`${g.label} – Skriv`}
                             checked={!!formScopes[g.write]}

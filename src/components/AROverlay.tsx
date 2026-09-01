@@ -103,7 +103,7 @@ export function AROverlay({
         {/* Fallback when camera is not available */}
         {!cameraStream && (
           <div className="absolute inset-0 flex items-center justify-center bg-coop-gray-900">
-            <div className="text-white text-center p-4">
+            <div className="text-coop-vit text-center p-4">
               {cameraError ? (
                 <p>Kamera ej tillgänglig: {cameraError}</p>
               ) : (
@@ -150,7 +150,7 @@ export function AROverlay({
       {isSessionActive && (
         <>
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-background/90 backdrop-blur rounded-xl px-4 py-2 shadow-lg border">
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-sm font-medium text-coop-gray-900">
               AR aktiv — Kameraström + 3D-överlagring
             </p>
             <button
@@ -163,7 +163,7 @@ export function AROverlay({
 
           {/* AR status indicator */}
           <div className="absolute top-4 right-4 z-20 bg-coop-gron-500/90 backdrop-blur rounded-full px-3 py-1 shadow-lg border border-green-400">
-            <span className="text-xs font-medium text-white flex items-center gap-1">
+            <span className="text-xs font-medium text-coop-vit flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-coop-gron-300 animate-pulse" />
               AR-SESSION
             </span>

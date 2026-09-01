@@ -50,11 +50,11 @@ function HubPage() {
           {firstName && (
             <p className="mb-1 text-base font-medium text-primary/80">Hej, {firstName}</p>
           )}
-          <h1 className="text-3xl font-black tracking-tight text-foreground md:text-5xl">
+          <h1 className="text-3xl font-black tracking-tight text-coop-gray-900 md:text-5xl">
             Vad ska du göra idag?
           </h1>
           {activeStore && (
-            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-coop-gray-600">
               {activeStore.name}
             </p>
           )}
@@ -176,26 +176,26 @@ function QuickCard({
     info: "bg-info/10 text-info",
     warning: "bg-warning/15 text-warning-foreground",
     success: "bg-success/10 text-success",
-    primary: "bg-primary/10 text-primary",
-    muted: "bg-muted text-muted-foreground",
-    destructive: "bg-destructive/10 text-destructive",
-    accent: "bg-accent/10 text-accent-foreground",
+    primary: "bg-primary-soft text-coop-gron-600",
+    muted: "bg-muted text-coop-gray-600",
+    destructive: "bg-coop-red-100 text-coop-red-600",
+    accent: "bg-coop-accent text-coop-morkgron",
   };
   return (
     <Link
       to={to}
-      className="group flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-3.5 shadow-[var(--shadow-sm)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] overflow-hidden"
+      className="group flex items-center gap-3 rounded-2xl border border-border/60 bg-coop-gray-100 p-3.5 shadow-[var(--shadow-sm)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] overflow-hidden"
     >
       <div
-        className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", colors[tone])}
+        className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", colors[tone], `${tone === 'primary' ? 'text-coop-gron-600' : 'text-coop-gray-200'}`)}
       >
         <Icon className="h-4.5 w-4.5" />
       </div>
       <div className="min-w-0 flex-1 overflow-hidden">
-        <p className="font-semibold text-sm text-foreground truncate leading-tight">{title}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground truncate leading-tight">{desc}</p>
+        <p className="font-semibold text-sm text-coop-gray-900 truncate leading-tight">{title}</p>
+        <p className="mt-0.5 text-xs text-coop-gray-600 truncate leading-tight">{desc}</p>
       </div>
-      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5" />
+      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-coop-gray-600/40 transition-transform group-hover:translate-x-0.5" />
     </Link>
   );
 }

@@ -64,28 +64,28 @@ export function initializeFonts(): void {
     src: url('${fontBaseUrl}/CoopSans-Black.woff2') format('woff2');
     font-weight: 900;
     font-style: normal;
-    font-display: swap;
+    font-display: block;
   }`;
   css += `@font-face {
     font-family: 'Coop Sans';
     src: url('${fontBaseUrl}/CoopSans-Bold.woff2') format('woff2');
     font-weight: 700;
     font-style: normal;
-    font-display: swap;
+    font-display: block;
   }`;
   css += `@font-face {
     font-family: 'Coop Sans';
     src: url('${fontBaseUrl}/CoopSans-Medium.woff2') format('woff2');
     font-weight: 500;
     font-style: normal;
-    font-display: swap;
+    font-display: block;
   }`;
   css += `@font-face {
     font-family: 'Coop Sans';
     src: url('${fontBaseUrl}/CoopSans-Regular.woff2') format('woff2');
     font-weight: 400;
     font-style: normal;
-    font-display: swap;
+    font-display: block;
   }`;
 
   // Coop Sans Price
@@ -94,7 +94,7 @@ export function initializeFonts(): void {
     src: url('${fontBaseUrl}/CoopSansPrice-Black.woff2') format('woff2');
     font-weight: 900;
     font-style: normal;
-    font-display: swap;
+    font-display: block;
   }`;
 
   // Coop Marker
@@ -103,14 +103,14 @@ export function initializeFonts(): void {
     src: url('${fontBaseUrl}/CoopMarker-Bold.woff2') format('woff2');
     font-weight: 700;
     font-style: normal;
-    font-display: swap;
+    font-display: block;
   }`;
   css += `@font-face {
     font-family: 'Coop Marker';
     src: url('${fontBaseUrl}/CoopMarker-Regular.woff2') format('woff2');
     font-weight: 400;
     font-style: normal;
-    font-display: swap;
+    font-display: block;
   }`;
 
   const styleEl = document.createElement("style");

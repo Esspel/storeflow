@@ -29,12 +29,12 @@ const STATUS_CONFIG: Record<
   string,
   { label: string; color: string; icon: React.ComponentType<{ className?: string }> }
 > = {
-  open: { label: "Inkommit", color: "text-muted-foreground", icon: Clock },
+  open: { label: "Inkommit", color: "text-coop-gray-600", icon: Clock },
   ordered: { label: "Beställd", color: "text-info", icon: ShoppingCart },
   fulfilled: { label: "Uppfylld", color: "text-success", icon: CheckCircle2 },
-  declined: { label: "Avböjd", color: "text-muted-foreground", icon: XCircle },
-  not_in_assortment: { label: "Finns ej i sortiment", color: "text-muted-foreground", icon: Ban },
-  discontinued: { label: "Utgått", color: "text-muted-foreground", icon: ArchiveX },
+  declined: { label: "Avböjd", color: "text-coop-gray-600", icon: XCircle },
+  not_in_assortment: { label: "Finns ej i sortiment", color: "text-coop-gray-600", icon: Ban },
+  discontinued: { label: "Utgått", color: "text-coop-gray-600", icon: ArchiveX },
 };
 
 function QrKundonskemalPage() {
@@ -126,8 +126,8 @@ function QrKundonskemalPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10">
             <AlertTriangle className="h-8 w-8 text-destructive" />
           </div>
-          <h1 className="text-xl font-semibold text-foreground">Ogiltig länk</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <h1 className="text-xl font-semibold text-coop-gray-900">Ogiltig länk</h1>
+          <p className="mt-2 text-sm text-coop-gray-600">
             Den här QR-koden är inte längre giltig.
           </p>
         </div>
@@ -152,22 +152,22 @@ function QrKundonskemalPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="border-b border-border/60 bg-card px-4 py-5">
+      <div className="border-b border-border/60 bg-coop-gray-100 px-4 py-5">
         <div className="mx-auto max-w-sm text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
             <Package className="h-6 w-6 text-primary" />
           </div>
-          <h1 className="text-lg font-semibold text-foreground">Status på ditt kundönskemål</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">{request.store_name}</p>
+          <h1 className="text-lg font-semibold text-coop-gray-900">Status på ditt kundönskemål</h1>
+          <p className="mt-0.5 text-sm text-coop-gray-600">{request.store_name}</p>
         </div>
       </div>
 
       <div className="mx-auto max-w-sm space-y-6 p-4">
         {/* Product card */}
-        <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+        <div className="rounded-2xl border border-border/60 bg-coop-gray-100 p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-foreground">{request.product_name}</p>
+              <p className="font-semibold text-coop-gray-900">{request.product_name}</p>
             </div>
             <div
               className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1", {
@@ -185,10 +185,10 @@ function QrKundonskemalPage() {
 
           {request.notes && (
             <div className="mt-3 rounded-xl border border-border/40 bg-muted/30 px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60 mb-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-coop-gray-600/60 mb-1">
                 Kommentar
               </p>
-              <p className="text-sm text-foreground">{request.notes}</p>
+              <p className="text-sm text-coop-gray-900">{request.notes}</p>
             </div>
           )}
 
@@ -197,12 +197,12 @@ function QrKundonskemalPage() {
               <p className="text-[11px] font-semibold uppercase tracking-wide text-primary/70 mb-1">
                 Meddelande från butiken
               </p>
-              <p className="text-sm text-foreground">{request.staff_comment}</p>
+              <p className="text-sm text-coop-gray-900">{request.staff_comment}</p>
             </div>
           )}
 
           <div className="mt-3 border-t border-border/40 pt-3">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-coop-gray-600">
               Registrerat{" "}
               {new Date(request.created_at).toLocaleDateString("sv-SE", {
                 year: "numeric",
@@ -215,8 +215,8 @@ function QrKundonskemalPage() {
 
         {/* Timeline / Sidospår */}
         {!isDetour ? (
-          <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
-            <p className="mb-4 text-sm font-semibold text-foreground">Statusspårning</p>
+          <div className="rounded-2xl border border-border/60 bg-coop-gray-100 p-4 shadow-sm">
+            <p className="mb-4 text-sm font-semibold text-coop-gray-900">Statusspårning</p>
             <div className="space-y-0">
               {steps.map((step, i) => {
                 const isCompleted = activeStep >= i;
@@ -229,7 +229,7 @@ function QrKundonskemalPage() {
                           "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition-all",
                           isCompleted
                             ? "border-success bg-success/10 text-success"
-                            : "border-border bg-muted text-muted-foreground",
+                            : "border-border bg-muted text-coop-gray-600",
                           isCurrent && "ring-2 ring-success/20",
                         )}
                       >
@@ -248,13 +248,13 @@ function QrKundonskemalPage() {
                       <p
                         className={cn(
                           "text-sm font-medium",
-                          isCompleted ? "text-foreground" : "text-muted-foreground",
+                          isCompleted ? "text-coop-gray-900" : "text-coop-gray-600",
                         )}
                       >
                         {step.label}
                       </p>
                       {isCurrent && (
-                        <p className="mt-0.5 text-xs text-muted-foreground">Nuvarande status</p>
+                        <p className="mt-0.5 text-xs text-coop-gray-600">Nuvarande status</p>
                       )}
                     </div>
                   </div>
@@ -266,9 +266,9 @@ function QrKundonskemalPage() {
           <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 text-center">
             {request.status === "declined" && (
               <>
-                <XCircle className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
-                <p className="text-sm font-medium text-foreground">Önskemål avböjt</p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <XCircle className="mx-auto mb-2 h-8 w-8 text-coop-gray-600/50" />
+                <p className="text-sm font-medium text-coop-gray-900">Önskemål avböjt</p>
+                <p className="mt-1 text-xs text-coop-gray-600">
                   Tyvärr kan vi inte ta in den här produkten. Se meddelande från butiken ovan eller
                   kontakta personalen för mer information.
                 </p>
@@ -276,9 +276,9 @@ function QrKundonskemalPage() {
             )}
             {request.status === "not_in_assortment" && (
               <>
-                <Ban className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
-                <p className="text-sm font-medium text-foreground">Finns ej i sortiment</p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <Ban className="mx-auto mb-2 h-8 w-8 text-coop-gray-600/50" />
+                <p className="text-sm font-medium text-coop-gray-900">Finns ej i sortiment</p>
+                <p className="mt-1 text-xs text-coop-gray-600">
                   Denna produkt ingår för närvarande inte i vårt leverantörssortiment och kan inte
                   beställas in.
                 </p>
@@ -286,9 +286,9 @@ function QrKundonskemalPage() {
             )}
             {request.status === "discontinued" && (
               <>
-                <ArchiveX className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
-                <p className="text-sm font-medium text-foreground">Produkten har utgått</p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <ArchiveX className="mx-auto mb-2 h-8 w-8 text-coop-gray-600/50" />
+                <p className="text-sm font-medium text-coop-gray-900">Produkten har utgått</p>
+                <p className="mt-1 text-xs text-coop-gray-600">
                   Denna produkt har utgått ur tillverkarens eller leverantörens sortiment och går
                   tyvärr inte längre att få tag på.
                 </p>
@@ -297,7 +297,7 @@ function QrKundonskemalPage() {
           </div>
         )}
 
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-xs text-coop-gray-600">
           Uppdateras automatiskt av butikspersonalen
         </p>
       </div>

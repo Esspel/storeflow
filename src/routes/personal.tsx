@@ -1294,28 +1294,28 @@ function AccountsPage() {
         <TabsList className="flex-wrap rounded-full bg-muted/60 p-1">
           <TabsTrigger
             value="users"
-            className="rounded-full px-4 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"
+            className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
           >
             Användare
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger
               value="stores"
-              className="rounded-full px-4 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"
+              className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
             >
               Butiker
             </TabsTrigger>
           )}
           <TabsTrigger
             value="groups"
-            className="rounded-full px-4 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"
+            className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
           >
             Grupper
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger
               value="gdpr"
-              className="rounded-full px-4 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"
+              className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
             >
               <Shield className="mr-1.5 h-3.5 w-3.5" /> GDPR
             </TabsTrigger>
@@ -1323,7 +1323,7 @@ function AccountsPage() {
           {isManager && (
             <TabsTrigger
               value="admin"
-              className="rounded-full px-4 text-sm data-[state=active]:bg-card data-[state=active]:shadow-sm"
+              className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
             >
               Administration
             </TabsTrigger>
@@ -1335,11 +1335,11 @@ function AccountsPage() {
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Användarkonton</h2>
-              <p className="text-sm text-muted-foreground">{filteredUsers.length} konton</p>
+              <p className="text-sm text-coop-gray-600">{filteredUsers.length} konton</p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="relative flex-1 sm:flex-none sm:w-56">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600" />
                 <Input
                   placeholder="Sök konto..."
                   className="pl-9 rounded-full h-9 text-sm"
@@ -1390,14 +1390,14 @@ function AccountsPage() {
             </div>
             {/* User CSV import result */}
             {userCsvResult && (
-              <div className="mt-2 rounded-xl border border-border/60 bg-card px-4 py-3 text-sm">
+              <div className="mt-2 rounded-xl border border-border/60 bg-coop-gray-100 px-4 py-3 text-sm">
                 <div className="flex items-center justify-between">
                   <span>
                     Import klar: <strong>{userCsvResult.success} skapade</strong>,{" "}
                     {userCsvResult.skipped} hoppades över
                   </span>
                   <button
-                    className="text-xs text-muted-foreground hover:text-foreground"
+                    className="text-xs text-coop-gray-600 hover:text-coop-gray-900"
                     onClick={() => setUserCsvResult(null)}
                   >
                     Stäng
@@ -1417,18 +1417,18 @@ function AccountsPage() {
           {loading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-16 animate-pulse rounded-2xl bg-card" />
+                <div key={i} className="h-16 animate-pulse rounded-2xl bg-coop-gray-100" />
               ))}
             </div>
           ) : (
-            <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-sm)]">
+            <div className="overflow-hidden rounded-2xl border border-border/60 bg-coop-gray-100 shadow-[var(--shadow-sm)]">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border/60">
                       <th className="px-4 py-3 text-left">
                         <button
-                          className="flex items-center text-xs font-medium text-muted-foreground hover:text-foreground"
+                          className="flex items-center text-xs font-medium text-coop-gray-600 hover:text-coop-gray-900"
                           onClick={() =>
                             toggleSort(
                               "display_name",
@@ -1448,11 +1448,11 @@ function AccountsPage() {
                         </button>
                       </th>
                       <th className="hidden px-4 py-3 text-left md:table-cell">
-                        <span className="text-xs font-medium text-muted-foreground">Butiker</span>
+                        <span className="text-xs font-medium text-coop-gray-600">Butiker</span>
                       </th>
                       <th className="px-4 py-3 text-center">
                         <button
-                          className="flex items-center justify-center text-xs font-medium text-muted-foreground hover:text-foreground mx-auto"
+                          className="flex items-center justify-center text-xs font-medium text-coop-gray-600 hover:text-coop-gray-900 mx-auto"
                           onClick={() =>
                             toggleSort(
                               "role",
@@ -1467,10 +1467,10 @@ function AccountsPage() {
                           <SortIcon field="role" current={userSortField} dir={userSortDir} />
                         </button>
                       </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground">
+                      <th className="px-4 py-3 text-center text-xs font-medium text-coop-gray-600">
                         Aktiv
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-coop-gray-600">
                         Åtgärder
                       </th>
                     </tr>
@@ -1490,7 +1490,7 @@ function AccountsPage() {
                             </div>
                             <div>
                               <p className="font-medium">{u.display_name}</p>
-                              <p className="font-mono text-xs text-muted-foreground">
+                              <p className="font-mono text-xs text-coop-gray-600">
                                 {u.username}
                               </p>
                             </div>
@@ -1499,7 +1499,7 @@ function AccountsPage() {
                         <td className="hidden px-4 py-3 md:table-cell">
                           <div className="flex flex-wrap gap-1">
                             {u.assignedStoreIds.length === 0 ? (
-                              <span className="text-muted-foreground/50">—</span>
+                              <span className="text-coop-gray-600/50">—</span>
                             ) : (
                               u.assignedStoreIds.slice(0, 2).map((sid) => {
                                 const s = stores.find((st) => st.id === sid);
@@ -1514,7 +1514,7 @@ function AccountsPage() {
                               })
                             )}
                             {u.assignedStoreIds.length > 2 && (
-                              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-coop-gray-600">
                                 +{u.assignedStoreIds.length - 2}
                               </span>
                             )}
@@ -1559,7 +1559,7 @@ function AccountsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="rounded-full text-muted-foreground hover:text-destructive"
+                                className="rounded-full text-coop-gray-600 hover:text-destructive"
                                 onClick={() => setDeleteUser(u)}
                                 aria-label="Ta bort"
                               >
@@ -1582,11 +1582,11 @@ function AccountsPage() {
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Användargrupper</h2>
-              <p className="text-sm text-muted-foreground">{filteredGroups.length} grupper</p>
+              <p className="text-sm text-coop-gray-600">{filteredGroups.length} grupper</p>
             </div>
             <div className="flex items-center gap-2">
               <div className="relative flex-1 sm:flex-none sm:w-48">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600" />
                 <Input
                   placeholder="Sök grupp..."
                   className="pl-9 rounded-full h-9 text-sm"
@@ -1606,21 +1606,21 @@ function AccountsPage() {
             </div>
           </div>
           {filteredGroups.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
-              <Users className="mb-3 h-10 w-10 text-muted-foreground/40" />
-              <p className="text-sm font-medium text-muted-foreground">Inga grupper hittades</p>
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-16 text-center">
+              <Users className="mb-3 h-10 w-10 text-coop-gray-600/40" />
+              <p className="text-sm font-medium text-coop-gray-600">Inga grupper hittades</p>
             </div>
           ) : (
             <div className="space-y-3">
               {filteredGroups.map((g) => (
                 <div
                   key={g.id}
-                  className="overflow-hidden rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)]"
+                  className="overflow-hidden rounded-2xl border border-border/60 bg-coop-gray-100 p-5 shadow-[var(--shadow-sm)]"
                 >
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">{g.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-coop-gray-600">
                         {stores.find((s) => s.id === g.store_id)?.name ?? "Alla butiker"} —{" "}
                         {g.members?.length ?? 0} medlemmar
                       </p>
@@ -1639,7 +1639,7 @@ function AccountsPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="rounded-full text-muted-foreground hover:text-destructive"
+                        className="rounded-full text-coop-gray-600 hover:text-destructive"
                         onClick={() => setDeleteGroup(g)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -1669,11 +1669,11 @@ function AccountsPage() {
           <TabsContent value="gdpr" className="mt-6">
             <div className="mb-6">
               <h2 className="text-xl font-semibold">GDPR &amp; Dataportabilitet</h2>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-coop-gray-600">
                 Artikel 20 — Exportera en anställds persondata på begäran.
               </p>
             </div>
-            <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
+            <div className="rounded-2xl border border-border/60 bg-coop-gray-100 p-6 shadow-[var(--shadow-sm)]">
               <GdprExport />
             </div>
           </TabsContent>
@@ -1684,7 +1684,7 @@ function AccountsPage() {
           <TabsContent value="admin" className="mt-6 space-y-6">
             <div className="mb-2">
               <h2 className="text-xl font-semibold">Administration</h2>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-coop-gray-600">
                 Butiksinställningar och övergripande konfiguration.
               </p>
             </div>
@@ -1697,20 +1697,20 @@ function AccountsPage() {
             )}
 
             {/* GDPR för chefer — exportera butiksdata */}
-            <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)]">
+            <div className="rounded-2xl border border-border/60 bg-coop-gray-100 p-5 shadow-[var(--shadow-sm)]">
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
                   <Shield className="h-4 w-4" />
                 </div>
                 <div>
                   <h3 className="font-semibold">GDPR &amp; Dataexport</h3>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-coop-gray-600">
                     Exportera butikens data för portabilitet och arkivering.
                   </p>
                 </div>
               </div>
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-coop-gray-600">
                   Som butikschef kan du exportera en sammanfattning av butikens uppgifter,
                   avvikelser och kundönskemål som CSV-filer.
                 </p>
@@ -1862,7 +1862,7 @@ function AccountsPage() {
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-xl font-semibold">Butiksregister</h2>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-coop-gray-600">
                   {filteredStores.length} av {stores.length} butiker
                 </p>
               </div>
@@ -1912,7 +1912,7 @@ function AccountsPage() {
               </div>
             )}
             {csvResult && (
-              <div className="mb-4 rounded-xl border border-border/60 bg-card p-4">
+              <div className="mb-4 rounded-xl border border-border/60 bg-coop-gray-100 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <CheckCircle2 className="h-4 w-4 text-success" />
                   <p className="text-sm font-medium">
@@ -1921,7 +1921,7 @@ function AccountsPage() {
                   </p>
                   <button
                     onClick={() => setCsvResult(null)}
-                    className="ml-auto text-muted-foreground hover:text-foreground"
+                    className="ml-auto text-coop-gray-600 hover:text-coop-gray-900"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -1929,7 +1929,7 @@ function AccountsPage() {
                 {csvResult.errors.length > 0 && (
                   <div className="mt-2 max-h-32 overflow-y-auto rounded-lg bg-muted/40 p-2">
                     {csvResult.errors.map((e, i) => (
-                      <p key={i} className="text-xs text-muted-foreground">
+                      <p key={i} className="text-xs text-coop-gray-600">
                         {e}
                       </p>
                     ))}
@@ -1941,7 +1941,7 @@ function AccountsPage() {
             {/* Search + sort controls */}
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-48">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600" />
                 <Input
                   placeholder="Sök butik, stad, förening, distrikt..."
                   className="pl-9 rounded-full h-9 text-sm"
@@ -1949,7 +1949,7 @@ function AccountsPage() {
                   onChange={(e) => setStoreSearch(e.target.value)}
                 />
               </div>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1 text-xs text-coop-gray-600">
                 <span>Sortera:</span>
                 {(["name", "bolag", "distrikt_namn", "butiks_nr", "koncept"] as const).map((f) => (
                   <button
@@ -1983,13 +1983,13 @@ function AccountsPage() {
             {loading ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-48 animate-pulse rounded-2xl bg-card" />
+                  <div key={i} className="h-48 animate-pulse rounded-2xl bg-coop-gray-100" />
                 ))}
               </div>
             ) : filteredStores.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
-                <Building2 className="mb-3 h-10 w-10 text-muted-foreground/40" />
-                <p className="text-sm font-medium text-muted-foreground">Inga butiker hittades</p>
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-16 text-center">
+                <Building2 className="mb-3 h-10 w-10 text-coop-gray-600/40" />
+                <p className="text-sm font-medium text-coop-gray-600">Inga butiker hittades</p>
                 {!isMobile && (
                   <Button
                     className="mt-4 rounded-full"
@@ -2005,7 +2005,7 @@ function AccountsPage() {
                 {filteredStores.map((store) => (
                   <div
                     key={store.id}
-                    className="relative overflow-hidden rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)]"
+                    className="relative overflow-hidden rounded-2xl border border-border/60 bg-coop-gray-100 p-5 shadow-[var(--shadow-sm)]"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
@@ -2015,7 +2015,7 @@ function AccountsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="rounded-full text-muted-foreground hover:text-foreground"
+                          className="rounded-full text-coop-gray-600 hover:text-coop-gray-900"
                           onClick={() => {
                             setEditStore({ ...store });
                             setError("");
@@ -2027,7 +2027,7 @@ function AccountsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="rounded-full text-muted-foreground hover:text-destructive"
+                          className="rounded-full text-coop-gray-600 hover:text-destructive"
                           onClick={() => setDeleteStore(store)}
                           aria-label="Ta bort butik"
                         >
@@ -2036,7 +2036,7 @@ function AccountsPage() {
                       </div>
                     </div>
                     <h3 className="mt-3 text-base font-semibold">{store.name}</h3>
-                    <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                    <div className="mt-3 space-y-1 text-xs text-coop-gray-600">
                       {store.butiks_nr && (
                         <div className="flex items-center gap-1.5">
                           <Hash className="h-3.5 w-3.5 shrink-0" />
@@ -2160,7 +2160,7 @@ function AccountsPage() {
                 onChange={(e) => setNewUser((p) => ({ ...p, password: e.target.value }))}
                 autoComplete="new-password"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-coop-gray-600">
                 Användaren tvingas byta lösenord vid första inlogg.
               </p>
             </div>
@@ -2262,7 +2262,7 @@ function AccountsPage() {
                       {distrikt.filter(
                         (d) => !newUser.forening_id || d.forening_id === newUser.forening_id,
                       ).length === 0 && (
-                        <div className="px-3 py-2 text-xs text-muted-foreground">
+                        <div className="px-3 py-2 text-xs text-coop-gray-600">
                           Inga distrikt för vald förening.
                         </div>
                       )}
@@ -2281,13 +2281,13 @@ function AccountsPage() {
             <div className="space-y-1.5">
               <Label>Butiker</Label>
               <div className="relative mb-1.5">
-                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600 pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Sök butik..."
                   value={newStoreSearch}
                   onChange={(e) => setNewStoreSearch(e.target.value)}
-                  className="h-8 w-full rounded-md border border-border/60 bg-background pl-8 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary/30"
+                  className="h-8 w-full rounded-md border border-border/60 bg-background pl-8 pr-3 text-sm outline-none placeholder:text-coop-gray-600 focus:border-primary focus:ring-1 focus:ring-primary/30"
                 />
               </div>
               <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
@@ -2314,10 +2314,10 @@ function AccountsPage() {
                       />
                       <span className="text-sm">{s.name}</span>
                       {s.butiks_nr && (
-                        <span className="text-xs text-muted-foreground">#{s.butiks_nr}</span>
+                        <span className="text-xs text-coop-gray-600">#{s.butiks_nr}</span>
                       )}
                       {s.distrikt_namn && (
-                        <span className="text-xs text-muted-foreground/60">{s.distrikt_namn}</span>
+                        <span className="text-xs text-coop-gray-600/60">{s.distrikt_namn}</span>
                       )}
                       {newUser.storeIds[0] === s.id && (
                         <span className="ml-auto text-xs text-primary">Primär</span>
@@ -2325,7 +2325,7 @@ function AccountsPage() {
                     </label>
                   ))
                 ) : (
-                  <p className="py-3 text-center text-xs text-muted-foreground">
+                  <p className="py-3 text-center text-xs text-coop-gray-600">
                     Inga butiker matchar
                   </p>
                 )}
@@ -2523,7 +2523,7 @@ function AccountsPage() {
                         {distrikt.filter(
                           (d) => !editUser.forening_id || d.forening_id === editUser.forening_id,
                         ).length === 0 && (
-                          <div className="px-3 py-2 text-xs text-muted-foreground">
+                          <div className="px-3 py-2 text-xs text-coop-gray-600">
                             Inga distrikt finns.
                           </div>
                         )}
@@ -2544,13 +2544,13 @@ function AccountsPage() {
               <div className="space-y-1.5">
                 <Label>Butiker</Label>
                 <div className="relative mb-1.5">
-                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600 pointer-events-none" />
                   <input
                     type="text"
                     placeholder="Sök butik..."
                     value={editStoreSearch}
                     onChange={(e) => setEditStoreSearch(e.target.value)}
-                    className="h-8 w-full rounded-md border border-border/60 bg-background pl-8 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary/30"
+                    className="h-8 w-full rounded-md border border-border/60 bg-background pl-8 pr-3 text-sm outline-none placeholder:text-coop-gray-600 focus:border-primary focus:ring-1 focus:ring-primary/30"
                   />
                 </div>
                 <div className="max-h-40 overflow-y-auto rounded-lg border border-border/60 p-2 space-y-1">
@@ -2581,7 +2581,7 @@ function AccountsPage() {
                         />
                         <span className="text-sm">{s.name}</span>
                         {s.butiks_nr && (
-                          <span className="text-xs text-muted-foreground">#{s.butiks_nr}</span>
+                          <span className="text-xs text-coop-gray-600">#{s.butiks_nr}</span>
                         )}
                         {editUser.assignedStoreIds[0] === s.id && (
                           <span className="ml-auto text-xs text-primary">Primär</span>
@@ -2589,7 +2589,7 @@ function AccountsPage() {
                       </label>
                     ))
                   ) : (
-                    <p className="py-3 text-center text-xs text-muted-foreground">
+                    <p className="py-3 text-center text-xs text-coop-gray-600">
                       Inga butiker matchar
                     </p>
                   )}
@@ -2605,7 +2605,7 @@ function AccountsPage() {
                   autoComplete="new-password"
                 />
                 {resetPw.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-coop-gray-600">
                     Användaren tvingas byta lösenord vid nästa inlogg.
                   </p>
                 )}
@@ -2622,7 +2622,7 @@ function AccountsPage() {
                     onChange={(e) => setEditPin(e.target.value.replace(/\D/g, ""))}
                     autoComplete="off"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-coop-gray-600">
                     Lämna tomt för att behålla befintlig PIN.
                   </p>
                 </div>
@@ -2638,7 +2638,7 @@ function AccountsPage() {
                     />
                     <BarcodeScanButton onScan={(code) => setEditBarcode(code)} />
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-coop-gray-600">
                     Lämna tomt för att ta bort streckkod.
                   </p>
                 </div>
@@ -3195,7 +3195,7 @@ function AccountsPage() {
             <div className="space-y-1.5">
               <Label>Medlemmar</Label>
               <div className="relative mb-1">
-                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600" />
                 <Input
                   placeholder="Sök person..."
                   value={groupMemberSearch}
@@ -3207,7 +3207,7 @@ function AccountsPage() {
                     onClick={() => setGroupMemberSearch("")}
                     className="absolute right-2 top-1/2 -translate-y-1/2"
                   >
-                    <X className="h-3.5 w-3.5 text-muted-foreground" />
+                    <X className="h-3.5 w-3.5 text-coop-gray-600" />
                   </button>
                 )}
               </div>
@@ -3240,7 +3240,7 @@ function AccountsPage() {
                   ))}
               </div>
               {newGroup.memberIds.length > 0 && (
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-coop-gray-600">
                   {newGroup.memberIds.length} valda
                 </p>
               )}
@@ -3296,7 +3296,7 @@ function AccountsPage() {
               <div className="space-y-1.5">
                 <Label>Medlemmar</Label>
                 <div className="relative mb-1">
-                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600" />
                   <Input
                     placeholder="Sök person..."
                     value={groupMemberSearch}
@@ -3308,7 +3308,7 @@ function AccountsPage() {
                       onClick={() => setGroupMemberSearch("")}
                       className="absolute right-2 top-1/2 -translate-y-1/2"
                     >
-                      <X className="h-3.5 w-3.5 text-muted-foreground" />
+                      <X className="h-3.5 w-3.5 text-coop-gray-600" />
                     </button>
                   )}
                 </div>
@@ -3345,7 +3345,7 @@ function AccountsPage() {
                     ))}
                 </div>
                 {editGroup.memberIds.length > 0 && (
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-[11px] text-coop-gray-600">
                     {editGroup.memberIds.length} valda
                   </p>
                 )}

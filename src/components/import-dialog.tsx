@@ -105,12 +105,12 @@ export function ImportDialog({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border/60 px-4 py-3 sm:px-5 sm:py-4">
           <div className="min-w-0 pr-2">
-            <h2 className="text-base font-semibold text-foreground">{title}</h2>
-            {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+            <h2 className="text-base font-semibold text-coop-gray-900">{title}</h2>
+            {description && <p className="mt-0.5 text-xs text-coop-gray-600">{description}</p>}
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 rounded-full p-1 text-muted-foreground hover:text-foreground transition-colors"
+            className="shrink-0 rounded-full p-1 text-coop-gray-600 hover:text-coop-gray-900 transition-colors"
             aria-label="Stäng"
           >
             <X className="h-4 w-4" />
@@ -153,10 +153,10 @@ export function ImportDialog({
                   <FileText className="h-5 w-5 text-primary" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-medium text-foreground truncate max-w-[220px]">
+                  <p className="text-sm font-medium text-coop-gray-900 truncate max-w-[220px]">
                     {selectedFile.name}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-coop-gray-600">
                     {(selectedFile.size / 1024).toFixed(1)} KB
                   </p>
                 </div>
@@ -165,7 +165,7 @@ export function ImportDialog({
                     e.stopPropagation();
                     setSelectedFile(null);
                   }}
-                  className="ml-2 rounded-full p-1 text-muted-foreground hover:text-destructive transition-colors"
+                  className="ml-2 rounded-full p-1 text-coop-gray-600 hover:text-destructive transition-colors"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -173,15 +173,15 @@ export function ImportDialog({
             ) : (
               <>
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-3">
-                  <Upload className="h-5 w-5 text-muted-foreground" />
+                  <Upload className="h-5 w-5 text-coop-gray-600" />
                 </div>
-                <p className="text-sm font-medium text-foreground">
+                <p className="text-sm font-medium text-coop-gray-900">
                   {dragging ? "Släpp filen här" : "Dra & släpp en fil hit"}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-coop-gray-600">
                   eller <span className="text-primary font-medium">klicka för att välja</span>
                 </p>
-                <p className="mt-1.5 text-[10px] text-muted-foreground/60">
+                <p className="mt-1.5 text-[10px] text-coop-gray-600/60">
                   {accept.toUpperCase().replace(/\./g, "").replace(/,/g, ", ")} accepteras
                 </p>
               </>
@@ -198,7 +198,7 @@ export function ImportDialog({
                   return (
                     <p
                       key={opt.key}
-                      className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 pt-1 first:pt-0"
+                      className="text-[10px] font-semibold uppercase tracking-wider text-coop-gray-600/70 pt-1 first:pt-0"
                     >
                       {opt.label}
                     </p>
@@ -215,11 +215,11 @@ export function ImportDialog({
                         className="mt-0.5 h-4 w-4 shrink-0"
                       />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium leading-none text-foreground">
+                        <p className="text-sm font-medium leading-none text-coop-gray-900">
                           {opt.label}
                         </p>
                         {opt.description && (
-                          <p className="mt-0.5 text-xs text-muted-foreground">{opt.description}</p>
+                          <p className="mt-0.5 text-xs text-coop-gray-600">{opt.description}</p>
                         )}
                       </div>
                     </label>
@@ -231,9 +231,9 @@ export function ImportDialog({
                     <div key={opt.key} className="space-y-1.5">
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground">{opt.label}</p>
+                          <p className="text-sm font-medium text-coop-gray-900">{opt.label}</p>
                           {opt.description && (
-                            <p className="text-xs text-muted-foreground">{opt.description}</p>
+                            <p className="text-xs text-coop-gray-600">{opt.description}</p>
                           )}
                         </div>
                         <Select
@@ -266,7 +266,7 @@ export function ImportDialog({
 
           {/* Footer */}
           <div className="flex items-center justify-end gap-2 pt-1">
-            <Button variant="ghost" size="sm" onClick={onClose} className="text-muted-foreground">
+            <Button variant="ghost" size="sm" onClick={onClose} className="text-coop-gray-600">
               Avbryt
             </Button>
             <Button

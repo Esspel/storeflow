@@ -224,7 +224,7 @@ export function GdprExport() {
         <Shield className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
         <div>
           <p className="text-sm font-medium">GDPR Artikel 20 — Rätt till dataportabilitet</p>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <p className="mt-0.5 text-sm text-coop-gray-600">
             Generera en fullständig export av all data kopplad till en anställd. Exportfilen kan
             utlämnas till den berörda personen på begäran.
           </p>
@@ -266,11 +266,11 @@ export function GdprExport() {
 
       {result && (
         <div className="space-y-4">
-          <div className="rounded-xl border border-border/60 bg-card p-5">
+          <div className="rounded-xl border border-border/60 bg-coop-gray-100 p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-semibold">{result.user.display_name as string}</p>
-                <p className="font-mono text-sm text-muted-foreground">
+                <p className="font-mono text-sm text-coop-gray-600">
                   {result.user.username as string}
                 </p>
               </div>
@@ -293,12 +293,12 @@ export function GdprExport() {
               ].map(({ label, count }) => (
                 <div key={label} className="rounded-lg bg-muted/50 p-3 text-center">
                   <p className="text-2xl font-bold tabular-nums">{count}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
+                  <p className="mt-0.5 text-xs text-coop-gray-600">{label}</p>
                 </div>
               ))}
             </div>
 
-            <p className="mt-3 text-center text-xs text-muted-foreground tabular-nums">
+            <p className="mt-3 text-center text-xs text-coop-gray-600 tabular-nums">
               {totalRecords} poster totalt &mdash; exporterad{" "}
               {new Date(result.exported_at).toLocaleString("sv-SE")}
             </p>

@@ -115,7 +115,7 @@ export function AppSidebar() {
             <span className="text-sm font-semibold tracking-tight">
               <span className="coop-font-marker">Store</span><span className="coop-font-marker-strong">Flow</span>
             </span>
-            <span className="text-[11px] text-muted-foreground">Retail Operations</span>
+            <span className="text-[11px] text-coop-gray-600">Retail Operations</span>
           </div>
         </Link>
       </SidebarHeader>
@@ -161,7 +161,7 @@ export function AppSidebar() {
           </div>
           <div className="flex flex-col leading-tight min-w-0 group-data-[collapsible=icon]:hidden">
             <span className="text-sm font-medium truncate">{displayName}</span>
-            <span className="text-[11px] text-muted-foreground">{roleLabel}</span>
+            <span className="text-[11px] text-coop-gray-600">{roleLabel}</span>
           </div>
         </div>
       </SidebarFooter>

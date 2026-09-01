@@ -153,7 +153,6 @@
 
   /* ── TAILWIND MAPPNING ─────────────────────── */
   /* primary = Coop Grön 600 */
-  --primary: var(--coop-gron-600);
   --primary-foreground: var(--coop-vit);
 
   /* soft-variant för bakgrunder */
@@ -213,6 +212,37 @@
 
   /* radius */
   --radius: 0.5rem;
+}
+
+@theme {
+  --color-primary: var(--coop-gron-600);
+  --color-primary-foreground: var(--coop-vit);
+  --color-secondary: var(--coop-gray-200);
+  --color-secondary-foreground: var(--coop-gray-1000);
+  --color-muted: var(--coop-gray-100);
+  --color-muted-foreground: var(--coop-gray-700);
+  --color-accent: var(--coop-gray-200);
+  --color-accent-foreground: var(--coop-gray-1000);
+  --color-destructive: var(--coop-red-600);
+  --color-destructive-foreground: var(--coop-vit);
+  --color-success: var(--coop-gron-500);
+  --color-success-foreground: var(--coop-vit);
+  --color-warning: var(--coop-orange-500);
+  --color-warning-foreground: var(--coop-vit);
+  --color-info: var(--coop-blue-600);
+  --color-info-foreground: var(--coop-vit);
+  --color-border: var(--coop-gray-300);
+  --color-input: var(--coop-gray-300);
+  --color-ring: var(--coop-gron-600);
+  --color-card: var(--coop-vit);
+  --color-card-foreground: var(--coop-gray-1000);
+  --color-popover: var(--coop-vit);
+  --color-popover-foreground: var(--coop-gray-1000);
+  --color-background: var(--coop-gray-100);
+  --color-foreground: var(--coop-gray-1000);
+  --radius-lg: 0.5rem;
+  --radius-md: 0.5rem;
+  --radius-sm: 0.25rem;
 }
 
 /* ── GLOBALT TYPSnitt — Coop Sans är ENDAST typsnitt ─── */

@@ -88,7 +88,7 @@ export function Step2Markers({
         <CardTitle>Steg 2 — Placera Aruco-markörer</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-coop-gray-600">
           Klicka på kartan för att placera en ny markör. Dra för att flytta. Totalt {markers.length}
           /{MAX_MARKERS}.
         </p>

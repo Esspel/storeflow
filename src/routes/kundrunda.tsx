@@ -153,7 +153,7 @@ function ScoreRing({ score, max }: { score: number; max: number }) {
       </svg>
       <div className="absolute flex flex-col items-center leading-none">
         <span className={cn("text-lg font-bold tabular-nums", color)}>{Math.round(pct * 100)}</span>
-        <span className="text-[9px] text-muted-foreground">%</span>
+        <span className="text-[9px] text-coop-gray-600">%</span>
       </div>
     </div>
   );
@@ -1468,7 +1468,7 @@ function KundrundaPage() {
     return (
       <div className="mx-auto max-w-2xl px-5 py-8 space-y-4">
         <div className="h-8 w-40 animate-pulse motion-reduce:animate-none rounded-md bg-muted" />
-        <div className="rounded-2xl border border-border/60 bg-card p-6">
+        <div className="rounded-2xl border border-border/60 bg-coop-gray-100 p-6">
           <div className="flex items-center gap-4">
             <div className="h-12 w-12 animate-pulse motion-reduce:animate-none rounded-xl bg-muted shrink-0" />
             <div className="flex-1 space-y-2">
@@ -1481,7 +1481,7 @@ function KundrundaPage() {
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="rounded-2xl border border-border/60 bg-card p-4 flex items-center gap-3"
+            className="rounded-2xl border border-border/60 bg-coop-gray-100 p-4 flex items-center gap-3"
           >
             <div className="h-7 w-7 animate-pulse motion-reduce:animate-none rounded-full bg-muted shrink-0" />
             <div className="flex-1 space-y-1.5">
@@ -1504,7 +1504,7 @@ function KundrundaPage() {
 
     return (
       <div className="flex min-h-screen flex-col bg-background">
-        <div className="sticky top-0 z-20 shrink-0 border-b border-border/60 bg-card px-4 py-3">
+        <div className="sticky top-0 z-20 shrink-0 border-b border-border/60 bg-coop-gray-100 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <button
@@ -1518,14 +1518,14 @@ function KundrundaPage() {
                 <p className="truncate text-sm font-semibold">
                   {sessionReadOnly ? "Granskning — låst" : "Kundrunda"}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-coop-gray-600">
                   {activeSession.store?.name ?? "Butik"}
                 </p>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-3">
               {sessionReadOnly ? (
-                <div className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+                <div className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-coop-gray-600">
                   <Lock className="h-3 w-3" /> Slutförd — låst
                 </div>
               ) : (
@@ -1536,7 +1536,7 @@ function KundrundaPage() {
                         "flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium",
                         syncStatus === "offline"
                           ? "bg-warning/20 text-warning-foreground"
-                          : "bg-muted text-muted-foreground",
+                          : "bg-muted text-coop-gray-600",
                       )}
                     >
                       <span
@@ -1553,7 +1553,7 @@ function KundrundaPage() {
                   <div className="text-right">
                     <p className="text-xs font-medium tabular-nums">
                       {answeredCount}
-                      <span className="text-muted-foreground">/{totalCheckpoints}</span>
+                      <span className="text-coop-gray-600">/{totalCheckpoints}</span>
                     </p>
                     <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted mt-0.5">
                       <div
@@ -1599,7 +1599,7 @@ function KundrundaPage() {
                 <div
                   key={zone.id}
                   className={cn(
-                    "overflow-hidden rounded-2xl border bg-card transition-colors",
+                    "overflow-hidden rounded-2xl border bg-coop-gray-100 transition-colors",
                     zoneDone ? "border-success/30" : "border-border/60",
                   )}
                 >
@@ -1619,14 +1619,14 @@ function KundrundaPage() {
                     <div
                       className={cn(
                         "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors",
-                        zoneDone ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
+                        zoneDone ? "bg-success/15 text-success" : "bg-muted text-coop-gray-600",
                       )}
                     >
                       {zoneDone ? <CheckCircle2 className="h-4 w-4" /> : zoneIdx + 1}
                     </div>
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-semibold">{zone.name}</span>
-                      <span className="ml-2 text-xs text-muted-foreground tabular-nums">
+                      <span className="ml-2 text-xs text-coop-gray-600 tabular-nums">
                         {zoneAnswered}/{zone.checkpoints.length}
                         {zoneDefects > 0 && (
                           <span className="ml-1 text-destructive">{zoneDefects} avvik.</span>
@@ -1646,7 +1646,7 @@ function KundrundaPage() {
                     )}
                     <ChevronRight
                       className={cn(
-                        "h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform",
+                        "h-4 w-4 shrink-0 text-coop-gray-600/50 transition-transform",
                         isExpanded && "rotate-90",
                       )}
                     />
@@ -1678,7 +1678,7 @@ function KundrundaPage() {
                                   ) : isDefect ? (
                                     <AlertTriangle className="h-5 w-5 text-destructive" />
                                   ) : (
-                                    <Circle className="h-5 w-5 text-muted-foreground/30" />
+                                    <Circle className="h-5 w-5 text-coop-gray-600/30" />
                                   )}
                                 </div>
                                 <div className="min-w-0">
@@ -1686,7 +1686,7 @@ function KundrundaPage() {
                                     {cp.label}
                                   </span>
                                   {cp.description && (
-                                    <p className="mt-0.5 text-xs text-muted-foreground leading-snug">
+                                    <p className="mt-0.5 text-xs text-coop-gray-600 leading-snug">
                                       {cp.description}
                                     </p>
                                   )}
@@ -1703,7 +1703,7 @@ function KundrundaPage() {
                                       "flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95 motion-reduce:animate-none",
                                       isOk
                                         ? "border-success bg-success/15 text-success"
-                                        : "border-border/60 text-muted-foreground hover:border-success/50 hover:text-success",
+                                        : "border-border/60 text-coop-gray-600 hover:border-success/50 hover:text-success",
                                     )}
                                     aria-label="OK"
                                   >
@@ -1715,7 +1715,7 @@ function KundrundaPage() {
                                       "flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-all active:scale-95 motion-reduce:animate-none",
                                       isDefect
                                         ? "border-destructive bg-destructive/15 text-destructive"
-                                        : "border-border/60 text-muted-foreground hover:border-destructive/50 hover:text-destructive",
+                                        : "border-border/60 text-coop-gray-600 hover:border-destructive/50 hover:text-destructive",
                                     )}
                                     aria-label="Avvikelse"
                                   >
@@ -1727,7 +1727,7 @@ function KundrundaPage() {
 
                             {refImages.length > 0 && (
                               <div className="mt-3 pt-2">
-                                <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-coop-gray-600">
                                   Referens
                                 </p>
                                 <div className="flex gap-1.5 overflow-x-auto">
@@ -1778,7 +1778,7 @@ function KundrundaPage() {
                                         {resp.sap_article_id} — Mitt Coop-sortiment
                                       </a>
                                     ) : (
-                                      <p className="text-[11px] text-muted-foreground font-mono">
+                                      <p className="text-[11px] text-coop-gray-600 font-mono">
                                         {resp.sap_article_id}
                                       </p>
                                     );
@@ -1927,7 +1927,7 @@ function KundrundaPage() {
                         : "Materialnummer"}
                   </Label>
                   <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2">
-                    <Hash className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <Hash className="h-3.5 w-3.5 shrink-0 text-coop-gray-600" />
                     <input
                       id="defect-article"
                       value={defectDialog.sap_article_id}
@@ -1947,13 +1947,13 @@ function KundrundaPage() {
                       autoCorrect="off"
                       autoCapitalize="none"
                       spellCheck={false}
-                      className="flex-1 border-0 bg-transparent text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground/40"
+                      className="flex-1 border-0 bg-transparent text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-coop-gray-600/40"
                     />
                     <select
                       aria-label="Typ av artikelnummer"
                       value={defectArticleType}
                       onChange={(e) => setDefectArticleType(e.target.value as ArticleIdType)}
-                      className="border-0 bg-transparent text-[10px] text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer shrink-0"
+                      className="border-0 bg-transparent text-[10px] text-coop-gray-600 outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer shrink-0"
                     >
                       <option value="mat-nr">Mat-nr</option>
                       <option value="ean">EAN</option>
@@ -1966,7 +1966,7 @@ function KundrundaPage() {
                         onClick={() =>
                           setDefectDialog((p) => (p ? { ...p, sap_article_id: "" } : null))
                         }
-                        className="text-muted-foreground hover:text-destructive"
+                        className="text-coop-gray-600 hover:text-destructive"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -2010,8 +2010,8 @@ function KundrundaPage() {
                       <span
                         className={
                           defectDialog.responsible_user_id
-                            ? "text-foreground"
-                            : "text-muted-foreground"
+                            ? "text-coop-gray-900"
+                            : "text-coop-gray-600"
                         }
                       >
                         {defectDialog.responsible_user_id
@@ -2029,7 +2029,7 @@ function KundrundaPage() {
                           setDefectDialog((p) => (p ? { ...p, responsible_user_id: "" } : null));
                           setDefectUserOpen(false);
                         }}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-muted/60"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full text-coop-gray-600 hover:text-destructive hover:bg-muted/60"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -2037,11 +2037,11 @@ function KundrundaPage() {
                     {defectUserOpen && (
                       <div
                         id="defect-user-panel"
-                        className="absolute top-full left-0 z-50 mt-1 w-full rounded-lg border border-border/60 bg-card shadow-lg"
+                        className="absolute top-full left-0 z-50 mt-1 w-full rounded-lg border border-border/60 bg-coop-gray-100 shadow-lg"
                       >
                         <div className="p-2 border-b border-border/40">
                           <div className="relative">
-                            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600" />
                             <input
                               autoFocus
                               type="text"
@@ -2063,7 +2063,7 @@ function KundrundaPage() {
                               setDefectUserOpen(false);
                               setDefectUserSearch("");
                             }}
-                            className="w-full rounded px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted/50"
+                            className="w-full rounded px-2 py-1.5 text-left text-sm text-coop-gray-600 hover:bg-muted/50"
                           >
                             Ingen
                           </button>
@@ -2100,7 +2100,7 @@ function KundrundaPage() {
                     )}
                   </div>
                   {defectDialog.responsible_user_id && (
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-[11px] text-coop-gray-600">
                       En uppgift och en avvikelse skapas automatiskt.
                     </p>
                   )}
@@ -2158,7 +2158,7 @@ function KundrundaPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Rundan är inte klar</AlertDialogTitle>
               <AlertDialogDescription asChild>
-                <div className="space-y-2 text-sm text-muted-foreground">
+                <div className="space-y-2 text-sm text-coop-gray-600">
                   <p>
                     Du har {totalCheckpoints - answeredCount} punkt
                     {totalCheckpoints - answeredCount !== 1 ? "er" : ""} kvar:
@@ -2228,13 +2228,13 @@ function KundrundaPage() {
           <button
             onClick={() => setView("home")}
             aria-label="Tillbaka"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-card hover:bg-muted/40"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 bg-coop-gray-100 hover:bg-muted/40"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <div>
             <h1 className="text-xl font-bold">Redigera kundrunda</h1>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-coop-gray-600">
               Hantera zoner, kontrollpunkter och referensbilder
             </p>
           </div>
@@ -2303,8 +2303,8 @@ function KundrundaPage() {
               className={cn(
                 "flex-1 px-4 py-2.5 text-sm font-medium transition-colors",
                 editScope === "global"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
+                  ? "bg-coop-gray-100 text-coop-gray-900 shadow-sm"
+                  : "text-coop-gray-600 hover:text-coop-gray-900",
               )}
               onClick={() => setEditScope("global")}
             >
@@ -2316,8 +2316,8 @@ function KundrundaPage() {
               className={cn(
                 "flex-1 px-4 py-2.5 text-sm font-medium transition-colors",
                 editScope === "local"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
+                  ? "bg-coop-gray-100 text-coop-gray-900 shadow-sm"
+                  : "text-coop-gray-600 hover:text-coop-gray-900",
               )}
               onClick={() => setEditScope("local")}
             >
@@ -2327,7 +2327,7 @@ function KundrundaPage() {
         )}
 
         {editScope === "local" && !canEditGlobal && (
-          <div className="mb-4 flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground">
+          <div className="mb-4 flex items-center gap-2 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 text-xs text-coop-gray-600">
             <Edit2 className="h-3.5 w-3.5 shrink-0" />
             Din butiks lokala version. Ändringar påverkar bara din butik.
           </div>
@@ -2437,8 +2437,8 @@ function KundrundaPage() {
         </div>
 
         {displayZones.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-border/60 bg-card px-6 py-10 text-center">
-            <p className="text-sm text-muted-foreground">
+          <div className="rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 px-6 py-10 text-center">
+            <p className="text-sm text-coop-gray-600">
               Inga zoner i denna version. Lägg till en zon eller importera en CSV-mall.
             </p>
           </div>
@@ -2455,7 +2455,7 @@ function KundrundaPage() {
                 )}
               <div
                 className={cn(
-                  "rounded-2xl border border-border/60 bg-card overflow-hidden transition-opacity",
+                  "rounded-2xl border border-border/60 bg-coop-gray-100 overflow-hidden transition-opacity",
                   dragZoneIdx === zoneIdx && "opacity-40",
                   dropZoneIdx === zoneIdx && dragZoneIdx !== zoneIdx && "ring-2 ring-primary/40",
                 )}
@@ -2482,7 +2482,7 @@ function KundrundaPage() {
               >
                 <div className="flex items-center justify-between gap-2 border-b border-border/40 bg-muted/20 px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <GripVertical className="h-4 w-4 text-muted-foreground/40 cursor-grab active:cursor-grabbing shrink-0" />
+                    <GripVertical className="h-4 w-4 text-coop-gray-600/40 cursor-grab active:cursor-grabbing shrink-0" />
                     <h3 className="font-semibold text-sm">{zone.name}</h3>
                     {zone.is_local_override && (
                       <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold text-primary">
@@ -2493,7 +2493,7 @@ function KundrundaPage() {
                   <div className="flex gap-1">
                     <button
                       aria-label="Redigera zon"
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary"
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-coop-gray-600 hover:bg-muted/60 hover:text-primary"
                       onClick={() => {
                         setEditZone(zone);
                         setEditZoneForm({ name: zone.name });
@@ -2503,7 +2503,7 @@ function KundrundaPage() {
                     </button>
                     <button
                       aria-label="Ta bort zon"
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-destructive"
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-coop-gray-600 hover:bg-muted/60 hover:text-destructive"
                       onClick={() => setDeleteZoneTarget(zone)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -2556,11 +2556,11 @@ function KundrundaPage() {
                           }}
                         >
                           <div className="flex items-start gap-2">
-                            <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/40 cursor-grab active:cursor-grabbing" />
+                            <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-coop-gray-600/40 cursor-grab active:cursor-grabbing" />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium">{cp.label}</p>
                               {cp.description && (
-                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                <p className="mt-0.5 text-xs text-coop-gray-600">
                                   {cp.description}
                                 </p>
                               )}
@@ -2568,7 +2568,7 @@ function KundrundaPage() {
                             <div className="flex shrink-0 gap-1">
                               <button
                                 aria-label="Redigera kontrollpunkt"
-                                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-primary"
+                                className="flex h-7 w-7 items-center justify-center rounded-full text-coop-gray-600 hover:bg-muted/60 hover:text-primary"
                                 onClick={() => {
                                   setEditCheckpoint(cp);
                                   setEditCheckpointForm({
@@ -2581,7 +2581,7 @@ function KundrundaPage() {
                               </button>
                               <button
                                 aria-label="Ta bort kontrollpunkt"
-                                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-destructive"
+                                className="flex h-7 w-7 items-center justify-center rounded-full text-coop-gray-600 hover:bg-muted/60 hover:text-destructive"
                                 onClick={() =>
                                   setDeleteCheckpointTarget({ checkpoint: cp, zoneId: zone.id })
                                 }
@@ -2603,15 +2603,15 @@ function KundrundaPage() {
                                 />
                                 <button
                                   aria-label="Ta bort referensbild"
-                                  className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-60 group-hover:opacity-100 transition-opacity"
+                                  className="absolute inset-0 flex items-center justify-center bg-coop-svart/40 opacity-60 group-hover:opacity-100 transition-opacity"
                                   onClick={() => deleteRefPhoto(cp.id, img.id, img.storage_path)}
                                 >
-                                  <X className="h-4 w-4 text-white" />
+                                  <X className="h-4 w-4 text-coop-vit" />
                                 </button>
                               </div>
                             ))}
                             <button
-                              className="flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-border/60 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+                              className="flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-border/60 text-coop-gray-600 hover:border-primary/50 hover:text-primary transition-colors"
                               onClick={() => {
                                 setPendingRefCheckpointId(cp.id);
                                 refPhotoRef.current?.click();
@@ -2893,7 +2893,7 @@ function KundrundaPage() {
               <p className="text-sm font-semibold text-warning-foreground">
                 Ny central version tillgänglig
               </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="mt-0.5 text-xs text-coop-gray-600">
                 Huvudkontoret har publicerat en uppdaterad kundrundamall. Välj hur du vill hantera
                 din lokala version.
               </p>
@@ -2910,7 +2910,7 @@ function KundrundaPage() {
       )}
 
       {localVersion?.version_type === "parallel" && (
-        <div className="mb-4 flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-xs text-coop-gray-600">
           <GitMerge className="h-3.5 w-3.5 shrink-0" />
           Parallell version aktiv — du kan välja Central eller Lokal version vid varje runda.
         </div>
@@ -2918,9 +2918,9 @@ function KundrundaPage() {
 
       {/* Multiple unfinished rounds */}
       {inProgressSessions.length > 1 && (
-        <div className="mb-6 rounded-2xl border border-border bg-card">
+        <div className="mb-6 rounded-2xl border border-border bg-coop-gray-100">
           <div className="flex items-center gap-2 border-b border-border px-5 py-3">
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <Clock className="h-4 w-4 text-coop-gray-600" />
             <span className="text-sm font-semibold tabular-nums">
               {inProgressSessions.length} oavslutade rundor
             </span>
@@ -2936,7 +2936,7 @@ function KundrundaPage() {
                   className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left hover:bg-muted/50 transition-colors"
                 >
                   <div className="min-w-0">
-                    <span className="text-sm text-foreground">
+                    <span className="text-sm text-coop-gray-900">
                       Startad{" "}
                       {new Date(s.started_at).toLocaleString("sv-SE", {
                         month: "short",
@@ -2947,7 +2947,7 @@ function KundrundaPage() {
                     </span>
                     {(s as KundrundaSession & { conductor?: { display_name: string } }).conductor
                       ?.display_name && (
-                      <span className="ml-2 text-xs text-muted-foreground">
+                      <span className="ml-2 text-xs text-coop-gray-600">
                         ·{" "}
                         {
                           (s as KundrundaSession & { conductor?: { display_name: string } })
@@ -2958,7 +2958,7 @@ function KundrundaPage() {
                   </div>
                   <ChevronDown
                     className={cn(
-                      "h-4 w-4 text-muted-foreground shrink-0 transition-transform",
+                      "h-4 w-4 text-coop-gray-600 shrink-0 transition-transform",
                       priorSessionAction?.id === s.id && "rotate-180",
                     )}
                   />
@@ -2995,7 +2995,7 @@ function KundrundaPage() {
       )}
 
       {/* Start / Resume */}
-      <div className="mb-8 rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-sm)]">
+      <div className="mb-8 rounded-2xl border border-border/60 bg-coop-gray-100 p-6 shadow-[var(--shadow-sm)]">
         {inProgressSession && inProgressSessions.length === 1 ? (
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -3004,7 +3004,7 @@ function KundrundaPage() {
               </div>
               <div>
                 <p className="font-semibold">Pågående runda</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-coop-gray-600">
                   Startad kl{" "}
                   {new Date(inProgressSession.started_at).toLocaleTimeString("sv-SE", {
                     hour: "2-digit",
@@ -3025,7 +3025,7 @@ function KundrundaPage() {
                     </span>
                   )}
                   {localDraftTime && (
-                    <span className="ml-1 text-muted-foreground/70">
+                    <span className="ml-1 text-coop-gray-600/70">
                       · Autosparat{" "}
                       {new Date(localDraftTime).toLocaleTimeString("sv-SE", {
                         hour: "2-digit",
@@ -3039,7 +3039,7 @@ function KundrundaPage() {
             <div className="flex flex-col gap-2 sm:flex-row">
               {isManager && (
                 <button
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-destructive"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-coop-gray-600 hover:bg-muted/60 hover:text-destructive"
                   onClick={() => setDeleteSessionTarget(inProgressSession)}
                   aria-label="Ta bort"
                 >
@@ -3070,7 +3070,7 @@ function KundrundaPage() {
               </div>
               <div>
                 <p className="font-semibold">Starta ny runda</p>
-                <p className="text-xs text-muted-foreground tabular-nums">
+                <p className="text-xs text-coop-gray-600 tabular-nums">
                   {activeZones.length} zoner · {totalCheckpoints} kontrollpunkter
                 </p>
               </div>
@@ -3123,11 +3123,11 @@ function KundrundaPage() {
 
       {/* Assignment overview + button */}
       {isManager && activeStore && (
-        <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-5 shadow-[var(--shadow-sm)]">
+        <div className="rounded-2xl border border-border/60 bg-coop-gray-100 p-4 sm:p-5 shadow-[var(--shadow-sm)]">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="font-semibold text-sm">Tilldelning av kundrunda</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-coop-gray-600">
                 {assignments.length > 0
                   ? `${assignments.filter((a) => a.assigned_user_id).length} av 7 dagar tilldelade`
                   : "Ingen tilldelning gjord denna vecka"}
@@ -3175,7 +3175,7 @@ function KundrundaPage() {
               )}
               {selectedSessionIds.size > 0 && (
                 <button
-                  className="text-xs text-muted-foreground hover:text-foreground"
+                  className="text-xs text-coop-gray-600 hover:text-coop-gray-900"
                   onClick={() => setSelectedSessionIds(new Set())}
                 >
                   Avmarkera
@@ -3194,7 +3194,7 @@ function KundrundaPage() {
                 <div
                   key={s.id}
                   className={cn(
-                    "group flex items-center gap-3 rounded-2xl border bg-card px-4 py-4 transition-colors",
+                    "group flex items-center gap-3 rounded-2xl border bg-coop-gray-100 px-4 py-4 transition-colors",
                     isSelected ? "border-primary/40 bg-primary/5" : "border-border/60",
                   )}
                 >
@@ -3231,7 +3231,7 @@ function KundrundaPage() {
                           })
                         : "—"}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-coop-gray-600">
                       {(s as KundrundaSession & { conductor?: { display_name: string } }).conductor
                         ?.display_name ?? "Okänd"}
                     </p>
@@ -3240,12 +3240,12 @@ function KundrundaPage() {
                     <span className={cn("text-base font-bold tabular-nums", scoreColor)}>
                       {Math.round(pct * 100)}%
                     </span>
-                    <p className="text-[10px] text-muted-foreground tabular-nums">
+                    <p className="text-[10px] text-coop-gray-600 tabular-nums">
                       {s.total_score}/{s.max_score}
                     </p>
                   </div>
                   <button
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:bg-primary-soft hover:text-primary"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/60 text-coop-gray-600 transition-colors hover:bg-primary-soft hover:text-primary"
                     onClick={() => resumeSession(s)}
                     aria-label="Granska"
                   >
@@ -3253,7 +3253,7 @@ function KundrundaPage() {
                   </button>
                   {canDelete && (
                     <button
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-coop-gray-600 transition-colors hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => setDeleteSessionTarget(s)}
                       aria-label="Ta bort"
                     >
@@ -3337,7 +3337,7 @@ function KundrundaPage() {
           <DialogHeader>
             <DialogTitle>Ny central version tillgänglig</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground leading-relaxed">
+          <p className="text-sm text-coop-gray-600 leading-relaxed">
             Huvudkontoret har publicerat en ny kundrundamall. Välj hur din butik ska hantera
             uppdateringen.
           </p>
@@ -3349,7 +3349,7 @@ function KundrundaPage() {
               <Upload className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
               <div>
                 <p className="text-sm font-semibold">Uppdatera till central version</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-coop-gray-600">
                   Ersätt din lokala mall med den nya centrala versionen.
                 </p>
               </div>
@@ -3358,10 +3358,10 @@ function KundrundaPage() {
               className="w-full flex items-start gap-3 rounded-xl border border-border/60 bg-muted/30 p-4 text-left hover:bg-muted/50 transition-colors"
               onClick={() => resolveVersionChoice("local")}
             >
-              <Copy className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+              <Copy className="mt-0.5 h-5 w-5 shrink-0 text-coop-gray-600" />
               <div>
                 <p className="text-sm font-semibold">Behåll lokal version</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-coop-gray-600">
                   Fortsätt använda din befintliga lokala mall utan förändringar.
                 </p>
               </div>
@@ -3373,7 +3373,7 @@ function KundrundaPage() {
               <GitMerge className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
               <div>
                 <p className="text-sm font-semibold">Kör båda parallellt</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-coop-gray-600">
                   Välj vid varje runda om du vill använda central eller lokal version.
                 </p>
               </div>
@@ -3423,7 +3423,7 @@ function KundrundaPage() {
           <DialogHeader>
             <DialogTitle>Välj mall för denna runda</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-coop-gray-600">
             Du kör parallell version. Vilken mall vill du använda för denna runda?
           </p>
           <div className="space-y-2 mt-2">
@@ -3438,7 +3438,7 @@ function KundrundaPage() {
               {
                 choice: "local" as const,
                 icon: Copy,
-                iconClass: "text-muted-foreground",
+                iconClass: "text-coop-gray-600",
                 title: "Lokal version",
                 desc: "Använd butikens anpassade mall för denna runda.",
               },
@@ -3451,7 +3451,7 @@ function KundrundaPage() {
                 <Icon className={cn("h-5 w-5 shrink-0", iconClass)} />
                 <div>
                   <p className="text-sm font-semibold">{title}</p>
-                  <p className="text-xs text-muted-foreground">{desc}</p>
+                  <p className="text-xs text-coop-gray-600">{desc}</p>
                 </div>
               </button>
             ))}
@@ -3562,7 +3562,7 @@ function KundrundaAssignmentDialog({
         <DialogHeader>
           <DialogTitle>Tilldela kundrunda per veckodag</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-coop-gray-600">
           Välj vem som ansvarar för kundrundan varje dag denna vecka (startar {weekStart}).
         </p>
         <div className="space-y-2 my-2 max-h-72 overflow-y-auto">

@@ -63,10 +63,10 @@ export function Step4Products({ storeId, markers, links, onLinksChange, onValid 
               key={p.sap_article_id}
               draggable
               onDragStart={() => setDraggedProduct(p)}
-              className="p-2 border rounded bg-card cursor-grab"
+              className="p-2 border rounded bg-coop-gray-100 cursor-grab"
             >
               <Label>{p.name ?? p.sap_article_id}</Label>
-              <div className="text-xs text-muted-foreground">{p.bnr}</div>
+              <div className="text-xs text-coop-gray-600">{p.bnr}</div>
             </div>
           ))}
         </div>

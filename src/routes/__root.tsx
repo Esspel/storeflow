@@ -24,9 +24,9 @@ function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Sidan hittades inte</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <h1 className="text-7xl font-bold text-coop-gray-900">404</h1>
+        <h2 className="mt-4 text-xl font-semibold text-coop-gray-900">Sidan hittades inte</h2>
+        <p className="mt-2 text-sm text-coop-gray-600">
           Sidan du letar efter finns inte eller har flyttats.
         </p>
         <div className="mt-6">
@@ -66,15 +66,15 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             />
           </svg>
         </div>
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+        <h1 className="text-xl font-semibold tracking-tight text-coop-gray-900">
           Sidan laddades inte
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-sm text-coop-gray-600">
           Något gick fel. Prova att ladda om sidan.
         </p>
 
         <div className="mt-4 rounded-md border border-border bg-muted/50 px-4 py-3 text-left">
-          <p className="mb-1 text-xs font-medium text-muted-foreground">Feldetaljer:</p>
+          <p className="mb-1 text-xs font-medium text-coop-gray-600">Feldetaljer:</p>
           <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-all text-xs text-destructive font-mono">
             {errorMessage}
           </pre>
@@ -92,7 +92,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
           </button>
           <a
             href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-coop-gray-900 transition-colors hover:bg-accent"
           >
             Till startsidan
           </a>

@@ -77,7 +77,7 @@ export function StoreMap2D({
       onMouseMove={onMouseMove}
       onMouseUp={() => setDrag(null)}
       onMouseLeave={() => setDrag(null)}
-      className="relative h-[600px] w-full overflow-auto rounded-md border bg-white select-none"
+      className="relative h-[600px] w-full overflow-auto rounded-md border bg-coop-vit select-none"
       style={{
         backgroundImage:
           "linear-gradient(to right, #E2D8CA 1px, transparent 1px), linear-gradient(to bottom, #E2D8CA 1px, transparent 1px)",
@@ -159,7 +159,7 @@ export function StoreMap2D({
                 onChange?.(next);
               }}
               onMouseDown={(e) => e.stopPropagation()}
-              className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 bg-white border border-primary text-primary rounded-full w-5 h-5 text-[10px] flex items-center justify-center shadow hover:bg-primary/10"
+              className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 bg-coop-vit border border-primary text-primary rounded-full w-5 h-5 text-[10px] flex items-center justify-center shadow hover:bg-primary/10"
               title="Rotera 90°"
             >
               ↻

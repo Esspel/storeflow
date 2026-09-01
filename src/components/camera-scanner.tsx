@@ -253,7 +253,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[300] flex flex-col bg-black">
+    <div className="fixed inset-0 z-[300] flex flex-col bg-coop-svart">
       <video
         ref={videoRef}
         muted
@@ -263,7 +263,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
 
       {/* Overlay med utskärning för siktområde */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-black/55" />
+        <div className="absolute inset-0 bg-coop-svart/55" />
         <div
           className="absolute"
           style={{
@@ -318,18 +318,18 @@ export function CameraScanner({ onScan, onClose }: Props) {
             stopStream();
             onClose();
           }}
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-md transition-transform active:scale-95"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-coop-vit/10 text-coop-vit backdrop-blur-md transition-transform active:scale-95"
           aria-label="Stäng"
         >
           <X className="h-5 w-5" />
         </button>
-        <span className="text-sm font-semibold text-white drop-shadow">Scanna streckkod</span>
+        <span className="text-sm font-semibold text-coop-vit drop-shadow">Scanna streckkod</span>
         {torchSupported ? (
           <button
             onClick={toggleTorch}
             className={cn(
               "flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-md transition-all active:scale-95",
-              torchOn ? "bg-coop-yellow-400 text-coop-yellow-900" : "bg-white/10 text-white",
+              torchOn ? "bg-coop-yellow-400 text-coop-yellow-900" : "bg-coop-vit/10 text-coop-vit",
             )}
             aria-label="Tänd/släck ficklampa"
           >
@@ -347,7 +347,7 @@ export function CameraScanner({ onScan, onClose }: Props) {
             <p className="text-sm text-coop-red-200">{error}</p>
           </div>
         ) : (
-          <p className="text-sm text-white/60">EAN-13 · EAN-8 · Code 128 · QR · med flera</p>
+          <p className="text-sm text-coop-vit/60">EAN-13 · EAN-8 · Code 128 · QR · med flera</p>
         )}
       </div>
     </div>

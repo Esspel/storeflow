@@ -123,16 +123,16 @@ export class ErrorBoundary extends React.Component<Props, State> {
         </div>
 
         <div className="space-y-1">
-          <p className="text-sm font-semibold text-foreground">
+          <p className="text-sm font-semibold text-coop-gray-900">
             {section ? `${section} kunde inte laddas` : "Något gick fel"}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-coop-gray-600">
             Ett oväntat fel uppstod. Detaljer finns nedan och i webbläsarens konsol.
           </p>
         </div>
 
         <div className="w-full max-w-3xl rounded-md border border-border bg-muted/60 px-4 py-3 text-left shadow-inner">
-          <p className="mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <p className="mb-1.5 text-xs font-semibold text-coop-gray-600 uppercase tracking-wider">
             Stack Trace & Komponentträd:
           </p>
           <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-destructive">

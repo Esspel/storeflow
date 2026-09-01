@@ -86,7 +86,7 @@ function Section({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border/60 bg-card p-5 shadow-[var(--shadow-sm)]",
+        "rounded-2xl border border-border/60 bg-coop-gray-100 p-5 shadow-[var(--shadow-sm)]",
         span2 && "sm:col-span-2",
       )}
     >
@@ -1640,10 +1640,10 @@ function TestPanel() {
           {statItems.map(({ label, value }) => (
             <div
               key={label}
-              className="rounded-2xl border border-border/60 bg-card p-3 text-center shadow-[var(--shadow-sm)]"
+              className="rounded-2xl border border-border/60 bg-coop-gray-100 p-3 text-center shadow-[var(--shadow-sm)]"
             >
-              <p className="text-xl font-black tabular-nums text-foreground">{value}</p>
-              <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground">{label}</p>
+              <p className="text-xl font-black tabular-nums text-coop-gray-900">{value}</p>
+              <p className="mt-0.5 text-[10px] leading-tight text-coop-gray-600">{label}</p>
             </div>
           ))}
         </div>
@@ -1652,7 +1652,7 @@ function TestPanel() {
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Time Simulation */}
         <Section icon={Clock} title="Tidssimulering" span2>
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Flytta fram den simulerade klockan för att testa återkommande uppgifter och
             SLA-deadlines.
           </p>
@@ -1661,7 +1661,7 @@ function TestPanel() {
               "mb-4 rounded-lg px-3 py-2 text-xs font-medium",
               simulatedOffset > 0
                 ? "bg-warning/10 text-warning-foreground"
-                : "bg-muted/60 text-muted-foreground",
+                : "bg-muted/60 text-coop-gray-600",
             )}
           >
             {simulatedLabel}
@@ -1719,7 +1719,7 @@ function TestPanel() {
 
         {/* Notifications */}
         <Section icon={Bell} title="Notiser">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Testa och rensa notifieringssystemet.
           </p>
           <div className="space-y-2">
@@ -1791,7 +1791,7 @@ function TestPanel() {
 
         {/* Push & OS-notiser */}
         <Section icon={BellRing} title="Push & OS-notiser" span2>
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Diagnostisera och testa riktiga OS-push-notiser via send-push edge-funktionen.
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -1822,7 +1822,7 @@ function TestPanel() {
 
         {/* Tasks */}
         <Section icon={ListChecks} title="Uppgifter">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Aktiv butik: <strong>{activeStore?.name ?? "ingen vald"}</strong>
           </p>
           <div className="space-y-2">
@@ -1863,7 +1863,7 @@ function TestPanel() {
 
         {/* Incidents */}
         <Section icon={TriangleAlert} title="Avvikelser">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Aktiv butik: <strong>{activeStore?.name ?? "ingen vald"}</strong>
           </p>
           <div className="space-y-2">
@@ -1895,7 +1895,7 @@ function TestPanel() {
 
         {/* Storage & Images */}
         <Section icon={ImageIcon} title="Bilder & Lagring">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Testa bildkomprimering och hitta/rensa herrelösa filer i Storage.
           </p>
           <div className="space-y-2">
@@ -1941,7 +1941,7 @@ function TestPanel() {
           }
           title="Realtid & WebSocket"
         >
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Verifiera att Supabase Realtime-kanalen ansluter och att DB-operationer är snabba.
           </p>
           <div
@@ -1951,7 +1951,7 @@ function TestPanel() {
                 ? "bg-success/10 text-success"
                 : realtimeStatus === "error"
                   ? "bg-destructive/10 text-destructive"
-                  : "bg-muted/60 text-muted-foreground",
+                  : "bg-muted/60 text-coop-gray-600",
             )}
           >
             Status:{" "}
@@ -1978,7 +1978,7 @@ function TestPanel() {
 
         {/* Templates */}
         <Section icon={FileText} title="Mallar">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Testa hämtning av mallar inklusive steg och frågor.
           </p>
           <div className="space-y-2">
@@ -1993,7 +1993,7 @@ function TestPanel() {
 
         {/* Security & RLS */}
         <Section icon={Shield} title="Säkerhet & RLS">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Verifiera SELECT-behörigheter och testa att cross-store INSERT blockeras.
           </p>
           <div className="space-y-2">
@@ -2013,7 +2013,7 @@ function TestPanel() {
 
         {/* Users */}
         <Section icon={Users} title="Användare">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Granska användarkvalitet och kopplingsproblem.
           </p>
           <div className="space-y-2">
@@ -2038,7 +2038,7 @@ function TestPanel() {
 
         {/* Schedule */}
         <Section icon={CalendarDays} title="Schema & Leveransplan">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Inspektera importerade scheman och leveransplaner.
           </p>
           <div className="space-y-2">
@@ -2059,7 +2059,7 @@ function TestPanel() {
 
         {/* Data integrity */}
         <Section icon={Bug} title="Dataintegritet">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Hitta inkonsistens i databasen: null-referens, saknade FK, utgångna poster.
           </p>
           <div className="space-y-2">
@@ -2086,7 +2086,7 @@ function TestPanel() {
 
         {/* Clear tables */}
         <Section icon={Trash2} title="Rensa tabeller">
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Permanent radering av alla rader i angivna tabeller. Kan inte ångras.
           </p>
           <div className="space-y-2">
@@ -2113,7 +2113,7 @@ function TestPanel() {
 
         {/* File Format Inspector */}
         <Section icon={FileSearch} title="Filformatsinspektör" span2>
-          <p className="mb-3 text-xs text-muted-foreground">
+          <p className="mb-3 text-xs text-coop-gray-600">
             Ladda upp CSV- eller XML-filer för att se struktur, kolumner, taggar och exempelvärden.
             Hjälper till att konfigurera importers korrekt.
           </p>
@@ -2122,9 +2122,9 @@ function TestPanel() {
             onClick={() => fileInspectorRef.current?.click()}
             className="flex w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border/60 bg-muted/30 px-6 py-8 transition-colors hover:border-primary/40 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Upload className="mb-2 h-7 w-7 text-muted-foreground/60" />
+            <Upload className="mb-2 h-7 w-7 text-coop-gray-600/60" />
             <span className="block text-sm font-medium">Välj en eller flera CSV/XML-filer</span>
-            <span className="mt-0.5 block text-xs text-muted-foreground">
+            <span className="mt-0.5 block text-xs text-coop-gray-600">
               Klicka för att bläddra — flera filer kan väljas
             </span>
           </button>
@@ -2155,7 +2155,7 @@ function TestPanel() {
                       </span>
                       <span className="text-sm font-medium">{ins.name}</span>
                     </div>
-                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                    <div className="flex items-center gap-3 text-[10px] text-coop-gray-600">
                       <span>{ins.sizeKb} KB</span>
                       <span
                         className={cn(
@@ -2175,7 +2175,7 @@ function TestPanel() {
                   ) : ins.type === "csv" ? (
                     <div className="p-4 space-y-3">
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tabular-nums text-muted-foreground mb-1.5">
+                        <p className="text-[10px] font-semibold uppercase tabular-nums text-coop-gray-600 mb-1.5">
                           {ins.columns?.length} kolumner ({ins.rowCount} rader)
                         </p>
                         <div className="flex flex-wrap gap-1.5">
@@ -2191,7 +2191,7 @@ function TestPanel() {
                       </div>
                       {(ins.sampleRows ?? []).length > 0 && (
                         <div>
-                          <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-1.5">
+                          <p className="text-[10px] font-semibold uppercase text-coop-gray-600 mb-1.5">
                             Exempelrader
                           </p>
                           <div className="overflow-x-auto rounded-lg border border-border/50">
@@ -2201,7 +2201,7 @@ function TestPanel() {
                                   {ins.columns?.map((col, ci) => (
                                     <th
                                       key={ci}
-                                      className="px-2.5 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap"
+                                      className="px-2.5 py-1.5 text-left font-medium text-coop-gray-600 whitespace-nowrap"
                                     >
                                       {col || `(${ci + 1})`}
                                     </th>
@@ -2214,7 +2214,7 @@ function TestPanel() {
                                     {ins.columns?.map((col, ci) => (
                                       <td
                                         key={ci}
-                                        className="px-2.5 py-1.5 font-mono text-muted-foreground max-w-[200px] truncate"
+                                        className="px-2.5 py-1.5 font-mono text-coop-gray-600 max-w-[200px] truncate"
                                       >
                                         {row[col] || "—"}
                                       </td>
@@ -2230,7 +2230,7 @@ function TestPanel() {
                   ) : (
                     <div className="p-4 space-y-3">
                       <div>
-                        <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-1.5">
+                        <p className="text-[10px] font-semibold uppercase text-coop-gray-600 mb-1.5">
                           Struktur
                         </p>
                         <div className="flex flex-wrap gap-1.5">
@@ -2244,7 +2244,7 @@ function TestPanel() {
                       </div>
                       {ins.recordTag && (
                         <div>
-                          <p className="text-[10px] font-semibold uppercase tabular-nums text-muted-foreground mb-1.5">
+                          <p className="text-[10px] font-semibold uppercase tabular-nums text-coop-gray-600 mb-1.5">
                             Postelement:{" "}
                             <span className="font-mono text-orange-700">{ins.recordTag}</span> (
                             {ins.recordCount} poster)
@@ -2254,10 +2254,10 @@ function TestPanel() {
                               <table className="w-full text-[11px]">
                                 <thead>
                                   <tr className="border-b border-border/50 bg-muted/40">
-                                    <th className="px-2.5 py-1.5 text-left font-medium text-muted-foreground">
+                                    <th className="px-2.5 py-1.5 text-left font-medium text-coop-gray-600">
                                       Tagg
                                     </th>
-                                    <th className="px-2.5 py-1.5 text-left font-medium text-muted-foreground">
+                                    <th className="px-2.5 py-1.5 text-left font-medium text-coop-gray-600">
                                       Exempelvärde
                                     </th>
                                   </tr>
@@ -2268,7 +2268,7 @@ function TestPanel() {
                                       <td className="px-2.5 py-1.5 font-mono text-orange-700">
                                         {f.tag}
                                       </td>
-                                      <td className="px-2.5 py-1.5 text-muted-foreground">
+                                      <td className="px-2.5 py-1.5 text-coop-gray-600">
                                         {f.sample || "—"}
                                       </td>
                                     </tr>
@@ -2335,17 +2335,17 @@ function TestPanel() {
               className="mt-4 overflow-hidden rounded-xl border border-border/60"
             >
               <div className="border-b border-border/60 px-4 py-2.5 flex items-center justify-between">
-                <p className="text-xs font-semibold text-muted-foreground">Senaste 30 händelser</p>
+                <p className="text-xs font-semibold text-coop-gray-600">Senaste 30 händelser</p>
                 <button
                   onClick={() => setShowAudit(false)}
-                  className="text-xs text-muted-foreground hover:text-foreground"
+                  className="text-xs text-coop-gray-600 hover:text-coop-gray-900"
                 >
                   Stäng
                 </button>
               </div>
               <div className="max-h-72 overflow-y-auto">
                 {auditLog.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                  <p className="px-4 py-6 text-center text-sm text-coop-gray-600">
                     Inga händelser
                   </p>
                 ) : (
@@ -2359,14 +2359,14 @@ function TestPanel() {
                           <span className="rounded-full bg-primary/10 px-2 py-0.5 font-mono text-[10px] text-primary">
                             {entry.action}
                           </span>
-                          <span className="text-xs text-muted-foreground">{entry.entity}</span>
+                          <span className="text-xs text-coop-gray-600">{entry.entity}</span>
                           {entry.entity_id && (
-                            <span className="font-mono text-[10px] text-muted-foreground/60">
+                            <span className="font-mono text-[10px] text-coop-gray-600/60">
                               {entry.entity_id.slice(0, 8)}
                             </span>
                           )}
                         </div>
-                        <span className="shrink-0 text-[10px] text-muted-foreground/60">
+                        <span className="shrink-0 text-[10px] text-coop-gray-600/60">
                           {new Date(entry.created_at).toLocaleString("sv-SE", {
                             dateStyle: "short",
                             timeStyle: "short",
@@ -2374,7 +2374,7 @@ function TestPanel() {
                         </span>
                       </div>
                       {entry.actor && (
-                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        <p className="mt-0.5 text-[10px] text-coop-gray-600">
                           av {entry.actor.display_name}
                         </p>
                       )}

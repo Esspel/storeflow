@@ -11,17 +11,17 @@ function LicensePage() {
     <div className="mx-auto max-w-3xl px-5 py-8 md:px-8 md:py-12">
       <Link
         to="/installningar"
-        className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        className="mb-6 inline-flex items-center gap-1.5 text-sm text-coop-gray-600 hover:text-coop-gray-900 transition-colors"
       >
         <ChevronLeft className="h-4 w-4" /> Tillbaka till Inställningar
       </Link>
 
       <h1 className="mb-2 text-3xl font-bold tracking-tight">Licens</h1>
-      <p className="mb-8 text-sm text-muted-foreground">GNU General Public License v3.0</p>
+      <p className="mb-8 text-sm text-coop-gray-600">GNU General Public License v3.0</p>
 
-      <div className="space-y-6 text-sm text-muted-foreground leading-relaxed">
+      <div className="space-y-6 text-sm text-coop-gray-600 leading-relaxed">
         <div className="rounded-xl border border-border/60 bg-muted/30 p-5">
-          <p className="font-mono text-xs text-foreground">
+          <p className="font-mono text-xs text-coop-gray-900">
             StoreFlow — Butiksdriftssystem
             <br />
             Copyright (C) 2026 Eric Söderström
@@ -38,7 +38,7 @@ function LicensePage() {
         </div>
 
         <section>
-          <h2 className="text-lg font-semibold text-foreground mb-3">
+          <h2 className="text-lg font-semibold text-coop-gray-900 mb-3">
             GNU General Public License version 3
           </h2>
           <p>
@@ -49,7 +49,7 @@ function LicensePage() {
         </section>
 
         <section>
-          <h2 className="text-base font-semibold text-foreground mb-2">Dina rättigheter</h2>
+          <h2 className="text-base font-semibold text-coop-gray-900 mb-2">Dina rättigheter</h2>
           <ul className="list-disc list-inside space-y-1">
             <li>Frihet att använda programmet för valfritt ändamål.</li>
             <li>Frihet att studera hur programmet fungerar och anpassa det efter dina behov.</li>
@@ -59,7 +59,7 @@ function LicensePage() {
         </section>
 
         <section>
-          <h2 className="text-base font-semibold text-foreground mb-2">Villkor</h2>
+          <h2 className="text-base font-semibold text-coop-gray-900 mb-2">Villkor</h2>
           <ul className="list-disc list-inside space-y-1">
             <li>Källkod ska alltid göras tillgänglig när du distribuerar binärer.</li>
             <li>Modifieringar ska märkas tydligt som ändringar av originalet.</li>
@@ -69,7 +69,7 @@ function LicensePage() {
         </section>
 
         <section>
-          <h2 className="text-base font-semibold text-foreground mb-2">Garanti</h2>
+          <h2 className="text-base font-semibold text-coop-gray-900 mb-2">Garanti</h2>
           <p>
             Programmet levereras UTAN GARANTI, varken uttryckt eller underförstådd. Se GPL-3.0 för
             fullständiga villkor. Du ansvarar själv för alla risker förknippade med programmets
@@ -78,7 +78,7 @@ function LicensePage() {
         </section>
 
         <section>
-          <h2 className="text-base font-semibold text-foreground mb-2">Fullständig licens</h2>
+          <h2 className="text-base font-semibold text-coop-gray-900 mb-2">Fullständig licens</h2>
           <p>
             Den fullständiga texten för GNU General Public License version 3 finns på:{" "}
             <a
@@ -93,7 +93,7 @@ function LicensePage() {
         </section>
 
         <section>
-          <h2 className="text-base font-semibold text-foreground mb-2">Tredjepartskomponenter</h2>
+          <h2 className="text-base font-semibold text-coop-gray-900 mb-2">Tredjepartskomponenter</h2>
           <p className="mb-3">StoreFlow använder följande bibliotek med öppen källkod:</p>
           <div className="space-y-1.5 rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
             {[
@@ -111,9 +111,9 @@ function LicensePage() {
               ["ZXing Browser", "Apache-2.0", "zxing-js/browser"],
             ].map(([name, lic, repo]) => (
               <div key={name} className="flex items-center gap-3">
-                <span className="w-36 text-foreground">{name}</span>
+                <span className="w-36 text-coop-gray-900">{name}</span>
                 <span className="w-20 text-primary">{lic}</span>
-                <span className="text-muted-foreground">{repo}</span>
+                <span className="text-coop-gray-600">{repo}</span>
               </div>
             ))}
           </div>

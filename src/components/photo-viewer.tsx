@@ -88,7 +88,7 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
       tabIndex={-1}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/95 select-none touch-none outline-none animate-in fade-in-0 duration-150 motion-reduce:animate-none"
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-coop-svart/95 select-none touch-none outline-none animate-in fade-in-0 duration-150 motion-reduce:animate-none"
     >
       {/* Bakgrundsyta som stänger vid klick */}
       <div onClick={onClose} className="absolute inset-0 z-0" aria-hidden="true" />
@@ -98,14 +98,14 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
         type="button"
         onClick={onClose}
         aria-label="Stäng bildvisare"
-        className="absolute top-4 right-4 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-white/15 text-white transition-opacity hover:bg-white/25 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        className="absolute top-4 right-4 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-coop-vit/15 text-coop-vit transition-opacity hover:bg-coop-vit/25 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
       >
         <X className="h-6 w-6" />
       </button>
 
       {/* Bildräknare */}
       {images.length > 1 && (
-        <div className="absolute top-5 left-1/2 z-20 -translate-x-1/2 text-sm font-medium text-white/75 pointer-events-none">
+        <div className="absolute top-5 left-1/2 z-20 -translate-x-1/2 text-sm font-medium text-coop-vit/75 pointer-events-none">
           {idx + 1} / {images.length}
         </div>
       )}
@@ -132,10 +132,10 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
             disabled={idx === 0}
             aria-label="Föregående bild"
             className={cn(
-              "absolute left-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-white/15 text-white transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
+              "absolute left-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-coop-vit/15 text-coop-vit transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
               idx === 0
-                ? "cursor-default opacity-30 text-white/30"
-                : "cursor-pointer hover:bg-white/25",
+                ? "cursor-default opacity-30 text-coop-vit/30"
+                : "cursor-pointer hover:bg-coop-vit/25",
             )}
           >
             <ChevronLeft className="h-6 w-6" />
@@ -150,10 +150,10 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
             disabled={idx === images.length - 1}
             aria-label="Nästa bild"
             className={cn(
-              "absolute right-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-white/15 text-white transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
+              "absolute right-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-coop-vit/15 text-coop-vit transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
               idx === images.length - 1
-                ? "cursor-default opacity-30 text-white/30"
-                : "cursor-pointer hover:bg-white/25",
+                ? "cursor-default opacity-30 text-coop-vit/30"
+                : "cursor-pointer hover:bg-coop-vit/25",
             )}
           >
             <ChevronRight className="h-6 w-6" />
@@ -169,7 +169,7 @@ export function PhotoViewer({ images, initialIndex = 0, onClose }: Props) {
               key={i}
               className={cn(
                 "h-2 rounded-full transition-all duration-200",
-                i === idx ? "w-5 bg-white" : "w-2 bg-white/40",
+                i === idx ? "w-5 bg-coop-vit" : "w-2 bg-coop-vit/40",
               )}
             />
           ))}

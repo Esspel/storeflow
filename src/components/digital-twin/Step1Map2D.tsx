@@ -66,7 +66,7 @@ export function Step1Map2D({
         <CardTitle>Steg 1 — Rita 2D-karta</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-coop-gray-600">
           Lägg till sektioner och dra dem i rutnätet (20 cm). Allt sparas automatiskt.
         </p>
         <StoreMap2D

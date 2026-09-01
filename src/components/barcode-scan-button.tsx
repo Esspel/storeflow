@@ -16,7 +16,7 @@ export function BarcodeScanButton({ onScan }: BarcodeScanButtonProps) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-input bg-background text-coop-gray-600 transition-colors hover:bg-accent hover:text-accent-foreground"
         title="Scanna med kamera"
       >
         <Camera className="h-4 w-4" />

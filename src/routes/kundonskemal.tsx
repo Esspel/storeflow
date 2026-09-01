@@ -81,19 +81,19 @@ function statusBadge(s: string) {
   if (s === "fulfilled") return <Badge className="bg-success/15 text-success">Uppfylld</Badge>;
   if (s === "declined")
     return (
-      <Badge variant="secondary" className="text-muted-foreground">
+      <Badge variant="secondary" className="text-coop-gray-600">
         Avböjd
       </Badge>
     );
   if (s === "not_in_assortment")
     return (
-      <Badge variant="secondary" className="text-muted-foreground">
+      <Badge variant="secondary" className="text-coop-gray-600">
         Finns ej i sortiment
       </Badge>
     );
   if (s === "discontinued")
     return (
-      <Badge variant="secondary" className="text-muted-foreground">
+      <Badge variant="secondary" className="text-coop-gray-600">
         Utgått
       </Badge>
     );
@@ -102,7 +102,7 @@ function statusBadge(s: string) {
 
 function priorityClass(p: string) {
   if (p === "high") return "bg-destructive/10 text-destructive";
-  if (p === "low") return "bg-muted text-muted-foreground";
+  if (p === "low") return "bg-muted text-coop-gray-600";
   return "bg-info/15 text-info";
 }
 
@@ -517,8 +517,8 @@ function CustomerRequestsPage() {
                 className={cn(
                   "rounded-full px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap",
                   filterStatus === f.value
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "bg-coop-gray-100 text-coop-gray-900 shadow-sm"
+                    : "text-coop-gray-600 hover:text-coop-gray-900",
                 )}
               >
                 {f.label}
@@ -527,7 +527,7 @@ function CustomerRequestsPage() {
           </div>
         </div>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600" />
           <Input
             placeholder="Sök produkt eller materialnummer..."
             value={search}
@@ -540,16 +540,16 @@ function CustomerRequestsPage() {
       {loading ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
+            <div key={i} className="rounded-2xl border border-border/60 bg-coop-gray-100 p-4 space-y-3">
               <div className="h-4 w-3/4 animate-pulse rounded-md bg-muted" />
               <div className="h-3 w-1/2 animate-pulse rounded-md bg-muted/60" />
             </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-16 text-center">
-          <ShoppingCart className="mb-3 h-10 w-10 text-muted-foreground/40" />
-          <p className="text-sm font-medium text-muted-foreground">Inga kundönskemål hittades</p>
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-16 text-center">
+          <ShoppingCart className="mb-3 h-10 w-10 text-coop-gray-600/40" />
+          <p className="text-sm font-medium text-coop-gray-600">Inga kundönskemål hittades</p>
           <Button className="mt-4 rounded-full" size="sm" onClick={() => setShowCreate(true)}>
             <Plus className="mr-1.5 h-3.5 w-3.5" /> Registrera önskemål
           </Button>
@@ -570,7 +570,7 @@ function CustomerRequestsPage() {
             return (
               <div
                 key={r.id}
-                className="flex flex-col justify-between rounded-2xl border border-border/60 bg-card p-4 space-y-3 shadow-sm hover:border-border transition-colors"
+                className="flex flex-col justify-between rounded-2xl border border-border/60 bg-coop-gray-100 p-4 space-y-3 shadow-sm hover:border-border transition-colors"
               >
                 <div className="space-y-3">
                   {/* Top bar: Name + badges */}
@@ -578,7 +578,7 @@ function CustomerRequestsPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-base leading-snug">{r.product_name}</p>
                       {r.source === "qr" && (
-                        <span className="inline-block mt-1 rounded-full border border-border/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        <span className="inline-block mt-1 rounded-full border border-border/60 px-2 py-0.5 text-[10px] font-medium text-coop-gray-600">
                           Via QR
                         </span>
                       )}
@@ -599,7 +599,7 @@ function CustomerRequestsPage() {
                   {/* Article number & Mitt Coop info */}
                   {r.article_number && (
                     <div className="rounded-xl border border-border/60 bg-muted/30 p-2.5 space-y-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600/70">
                         {decodedArticle?.type === "ean"
                           ? "EAN"
                           : decodedArticle?.type === "bnr"
@@ -607,7 +607,7 @@ function CustomerRequestsPage() {
                             : "Materialnummer"}
                       </p>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-xs font-semibold text-foreground">
+                        <span className="font-mono text-xs font-semibold text-coop-gray-900">
                           {decodedArticle?.value ?? r.article_number}
                         </span>
                         {mcUrl && (
@@ -631,7 +631,7 @@ function CustomerRequestsPage() {
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600/90 dark:text-amber-400/90 mb-0.5">
                         Anteckning (visas för kunden)
                       </p>
-                      <p className="text-xs text-muted-foreground leading-relaxed">{r.notes}</p>
+                      <p className="text-xs text-coop-gray-600 leading-relaxed">{r.notes}</p>
                     </div>
                   )}
 
@@ -641,17 +641,17 @@ function CustomerRequestsPage() {
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70 mb-0.5">
                         Meddelande till kund
                       </p>
-                      <p className="text-xs text-foreground leading-relaxed">{staffComment}</p>
+                      <p className="text-xs text-coop-gray-900 leading-relaxed">{staffComment}</p>
                     </div>
                   )}
 
                   {/* Internal Notes */}
                   {r.internal_notes && (
                     <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-0.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600/70 mb-0.5">
                         Intern anteckning
                       </p>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
+                      <p className="text-xs text-coop-gray-600 leading-relaxed">
                         {r.internal_notes}
                       </p>
                     </div>
@@ -660,7 +660,7 @@ function CustomerRequestsPage() {
                   {/* Images */}
                   {images.length > 0 && (
                     <div className="space-y-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600/70">
                         Bilder
                       </p>
                       <div className="flex flex-wrap gap-1.5">
@@ -686,7 +686,7 @@ function CustomerRequestsPage() {
 
                 {/* Footer: Meta & actions */}
                 <div className="pt-2 border-t border-border/40 space-y-2">
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground/70">
+                  <div className="flex items-center justify-between text-[11px] text-coop-gray-600/70">
                     <span>{r.requester?.display_name ?? "Anonym/Kund"}</span>
                     <span>{new Date(r.created_at).toLocaleDateString("sv-SE")}</span>
                   </div>
@@ -720,7 +720,7 @@ function CustomerRequestsPage() {
                       <button
                         type="button"
                         onClick={() => openQrForRequest(r)}
-                        className="flex h-8 w-8 items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:bg-muted/60 hover:text-primary transition-colors"
+                        className="flex h-8 w-8 items-center justify-center rounded-full border border-border/60 text-coop-gray-600 hover:bg-muted/60 hover:text-primary transition-colors"
                         title="Dela status-QR med kund"
                       >
                         <QrCode className="h-4 w-4" />
@@ -729,7 +729,7 @@ function CustomerRequestsPage() {
                         <button
                           type="button"
                           onClick={() => setDeleteTarget(r)}
-                          className="flex h-8 w-8 items-center justify-center rounded-full border border-border/60 text-muted-foreground hover:bg-muted/60 hover:text-destructive transition-colors"
+                          className="flex h-8 w-8 items-center justify-center rounded-full border border-border/60 text-coop-gray-600 hover:bg-muted/60 hover:text-destructive transition-colors"
                           title="Ta bort önskemål"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -783,7 +783,7 @@ function CustomerRequestsPage() {
                   ✓ Fälten har fyllts i automatiskt från länken!
                 </p>
               ) : (
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-coop-gray-600">
                   Fyller automatiskt i artikelnummer, typ och produktnamn från länken.
                 </p>
               )}
@@ -812,7 +812,7 @@ function CustomerRequestsPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs flex items-center gap-1.5">
-                <Hash className="h-3 w-3 text-muted-foreground" />
+                <Hash className="h-3 w-3 text-coop-gray-600" />
                 Materialnummer / EAN / BNR (valfritt)
               </Label>
               <div className="flex gap-2">
@@ -858,14 +858,14 @@ function CustomerRequestsPage() {
                 <button
                   type="button"
                   onClick={() => setArticleCameraOpen(true)}
-                  className="flex items-center gap-1 shrink-0 rounded-xl border border-border/60 px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                  className="flex items-center gap-1 shrink-0 rounded-xl border border-border/60 px-2.5 py-1 text-[11px] text-coop-gray-600 transition-colors hover:border-primary/50 hover:text-primary"
                   title="Scanna EAN-streckkod"
                 >
                   <ScanLine className="h-3 w-3" />
                   Scanna
                 </button>
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[11px] text-coop-gray-600">
                 Används för direktlänk till Mitt Coop-sortiment. Ange typ av nummer i rullgardinen.
               </p>
             </div>
@@ -934,7 +934,7 @@ function CustomerRequestsPage() {
                       <button
                         type="button"
                         onClick={() => removeCreateImage(i)}
-                        className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white"
+                        className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-coop-svart/60 text-coop-vit"
                       >
                         <X className="h-2.5 w-2.5" />
                       </button>
@@ -947,7 +947,7 @@ function CustomerRequestsPage() {
                   <button
                     type="button"
                     onClick={() => createFileRef.current?.click()}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-coop-gray-600 transition-colors hover:border-primary/40 hover:bg-muted/50"
                   >
                     <ImagePlus className="h-3.5 w-3.5" />
                     Lägg till bild
@@ -1006,7 +1006,7 @@ function CustomerRequestsPage() {
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600/90 dark:text-amber-400/90 mb-0.5">
                       Anteckning (visas för kunden)
                     </p>
-                    <p className="text-xs text-muted-foreground">{editTarget.notes}</p>
+                    <p className="text-xs text-coop-gray-600">{editTarget.notes}</p>
                   </div>
                 )}
               </div>
@@ -1031,7 +1031,7 @@ function CustomerRequestsPage() {
                     ✓ Artikelnummer har fyllts i från länken!
                   </p>
                 ) : (
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-[11px] text-coop-gray-600">
                     Fyller automatiskt i artikelnummer och typ från länken.
                   </p>
                 )}
@@ -1055,7 +1055,7 @@ function CustomerRequestsPage() {
                         <button
                           type="button"
                           onClick={() => deleteExistingImage(img.id)}
-                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white"
+                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-coop-svart/60 text-coop-vit"
                         >
                           <X className="h-2.5 w-2.5" />
                         </button>
@@ -1070,7 +1070,7 @@ function CustomerRequestsPage() {
                         <button
                           type="button"
                           onClick={() => removeEditImage(i)}
-                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white"
+                          className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-coop-svart/60 text-coop-vit"
                         >
                           <X className="h-2.5 w-2.5" />
                         </button>
@@ -1083,7 +1083,7 @@ function CustomerRequestsPage() {
                     <button
                       type="button"
                       onClick={() => editFileRef.current?.click()}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-coop-gray-600 transition-colors hover:border-primary/40 hover:bg-muted/50"
                     >
                       <ImagePlus className="h-3.5 w-3.5" />
                       Lägg till bild
@@ -1102,7 +1102,7 @@ function CustomerRequestsPage() {
 
               <div className="space-y-1.5">
                 <Label className="text-xs flex items-center gap-1.5">
-                  <Hash className="h-3 w-3 text-muted-foreground" />
+                  <Hash className="h-3 w-3 text-coop-gray-600" />
                   Materialnummer / EAN / BNR
                 </Label>
                 <div className="flex gap-2">
@@ -1144,7 +1144,7 @@ function CustomerRequestsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-coop-gray-600">
                   Syns bara internt — används för direktlänk till Mitt Coop-sortiment.
                 </p>
               </div>
@@ -1180,7 +1180,7 @@ function CustomerRequestsPage() {
                   className="resize-none text-sm"
                   placeholder="T.ex. Varan är nu i hylla 3, kyl..."
                 />
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-coop-gray-600">
                   {editStatus === "declined"
                     ? "En kommentar måste anges när önskemålet avböjs."
                     : "Kunden ser detta meddelande på sin statuslänk."}
@@ -1281,7 +1281,7 @@ function CustomerRequestsPage() {
                 </div>
                 <div>
                   <DialogTitle className="text-base">Dela status med kund</DialogTitle>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-coop-gray-600">
                     Kunden kan följa önskemålets status via denna QR-kod.
                   </p>
                 </div>
@@ -1289,16 +1289,16 @@ function CustomerRequestsPage() {
             </DialogHeader>
             <div className="space-y-4">
               <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-                <p className="text-xs text-muted-foreground mb-0.5">Produkt</p>
-                <p className="font-medium text-sm text-foreground">{qrRequest.product_name}</p>
+                <p className="text-xs text-coop-gray-600 mb-0.5">Produkt</p>
+                <p className="font-medium text-sm text-coop-gray-900">{qrRequest.product_name}</p>
               </div>
               {qrTokenUrl ? (
                 <div className="space-y-3">
-                  <div className="flex justify-center rounded-2xl border border-border/60 bg-white p-4">
+                  <div className="flex justify-center rounded-2xl border border-border/60 bg-coop-vit p-4">
                     <QrDisplay url={qrTokenUrl} size={180} />
                   </div>
                   <div className="rounded-xl border border-border/60 bg-muted/20 p-2.5">
-                    <p className="break-all font-mono text-[10px] text-muted-foreground leading-relaxed">
+                    <p className="break-all font-mono text-[10px] text-coop-gray-600 leading-relaxed">
                       {qrTokenUrl}
                     </p>
                   </div>
@@ -1320,13 +1320,13 @@ function CustomerRequestsPage() {
                       href={qrTokenUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-border/60 bg-background px-3 py-2 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-border/60 bg-background px-3 py-2 text-xs font-medium text-coop-gray-900 hover:bg-muted transition-colors"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
                       Öppna
                     </a>
                   </div>
-                  <p className="text-xs text-center text-muted-foreground">
+                  <p className="text-xs text-center text-coop-gray-600">
                     Länken är giltig i 30 dagar.
                   </p>
                 </div>
@@ -1360,7 +1360,7 @@ function CustomerRequestsPage() {
                 </div>
                 <div>
                   <DialogTitle className="text-base">Butiks-QR för kundönskemål</DialogTitle>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-coop-gray-600">
                     Kunder kan skanna och skicka in önskemål direkt.
                   </p>
                 </div>
@@ -1373,14 +1373,14 @@ function CustomerRequestsPage() {
                 </div>
               ) : storeQrToken ? (
                 <>
-                  <div className="flex justify-center rounded-2xl border border-border/60 bg-white p-4">
+                  <div className="flex justify-center rounded-2xl border border-border/60 bg-coop-vit p-4">
                     <QrDisplay
                       url={`${window.location.origin}/qr-kundonskemal-form?t=${storeQrToken}`}
                       size={200}
                     />
                   </div>
                   <div className="rounded-xl border border-border/60 bg-muted/20 p-2.5">
-                    <p className="break-all font-mono text-[10px] text-muted-foreground leading-relaxed">
+                    <p className="break-all font-mono text-[10px] text-coop-gray-600 leading-relaxed">
                       {`${window.location.origin}/qr-kundonskemal-form?t=${storeQrToken}`}
                     </p>
                   </div>
@@ -1403,19 +1403,19 @@ function CustomerRequestsPage() {
                       href={`${window.location.origin}/qr-kundonskemal-form?t=${storeQrToken}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-border/60 bg-background px-3 py-2 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-full border border-border/60 bg-background px-3 py-2 text-xs font-medium text-coop-gray-900 hover:bg-muted transition-colors"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
                       Testa
                     </a>
                   </div>
-                  <p className="text-xs text-center text-muted-foreground">
+                  <p className="text-xs text-center text-coop-gray-600">
                     Skriv ut och sätt upp i butiken. Kunder skannar och skickar önskemål direkt.
                   </p>
                 </>
               ) : (
                 <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 py-8 text-center">
-                  <p className="text-sm text-muted-foreground">Kunde inte generera QR-kod</p>
+                  <p className="text-sm text-coop-gray-600">Kunde inte generera QR-kod</p>
                 </div>
               )}
             </div>

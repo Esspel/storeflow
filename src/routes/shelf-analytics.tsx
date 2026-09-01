@@ -305,7 +305,7 @@ function ShelfAnalyticsComponent() {
                   className={`group p-4 rounded-xl border transition-all ${
                     selectedShelf?.id === shelf.id
                       ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500/30"
-                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
+                      : "bg-coop-vit dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
                   }`}
                   onClick={() => setSelectedShelf(shelf)}
                 >
@@ -330,7 +330,7 @@ function ShelfAnalyticsComponent() {
 
                       <Button
                         size="sm"
-                        className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1.5"
+                        className="bg-indigo-600 hover:bg-indigo-500 text-coop-vit gap-1.5"
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveScannerShelf(shelf);
@@ -378,7 +378,7 @@ function ShelfAnalyticsComponent() {
           {/* Right Column: Detailed Shelf View */}
           <div className="space-y-4">
             {selectedShelf ? (
-              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+              <Card className="bg-coop-vit dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                 <CardHeader border-b border-slate-200 dark:border-slate-700>
                   <CardTitle className="text-base text-slate-900 dark:text-slate-100 flex items-center justify-between">
                     <span>{selectedShelf.name}</span>
@@ -438,7 +438,7 @@ function ShelfAnalyticsComponent() {
                   </div>
 
                   <Button
-                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white gap-2"
+                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-coop-vit gap-2"
                     onClick={() => setActiveScannerShelf(selectedShelf!)}
                   >
                     <ScanLine className="w-4 h-4" /> Starta skanning
@@ -446,7 +446,7 @@ function ShelfAnalyticsComponent() {
                 </CardContent>
               </Card>
             ) : (
-              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-center py-12">
+              <Card className="bg-coop-vit dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-center py-12">
                 <BarChart3 className="w-12 h-12 mx-auto text-slate-400 mb-3" />
                 <p className="text-slate-500 dark:text-slate-400">
                   Välj en hylla för att se detaljer
@@ -456,19 +456,19 @@ function ShelfAnalyticsComponent() {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-3 gap-3">
-              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 p-4 text-center">
+              <Card className="bg-coop-vit dark:bg-slate-900 border-slate-200 dark:border-slate-700 p-4 text-center">
                 <div className="text-2xl font-bold text-indigo-500">
                   {shelves.filter((s) => s.status === "compliant").length}
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">Godkända</div>
               </Card>
-              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 p-4 text-center">
+              <Card className="bg-coop-vit dark:bg-slate-900 border-slate-200 dark:border-slate-700 p-4 text-center">
                 <div className="text-2xl font-bold text-amber-500">
                   {shelves.filter((s) => s.status === "warning").length}
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">Varning</div>
               </Card>
-              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 p-4 text-center">
+              <Card className="bg-coop-vit dark:bg-slate-900 border-slate-200 dark:border-slate-700 p-4 text-center">
                 <div className="text-2xl font-bold text-rose-500">
                   {shelves.filter((s) => s.status === "critical").length}
                 </div>
@@ -479,7 +479,7 @@ function ShelfAnalyticsComponent() {
             {/* QR Code Generator moved to store-setup */}
 
             {/* Planogram & Spatial Marker Linking */}
-            <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 mt-4">
+            <Card className="bg-coop-vit dark:bg-slate-900 border-slate-200 dark:border-slate-700 mt-4">
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Settings className="w-5 h-5 text-indigo-500" />
@@ -633,7 +633,7 @@ function ShelfAnalyticsComponent() {
 
         {/* Shelf Scanner Modal */}
         {activeScannerShelf && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-coop-svart/50 backdrop-blur-sm">
             <div className="w-full max-w-4xl h-[85vh] max-h-[85vh] bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-2xl">
               <ShelfScanner
                 shelfId={activeScannerShelf.id}

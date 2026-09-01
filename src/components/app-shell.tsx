@@ -87,7 +87,7 @@ function OfflineQueueBadge() {
 
   if (queueLen === 0 && !syncStale) {
     return (
-      <span className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+      <span className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-coop-gray-600">
         Synkad {lastSync.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}
       </span>
     );
@@ -99,7 +99,7 @@ function OfflineQueueBadge() {
       aria-live="polite"
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
-        queueLen > 0 ? "bg-warning/15 text-warning-foreground" : "bg-muted text-muted-foreground",
+        queueLen > 0 ? "bg-warning/15 text-warning-foreground" : "bg-muted text-coop-gray-600",
       )}
     >
       {queueLen > 0 ? (
@@ -475,7 +475,7 @@ export function AppShell() {
 
       {/* Mobile Bottom Nav */}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-card/95 backdrop-blur-sm pb-safe md:hidden"
+        className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-coop-gray-100/95 backdrop-blur-sm pb-safe md:hidden"
         data-safe-bottom
       >
         {nav
@@ -486,7 +486,7 @@ export function AppShell() {
               to={to}
               className={cn(
                 "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
-                isActive(to) ? "text-primary" : "text-muted-foreground",
+                isActive(to) ? "text-primary" : "text-coop-gray-600",
               )}
             >
               <div
@@ -504,7 +504,7 @@ export function AppShell() {
           onClick={() => setMoreOpen(true)}
           className={cn(
             "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
-            isMoreActive ? "text-primary" : "text-muted-foreground",
+            isMoreActive ? "text-primary" : "text-coop-gray-600",
           )}
         >
           <div
@@ -518,7 +518,7 @@ export function AppShell() {
           <span className="leading-none">Övrigt</span>
         </button>
       </nav>
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-card/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-coop-gray-100/95 backdrop-blur-sm">
         <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4 md:h-16 md:gap-4 md:px-8">
           <Link to="/" className="flex shrink-0 items-center gap-2">
             <div className="flex flex-col leading-none">
@@ -534,7 +534,7 @@ export function AppShell() {
             <Link
               to="/"
               className={cn(
-                "relative shrink-0 rounded-full px-2.5 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:text-primary",
+                "relative shrink-0 rounded-full px-2.5 py-1.5 text-sm font-medium text-coop-gray-900/70 transition-colors hover:text-primary",
                 isActive("/") && "text-primary",
               )}
             >
@@ -548,7 +548,7 @@ export function AppShell() {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  className="relative shrink-0 rounded-full px-3 py-1.5 text-sm font-medium text-foreground/70 hover:text-primary"
+                  className="relative shrink-0 rounded-full px-3 py-1.5 text-sm font-medium text-coop-gray-900/70 hover:text-primary"
                 >
                   Uppgifter & mallar
                 </Button>
@@ -570,7 +570,7 @@ export function AppShell() {
                   key={item.to}
                   to={item.to}
                   className={cn(
-                    "relative shrink-0 rounded-full px-2.5 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:text-primary",
+                    "relative shrink-0 rounded-full px-2.5 py-1.5 text-sm font-medium text-coop-gray-900/70 transition-colors hover:text-primary",
                     isActive(item.to) && "text-primary",
                   )}
                 >
@@ -585,7 +585,7 @@ export function AppShell() {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  className="relative shrink-0 rounded-full px-2.5 py-1.5 text-sm font-medium text-foreground/70 transition-colors hover:text-primary"
+                  className="relative shrink-0 rounded-full px-2.5 py-1.5 text-sm font-medium text-coop-gray-900/70 transition-colors hover:text-primary"
                 >
                   <Navigation className="mr-1.5 h-4 w-4" />
                   Posemesh
@@ -640,7 +640,7 @@ export function AppShell() {
                 </div>
                 <div className="max-h-72 overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    <p className="px-4 py-8 text-center text-sm text-coop-gray-600">
                       Inga notiser
                     </p>
                   ) : (
@@ -663,11 +663,11 @@ export function AppShell() {
                               {n.title}
                             </p>
                             {n.body && (
-                              <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                              <p className="mt-0.5 text-xs text-coop-gray-600 leading-relaxed">
                                 {n.body}
                               </p>
                             )}
-                            <p className="mt-1 text-xs text-muted-foreground/70">
+                            <p className="mt-1 text-xs text-coop-gray-600/70">
                               {new Date(n.created_at).toLocaleString("sv-SE", {
                                 dateStyle: "short",
                                 timeStyle: "short",
@@ -676,7 +676,7 @@ export function AppShell() {
                           </div>
                           <button
                             onClick={() => deleteNotification(n.id)}
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 active:opacity-100"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-coop-gray-600/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 active:opacity-100"
                             aria-label="Ta bort notis"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -706,7 +706,7 @@ export function AppShell() {
               <DropdownMenuContent align="end" className="w-56">
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-medium">{user?.display_name}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-coop-gray-600">
                     {user?.hierarchy_level
                       ? (HIERARCHY_LABELS[user.hierarchy_level] ??
                         ROLE_LABELS[user.role] ??
@@ -716,7 +716,7 @@ export function AppShell() {
                         : ""}
                   </p>
                   {activeStore && (
-                    <p className="text-xs text-muted-foreground">{activeStore.name}</p>
+                    <p className="text-xs text-coop-gray-600">{activeStore.name}</p>
                   )}
                 </div>
                 <div className="md:hidden">
@@ -842,16 +842,16 @@ export function AppShell() {
           className="fixed inset-0 z-[250] md:hidden"
           onClick={() => setMoreOpen(false)}
         >
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-coop-svart/40 backdrop-blur-sm" />
           <div
-            className="absolute bottom-0 left-0 right-0 rounded-t-3xl border-t border-border/60 bg-card pb-safe shadow-xl animate-in slide-in-from-bottom duration-200"
+            className="absolute bottom-0 left-0 right-0 rounded-t-3xl border-t border-border/60 bg-coop-gray-100 pb-safe shadow-xl animate-in slide-in-from-bottom duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 pt-4 pb-2">
-              <span className="text-sm font-semibold text-foreground">Övrigt</span>
+              <span className="text-sm font-semibold text-coop-gray-900">Övrigt</span>
               <button
                 onClick={() => setMoreOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-coop-gray-600"
                 aria-label="Stäng meny"
               >
                 <XIcon className="h-4 w-4" />
@@ -867,7 +867,7 @@ export function AppShell() {
                     "flex flex-col items-center gap-2 rounded-2xl border border-border/60 px-3 py-4 transition-colors",
                     isActive(to)
                       ? "bg-primary/10 border-primary/30 text-primary"
-                      : "bg-muted/30 text-foreground hover:bg-muted/60",
+                      : "bg-muted/30 text-coop-gray-900 hover:bg-muted/60",
                   )}
                 >
                   <Icon className="h-6 w-6" />

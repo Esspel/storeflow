@@ -206,11 +206,11 @@ function BelastningPage() {
     return (
       <div className="mx-auto max-w-[1200px] px-5 py-8 md:px-8 md:py-10">
         <PageHeader title="Medarbetarbelastning" description="Uppgifter per person denna vecka" />
-        <div className="flex items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-24 text-center">
+        <div className="flex items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-24 text-center">
           <div>
-            <Users className="mx-auto mb-3 h-12 w-12 text-muted-foreground/40" />
-            <p className="font-medium text-foreground">Åtkomst nekad</p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <Users className="mx-auto mb-3 h-12 w-12 text-coop-gray-600/40" />
+            <p className="font-medium text-coop-gray-900">Åtkomst nekad</p>
+            <p className="mt-1 text-sm text-coop-gray-600">
               Endast chefer och admins kan se denna vy.
             </p>
           </div>
@@ -256,7 +256,7 @@ function BelastningPage() {
 
       <div>
         {/* Legend */}
-        <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+        <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-coop-gray-600">
           <div className="flex items-center gap-1.5">
             <div className="h-2.5 w-2.5 rounded-full bg-success" />
             <span>Klar</span>
@@ -285,10 +285,10 @@ function BelastningPage() {
             ))}
           </div>
         ) : loads.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card py-24 text-center">
-            <BarChart2 className="mb-3 h-12 w-12 text-muted-foreground/40" />
-            <p className="font-medium text-foreground">Inga uppgifter denna vecka</p>
-            <p className="mt-1 text-sm text-muted-foreground">
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-24 text-center">
+            <BarChart2 className="mb-3 h-12 w-12 text-coop-gray-600/40" />
+            <p className="font-medium text-coop-gray-900">Inga uppgifter denna vecka</p>
+            <p className="mt-1 text-sm text-coop-gray-600">
               Inga uppgifter med förfallodatum i veckan hittades.
             </p>
           </div>
@@ -300,7 +300,7 @@ function BelastningPage() {
               return (
                 <div
                   key={load.user.id}
-                  className="rounded-2xl border border-border/60 bg-card p-4 shadow-[var(--shadow-card)]"
+                  className="rounded-2xl border border-border/60 bg-coop-gray-100 p-4 shadow-[var(--shadow-card)]"
                 >
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
@@ -308,10 +308,10 @@ function BelastningPage() {
                         {load.user.display_name.charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-foreground">
+                        <p className="truncate font-medium text-coop-gray-900">
                           {load.user.display_name}
                         </p>
-                        <p className="text-xs text-muted-foreground capitalize">
+                        <p className="text-xs text-coop-gray-600 capitalize">
                           {load.user.role === "admin"
                             ? "Admin"
                             : load.user.role === "manager"
@@ -321,8 +321,8 @@ function BelastningPage() {
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-xl font-bold tabular-nums text-foreground">{load.total}</p>
-                      <p className="text-xs text-muted-foreground">uppgifter</p>
+                      <p className="text-xl font-bold tabular-nums text-coop-gray-900">{load.total}</p>
+                      <p className="text-xs text-coop-gray-600">uppgifter</p>
                     </div>
                   </div>
 
@@ -340,7 +340,7 @@ function BelastningPage() {
                   </div>
 
                   {/* Counts */}
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-coop-gray-600">
                     {load.done > 0 && (
                       <span className="flex items-center gap-1 text-success tabular-nums">
                         <CheckCircle2 className="h-3 w-3" />
@@ -371,7 +371,7 @@ function BelastningPage() {
                           style={{ width: `${completionPct}%` }}
                         />
                       </div>
-                      <span className="ml-3 shrink-0 text-xs font-medium text-muted-foreground tabular-nums">
+                      <span className="ml-3 shrink-0 text-xs font-medium text-coop-gray-600 tabular-nums">
                         {completionPct}% klar
                       </span>
                     </div>
@@ -385,15 +385,15 @@ function BelastningPage() {
               <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm text-muted-foreground">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm text-coop-gray-600">
                       ?
                     </div>
                     <div>
-                      <p className="font-medium text-muted-foreground">Ej tilldelade</p>
-                      <p className="text-xs text-muted-foreground">Uppgifter utan ansvarig</p>
+                      <p className="font-medium text-coop-gray-600">Ej tilldelade</p>
+                      <p className="text-xs text-coop-gray-600">Uppgifter utan ansvarig</p>
                     </div>
                   </div>
-                  <p className="text-xl font-bold tabular-nums text-muted-foreground">
+                  <p className="text-xl font-bold tabular-nums text-coop-gray-600">
                     {unassigned.total}
                   </p>
                 </div>

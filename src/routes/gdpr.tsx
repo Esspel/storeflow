@@ -11,17 +11,17 @@ function GdprPage() {
     <div className="mx-auto max-w-3xl px-5 py-8 md:px-8 md:py-12">
       <Link
         to="/installningar"
-        className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        className="mb-6 inline-flex items-center gap-1.5 text-sm text-coop-gray-600 hover:text-coop-gray-900 transition-colors"
       >
         <ChevronLeft className="h-4 w-4" /> Tillbaka till Inställningar
       </Link>
 
       <h1 className="mb-2 text-3xl font-bold tracking-tight">GDPR-information</h1>
-      <p className="mb-8 text-sm text-muted-foreground">Dataskyddsförordningen (EU) 2016/679</p>
+      <p className="mb-8 text-sm text-coop-gray-600">Dataskyddsförordningen (EU) 2016/679</p>
 
-      <div className="space-y-8 text-sm text-muted-foreground leading-relaxed">
+      <div className="space-y-8 text-sm text-coop-gray-600 leading-relaxed">
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
-          <p className="text-foreground font-medium mb-1">Vad är GDPR?</p>
+          <p className="text-coop-gray-900 font-medium mb-1">Vad är GDPR?</p>
           <p>
             GDPR (General Data Protection Regulation) är EU:s dataskyddsförordning som gäller från
             maj 2018. Den ger dig som individ starka rättigheter över dina personuppgifter och
@@ -30,7 +30,7 @@ function GdprPage() {
         </div>
 
         <section>
-          <h2 className="text-lg font-semibold text-foreground mb-3">
+          <h2 className="text-lg font-semibold text-coop-gray-900 mb-3">
             Vilka uppgifter behandlas i StoreFlow?
           </h2>
           <div className="space-y-3">
@@ -54,8 +54,8 @@ function GdprPage() {
               ],
               ["Platsdata", "Ingen GPS- eller positionsdata samlas in."],
             ].map(([type, desc]) => (
-              <div key={type} className="flex gap-3 rounded-lg border border-border/60 bg-card p-3">
-                <span className="font-medium text-foreground shrink-0 w-48">{type}</span>
+              <div key={type} className="flex gap-3 rounded-lg border border-border/60 bg-coop-gray-100 p-3">
+                <span className="font-medium text-coop-gray-900 shrink-0 w-48">{type}</span>
                 <span>{desc}</span>
               </div>
             ))}
@@ -63,7 +63,7 @@ function GdprPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-foreground mb-3">
+          <h2 className="text-lg font-semibold text-coop-gray-900 mb-3">
             Dina rättigheter enligt GDPR
           </h2>
           <div className="space-y-3">
@@ -97,8 +97,8 @@ function GdprPage() {
                 "StoreFlow fattar inga helt automatiserade beslut med rättslig verkan om enskilda.",
               ],
             ].map(([right, desc]) => (
-              <div key={right} className="rounded-lg border border-border/60 bg-card p-4">
-                <p className="font-medium text-foreground mb-1">{right}</p>
+              <div key={right} className="rounded-lg border border-border/60 bg-coop-gray-100 p-4">
+                <p className="font-medium text-coop-gray-900 mb-1">{right}</p>
                 <p>{desc}</p>
               </div>
             ))}
@@ -106,24 +106,24 @@ function GdprPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-foreground mb-3">
+          <h2 className="text-lg font-semibold text-coop-gray-900 mb-3">
             Hur utövar jag mina rättigheter?
           </h2>
           <ol className="list-decimal list-inside space-y-2">
             <li>
-              <strong className="text-foreground">GDPR-export:</strong> Gå till Inställningar och
+              <strong className="text-coop-gray-900">GDPR-export:</strong> Gå till Inställningar och
               klicka på "Exportera mina uppgifter" i GDPR-avsnittet.
             </li>
             <li>
-              <strong className="text-foreground">Rättelse:</strong> Ändra ditt visningsnamn direkt
+              <strong className="text-coop-gray-900">Rättelse:</strong> Ändra ditt visningsnamn direkt
               i Inställningar. Övriga uppgifter via administratören.
             </li>
             <li>
-              <strong className="text-foreground">Radering / invändning:</strong> Kontakta din
+              <strong className="text-coop-gray-900">Radering / invändning:</strong> Kontakta din
               närmaste systemadministratör eller dataskyddsombud.
             </li>
             <li>
-              <strong className="text-foreground">Klagomål:</strong> Du har rätt att inge klagomål
+              <strong className="text-coop-gray-900">Klagomål:</strong> Du har rätt att inge klagomål
               till Integritetsskyddsmyndigheten (IMY) på{" "}
               <a
                 href="https://www.imy.se"
@@ -139,7 +139,7 @@ function GdprPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-foreground mb-3">Lagringstider</h2>
+          <h2 className="text-lg font-semibold text-coop-gray-900 mb-3">Lagringstider</h2>
           <div className="space-y-2">
             {[
               ["Aktiva konton", "Tills administratören inaktiverar eller raderar kontot."],
@@ -149,7 +149,7 @@ function GdprPage() {
               ["Bilder i avvikelser", "Tills ärendet raderas (följer uppgiftens lagringstid)."],
             ].map(([item, retention]) => (
               <div key={item} className="flex gap-3 rounded-lg border border-border/60 px-3 py-2.5">
-                <span className="font-medium text-foreground w-48 shrink-0">{item}</span>
+                <span className="font-medium text-coop-gray-900 w-48 shrink-0">{item}</span>
                 <span>{retention}</span>
               </div>
             ))}
@@ -157,9 +157,9 @@ function GdprPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-foreground mb-3">Databehandlare</h2>
-          <div className="rounded-lg border border-border/60 bg-card p-4">
-            <p className="font-medium text-foreground mb-1">Supabase Inc.</p>
+          <h2 className="text-lg font-semibold text-coop-gray-900 mb-3">Databehandlare</h2>
+          <div className="rounded-lg border border-border/60 bg-coop-gray-100 p-4">
+            <p className="font-medium text-coop-gray-900 mb-1">Supabase Inc.</p>
             <p className="mb-1">Plats: EU-region (Frankfurt, Tyskland).</p>
             <p>
               Supabase behandlar data som underleverantör i enlighet med ett Data Processing

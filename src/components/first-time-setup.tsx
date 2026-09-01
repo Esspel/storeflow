@@ -141,15 +141,15 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
       >
         {/* Header */}
         <div className="mb-8 text-center">
-          <p className="text-sm font-medium text-muted-foreground">
+          <p className="text-sm font-medium text-coop-gray-600">
             Välkommen,{" "}
-            <span className="font-semibold text-foreground">
+            <span className="font-semibold text-coop-gray-900">
               {user?.display_name ?? user?.username}
             </span>
             {effectiveStore && (
               <>
                 {" "}
-                · <span className="text-foreground/90">{effectiveStore.name}</span>
+                · <span className="text-coop-gray-900/90">{effectiveStore.name}</span>
               </>
             )}
           </p>
@@ -178,13 +178,13 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
             ))}
           </div>
 
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-2 text-xs text-coop-gray-600">
             Steg {currentStep + 1} av {STEPS.length}
           </p>
         </div>
 
         {/* Huvudkort */}
-        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-[var(--shadow-md)] transition-all">
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-coop-gray-100 shadow-[var(--shadow-md)] transition-all">
           <div key={step.id} className="animate-in fade-in-50 duration-200 p-6 sm:p-8">
             {/* Ikon */}
             <div className="mb-6 flex justify-center">
@@ -194,10 +194,10 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
             </div>
 
             {/* Rubrik & Beskrivning */}
-            <h2 className="mb-2 text-center text-2xl font-bold tracking-tight text-foreground">
+            <h2 className="mb-2 text-center text-2xl font-bold tracking-tight text-coop-gray-900">
               {step.title}
             </h2>
-            <p className="mb-6 text-center text-sm leading-relaxed text-muted-foreground">
+            <p className="mb-6 text-center text-sm leading-relaxed text-coop-gray-600">
               {step.description}
             </p>
 
@@ -209,7 +209,7 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
                     className="mt-0.5 h-4 w-4 shrink-0 text-primary"
                     aria-hidden="true"
                   />
-                  <span className="text-sm text-foreground/80 leading-normal">{detail}</span>
+                  <span className="text-sm text-coop-gray-900/80 leading-normal">{detail}</span>
                 </li>
               ))}
             </ul>
@@ -221,7 +221,7 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
               variant="ghost"
               size="sm"
               onClick={handlePrev}
-              className="gap-1 text-muted-foreground hover:text-foreground"
+              className="gap-1 text-coop-gray-600 hover:text-coop-gray-900"
             >
               {!isFirst && <ChevronLeft className="h-4 w-4" />}
               {isFirst ? "Hoppa över" : "Tillbaka"}

@@ -109,7 +109,7 @@ function SpatialNavigationPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold">3D Butiksvy</h1>
-            <p className="text-muted-foreground">Navigera i butiken med 3D-modell eller AR</p>
+            <p className="text-coop-gray-600">Navigera i butiken med 3D-modell eller AR</p>
           </div>
         </div>
 
@@ -161,7 +161,7 @@ function SpatialNavigationPage() {
               {network ? (
                 <AROverlay network={network} storeId={String(activeStore.id)} />
               ) : (
-                <div className="h-full flex items-center justify-center bg-slate-900 text-muted-foreground">
+                <div className="h-full flex items-center justify-center bg-slate-900 text-coop-gray-600">
                   <p>AR icke tillgängligt</p>
                 </div>
               )}
@@ -177,7 +177,7 @@ function SpatialNavigationPage() {
                 {complianceData ? (
                   <>
                     <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Planogram-efterlevnad</span>
+                      <span className="text-coop-gray-600">Planogram-efterlevnad</span>
                       <span
                         className={`font-bold ${
                           (complianceData as any).score >= 80
@@ -192,19 +192,19 @@ function SpatialNavigationPage() {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div className="bg-red-50 dark:bg-red-950 rounded px-2 py-1 text-center">
-                        <div className="text-xs text-muted-foreground">Saknas</div>
+                        <div className="text-xs text-coop-gray-600">Saknas</div>
                         <div className="font-semibold text-red-700 dark:text-red-300">
                           {(complianceData as any).missing ?? 0}
                         </div>
                       </div>
                       <div className="bg-amber-50 dark:bg-amber-950 rounded px-2 py-1 text-center">
-                        <div className="text-xs text-muted-foreground">Felplacerad</div>
+                        <div className="text-xs text-coop-gray-600">Felplacerad</div>
                         <div className="font-semibold text-amber-700 dark:text-amber-300">
                           {(complianceData as any).misplaced ?? 0}
                         </div>
                       </div>
                       <div className="bg-green-50 dark:bg-green-950 rounded px-2 py-1 text-center">
-                        <div className="text-xs text-muted-foreground">Extra</div>
+                        <div className="text-xs text-coop-gray-600">Extra</div>
                         <div className="font-semibold text-green-700 dark:text-green-300">
                           {(complianceData as any).extra ?? 0}
                         </div>
@@ -212,10 +212,10 @@ function SpatialNavigationPage() {
                     </div>
                   </>
                 ) : (
-                  <p className="text-xs text-muted-foreground">Laddar efterlevnadsdata...</p>
+                  <p className="text-xs text-coop-gray-600">Laddar efterlevnadsdata...</p>
                 )}
                 <div className="border-t pt-3">
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-coop-gray-600">
                     Lagerstatus per hylla visas när en markör väljs.
                   </p>
                 </div>
@@ -246,7 +246,7 @@ function SpatialNavigationPage() {
                           <MapPinIcon className="h-4 w-4" />
                           <div className="flex-1">
                             <p className="text-sm font-medium">{marker.name}</p>
-                            <p className="text-xs text-muted-foreground capitalize">
+                            <p className="text-xs text-coop-gray-600 capitalize">
                               {marker.type}
                             </p>
                           </div>
@@ -266,11 +266,11 @@ function SpatialNavigationPage() {
                 <CardContent>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Typ:</span>
+                      <span className="text-coop-gray-600">Typ:</span>
                       <span className="capitalize">{selectedMarker.type}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Position:</span>
+                      <span className="text-coop-gray-600">Position:</span>
                       <span>
                         {selectedMarker.position.x.toFixed(2)},{" "}
                         {selectedMarker.position.y.toFixed(2)},{" "}

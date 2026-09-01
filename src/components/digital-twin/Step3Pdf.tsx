@@ -79,7 +79,7 @@ export function Step3Pdf() {
         <CardTitle>Steg 3 — Generera Aruco-ark</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-coop-gray-600">
           Genererar {MAX_MARKERS} möjliga 4×4-markörer. Välj antal och ladda ned. Allt sker lokalt i
           webbläsaren utan externa API-beroenden.
         </p>
