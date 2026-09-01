@@ -241,7 +241,7 @@ function CustomerNavPage() {
   };
 
   return (
-    <div className="min-h-full bg-coop-gray-100 dark:bg-coop-gray-1200">
+    <div className="min-h-full bg-card dark:bg-coop-gray-1200">
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border/60 bg-card/95 backdrop-blur-sm">
         <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4 md:h-16 md:gap-4 md:px-8">

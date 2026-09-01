@@ -86,7 +86,7 @@ function HubPage() {
               icon={ListChecks}
               title="Uppgifter"
               desc="Rutiner och checklistor"
-              tone="blue"
+              tone="info"
             />
           </ErrorBoundary>
           <ErrorBoundary section="Avvikelser" fallback={<WidgetFallback name="Avvikelser" />}>
@@ -95,7 +95,7 @@ function HubPage() {
               icon={AlertTriangle}
               title="Avvikelser"
               desc="Rapportera ärenden"
-              tone="amber"
+              tone="warning"
             />
           </ErrorBoundary>
           <ErrorBoundary section="Schema" fallback={<WidgetFallback name="Schema" />}>
@@ -104,7 +104,7 @@ function HubPage() {
               icon={CalendarDays}
               title="Schema"
               desc="Skiftöversikt"
-              tone="green"
+              tone="primary"
             />
           </ErrorBoundary>
           <ErrorBoundary section="Kundrunda" fallback={<WidgetFallback name="Kundrunda" />}>
@@ -113,7 +113,7 @@ function HubPage() {
               icon={UserRound}
               title="Kundrunda"
               desc="Butikskontroll"
-              tone="teal"
+              tone="primary"
             />
           </ErrorBoundary>
           <ErrorBoundary section="Kundönskemål" fallback={<WidgetFallback name="Kundönskemål" />}>
@@ -122,7 +122,7 @@ function HubPage() {
               icon={ShoppingCart}
               title="Kundönskemål"
               desc="Produktförfrågningar"
-              tone="rose"
+              tone="destructive"
             />
           </ErrorBoundary>
           {isManager && (
@@ -133,7 +133,7 @@ function HubPage() {
                   icon={BarChart3}
                   title="Rapporter"
                   desc="KPI:er och insikter"
-                  tone="green"
+                  tone="accent"
                 />
               </ErrorBoundary>
             </>
@@ -170,21 +170,21 @@ function QuickCard({
   icon: LucideIcon;
   title: string;
   desc: string;
-  tone: "blue" | "amber" | "green" | "teal" | "slate" | "rose" | "indigo";
+  tone: "info" | "warning" | "success" | "primary" | "muted" | "destructive" | "accent";
 }) {
   const colors = {
-    blue: "bg-info/10 text-info",
-    amber: "bg-warning/15 text-warning-foreground",
-    green: "bg-success/10 text-success",
-    teal: "bg-teal-500/10 text-teal-600",
-    slate: "bg-slate-500/10 text-slate-600",
-    rose: "bg-rose-500/10 text-rose-600",
-    indigo: "bg-indigo-500/10 text-indigo-500",
+    info: "bg-info/10 text-info",
+    warning: "bg-warning/15 text-warning-foreground",
+    success: "bg-success/10 text-success",
+    primary: "bg-primary/10 text-primary",
+    muted: "bg-muted text-muted-foreground",
+    destructive: "bg-destructive/10 text-destructive",
+    accent: "bg-accent/10 text-accent-foreground",
   };
   return (
     <Link
       to={to}
-      className="group flex items-center gap-3 rounded-2xl border border-border/60 bg-white p-3.5 shadow-[var(--shadow-sm)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] overflow-hidden"
+      className="group flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-3.5 shadow-[var(--shadow-sm)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] overflow-hidden"
     >
       <div
         className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", colors[tone])}
