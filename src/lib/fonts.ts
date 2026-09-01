@@ -64,7 +64,7 @@ export function initializeFonts(): void {
     src: url('${fontBaseUrl}/CoopSans-Black.woff2') format('woff2');
     font-weight: 900;
     font-style: normal;
-    font-display: swap;
+    font-display: block;
   }`;
   css += `@font-face {
     font-family: 'Coop Sans';

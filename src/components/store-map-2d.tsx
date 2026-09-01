@@ -114,12 +114,12 @@ export function StoreMap2D({
             ${isReadonly ? "cursor-default" : "cursor-move"}
             rounded
             border
-            ${s.id === selectedId ? "border-indigo-500" : "border-blue-500"}
-            bg-blue-100/80
+            ${s.id === selectedId ? "border-primary" : "border-border"}
+            bg-coop-gron-100/80
             p-1
             text-xs
             font-medium
-            text-blue-900
+            text-coop-gron-800
             shadow-sm
             transition-shadow
             hover:shadow-md
@@ -145,7 +145,7 @@ export function StoreMap2D({
               setSections(next);
               onChange?.(next);
             }}
-            className="w-full bg-transparent border-none outline-none text-blue-900 font-medium text-xs p-0 focus:ring-1 focus:ring-indigo-400 rounded"
+            className="w-full bg-transparent border-none outline-none text-coop-gron-900 font-medium text-xs p-0 focus:ring-1 focus:ring-primary rounded"
           />
           {!isReadonly && (
             <button
@@ -159,7 +159,7 @@ export function StoreMap2D({
                 onChange?.(next);
               }}
               onMouseDown={(e) => e.stopPropagation()}
-              className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 bg-white border border-blue-500 text-blue-700 rounded-full w-5 h-5 text-[10px] flex items-center justify-center shadow hover:bg-blue-50"
+              className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 bg-white border border-primary text-primary rounded-full w-5 h-5 text-[10px] flex items-center justify-center shadow hover:bg-primary/10"
               title="Rotera 90°"
             >
               ↻
