@@ -125,6 +125,20 @@ Deno.serve(async (req: Request) => {
   }
 
   if (body.action === "create") {
+    // Admin-check: only users with admin role may create API keys
+    if (currentUserId) {
+      const { data: userData, error: userErr } = await supabase
+        .from("app_users")
+        .select("role")
+        .eq("id", currentUserId)
+        .single();
+      if (userErr || !userData || userData.role !== "admin") {
+        return json({ error: "Endast administratör kan skapa API-nycklar." }, 403);
+      }
+    } else {
+      return json({ error: "Autentisering krävs." }, 401);
+    }
+
     if (!body.name) return json({ error: "name saknas." }, 400);
 
     const scopes = (body.scopes && body.scopes.length > 0 ? body.scopes : ALL_SCOPES).filter((s) =>

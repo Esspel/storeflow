@@ -17,6 +17,17 @@ function requireStore(ctx: ApiKeyContext, storeId: string | null | undefined) {
     throw new ScopeError("Nyckeln har inte åtkomst till denna butik.", 403);
 }
 
+// Sanitize HTML from user input to prevent XSS when stored data is rendered.
+// Uses a simple escape approach since DOMPurify is not a dependency.
+function htmlEscape(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 // ─── Templates (mallar) ─────────────────────────────────────────────────────
 
 export async function listTemplates(
@@ -540,13 +551,15 @@ export async function createCustomerRequest(
   if (!input.product_name?.trim()) throw new ScopeError("product_name krävs.", 400);
   requireStore(ctx, input.store_id);
 
+  const sanitizedNotes = input.notes ? htmlEscape(input.notes) : null;
+
   const { data: request, error } = await supabase
     .from("customer_requests")
     .insert({
       store_id: input.store_id,
       product_name: input.product_name.trim(),
       article_number: input.article_number ?? null,
-      notes: input.notes ?? null,
+      notes: sanitizedNotes,
       priority: input.priority ?? "normal",
       status: input.status ?? "open",
       requested_by: input.requested_by ?? null,
@@ -586,12 +599,12 @@ export async function updateCustomerRequest(
 
   const updates: Record<string, unknown> = {};
   if (input.status !== undefined) updates.status = input.status;
-  if (input.staff_comment !== undefined) updates.staff_comment = input.staff_comment;
+  if (input.staff_comment !== undefined) updates.staff_comment = input.staff_comment ? htmlEscape(input.staff_comment) : null;
   if (input.internal_notes !== undefined) updates.internal_notes = input.internal_notes;
   if (input.priority !== undefined) updates.priority = input.priority;
   if (input.product_name !== undefined) updates.product_name = input.product_name.trim();
   if (input.article_number !== undefined) updates.article_number = input.article_number;
-  if (input.notes !== undefined) updates.notes = input.notes;
+  if (input.notes !== undefined) updates.notes = input.notes ? htmlEscape(input.notes) : null;
 
   const { error } = await supabase
     .from("customer_requests")

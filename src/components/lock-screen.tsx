@@ -78,6 +78,21 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
     return () => clearInterval(interval);
   }, [refocusHiddenInput]);
 
+  // STATE-03: Auto-lock when tab becomes hidden (visibilitychange)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Auto-lock: cancel any pending switch and reset state
+        setPin("");
+        setMode("choose");
+        setSelectedUser(null);
+        setError("Skärmen låstes på grund av inaktivitet.");
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
   const handleHiddenInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     const now = Date.now();
     const gap = now - hiddenInputLastKeyTime.current;

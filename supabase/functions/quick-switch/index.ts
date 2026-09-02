@@ -65,12 +65,39 @@ Deno.serve(async (req: Request) => {
         return json({ error: "user_id och pin krävs." }, 400);
       }
 
+      // Rate limit check: verify account not locked before attempting PIN
+      const { data: userCheck } = await supabase
+        .from("app_users")
+        .select("username, failed_login_count, locked_until")
+        .eq("id", user_id)
+        .single();
+
+      if (userCheck && userCheck.locked_until && new Date(userCheck.locked_until).getTime() > Date.now()) {
+        return json({ error: "Konto låst på grund av för många misslyckade försök. Försök igen senare." }, 403);
+      }
+
+      // AUTHZ-05: Verify the requested user is associated with the requested store
+      const { data: userStore } = await supabase
+        .from("user_stores")
+        .select("store_id")
+        .eq("user_id", user_id)
+        .eq("store_id", store_id)
+        .maybeSingle();
+
+      if (!userStore) {
+        return json({ error: "Användaren tillhör inte denna butik." }, 403);
+      }
+
       const { data: valid } = await supabase.rpc("verify_quick_pin", {
         p_user_id: user_id,
         p_pin: pin,
       });
 
       if (!valid) {
+        // Record failed login attempt using username-based rate limit
+        if (userCheck && userCheck.username) {
+          await supabase.rpc("record_failed_login", { p_username: userCheck.username });
+        }
         return json({ error: "Fel PIN-kod." }, 401);
       }
 

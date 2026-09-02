@@ -10,6 +10,46 @@ const USER_KEY = "sf_user";
 const EXPIRY_KEY = "sf_session_expires_at";
 
 export const SESSION_LIFETIME_MS = 12 * 60 * 60 * 1000; // 12 hours absolute
+// AES-GCM encryption for IndexedDB token storage (STATE-01)
+async function getCryptoKey(): Promise<CryptoKey> {
+  const raw = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode('storeflow-crypto-key-2026'),
+    'AES-GCM',
+    false,
+    ['encrypt', 'decrypt']
+  );
+  return raw;
+}
+
+export async function encryptToken(token: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await getCryptoKey();
+  const cipher = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(token)
+  );
+  // Store as iv + ciphertext, base64 encoded
+  const combined = new Uint8Array(iv.byteLength + cipher.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(cipher), iv.byteLength);
+  return btoa(String.fromCharCode(...combined));
+}
+
+export async function decryptToken(encrypted: string): Promise<string | null> {
+  try {
+    const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+    const iv = combined.slice(0, 12);
+    const cipher = combined.slice(12);
+    const key = await getCryptoKey();
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
+    return new TextDecoder().decode(plain);
+  } catch {
+    return null;
+  }
+}
+
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -56,9 +96,11 @@ export async function secureGetToken(): Promise<string | null> {
   if (!isBrowser()) return null;
   if (!isIDBAvailable()) {
     if (!isLocalStorageAvailable()) return null;
-    return localStorage.getItem("sf_session_token");
+    const val = localStorage.getItem("sf_session_token");
+    return val ? await decryptToken(val) : null;
   }
-  return idbGet<string>(TOKEN_KEY);
+  const encrypted = await idbGet<string>(TOKEN_KEY);
+  return encrypted ? await decryptToken(encrypted) : null;
 }
 
 export async function secureGetUser<T>(): Promise<T | null> {
