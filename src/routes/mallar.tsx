@@ -826,40 +826,25 @@ function MallarPage() {
     snapshot: unknown,
     summary: string,
   ) {
-    try {
-      await supabase.from("template_versions").insert({
-        template_id: templateId,
-        version,
-        snapshot,
-        change_summary: summary || "",
-        saved_by: user?.id ?? null,
-      });
-    } catch (err) {
-      console.error("saveVersionSnapshot error:", err);
-      throw err;
-    }
+    await supabase.from("template_versions").insert({
+      template_id: templateId,
+      version,
+      snapshot,
+      change_summary: summary || "",
+      saved_by: user?.id ?? null,
+    });
   }
 
   async function loadVersionHistory(t: TemplateWithMeta) {
     setVersionHistoryTarget(t);
     setLoadingVersions(true);
-    try {
-      const { data, error } = await supabase
-        .from("template_versions")
-        .select("*")
-        .eq("template_id", t.id)
-        .order("version", { ascending: false });
-      if (error) {
-        console.error("loadVersionHistory error:", error);
-        toast.error(`Kunde inte ladda versioner: ${error.message}`);
-      }
-      setVersions((data ?? []) as TemplateVersion[]);
-    } catch (err) {
-      console.error("loadVersionHistory unexpected error:", err);
-      toast.error("Kunde inte ladda versionshistorik.");
-    } finally {
-      setLoadingVersions(false);
-    }
+    const { data } = await supabase
+      .from("template_versions")
+      .select("*")
+      .eq("template_id", t.id)
+      .order("version", { ascending: false });
+    setVersions((data ?? []) as TemplateVersion[]);
+    setLoadingVersions(false);
   }
 
   async function restoreVersion(ver: TemplateVersion) {
@@ -1177,9 +1162,7 @@ function MallarPage() {
     }
     setSaving(true);
 
-    let tmpl: { id: string } | null = null;
-    try {
-      const { data: tmplData } = await supabase
+    const { data: tmpl } = await supabase
       .from("checklist_templates")
       .insert({
         title: form.title.trim(),
@@ -1231,39 +1214,49 @@ function MallarPage() {
       .select("id")
       .maybeSingle();
 
-      tmpl = tmplData;
-      if (!tmpl?.id) {
-        setError("Kunde inte skapa mallen. Försök igen.");
-        setSaving(false);
-        return;
-      }
+    if (!tmpl?.id) {
+      setSaving(false);
+      return;
+    }
 
-      const validItems = form.items.filter((it) => it.label.trim());
-      if (validItems.length > 0) {
-        const { error: itemsErr } = await supabase.from("checklist_template_items").insert(
-          validItems.map((it, idx) => ({
-            template_id: tmpl.id,
-            label: it.label.trim(),
-            requires_photo: it.requires_photo,
-            link_url: it.link_url || null,
-            sort_order: idx,
-            condition_question_id: it.condition_question_id ?? null,
-            condition_answer: it.condition_answer ?? null,
-          })),
-        );
-        if (itemsErr) {
-          setError(`Kunde inte spara steg: ${itemsErr.message}`);
-          setSaving(false);
-          return;
-        }
-      }
+    const validItems = form.items.filter((it) => it.label.trim());
+    if (validItems.length > 0) {
+      await supabase.from("checklist_template_items").insert(
+        validItems.map((it, idx) => ({
+          template_id: tmpl.id,
+          label: it.label.trim(),
+          requires_photo: it.requires_photo,
+          link_url: it.link_url || null,
+          sort_order: idx,
+          condition_question_id: it.condition_question_id ?? null,
+          condition_answer: it.condition_answer ?? null,
+        })),
+      );
+    }
 
     if (createScope === "store") {
       const storeList =
         form.storeIds.length > 0 ? form.storeIds : activeStore ? [activeStore.id] : [];
       if (storeList.length > 0) {
-        const { error: storesErr } = await supabase
-          de
+        await supabase
+          .from("template_stores")
+          .insert(storeList.map((sid) => ({ template_id: tmpl.id, store_id: sid })));
+      }
+    }
+
+    const validQuestions = form.questions.filter((q) => q.label.trim());
+    if (validQuestions.length > 0) {
+      await supabase.from("checklist_template_questions").insert(
+        validQuestions.map((q, idx) => ({
+          template_id: tmpl.id,
+          label: q.label.trim(),
+          question_type: q.question_type ?? "text",
+          is_required: q.is_required,
+          link_url: q.link_url || null,
+          sort_order: idx,
+        })),
+      );
+    }
 
     logAudit(user?.id ?? null, "template.create", "checklist_templates", tmpl.id, {
       title: form.title,
@@ -2071,11 +2064,10 @@ function MallarPage() {
     }
     const scope = editTarget.hierarchy_scope ?? "store";
     setSaving(true);
-    try {
 
-      await supabase
-        .from("checklist_templates")
-        .update({
+    await supabase
+      .from("checklist_templates")
+      .update({
         title: editForm.title.trim(),
         description: editForm.description.trim(),
         category: editForm.category.trim(),
@@ -2217,39 +2209,27 @@ function MallarPage() {
     await load();
     setSaving(false);
     setEditTarget(null);
-    setShowEdit(false);
-    setError("");
-    } catch (err) {
-      console.error("saveEdit error:", err);
-      setError("Kunde inte spara ändringarna. Försök igen.");
-      setSaving(false);
-    }
   }
 
   async function toggleHideHKTemplate(t: TemplateWithMeta) {
     if (!user?.forening_id) return;
-    try {
-      const alreadyHidden = hiddenEntries.some(
-        (h) => h.template_id === t.id && h.forening_id === user.forening_id,
-      );
-      if (alreadyHidden) {
-        await supabase
-          .from("forening_hidden_templates")
-          .delete()
-          .eq("template_id", t.id)
-          .eq("forening_id", user.forening_id);
-      } else {
-        await supabase.from("forening_hidden_templates").insert({
-          template_id: t.id,
-          forening_id: user.forening_id,
-          hidden_by: user.id,
-        });
-      }
-      await load();
-    } catch (err) {
-      console.error("toggleHideHKTemplate error:", err);
-      setError("Kunde inte uppdatera dold status. Försök igen.");
+    const alreadyHidden = hiddenEntries.some(
+      (h) => h.template_id === t.id && h.forening_id === user.forening_id,
+    );
+    if (alreadyHidden) {
+      await supabase
+        .from("forening_hidden_templates")
+        .delete()
+        .eq("template_id", t.id)
+        .eq("forening_id", user.forening_id);
+    } else {
+      await supabase.from("forening_hidden_templates").insert({
+        template_id: t.id,
+        forening_id: user.forening_id,
+        hidden_by: user.id,
+      });
     }
+    await load();
   }
 
   function canEdit(t: TemplateWithMeta): boolean {
