@@ -43,14 +43,18 @@ import { Typography } from "@/components/typography";
 <Typography variant="marker">Handgjord notering</Typography>
 ```
 
-### Kolon-tecken i Coop Sans Price
-**Viktigt:** `Coop Sans Price` typsnittet innehåller **inte kolon-tecken (`:`)**. 
-Om du visar priser eller tider som innehåller kolon (t.ex. `09:30`, `99:-%`), ersätter `Typography`-komponenten automatiskt kolon med `Coop Marker Bold` (handgjord stil) för att undvika ersättningstecken som `:%`.
+### Kolon-tecken och blandad text
+**Viktigt:** `Coop Sans Price` är ett siffror-specifikt typsnitt och saknar många vanliga tecken. För att undvika felaktig återgivning (t.ex. ersättningstecken eller saknade specialtecken) används istället `Coop Sans` med `tabular-nums` för all text som blandar siffror med vanliga bokstäver, specialtecken (`%`, `kr`, `:`) eller andra icke-siffe-tecken.
+
+`Typography`-komponenten mappar därför `price`/`price-sm`/`price-lg`-varianterna till `coop-font-body` (Coop Sans) med tabular nums för enhetlig sifferbredd.
 
 Exempel:
 ```tsx
+<Typography variant="price">99 kr</Typography>
+// Renderas med Coop Sans + tabular-nums — siffror och text i samma typsnitt
+
 <Typography variant="price">09:30</Typography> 
-// Renderar som: [Coop Sans Price]09[Coop Marker Bold]:[Coop Sans Price]30
+// Renderas med Coop Sans + tabular-nums — kolon fungerar korrekt
 ```
 
 ### Programmatisk API

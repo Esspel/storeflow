@@ -277,10 +277,12 @@ html, body {
 }
 
 /* Prissättning och marker behåller sina egna familjer när de explicit anges */
-.coop-font-price,
-.coop-font-price-sm,
-.coop-font-price-lg {
-  font-family: 'Coop Sans Price', 'Coop Sans', sans-serif !important;
+.coop-font-price-num,
+.coop-font-price-num-sm,
+.coop-font-price-num-lg {
+  font-family: 'Coop Sans', sans-serif !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
 }
 .coop-font-marker,
 .coop-font-marker-strong {
@@ -358,6 +360,20 @@ html, body {
   font-family: 'Coop Sans', sans-serif;
   font-weight: 400; /* Regular */
   font-size: 1rem;
+  line-height: 1.6;
+}
+
+.coop-font-body-sm {
+  font-family: 'Coop Sans', sans-serif;
+  font-weight: 400; /* Regular */
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.coop-font-body-lg {
+  font-family: 'Coop Sans', sans-serif;
+  font-weight: 400; /* Regular */
+  font-size: 1.125rem;
   line-height: 1.6;
 }
 

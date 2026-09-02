@@ -37,27 +37,7 @@ export function Typography({
       ? "text-center"
       : "text-left";
 
-  // Hantera kolon (:) i Coop Sans Price — typsnittet innehåller inte kolon.
-  // Vi ersätter med Coop Marker Bold (handgjord stil, passande för priskommunikation)
-  // eller låter texten flöda med Coop Sans som fallback.
-  const processPriceText = (str: string): React.ReactNode => {
-    if (variant !== "price" && variant !== "price-sm" && variant !== "price-lg") return str;
-    if (typeof str !== "string") return str;
-
-    const parts = str.split(":");
-    if (parts.length <= 1) return str; // inget kolon
-
-    return parts.map((part, i) => (
-      <span key={i}>
-        <span className={base}>{part}</span>
-        {i < parts.length - 1 && (
-          <span className="coop-font-marker-strong" aria-label="kolon">:</span>
-        )}
-      </span>
-    ));
-  };
-
-  const processed = typeof children === "string" ? processPriceText(children) : children;
+  const processed = typeof children === "string" ? children : children;
 
   return (
     <span className={`${base} ${alignClass} ${className}`}>{processed}</span>

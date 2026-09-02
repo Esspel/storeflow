@@ -473,7 +473,7 @@ export function AppShell() {
 
       {/* Mobile Bottom Nav */}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-coop-gray-100/95 backdrop-blur-sm pb-safe md:hidden"
+        className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-coop-gray-100/85 backdrop-blur-sm pb-safe md:hidden"
         data-safe-bottom
       >
         {nav
@@ -516,7 +516,7 @@ export function AppShell() {
           <span className="leading-none">Övrigt</span>
         </button>
       </nav>
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-coop-gray-100/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-coop-gray-100/85 backdrop-blur-sm">
         <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4 md:h-16 md:gap-4 md:px-8">
           <Link to="/" className="flex shrink-0 items-center gap-2">
             <div className="flex flex-col leading-none">

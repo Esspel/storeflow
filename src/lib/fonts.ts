@@ -151,9 +151,9 @@ export const typographyClass: Record<TypographyVariant, string> = {
   "heading-sm": "coop-font-heading-sm",
   emphasis: "coop-font-emphasis",
   body: "coop-font-body",
-  price: "coop-font-price",
-  "price-sm": "coop-font-price-sm",
-  "price-lg": "coop-font-price-lg",
+  price: "coop-font-price-num",
+  "price-sm": "coop-font-price-num-sm",
+  "price-lg": "coop-font-price-num-lg",
   marker: "coop-font-marker",
   "marker-strong": "coop-font-marker-strong",
 };

@@ -23,6 +23,9 @@
 DROP POLICY IF EXISTS "products_user_select" ON products;
 DROP POLICY IF EXISTS "products_manager_insert" ON products;
 DROP POLICY IF EXISTS "products_manager_update" ON products;
+DROP POLICY IF EXISTS "Session users can view products" ON products;
+DROP POLICY IF EXISTS "Session users can insert products" ON products;
+DROP POLICY IF EXISTS "Session users can update products" ON products;
 
 -- SELECT: Allow viewing products from user's assigned stores or active store
 CREATE POLICY "Session users can view products"
@@ -81,6 +84,10 @@ CREATE POLICY "Session users can update products"
 
 DROP POLICY IF EXISTS reclamations_select ON public.reclamations;
 DROP POLICY IF EXISTS reclamations_modify ON public.reclamations;
+DROP POLICY IF EXISTS "reclamations_session_select" ON public.reclamations;
+DROP POLICY IF EXISTS "reclamations_session_insert" ON public.reclamations;
+DROP POLICY IF EXISTS "reclamations_session_update" ON public.reclamations;
+DROP POLICY IF EXISTS "reclamations_session_delete" ON public.reclamations;
 
 CREATE POLICY "reclamations_session_select"
   ON public.reclamations FOR SELECT
@@ -109,6 +116,9 @@ CREATE POLICY "reclamations_session_delete"
 
 DROP POLICY IF EXISTS prs_select ON public.product_reclamation_stats;
 DROP POLICY IF EXISTS prs_modify ON public.product_reclamation_stats;
+DROP POLICY IF EXISTS "prs_session_select" ON public.product_reclamation_stats;
+DROP POLICY IF EXISTS "prs_session_insert" ON public.product_reclamation_stats;
+DROP POLICY IF EXISTS "prs_session_update" ON public.product_reclamation_stats;
 
 CREATE POLICY "prs_session_select"
   ON public.product_reclamation_stats FOR SELECT
@@ -133,6 +143,8 @@ CREATE POLICY "prs_session_update"
 -- Drop existing policies that may use auth.uid()
 DROP POLICY IF EXISTS "spatial_maps_select" ON spatial_maps;
 DROP POLICY IF EXISTS "spatial_maps_manage" ON spatial_maps;
+DROP POLICY IF EXISTS "spatial_maps_session_select" ON spatial_maps;
+DROP POLICY IF EXISTS "spatial_maps_session_manage" ON spatial_maps;
 
 CREATE POLICY "spatial_maps_session_select"
   ON spatial_maps FOR SELECT
@@ -156,6 +168,10 @@ CREATE POLICY "spatial_maps_session_manage"
 
 DROP POLICY IF EXISTS store_sections_select ON public.store_sections;
 DROP POLICY IF EXISTS store_sections_modify ON public.store_sections;
+DROP POLICY IF EXISTS "store_sections_session_select" ON public.store_sections;
+DROP POLICY IF EXISTS "store_sections_session_insert" ON public.store_sections;
+DROP POLICY IF EXISTS "store_sections_session_update" ON public.store_sections;
+DROP POLICY IF EXISTS "store_sections_session_delete" ON public.store_sections;
 
 CREATE POLICY "store_sections_session_select"
   ON public.store_sections FOR SELECT
