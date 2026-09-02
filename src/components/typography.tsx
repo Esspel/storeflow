@@ -37,9 +37,7 @@ export function Typography({
       ? "text-center"
       : "text-left";
 
-  const processed = typeof children === "string" ? children : children;
-
   return (
-    <span className={`${base} ${alignClass} ${className}`}>{processed}</span>
+    <span className={`${base} ${alignClass} ${className}`}>{children}</span>
   );
 }

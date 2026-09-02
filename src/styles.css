@@ -363,44 +363,6 @@ html, body {
   line-height: 1.6;
 }
 
-.coop-font-body-sm {
-  font-family: 'Coop Sans', sans-serif;
-  font-weight: 400; /* Regular */
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
-.coop-font-body-lg {
-  font-family: 'Coop Sans', sans-serif;
-  font-weight: 400; /* Regular */
-  font-size: 1.125rem;
-  line-height: 1.6;
-}
-
-.coop-font-price {
-  font-family: 'Coop Sans Price', sans-serif;
-  font-weight: 900; /* Black */
-  font-size: 1.5rem;
-  line-height: 1;
-  font-variant-numeric: tabular-nums; /* Smala siffror för enhetlig bredd */
-}
-
-.coop-font-price-sm {
-  font-family: 'Coop Sans Price', sans-serif;
-  font-weight: 900; /* Black */
-  font-size: 1rem;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.coop-font-price-lg {
-  font-family: 'Coop Sans Price', sans-serif;
-  font-weight: 900; /* Black */
-  font-size: 2.5rem;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
 .coop-font-marker {
   font-family: 'Coop Marker', cursive;
   font-weight: 400; /* Regular */

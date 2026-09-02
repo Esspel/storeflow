@@ -27,9 +27,9 @@
 | `coop-font-heading-sm` | 700 | Små rubriker |
 | `coop-font-emphasis` | 500 | Ingresser & betoning |
 | `coop-font-body` | 400 | Brödtext |
-| `coop-font-price` | 900 | Prissättning |
-| `coop-font-price-sm` | 900 | Mindre priser |
-| `coop-font-price-lg` | 900 | Stora priser/erbjudanden |
+| `coop-font-price-num` | 900 | Prissättning (tabular-nums) |
+| `coop-font-price-num-sm` | 900 | Mindre priser (tabular-nums) |
+| `coop-font-price-num-lg` | 900 | Stora priser/erbjudanden (tabular-nums) |
 | `coop-font-marker` | 400 | Handgjord komplement |
 | `coop-font-marker-strong` | 700 | Stark handgjord betoning |
 
