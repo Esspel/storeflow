@@ -159,7 +159,13 @@ function AppLayout() {
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+      navigator.serviceWorker.register("/sw.js", { scope: "/" })
+        .then((reg) => {
+          console.log("[SW] Registrerad:", reg.scope);
+        })
+        .catch((err) => {
+          console.error("[SW] Registrering misslyckades:", err);
+        });
     }
   }, []);
 
