@@ -22,12 +22,14 @@ import { Route as KundonskemalRouteImport } from './routes/kundonskemal'
 import { Route as KundrundaRouteImport } from './routes/kundrunda'
 import { Route as LicensRouteImport } from './routes/licens'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as PersonalRouteImport } from './routes/personal'
 import { Route as QrKundonskemalRouteImport } from './routes/qr-kundonskemal'
 import { Route as QrKundonskemalFormRouteImport } from './routes/qr-kundonskemal-form'
 import { Route as RapporterRouteImport } from './routes/rapporter'
 import { Route as SchemaRouteImport } from './routes/schema'
 import { Route as TestpanelRouteImport } from './routes/testpanel'
+import { Route as UppgifterRouteImport } from './routes/uppgifter'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -94,6 +96,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MallarRoute = MallarRouteImport.update({
+  id: '/mallar',
+  path: '/mallar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PersonalRoute = PersonalRouteImport.update({
   id: '/personal',
   path: '/personal',
@@ -124,6 +131,11 @@ const TestpanelRoute = TestpanelRouteImport.update({
   path: '/testpanel',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UppgifterRoute = UppgifterRouteImport.update({
+  id: '/uppgifter',
+  path: '/uppgifter',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -139,12 +151,14 @@ export interface FileRoutesByFullPath {
   '/kundrunda': typeof KundrundaRoute
   '/licens': typeof LicensRoute
   '/login': typeof LoginRoute
+  '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
+  '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -160,12 +174,14 @@ export interface FileRoutesByTo {
   '/kundrunda': typeof KundrundaRoute
   '/licens': typeof LicensRoute
   '/login': typeof LoginRoute
+  '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
+  '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -182,12 +198,14 @@ export interface FileRoutesById {
   '/kundrunda': typeof KundrundaRoute
   '/licens': typeof LicensRoute
   '/login': typeof LoginRoute
+  '/mallar': typeof MallarRoute
   '/personal': typeof PersonalRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
+  '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -205,12 +223,14 @@ export interface FileRouteTypes {
     | '/kundrunda'
     | '/licens'
     | '/login'
+    | '/mallar'
     | '/personal'
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
     | '/rapporter'
     | '/schema'
     | '/testpanel'
+    | '/uppgifter'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -226,12 +246,14 @@ export interface FileRouteTypes {
     | '/kundrunda'
     | '/licens'
     | '/login'
+    | '/mallar'
     | '/personal'
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
     | '/rapporter'
     | '/schema'
     | '/testpanel'
+    | '/uppgifter'
   id:
     | '__root__'
     | '/'
@@ -247,12 +269,14 @@ export interface FileRouteTypes {
     | '/kundrunda'
     | '/licens'
     | '/login'
+    | '/mallar'
     | '/personal'
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
     | '/rapporter'
     | '/schema'
     | '/testpanel'
+    | '/uppgifter'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -269,12 +293,14 @@ export interface RootRouteChildren {
   KundrundaRoute: typeof KundrundaRoute
   LicensRoute: typeof LicensRoute
   LoginRoute: typeof LoginRoute
+  MallarRoute: typeof MallarRoute
   PersonalRoute: typeof PersonalRoute
   QrKundonskemalRoute: typeof QrKundonskemalRoute
   QrKundonskemalFormRoute: typeof QrKundonskemalFormRoute
   RapporterRoute: typeof RapporterRoute
   SchemaRoute: typeof SchemaRoute
   TestpanelRoute: typeof TestpanelRoute
+  UppgifterRoute: typeof UppgifterRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -370,6 +396,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mallar': {
+      id: '/mallar'
+      path: '/mallar'
+      fullPath: '/mallar'
+      preLoaderRoute: typeof MallarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/personal': {
       id: '/personal'
       path: '/personal'
@@ -412,6 +445,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TestpanelRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/uppgifter': {
+      id: '/uppgifter'
+      path: '/uppgifter'
+      fullPath: '/uppgifter'
+      preLoaderRoute: typeof UppgifterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -429,12 +469,14 @@ const rootRouteChildren: RootRouteChildren = {
   KundrundaRoute: KundrundaRoute,
   LicensRoute: LicensRoute,
   LoginRoute: LoginRoute,
+  MallarRoute: MallarRoute,
   PersonalRoute: PersonalRoute,
   QrKundonskemalRoute: QrKundonskemalRoute,
   QrKundonskemalFormRoute: QrKundonskemalFormRoute,
   RapporterRoute: RapporterRoute,
   SchemaRoute: SchemaRoute,
   TestpanelRoute: TestpanelRoute,
+  UppgifterRoute: UppgifterRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
