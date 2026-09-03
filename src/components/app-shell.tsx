@@ -357,10 +357,12 @@ export function AppShell() {
 
   const nav = [
     { to: "/", label: "Översikt", mobileHidden: false, Icon: Home },
-    { to: "/schema", label: "Schema", mobileHidden: true, Icon: CalendarDays },
+    { to: "/uppgifter", label: "Uppgifter", mobileHidden: false, Icon: ClipboardList },
+    { to: "/mallar", label: "Mallar", mobileHidden: true, Icon: FileText },
+    { to: "/schema", label: "Schema", mobileHidden: false, Icon: CalendarDays },
     { to: "/avvikelser", label: "Avvikelser", mobileHidden: true, Icon: TriangleAlert },
     { to: "/kundrunda", label: "Kundrunda", mobileHidden: true, Icon: UserRound },
-    { to: "/kundonskemal", label: "Kundönskemål", mobileHidden: true, Icon: ShoppingCart },
+    { to: "/kundonskemal", label: "Kundönskemål", mobileHidden: false, Icon: ShoppingCart },
     ...(isManager
       ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }]
       : []),
@@ -439,10 +441,9 @@ export function AppShell() {
   const isActive = (to: string) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
 
   const moreRoutes = [
-    { to: "/schema", label: "Schema", Icon: CalendarDays },
     { to: "/avvikelser", label: "Avvikelser", Icon: TriangleAlert },
     { to: "/kundrunda", label: "Kundrunda", Icon: UserRound },
-    { to: "/kundonskemal", label: "Kundönskemål", Icon: ShoppingCart },
+    { to: "/mallar", label: "Mallar", Icon: FileText },
     ...(isManager ? [{ to: "/rapporter", label: "Rapporter", Icon: FlaskConical }] : []),
   ];
   const isMoreActive = moreRoutes.some((r) => isActive(r.to));
@@ -546,13 +547,30 @@ export function AppShell() {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  className="relative shrink-0 rounded-full px-3 py-1.5 text-sm font-medium text-coop-gray-900/70 hover:text-primary"
+                  className={cn(
+                    "relative shrink-0 rounded-full px-3 py-1.5 text-sm font-medium text-coop-gray-900/70 hover:text-primary",
+                    (isActive("/uppgifter") || isActive("/mallar")) && "text-primary",
+                  )}
                 >
                   Uppgifter
+                  {(isActive("/uppgifter") || isActive("/mallar")) && (
+                    <span className="absolute inset-x-3.5 -bottom-[14px] h-[3px] rounded-t-full bg-primary" />
+                  )}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
-                <DropdownMenuItem disabled>Uppgifter (inte tillgängligt)</DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/uppgifter" className="cursor-pointer">
+                    <ClipboardList className="mr-2 h-4 w-4" />
+                    Uppgifter
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/mallar" className="cursor-pointer">
+                    <FileText className="mr-2 h-4 w-4" />
+                    Mallar
+                  </Link>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -573,7 +591,6 @@ export function AppShell() {
                   )}
                 </Link>
               ))}
-
           </nav>
 
           <div className="ml-auto shrink-0 flex items-center gap-1.5 md:gap-2">
@@ -607,9 +624,7 @@ export function AppShell() {
                 </div>
                 <div className="max-h-72 overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <p className="px-4 py-8 text-center text-sm text-coop-gray-600">
-                      Inga notiser
-                    </p>
+                    <p className="px-4 py-8 text-center text-sm text-coop-gray-600">Inga notiser</p>
                   ) : (
                     notifications.map((n) => (
                       <div
@@ -682,9 +697,7 @@ export function AppShell() {
                         ? (ROLE_LABELS[user.role] ?? user.role)
                         : ""}
                   </p>
-                  {activeStore && (
-                    <p className="text-xs text-coop-gray-600">{activeStore.name}</p>
-                  )}
+                  {activeStore && <p className="text-xs text-coop-gray-600">{activeStore.name}</p>}
                 </div>
                 <div className="md:hidden">
                   <DropdownMenuSeparator />

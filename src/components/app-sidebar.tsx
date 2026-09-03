@@ -13,6 +13,7 @@ import {
   CalendarDays,
   ChartBar,
   ShoppingCart,
+  FileText,
 } from "lucide-react";
 
 import {
@@ -38,6 +39,7 @@ interface MenuItem {
 const mainRoutes: MenuItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Uppgifter", url: "/uppgifter", icon: ListChecks },
+  { title: "Mallar", url: "/mallar", icon: FileText },
   { title: "Schema", url: "/schema", icon: CalendarDays },
   { title: "Avvikelser", url: "/avvikelser", icon: TriangleAlert },
   { title: "Kundönskemål", url: "/kundonskemal", icon: ShoppingCart },
@@ -111,7 +113,8 @@ export function AppSidebar() {
           </div>
           <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
             <span className="text-sm font-semibold tracking-tight">
-              <span className="coop-font-marker">Store</span><span className="coop-font-marker-strong">Flow</span>
+              <span className="coop-font-marker">Store</span>
+              <span className="coop-font-marker-strong">Flow</span>
             </span>
             <span className="text-[11px] text-coop-gray-600">Retail Operations</span>
           </div>
