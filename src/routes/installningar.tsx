@@ -347,7 +347,7 @@ function SettingsPage() {
             <div className="space-y-1.5">
               <Label htmlFor="username">Användarnamn</Label>
               <Input id="username" value={user?.username ?? ""} disabled className="bg-muted/40" />
-              <p className="text-xs text-coop-gray-600">Användarnamn kan inte ändras.</p>
+              <p className="text-xs text-coop-gray-900">Användarnamn kan inte ändras.</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="display-name">Visningsnamn</Label>
@@ -416,7 +416,7 @@ function SettingsPage() {
             </div>
             <div>
               <h2 className="font-semibold">Push-notiser</h2>
-              <p className="text-xs text-coop-gray-600">
+              <p className="text-xs text-coop-gray-900">
                 Få aviseringar direkt på enheten när uppgifter tilldelas eller deadlines nalkas.
               </p>
             </div>
@@ -431,7 +431,7 @@ function SettingsPage() {
             </div>
             <div>
               <h2 className="font-semibold">Snabbt användarbyte</h2>
-              <p className="text-xs text-coop-gray-600">
+              <p className="text-xs text-coop-gray-900">
                 Registrera streckkod och/eller PIN för att ta över en delad Zebra-enhet på sekunder.
               </p>
             </div>
@@ -440,12 +440,12 @@ function SettingsPage() {
           <div className="space-y-6">
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <ScanBarcode className="h-4 w-4 text-coop-gray-600" />
+                <ScanBarcode className="h-4 w-4 text-coop-gray-900" />
                 <label htmlFor="barcode-id" className="text-sm font-medium">
                   Passerkortets streckkod
                 </label>
               </div>
-              <p className="text-xs text-coop-gray-600">
+              <p className="text-xs text-coop-gray-900">
                 Scanna ditt passerkort med Zebra-skannern i fältet nedan, eller skriv in
                 streckkodsvärdet manuellt.
               </p>
@@ -516,7 +516,7 @@ function SettingsPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Hash className="h-4 w-4 text-coop-gray-600" />
+                  <Hash className="h-4 w-4 text-coop-gray-900" />
                   <span className="text-sm font-medium">4-siffrig PIN-kod</span>
                 </div>
                 {hasPin && (
@@ -527,12 +527,12 @@ function SettingsPage() {
               </div>
 
               {hasPin && pinStep === "enter" && newPin.length === 0 && (
-                <p className="text-xs text-coop-gray-600">
+                <p className="text-xs text-coop-gray-900">
                   Du har en aktiv PIN. Ange nedan för att byta.
                 </p>
               )}
 
-              <p className="text-sm text-coop-gray-600">
+              <p className="text-sm text-coop-gray-900">
                 {pinStep === "enter"
                   ? hasPin
                     ? "Ange ny PIN-kod:"
@@ -591,7 +591,7 @@ function SettingsPage() {
                     setPinStep("enter");
                     setPinError("");
                   }}
-                  className="flex h-14 items-center justify-center rounded-xl text-xs text-coop-gray-600 transition-all active:scale-95 hover:bg-muted motion-reduce:transition-none"
+                  className="flex h-14 items-center justify-center rounded-xl text-xs text-coop-gray-900 transition-all active:scale-95 hover:bg-muted motion-reduce:transition-none"
                 >
                   Rensa
                 </button>
@@ -607,7 +607,7 @@ function SettingsPage() {
                     else setConfirmPin((p) => p.slice(0, -1));
                     setPinError("");
                   }}
-                  className="flex h-14 items-center justify-center rounded-xl text-coop-gray-600 transition-all active:scale-95 hover:bg-muted motion-reduce:transition-none"
+                  className="flex h-14 items-center justify-center rounded-xl text-coop-gray-900 transition-all active:scale-95 hover:bg-muted motion-reduce:transition-none"
                   aria-label="Radera siffra"
                 >
                   <Delete className="h-4 w-4" />
@@ -651,7 +651,7 @@ function SettingsPage() {
                 />
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-coop-gray-600 hover:text-coop-gray-900"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-coop-gray-900 hover:text-coop-gray-900"
                   onClick={() => setShowCurrentPw((v) => !v)}
                   aria-label={showCurrentPw ? "Dölj lösenord" : "Visa lösenord"}
                   aria-pressed={showCurrentPw}
@@ -673,7 +673,7 @@ function SettingsPage() {
                 />
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-coop-gray-600 hover:text-coop-gray-900"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-coop-gray-900 hover:text-coop-gray-900"
                   onClick={() => setShowNewPw((v) => !v)}
                   aria-label={showNewPw ? "Dölj lösenord" : "Visa lösenord"}
                   aria-pressed={showNewPw}
@@ -729,14 +729,14 @@ function SettingsPage() {
             </div>
             <div>
               <h2 className="font-semibold">Min data (GDPR)</h2>
-              <p className="text-xs text-coop-gray-600">
+              <p className="text-xs text-coop-gray-900">
                 Exportera dina personuppgifter som lagras i systemet. Artikel 20 — rätt till
                 dataportabilitet.
               </p>
             </div>
           </div>
           <div className="space-y-3">
-            <p className="text-sm text-coop-gray-600">
+            <p className="text-sm text-coop-gray-900">
               Du kan ladda ned alla uppgifter som är kopplade till ditt konto: profil, tilldelade
               uppgifter, slutförda uppgifter, svar på frågor och avvikelserapporter.
             </p>
@@ -799,7 +799,7 @@ function SettingsPage() {
                 </div>
                 <div>
                   <h2 className="font-semibold">Diagnostik</h2>
-                  <p className="text-xs text-coop-gray-600">
+                  <p className="text-xs text-coop-gray-900">
                     Realtidsstatus för Helpdesk-support.
                   </p>
                 </div>
@@ -808,7 +808,7 @@ function SettingsPage() {
                 <button
                   onClick={refreshDiagnostics}
                   disabled={diagRefreshing}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-coop-gray-600 transition-colors hover:bg-muted"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-coop-gray-900 transition-colors hover:bg-muted"
                   aria-label="Uppdatera diagnostik"
                 >
                   <RefreshCw
@@ -820,7 +820,7 @@ function SettingsPage() {
                 </button>
                 <button
                   onClick={() => setShowDiagnostics(false)}
-                  className="text-xs text-coop-gray-600 hover:text-coop-gray-900"
+                  className="text-xs text-coop-gray-900 hover:text-coop-gray-900"
                 >
                   Stäng
                 </button>
@@ -849,10 +849,10 @@ function SettingsPage() {
 
               <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <HardDrive className="h-4 w-4 text-coop-gray-600" />
+                  <HardDrive className="h-4 w-4 text-coop-gray-900" />
                   IndexedDB-lagring
                 </div>
-                <span className="font-mono text-xs text-coop-gray-600">{diagIdbUsage}</span>
+                <span className="font-mono text-xs text-coop-gray-900">{diagIdbUsage}</span>
               </div>
 
               <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
@@ -860,7 +860,7 @@ function SettingsPage() {
                 <span
                   className={cn(
                     "text-sm font-semibold tabular-nums",
-                    diagLocalDrafts > 0 ? "text-warning-foreground" : "text-coop-gray-600",
+                    diagLocalDrafts > 0 ? "text-warning-foreground" : "text-coop-gray-900",
                   )}
                 >
                   {diagLocalDrafts} poster
@@ -868,13 +868,13 @@ function SettingsPage() {
               </div>
 
               <div className="rounded-lg border border-border/60 px-3 py-2.5">
-                <p className="mb-1 text-xs font-medium text-coop-gray-600">Senaste systemfel</p>
+                <p className="mb-1 text-xs font-medium text-coop-gray-900">Senaste systemfel</p>
                 <p className="break-all font-mono text-xs text-coop-gray-900/80">{diagLastError}</p>
               </div>
 
               <div className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2.5">
                 <span className="text-sm font-medium">App-version</span>
-                <span className="font-mono text-xs text-coop-gray-600">{APP_VERSION}</span>
+                <span className="font-mono text-xs text-coop-gray-900">{APP_VERSION}</span>
               </div>
             </div>
 
@@ -883,7 +883,7 @@ function SettingsPage() {
                 <Download className="h-4 w-4" />
                 Exportera lokal debug-logg
               </Button>
-              <p className="mt-2 text-center text-xs text-coop-gray-600">
+              <p className="mt-2 text-center text-xs text-coop-gray-900">
                 Exportera lokal debug-information för felsökning.
               </p>
             </div>
@@ -911,12 +911,12 @@ function SettingsPage() {
           <div className="flex justify-center pt-2 pb-4">
             <button
               onClick={handleVersionTap}
-              className="select-none rounded-full px-4 py-2 text-xs text-coop-gray-600/40 transition-colors hover:text-coop-gray-600/60 active:opacity-50"
+              className="select-none rounded-full px-4 py-2 text-xs text-coop-gray-900/40 transition-colors hover:text-coop-gray-900/60 active:opacity-50"
               aria-label="App-version"
             >
               v{APP_VERSION}
               {versionTapCount > 0 && versionTapCount < 7 && (
-                <span className="ml-2 tabular-nums text-coop-gray-600/60">
+                <span className="ml-2 tabular-nums text-coop-gray-900/60">
                   ({7 - versionTapCount} tryck kvar)
                 </span>
               )}
@@ -938,7 +938,7 @@ function SettingsPage() {
               <Link
                 key={to}
                 to={to}
-                className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm text-coop-gray-600 transition-colors hover:bg-muted hover:text-coop-gray-900"
+                className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm text-coop-gray-900 transition-colors hover:bg-muted hover:text-coop-gray-900"
               >
                 {label}
                 <svg
@@ -955,7 +955,7 @@ function SettingsPage() {
           </nav>
         </div>
 
-        <p className="pb-4 text-center text-xs text-coop-gray-600/50">
+        <p className="pb-4 text-center text-xs text-coop-gray-900/50">
           &copy; 2024–2026 StoreFlow Contributors. Licensierat under GNU GPL v3.0.
         </p>
       </div>

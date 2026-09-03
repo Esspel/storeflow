@@ -25,7 +25,7 @@ function Field({ label, value }: { label: string; value: string | null | undefin
   if (!value) return null;
   return (
     <div className="min-w-0">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600/70">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-900/70">
         {label}
       </p>
       <p className="text-sm text-coop-gray-900 truncate">{value}</p>
@@ -69,7 +69,7 @@ function StoreCard({ store }: { store: StoreType }) {
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base font-semibold text-coop-gray-900 truncate">{store.name}</h3>
               {store.koncept && (
-                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600">
+                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-coop-gray-900">
                   {store.koncept}
                 </span>
               )}
@@ -79,7 +79,7 @@ function StoreCard({ store }: { store: StoreType }) {
                 </span>
               )}
             </div>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-coop-gray-600">
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-coop-gray-900">
               {store.butiks_nr && <span className="font-mono">#{store.butiks_nr}</span>}
               {store.bolag && <span>{store.bolag}</span>}
               {store.distrikt_namn && <span>{store.distrikt_namn}</span>}
@@ -88,7 +88,7 @@ function StoreCard({ store }: { store: StoreType }) {
               type="button"
               onClick={() => navigator.clipboard.writeText(store.id)}
               title="Klicka för att kopiera UUID"
-              className="mt-1 flex items-center gap-1 rounded font-mono text-[10px] text-coop-gray-600/70 hover:text-primary transition-colors"
+              className="mt-1 flex items-center gap-1 rounded font-mono text-[10px] text-coop-gray-900/70 hover:text-primary transition-colors"
             >
               UUID: {store.id}
             </button>
@@ -98,8 +98,8 @@ function StoreCard({ store }: { store: StoreType }) {
         {/* Core contact info */}
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {(store.gatuadress || store.postadress || store.postnr) && (
-            <div className="flex items-start gap-2 text-sm text-coop-gray-600">
-              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-coop-gray-600/60" />
+            <div className="flex items-start gap-2 text-sm text-coop-gray-900">
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-coop-gray-900/60" />
               <span className="min-w-0">
                 {store.gatuadress && <span className="block truncate">{store.gatuadress}</span>}
                 {(store.postnr || store.postadress) && (
@@ -111,8 +111,8 @@ function StoreCard({ store }: { store: StoreType }) {
             </div>
           )}
           {store.telefon_butik && (
-            <div className="flex items-center gap-2 text-sm text-coop-gray-600">
-              <Phone className="h-3.5 w-3.5 shrink-0 text-coop-gray-600/60" />
+            <div className="flex items-center gap-2 text-sm text-coop-gray-900">
+              <Phone className="h-3.5 w-3.5 shrink-0 text-coop-gray-900/60" />
               <a
                 href={`tel:${store.telefon_butik}`}
                 className="truncate hover:text-primary transition-colors"
@@ -122,8 +122,8 @@ function StoreCard({ store }: { store: StoreType }) {
             </div>
           )}
           {(store.email || store.email_sm_chef) && (
-            <div className="flex items-center gap-2 text-sm text-coop-gray-600">
-              <Mail className="h-3.5 w-3.5 shrink-0 text-coop-gray-600/60" />
+            <div className="flex items-center gap-2 text-sm text-coop-gray-900">
+              <Mail className="h-3.5 w-3.5 shrink-0 text-coop-gray-900/60" />
               <a
                 href={`mailto:${store.email || store.email_sm_chef}`}
                 className="truncate hover:text-primary transition-colors"
@@ -133,8 +133,8 @@ function StoreCard({ store }: { store: StoreType }) {
             </div>
           )}
           {store.butikschef && (
-            <div className="flex items-center gap-2 text-sm text-coop-gray-600">
-              <User className="h-3.5 w-3.5 shrink-0 text-coop-gray-600/60" />
+            <div className="flex items-center gap-2 text-sm text-coop-gray-900">
+              <User className="h-3.5 w-3.5 shrink-0 text-coop-gray-900/60" />
               <span className="truncate">{store.butikschef}</span>
             </div>
           )}
@@ -169,7 +169,7 @@ function StoreCard({ store }: { store: StoreType }) {
           )}
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="flex w-full items-center justify-center gap-1.5 border-t border-border/40 bg-muted/10 py-2 text-xs font-medium text-coop-gray-600 transition-colors hover:bg-muted/30 hover:text-coop-gray-900"
+            className="flex w-full items-center justify-center gap-1.5 border-t border-border/40 bg-muted/10 py-2 text-xs font-medium text-coop-gray-900 transition-colors hover:bg-muted/30 hover:text-coop-gray-900"
           >
             {expanded ? (
               <>
@@ -241,7 +241,7 @@ function ButiksregisterPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-coop-gray-900">Butiksregister</h1>
-            <p className="text-sm text-coop-gray-600">
+            <p className="text-sm text-coop-gray-900">
               {loading ? "Laddar..." : `${stores.length} butiker`}
             </p>
           </div>
@@ -251,18 +251,18 @@ function ButiksregisterPage() {
       {/* Search & filters */}
       <div className="mb-6 flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-coop-gray-600 pointer-events-none" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-coop-gray-900 pointer-events-none" />
           <input
             type="text"
             placeholder="Sök butik, chef, ort..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-xl border border-border/60 bg-coop-gray-100 pl-9 pr-3 text-sm outline-none placeholder:text-coop-gray-600 focus:border-primary focus:ring-2 focus:ring-primary/20"
+            className="h-10 w-full rounded-xl border border-border/60 bg-coop-gray-100 pl-9 pr-3 text-sm outline-none placeholder:text-coop-gray-900 focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-coop-gray-600 hover:text-coop-gray-900"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-coop-gray-900 hover:text-coop-gray-900"
             >
               <X className="h-4 w-4" />
             </button>
@@ -275,7 +275,7 @@ function ButiksregisterPage() {
             onChange={(e) => setFilterDistrikt(e.target.value)}
             className={cn(
               "h-10 rounded-xl border border-border/60 bg-coop-gray-100 px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer",
-              filterDistrikt ? "text-coop-gray-900" : "text-coop-gray-600",
+              filterDistrikt ? "text-coop-gray-900" : "text-coop-gray-900",
             )}
           >
             <option value="">Alla distrikt</option>
@@ -293,7 +293,7 @@ function ButiksregisterPage() {
             onChange={(e) => setFilterBolag(e.target.value)}
             className={cn(
               "h-10 rounded-xl border border-border/60 bg-coop-gray-100 px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 cursor-pointer",
-              filterBolag ? "text-coop-gray-900" : "text-coop-gray-600",
+              filterBolag ? "text-coop-gray-900" : "text-coop-gray-900",
             )}
           >
             <option value="">Alla föreningar</option>
@@ -312,7 +312,7 @@ function ButiksregisterPage() {
               setFilterDistrikt("");
               setFilterBolag("");
             }}
-            className="flex h-10 items-center gap-1.5 rounded-xl border border-border/60 bg-coop-gray-100 px-3 text-sm text-coop-gray-600 transition-colors hover:bg-muted hover:text-coop-gray-900"
+            className="flex h-10 items-center gap-1.5 rounded-xl border border-border/60 bg-coop-gray-100 px-3 text-sm text-coop-gray-900 transition-colors hover:bg-muted hover:text-coop-gray-900"
           >
             <X className="h-3.5 w-3.5" />
             Rensa
@@ -322,7 +322,7 @@ function ButiksregisterPage() {
 
       {/* Result count */}
       {hasFilters && !loading && (
-        <p className="mb-4 text-sm text-coop-gray-600">
+        <p className="mb-4 text-sm text-coop-gray-900">
           {filtered.length} av {stores.length} butiker
         </p>
       )}
@@ -351,8 +351,8 @@ function ButiksregisterPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-2xl border border-border/60 bg-coop-gray-100 p-10 text-center shadow-[var(--shadow-sm)]">
-          <Store className="mx-auto mb-3 h-10 w-10 text-coop-gray-600/40" />
-          <p className="text-sm font-medium text-coop-gray-600">Inga butiker hittades</p>
+          <Store className="mx-auto mb-3 h-10 w-10 text-coop-gray-900/40" />
+          <p className="text-sm font-medium text-coop-gray-900">Inga butiker hittades</p>
           {hasFilters && (
             <button
               onClick={() => {

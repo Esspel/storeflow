@@ -16,16 +16,16 @@ type Props = {
 export function MaskedField({ value, masked, label, className = "" }: Props) {
   const [revealed, setRevealed] = useState(false);
 
-  if (!value) return <span className="text-coop-gray-600/50">—</span>;
+  if (!value) return <span className="text-coop-gray-900/50">—</span>;
 
   return (
     <span className={`inline-flex items-center gap-1.5 ${className}`}>
-      {label && <span className="text-coop-gray-600">{label}: </span>}
+      {label && <span className="text-coop-gray-900">{label}: </span>}
       <span className="font-mono text-sm">{revealed ? value : masked}</span>
       <Button
         variant="ghost"
         size="icon"
-        className="h-5 w-5 shrink-0 rounded text-coop-gray-600 hover:text-coop-gray-900"
+        className="h-5 w-5 shrink-0 rounded text-coop-gray-900 hover:text-coop-gray-900"
         onClick={() => setRevealed((r) => !r)}
         title={revealed ? "Dölj" : "Visa"}
         aria-label={revealed ? "Dölj värde" : "Visa värde"}

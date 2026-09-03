@@ -36,8 +36,8 @@ const CATEGORY_CONFIG: Record<string, { color: string }> = {
   Arbetsmiljö: { color: "text-warning-foreground" },
   Ekonomi: { color: "text-success" },
   Kassa: { color: "text-success" },
-  Rengöring: { color: "text-coop-gray-600" },
-  Städning: { color: "text-coop-gray-600" },
+  Rengöring: { color: "text-coop-gray-900" },
+  Städning: { color: "text-coop-gray-900" },
   Varupåfyllning: { color: "text-info" },
 };
 
@@ -236,7 +236,7 @@ function ReportsPage() {
   if (user && user.role === "employee") {
     return (
       <div className="flex h-full flex-col items-center justify-center px-5 py-20 text-center">
-        <p className="text-sm font-medium text-coop-gray-600">
+        <p className="text-sm font-medium text-coop-gray-900">
           Du har inte behörighet att se rapporter.
         </p>
       </div>
@@ -246,7 +246,7 @@ function ReportsPage() {
   if (!activeStore) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-5 py-20 text-center">
-        <p className="text-sm font-medium text-coop-gray-600">
+        <p className="text-sm font-medium text-coop-gray-900">
           Välj en butik för att se rapporter.
         </p>
       </div>
@@ -271,7 +271,7 @@ function ReportsPage() {
       {/* Date filter */}
       <div className="mb-6 flex flex-wrap items-end gap-3">
         <div className="space-y-1">
-          <Label className="text-xs text-coop-gray-600">Från</Label>
+          <Label className="text-xs text-coop-gray-900">Från</Label>
           <Input
             type="date"
             value={dateFrom}
@@ -280,7 +280,7 @@ function ReportsPage() {
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs text-coop-gray-600">Till</Label>
+          <Label className="text-xs text-coop-gray-900">Till</Label>
           <Input
             type="date"
             value={dateTo}
@@ -363,7 +363,7 @@ function ReportsPage() {
                 {
                   label: "Ej påbörjad",
                   value: tasks.filter((t) => t.status === "todo").length,
-                  cls: "text-coop-gray-600",
+                  cls: "text-coop-gray-900",
                 },
                 {
                   label: "Pågående",
@@ -386,7 +386,7 @@ function ReportsPage() {
                   className="rounded-2xl bg-coop-gray-100 p-5 text-center shadow-[var(--shadow-sm)]"
                 >
                   <p className={`text-2xl font-black ${cls}`}>{value}</p>
-                  <p className="mt-1 text-xs text-coop-gray-600">{label}</p>
+                  <p className="mt-1 text-xs text-coop-gray-900">{label}</p>
                 </div>
               ))}
             </div>
@@ -421,7 +421,7 @@ function ReportsPage() {
               </div>
             )}
             {tasks.length === 0 && (
-              <p className="mt-8 text-center text-sm text-coop-gray-600">
+              <p className="mt-8 text-center text-sm text-coop-gray-900">
                 Inga uppgifter för vald period.
               </p>
             )}
@@ -444,7 +444,7 @@ function ReportsPage() {
                 {
                   label: "Ny",
                   value: incidents.filter((i) => i.status === "open").length,
-                  cls: "text-coop-gray-600",
+                  cls: "text-coop-gray-900",
                 },
                 {
                   label: "Pågår",
@@ -467,7 +467,7 @@ function ReportsPage() {
                   className="rounded-2xl bg-coop-gray-100 p-5 text-center shadow-[var(--shadow-sm)]"
                 >
                   <p className={`text-2xl font-black ${cls}`}>{value}</p>
-                  <p className="mt-1 text-xs text-coop-gray-600">{label}</p>
+                  <p className="mt-1 text-xs text-coop-gray-900">{label}</p>
                 </div>
               ))}
             </div>
@@ -515,7 +515,7 @@ function ReportsPage() {
               </div>
             )}
             {incidents.length === 0 && (
-              <p className="mt-8 text-center text-sm text-coop-gray-600">
+              <p className="mt-8 text-center text-sm text-coop-gray-900">
                 Inga avvikelser för vald period.
               </p>
             )}
@@ -524,7 +524,7 @@ function ReportsPage() {
           {/* KUNDRUNDAN */}
           <TabsContent value="kundrunda" className="mt-6">
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm text-coop-gray-600">
+              <p className="text-sm text-coop-gray-900">
                 Genomförda kundrundesessioner och avvikelseutfall.
               </p>
               {kundrunSessions.length > 0 && (
@@ -542,21 +542,21 @@ function ReportsPage() {
             <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
               <div className="rounded-2xl bg-coop-gray-100 p-5 text-center shadow-[var(--shadow-sm)]">
                 <p className="text-2xl font-black text-success">{completedRundor}</p>
-                <p className="mt-1 text-xs text-coop-gray-600">Genomförda rundor</p>
+                <p className="mt-1 text-xs text-coop-gray-900">Genomförda rundor</p>
               </div>
               <div className="rounded-2xl bg-coop-gray-100 p-5 text-center shadow-[var(--shadow-sm)]">
                 <p className="text-2xl font-black text-warning-foreground">{totalDefects}</p>
-                <p className="mt-1 text-xs text-coop-gray-600">Totalt antal avvikelser</p>
+                <p className="mt-1 text-xs text-coop-gray-900">Totalt antal avvikelser</p>
               </div>
               <div className="rounded-2xl bg-coop-gray-100 p-5 text-center shadow-[var(--shadow-sm)]">
                 <p className="text-2xl font-black text-info">{avgDefectsPerRunda}</p>
-                <p className="mt-1 text-xs text-coop-gray-600">Snitt avvikelser/runda</p>
+                <p className="mt-1 text-xs text-coop-gray-900">Snitt avvikelser/runda</p>
               </div>
               <div className="rounded-2xl bg-coop-gray-100 p-5 text-center shadow-[var(--shadow-sm)]">
-                <p className="text-2xl font-black text-coop-gray-600">
+                <p className="text-2xl font-black text-coop-gray-900">
                   {kundrunSessions.filter((s) => s.status === "in_progress").length}
                 </p>
-                <p className="mt-1 text-xs text-coop-gray-600">Pågående rundor</p>
+                <p className="mt-1 text-xs text-coop-gray-900">Pågående rundor</p>
               </div>
             </div>
 
@@ -565,19 +565,19 @@ function ReportsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border/60 bg-muted/30">
-                      <th className="px-4 py-3 text-left text-xs font-medium text-coop-gray-600">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-coop-gray-900">
                         Datum
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-coop-gray-600">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-coop-gray-900">
                         Utförd av
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-coop-gray-600">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-coop-gray-900">
                         Status
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-coop-gray-600">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-coop-gray-900">
                         OK
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-coop-gray-600">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-coop-gray-900">
                         Avvikelser
                       </th>
                     </tr>
@@ -591,7 +591,7 @@ function ReportsPage() {
                           idx % 2 === 1 && "bg-muted/10",
                         )}
                       >
-                        <td className="px-4 py-3 text-xs text-coop-gray-600">
+                        <td className="px-4 py-3 text-xs text-coop-gray-900">
                           {new Date(s.started_at).toLocaleDateString("sv-SE", {
                             dateStyle: "medium",
                           })}
@@ -607,7 +607,7 @@ function ReportsPage() {
                               Pågår
                             </span>
                           ) : (
-                            <span className="text-xs text-coop-gray-600">{s.status}</span>
+                            <span className="text-xs text-coop-gray-900">{s.status}</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -617,7 +617,7 @@ function ReportsPage() {
                           <span
                             className={cn(
                               "text-xs font-semibold",
-                              s.zone_defects > 0 ? "text-destructive" : "text-coop-gray-600",
+                              s.zone_defects > 0 ? "text-destructive" : "text-coop-gray-900",
                             )}
                           >
                             {s.zone_defects > 0 ? s.zone_defects : "—"}
@@ -630,8 +630,8 @@ function ReportsPage() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-16 text-center">
-                <ShoppingCart className="mb-3 h-10 w-10 text-coop-gray-600/30" />
-                <p className="text-sm font-medium text-coop-gray-600">
+                <ShoppingCart className="mb-3 h-10 w-10 text-coop-gray-900/30" />
+                <p className="text-sm font-medium text-coop-gray-900">
                   Inga kundrundesessioner för vald period
                 </p>
               </div>

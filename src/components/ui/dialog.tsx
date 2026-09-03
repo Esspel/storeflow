@@ -83,7 +83,7 @@ const DialogContent = React.forwardRef<
 
         {/* Stängningsknapp (Fixerad uppe till höger i modalen) — kan döljas om dialogen har egen */}
         {!hideCloseButton && (
-          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full p-1.5 opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-coop-gray-600">
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full p-1.5 opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-coop-gray-900">
             <X className="h-4 w-4" />
             <span className="sr-only">Stäng</span>
           </DialogPrimitive.Close>
@@ -131,7 +131,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-coop-gray-600 leading-relaxed", className)}
+    className={cn("text-sm text-coop-gray-900 leading-relaxed", className)}
     {...props}
   />
 ));

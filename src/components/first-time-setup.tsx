@@ -141,7 +141,7 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
       >
         {/* Header */}
         <div className="mb-8 text-center">
-          <p className="text-sm font-medium text-coop-gray-600">
+          <p className="text-sm font-medium text-coop-gray-900">
             Välkommen,{" "}
             <span className="font-semibold text-coop-gray-900">
               {user?.display_name ?? user?.username}
@@ -178,7 +178,7 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
             ))}
           </div>
 
-          <p className="mt-2 text-xs text-coop-gray-600">
+          <p className="mt-2 text-xs text-coop-gray-900">
             Steg {currentStep + 1} av {STEPS.length}
           </p>
         </div>
@@ -197,7 +197,7 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
             <h2 className="mb-2 text-center text-2xl font-bold tracking-tight text-coop-gray-900">
               {step.title}
             </h2>
-            <p className="mb-6 text-center text-sm leading-relaxed text-coop-gray-600">
+            <p className="mb-6 text-center text-sm leading-relaxed text-coop-gray-900">
               {step.description}
             </p>
 
@@ -221,7 +221,7 @@ export function FirstTimeSetup({ onComplete }: FirstTimeSetupProps) {
               variant="ghost"
               size="sm"
               onClick={handlePrev}
-              className="gap-1 text-coop-gray-600 hover:text-coop-gray-900"
+              className="gap-1 text-coop-gray-900 hover:text-coop-gray-900"
             >
               {!isFirst && <ChevronLeft className="h-4 w-4" />}
               {isFirst ? "Hoppa över" : "Tillbaka"}

@@ -11,15 +11,15 @@ function TosPage() {
     <div className="mx-auto max-w-3xl px-5 py-8 md:px-8 md:py-12">
       <Link
         to="/installningar"
-        className="mb-6 inline-flex items-center gap-1.5 text-sm text-coop-gray-600 hover:text-coop-gray-900 transition-colors"
+        className="mb-6 inline-flex items-center gap-1.5 text-sm text-coop-gray-900 hover:text-coop-gray-900 transition-colors"
       >
         <ChevronLeft className="h-4 w-4" /> Tillbaka till Inställningar
       </Link>
 
       <h1 className="mb-2 text-3xl font-bold tracking-tight">Användarvillkor</h1>
-      <p className="mb-8 text-sm text-coop-gray-600">Senast uppdaterad: Juni 2026</p>
+      <p className="mb-8 text-sm text-coop-gray-900">Senast uppdaterad: Juni 2026</p>
 
-      <div className="space-y-8 text-sm text-coop-gray-600 leading-relaxed">
+      <div className="space-y-8 text-sm text-coop-gray-900 leading-relaxed">
         <section>
           <h2 className="text-lg font-semibold text-coop-gray-900 mb-3">1. Godkännande av villkor</h2>
           <p>

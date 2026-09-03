@@ -109,14 +109,14 @@ export function KeyboardShortcuts() {
       >
         <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
           <div className="flex items-center gap-2">
-            <Keyboard className="h-4 w-4 text-coop-gray-600" />
+            <Keyboard className="h-4 w-4 text-coop-gray-900" />
             <span className="text-sm font-semibold text-coop-gray-900">Tangentbordsgenvägar</span>
           </div>
           <button
             type="button"
             aria-label="Stäng"
             onClick={() => setShowHelp(false)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-coop-gray-600 hover:bg-muted/60"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-coop-gray-900 hover:bg-muted/60"
           >
             <X className="h-4 w-4" />
           </button>
@@ -132,20 +132,20 @@ export function KeyboardShortcuts() {
               }}
             >
               <span className="text-coop-gray-900">{s.label}</span>
-              <kbd className="rounded-md border border-border/60 bg-muted px-2 py-0.5 font-mono text-xs text-coop-gray-600">
+              <kbd className="rounded-md border border-border/60 bg-muted px-2 py-0.5 font-mono text-xs text-coop-gray-900">
                 {s.key}
               </kbd>
             </button>
           ))}
           <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-            <span className="text-coop-gray-600">Stäng</span>
-            <kbd className="rounded-md border border-border/60 bg-muted px-2 py-0.5 font-mono text-xs text-coop-gray-600">
+            <span className="text-coop-gray-900">Stäng</span>
+            <kbd className="rounded-md border border-border/60 bg-muted px-2 py-0.5 font-mono text-xs text-coop-gray-900">
               Esc
             </kbd>
           </div>
         </div>
         <div className="border-t border-border/40 px-4 py-2.5">
-          <p className="text-xs text-coop-gray-600">
+          <p className="text-xs text-coop-gray-900">
             Tryck{" "}
             <kbd className="rounded border border-border/60 bg-muted px-1 py-0.5 font-mono text-[10px]">
               ?

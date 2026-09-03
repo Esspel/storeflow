@@ -224,11 +224,11 @@ const TEMPLATE_STATUS_OPTIONS = [
     label: "Under granskning",
     cls: "bg-warning/15 text-warning-foreground border-warning/30",
   },
-  { value: "deprecated", label: "Utfasad", cls: "bg-muted text-coop-gray-600 border-border" },
+  { value: "deprecated", label: "Utfasad", cls: "bg-muted text-coop-gray-900 border-border" },
   {
     value: "archived",
     label: "Arkiverad",
-    cls: "bg-muted/50 text-coop-gray-600/60 border-border/50",
+    cls: "bg-muted/50 text-coop-gray-900/60 border-border/50",
   },
 ];
 
@@ -423,7 +423,7 @@ function DeliveryPicker({
                 className="h-3.5 w-3.5"
               />
               <span className="text-xs font-semibold flex-1">{dayName}</span>
-              <span className="text-[10px] text-coop-gray-600">
+              <span className="text-[10px] text-coop-gray-900">
                 {dayEntries.length} leverans{dayEntries.length !== 1 ? "er" : ""}
               </span>
             </div>
@@ -443,7 +443,7 @@ function DeliveryPicker({
                   />
                   <div className="flex-1 min-w-0">
                     <span className="text-xs">{entry.supplier}</span>
-                    <span className="text-[10px] text-coop-gray-600 ml-1.5">
+                    <span className="text-[10px] text-coop-gray-900 ml-1.5">
                       {entry.flow_name}
                     </span>
                   </div>
@@ -3174,7 +3174,7 @@ function MallarPage() {
       visibleGroups.push({
         label: "Butiksmallar",
         badge: "Butik",
-        badgeClass: "border-border text-coop-gray-600",
+        badgeClass: "border-border text-coop-gray-900",
         items: storeTemplates,
       });
     }
@@ -3216,19 +3216,19 @@ function MallarPage() {
             placeholder="Mallens namn..."
             value={f.title}
             onChange={(e) => setF((p) => ({ ...p, title: e.target.value }))}
-            className="w-full border-0 bg-transparent text-xl font-bold text-coop-gray-900 placeholder:text-coop-gray-600/50 outline-none focus:outline-none"
+            className="w-full border-0 bg-transparent text-xl font-bold text-coop-gray-900 placeholder:text-coop-gray-900/50 outline-none focus:outline-none"
           />
           <Textarea
             placeholder="Kort beskrivning av vad mallen används till..."
             value={f.description}
             onChange={(e) => setF((p) => ({ ...p, description: e.target.value }))}
             rows={2}
-            className="resize-none border-0 bg-transparent px-0 text-sm text-coop-gray-600 placeholder:text-coop-gray-600/40 focus-visible:ring-0 shadow-none"
+            className="resize-none border-0 bg-transparent px-0 text-sm text-coop-gray-900 placeholder:text-coop-gray-900/40 focus-visible:ring-0 shadow-none"
           />
 
           {/* Steg */}
           <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-600">
+            <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">
               Steg
             </p>
             <div className="space-y-1.5">
@@ -3242,7 +3242,7 @@ function MallarPage() {
                     className="rounded-lg border border-border/50 bg-muted/20 transition-colors hover:bg-muted/40"
                   >
                     <div className="group flex items-center gap-2 px-3 py-2">
-                      <GripVertical className="h-4 w-4 shrink-0 text-coop-gray-600/30" />
+                      <GripVertical className="h-4 w-4 shrink-0 text-coop-gray-900/30" />
                       <Input
                         placeholder={`Steg ${idx + 1}`}
                         value={item.label}
@@ -3253,7 +3253,7 @@ function MallarPage() {
                         }}
                         className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0"
                       />
-                      <label className="flex shrink-0 items-center gap-1 text-[11px] text-coop-gray-600/70 cursor-pointer">
+                      <label className="flex shrink-0 items-center gap-1 text-[11px] text-coop-gray-900/70 cursor-pointer">
                         <Checkbox
                           checked={item.requires_photo}
                           onCheckedChange={(v) => {
@@ -3281,7 +3281,7 @@ function MallarPage() {
                             setF((p) => ({ ...p, items }));
                           }
                         }}
-                        className="w-24 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-coop-gray-600/40"
+                        className="w-24 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-coop-gray-900/40"
                       />
                       {item.link_url && (
                         <a
@@ -3302,13 +3302,13 @@ function MallarPage() {
                         }
                         disabled={f.items.length === 1}
                       >
-                        <X className="h-3.5 w-3.5 text-coop-gray-600/60" />
+                        <X className="h-3.5 w-3.5 text-coop-gray-900/60" />
                       </button>
                     </div>
                     {/* Conditional logic — only shown if there are yes/no questions */}
                     {yesNoQuestions.length > 0 && (
                       <div className="flex items-center gap-2 border-t border-border/30 px-3 pb-2 pt-1.5">
-                        <span className="text-[11px] text-coop-gray-600/60">Visa om</span>
+                        <span className="text-[11px] text-coop-gray-900/60">Visa om</span>
                         <Select
                           value={item.condition_question_id ?? "__none"}
                           onValueChange={(v) => {
@@ -3322,7 +3322,7 @@ function MallarPage() {
                             setF((p) => ({ ...p, items }));
                           }}
                         >
-                          <SelectTrigger className="h-6 flex-1 border-0 bg-transparent p-0 text-[11px] shadow-none focus:ring-0 text-coop-gray-600">
+                          <SelectTrigger className="h-6 flex-1 border-0 bg-transparent p-0 text-[11px] shadow-none focus:ring-0 text-coop-gray-900">
                             <SelectValue placeholder="Alltid (ingen villkor)" />
                           </SelectTrigger>
                           <SelectContent>
@@ -3343,7 +3343,7 @@ function MallarPage() {
                               setF((p) => ({ ...p, items }));
                             }}
                           >
-                            <SelectTrigger className="h-6 w-16 border-0 bg-transparent p-0 text-[11px] shadow-none focus:ring-0 text-coop-gray-600">
+                            <SelectTrigger className="h-6 w-16 border-0 bg-transparent p-0 text-[11px] shadow-none focus:ring-0 text-coop-gray-900">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -3360,7 +3360,7 @@ function MallarPage() {
             </div>
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-600 transition-colors hover:border-primary/40 hover:text-primary"
+              className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-900 transition-colors hover:border-primary/40 hover:text-primary"
               onClick={() =>
                 setF((p) => ({
                   ...p,
@@ -3374,7 +3374,7 @@ function MallarPage() {
 
           {/* Frågor */}
           <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-600">
+            <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">
               Frågor
             </p>
             <div className="space-y-2">
@@ -3400,11 +3400,11 @@ function MallarPage() {
                         setF((p) => ({ ...p, questions: p.questions.filter((_, i) => i !== idx) }))
                       }
                     >
-                      <X className="h-3.5 w-3.5 text-coop-gray-600/50" />
+                      <X className="h-3.5 w-3.5 text-coop-gray-900/50" />
                     </button>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <ExternalLink className="h-3 w-3 shrink-0 text-coop-gray-600/40" />
+                    <ExternalLink className="h-3 w-3 shrink-0 text-coop-gray-900/40" />
                     <Input
                       placeholder="URL (valfri länk)"
                       value={q.link_url ?? ""}
@@ -3421,7 +3421,7 @@ function MallarPage() {
                           setF((p) => ({ ...p, questions: qs }));
                         }
                       }}
-                      className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-coop-gray-600/40"
+                      className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-coop-gray-900/40"
                     />
                     {q.link_url && (
                       <a
@@ -3444,7 +3444,7 @@ function MallarPage() {
                             "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
                             (q.question_type ?? "text") === type
                               ? "bg-primary text-primary-foreground border-primary"
-                              : "border-border/60 text-coop-gray-600 hover:border-primary/50",
+                              : "border-border/60 text-coop-gray-900 hover:border-primary/50",
                           )}
                           onClick={() => {
                             const qs = [...f.questions];
@@ -3456,7 +3456,7 @@ function MallarPage() {
                         </button>
                       ))}
                     </div>
-                    <label className="flex items-center gap-1 text-[11px] text-coop-gray-600 cursor-pointer">
+                    <label className="flex items-center gap-1 text-[11px] text-coop-gray-900 cursor-pointer">
                       <Checkbox
                         checked={q.is_required}
                         onCheckedChange={(v) => {
@@ -3474,7 +3474,7 @@ function MallarPage() {
             </div>
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-600 transition-colors hover:border-primary/40 hover:text-primary"
+              className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-900 transition-colors hover:border-primary/40 hover:text-primary"
               onClick={() =>
                 setF((p) => ({
                   ...p,
@@ -3495,7 +3495,7 @@ function MallarPage() {
           <div className="divide-y divide-border/50 pb-16">
             {/* Malltyp */}
             <div className="px-4 py-3 space-y-2">
-              <span className="text-xs font-medium text-coop-gray-600">Malltyp</span>
+              <span className="text-xs font-medium text-coop-gray-900">Malltyp</span>
               <div className="flex gap-1.5">
                 {(["regular", "base"] as const).map((type) => (
                   <button
@@ -3507,7 +3507,7 @@ function MallarPage() {
                         ? type === "base"
                           ? "bg-coop-orange-600 text-coop-vit border-amber-500"
                           : "bg-primary text-primary-foreground border-primary"
-                        : "border-border/60 text-coop-gray-600 hover:border-primary/40",
+                        : "border-border/60 text-coop-gray-900 hover:border-primary/40",
                     )}
                     onClick={() => setF((p) => ({ ...p, template_type: type }))}
                   >
@@ -3515,7 +3515,7 @@ function MallarPage() {
                   </button>
                 ))}
               </div>
-              <p className="text-[11px] text-coop-gray-600/70">
+              <p className="text-[11px] text-coop-gray-900/70">
                 {f.template_type === "base"
                   ? "Grundmallar visas bara vid batchskapning och schemalagda körningar."
                   : "Vanliga mallar visas i mallväljaren vid manuell uppgiftsskapning."}
@@ -3525,10 +3525,10 @@ function MallarPage() {
             {/* Kategori */}
             <div className="flex items-start gap-3 px-4 py-3">
               <div className="mt-0.5 h-4 w-4 shrink-0 flex items-center justify-center">
-                <span className="text-xs text-coop-gray-600/60">#</span>
+                <span className="text-xs text-coop-gray-900/60">#</span>
               </div>
               <div className="flex flex-col gap-1 min-w-0 flex-1">
-                <span className="text-xs text-coop-gray-600">Kategori</span>
+                <span className="text-xs text-coop-gray-900">Kategori</span>
                 <Input
                   placeholder="t.ex. Rengöring"
                   value={f.category}
@@ -3540,8 +3540,8 @@ function MallarPage() {
 
             {/* Prioritet */}
             <div className="flex items-center gap-3 px-4 py-3">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-              <span className="w-20 shrink-0 text-xs text-coop-gray-600">Prioritet</span>
+              <AlertTriangle className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+              <span className="w-20 shrink-0 text-xs text-coop-gray-900">Prioritet</span>
               <Select
                 value={f.priority}
                 onValueChange={(v) => setF((p) => ({ ...p, priority: v }))}
@@ -3561,8 +3561,8 @@ function MallarPage() {
 
             {/* Status */}
             <div className="flex items-center gap-3 px-4 py-3">
-              <CheckCircle className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-              <span className="w-20 shrink-0 text-xs text-coop-gray-600">Status</span>
+              <CheckCircle className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+              <span className="w-20 shrink-0 text-xs text-coop-gray-900">Status</span>
               <Select
                 value={f.status}
                 onValueChange={(v) => setF((p) => ({ ...p, status: v as FormState["status"] }))}
@@ -3583,19 +3583,19 @@ function MallarPage() {
             {/* Förfallodagar — locked for delivery tasks */}
             {f.is_delivery_task ? (
               <div className="flex items-center gap-3 px-4 py-3 opacity-50">
-                <Clock className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
+                <Clock className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
                 <div className="flex flex-col gap-1 flex-1 min-w-0">
-                  <span className="text-xs text-coop-gray-600">Förfaller om (dagar)</span>
-                  <span className="text-xs text-coop-gray-600/60 italic">
+                  <span className="text-xs text-coop-gray-900">Förfaller om (dagar)</span>
+                  <span className="text-xs text-coop-gray-900/60 italic">
                     Bestäms av leveransschemat
                   </span>
                 </div>
               </div>
             ) : (
               <div className="flex items-center gap-3 px-4 py-3">
-                <Clock className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
+                <Clock className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
                 <div className="flex flex-col gap-1 flex-1 min-w-0">
-                  <span className="text-xs text-coop-gray-600">Förfaller om (dagar)</span>
+                  <span className="text-xs text-coop-gray-900">Förfaller om (dagar)</span>
                   <Input
                     type="number"
                     min={0}
@@ -3611,19 +3611,19 @@ function MallarPage() {
             {/* Förfallotid — locked for delivery tasks */}
             {f.is_delivery_task ? (
               <div className="flex items-center gap-3 px-4 py-3 opacity-50">
-                <Clock className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
+                <Clock className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
                 <div className="flex flex-col gap-1 flex-1 min-w-0">
-                  <span className="text-xs text-coop-gray-600">Förfallotid (HH:MM)</span>
-                  <span className="text-xs text-coop-gray-600/60 italic">
+                  <span className="text-xs text-coop-gray-900">Förfallotid (HH:MM)</span>
+                  <span className="text-xs text-coop-gray-900/60 italic">
                     Bestäms av leveransschemat
                   </span>
                 </div>
               </div>
             ) : (
               <div className="flex items-center gap-3 px-4 py-3">
-                <Clock className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
+                <Clock className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
                 <div className="flex flex-col gap-1 flex-1 min-w-0">
-                  <span className="text-xs text-coop-gray-600">Förfallotid (HH:MM)</span>
+                  <span className="text-xs text-coop-gray-900">Förfallotid (HH:MM)</span>
                   <Input
                     type="time"
                     value={f.due_date_time}
@@ -3637,8 +3637,8 @@ function MallarPage() {
             {/* Materialnummer / Mitt Coop-sortiment */}
             <div className="px-4 py-3 min-w-0 space-y-1">
               <div className="flex items-center gap-2">
-                <Hash className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                <span className="text-xs text-coop-gray-600 shrink-0">
+                <Hash className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                <span className="text-xs text-coop-gray-900 shrink-0">
                   {mallArticleType === "ean"
                     ? "EAN"
                     : mallArticleType === "bnr"
@@ -3662,12 +3662,12 @@ function MallarPage() {
                     autoCorrect="off"
                     autoCapitalize="none"
                     spellCheck={false}
-                    className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-coop-gray-900 placeholder:text-coop-gray-600/40 outline-none focus:outline-none overflow-hidden"
+                    className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-coop-gray-900 placeholder:text-coop-gray-900/40 outline-none focus:outline-none overflow-hidden"
                   />
                   <select
                     value={mallArticleType}
                     onChange={(e) => setMallArticleType(e.target.value as ArticleIdType)}
-                    className="border-0 bg-transparent text-[10px] text-coop-gray-600 outline-none cursor-pointer shrink-0"
+                    className="border-0 bg-transparent text-[10px] text-coop-gray-900 outline-none cursor-pointer shrink-0"
                   >
                     <option value="mat-nr">Mat-nr</option>
                     <option value="ean">EAN</option>
@@ -3677,7 +3677,7 @@ function MallarPage() {
                     <button
                       type="button"
                       onClick={() => setF((p) => ({ ...p, sap_article_id: "" }))}
-                      className="flex h-5 w-5 items-center justify-center rounded-full text-coop-gray-600/60 hover:text-destructive shrink-0"
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-coop-gray-900/60 hover:text-destructive shrink-0"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -3706,12 +3706,12 @@ function MallarPage() {
             </div>
             <div className="px-4 py-3 space-y-2">
               <div className="flex items-center gap-2">
-                <CalendarClock className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                <span className="text-xs text-coop-gray-600 flex-1">
+                <CalendarClock className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                <span className="text-xs text-coop-gray-900 flex-1">
                   Tidsluckor (fleruppgifter)
                 </span>
               </div>
-              <p className="text-[11px] text-coop-gray-600/70 pl-6">
+              <p className="text-[11px] text-coop-gray-900/70 pl-6">
                 Genererar en separat uppgift för varje tid per period.
               </p>
               <div className="space-y-1.5 pl-6">
@@ -3736,13 +3736,13 @@ function MallarPage() {
                         }))
                       }
                     >
-                      <X className="h-3.5 w-3.5 text-coop-gray-600/50 hover:text-destructive" />
+                      <X className="h-3.5 w-3.5 text-coop-gray-900/50 hover:text-destructive" />
                     </button>
                   </div>
                 ))}
                 <button
                   type="button"
-                  className="flex items-center gap-1 text-[11px] text-coop-gray-600 hover:text-primary transition-colors"
+                  className="flex items-center gap-1 text-[11px] text-coop-gray-900 hover:text-primary transition-colors"
                   onClick={() =>
                     setF((p) => ({ ...p, time_slots: [...(p.time_slots ?? []), "08:00"] }))
                   }
@@ -3755,10 +3755,10 @@ function MallarPage() {
             {/* Återkommande — locked for delivery tasks since schedule is set by delivery plan */}
             <div className="px-4 py-3 space-y-2">
               <div className="flex items-center gap-3">
-                <Repeat className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                <span className="w-20 shrink-0 text-xs text-coop-gray-600">Återkommande</span>
+                <Repeat className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                <span className="w-20 shrink-0 text-xs text-coop-gray-900">Återkommande</span>
                 {f.is_delivery_task ? (
-                  <span className="flex-1 text-xs text-right text-coop-gray-600/60 italic">
+                  <span className="flex-1 text-xs text-right text-coop-gray-900/60 italic">
                     Bestäms av leveransschemat
                   </span>
                 ) : (
@@ -3792,7 +3792,7 @@ function MallarPage() {
               </div>
               {f.recurrence_rule === "custom" && (
                 <div className="flex items-center gap-2 pl-7">
-                  <span className="text-[11px] text-coop-gray-600">Var</span>
+                  <span className="text-[11px] text-coop-gray-900">Var</span>
                   <input
                     type="number"
                     min={1}
@@ -3806,7 +3806,7 @@ function MallarPage() {
                     }
                     className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
                   />
-                  <span className="text-[11px] text-coop-gray-600">dag(ar)</span>
+                  <span className="text-[11px] text-coop-gray-900">dag(ar)</span>
                 </div>
               )}
               {(f.recurrence_rule === "weekly" || f.recurrence_rule === "biweekly") && (
@@ -3820,7 +3820,7 @@ function MallarPage() {
                           "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
                           f.recurrence_days.includes(idx)
                             ? "bg-primary text-primary-foreground border-primary"
-                            : "border-border/60 text-coop-gray-600 hover:border-primary/50",
+                            : "border-border/60 text-coop-gray-900 hover:border-primary/50",
                         )}
                         onClick={() => {
                           const days = f.recurrence_days.includes(idx)
@@ -3834,7 +3834,7 @@ function MallarPage() {
                     ))}
                   </div>
                   {f.recurrence_rule === "biweekly" && (
-                    <p className="text-[11px] text-coop-gray-600">
+                    <p className="text-[11px] text-coop-gray-900">
                       Upprepas varannan vecka på valda dagar.
                     </p>
                   )}
@@ -3842,7 +3842,7 @@ function MallarPage() {
               )}
               {f.recurrence_rule === "monthly" && (
                 <div className="flex items-center gap-2 pl-7">
-                  <span className="text-[11px] text-coop-gray-600">Dag i månaden</span>
+                  <span className="text-[11px] text-coop-gray-900">Dag i månaden</span>
                   <input
                     type="number"
                     min={1}
@@ -3863,11 +3863,11 @@ function MallarPage() {
               )}
               {f.recurrence_rule === "quarterly" && (
                 <div className="pl-7 space-y-1.5">
-                  <p className="text-[11px] text-coop-gray-600">Välj månader per kvartal</p>
+                  <p className="text-[11px] text-coop-gray-900">Välj månader per kvartal</p>
                   <div className="space-y-1">
                     {QUARTER_MONTHS.map(({ q, months }) => (
                       <div key={q} className="flex items-center gap-1">
-                        <span className="text-[11px] font-medium text-coop-gray-600 w-6">
+                        <span className="text-[11px] font-medium text-coop-gray-900 w-6">
                           {q}
                         </span>
                         {months.map((m) => (
@@ -3878,7 +3878,7 @@ function MallarPage() {
                               "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
                               f.recurrence_months.includes(m)
                                 ? "bg-primary text-primary-foreground border-primary"
-                                : "border-border/60 text-coop-gray-600 hover:border-primary/50",
+                                : "border-border/60 text-coop-gray-900 hover:border-primary/50",
                             )}
                             onClick={() => {
                               const ms = f.recurrence_months.includes(m)
@@ -3894,7 +3894,7 @@ function MallarPage() {
                     ))}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-coop-gray-600">Dag i månaden</span>
+                    <span className="text-[11px] text-coop-gray-900">Dag i månaden</span>
                     <input
                       type="number"
                       min={1}
@@ -3917,7 +3917,7 @@ function MallarPage() {
               {f.recurrence_rule && (
                 <div className="space-y-2 pt-1 border-t border-border/40">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-coop-gray-600 w-10">Start</span>
+                    <span className="text-[11px] text-coop-gray-900 w-10">Start</span>
                     <Input
                       type="date"
                       value={f.recurrence_start}
@@ -3926,7 +3926,7 @@ function MallarPage() {
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-coop-gray-600 w-10">V.</span>
+                    <span className="text-[11px] text-coop-gray-900 w-10">V.</span>
                     <input
                       type="number"
                       min={1}
@@ -3959,13 +3959,13 @@ function MallarPage() {
                       className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
                     />
                     {f.recurrence_start_week && (
-                      <span className="text-[11px] text-coop-gray-600/60">
+                      <span className="text-[11px] text-coop-gray-900/60">
                         {f.recurrence_start}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-coop-gray-600 w-10">Slut</span>
+                    <span className="text-[11px] text-coop-gray-900 w-10">Slut</span>
                     {f.recurrence_end_mode === "end_date" ? (
                       <Input
                         type="date"
@@ -3995,13 +3995,13 @@ function MallarPage() {
                           placeholder="Antal"
                           className="w-20 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
                         />
-                        <span className="text-[11px] text-coop-gray-600">upprepningar</span>
+                        <span className="text-[11px] text-coop-gray-900">upprepningar</span>
                       </div>
                     )}
                   </div>
                   {f.recurrence_end_mode === "end_date" && (
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-coop-gray-600 w-10">V.</span>
+                      <span className="text-[11px] text-coop-gray-900 w-10">V.</span>
                       <input
                         type="number"
                         min={1}
@@ -4031,7 +4031,7 @@ function MallarPage() {
                         className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
                       />
                       {f.recurrence_end_week && (
-                        <span className="text-[11px] text-coop-gray-600/60">
+                        <span className="text-[11px] text-coop-gray-900/60">
                           {f.recurrence_end}
                         </span>
                       )}
@@ -4040,7 +4040,7 @@ function MallarPage() {
                   {f.recurrence_end_mode === "max_repetitions" &&
                     f.recurrence_max_repetitions > 0 &&
                     f.recurrence_end && (
-                      <p className="text-[11px] text-coop-gray-600">
+                      <p className="text-[11px] text-coop-gray-900">
                         Slutar efter {f.recurrence_max_repetitions} upprepningar (beräknat
                         slutdatum: {f.recurrence_end})
                       </p>
@@ -4055,7 +4055,7 @@ function MallarPage() {
                         "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
                         f.recurrence_end_mode === "max_repetitions"
                           ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border/60 text-coop-gray-600 hover:border-primary/50",
+                          : "border-border/60 text-coop-gray-900 hover:border-primary/50",
                       )}
                     >
                       Max antal upprepningar
@@ -4067,7 +4067,7 @@ function MallarPage() {
                         "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
                         f.recurrence_end_mode === "end_date"
                           ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border/60 text-coop-gray-600 hover:border-primary/50",
+                          : "border-border/60 text-coop-gray-900 hover:border-primary/50",
                       )}
                     >
                       Slutdatum
@@ -4079,7 +4079,7 @@ function MallarPage() {
                     f.recurrence_start,
                     f.recurrence_end,
                   ) && (
-                    <p className="text-[11px] text-coop-gray-600">
+                    <p className="text-[11px] text-coop-gray-900">
                       {getRecurrencePreview(
                         f.recurrence_rule,
                         f.recurrence_days,
@@ -4095,7 +4095,7 @@ function MallarPage() {
             {/* Förening selector — shown when scope is forening and user is admin */}
             {scope === "forening" && isAdmin && (
               <div className="px-4 py-3 space-y-1">
-                <span className="text-xs text-coop-gray-600">Publicera till förening</span>
+                <span className="text-xs text-coop-gray-900">Publicera till förening</span>
                 <Select
                   value={f.foreningId || "__none"}
                   onValueChange={(v) =>
@@ -4121,8 +4121,8 @@ function MallarPage() {
             {isAdmin && scope === "hk" && (
               <div className="flex items-center justify-between px-4 py-3">
                 <div>
-                  <span className="text-xs font-medium text-coop-gray-600">Låst</span>
-                  <p className="text-[10px] text-coop-gray-600/60">Chefer kan inte redigera</p>
+                  <span className="text-xs font-medium text-coop-gray-900">Låst</span>
+                  <p className="text-[10px] text-coop-gray-900/60">Chefer kan inte redigera</p>
                 </div>
                 <Switch
                   checked={f.isLocked}
@@ -4135,8 +4135,8 @@ function MallarPage() {
             {f.template_type === "base" && f.recurrence_rule && (
               <div className="flex items-center justify-between px-4 py-3">
                 <div>
-                  <span className="text-xs font-medium text-coop-gray-600">Kritisk rutin</span>
-                  <p className="text-[10px] text-coop-gray-600/60">Stoppas aldrig automatiskt</p>
+                  <span className="text-xs font-medium text-coop-gray-900">Kritisk rutin</span>
+                  <p className="text-[10px] text-coop-gray-900/60">Stoppas aldrig automatiskt</p>
                 </div>
                 <Switch
                   checked={f.is_critical}
@@ -4149,10 +4149,10 @@ function MallarPage() {
             {scope === "store" && (
               <div className="px-4 py-3 space-y-1">
                 <div className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                  <span className="text-xs text-coop-gray-600">Händelsevillkor</span>
+                  <Zap className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                  <span className="text-xs text-coop-gray-900">Händelsevillkor</span>
                 </div>
-                <p className="text-[11px] text-coop-gray-600/60 pl-6">
+                <p className="text-[11px] text-coop-gray-900/60 pl-6">
                   Uppgiften döljs tills händelsen bekräftas.
                 </p>
                 <Input
@@ -4165,7 +4165,7 @@ function MallarPage() {
                 />
                 {f.event_trigger_description && (
                   <div className="pl-0 space-y-1 pt-1">
-                    <span className="text-[11px] text-coop-gray-600/70">Bekräftas av</span>
+                    <span className="text-[11px] text-coop-gray-900/70">Bekräftas av</span>
                     <Select
                       value={f.event_trigger_user_id || "__any"}
                       onValueChange={(v) =>
@@ -4196,8 +4196,8 @@ function MallarPage() {
               <div className="px-4 py-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Truck className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                    <span className="text-xs text-coop-gray-600">Leveransuppgift</span>
+                    <Truck className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                    <span className="text-xs text-coop-gray-900">Leveransuppgift</span>
                   </div>
                   <Switch
                     checked={f.is_delivery_task}
@@ -4207,7 +4207,7 @@ function MallarPage() {
                 {f.is_delivery_task && (
                   <div className="pl-6 space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-coop-gray-600">
+                      <span className="text-xs font-medium text-coop-gray-900">
                         Koppla till leveranser
                       </span>
                       {deliveryWeekEntries.length > 1 && (
@@ -4292,7 +4292,7 @@ function MallarPage() {
                           }
                           className="h-7 border border-border/60 text-xs"
                         />
-                        <p className="text-[10px] text-coop-gray-600/60">
+                        <p className="text-[10px] text-coop-gray-900/60">
                           Inga leveranser i aktiv plan — ange flödesnamn manuellt
                         </p>
                       </div>
@@ -4302,7 +4302,7 @@ function MallarPage() {
                         const cnt = parseEntryKeys(f.delivery_entry_keys).length;
                         if (cnt === 0) return null;
                         return (
-                          <p className="text-[10px] text-coop-gray-600/60">
+                          <p className="text-[10px] text-coop-gray-900/60">
                             {cnt} specifik{cnt !== 1 ? "a" : ""} leverans{cnt !== 1 ? "er" : ""}{" "}
                             vald{cnt !== 1 ? "a" : ""}
                           </p>
@@ -4316,10 +4316,10 @@ function MallarPage() {
             {/* Kedja / Beror på */}
             <div className="px-4 py-3 space-y-1">
               <div className="flex items-center gap-2">
-                <Link2 className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                <span className="text-xs text-coop-gray-600">Beror på mall</span>
+                <Link2 className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                <span className="text-xs text-coop-gray-900">Beror på mall</span>
               </div>
-              <p className="text-[11px] text-coop-gray-600/60 pl-6">
+              <p className="text-[11px] text-coop-gray-900/60 pl-6">
                 Uppgiften blockeras tills föregångarmallen är klar.
               </p>
               <div className="pl-0 space-y-1">
@@ -4357,8 +4357,8 @@ function MallarPage() {
             {f.template_type === "base" && f.recurrence_rule && (
               <div className="px-4 py-3 space-y-1">
                 <div className="flex items-center gap-2">
-                  <CalendarClock className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                  <span className="text-xs text-coop-gray-600">
+                  <CalendarClock className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                  <span className="text-xs text-coop-gray-900">
                     Granskningsintervall (månader)
                   </span>
                 </div>
@@ -4375,7 +4375,7 @@ function MallarPage() {
                   }
                   className="h-7 border border-border/60 text-xs"
                 />
-                <p className="text-[11px] text-coop-gray-600/60">
+                <p className="text-[11px] text-coop-gray-900/60">
                   Chef aviseras när granskningstiden löpt ut.
                 </p>
               </div>
@@ -4574,7 +4574,7 @@ function MallarPage() {
                 "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
                 viewFilter === key
                   ? "bg-background shadow-sm text-coop-gray-900"
-                  : "text-coop-gray-600 hover:text-coop-gray-900",
+                  : "text-coop-gray-900 hover:text-coop-gray-900",
               )}
             >
               {label}
@@ -4584,19 +4584,19 @@ function MallarPage() {
 
         {/* Search */}
         <div className="relative flex-1 min-w-40 max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600" />
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-900" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Sök mallar..."
-            className="h-8 w-full rounded-lg border border-border/60 bg-background pl-8 pr-3 text-xs outline-none placeholder:text-coop-gray-600/50 focus:border-primary/40"
+            className="h-8 w-full rounded-lg border border-border/60 bg-background pl-8 pr-3 text-xs outline-none placeholder:text-coop-gray-900/50 focus:border-primary/40"
           />
           {search && (
             <button
               onClick={() => setSearch("")}
               className="absolute right-2 top-1/2 -translate-y-1/2"
             >
-              <X className="h-3 w-3 text-coop-gray-600" />
+              <X className="h-3 w-3 text-coop-gray-900" />
             </button>
           )}
         </div>
@@ -4647,7 +4647,7 @@ function MallarPage() {
               setFilterCategory("");
               setFilterPriority("");
             }}
-            className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-coop-gray-600 hover:text-coop-gray-900 transition-colors"
+            className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-coop-gray-900 hover:text-coop-gray-900 transition-colors"
           >
             <X className="h-3 w-3" /> Rensa filter
           </button>
@@ -4663,7 +4663,7 @@ function MallarPage() {
                 setSelectedTemplateIds(new Set(filteredTemplates.map((t) => t.id)));
               }
             }}
-            className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-coop-gray-600 hover:text-coop-gray-900 transition-colors ml-auto"
+            className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-coop-gray-900 hover:text-coop-gray-900 transition-colors ml-auto"
           >
             {selectedTemplateIds.size === filteredTemplates.length && filteredTemplates.length > 0
               ? "Avmarkera alla"
@@ -4680,7 +4680,7 @@ function MallarPage() {
         </div>
       ) : filteredTemplates.length === 0 && templates.length === 0 ? (
         <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-16 text-center">
-          <p className="text-sm font-medium text-coop-gray-600">Inga mallar ännu</p>
+          <p className="text-sm font-medium text-coop-gray-900">Inga mallar ännu</p>
           {isManager && (
             <Button className="mt-4 rounded-full" size="sm" onClick={() => openCreate("store")}>
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Skapa mall
@@ -4689,7 +4689,7 @@ function MallarPage() {
         </div>
       ) : filteredTemplates.length === 0 ? (
         <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-12 text-center">
-          <p className="text-sm font-medium text-coop-gray-600">Inga mallar matchar sökningen</p>
+          <p className="text-sm font-medium text-coop-gray-900">Inga mallar matchar sökningen</p>
           <button
             onClick={() => {
               setSearch("");
@@ -4798,7 +4798,7 @@ function MallarPage() {
                 </Badge>
                 <button
                   onClick={() => setShowPackagesInline((v) => !v)}
-                  className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-coop-gray-600 hover:text-coop-gray-900 transition-colors"
+                  className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-coop-gray-900 hover:text-coop-gray-900 transition-colors"
                 >
                   {showPackagesInline ? (
                     <ChevronUp className="h-3 w-3" />
@@ -4810,7 +4810,7 @@ function MallarPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="ml-auto text-xs text-coop-gray-600 h-7 rounded-full"
+                  className="ml-auto text-xs text-coop-gray-900 h-7 rounded-full"
                   onClick={() => setShowPackagesPanel(true)}
                 >
                   <Layers className="h-3.5 w-3.5 mr-1" /> Hantera
@@ -4831,9 +4831,9 @@ function MallarPage() {
                           <div className="min-w-0">
                             <p className="font-medium text-sm">{pkg.name}</p>
                             {pkg.description && (
-                              <p className="text-xs text-coop-gray-600">{pkg.description}</p>
+                              <p className="text-xs text-coop-gray-900">{pkg.description}</p>
                             )}
-                            <p className="text-xs text-coop-gray-600 mt-0.5">
+                            <p className="text-xs text-coop-gray-900 mt-0.5">
                               {pkgTemplates.length} mallar
                             </p>
                           </div>
@@ -4870,10 +4870,10 @@ function MallarPage() {
                 <Badge variant="outline" className={cn("text-xs", group.badgeClass)}>
                   {group.badge}
                 </Badge>
-                <span className="text-xs text-coop-gray-600">{group.items.length} mallar</span>
+                <span className="text-xs text-coop-gray-900">{group.items.length} mallar</span>
               </div>
               {group.items.length === 0 ? (
-                <p className="text-sm text-coop-gray-600">Inga mallar i denna kategori.</p>
+                <p className="text-sm text-coop-gray-900">Inga mallar i denna kategori.</p>
               ) : (
                 <div className="space-y-3">
                   {group.items.map((t) => {
@@ -4907,20 +4907,20 @@ function MallarPage() {
                               onClick={() => setExpanded(expanded === t.id ? null : t.id)}
                             >
                               {expanded === t.id ? (
-                                <ChevronUp className="h-4 w-4 text-coop-gray-600" />
+                                <ChevronUp className="h-4 w-4 text-coop-gray-900" />
                               ) : (
-                                <ChevronDown className="h-4 w-4 text-coop-gray-600" />
+                                <ChevronDown className="h-4 w-4 text-coop-gray-900" />
                               )}
                               <div>
                                 <p className="font-medium">
                                   {t.title}
                                   {isHidden && (
-                                    <span className="ml-2 text-xs text-coop-gray-600">
+                                    <span className="ml-2 text-xs text-coop-gray-900">
                                       (dold för din förening)
                                     </span>
                                   )}
                                   {t.parent_template_id && (
-                                    <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-coop-gray-600/70">
+                                    <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-coop-gray-900/70">
                                       <GitBranch className="h-3 w-3" />
                                       {t.inherit_mode === "variant" ? "Variant" : "Kopia"}
                                     </span>
@@ -4977,16 +4977,16 @@ function MallarPage() {
                                       Skrivskyddad
                                     </Badge>
                                   )}
-                                  <span className="text-xs text-coop-gray-600">
+                                  <span className="text-xs text-coop-gray-900">
                                     {t.items?.length ?? 0} steg
                                   </span>
                                   {(t.questions?.length ?? 0) > 0 && (
-                                    <span className="text-xs text-coop-gray-600">
+                                    <span className="text-xs text-coop-gray-900">
                                       {t.questions?.length} frågor
                                     </span>
                                   )}
                                   {(t.version ?? 1) > 1 && (
-                                    <span className="text-xs text-coop-gray-600/60">
+                                    <span className="text-xs text-coop-gray-900/60">
                                       v{t.version}
                                     </span>
                                   )}
@@ -4999,7 +4999,7 @@ function MallarPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="hidden sm:inline-flex rounded-full text-coop-gray-600 hover:text-coop-gray-900"
+                                className="hidden sm:inline-flex rounded-full text-coop-gray-900 hover:text-coop-gray-900"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setPreviewTarget(t);
@@ -5017,7 +5017,7 @@ function MallarPage() {
                                     "rounded-full",
                                     isHidden
                                       ? "text-coop-orange-600 hover:text-coop-orange-700"
-                                      : "text-coop-gray-600 hover:text-coop-gray-900",
+                                      : "text-coop-gray-900 hover:text-coop-gray-900",
                                   )}
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -5041,7 +5041,7 @@ function MallarPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="hidden sm:inline-flex rounded-full text-coop-gray-600 hover:text-coop-gray-900"
+                                  className="hidden sm:inline-flex rounded-full text-coop-gray-900 hover:text-coop-gray-900"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     void loadVersionHistory(t);
@@ -5060,7 +5060,7 @@ function MallarPage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="hidden sm:inline-flex rounded-full text-coop-gray-600 hover:text-primary"
+                                    className="hidden sm:inline-flex rounded-full text-coop-gray-900 hover:text-primary"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       void createLocalVariantAndEdit(t);
@@ -5075,7 +5075,7 @@ function MallarPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="hidden sm:inline-flex rounded-full text-coop-gray-600 hover:text-primary"
+                                  className="hidden sm:inline-flex rounded-full text-coop-gray-900 hover:text-primary"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     openEdit(t);
@@ -5089,7 +5089,7 @@ function MallarPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="hidden sm:inline-flex rounded-full text-coop-gray-600 hover:text-destructive"
+                                  className="hidden sm:inline-flex rounded-full text-coop-gray-900 hover:text-destructive"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setDeleteTarget(t);
@@ -5105,7 +5105,7 @@ function MallarPage() {
                           {expanded === t.id && (
                             <div className="border-t border-border/60 px-5 py-4 space-y-3">
                               {t.description && (
-                                <p className="text-sm text-coop-gray-600">{t.description}</p>
+                                <p className="text-sm text-coop-gray-900">{t.description}</p>
                               )}
                               {/* Special type indicators */}
                               <div className="flex flex-wrap gap-2">
@@ -5159,7 +5159,7 @@ function MallarPage() {
                                 )}
                                 {(t as ChecklistTemplate & { depends_on_template_title?: string })
                                   .depends_on_template_title && (
-                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-coop-gray-600">
+                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-coop-gray-900">
                                     <Link2 className="h-3 w-3" />
                                     Beror på:{" "}
                                     {
@@ -5175,7 +5175,7 @@ function MallarPage() {
                                   (t as ChecklistTemplate & { time_slots?: string[] }).time_slots ??
                                   []
                                 ).length > 0 && (
-                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-coop-gray-600">
+                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-coop-gray-900">
                                     <Clock className="h-3 w-3" />
                                     {(
                                       (t as ChecklistTemplate & { time_slots?: string[] })
@@ -5210,7 +5210,7 @@ function MallarPage() {
                                       <ExternalLink className="h-3 w-3" />
                                     </a>
                                   ) : (
-                                    <p className="text-xs text-coop-gray-600 font-mono">
+                                    <p className="text-xs text-coop-gray-900 font-mono">
                                       Materialnummer:{" "}
                                       {
                                         (
@@ -5224,7 +5224,7 @@ function MallarPage() {
                                 })()}
                               {(t.items?.length ?? 0) > 0 && (
                                 <div>
-                                  <p className="mb-2 text-xs font-medium text-coop-gray-600 uppercase tracking-wide">
+                                  <p className="mb-2 text-xs font-medium text-coop-gray-900 uppercase tracking-wide">
                                     Checkpoints
                                   </p>
                                   <ol className="space-y-2">
@@ -5235,7 +5235,7 @@ function MallarPage() {
                                           key={item.id}
                                           className="flex items-center gap-2.5 text-sm"
                                         >
-                                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-coop-gray-600">
+                                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-coop-gray-900">
                                             {idx + 1}
                                           </span>
                                           <span className="flex-1">{item.label}</span>
@@ -5269,7 +5269,7 @@ function MallarPage() {
                               )}
                               {(t.questions?.length ?? 0) > 0 && (
                                 <div>
-                                  <p className="mb-2 text-xs font-medium text-coop-gray-600 uppercase tracking-wide">
+                                  <p className="mb-2 text-xs font-medium text-coop-gray-900 uppercase tracking-wide">
                                     Frågor
                                   </p>
                                   <ol className="space-y-2">
@@ -5304,7 +5304,7 @@ function MallarPage() {
                               )}
                               {t.storeIds.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5">
-                                  <span className="text-xs text-coop-gray-600">
+                                  <span className="text-xs text-coop-gray-900">
                                     Tilldelade butiker:
                                   </span>
                                   {t.storeIds.map((sid) => {
@@ -5365,9 +5365,9 @@ function MallarPage() {
                                     onClick={() => setExpanded(expanded === v.id ? null : v.id)}
                                   >
                                     {expanded === v.id ? (
-                                      <ChevronUp className="h-4 w-4 text-coop-gray-600" />
+                                      <ChevronUp className="h-4 w-4 text-coop-gray-900" />
                                     ) : (
-                                      <ChevronDown className="h-4 w-4 text-coop-gray-600" />
+                                      <ChevronDown className="h-4 w-4 text-coop-gray-900" />
                                     )}
                                     <div>
                                       <p className="font-medium text-sm">
@@ -5383,7 +5383,7 @@ function MallarPage() {
                                             {v.category}
                                           </Badge>
                                         )}
-                                        <span className="text-xs text-coop-gray-600">
+                                        <span className="text-xs text-coop-gray-900">
                                           {v.items?.length ?? 0} steg
                                         </span>
                                       </div>
@@ -5394,7 +5394,7 @@ function MallarPage() {
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="hidden sm:inline-flex rounded-full text-coop-gray-600 hover:text-primary"
+                                        className="hidden sm:inline-flex rounded-full text-coop-gray-900 hover:text-primary"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           openEdit(v);
@@ -5409,7 +5409,7 @@ function MallarPage() {
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="hidden sm:inline-flex rounded-full text-coop-gray-600 hover:text-destructive"
+                                        className="hidden sm:inline-flex rounded-full text-coop-gray-900 hover:text-destructive"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setDeleteTarget(v);
@@ -5424,13 +5424,13 @@ function MallarPage() {
                                 {expanded === v.id && (
                                   <div className="border-t border-border/60 px-5 py-4 space-y-3">
                                     {v.description && (
-                                      <p className="text-sm text-coop-gray-600">
+                                      <p className="text-sm text-coop-gray-900">
                                         {v.description}
                                       </p>
                                     )}
                                     {(v.items?.length ?? 0) > 0 && (
                                       <div>
-                                        <p className="mb-2 text-xs font-medium text-coop-gray-600 uppercase tracking-wide">
+                                        <p className="mb-2 text-xs font-medium text-coop-gray-900 uppercase tracking-wide">
                                           Checkpoints
                                         </p>
                                         <ol className="space-y-2">
@@ -5441,7 +5441,7 @@ function MallarPage() {
                                                 key={item.id}
                                                 className="flex items-center gap-2.5 text-sm"
                                               >
-                                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-coop-gray-600">
+                                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-coop-gray-900">
                                                   {idx + 1}
                                                 </span>
                                                 <span>{item.label}</span>
@@ -5488,8 +5488,8 @@ function MallarPage() {
                 : "Ny butiksmall"}
           </DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
-            <GripVertical className="h-4 w-4 text-coop-gray-600" />
-            <span className="text-sm font-medium text-coop-gray-600">
+            <GripVertical className="h-4 w-4 text-coop-gray-900" />
+            <span className="text-sm font-medium text-coop-gray-900">
               {createScope === "hk"
                 ? "Ny HK-mall"
                 : createScope === "forening"
@@ -5506,7 +5506,7 @@ function MallarPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs text-coop-gray-600"
+                className="text-xs text-coop-gray-900"
                 onClick={() => setShowCreate(false)}
               >
                 Avbryt
@@ -5532,14 +5532,14 @@ function MallarPage() {
             Redigera mall{editTarget ? `: ${editTarget.title}` : ""}
           </DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
-            <GripVertical className="h-4 w-4 text-coop-gray-600" />
-            <span className="text-sm font-medium text-coop-gray-600">Redigera mall</span>
+            <GripVertical className="h-4 w-4 text-coop-gray-900" />
+            <span className="text-sm font-medium text-coop-gray-900">Redigera mall</span>
             <div className="ml-auto flex items-center gap-2">
               {error && <span className="text-xs text-destructive">{error}</span>}
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs text-coop-gray-600"
+                className="text-xs text-coop-gray-900"
                 onClick={() => setEditTarget(null)}
               >
                 Avbryt
@@ -5695,17 +5695,17 @@ function MallarPage() {
         >
           <DialogTitle className="sr-only">Versionshistorik</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
-            <History className="h-4 w-4 text-coop-gray-600" />
+            <History className="h-4 w-4 text-coop-gray-900" />
             <span className="text-sm font-medium">Versionshistorik</span>
-            <span className="text-sm text-coop-gray-600 truncate flex-1">
+            <span className="text-sm text-coop-gray-900 truncate flex-1">
               {versionHistoryTarget?.title}
             </span>
-            <span className="text-xs text-coop-gray-600 whitespace-nowrap">
+            <span className="text-xs text-coop-gray-900 whitespace-nowrap">
               v{versionHistoryTarget?.version ?? 1}
             </span>
             <button
               onClick={() => setVersionHistoryTarget(null)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-coop-gray-600 hover:bg-muted/60 transition-colors"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-coop-gray-900 hover:bg-muted/60 transition-colors"
               aria-label="Stäng"
             >
               <X className="h-4 w-4" />
@@ -5719,7 +5719,7 @@ function MallarPage() {
                 ))}
               </div>
             ) : versions.length === 0 ? (
-              <p className="text-sm text-coop-gray-600 text-center py-8">
+              <p className="text-sm text-coop-gray-900 text-center py-8">
                 Ingen versionshistorik tillgänglig än.
               </p>
             ) : (
@@ -5945,11 +5945,11 @@ function MallarPage() {
                           <p className="text-xs font-medium text-coop-gray-900">
                             {v.change_summary || "Sparad"}
                           </p>
-                          <p className="text-[11px] text-coop-gray-600">
+                          <p className="text-[11px] text-coop-gray-900">
                             {new Date(v.saved_at).toLocaleString("sv-SE")}
                           </p>
                           {snap.title && (
-                            <p className="text-[11px] text-coop-gray-600 mt-0.5">
+                            <p className="text-[11px] text-coop-gray-900 mt-0.5">
                               "{snap.title}" — {snap.items?.length ?? 0} steg,{" "}
                               {snap.questions?.length ?? 0} frågor
                               {snap.recurrence_rule ? `, ${snap.recurrence_rule}` : ""}
@@ -5989,7 +5989,7 @@ function MallarPage() {
                                     "shrink-0 w-3 font-bold",
                                     isAdded && "text-success",
                                     isRemoved && "text-destructive",
-                                    !isAdded && !isRemoved && "text-coop-gray-600",
+                                    !isAdded && !isRemoved && "text-coop-gray-900",
                                   )}
                                 >
                                   {isAdded ? "+" : isRemoved ? "−" : "·"}
@@ -6002,7 +6002,7 @@ function MallarPage() {
                           })}
                         </div>
                       ) : (
-                        <p className="text-xs text-coop-gray-600 italic">
+                        <p className="text-xs text-coop-gray-900 italic">
                           Inga spårade ändringar
                         </p>
                       )}
@@ -6041,7 +6041,7 @@ function MallarPage() {
         <DialogContent className="max-w-md">
           <div className="space-y-4 p-4">
             <h2 className="text-base font-semibold">Kopiera mall: {inheritTarget?.title}</h2>
-            <p className="text-sm text-coop-gray-600">
+            <p className="text-sm text-coop-gray-900">
               Välj hur du vill använda den här mallen som utgångspunkt:
             </p>
 
@@ -6059,7 +6059,7 @@ function MallarPage() {
                   <Copy className="h-4 w-4 text-primary" />
                   <span className="text-sm font-medium">Kopiera mall</span>
                 </div>
-                <p className="mt-1 text-xs text-coop-gray-600">
+                <p className="mt-1 text-xs text-coop-gray-900">
                   Fristående kopia — ändringar i originalet påverkar inte kopian.
                 </p>
               </button>
@@ -6077,7 +6077,7 @@ function MallarPage() {
                   <GitBranch className="h-4 w-4 text-primary" />
                   <span className="text-sm font-medium">Skapa lokal variant</span>
                 </div>
-                <p className="mt-1 text-xs text-coop-gray-600">
+                <p className="mt-1 text-xs text-coop-gray-900">
                   Behåller koppling — du kan lägga till steg, dölja steg och skriva över
                   beskrivningar.
                 </p>
@@ -6109,14 +6109,14 @@ function MallarPage() {
         >
           <DialogTitle className="sr-only">Förhandsgranska mall</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
-            <Eye className="h-4 w-4 text-coop-gray-600" />
+            <Eye className="h-4 w-4 text-coop-gray-900" />
             <span className="text-sm font-medium">Förhandsgranska mall</span>
             <span className="text-sm text-coop-gray-900 font-semibold truncate flex-1">
               {previewTarget?.title}
             </span>
             <button
               onClick={() => setPreviewTarget(null)}
-              className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl text-coop-gray-600 hover:bg-muted/60 transition-colors"
+              className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl text-coop-gray-900 hover:bg-muted/60 transition-colors"
               aria-label="Stäng"
             >
               <X className="h-4 w-4" />
@@ -6175,7 +6175,7 @@ function MallarPage() {
               </div>
 
               {previewTarget.description && (
-                <p className="text-sm text-coop-gray-600 leading-relaxed">
+                <p className="text-sm text-coop-gray-900 leading-relaxed">
                   {previewTarget.description}
                 </p>
               )}
@@ -6183,7 +6183,7 @@ function MallarPage() {
               {/* Steps */}
               {(previewTarget.items?.length ?? 0) > 0 && (
                 <div>
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-coop-gray-600">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-coop-gray-900">
                     Steg ({previewTarget.items?.length})
                   </p>
                   <ol className="space-y-2">
@@ -6194,7 +6194,7 @@ function MallarPage() {
                           key={item.id}
                           className="flex items-center gap-3 rounded-xl border border-border/50 bg-muted/20 px-3 py-2.5"
                         >
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-coop-gray-600">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-coop-gray-900">
                             {idx + 1}
                           </span>
                           <span className="flex-1 text-sm">{item.label}</span>
@@ -6225,7 +6225,7 @@ function MallarPage() {
               {/* Questions */}
               {(previewTarget.questions?.length ?? 0) > 0 && (
                 <div>
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-coop-gray-600">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-coop-gray-900">
                     Frågor ({previewTarget.questions?.length})
                   </p>
                   <ol className="space-y-2">
@@ -6265,7 +6265,7 @@ function MallarPage() {
                   .time_slots;
                 return ts && ts.length > 0 ? (
                   <div>
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-coop-gray-600">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-coop-gray-900">
                       Tidsluckor
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -6274,12 +6274,12 @@ function MallarPage() {
                           key={i}
                           className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-3 py-1.5 text-sm"
                         >
-                          <Clock className="h-3.5 w-3.5 text-coop-gray-600" />
+                          <Clock className="h-3.5 w-3.5 text-coop-gray-900" />
                           {slot}
                         </div>
                       ))}
                     </div>
-                    <p className="mt-2 text-xs text-coop-gray-600">
+                    <p className="mt-2 text-xs text-coop-gray-900">
                       En uppgift skapas per tidslucka och period.
                     </p>
                   </div>
@@ -6290,11 +6290,11 @@ function MallarPage() {
               {previewTarget.parent_template_id && (
                 <div className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3">
                   <div className="flex items-center gap-2 text-sm">
-                    <GitBranch className="h-4 w-4 text-coop-gray-600" />
+                    <GitBranch className="h-4 w-4 text-coop-gray-900" />
                     <span className="font-medium">
                       {previewTarget.inherit_mode === "variant" ? "Lokal variant" : "Kopia"}
                     </span>
-                    <span className="text-coop-gray-600">av en överordnad mall</span>
+                    <span className="text-coop-gray-900">av en överordnad mall</span>
                   </div>
                 </div>
               )}
@@ -6308,11 +6308,11 @@ function MallarPage() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogTitle className="sr-only">Skapa uppgifter från mallar</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
-            <ListChecks className="h-4 w-4 text-coop-gray-600" />
+            <ListChecks className="h-4 w-4 text-coop-gray-900" />
             <span className="text-sm font-medium">
               Skapa uppgifter från {bulkTaskConfigs.length} mallar
             </span>
-            <span className="text-xs text-coop-gray-600">
+            <span className="text-xs text-coop-gray-900">
               (
               {bulkTaskConfigs.reduce((sum, cfg) => {
                 const tmpl = templates.find((t) => t.id === cfg.templateId);
@@ -6331,7 +6331,7 @@ function MallarPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs text-coop-gray-600"
+                className="text-xs text-coop-gray-900"
                 onClick={() => setBulkCreateOpen(false)}
               >
                 Avbryt
@@ -6347,7 +6347,7 @@ function MallarPage() {
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-5 space-y-4 pb-8">
-            <p className="text-sm text-coop-gray-600">
+            <p className="text-sm text-coop-gray-900">
               Förfallodatum, tid och prioritet hämtas direkt från mallen. Välj vem som ska tilldelas
               varje uppgift.
             </p>
@@ -6455,7 +6455,7 @@ function MallarPage() {
                         <Badge variant="outline" className="text-xs">
                           {tmpl.priority ?? "Medel"}
                         </Badge>
-                        <span className="text-xs text-coop-gray-600">
+                        <span className="text-xs text-coop-gray-900">
                           {tmpl.items?.length ?? 0} steg
                         </span>
                         {taskCount > 1 && (
@@ -6502,7 +6502,7 @@ function MallarPage() {
                       </div>
                       {/* Smart date info */}
                       {!isDeliveryTmpl && (
-                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-coop-gray-600">
+                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-coop-gray-900">
                           {tmpl.recurrence_rule && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5">
                               <Repeat className="h-3 w-3" />
@@ -6620,8 +6620,8 @@ function MallarPage() {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                              <Truck className="h-3.5 w-3.5 text-coop-gray-600" />
-                              <label className="text-xs font-medium text-coop-gray-600">
+                              <Truck className="h-3.5 w-3.5 text-coop-gray-900" />
+                              <label className="text-xs font-medium text-coop-gray-900">
                                 Välj leveranser (veckans plan)
                               </label>
                               {hasSuggestions && (
@@ -6698,7 +6698,7 @@ function MallarPage() {
                                       <span className="text-xs font-semibold flex-1">
                                         {dayName}
                                       </span>
-                                      <span className="text-[10px] text-coop-gray-600">
+                                      <span className="text-[10px] text-coop-gray-900">
                                         {entries.length} leverans{entries.length !== 1 ? "er" : ""}
                                       </span>
                                     </label>
@@ -6732,7 +6732,7 @@ function MallarPage() {
                                           />
                                           <div className="flex-1 min-w-0">
                                             <span className="text-xs">{e.supplier}</span>
-                                            <span className="text-[10px] text-coop-gray-600 ml-1.5">
+                                            <span className="text-[10px] text-coop-gray-900 ml-1.5">
                                               {e.flow_name}
                                             </span>
                                           </div>
@@ -6755,7 +6755,7 @@ function MallarPage() {
                             </div>
                           )}
                           {cfg.selectedDeliveryIds.length > 0 && (
-                            <p className="text-[11px] text-coop-gray-600">
+                            <p className="text-[11px] text-coop-gray-900">
                               {cfg.selectedDeliveryIds.length} leverans
                               {cfg.selectedDeliveryIds.length !== 1 ? "er" : ""} valda — skapar{" "}
                               {cfg.selectedDeliveryIds.length} uppgift
@@ -6770,8 +6770,8 @@ function MallarPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <Users className="h-3.5 w-3.5 text-coop-gray-600" />
-                        <label className="text-xs font-medium text-coop-gray-600">
+                        <Users className="h-3.5 w-3.5 text-coop-gray-900" />
+                        <label className="text-xs font-medium text-coop-gray-900">
                           Tilldelad
                         </label>
                         {hasScheduleData && scheduledOnDays.size > 0 && !showAll && (
@@ -6783,7 +6783,7 @@ function MallarPage() {
                       {hasScheduleData && scheduledOnDays.size > 0 && (
                         <button
                           type="button"
-                          className="text-[10px] text-coop-gray-600 underline underline-offset-2 hover:text-coop-gray-900 transition-colors"
+                          className="text-[10px] text-coop-gray-900 underline underline-offset-2 hover:text-coop-gray-900 transition-colors"
                           onClick={() =>
                             setShowAllUsersForTemplate((prev) => ({
                               ...prev,
@@ -6797,7 +6797,7 @@ function MallarPage() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <p className="text-[11px] text-coop-gray-600/70 mb-1.5">Användare</p>
+                        <p className="text-[11px] text-coop-gray-900/70 mb-1.5">Användare</p>
                         <input
                           type="text"
                           placeholder="Sök användare..."
@@ -6808,11 +6808,11 @@ function MallarPage() {
                               [cfg.templateId]: e.target.value,
                             }))
                           }
-                          className="mb-1.5 w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs placeholder:text-coop-gray-600/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                          className="mb-1.5 w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs placeholder:text-coop-gray-900/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
                         />
                         <div className="space-y-0.5 max-h-36 overflow-y-auto rounded-lg border border-border/50 p-2">
                           {visibleUsers.length === 0 ? (
-                            <p className="text-xs text-coop-gray-600 py-1">Inga användare</p>
+                            <p className="text-xs text-coop-gray-900 py-1">Inga användare</p>
                           ) : (
                             visibleUsers.map((u, uIdx) => {
                               const isScheduled = scheduledOnDays.has(u.id);
@@ -6827,7 +6827,7 @@ function MallarPage() {
                                   {showSeparator && (
                                     <div className="flex items-center gap-1.5 py-1">
                                       <div className="flex-1 h-px bg-border/60" />
-                                      <span className="text-[9px] text-coop-gray-600/60 uppercase tracking-wide">
+                                      <span className="text-[9px] text-coop-gray-900/60 uppercase tracking-wide">
                                         Ej inplanerade
                                       </span>
                                       <div className="flex-1 h-px bg-border/60" />
@@ -6862,10 +6862,10 @@ function MallarPage() {
                         </div>
                       </div>
                       <div>
-                        <p className="text-[11px] text-coop-gray-600/70 mb-1.5">Grupper</p>
+                        <p className="text-[11px] text-coop-gray-900/70 mb-1.5">Grupper</p>
                         <div className="space-y-0.5 max-h-28 overflow-y-auto rounded-lg border border-border/50 p-2">
                           {storeGroups.length === 0 ? (
-                            <p className="text-xs text-coop-gray-600 py-1">Inga grupper</p>
+                            <p className="text-xs text-coop-gray-900 py-1">Inga grupper</p>
                           ) : (
                             storeGroups.map((g) => (
                               <label
@@ -6901,7 +6901,7 @@ function MallarPage() {
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <Zap className="h-3.5 w-3.5 text-coop-orange-600" />
-                        <label className="text-xs font-medium text-coop-gray-600">
+                        <label className="text-xs font-medium text-coop-gray-900">
                           Bekräftare för:{" "}
                           <span className="text-coop-gray-900 font-semibold">
                             {
@@ -6911,7 +6911,7 @@ function MallarPage() {
                           </span>
                         </label>
                       </div>
-                      <p className="text-[11px] text-coop-gray-600">
+                      <p className="text-[11px] text-coop-gray-900">
                         Välj vem som ska bekräfta att händelsen inträffat innan uppgiften visas.
                       </p>
                       <input
@@ -6924,7 +6924,7 @@ function MallarPage() {
                             [cfg.templateId + "_confirm"]: e.target.value,
                           }))
                         }
-                        className="w-full rounded-md border border-coop-orange-200 bg-background px-2 py-1 text-xs placeholder:text-coop-gray-600/50 focus:outline-none focus:ring-1 focus:ring-amber-400/40"
+                        className="w-full rounded-md border border-coop-orange-200 bg-background px-2 py-1 text-xs placeholder:text-coop-gray-900/50 focus:outline-none focus:ring-1 focus:ring-amber-400/40"
                       />
                       <div className="space-y-0.5 max-h-28 overflow-y-auto rounded-lg border border-coop-orange-200 bg-coop-orange-100/30 p-2">
                         <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-muted/50">
@@ -6939,7 +6939,7 @@ function MallarPage() {
                             }
                             className="h-3.5 w-3.5"
                           />
-                          <span className="text-xs text-coop-gray-600 italic">
+                          <span className="text-xs text-coop-gray-900 italic">
                             Ingen specifik bekräftare
                           </span>
                         </label>
@@ -6999,14 +6999,14 @@ function MallarPage() {
         >
           <DialogTitle className="sr-only">Mallpaket</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
-            <Layers className="h-4 w-4 text-coop-gray-600" />
+            <Layers className="h-4 w-4 text-coop-gray-900" />
             <span className="text-sm font-medium">Mallpaket</span>
-            <span className="text-xs text-coop-gray-600 ml-1">
+            <span className="text-xs text-coop-gray-900 ml-1">
               — gruppera mallar och skapa alla uppgifter på en gång
             </span>
             <button
               onClick={() => setShowPackagesPanel(false)}
-              className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl text-coop-gray-600 hover:bg-muted/60 transition-colors"
+              className="ml-auto flex h-9 w-9 items-center justify-center rounded-xl text-coop-gray-900 hover:bg-muted/60 transition-colors"
               aria-label="Stäng"
             >
               <X className="h-4 w-4" />
@@ -7032,7 +7032,7 @@ function MallarPage() {
                   className="h-8 text-sm"
                 />
                 <div>
-                  <p className="text-xs text-coop-gray-600 mb-2">Välj mallar att inkludera:</p>
+                  <p className="text-xs text-coop-gray-900 mb-2">Välj mallar att inkludera:</p>
                   <div className="space-y-1 max-h-48 overflow-y-auto rounded-lg border border-border/50 p-2">
                     {templates.map((t) => (
                       <label
@@ -7090,7 +7090,7 @@ function MallarPage() {
             {/* Existing packages */}
             {packages.length > 0 && (
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-coop-gray-600">Sparade paket</h3>
+                <h3 className="text-sm font-semibold text-coop-gray-900">Sparade paket</h3>
                 {packages.map((pkg) => {
                   const pkgTemplates = (pkg.items ?? [])
                     .map((it) => templates.find((t) => t.id === it.template_id))
@@ -7104,9 +7104,9 @@ function MallarPage() {
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm">{pkg.name}</p>
                           {pkg.description && (
-                            <p className="text-xs text-coop-gray-600">{pkg.description}</p>
+                            <p className="text-xs text-coop-gray-900">{pkg.description}</p>
                           )}
-                          <p className="text-xs text-coop-gray-600 mt-0.5">
+                          <p className="text-xs text-coop-gray-900 mt-0.5">
                             {pkgTemplates.length} mallar
                           </p>
                         </div>
@@ -7128,7 +7128,7 @@ function MallarPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 rounded-full text-coop-gray-600 hover:text-primary"
+                                className="h-7 w-7 rounded-full text-coop-gray-900 hover:text-primary"
                                 onClick={() => openEditPackage(pkg)}
                               >
                                 <Pencil className="h-3.5 w-3.5" />
@@ -7136,7 +7136,7 @@ function MallarPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 rounded-full text-coop-gray-600 hover:text-destructive"
+                                className="h-7 w-7 rounded-full text-coop-gray-900 hover:text-destructive"
                                 onClick={() => deletePackage(pkg)}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -7191,7 +7191,7 @@ function MallarPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <p className="text-sm text-coop-gray-600">
+            <p className="text-sm text-coop-gray-900">
               Denna återkommande mall har nått granskningsdatumet. Välj vad som ska hända:
             </p>
             <button
@@ -7201,7 +7201,7 @@ function MallarPage() {
               className="w-full rounded-lg border border-border px-4 py-3 text-left hover:bg-muted/50 transition-colors"
             >
               <span className="block text-sm font-medium">Fortsätt till nästa granskning</span>
-              <span className="block text-xs text-coop-gray-600 mt-0.5">
+              <span className="block text-xs text-coop-gray-900 mt-0.5">
                 Mallen fortsätter som vanligt. Nästa granskning om{" "}
                 {(reviewTarget as ChecklistTemplate & { review_interval_months?: number })
                   ?.review_interval_months ?? 24}{" "}
@@ -7215,13 +7215,13 @@ function MallarPage() {
               className="w-full rounded-lg border border-primary/30 px-4 py-3 text-left hover:bg-primary/5 transition-colors"
             >
               <span className="block text-sm font-medium">Redigera mall</span>
-              <span className="block text-xs text-coop-gray-600 mt-0.5">
+              <span className="block text-xs text-coop-gray-900 mt-0.5">
                 Öppna mallen för redigering innan beslut fattas.
               </span>
             </button>
             <div className="rounded-lg border border-border px-4 py-3 space-y-2">
               <span className="block text-sm font-medium">Sätt slutdatum</span>
-              <span className="block text-xs text-coop-gray-600">
+              <span className="block text-xs text-coop-gray-900">
                 Mallen slutar skapa uppgifter efter detta datum.
               </span>
               <div className="flex gap-2">
@@ -7249,7 +7249,7 @@ function MallarPage() {
                 className="w-full rounded-lg border border-destructive/30 px-4 py-3 text-left hover:bg-destructive/5 transition-colors"
               >
                 <span className="block text-sm font-medium text-destructive">Arkivera mall</span>
-                <span className="block text-xs text-coop-gray-600 mt-0.5">
+                <span className="block text-xs text-coop-gray-900 mt-0.5">
                   Mallen arkiveras och skapar inga fler uppgifter.
                 </span>
               </button>
@@ -7273,10 +7273,10 @@ function MallarPage() {
         <DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col p-0 gap-0">
           <DialogTitle className="sr-only">Koppla leveranser till mallar</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
-            <Truck className="h-4 w-4 text-coop-gray-600" />
+            <Truck className="h-4 w-4 text-coop-gray-900" />
             <span className="text-sm font-medium">Koppla leveranser till mallar</span>
           </div>
-          <p className="px-5 pt-4 pb-2 text-xs text-coop-gray-600">
+          <p className="px-5 pt-4 pb-2 text-xs text-coop-gray-900">
             Välj vilka leveranser varje leveransmall ska kopplas till.
           </p>
           <div className="flex-1 overflow-y-auto px-5 space-y-5 pb-8">
@@ -7337,7 +7337,7 @@ function MallarPage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <Truck className="h-3.5 w-3.5 text-coop-gray-600/60 shrink-0" />
+                      <Truck className="h-3.5 w-3.5 text-coop-gray-900/60 shrink-0" />
                       <span className="text-sm font-semibold">{item.templateTitle}</span>
                     </div>
                     {deliveryWeekEntries.length > 1 && (
@@ -7363,7 +7363,7 @@ function MallarPage() {
                   </div>
                   <div className="space-y-1 max-h-56 overflow-y-auto rounded-lg border border-border/50 p-2">
                     {deliveryWeekEntries.length === 0 ? (
-                      <p className="text-xs text-coop-gray-600 py-1">
+                      <p className="text-xs text-coop-gray-900 py-1">
                         Inga leveranser i aktiv plan
                       </p>
                     ) : (
@@ -7384,7 +7384,7 @@ function MallarPage() {
                                 className="h-3.5 w-3.5"
                               />
                               <span className="text-xs font-semibold flex-1">{dayName}</span>
-                              <span className="text-[10px] text-coop-gray-600">
+                              <span className="text-[10px] text-coop-gray-900">
                                 {entries.length} lev.
                               </span>
                             </label>
@@ -7400,7 +7400,7 @@ function MallarPage() {
                                 />
                                 <div className="flex-1 min-w-0">
                                   <span className="text-xs">{e.supplier}</span>
-                                  <span className="text-[10px] text-coop-gray-600 ml-1.5">
+                                  <span className="text-[10px] text-coop-gray-900 ml-1.5">
                                     {e.flow_name}
                                   </span>
                                 </div>

@@ -178,7 +178,7 @@
 
   /* muted = Grå 100 */
   --muted: var(--coop-gray-100);
-  --muted-foreground: var(--coop-gray-700);
+  --muted-foreground: var(--coop-gray-900);
 
   /* accent = Coop Accent + Grå 200 */
   --accent: var(--coop-gray-200);
@@ -234,7 +234,7 @@
   --color-secondary: var(--coop-gray-200);
   --color-secondary-foreground: var(--coop-gray-1000);
   --color-muted: var(--coop-gray-100);
-  --color-muted-foreground: var(--coop-gray-700);
+  --color-muted-foreground: var(--coop-gray-900);
   --color-accent: var(--coop-gray-200);
   --color-accent-foreground: var(--coop-gray-1000);
   --color-destructive: var(--coop-red-600);
@@ -461,6 +461,7 @@ html, body {
 .text-coop-gray-600 { color: var(--coop-gray-600); }
 .text-coop-gray-700 { color: var(--coop-gray-700); }
 .text-coop-gray-800 { color: var(--coop-gray-800); }
+.text-coop-gray-900 { color: var(--coop-gray-900); }
 .text-coop-accent { color: var(--coop-accent); }
 .text-coop-red { color: var(--coop-red-600); }
 .text-coop-orange { color: var(--coop-orange-500); }

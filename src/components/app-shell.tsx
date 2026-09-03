@@ -87,7 +87,7 @@ function OfflineQueueBadge() {
 
   if (queueLen === 0 && !syncStale) {
     return (
-      <span className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-coop-gray-600">
+      <span className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-coop-gray-900">
         Synkad {lastSync.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" })}
       </span>
     );
@@ -99,7 +99,7 @@ function OfflineQueueBadge() {
       aria-live="polite"
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
-        queueLen > 0 ? "bg-warning/15 text-warning-foreground" : "bg-muted text-coop-gray-600",
+        queueLen > 0 ? "bg-warning/15 text-warning-foreground" : "bg-muted text-coop-gray-900",
       )}
     >
       {queueLen > 0 ? (
@@ -485,7 +485,7 @@ export function AppShell() {
               to={to}
               className={cn(
                 "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
-                isActive(to) ? "text-primary" : "text-coop-gray-600",
+                isActive(to) ? "text-primary" : "text-coop-gray-900",
               )}
             >
               <div
@@ -503,7 +503,7 @@ export function AppShell() {
           onClick={() => setMoreOpen(true)}
           className={cn(
             "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
-            isMoreActive ? "text-primary" : "text-coop-gray-600",
+            isMoreActive ? "text-primary" : "text-coop-gray-900",
           )}
         >
           <div
@@ -624,7 +624,7 @@ export function AppShell() {
                 </div>
                 <div className="max-h-72 overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <p className="px-4 py-8 text-center text-sm text-coop-gray-600">Inga notiser</p>
+                    <p className="px-4 py-8 text-center text-sm text-coop-gray-900">Inga notiser</p>
                   ) : (
                     notifications.map((n) => (
                       <div
@@ -645,11 +645,11 @@ export function AppShell() {
                               {n.title}
                             </p>
                             {n.body && (
-                              <p className="mt-0.5 text-xs text-coop-gray-600 leading-relaxed">
+                              <p className="mt-0.5 text-xs text-coop-gray-900 leading-relaxed">
                                 {n.body}
                               </p>
                             )}
-                            <p className="mt-1 text-xs text-coop-gray-600/70">
+                            <p className="mt-1 text-xs text-coop-gray-900/70">
                               {new Date(n.created_at).toLocaleString("sv-SE", {
                                 dateStyle: "short",
                                 timeStyle: "short",
@@ -658,7 +658,7 @@ export function AppShell() {
                           </div>
                           <button
                             onClick={() => deleteNotification(n.id)}
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-coop-gray-600/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 active:opacity-100"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-coop-gray-900/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 active:opacity-100"
                             aria-label="Ta bort notis"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -688,7 +688,7 @@ export function AppShell() {
               <DropdownMenuContent align="end" className="w-56">
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-medium">{user?.display_name}</p>
-                  <p className="text-xs text-coop-gray-600">
+                  <p className="text-xs text-coop-gray-900">
                     {user?.hierarchy_level
                       ? (HIERARCHY_LABELS[user.hierarchy_level] ??
                         ROLE_LABELS[user.role] ??
@@ -697,7 +697,7 @@ export function AppShell() {
                         ? (ROLE_LABELS[user.role] ?? user.role)
                         : ""}
                   </p>
-                  {activeStore && <p className="text-xs text-coop-gray-600">{activeStore.name}</p>}
+                  {activeStore && <p className="text-xs text-coop-gray-900">{activeStore.name}</p>}
                 </div>
                 <div className="md:hidden">
                   <DropdownMenuSeparator />
@@ -831,7 +831,7 @@ export function AppShell() {
               <span className="text-sm font-semibold text-coop-gray-900">Övrigt</span>
               <button
                 onClick={() => setMoreOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-coop-gray-600"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-coop-gray-900"
                 aria-label="Stäng meny"
               >
                 <XIcon className="h-4 w-4" />

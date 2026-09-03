@@ -11,15 +11,15 @@ function GdprPage() {
     <div className="mx-auto max-w-3xl px-5 py-8 md:px-8 md:py-12">
       <Link
         to="/installningar"
-        className="mb-6 inline-flex items-center gap-1.5 text-sm text-coop-gray-600 hover:text-coop-gray-900 transition-colors"
+        className="mb-6 inline-flex items-center gap-1.5 text-sm text-coop-gray-900 hover:text-coop-gray-900 transition-colors"
       >
         <ChevronLeft className="h-4 w-4" /> Tillbaka till Inställningar
       </Link>
 
       <h1 className="mb-2 text-3xl font-bold tracking-tight">GDPR-information</h1>
-      <p className="mb-8 text-sm text-coop-gray-600">Dataskyddsförordningen (EU) 2016/679</p>
+      <p className="mb-8 text-sm text-coop-gray-900">Dataskyddsförordningen (EU) 2016/679</p>
 
-      <div className="space-y-8 text-sm text-coop-gray-600 leading-relaxed">
+      <div className="space-y-8 text-sm text-coop-gray-900 leading-relaxed">
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
           <p className="text-coop-gray-900 font-medium mb-1">Vad är GDPR?</p>
           <p>

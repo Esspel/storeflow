@@ -175,7 +175,7 @@ function QrKundonskemalFormPage() {
             <AlertTriangle className="h-8 w-8 text-destructive" />
           </div>
           <h1 className="text-xl font-semibold text-coop-gray-900">Ogiltig QR-kod</h1>
-          <p className="mt-2 text-sm text-coop-gray-600">
+          <p className="mt-2 text-sm text-coop-gray-900">
             Den här QR-koden är inte längre giltig eller har tagits bort.
           </p>
         </div>
@@ -191,13 +191,13 @@ function QrKundonskemalFormPage() {
             <CheckCircle2 className="h-8 w-8 text-success" />
           </div>
           <h1 className="text-xl font-semibold text-coop-gray-900">Tack för ditt önskemål!</h1>
-          <p className="mt-2 text-sm text-coop-gray-600">
+          <p className="mt-2 text-sm text-coop-gray-900">
             Vi har tagit emot ditt önskemål och återkommer när vi har mer information.
           </p>
           {statusUrl && (
             <div className="mt-5 rounded-2xl border border-border/60 bg-coop-gray-100 p-4 text-left space-y-3">
               <p className="text-sm font-medium text-coop-gray-900">Följ ditt önskemål</p>
-              <p className="text-xs text-coop-gray-600">
+              <p className="text-xs text-coop-gray-900">
                 Spara länken nedan för att se status på ditt önskemål:
               </p>
               <div className="flex items-center gap-2">
@@ -254,7 +254,7 @@ function QrKundonskemalFormPage() {
             </div>
             <div>
               <h1 className="font-semibold text-coop-gray-900">Skicka in kundönskemål</h1>
-              <p className="text-xs text-coop-gray-600">{storeName}</p>
+              <p className="text-xs text-coop-gray-900">{storeName}</p>
             </div>
           </div>
         </div>
@@ -330,7 +330,7 @@ function QrKundonskemalFormPage() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-3 text-sm text-coop-gray-600 transition-colors hover:border-primary/40 hover:bg-muted/50"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-3 text-sm text-coop-gray-900 transition-colors hover:border-primary/40 hover:bg-muted/50"
               >
                 <ImagePlus className="h-4 w-4" />
                 Välj bild
@@ -338,7 +338,7 @@ function QrKundonskemalFormPage() {
               <button
                 type="button"
                 onClick={() => cameraRef.current?.click()}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-3 text-sm text-coop-gray-600 transition-colors hover:border-primary/40 hover:bg-muted/50"
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-3 text-sm text-coop-gray-900 transition-colors hover:border-primary/40 hover:bg-muted/50"
               >
                 <ImagePlus className="h-4 w-4" />
                 Ta foto
@@ -373,7 +373,7 @@ function QrKundonskemalFormPage() {
           {saving ? "Skickar..." : "Skicka in önskemål"}
         </Button>
 
-        <p className="text-center text-xs text-coop-gray-600">
+        <p className="text-center text-xs text-coop-gray-900">
           Ditt önskemål skickas direkt till butikspersonalen
         </p>
       </div>

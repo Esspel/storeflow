@@ -347,7 +347,7 @@ export function XmlImportModal({
             <FileUp className="h-5 w-5 text-primary" />
             Importera personal från SoftOne GO
           </DialogTitle>
-          {storeName && <p className="text-sm text-coop-gray-600">Butik: {storeName}</p>}
+          {storeName && <p className="text-sm text-coop-gray-900">Butik: {storeName}</p>}
         </DialogHeader>
 
         <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: "calc(92dvh - 130px)" }}>
@@ -357,24 +357,24 @@ export function XmlImportModal({
                 <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-success" />
                 <p className="text-lg font-semibold">{importResult.created} konton skapades</p>
                 {importResult.skipped > 0 && (
-                  <p className="mt-1 text-sm text-coop-gray-600">
+                  <p className="mt-1 text-sm text-coop-gray-900">
                     {importResult.skipped} befintliga användare kopplades till butiken
                   </p>
                 )}
                 {selectedForeningId && (
-                  <p className="mt-1 text-sm text-coop-gray-600">
+                  <p className="mt-1 text-sm text-coop-gray-900">
                     Kopplades till förening:{" "}
                     {foreningar.find((f) => f.id === selectedForeningId)?.name}
                   </p>
                 )}
                 {selectedDistriktId && (
-                  <p className="mt-1 text-sm text-coop-gray-600">
+                  <p className="mt-1 text-sm text-coop-gray-900">
                     Kopplades till distrikt:{" "}
                     {distriktList.find((d) => d.id === selectedDistriktId)?.namn}
                   </p>
                 )}
               </div>
-              <p className="text-sm text-coop-gray-600 text-center">
+              <p className="text-sm text-coop-gray-900 text-center">
                 Alla nya konton har ett slumpmässigt 16-teckens lösenord och kräver lösenordsbyte
                 vid första inlogg.
               </p>
@@ -386,9 +386,9 @@ export function XmlImportModal({
                 className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border/60 bg-muted/30 px-6 py-10 transition hover:border-primary/40 hover:bg-muted/50"
                 onClick={() => fileRef.current?.click()}
               >
-                <FileUp className="mb-3 h-8 w-8 text-coop-gray-600/60" />
+                <FileUp className="mb-3 h-8 w-8 text-coop-gray-900/60" />
                 <p className="font-medium">{fileName || "Välj SoftOne GO XML-fil"}</p>
-                <p className="mt-1 text-sm text-coop-gray-600">Klicka för att bläddra</p>
+                <p className="mt-1 text-sm text-coop-gray-900">Klicka för att bläddra</p>
                 <input
                   ref={fileRef}
                   type="file"
@@ -402,7 +402,7 @@ export function XmlImportModal({
               {/* Hierarchy assignment */}
               <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
                 <p className="text-sm font-medium">Koppla till hierarki (valfritt)</p>
-                <p className="text-xs text-coop-gray-600">
+                <p className="text-xs text-coop-gray-900">
                   Alla importerade användare kopplas till valda förening och/eller distrikt. De kan
                   tillhöra flera i efterhand via personalhanteringen.
                 </p>
@@ -477,7 +477,7 @@ export function XmlImportModal({
                       {toCreate.length} skapas
                     </Badge>
                     {toSkip.length > 0 && (
-                      <Badge variant="outline" className="rounded-full text-coop-gray-600">
+                      <Badge variant="outline" className="rounded-full text-coop-gray-900">
                         <UserX className="mr-1.5 h-3.5 w-3.5" />
                         {toSkip.length} hoppas över (finns redan)
                       </Badge>
@@ -493,16 +493,16 @@ export function XmlImportModal({
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b border-border/60 bg-muted/40">
-                              <th className="px-4 py-2.5 text-left text-xs font-medium text-coop-gray-600">
+                              <th className="px-4 py-2.5 text-left text-xs font-medium text-coop-gray-900">
                                 Namn
                               </th>
-                              <th className="hidden px-4 py-2.5 text-left text-xs font-medium text-coop-gray-600 sm:table-cell">
+                              <th className="hidden px-4 py-2.5 text-left text-xs font-medium text-coop-gray-900 sm:table-cell">
                                 Användarnamn
                               </th>
-                              <th className="hidden px-4 py-2.5 text-left text-xs font-medium text-coop-gray-600 md:table-cell">
+                              <th className="hidden px-4 py-2.5 text-left text-xs font-medium text-coop-gray-900 md:table-cell">
                                 Avdelning
                               </th>
-                              <th className="px-4 py-2.5 text-left text-xs font-medium text-coop-gray-600">
+                              <th className="px-4 py-2.5 text-left text-xs font-medium text-coop-gray-900">
                                 Anst.nr
                               </th>
                             </tr>
@@ -511,13 +511,13 @@ export function XmlImportModal({
                             {toCreate.map((emp, i) => (
                               <tr key={i} className="hover:bg-muted/20">
                                 <td className="px-4 py-2.5 font-medium">{emp.name}</td>
-                                <td className="hidden px-4 py-2.5 font-mono text-xs text-coop-gray-600 sm:table-cell">
+                                <td className="hidden px-4 py-2.5 font-mono text-xs text-coop-gray-900 sm:table-cell">
                                   {emp.username}
                                 </td>
-                                <td className="hidden px-4 py-2.5 text-coop-gray-600 md:table-cell">
+                                <td className="hidden px-4 py-2.5 text-coop-gray-900 md:table-cell">
                                   {emp.department || "—"}
                                 </td>
-                                <td className="px-4 py-2.5 text-coop-gray-600">
+                                <td className="px-4 py-2.5 text-coop-gray-900">
                                   {emp.employeeNumber || "—"}
                                 </td>
                               </tr>
@@ -530,7 +530,7 @@ export function XmlImportModal({
 
                   {toSkip.length > 0 && (
                     <div>
-                      <p className="mb-2 text-sm font-medium text-coop-gray-600">
+                      <p className="mb-2 text-sm font-medium text-coop-gray-900">
                         Dessa finns redan och kopplas till butiken:
                       </p>
                       <div className="overflow-hidden rounded-xl border border-border/40 opacity-60">
@@ -538,8 +538,8 @@ export function XmlImportModal({
                           <tbody className="divide-y divide-border/40">
                             {toSkip.map((emp, i) => (
                               <tr key={i}>
-                                <td className="px-4 py-2 text-coop-gray-600">{emp.name}</td>
-                                <td className="hidden px-4 py-2 font-mono text-xs text-coop-gray-600 sm:table-cell">
+                                <td className="px-4 py-2 text-coop-gray-900">{emp.name}</td>
+                                <td className="hidden px-4 py-2 font-mono text-xs text-coop-gray-900 sm:table-cell">
                                   {emp.username}
                                 </td>
                               </tr>

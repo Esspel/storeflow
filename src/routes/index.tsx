@@ -54,7 +54,7 @@ function HubPage() {
             Vad ska du göra idag?
           </h1>
           {activeStore && (
-            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-coop-gray-600">
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-coop-gray-900">
               {activeStore.name}
             </p>
           )}
@@ -177,7 +177,7 @@ function QuickCard({
     warning: "bg-warning/15 text-warning-foreground",
     success: "bg-success/10 text-success",
     primary: "bg-primary-soft text-coop-gron-600",
-    muted: "bg-muted text-coop-gray-600",
+    muted: "bg-muted text-coop-gray-900",
     destructive: "bg-coop-red-100 text-coop-red-600",
     accent: "bg-coop-accent text-coop-morkgron",
   };
@@ -193,9 +193,9 @@ function QuickCard({
       </div>
       <div className="min-w-0 flex-1 overflow-hidden">
         <p className="font-semibold text-sm text-coop-gray-900 truncate leading-tight">{title}</p>
-        <p className="mt-0.5 text-xs text-coop-gray-600 truncate leading-tight">{desc}</p>
+        <p className="mt-0.5 text-xs text-coop-gray-900 truncate leading-tight">{desc}</p>
       </div>
-      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-coop-gray-600/40 transition-transform group-hover:translate-x-0.5" />
+      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-coop-gray-900/40 transition-transform group-hover:translate-x-0.5" />
     </Link>
   );
 }

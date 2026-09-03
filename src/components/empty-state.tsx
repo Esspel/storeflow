@@ -20,7 +20,7 @@ export function EmptyState({
     <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border/60 bg-coop-gray-100/50 p-8 text-center">
       {icon}
       <h3 className="font-semibold text-coop-gray-900 coop-font-heading-sm">{title}</h3>
-      <p className="max-w-sm text-sm text-coop-gray-600 coop-font-body">{description}</p>
+      <p className="max-w-sm text-sm text-coop-gray-900 coop-font-body">{description}</p>
       {actionLabel && actionTo && (
         <Link to={actionTo}>
           <Button className="rounded-full">{actionLabel}</Button>
