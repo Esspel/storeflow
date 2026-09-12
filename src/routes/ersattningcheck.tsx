@@ -31,6 +31,8 @@ import {
   Coins,
   Store,
   Send,
+  ChevronDown,
+  Search,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -65,6 +67,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   parseDeliveryNoteExcel,
   matchDeliveryNoteToProducts,
@@ -256,7 +260,12 @@ function formatDeliveryDate(dateValue: string | null | undefined): string {
   }
   if (Number.isNaN(date.getTime())) return "Ogiltigt datum";
   // Visa veckodag + datum: måndag 4 september 2026
-  const options: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long", year: "numeric" };
+  const options: Intl.DateTimeFormatOptions = {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  };
   return date.toLocaleDateString("sv-SE", options);
 }
 
@@ -388,10 +397,10 @@ function ErstatningsCheckPage() {
   const [reclamationStatuses, setReclamationStatuses] = useState<Map<string, string>>(new Map());
   const [sapExtensionChecked, setSapExtensionChecked] = useState(false);
   // Filter state for shelf life data (#6)
-  const [shelfLifeStatusFilter, setShelfLifeStatusFilter] = useState("");
-  const [brandFilter, setBrandFilter] = useState("");
+  const [shelfLifeStatusFilter, setShelfLifeStatusFilter] = useState<string[]>([]);
+  const [brandFilter, setBrandFilter] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [deliveryDateFilter, setDeliveryDateFilter] = useState("");
-  const [showShelfLifeFilters, setShowShelfLifeFilters] = useState(false);
   const [brands, setBrands] = useState<string[]>([]);
   // Show all import dates state (#7)
   const [showAllImportDates, setShowAllImportDates] = useState(false);
@@ -506,13 +515,9 @@ function ErstatningsCheckPage() {
   ).size;
   const goodProductCount = Math.max(totalProductCount - reclaimedProductCount, 0);
   const productPercentage =
-    totalProductCount > 0
-      ? ((goodProductCount / totalProductCount) * 100).toFixed(2)
-      : "0.00";
+    totalProductCount > 0 ? ((goodProductCount / totalProductCount) * 100).toFixed(2) : "0.00";
   const reclaimedPercentage =
-    totalProductCount > 0
-      ? ((reclaimedProductCount / totalProductCount) * 100).toFixed(2)
-      : "0.00";
+    totalProductCount > 0 ? ((reclaimedProductCount / totalProductCount) * 100).toFixed(2) : "0.00";
   // Filter: Only eligible records where arrival is within last 4 days (regulatory requirement)
   // Users must apply for compensation within 4 days of delivery, otherwise no compensation
   const fourDaysMs = 4 * 24 * 60 * 60 * 1000;
@@ -1946,30 +1951,20 @@ function ErstatningsCheckPage() {
             .includes(search),
         );
       })
-      .filter(({ record }) => {
+      .filter(({ record, status }) => {
         const recordCategory = String(record.category ?? "").trim();
         const lowerCategory = recordCategory.toLowerCase();
         if (hiddenCategories.some((c) => c.toLowerCase() === lowerCategory)) return false;
         if (autoHiddenCategories.has(lowerCategory)) {
           return Boolean(record.shelf_lifetime_days && record.shelf_lifetime_days > 0);
         }
-        // Filter by status
-        if (shelfLifeStatusFilter) {
-          const statusMap: Record<string, string> = {
-            "Kräver ersättning": "Kräver ersättning",
-            OK: "OK",
-            "SAKNAS I SAP": "SAKNAS I SAP",
-            "Hållbarhet saknas": "Hållbarhet saknas",
-            "Datum saknas": "Datum saknas",
-            "Ej skickad": "Ej skickad",
-            "Skickad": "Skickad",
-            "Bearbetas": "Bearbetas",
-          };
-          const expectedStatus = statusMap[shelfLifeStatusFilter];
-          if (expectedStatus && status !== expectedStatus) return false;
-        }
-        // Filter by brand
-        if (brandFilter && record.brand !== brandFilter) return false;
+        // Filter by status (multi-select)
+        if (shelfLifeStatusFilter.length > 0 && !shelfLifeStatusFilter.includes(status))
+          return false;
+        // Filter by brand (multi-select)
+        if (brandFilter.length > 0 && !brandFilter.includes(record.brand)) return false;
+        // Filter by category (multi-select)
+        if (categoryFilter.length > 0 && !categoryFilter.includes(recordCategory)) return false;
         // Filter by delivery date
         if (deliveryDateFilter) {
           const arrival = record.arrival_date;
@@ -1984,13 +1979,25 @@ function ErstatningsCheckPage() {
             const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
             switch (deliveryDateFilter) {
               case "idag":
-                if (!(arrivalDate >= todayStart && arrivalDate < new Date(todayStart.getTime() + 86400000))) return false;
+                if (!(
+                  arrivalDate >= todayStart &&
+                  arrivalDate < new Date(todayStart.getTime() + 86400000)
+                ))
+                  return false;
                 break;
               case "denna_vecka":
-                if (!(arrivalDate >= weekStart && arrivalDate < new Date(weekStart.getTime() + 604800000))) return false;
+                if (!(
+                  arrivalDate >= weekStart &&
+                  arrivalDate < new Date(weekStart.getTime() + 604800000)
+                ))
+                  return false;
                 break;
               case "denna_månad":
-                if (!(arrivalDate >= monthStart && arrivalDate < new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1))) return false;
+                if (!(
+                  arrivalDate >= monthStart &&
+                  arrivalDate < new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1)
+                ))
+                  return false;
                 break;
             }
           }
@@ -2021,63 +2028,205 @@ function ErstatningsCheckPage() {
         const leftRaw = sort.key === "status" ? a.status : (a.record[sort.key] ?? "");
         const rightRaw = sort.key === "status" ? b.status : (b.record[sort.key] ?? "");
 
-        // Handle date fields that may be null/undefined (shelves with missing dates)
+        let comparison: number;
+
         if (sort.key === "expiry_date" || sort.key === "arrival_date") {
+          // Handle date fields that may be null/undefined (shelves with missing dates)
           const leftDate = leftRaw ? new Date(String(leftRaw)).getTime() : 0;
           const rightDate = rightRaw ? new Date(String(rightRaw)).getTime() : 0;
           // Empty/missing dates should sort to bottom, dates with values sort properly
           const hasLeft = !!leftRaw && !isNaN(leftDate) && leftDate > 0;
           const hasRight = !!rightRaw && !isNaN(rightDate) && rightDate > 0;
-          let comparison: number;
           if (hasLeft && !hasRight)
             comparison = 1; // Has date comes after missing
           else if (!hasLeft && hasRight) comparison = -1;
           else if (!hasLeft && !hasRight) comparison = 0;
           else comparison = leftDate - rightDate;
+        } else if (sort.key === "shelf_lifetime_days") {
+          // Numeric sort: treat "Ej angiven" (null/0/NaN) as lowest so numbers come first
+          const aNum = a.record.shelf_lifetime_days ?? 0;
+          const bNum = b.record.shelf_lifetime_days ?? 0;
+          const aIsEmpty = !aNum || Number.isNaN(Number(aNum));
+          const bIsEmpty = !bNum || Number.isNaN(Number(bNum));
+
+          if (aIsEmpty && !bIsEmpty) comparison = -1;
+          else if (!aIsEmpty && bIsEmpty) comparison = 1;
+          else comparison = Number(aNum) - Number(bNum);
+        } else if (sort.key === "status") {
+          // Status ordering: Datum saknas < Hållbarhet saknas < SAKNAS I SAP < Kräver ersättning < OK
+          const statusOrder = {
+            "Datum saknas": 0,
+            "Hållbarhet saknas": 1,
+            "SAKNAS I SAP": 2,
+            "Kräver ersättning": 3,
+            OK: 4,
+            "": 5,
+          };
+          const aStatus = String(a.status ?? "");
+          const bStatus = String(b.status ?? "");
+          comparison =
+            (statusOrder[aStatus as keyof typeof statusOrder] ?? 99) -
+            (statusOrder[bStatus as keyof typeof statusOrder] ?? 99);
         } else {
-          let comparison: number;
-          if (sort.key === "shelf_lifetime_days") {
-            // Numeric sort: treat "Ej angiven" (null/0/NaN) as lowest so numbers come first
-            const aNum = a.record.shelf_lifetime_days ?? 0;
-            const bNum = b.record.shelf_lifetime_days ?? 0;
-            const aIsEmpty = !aNum || Number.isNaN(Number(aNum));
-            const bIsEmpty = !bNum || Number.isNaN(Number(bNum));
+          comparison = String(leftRaw).localeCompare(String(rightRaw), "sv", {
+            numeric: true,
+            sensitivity: "base",
+          });
+        }
 
-            if (aIsEmpty && !bIsEmpty) comparison = -1;
-            else if (!aIsEmpty && bIsEmpty) comparison = 1;
-            else comparison = Number(aNum) - Number(bNum);
-          } else if (sort.key === "status") {
-            // Status ordering: Datum saknas < Hållbarhet saknas < SAKNAS I SAP < Kräver ersättning < OK
-            const statusOrder = {
-              "Datum saknas": 0,
-              "Hållbarhet saknas": 1,
-              "SAKNAS I SAP": 2,
-              "Kräver ersättning": 3,
-              OK: 4,
-              "": 5,
-            };
-            const aStatus = String(a.status ?? "");
-            const bStatus = String(b.status ?? "");
-            comparison =
-              (statusOrder[aStatus as keyof typeof statusOrder] ?? 99) -
-              (statusOrder[bStatus as keyof typeof statusOrder] ?? 99);
-          } else {
-            comparison = String(leftRaw).localeCompare(String(rightRaw), "sv", {
-              numeric: true,
-              sensitivity: "base",
-            });
-          }
-
-          if (comparison !== 0) {
-            return sort.direction === "asc" ? comparison : -comparison;
-          }
+        if (comparison !== 0) {
+          return sort.direction === "asc" ? comparison : -comparison;
         }
       }
       return 0;
     });
 
     return filtered.map((item) => item.record);
-  }, [shelfLifeRecords, shelfLifeSearch, hiddenCategories, hideOkRecords, shelfLifeSort, shelfLifeStatusFilter, brandFilter, deliveryDateFilter]);
+  }, [
+    shelfLifeRecords,
+    shelfLifeSearch,
+    hiddenCategories,
+    hideOkRecords,
+    shelfLifeSort,
+    shelfLifeStatusFilter,
+    brandFilter,
+    categoryFilter,
+    deliveryDateFilter,
+  ]);
+
+  // Derive unique values for filter dropdowns from the full (unfiltered) dataset
+  const uniqueBrands = useMemo(() => {
+    const set = new Set<string>();
+    for (const record of shelfLifeRecords) {
+      const b = (record.brand ?? "").trim();
+      if (b) set.add(b);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "sv"));
+  }, [shelfLifeRecords]);
+
+  const uniqueCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const record of shelfLifeRecords) {
+      const c = (record.category ?? "").trim();
+      if (c) set.add(c);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "sv"));
+  }, [shelfLifeRecords]);
+
+  const uniqueStatuses = useMemo(() => {
+    const set = new Set<string>();
+    for (const record of shelfLifeRecords) {
+      const s = getShelfLifeStatus(record);
+      if (s) set.add(s);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "sv"));
+  }, [shelfLifeRecords]);
+
+  // Reusable filter dropdown component matching the screenshot design
+  const FilterDropdown = useCallback(
+    ({
+      label,
+      options,
+      selected,
+      onSelectionChange,
+    }: {
+      label: string;
+      options: string[];
+      selected: string[];
+      onSelectionChange: (values: string[]) => void;
+    }) => {
+      const [search, setSearch] = useState("");
+      const filteredOptions = options.filter((option) =>
+        option.toLocaleLowerCase("sv").includes(search.toLocaleLowerCase("sv")),
+      );
+      const isAllSelected = selected.length === 0;
+      const activeCount = selected.length;
+
+      return (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 gap-2 rounded-xl border-gray-300 bg-white px-3.5 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50 hover:text-gray-900"
+            >
+              {label}
+              {activeCount > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="h-5 min-w-[20px] rounded-full px-1.5 text-xs bg-emerald-100 text-emerald-800"
+                >
+                  {activeCount}
+                </Badge>
+              )}
+              <ChevronDown className="h-4 w-4 text-gray-700" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="w-72 rounded-2xl border border-gray-200 bg-white p-3 shadow-xl"
+            align="start"
+          >
+            <div className="mb-2">
+              <div className="relative flex items-center">
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={`Sök bland ${label.toLowerCase()}...`}
+                  className="h-10 w-full rounded-xl border border-gray-900/80 bg-white pr-9 pl-3 text-sm placeholder:text-gray-400 focus-visible:ring-1 focus-visible:ring-gray-900"
+                />
+                <Search className="absolute right-3 h-4 w-4 text-gray-500 pointer-events-none" />
+              </div>
+            </div>
+            <div className="py-1">
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm text-gray-800 hover:bg-gray-100 transition-colors"
+                onClick={() => onSelectionChange([])}
+              >
+                <span
+                  className={`flex h-4 w-4 items-center justify-center rounded-full border-2 ${isAllSelected ? "border-[#107c41] bg-[#107c41]" : "border-gray-400"}`}
+                >
+                  {isAllSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                </span>
+                <span className="font-normal text-gray-800">Alla</span>
+              </button>
+            </div>
+            <div className="border-t border-gray-100 max-h-[260px] overflow-y-auto pt-1 divide-y divide-gray-100">
+              {filteredOptions.map((option) => {
+                const isSelected = selected.includes(option);
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm text-gray-800 hover:bg-gray-100 transition-colors"
+                    onClick={() => {
+                      if (isSelected) {
+                        onSelectionChange(selected.filter((v) => v !== option));
+                      } else {
+                        onSelectionChange([...selected, option]);
+                      }
+                    }}
+                  >
+                    <span
+                      className={`flex h-4 w-4 items-center justify-center rounded border ${isSelected ? "border-[#107c41] bg-[#107c41] text-white" : "border-gray-300 bg-white"}`}
+                    >
+                      {isSelected && <span className="text-[10px] leading-none font-bold">✓</span>}
+                    </span>
+                    <span className="truncate text-gray-800">{option}</span>
+                  </button>
+                );
+              })}
+              {filteredOptions.length === 0 && (
+                <p className="px-3 py-3 text-center text-sm text-gray-500">Inga resultat</p>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      );
+    },
+    [],
+  );
 
   const toggleShelfLifeSort = (key: ShelfLifeSortKey, shiftKey = false) => {
     setShelfLifeSort((current) => {
@@ -2124,7 +2273,9 @@ function ErstatningsCheckPage() {
 
       // Determine which scope(s) the category belongs to
       const inLocalScope = hiddenCategories.some((c) => c.toLowerCase() === category.toLowerCase());
-      const inGlobalScope = globalHiddenCategories.some((c) => c.toLowerCase() === category.toLowerCase());
+      const inGlobalScope = globalHiddenCategories.some(
+        (c) => c.toLowerCase() === category.toLowerCase(),
+      );
 
       if (inLocalScope && inGlobalScope) {
         // Category is in both scopes - remove from both
@@ -2459,9 +2610,7 @@ function ErstatningsCheckPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex items-center justify-between text-sm text-coop-gray-900">
-                <span>
-                  {reclaimedPercentage}% av totalt
-                </span>
+                <span>{reclaimedPercentage}% av totalt</span>
                 <Button
                   variant="link"
                   className="h-auto p-0"
@@ -2592,9 +2741,7 @@ function ErstatningsCheckPage() {
               >
                 <Upload className="w-8 h-8 mx-auto text-coop-gray-900 mb-2" />
                 <p className="text-sm font-medium">Dra och släpp Excel-filen här</p>
-                <p className="text-xs text-coop-gray-900 mt-1">
-                  eller klicka för att välja .xlsx
-                </p>
+                <p className="text-xs text-coop-gray-900 mt-1">eller klicka för att välja .xlsx</p>
               </div>
               <input
                 id="delivery-file"
@@ -2684,49 +2831,57 @@ function ErstatningsCheckPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {deliveryNotes.slice(0, showAllDeliveryNotes ? undefined : 5).map((row, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="whitespace-nowrap">{row.pallnummer}</TableCell>
-                          <TableCell className="font-mono text-sm whitespace-nowrap">
-                            {row.sapProduktId}
-                          </TableCell>
-                          <TableCell className="font-mono text-sm whitespace-nowrap">
-                            {row.bnr}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap max-w-[200px] truncate">
-                            {row.produkt}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">{row.varumärke}</TableCell>
-                          <TableCell className="whitespace-nowrap">{row.innehåll}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {row.beställningskvantitet}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {row.beställningsenhet}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {row.enhetsomvandling}
-                          </TableCell>
-                          <TableCell align="right" className="whitespace-nowrap">
-                            {row.levereradKvantitet}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">{row.sannViktKg}</TableCell>
-                          <TableCell className="whitespace-nowrap">{formatDeliveryDate(row.leveransdag)}</TableCell>
-                          <TableCell className="whitespace-nowrap">{row.bastForeDatum}</TableCell>
-                          <TableCell className="whitespace-nowrap">{row.leveransstatus}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {row.prisPerLeveransenhet}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">{row.totalpris}</TableCell>
-                          <TableCell className="whitespace-nowrap">{row.kategori}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {row.förväntadKvantitet}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">{row.orderrad}</TableCell>
-                          <TableCell className="whitespace-nowrap">{row.ordernummer}</TableCell>
-                          <TableCell className="whitespace-nowrap">{row.leveransnummer}</TableCell>
-                        </TableRow>
-                      ))}
+                      {deliveryNotes
+                        .slice(0, showAllDeliveryNotes ? undefined : 5)
+                        .map((row, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="whitespace-nowrap">{row.pallnummer}</TableCell>
+                            <TableCell className="font-mono text-sm whitespace-nowrap">
+                              {row.sapProduktId}
+                            </TableCell>
+                            <TableCell className="font-mono text-sm whitespace-nowrap">
+                              {row.bnr}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap max-w-[200px] truncate">
+                              {row.produkt}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">{row.varumärke}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.innehåll}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {row.beställningskvantitet}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {row.beställningsenhet}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {row.enhetsomvandling}
+                            </TableCell>
+                            <TableCell align="right" className="whitespace-nowrap">
+                              {row.levereradKvantitet}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">{row.sannViktKg}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {formatDeliveryDate(row.leveransdag)}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">{row.bastForeDatum}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {row.leveransstatus}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {row.prisPerLeveransenhet}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">{row.totalpris}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.kategori}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {row.förväntadKvantitet}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">{row.orderrad}</TableCell>
+                            <TableCell className="whitespace-nowrap">{row.ordernummer}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {row.leveransnummer}
+                            </TableCell>
+                          </TableRow>
+                        ))}
                     </TableBody>
                   </Table>
                   {deliveryNotes.length > 10 && (
@@ -2778,28 +2933,57 @@ function ErstatningsCheckPage() {
             <p className="text-sm text-coop-gray-900">
               Visar {filteredShelfLifeRecords.length} av {shelfLifeRecords.length} artiklar
             </p>
-            <div className="flex gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <FilterDropdown
+                label="Varumärke"
+                options={uniqueBrands}
+                selected={brandFilter}
+                onSelectionChange={setBrandFilter}
+              />
+              <FilterDropdown
+                label="Kategori"
+                options={uniqueCategories}
+                selected={categoryFilter}
+                onSelectionChange={setCategoryFilter}
+              />
+              <FilterDropdown
+                label="Status"
+                options={uniqueStatuses}
+                selected={shelfLifeStatusFilter}
+                onSelectionChange={setShelfLifeStatusFilter}
+              />
               <Button
                 type="button"
                 variant={hideOkRecords ? "default" : "outline"}
                 size="sm"
+                className="h-9 rounded-xl border-gray-300 px-3.5 text-sm font-medium"
                 onClick={() => setHideOkRecords(!hideOkRecords)}
               >
                 {hideOkRecords ? "Visa OK" : "Dölj OK"}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowShelfLifeFilters(!showShelfLifeFilters)}
-              >
-                {showShelfLifeFilters ? "Dölj filter" : "Visa filter"}
-              </Button>
+              {(brandFilter.length > 0 ||
+                categoryFilter.length > 0 ||
+                shelfLifeStatusFilter.length > 0) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 rounded-xl px-3 text-sm text-gray-500 hover:text-gray-900"
+                  onClick={() => {
+                    setBrandFilter([]);
+                    setCategoryFilter([]);
+                    setShelfLifeStatusFilter([]);
+                  }}
+                >
+                  Rensa filter
+                </Button>
+              )}
               {shelfLifeSort.length > 0 && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="h-9 rounded-xl border-gray-300 px-3.5 text-sm font-medium"
                   onClick={() => setShelfLifeSort([])}
                 >
                   Rensa sortering
@@ -2809,6 +2993,7 @@ function ErstatningsCheckPage() {
                 type="button"
                 variant="outline"
                 size="sm"
+                className="h-9 rounded-xl border-gray-300 px-3.5 text-sm font-medium"
                 onClick={() => loadShelfLifeData()}
                 disabled={isLoading}
                 title="Ladda om tabellen från databasen"
@@ -2820,58 +3005,12 @@ function ErstatningsCheckPage() {
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="h-9 rounded-xl border-gray-300 px-3.5 text-sm font-medium"
                   onClick={() => void importShelfLifeFromSap()}
                   disabled={isLoading}
                 >
                   Hämta från SAP
                 </Button>
-              )}
-              {/* Filter controls for shelf life data */}
-              {showShelfLifeFilters && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <select
-                    className="select select-sm"
-                    value={shelfLifeStatusFilter}
-                    onChange={(e) => setShelfLifeStatusFilter(e.target.value)}
-                    aria-label="Filtrera efter status"
-                  >
-                    <option value="">Ingen filter</option>
-                    <option value="Kräver ersättning">Kräver ersättning</option>
-                    <option value="OK">OK</option>
-                    <option value="SAKNAS I SAP">SAKNAS I SAP</option>
-                    <option value="Hållbarhet saknas">Hållbarhet saknas</option>
-                    <option value="Datum saknas">Datum saknas</option>
-                  </select>
-                  <select
-                    className="select select-sm"
-                    value={brandFilter}
-                    onChange={(e) => setBrandFilter(e.target.value)}
-                    aria-label="Filtrera efter varumärke"
-                  >
-                    <option value="">Ingen filter</option>
-                    {brands.length > 0 && (
-                      <>
-                        {brands.map((brand) => (
-                          <option key={brand} value={brand}>
-                            {brand}
-                          </option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                  <select
-                    className="select select-sm"
-                    value={deliveryDateFilter}
-                    onChange={(e) => setDeliveryDateFilter(e.target.value)}
-                    aria-label="Filtrera efter leveransdatum"
-                  >
-                    <option value="">Ingen filter</option>
-                    <option value="idag">Idag</option>
-                    <option value="denna_vecka">Denna vecka</option>
-                    <option value="denna_månad">Denna månad</option>
-                    <option value="alla">Alla</option>
-                  </select>
-                </div>
               )}
             </div>
             {shelfLifeSort.length > 0 && (
@@ -3326,9 +3465,7 @@ function ErstatningsCheckPage() {
                         : "—"}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-900">
-                    Snitt per butik
-                  </CardContent>
+                  <CardContent className="text-sm text-coop-gray-900">Snitt per butik</CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
@@ -3347,9 +3484,7 @@ function ErstatningsCheckPage() {
                         : "—"}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-900">
-                    Snitt per butik
-                  </CardContent>
+                  <CardContent className="text-sm text-coop-gray-900">Snitt per butik</CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
