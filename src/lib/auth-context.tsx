@@ -14,6 +14,7 @@ type AuthContextType = {
   user: AppUser | null;
   token: string | null;
   loading: boolean;
+  hasCheckedAuth: boolean;
   userStores: Store[];
   activeStore: Store | null;
   setActiveStore: (store: Store | null) => Promise<void>;
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const [userStores, setUserStores] = useState<Store[]>([]);
   const [activeStore, setActiveStoreState] = useState<Store | null>(null);
   const [lockScreenOpen, setLockScreenOpen] = useState(false);
@@ -163,7 +165,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (err) {
         console.error("Fel vid initiering av session:", err);
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          setHasCheckedAuth(true);
+        }
       }
     })();
 
@@ -306,6 +311,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         loading,
+        hasCheckedAuth,
         userStores,
         activeStore,
         setActiveStore,

@@ -38,8 +38,6 @@ interface MenuItem {
 
 const mainRoutes: MenuItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Uppgifter", url: "/uppgifter", icon: ListChecks },
-  { title: "Mallar", url: "/mallar", icon: FileText },
   { title: "Schema", url: "/schema", icon: CalendarDays },
   { title: "Avvikelser", url: "/avvikelser", icon: TriangleAlert },
   { title: "Kundönskemål", url: "/kundonskemal", icon: ShoppingCart },

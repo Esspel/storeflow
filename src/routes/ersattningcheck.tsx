@@ -1974,7 +1974,7 @@ function ErstatningsCheckPage() {
         if (deliveryDateFilter) {
           const arrival = record.arrival_date;
           if (!arrival) {
-            if (deliveryDateFilter !== "Alla") return false;
+            if (deliveryDateFilter !== "alla") return false;
           } else {
             const arrivalDate = new Date(String(arrival));
             const now = new Date();
@@ -2787,6 +2787,14 @@ function ErstatningsCheckPage() {
               >
                 {hideOkRecords ? "Visa OK" : "Dölj OK"}
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowShelfLifeFilters(!showShelfLifeFilters)}
+              >
+                {showShelfLifeFilters ? "Dölj filter" : "Visa filter"}
+              </Button>
               {shelfLifeSort.length > 0 && (
                 <Button
                   type="button"
@@ -3253,54 +3261,6 @@ function ErstatningsCheckPage() {
 
           {replacementStatistics && (
             <>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <Card className="border-emerald-200 bg-emerald-50/70">
-                  <CardHeader className="pb-2">
-                    <CardDescription>ÅTERFÖRT VÄRDE</CardDescription>
-                    <CardTitle className="text-3xl text-emerald-700">
-                      {formatSek(replacementStatistics.allStoresReturnedValue)}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-900">
-                    perioden pågår
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardDescription>EJ FÄRDIGA REKLAMATIONERS VÄRDE</CardDescription>
-                    <CardTitle className="text-3xl">
-                      {formatSek(replacementStatistics.allStoresPendingValue)}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-900">
-                    {replacementStatistics.allStoresSentCount} skickade reklamationer
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardDescription>GODKÄNNANDEGRAD</CardDescription>
-                    <CardTitle className="text-3xl">
-                      {replacementStatistics.allStoresApprovalRate}%
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-900">
-                    {replacementStatistics.allStoresApprovedCount} av{" "}
-                    {replacementStatistics.allStoresDecidedCount} avgjorda
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardDescription>SNITT PER GODKÄND</CardDescription>
-                    <CardTitle className="text-3xl">
-                      {formatSek(replacementStatistics.allStoresAverageApprovedValue)}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-900">
-                    {replacementStatistics.allStoresTotalCount} reklamationer totalt
-                  </CardContent>
-                </Card>
-              </div>
-
               <h3 className="text-xl font-semibold tracking-tight">Totalt för alla butiker</h3>
               <div className="grid gap-4 md:grid-cols-3">
                 <Card className="border-emerald-200 bg-emerald-50/70">

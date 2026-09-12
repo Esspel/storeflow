@@ -147,7 +147,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function AppLayout() {
-  const { user, loading, showFirstTimeSetup, dismissFirstTimeSetup } = useAuth();
+  const { user, loading, hasCheckedAuth, showFirstTimeSetup, dismissFirstTimeSetup } = useAuth();
   const navigate = useNavigate();
   const router = useRouter();
   const pathname = router.state.location.pathname;
@@ -170,13 +170,13 @@ function AppLayout() {
   }, []);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !hasCheckedAuth) return;
     if (!user && !isLoginPage && !isPublicRoute) {
-      navigate({ to: "/login" });
+      navigate({ to: "/login" }, { replace: true });
     } else if (user && isLoginPage && !user.must_change_password) {
-      navigate({ to: "/" });
+      navigate({ to: "/" }, { replace: true });
     }
-  }, [user, loading, isLoginPage, isPublicRoute, navigate]);
+  }, [user, loading, hasCheckedAuth, isLoginPage, isPublicRoute, navigate]);
 
   if (loading && !isPublicRoute) {
     return (
