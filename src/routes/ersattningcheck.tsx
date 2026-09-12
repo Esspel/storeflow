@@ -244,6 +244,22 @@ function parseSapDate(dateValue: string | null | undefined): string | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+function formatDeliveryDate(dateValue: string | null | undefined): string {
+  if (!dateValue) return "Saknar datum";
+  // Leveransen kan komma som ISO-sträng från SAP eller som "Date(xxxx)"-format
+  let date: Date;
+  const match = String(dateValue).match(/Date\((\d+)\)/);
+  if (match) {
+    date = new Date(parseInt(match[1], 10));
+  } else {
+    date = new Date(dateValue);
+  }
+  if (Number.isNaN(date.getTime())) return "Ogiltigt datum";
+  // Visa veckodag + datum: måndag 4 september 2026
+  const options: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long", year: "numeric" };
+  return date.toLocaleDateString("sv-SE", options);
+}
+
 interface SapProductData {
   ProductID: string;
   ProductName: string;
@@ -350,6 +366,7 @@ function ErstatningsCheckPage() {
   );
   const [statisticsView, setStatisticsView] = useState<"value" | "count">("value");
   const [totalProductCount, setTotalProductCount] = useState(0);
+  const [showAllDeliveryNotes, setShowAllDeliveryNotes] = useState(false);
   const [statisticsPeriod, setStatisticsPeriod] = useState<"ytd" | "last30" | "last12">("ytd");
   const [categoryMappings, setCategoryMappings] = useState<DeliveryCategoryMapping[]>([]);
   const [deliveryCategories, setDeliveryCategories] = useState<string[]>([]);
@@ -370,6 +387,14 @@ function ErstatningsCheckPage() {
   const [sapExtensionInstalled, setSapExtensionInstalled] = useState(false);
   const [reclamationStatuses, setReclamationStatuses] = useState<Map<string, string>>(new Map());
   const [sapExtensionChecked, setSapExtensionChecked] = useState(false);
+  // Filter state for shelf life data (#6)
+  const [shelfLifeStatusFilter, setShelfLifeStatusFilter] = useState("");
+  const [brandFilter, setBrandFilter] = useState("");
+  const [deliveryDateFilter, setDeliveryDateFilter] = useState("");
+  const [showShelfLifeFilters, setShowShelfLifeFilters] = useState(false);
+  const [brands, setBrands] = useState<string[]>([]);
+  // Show all import dates state (#7)
+  const [showAllImportDates, setShowAllImportDates] = useState(false);
 
   useEffect(() => {
     if (!importSuccess) return;
@@ -481,7 +506,13 @@ function ErstatningsCheckPage() {
   ).size;
   const goodProductCount = Math.max(totalProductCount - reclaimedProductCount, 0);
   const productPercentage =
-    totalProductCount > 0 ? Math.round((goodProductCount / totalProductCount) * 100) : 0;
+    totalProductCount > 0
+      ? ((goodProductCount / totalProductCount) * 100).toFixed(2)
+      : "0.00";
+  const reclaimedPercentage =
+    totalProductCount > 0
+      ? ((reclaimedProductCount / totalProductCount) * 100).toFixed(2)
+      : "0.00";
   // Filter: Only eligible records where arrival is within last 4 days (regulatory requirement)
   // Users must apply for compensation within 4 days of delivery, otherwise no compensation
   const fourDaysMs = 4 * 24 * 60 * 60 * 1000;
@@ -1922,6 +1953,48 @@ function ErstatningsCheckPage() {
         if (autoHiddenCategories.has(lowerCategory)) {
           return Boolean(record.shelf_lifetime_days && record.shelf_lifetime_days > 0);
         }
+        // Filter by status
+        if (shelfLifeStatusFilter) {
+          const statusMap: Record<string, string> = {
+            "Kräver ersättning": "Kräver ersättning",
+            OK: "OK",
+            "SAKNAS I SAP": "SAKNAS I SAP",
+            "Hållbarhet saknas": "Hållbarhet saknas",
+            "Datum saknas": "Datum saknas",
+            "Ej skickad": "Ej skickad",
+            "Skickad": "Skickad",
+            "Bearbetas": "Bearbetas",
+          };
+          const expectedStatus = statusMap[shelfLifeStatusFilter];
+          if (expectedStatus && status !== expectedStatus) return false;
+        }
+        // Filter by brand
+        if (brandFilter && record.brand !== brandFilter) return false;
+        // Filter by delivery date
+        if (deliveryDateFilter) {
+          const arrival = record.arrival_date;
+          if (!arrival) {
+            if (deliveryDateFilter !== "Alla") return false;
+          } else {
+            const arrivalDate = new Date(String(arrival));
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const weekStart = new Date(todayStart);
+            weekStart.setDate(weekStart.getDate() - todayStart.getDay());
+            const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+            switch (deliveryDateFilter) {
+              case "idag":
+                if (!(arrivalDate >= todayStart && arrivalDate < new Date(todayStart.getTime() + 86400000))) return false;
+                break;
+              case "denna_vecka":
+                if (!(arrivalDate >= weekStart && arrivalDate < new Date(weekStart.getTime() + 604800000))) return false;
+                break;
+              case "denna_månad":
+                if (!(arrivalDate >= monthStart && arrivalDate < new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1))) return false;
+                break;
+            }
+          }
+        }
         return true;
       })
       .filter(({ status }) => {
@@ -2048,63 +2121,71 @@ function ErstatningsCheckPage() {
       const isGlobal = globalHiddenCategories.some(
         (c) => c.toLowerCase() === category.toLowerCase(),
       );
-      const nextHidden = !(isLocal || isGlobal);
 
-      if (nextHidden) {
-        // Determine scope: if category is already in store-specific list toggle local, else global
-        if (isLocal) {
-          await supabase.from("store_hidden_categories").upsert(
-            {
-              store_id: activeStore.id,
-              category,
-              is_hidden: true,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "store_id,category" },
+      // Determine which scope(s) the category belongs to
+      const inLocalScope = hiddenCategories.some((c) => c.toLowerCase() === category.toLowerCase());
+      const inGlobalScope = globalHiddenCategories.some((c) => c.toLowerCase() === category.toLowerCase());
+
+      if (inLocalScope && inGlobalScope) {
+        // Category is in both scopes - remove from both
+        await supabase.from("store_hidden_categories").upsert(
+          {
+            store_id: activeStore.id,
+            category,
+            is_hidden: false,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "store_id,category" },
+        );
+        await supabase
+          .from("global_hidden_categories")
+          .upsert(
+            { category, is_hidden: false, updated_at: new Date().toISOString() },
+            { onConflict: "category" },
           );
-          // If already local, no change needed
-        } else {
-          // Add to global (visible to all stores)
-          const { error } = await supabase
-            .from("global_hidden_categories")
-            .upsert(
-              { category, is_hidden: true, updated_at: new Date().toISOString() },
-              { onConflict: "category" },
-            );
-          if (error) throw error;
-          setGlobalHiddenCategories((current) => [...current, category]);
-          // Remove from local if present
-          setHiddenCategories((current) =>
-            current.filter((c) => c.toLowerCase() !== category.toLowerCase()),
+        setHiddenCategories((current) =>
+          current.filter((c) => c.toLowerCase() !== category.toLowerCase()),
+        );
+        setGlobalHiddenCategories((current) =>
+          current.filter((c) => c.toLowerCase() !== category.toLowerCase()),
+        );
+      } else if (inLocalScope) {
+        // Remove from local scope only
+        await supabase.from("store_hidden_categories").upsert(
+          {
+            store_id: activeStore.id,
+            category,
+            is_hidden: false,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "store_id,category" },
+        );
+        setHiddenCategories((current) =>
+          current.filter((c) => c.toLowerCase() !== category.toLowerCase()),
+        );
+      } else if (inGlobalScope) {
+        // Remove from global scope only
+        await supabase
+          .from("global_hidden_categories")
+          .upsert(
+            { category, is_hidden: false, updated_at: new Date().toISOString() },
+            { onConflict: "category" },
           );
-        }
+        setGlobalHiddenCategories((current) =>
+          current.filter((c) => c.toLowerCase() !== category.toLowerCase()),
+        );
       } else {
-        // Remove from whichever scope it's in
-        if (isLocal) {
-          await supabase.from("store_hidden_categories").upsert(
-            {
-              store_id: activeStore.id,
-              category,
-              is_hidden: false,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "store_id,category" },
-          );
-          setHiddenCategories((current) =>
-            current.filter((c) => c.toLowerCase() !== category.toLowerCase()),
-          );
-        }
-        if (isGlobal) {
-          await supabase
-            .from("global_hidden_categories")
-            .upsert(
-              { category, is_hidden: false, updated_at: new Date().toISOString() },
-              { onConflict: "category" },
-            );
-          setGlobalHiddenCategories((current) =>
-            current.filter((c) => c.toLowerCase() !== category.toLowerCase()),
-          );
-        }
+        // Category not in any scope - add to local scope (store-specific)
+        await supabase.from("store_hidden_categories").upsert(
+          {
+            store_id: activeStore.id,
+            category,
+            is_hidden: true,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "store_id,category" },
+        );
+        setHiddenCategories((current) => [...current, category]);
       }
     } catch (error) {
       console.error("Error toggling hidden category:", error);
@@ -2379,10 +2460,7 @@ function ErstatningsCheckPage() {
               </CardHeader>
               <CardContent className="flex items-center justify-between text-sm text-coop-gray-600">
                 <span>
-                  {totalProductCount > 0
-                    ? Math.round((reclaimedProductCount / totalProductCount) * 100)
-                    : 0}
-                  % av totalt
+                  {reclaimedPercentage}% av totalt
                 </span>
                 <Button
                   variant="link"
@@ -2534,7 +2612,7 @@ function ErstatningsCheckPage() {
                   Senaste importerade leveransdatum
                 </Label>
                 <div className="mt-1 flex flex-wrap gap-2">
-                  {importDates.slice(0, 20).map((date) => (
+                  {importDates.slice(0, showAllImportDates ? undefined : 5).map((date) => (
                     <Button
                       key={date}
                       type="button"
@@ -2543,10 +2621,32 @@ function ErstatningsCheckPage() {
                       className="font-mono text-xs"
                       onClick={() => setShelfLifeSearch(date)}
                     >
-                      {date}
+                      {formatDeliveryDate(date)}
                     </Button>
                   ))}
                 </div>
+                {importDates.length > 5 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {showAllImportDates ? (
+                      <span className="text-xs text-coop-gray-600">
+                        Alla {importDates.length} datum
+                      </span>
+                    ) : (
+                      <>
+                        <span className="text-xs text-coop-gray-600">
+                          Visar 5 av {importDates.length} datum
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowAllImportDates(true)}
+                        >
+                          Visa alla
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -2584,7 +2684,7 @@ function ErstatningsCheckPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {deliveryNotes.slice(0, 10).map((row, i) => (
+                      {deliveryNotes.slice(0, showAllDeliveryNotes ? undefined : 5).map((row, i) => (
                         <TableRow key={i}>
                           <TableCell className="whitespace-nowrap">{row.pallnummer}</TableCell>
                           <TableCell className="font-mono text-sm whitespace-nowrap">
@@ -2611,7 +2711,7 @@ function ErstatningsCheckPage() {
                             {row.levereradKvantitet}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">{row.sannViktKg}</TableCell>
-                          <TableCell className="whitespace-nowrap">{row.leveransdag}</TableCell>
+                          <TableCell className="whitespace-nowrap">{formatDeliveryDate(row.leveransdag)}</TableCell>
                           <TableCell className="whitespace-nowrap">{row.bastForeDatum}</TableCell>
                           <TableCell className="whitespace-nowrap">{row.leveransstatus}</TableCell>
                           <TableCell className="whitespace-nowrap">
@@ -2629,10 +2729,27 @@ function ErstatningsCheckPage() {
                       ))}
                     </TableBody>
                   </Table>
-                  {deliveryNotes.length > 10 && (
-                    <p className="text-sm text-coop-gray-600 text-center py-2">
-                      Och {deliveryNotes.length - 10} fler rader...
-                    </p>
+                  {deliveryNotes.length > 5 && (
+                    <>
+                      {!showAllDeliveryNotes ? (
+                        <div className="flex flex-col items-center gap-2 py-3">
+                          <p className="text-sm text-coop-gray-600 text-center">
+                            Visar {showAllDeliveryNotes} av {deliveryNotes.length} rader
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowAllDeliveryNotes(true)}
+                          >
+                            Visa alla
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-coop-gray-600 text-center py-2">
+                          Alla {deliveryNotes.length} rader
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -2700,6 +2817,53 @@ function ErstatningsCheckPage() {
                 >
                   Hämta från SAP
                 </Button>
+              )}
+              {/* Filter controls for shelf life data */}
+              {showShelfLifeFilters && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <select
+                    className="select select-sm"
+                    value={shelfLifeStatusFilter}
+                    onChange={(e) => setShelfLifeStatusFilter(e.target.value)}
+                    aria-label="Filtrera efter status"
+                  >
+                    <option value="">Ingen filter</option>
+                    <option value="Kräver ersättning">Kräver ersättning</option>
+                    <option value="OK">OK</option>
+                    <option value="SAKNAS I SAP">SAKNAS I SAP</option>
+                    <option value="Hållbarhet saknas">Hållbarhet saknas</option>
+                    <option value="Datum saknas">Datum saknas</option>
+                  </select>
+                  <select
+                    className="select select-sm"
+                    value={brandFilter}
+                    onChange={(e) => setBrandFilter(e.target.value)}
+                    aria-label="Filtrera efter varumärke"
+                  >
+                    <option value="">Ingen filter</option>
+                    {brands.length > 0 && (
+                      <>
+                        {brands.map((brand) => (
+                          <option key={brand} value={brand}>
+                            {brand}
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                  <select
+                    className="select select-sm"
+                    value={deliveryDateFilter}
+                    onChange={(e) => setDeliveryDateFilter(e.target.value)}
+                    aria-label="Filtrera efter leveransdatum"
+                  >
+                    <option value="">Ingen filter</option>
+                    <option value="idag">Idag</option>
+                    <option value="denna_vecka">Denna vecka</option>
+                    <option value="denna_månad">Denna månad</option>
+                    <option value="alla">Alla</option>
+                  </select>
+                </div>
               )}
             </div>
             {shelfLifeSort.length > 0 && (
@@ -3279,7 +3443,7 @@ function ErstatningsCheckPage() {
                     <div className="flex items-center justify-between">
                       <CardDescription className="text-base">GODKÄNNANDEGRAD</CardDescription>
                       <CardTitle className="text-3xl">
-                        {replacementStatistics.approvalRate}%
+                        {replacementStatistics.approvalRate.toFixed(2)}%
                       </CardTitle>
                     </div>
                     <CardContent className="text-sm text-coop-gray-600">
