@@ -2,6 +2,8 @@
 //
 // Sends Web Push notifications to subscriptions stored in the database.
 // Filters by user_ids or store_id, cleans up stale/deprecated endpoints (FCM legacy, 404, 410).
+// VAPID keys: VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must match VITE_VAPID_PUBLIC_KEY
+// (the VITE_ prefix is automatically stripped by normalizeVAPIDKey).
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import webpush from "npm:web-push@3";
@@ -23,18 +25,32 @@ interface SendPushPayload {
   tag?: string;
 }
 
+function normalizeVAPIDKey(key: string | null): string | null {
+  if (!key) return null;
+  // Remove VITE_ prefix if present for backward compatibility
+  return key.startsWith("VITE_") ? key.replace("VITE_", "") : key;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
-    const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
-    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
+    const vapidPublicKey = normalizeVAPIDKey(Deno.env.get("VAPID_PUBLIC_KEY"));
+    const vapidPrivateKey = normalizeVAPIDKey(Deno.env.get("VAPID_PRIVATE_KEY"));
     const vapidSubject = Deno.env.get("VAPID_SUBJECT") ?? "mailto:admin@storeflow.app";
 
-    if (!vapidPublicKey || !vapidPrivateKey) {
-      return json({ error: "VAPID keys not configured" }, 500);
+    // Validate VAPID keys format (URL-safe base64)
+    const VAPID_KEY_REGEX = /^[A-Za-z0-9_-]+=*$/;
+    if (!vapidPublicKey || !VAPID_KEY_REGEX.test(vapidPublicKey)) {
+      return json({ error: "Invalid VAPID_PUBLIC_KEY format. Must be URL-safe base64 encoded." }, 500);
+    }
+    if (!vapidPrivateKey || !VAPID_KEY_REGEX.test(vapidPrivateKey)) {
+      return json({ error: "Invalid VAPID_PRIVATE_KEY format. Must be URL-safe base64 encoded." }, 500);
+    }
+    if (vapidPublicKey === vapidPrivateKey) {
+      return json({ error: "VAPID public and private keys must be different." }, 500);
     }
 
     webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
@@ -110,7 +126,7 @@ Deno.serve(async (req: Request) => {
           const detail = `${sub.endpoint.slice(0, 40)}... status=${status} body=${e.body ?? e.message ?? String(err)}`;
           console.error("Push send error:", detail);
           errors.push(detail);
-          if (status === 410 || status === 404) {
+          if (status === 410 || status === 404 || status === 401 || status === 403) {
             staleEndpoints.push(sub.endpoint);
           }
         }

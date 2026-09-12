@@ -2650,7 +2650,6 @@ function TasksPage() {
     { value: "all", label: "Alla" },
     { value: "done", label: "Klara" },
     { value: "late", label: "Försenade" },
-    { value: "handover", label: "Överlämning" },
   ];
 
   const simNow = getSimulatedNow();

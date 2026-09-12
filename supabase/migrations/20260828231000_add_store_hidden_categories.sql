@@ -43,15 +43,16 @@ create policy "Store managers and admins can upsert hidden categories"
       select 1 from stores
       where stores.id = store_hidden_categories.store_id
         and (
-          exists (
+          app_user_manages_store(store_hidden_categories.store_id)
+          or exists (
             select 1 from app_users
-            where app_users.id = auth.uid()
+            where app_users.id = app_current_user_id()
               and app_users.role in ('admin', 'chef')
               and app_users.store_id = stores.id
           )
           or exists (
             select 1 from user_stores us
-            where us.user_id = auth.uid()
+            where us.user_id = app_current_user_id()
               and us.store_id = stores.id
           )
         )
@@ -65,15 +66,16 @@ create policy "Store managers and admins can update hidden categories"
       select 1 from stores
       where stores.id = store_hidden_categories.store_id
         and (
-          exists (
+          app_user_manages_store(store_hidden_categories.store_id)
+          or exists (
             select 1 from app_users
-            where app_users.id = auth.uid()
+            where app_users.id = app_current_user_id()
               and app_users.role in ('admin', 'chef')
               and app_users.store_id = stores.id
           )
           or exists (
             select 1 from user_stores us
-            where us.user_id = auth.uid()
+            where us.user_id = app_current_user_id()
               and us.store_id = stores.id
           )
         )
@@ -87,15 +89,16 @@ create policy "Store managers and admins can delete hidden categories"
       select 1 from stores
       where stores.id = store_hidden_categories.store_id
         and (
-          exists (
+          app_user_manages_store(store_hidden_categories.store_id)
+          or exists (
             select 1 from app_users
-            where app_users.id = auth.uid()
+            where app_users.id = app_current_user_id()
               and app_users.role in ('admin', 'chef')
               and app_users.store_id = stores.id
           )
           or exists (
             select 1 from user_stores us
-            where us.user_id = auth.uid()
+            where us.user_id = app_current_user_id()
               and us.store_id = stores.id
           )
         )

@@ -3,7 +3,22 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 
+// VAPID keys must match between client and server
+// Client uses VITE_VAPID_PUBLIC_KEY, Edge Function uses VAPID_PUBLIC_KEY
+// normalizeVAPIDKey in Edge Function handles VITE_ prefix stripping
+
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+
+// Validate VAPID key format
+function isValidVAPIDKey(key: string | undefined): key is string {
+  if (!key) return false;
+  // VAPID keys are URL-safe base64, typically 88 characters
+  const VAPID_KEY_REGEX = /^[A-Za-z0-9_-]+=*$/;
+  return VAPID_KEY_REGEX.test(key) && key.length === 88;
+}
+
+// Subject for VAPID authentication (must match Edge Function config)
+const VAPID_SUBJECT = "mailto:admin@storeflow.app";
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -95,6 +110,13 @@ export function usePushNotifications(): PushNotificationState {
         if (upsertErr) {
           // Om unikt villkor fallerar (t.ex. ägs av annan användare på samma enhet), skapa ny
           await sub.unsubscribe();
+
+          if (!isValidVAPIDKey(VAPID_PUBLIC_KEY)) {
+            console.error("VAPID key configuration error: VAPID public key is invalid or missing.");
+            toast.error("Push-configuration fel: ogiltig VAPID-nyckel.");
+            if (isMounted) setIsSubscribed(false);
+            return;
+          }
 
           const freshSub = await reg.pushManager.subscribe({
             userVisibleOnly: true,

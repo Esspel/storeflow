@@ -680,7 +680,7 @@ export function AppShell() {
                   className="rounded-full border-border/80 h-9 w-9 p-0"
                   aria-label="Konto"
                 >
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-soft text-[10px] font-bold text-primary">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
                     {initials}
                   </div>
                 </Button>

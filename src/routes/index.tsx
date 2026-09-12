@@ -187,7 +187,7 @@ function QuickCard({
       className="group flex items-center gap-3 rounded-2xl border border-border/60 bg-coop-gray-100 p-3.5 shadow-[var(--shadow-sm)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] overflow-hidden"
     >
       <div
-        className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", colors[tone], `${tone === 'primary' ? 'text-coop-gron-600' : 'text-coop-gray-200'}`)}
+        className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", colors[tone], `${tone === 'primary' ? 'text-coop-gron-600' : 'text-coop-gray-600'}`)}
       >
         <Icon className="h-4.5 w-4.5" />
       </div>
