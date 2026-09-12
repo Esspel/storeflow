@@ -34,7 +34,7 @@ export function CopyableId({
       title={id}
       aria-label={`Kopiera ${prefix ? prefix + " " : ""}UUID ${id}`}
       className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2 py-1 text-xs font-mono text-coop-gray-600 transition-colors hover:bg-muted hover:text-coop-gray-900",
+        "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2 py-1 text-xs font-mono text-coop-gray-900 transition-colors hover:bg-muted hover:text-coop-gray-900",
         className,
       )}
     >

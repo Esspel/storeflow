@@ -71,27 +71,27 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
   if (inline) {
     return (
       <div className="px-2 py-1">
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600">
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-coop-gray-900">
           Butik
         </p>
         <div className="mb-2 flex items-center gap-2 rounded-lg bg-muted/60 px-2.5 py-1.5">
-          <Search className="h-3 w-3 shrink-0 text-coop-gray-600" />
+          <Search className="h-3 w-3 shrink-0 text-coop-gray-900" />
           <input
             type="text"
             aria-label="Sök butik"
             placeholder="Sök butik..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 bg-transparent text-xs outline-none placeholder:text-coop-gray-600 focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex-1 bg-transparent text-xs outline-none placeholder:text-coop-gray-900 focus-visible:ring-2 focus-visible:ring-ring"
           />
           {search && (
             <button type="button" aria-label="Rensa sökning" onClick={() => setSearch("")}>
-              <X className="h-3 w-3 text-coop-gray-600" />
+              <X className="h-3 w-3 text-coop-gray-900" />
             </button>
           )}
         </div>
         {loading ? (
-          <p className="py-2 text-center text-xs text-coop-gray-600">Laddar...</p>
+          <p className="py-2 text-center text-xs text-coop-gray-900">Laddar...</p>
         ) : (
           <div className="max-h-44 overflow-y-auto space-y-0.5">
             {filtered.map((s) => {
@@ -111,7 +111,7 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
                   <Building2
                     className={cn(
                       "h-3 w-3 shrink-0",
-                      isSelected ? "text-primary" : "text-coop-gray-600",
+                      isSelected ? "text-primary" : "text-coop-gray-900",
                     )}
                   />
                   <span className="flex-1 truncate">{s.name}</span>
@@ -120,7 +120,7 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
               );
             })}
             {filtered.length === 0 && (
-              <p className="py-2 text-center text-xs text-coop-gray-600">
+              <p className="py-2 text-center text-xs text-coop-gray-900">
                 Inga butiker hittades
               </p>
             )}
@@ -142,14 +142,14 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
       >
         <Building2 className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate">{activeStore?.name ?? "Välj butik"}</span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-coop-gray-600" />
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-coop-gray-900" />
       </Button>
 
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1.5 w-80 overflow-hidden rounded-xl border border-border/60 bg-coop-gray-100 shadow-lg">
           <div className="border-b border-border/40 p-2">
             <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2">
-              <Search className="h-3.5 w-3.5 shrink-0 text-coop-gray-600" />
+              <Search className="h-3.5 w-3.5 shrink-0 text-coop-gray-900" />
               <input
                 autoFocus
                 type="text"
@@ -157,11 +157,11 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
                 placeholder="Sök butik, stad, förening..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 bg-transparent text-sm outline-none placeholder:text-coop-gray-600 focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-coop-gray-900 focus-visible:ring-2 focus-visible:ring-ring"
               />
               {search && (
                 <button type="button" aria-label="Rensa sökning" onClick={() => setSearch("")}>
-                  <X className="h-3.5 w-3.5 text-coop-gray-600 hover:text-coop-gray-900" />
+                  <X className="h-3.5 w-3.5 text-coop-gray-900 hover:text-coop-gray-900" />
                 </button>
               )}
             </div>
@@ -169,9 +169,9 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
 
           <div className="max-h-72 overflow-y-auto">
             {loading ? (
-              <p className="px-4 py-6 text-center text-sm text-coop-gray-600">Laddar...</p>
+              <p className="px-4 py-6 text-center text-sm text-coop-gray-900">Laddar...</p>
             ) : filtered.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-coop-gray-600">
+              <p className="px-4 py-6 text-center text-sm text-coop-gray-900">
                 Inga butiker hittades
               </p>
             ) : (
@@ -193,12 +193,12 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
                     <Building2
                       className={cn(
                         "mt-0.5 h-4 w-4 shrink-0",
-                        isSelected ? "text-primary" : "text-coop-gray-600",
+                        isSelected ? "text-primary" : "text-coop-gray-900",
                       )}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{s.name}</p>
-                      <p className="truncate text-xs text-coop-gray-600">
+                      <p className="truncate text-xs text-coop-gray-900">
                         {[s.butiks_nr && `#${s.butiks_nr}`, s.city, s.bolag]
                           .filter(Boolean)
                           .join(" · ")}
@@ -211,7 +211,7 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
             )}
           </div>
           <div className="border-t border-border/40 px-3 py-2">
-            <p className="text-[10px] text-coop-gray-600">
+            <p className="text-[10px] text-coop-gray-900">
               {filtered.length} butik{filtered.length !== 1 ? "er" : ""}
             </p>
           </div>

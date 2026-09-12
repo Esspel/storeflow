@@ -14,7 +14,7 @@ export function PageHeader({
     <div className="mb-6 flex flex-col gap-3 md:mb-8 md:flex-row md:items-end md:justify-between">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl coop-font-heading-sm">{title}</h1>
-        {description && <p className="mt-1 text-sm text-coop-gray-600 coop-font-body">{description}</p>}
+        {description && <p className="mt-1 text-sm text-coop-gray-900 coop-font-body">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
@@ -48,12 +48,12 @@ export function StatCard({
     <div className="group relative overflow-hidden rounded-2xl border border-border/60 bg-coop-gray-100 p-5 shadow-[var(--shadow-sm)] transition-shadow hover:shadow-[var(--shadow-md)]">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-600">
+          <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">
             {label}
           </p>
           <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums coop-font-heading">{value}</p>
           {(delta || hint) && (
-            <p className={cn("mt-1 text-xs", delta ? "text-success" : "text-coop-gray-600")}>
+            <p className={cn("mt-1 text-xs", delta ? "text-success" : "text-coop-gray-900")}>
               {delta ?? hint}
             </p>
           )}

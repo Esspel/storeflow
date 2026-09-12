@@ -161,7 +161,7 @@ function priorityClass(p: string) {
     case "Medel":
       return "bg-info/15 text-info";
     default:
-      return "bg-muted text-coop-gray-600";
+      return "bg-muted text-coop-gray-900";
   }
 }
 
@@ -171,7 +171,7 @@ function statusBadge(s: string) {
   if (s === "late") return <Badge className="bg-destructive/10 text-destructive">Försenad</Badge>;
   if (s === "cancelled")
     return (
-      <Badge variant="secondary" className="text-coop-gray-600">
+      <Badge variant="secondary" className="text-coop-gray-900">
         Avbruten
       </Badge>
     );
@@ -412,7 +412,7 @@ function SwipeableCard({
         }}
       >
         {done ? (
-          <Circle className="h-7 w-7 text-coop-gray-600" style={{ opacity: rightFrac }} />
+          <Circle className="h-7 w-7 text-coop-gray-900" style={{ opacity: rightFrac }} />
         ) : (
           <CheckCircle2 className="h-7 w-7 text-coop-vit" style={{ opacity: rightFrac }} />
         )}
@@ -471,16 +471,16 @@ function AssigneePicker({
   return (
     <div className="px-4 py-3 space-y-2">
       <div className="flex items-center gap-2">
-        <Users className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-        <span className="text-xs text-coop-gray-600">Tilldela</span>
+        <Users className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+        <span className="text-xs text-coop-gray-900">Tilldela</span>
       </div>
       <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-coop-gray-600" />
+        <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-coop-gray-900" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Sök person eller grupp..."
-          className="h-7 w-full rounded-lg border border-border/60 bg-background pl-7 pr-3 text-xs outline-none placeholder:text-coop-gray-600/50 focus:border-primary/40"
+          className="h-7 w-full rounded-lg border border-border/60 bg-background pl-7 pr-3 text-xs outline-none placeholder:text-coop-gray-900/50 focus:border-primary/40"
         />
       </div>
       <div className="max-h-40 overflow-y-auto space-y-0.5 -mx-1">
@@ -494,7 +494,7 @@ function AssigneePicker({
               onCheckedChange={() => onToggleGroup(g.id)}
               className="h-3.5 w-3.5 shrink-0"
             />
-            <Users className="h-3 w-3 shrink-0 text-coop-gray-600/60" />
+            <Users className="h-3 w-3 shrink-0 text-coop-gray-900/60" />
             <span className="text-xs font-medium">{g.name}</span>
           </label>
         ))}
@@ -508,14 +508,14 @@ function AssigneePicker({
               onCheckedChange={() => onToggleUser(u.id)}
               className="h-3.5 w-3.5 shrink-0"
             />
-            <span className="h-5 w-5 shrink-0 inline-flex items-center justify-center rounded-full bg-muted text-[10px] font-bold text-coop-gray-600">
+            <span className="h-5 w-5 shrink-0 inline-flex items-center justify-center rounded-full bg-muted text-[10px] font-bold text-coop-gray-900">
               {(u.display_name ?? "?").charAt(0).toUpperCase()}
             </span>
             <span className="text-xs">{u.display_name}</span>
           </label>
         ))}
         {filteredGroups.length === 0 && filteredUsers.length === 0 && (
-          <p className="px-2 py-3 text-center text-xs text-coop-gray-600">Inga träffar</p>
+          <p className="px-2 py-3 text-center text-xs text-coop-gray-900">Inga träffar</p>
         )}
       </div>
     </div>
@@ -2931,12 +2931,12 @@ function TasksPage() {
                   <h3
                     className={cn(
                       "text-sm font-semibold leading-snug",
-                      done && "line-through text-coop-gray-600",
+                      done && "line-through text-coop-gray-900",
                     )}
                   >
                     {t.title}
                   </h3>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-coop-gray-600">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-coop-gray-900">
                     {t.due_date && (
                       <span
                         className={cn(
@@ -3020,7 +3020,7 @@ function TasksPage() {
                           style={{ width: `${Math.round(progress * 100)}%` }}
                         />
                       </div>
-                      <span className="text-[10px] text-coop-gray-600 tabular-nums">
+                      <span className="text-[10px] text-coop-gray-900 tabular-nums">
                         {doneItems}/{totalItems}
                       </span>
                     </div>
@@ -3032,19 +3032,19 @@ function TasksPage() {
                           key={i}
                           className={cn(
                             "flex items-center gap-1.5 text-[11px]",
-                            s.is_done ? "text-coop-gray-600 line-through" : "text-coop-gray-900/70",
+                            s.is_done ? "text-coop-gray-900 line-through" : "text-coop-gray-900/70",
                           )}
                         >
                           {s.is_done ? (
                             <CheckCircle2 className="h-3 w-3 shrink-0 text-success" />
                           ) : (
-                            <Circle className="h-3 w-3 shrink-0 text-coop-gray-600/40" />
+                            <Circle className="h-3 w-3 shrink-0 text-coop-gray-900/40" />
                           )}
                           <span className="truncate">{s.label}</span>
                         </div>
                       ))}
                       {stepsTotal > 4 && (
-                        <p className="text-[10px] text-coop-gray-600/60 pl-4">
+                        <p className="text-[10px] text-coop-gray-900/60 pl-4">
                           +{stepsTotal - 4} fler steg
                         </p>
                       )}
@@ -3059,7 +3059,7 @@ function TasksPage() {
                   ) : dueSoon ? (
                     <Clock className="h-4 w-4 text-warning-foreground" />
                   ) : (
-                    <Circle className="h-5 w-5 text-coop-gray-600/25" />
+                    <Circle className="h-5 w-5 text-coop-gray-900/25" />
                   )}
                 </div>
               </div>
@@ -3112,12 +3112,12 @@ function TasksPage() {
         <div className="rounded-2xl border border-border/60 bg-coop-gray-100 p-5 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-medium uppercase tracking-widest text-coop-gray-600 mb-1">
+              <p className="text-xs font-medium uppercase tracking-widest text-coop-gray-900 mb-1">
                 {todayLabel}
               </p>
               <p className="text-2xl font-bold text-coop-gray-900">
                 {doneCount} / {totalToday}
-                <span className="text-base font-normal text-coop-gray-600 ml-2">slutförda</span>
+                <span className="text-base font-normal text-coop-gray-900 ml-2">slutförda</span>
               </p>
             </div>
             <div className="relative h-16 w-16 shrink-0">
@@ -3166,7 +3166,7 @@ function TasksPage() {
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-14 text-center">
             <CheckCircle2 className="mb-3 h-10 w-10 text-success/50" />
             <p className="text-sm font-semibold">Inga uppgifter för idag</p>
-            <p className="text-xs text-coop-gray-600 mt-1">
+            <p className="text-xs text-coop-gray-900 mt-1">
               {isManager ? "Njut av dagen eller lägg till nya uppgifter." : "Njut av dagen!"}
             </p>
             {isManager && (
@@ -3191,7 +3191,7 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-coop-orange-800 dark:text-coop-orange-500">
                 Händelser att bekräfta
               </h2>
-              <span className="ml-auto text-[11px] text-coop-gray-600">
+              <span className="ml-auto text-[11px] text-coop-gray-900">
                 {unconfirmedEventTasks.length}
               </span>
             </div>
@@ -3202,7 +3202,7 @@ function TasksPage() {
                   className="rounded-2xl border border-amber-400/40 bg-coop-orange-100/60 dark:bg-coop-orange-900/10 px-4 py-3 space-y-2"
                 >
                   <p className="text-sm font-semibold text-coop-gray-900">{t.title}</p>
-                  <p className="text-xs text-coop-gray-600">{t.event_trigger_description}</p>
+                  <p className="text-xs text-coop-gray-900">{t.event_trigger_description}</p>
                   <div className="flex items-center gap-2">
                     <button
                       className="inline-flex items-center gap-1.5 rounded-full bg-coop-orange-600 px-3 py-1.5 text-xs font-medium text-coop-vit hover:bg-coop-orange-600 transition-colors"
@@ -3212,7 +3212,7 @@ function TasksPage() {
                       Bekräfta — aktuell idag
                     </button>
                     <button
-                      className="text-[11px] text-coop-gray-600 hover:text-coop-gray-900 transition-colors"
+                      className="text-[11px] text-coop-gray-900 hover:text-coop-gray-900 transition-colors"
                       onClick={() => openDetail(t)}
                     >
                       Detaljer
@@ -3231,7 +3231,7 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-destructive">
                 Försenade
               </h2>
-              <span className="ml-auto text-[11px] text-coop-gray-600">
+              <span className="ml-auto text-[11px] text-coop-gray-900">
                 {overdueTasks.length}
               </span>
             </div>
@@ -3248,7 +3248,7 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-primary/80">
                 Idag
               </h2>
-              <span className="ml-auto text-[11px] text-coop-gray-600">{todayTasks.length}</span>
+              <span className="ml-auto text-[11px] text-coop-gray-900">{todayTasks.length}</span>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {todayTasks.map((t) => renderTaskCard(t))}
@@ -3259,11 +3259,11 @@ function TasksPage() {
         {noDateTasks.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-0.5">
-              <Circle className="h-3.5 w-3.5 text-coop-gray-600/60" />
-              <h2 className="text-xs font-semibold uppercase tracking-widest text-coop-gray-600">
+              <Circle className="h-3.5 w-3.5 text-coop-gray-900/60" />
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-coop-gray-900">
                 Utan datum
               </h2>
-              <span className="ml-auto text-[11px] text-coop-gray-600">
+              <span className="ml-auto text-[11px] text-coop-gray-900">
                 {noDateTasks.length}
               </span>
             </div>
@@ -3280,7 +3280,7 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-success/80">
                 Klara
               </h2>
-              <span className="ml-auto text-[11px] text-coop-gray-600">
+              <span className="ml-auto text-[11px] text-coop-gray-900">
                 {doneTodayTasks.length}
               </span>
             </div>
@@ -3298,7 +3298,7 @@ function TasksPage() {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Uppgifter</h1>
-          <p className="text-sm text-coop-gray-600 mt-0.5">
+          <p className="text-sm text-coop-gray-900 mt-0.5">
             {activeStore ? activeStore.name : "Alla butiker"}
           </p>
         </div>
@@ -3467,7 +3467,7 @@ function TasksPage() {
                           "rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
                           f.value === "late" && count > 0
                             ? "bg-destructive/15 text-destructive"
-                            : "bg-muted text-coop-gray-600",
+                            : "bg-muted text-coop-gray-900",
                         )}
                       >
                         {count}
@@ -3482,7 +3482,7 @@ function TasksPage() {
         {tab !== "today" && (
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-32">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600" />
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-900" />
               <Input
                 placeholder="Sök uppgifter..."
                 value={search}
@@ -3528,7 +3528,7 @@ function TasksPage() {
             </Select>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
               <SelectTrigger className="h-9 w-auto min-w-[120px] rounded-full text-xs gap-1.5">
-                <ArrowDownUp className="h-3.5 w-3.5 text-coop-gray-600 shrink-0" />
+                <ArrowDownUp className="h-3.5 w-3.5 text-coop-gray-900 shrink-0" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -3601,8 +3601,8 @@ function TasksPage() {
           />
         ) : (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-16 text-center">
-            <ListChecks className="mb-3 h-10 w-10 text-coop-gray-600/40" />
-            <p className="text-sm font-medium text-coop-gray-600">
+            <ListChecks className="mb-3 h-10 w-10 text-coop-gray-900/40" />
+            <p className="text-sm font-medium text-coop-gray-900">
               Inga uppgifter matchar filtren
             </p>
           </div>
@@ -3616,7 +3616,7 @@ function TasksPage() {
                 <h2 className="text-xs font-semibold uppercase tracking-widest text-coop-orange-800 dark:text-coop-orange-500">
                   Händelser att bekräfta
                 </h2>
-                <span className="ml-auto text-[11px] text-coop-gray-600">
+                <span className="ml-auto text-[11px] text-coop-gray-900">
                   {unconfirmedEventTasks.length}
                 </span>
               </div>
@@ -3627,7 +3627,7 @@ function TasksPage() {
                     className="rounded-2xl border border-amber-400/40 bg-coop-orange-100/60 dark:bg-coop-orange-900/10 px-4 py-3 space-y-2"
                   >
                     <p className="text-sm font-semibold text-coop-gray-900">{t.title}</p>
-                    <p className="text-xs text-coop-gray-600">{t.event_trigger_description}</p>
+                    <p className="text-xs text-coop-gray-900">{t.event_trigger_description}</p>
                     <div className="flex items-center gap-2">
                       <button
                         className="inline-flex items-center gap-1.5 rounded-full bg-coop-orange-600 px-3 py-1.5 text-xs font-medium text-coop-vit hover:bg-coop-orange-600 transition-colors"
@@ -3637,7 +3637,7 @@ function TasksPage() {
                         Bekräfta — aktuell idag
                       </button>
                       <button
-                        className="text-[11px] text-coop-gray-600 hover:text-coop-gray-900 transition-colors"
+                        className="text-[11px] text-coop-gray-900 hover:text-coop-gray-900 transition-colors"
                         onClick={() => openDetail(t)}
                       >
                         Detaljer
@@ -3712,7 +3712,7 @@ function TasksPage() {
                     >
                       {detailTask.priority}
                     </span>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-coop-gray-600">
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-coop-gray-900">
                       {detailTask.category}
                     </span>
                     {detailTask.recurrence_rule && (
@@ -3732,7 +3732,7 @@ function TasksPage() {
 
             <div className="space-y-5 py-1">
               {detailTask.description && (
-                <p className="text-sm text-coop-gray-600">{detailTask.description}</p>
+                <p className="text-sm text-coop-gray-900">{detailTask.description}</p>
               )}
 
               {(() => {
@@ -3752,7 +3752,7 @@ function TasksPage() {
                 );
               })()}
 
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-coop-gray-600">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-coop-gray-900">
                 {detailTask.due_date && (
                   <span
                     className={cn(
@@ -3803,7 +3803,7 @@ function TasksPage() {
                     />
                     <p className="text-xs font-semibold text-coop-gray-900">Händelsebaserad uppgift</p>
                   </div>
-                  <p className="text-xs text-coop-gray-600">
+                  <p className="text-xs text-coop-gray-900">
                     {detailTask.event_trigger_description}
                   </p>
                   {detailTask.event_triggered_at ? (
@@ -3842,7 +3842,7 @@ function TasksPage() {
                         <p className="text-xs font-semibold text-coop-gray-900">
                           Blockerad av föregående uppgift
                         </p>
-                        <p className="text-xs text-coop-gray-600 mt-0.5">{pred.title}</p>
+                        <p className="text-xs text-coop-gray-900 mt-0.5">{pred.title}</p>
                       </div>
                     </div>
                   );
@@ -3850,7 +3850,7 @@ function TasksPage() {
 
               {detailTask.steps && detailTask.steps.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-coop-gray-600 uppercase tracking-wide">
+                  <p className="text-xs font-medium text-coop-gray-900 uppercase tracking-wide">
                     Checkpoints
                   </p>
                   {detailTask.steps.map((step) => {
@@ -3896,7 +3896,7 @@ function TasksPage() {
                           <span
                             className={cn(
                               "flex-1 text-sm leading-snug",
-                              step.is_done && "line-through text-coop-gray-600",
+                              step.is_done && "line-through text-coop-gray-900",
                             )}
                           >
                             {step.label}
@@ -3927,7 +3927,7 @@ function TasksPage() {
                                 "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors",
                                 stepImages.length > 0
                                   ? "bg-success/15 text-success"
-                                  : "bg-muted text-coop-gray-600 hover:bg-primary-soft hover:text-primary",
+                                  : "bg-muted text-coop-gray-900 hover:bg-primary-soft hover:text-primary",
                               )}
                             >
                               <Camera className="h-3 w-3" />
@@ -3948,7 +3948,7 @@ function TasksPage() {
                     isBlockedByChain(detailTask) && "pointer-events-none opacity-50",
                   )}
                 >
-                  <p className="text-xs font-medium text-coop-gray-600 uppercase tracking-wide">
+                  <p className="text-xs font-medium text-coop-gray-900 uppercase tracking-wide">
                     Frågor
                   </p>
                   {detailTask.questions.map((q) => (
@@ -3987,7 +3987,7 @@ function TasksPage() {
                                     ? isYes
                                       ? "border-success bg-success/15 text-success scale-110"
                                       : "border-destructive bg-destructive/15 text-destructive scale-110"
-                                    : "border-border/60 text-coop-gray-600/50 hover:border-muted-foreground/40 hover:scale-105",
+                                    : "border-border/60 text-coop-gray-900/50 hover:border-muted-foreground/40 hover:scale-105",
                                 )}
                                 onClick={() => {
                                   setAnswerDraft((p) => ({ ...p, [q.id]: opt }));
@@ -4039,7 +4039,7 @@ function TasksPage() {
 
               {detailTask.images && detailTask.images.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-coop-gray-600 uppercase tracking-wide">
+                  <p className="text-xs font-medium text-coop-gray-900 uppercase tracking-wide">
                     Bilder
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -4192,12 +4192,12 @@ function TasksPage() {
       >
         <DialogContent className="max-w-sm p-0 gap-0 overflow-hidden">
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
-            <Repeat className="h-4 w-4 text-coop-gray-600 shrink-0" />
+            <Repeat className="h-4 w-4 text-coop-gray-900 shrink-0" />
             <DialogTitle className="text-sm font-semibold">Återkommande uppgift?</DialogTitle>
           </div>
           <div className="overflow-y-auto max-h-[70vh] p-4 space-y-3">
             <div className="flex items-center gap-3">
-              <span className="text-xs text-coop-gray-600 w-28 shrink-0">Upprepning</span>
+              <span className="text-xs text-coop-gray-900 w-28 shrink-0">Upprepning</span>
               <Select
                 value={newTask.recurrence_rule || "__none"}
                 onValueChange={(v) => {
@@ -4229,7 +4229,7 @@ function TasksPage() {
             </div>
             {newTask.recurrence_rule === "custom" && (
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-coop-gray-600">Var</span>
+                <span className="text-[11px] text-coop-gray-900">Var</span>
                 <input
                   type="number"
                   min={1}
@@ -4243,12 +4243,12 @@ function TasksPage() {
                   }
                   className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
                 />
-                <span className="text-[11px] text-coop-gray-600">dag(ar)</span>
+                <span className="text-[11px] text-coop-gray-900">dag(ar)</span>
               </div>
             )}
             {(newTask.recurrence_rule === "weekly" || newTask.recurrence_rule === "biweekly") && (
               <div className="space-y-1.5">
-                <span className="text-[11px] text-coop-gray-600">Veckodagar</span>
+                <span className="text-[11px] text-coop-gray-900">Veckodagar</span>
                 <div className="flex flex-wrap gap-1">
                   {WEEKDAYS.map((day, idx) => (
                     <button
@@ -4258,7 +4258,7 @@ function TasksPage() {
                         "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
                         newTask.recurrence_days.includes(idx)
                           ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border/60 text-coop-gray-600 hover:border-primary/50",
+                          : "border-border/60 text-coop-gray-900 hover:border-primary/50",
                       )}
                       onClick={() => {
                         const days = newTask.recurrence_days.includes(idx)
@@ -4275,7 +4275,7 @@ function TasksPage() {
             )}
             {newTask.recurrence_rule === "monthly" && (
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-coop-gray-600">Dag i månaden</span>
+                <span className="text-[11px] text-coop-gray-900">Dag i månaden</span>
                 <input
                   type="number"
                   min={1}
@@ -4296,11 +4296,11 @@ function TasksPage() {
             )}
             {newTask.recurrence_rule === "quarterly" && (
               <div className="space-y-1.5">
-                <p className="text-[11px] text-coop-gray-600">Månader per kvartal</p>
+                <p className="text-[11px] text-coop-gray-900">Månader per kvartal</p>
                 <div className="space-y-1">
                   {QUARTER_MONTHS.map(({ q, months }) => (
                     <div key={q} className="flex items-center gap-1">
-                      <span className="text-[11px] font-medium text-coop-gray-600 w-6">{q}</span>
+                      <span className="text-[11px] font-medium text-coop-gray-900 w-6">{q}</span>
                       {months.map((m) => (
                         <button
                           key={m}
@@ -4309,7 +4309,7 @@ function TasksPage() {
                             "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
                             newTask.recurrence_months.includes(m)
                               ? "bg-primary text-primary-foreground border-primary"
-                              : "border-border/60 text-coop-gray-600 hover:border-primary/50",
+                              : "border-border/60 text-coop-gray-900 hover:border-primary/50",
                           )}
                           onClick={() => {
                             const ms = newTask.recurrence_months.includes(m)
@@ -4325,7 +4325,7 @@ function TasksPage() {
                   ))}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-coop-gray-600">Dag i månaden</span>
+                  <span className="text-[11px] text-coop-gray-900">Dag i månaden</span>
                   <input
                     type="number"
                     min={1}
@@ -4348,7 +4348,7 @@ function TasksPage() {
             {newTask.recurrence_rule && (
               <div className="space-y-2 pt-1 border-t border-border/40">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-coop-gray-600 w-10">Start</span>
+                  <span className="text-[11px] text-coop-gray-900 w-10">Start</span>
                   <Input
                     type="date"
                     value={newTask.recurrence_start}
@@ -4359,7 +4359,7 @@ function TasksPage() {
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-coop-gray-600 w-10">V.</span>
+                  <span className="text-[11px] text-coop-gray-900 w-10">V.</span>
                   <input
                     type="number"
                     min={1}
@@ -4389,13 +4389,13 @@ function TasksPage() {
                     className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
                   />
                   {newTask.recurrence_start_week && (
-                    <span className="text-[11px] text-coop-gray-600/60">
+                    <span className="text-[11px] text-coop-gray-900/60">
                       {newTask.recurrence_start}
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-coop-gray-600 w-10">Slut</span>
+                  <span className="text-[11px] text-coop-gray-900 w-10">Slut</span>
                   {newTask.recurrence_end_mode === "end_date" ? (
                     <Input
                       type="date"
@@ -4427,13 +4427,13 @@ function TasksPage() {
                         placeholder="Antal"
                         className="w-20 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
                       />
-                      <span className="text-[11px] text-coop-gray-600">upprepningar</span>
+                      <span className="text-[11px] text-coop-gray-900">upprepningar</span>
                     </div>
                   )}
                 </div>
                 {newTask.recurrence_end_mode === "end_date" && (
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-coop-gray-600 w-10">V.</span>
+                    <span className="text-[11px] text-coop-gray-900 w-10">V.</span>
                     <input
                       type="number"
                       min={1}
@@ -4463,7 +4463,7 @@ function TasksPage() {
                       className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
                     />
                     {newTask.recurrence_end_week && (
-                      <span className="text-[11px] text-coop-gray-600/60">
+                      <span className="text-[11px] text-coop-gray-900/60">
                         {newTask.recurrence_end}
                       </span>
                     )}
@@ -4472,7 +4472,7 @@ function TasksPage() {
                 {newTask.recurrence_end_mode === "max_repetitions" &&
                   newTask.recurrence_max_repetitions > 0 &&
                   newTask.recurrence_end && (
-                    <p className="text-[11px] text-coop-gray-600">
+                    <p className="text-[11px] text-coop-gray-900">
                       Slutar efter {newTask.recurrence_max_repetitions} upprepningar (beräknat
                       slutdatum: {newTask.recurrence_end})
                     </p>
@@ -4487,7 +4487,7 @@ function TasksPage() {
                       "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
                       newTask.recurrence_end_mode === "max_repetitions"
                         ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border/60 text-coop-gray-600 hover:border-primary/50",
+                        : "border-border/60 text-coop-gray-900 hover:border-primary/50",
                     )}
                   >
                     Max antal upprepningar
@@ -4499,7 +4499,7 @@ function TasksPage() {
                       "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
                       newTask.recurrence_end_mode === "end_date"
                         ? "bg-primary text-primary-foreground border-primary"
-                        : "border-border/60 text-coop-gray-600 hover:border-primary/50",
+                        : "border-border/60 text-coop-gray-900 hover:border-primary/50",
                     )}
                   >
                     Slutdatum
@@ -4511,7 +4511,7 @@ function TasksPage() {
                   newTask.recurrence_start,
                   newTask.recurrence_end,
                 ) && (
-                  <p className="text-[11px] text-coop-gray-600">
+                  <p className="text-[11px] text-coop-gray-900">
                     {getRecurrencePreview(
                       newTask.recurrence_rule,
                       newTask.recurrence_days,
@@ -4527,7 +4527,7 @@ function TasksPage() {
             <button
               type="button"
               onClick={() => setShowRecurrenceSetup(false)}
-              className="rounded-full border border-border/60 px-4 py-1.5 text-xs text-coop-gray-600 hover:border-primary/40 hover:text-coop-gray-900"
+              className="rounded-full border border-border/60 px-4 py-1.5 text-xs text-coop-gray-900 hover:border-primary/40 hover:text-coop-gray-900"
             >
               Avbryt
             </button>
@@ -4558,8 +4558,8 @@ function TasksPage() {
       >
         <DialogContent className="sm:max-h-[92vh] sm:max-w-4xl overflow-hidden p-0 gap-0">
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
-            <ListChecks className="h-4 w-4 text-coop-gray-600 shrink-0" />
-            <span className="text-sm font-medium text-coop-gray-600 hidden sm:block">
+            <ListChecks className="h-4 w-4 text-coop-gray-900 shrink-0" />
+            <span className="text-sm font-medium text-coop-gray-900 hidden sm:block">
               Ny uppgift
             </span>
             {newTask.title && (
@@ -4590,7 +4590,7 @@ function TasksPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs text-coop-gray-600 hidden sm:flex"
+                className="text-xs text-coop-gray-900 hidden sm:flex"
                 onClick={() => setShowCreate(false)}
               >
                 Avbryt
@@ -4610,7 +4610,7 @@ function TasksPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="rounded-full text-xs text-coop-gray-600"
+                      className="rounded-full text-xs text-coop-gray-900"
                       onClick={() => setCreateStep(1)}
                     >
                       Tillbaka
@@ -4655,7 +4655,7 @@ function TasksPage() {
                 return tAny.template_type !== "base" && tAny.template_mode !== "batch_only";
               }).length > 0 && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium uppercase tracking-wide text-coop-gray-600">
+                  <Label className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">
                     Använd mall
                   </Label>
                   <Select onValueChange={applyTemplate}>
@@ -4688,7 +4688,7 @@ function TasksPage() {
                   placeholder="Uppgiftens titel..."
                   value={newTask.title}
                   onChange={(e) => setNewTask((p) => ({ ...p, title: e.target.value }))}
-                  className="w-full border-0 bg-transparent text-xl font-bold text-coop-gray-900 placeholder:text-coop-gray-600/50 outline-none focus:outline-none"
+                  className="w-full border-0 bg-transparent text-xl font-bold text-coop-gray-900 placeholder:text-coop-gray-900/50 outline-none focus:outline-none"
                 />
               </div>
 
@@ -4698,12 +4698,12 @@ function TasksPage() {
                   value={newTask.description}
                   onChange={(e) => setNewTask((p) => ({ ...p, description: e.target.value }))}
                   rows={3}
-                  className="resize-none border-0 bg-transparent px-0 text-sm text-coop-gray-600 placeholder:text-coop-gray-600/40 focus-visible:ring-0 shadow-none"
+                  className="resize-none border-0 bg-transparent px-0 text-sm text-coop-gray-900 placeholder:text-coop-gray-900/40 focus-visible:ring-0 shadow-none"
                 />
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-600">
+                <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">
                   Checkpoints
                 </p>
                 <div className="space-y-1.5">
@@ -4742,9 +4742,9 @@ function TasksPage() {
                           });
                         }}
                       >
-                        <GripVertical className="h-3.5 w-3.5 text-coop-gray-600/30" />
+                        <GripVertical className="h-3.5 w-3.5 text-coop-gray-900/30" />
                       </div>
-                      <CheckCircle2 className="h-4 w-4 shrink-0 text-coop-gray-600/30" />
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-coop-gray-900/30" />
                       <Input
                         placeholder={`Checkpoint ${i + 1}`}
                         value={step.label}
@@ -4758,7 +4758,7 @@ function TasksPage() {
                         }
                         className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0"
                       />
-                      <label className="flex items-center gap-1 text-[11px] text-coop-gray-600/70 whitespace-nowrap cursor-pointer">
+                      <label className="flex items-center gap-1 text-[11px] text-coop-gray-900/70 whitespace-nowrap cursor-pointer">
                         <Checkbox
                           checked={step.requires_photo}
                           onCheckedChange={(v) =>
@@ -4794,7 +4794,7 @@ function TasksPage() {
                               ),
                             }));
                         }}
-                        className="w-28 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-coop-gray-600/40"
+                        className="w-28 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-coop-gray-900/40"
                       />
                       {step.link_url && (
                         <a
@@ -4818,7 +4818,7 @@ function TasksPage() {
                             }))
                           }
                         >
-                          <X className="h-3.5 w-3.5 text-coop-gray-600/60" />
+                          <X className="h-3.5 w-3.5 text-coop-gray-900/60" />
                         </button>
                       )}
                     </div>
@@ -4826,7 +4826,7 @@ function TasksPage() {
                 </div>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-600 transition-colors hover:border-primary/40 hover:text-primary"
+                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-900 transition-colors hover:border-primary/40 hover:text-primary"
                   onClick={() =>
                     setNewTask((p) => ({
                       ...p,
@@ -4839,7 +4839,7 @@ function TasksPage() {
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-600">
+                <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">
                   Frågor
                 </p>
                 <div className="space-y-2">
@@ -4889,7 +4889,7 @@ function TasksPage() {
                             });
                           }}
                         >
-                          <GripVertical className="h-3.5 w-3.5 text-coop-gray-600/30" />
+                          <GripVertical className="h-3.5 w-3.5 text-coop-gray-900/30" />
                         </div>
                         <Input
                           placeholder={`Fråga ${i + 1}`}
@@ -4913,7 +4913,7 @@ function TasksPage() {
                             }))
                           }
                         >
-                          <X className="h-3.5 w-3.5 text-coop-gray-600/50" />
+                          <X className="h-3.5 w-3.5 text-coop-gray-900/50" />
                         </button>
                       </div>
                       <div className="flex items-center justify-between">
@@ -4926,7 +4926,7 @@ function TasksPage() {
                                 "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
                                 q.question_type === type
                                   ? "bg-primary text-primary-foreground border-primary"
-                                  : "border-border/60 text-coop-gray-600 hover:border-primary/50",
+                                  : "border-border/60 text-coop-gray-900 hover:border-primary/50",
                               )}
                               onClick={() =>
                                 setNewTask((p) => ({
@@ -4941,7 +4941,7 @@ function TasksPage() {
                             </button>
                           ))}
                         </div>
-                        <label className="flex items-center gap-1 text-[11px] text-coop-gray-600 cursor-pointer">
+                        <label className="flex items-center gap-1 text-[11px] text-coop-gray-900 cursor-pointer">
                           <Checkbox
                             checked={q.is_required}
                             onCheckedChange={(v) =>
@@ -4958,7 +4958,7 @@ function TasksPage() {
                         </label>
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <ExternalLink className="h-3 w-3 shrink-0 text-coop-gray-600/40" />
+                        <ExternalLink className="h-3 w-3 shrink-0 text-coop-gray-900/40" />
                         <Input
                           placeholder="URL (valfri länk)"
                           value={q.link_url ?? ""}
@@ -4980,7 +4980,7 @@ function TasksPage() {
                                 ),
                               }));
                           }}
-                          className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-coop-gray-600/40"
+                          className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-coop-gray-900/40"
                         />
                         {q.link_url && (
                           <a
@@ -4998,7 +4998,7 @@ function TasksPage() {
                 </div>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-600 transition-colors hover:border-primary/40 hover:text-primary"
+                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-900 transition-colors hover:border-primary/40 hover:text-primary"
                   onClick={() =>
                     setNewTask((p) => ({
                       ...p,
@@ -5014,7 +5014,7 @@ function TasksPage() {
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-600">
+                <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">
                   Bilder
                 </p>
                 <input
@@ -5052,7 +5052,7 @@ function TasksPage() {
                 )}
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-600 transition-colors hover:border-primary/40 hover:text-primary"
+                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-900 transition-colors hover:border-primary/40 hover:text-primary"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <ImageIcon className="h-3.5 w-3.5" /> Välj bilder
@@ -5068,8 +5068,8 @@ function TasksPage() {
             >
               <div className="divide-y divide-border/50">
                 <div className="flex items-center gap-3 px-4 py-3">
-                  <FileText className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                  <span className="w-24 shrink-0 text-xs text-coop-gray-600">Kategori</span>
+                  <FileText className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                  <span className="w-24 shrink-0 text-xs text-coop-gray-900">Kategori</span>
                   <Select
                     value={newTask.category}
                     onValueChange={(v) => setNewTask((p) => ({ ...p, category: v }))}
@@ -5098,8 +5098,8 @@ function TasksPage() {
                 </div>
 
                 <div className="flex items-center gap-3 px-4 py-3">
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                  <span className="w-24 shrink-0 text-xs text-coop-gray-600">Prioritet</span>
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                  <span className="w-24 shrink-0 text-xs text-coop-gray-900">Prioritet</span>
                   <Select
                     value={newTask.priority}
                     onValueChange={(v) => setNewTask((p) => ({ ...p, priority: v }))}
@@ -5120,19 +5120,19 @@ function TasksPage() {
                 {!newTask.recurrence_rule &&
                   (newTask.delivery_entry_id ? (
                     <div className="flex items-start gap-3 px-4 py-3 opacity-60">
-                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-coop-gray-600/60" />
+                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-coop-gray-900/60" />
                       <div className="flex flex-col gap-1 min-w-0 flex-1">
-                        <span className="text-xs text-coop-gray-600">Förfallodatum</span>
-                        <span className="text-xs text-coop-gray-600/70 italic">
+                        <span className="text-xs text-coop-gray-900">Förfallodatum</span>
+                        <span className="text-xs text-coop-gray-900/70 italic">
                           Bestäms av leveransschemat — {newTask.due_date || "beräknas vid skapande"}
                         </span>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-start gap-3 px-4 py-3">
-                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-coop-gray-600/60" />
+                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-coop-gray-900/60" />
                       <div className="flex flex-col gap-1 min-w-0 flex-1">
-                        <span className="text-xs text-coop-gray-600">Förfallodatum</span>
+                        <span className="text-xs text-coop-gray-900">Förfallodatum</span>
                         <input
                           type="date"
                           value={newTask.due_date}
@@ -5144,19 +5144,19 @@ function TasksPage() {
                   ))}
 
                 <div className="flex items-start gap-3 px-4 py-3">
-                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-coop-gray-600/60 opacity-0" />
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-coop-gray-900/60 opacity-0" />
                   <div className="flex flex-col gap-1.5 min-w-0 flex-1">
                     {newTask.delivery_entry_id ? (
                       <div className="opacity-60">
-                        <span className="text-xs text-coop-gray-600">Förfallotid</span>
-                        <p className="text-xs text-coop-gray-600/70 italic mt-0.5">
+                        <span className="text-xs text-coop-gray-900">Förfallotid</span>
+                        <p className="text-xs text-coop-gray-900/70 italic mt-0.5">
                           Bestäms av leveransschemat —{" "}
                           {newTask.due_date_time || "beräknas vid skapande"}
                         </p>
                       </div>
                     ) : newTask.time_slots.filter(Boolean).length > 0 ? (
                       <>
-                        <span className="text-xs text-coop-gray-600">
+                        <span className="text-xs text-coop-gray-900">
                           Tidsluckor (förfallotider)
                         </span>
                         <div className="flex flex-wrap gap-1">
@@ -5215,17 +5215,17 @@ function TasksPage() {
                             Lägg till
                           </button>
                         </div>
-                        <p className="text-[11px] text-coop-gray-600">
+                        <p className="text-[11px] text-coop-gray-900">
                           En uppgift skapas per tidslucka
                         </p>
                       </>
                     ) : (
                       <>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs text-coop-gray-600">Förfallotid</span>
+                          <span className="text-xs text-coop-gray-900">Förfallotid</span>
                           <button
                             type="button"
-                            className="rounded-full border border-dashed border-border/60 px-2 py-0.5 text-xs text-coop-gray-600 hover:border-primary/40 hover:text-primary"
+                            className="rounded-full border border-dashed border-border/60 px-2 py-0.5 text-xs text-coop-gray-900 hover:border-primary/40 hover:text-primary"
                             onClick={() =>
                               setNewTask((p) => ({
                                 ...p,
@@ -5254,8 +5254,8 @@ function TasksPage() {
 
                 <div className="px-4 py-3 min-w-0 space-y-1">
                   <div className="flex items-center gap-2">
-                    <Hash className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                    <span className="text-xs text-coop-gray-600 shrink-0">
+                    <Hash className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                    <span className="text-xs text-coop-gray-900 shrink-0">
                       {taskArticleType === "ean"
                         ? "EAN"
                         : taskArticleType === "bnr"
@@ -5282,12 +5282,12 @@ function TasksPage() {
                         autoCorrect="off"
                         autoCapitalize="none"
                         spellCheck={false}
-                        className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-coop-gray-900 placeholder:text-coop-gray-600/40 outline-none focus:outline-none overflow-hidden"
+                        className="min-w-0 flex-1 border-0 bg-transparent text-right text-xs text-coop-gray-900 placeholder:text-coop-gray-900/40 outline-none focus:outline-none overflow-hidden"
                       />
                       <select
                         value={taskArticleType}
                         onChange={(e) => setTaskArticleType(e.target.value as ArticleIdType)}
-                        className="border-0 bg-transparent text-[10px] text-coop-gray-600 outline-none cursor-pointer shrink-0"
+                        className="border-0 bg-transparent text-[10px] text-coop-gray-900 outline-none cursor-pointer shrink-0"
                       >
                         <option value="mat-nr">Mat-nr</option>
                         <option value="ean">EAN</option>
@@ -5297,7 +5297,7 @@ function TasksPage() {
                         <button
                           type="button"
                           onClick={() => setNewTask((p) => ({ ...p, sap_article_id: "" }))}
-                          className="flex h-5 w-5 items-center justify-center rounded-full text-coop-gray-600/60 hover:text-destructive shrink-0"
+                          className="flex h-5 w-5 items-center justify-center rounded-full text-coop-gray-900/60 hover:text-destructive shrink-0"
                         >
                           <X className="h-3 w-3" />
                         </button>
@@ -5331,8 +5331,8 @@ function TasksPage() {
                 </div>
 
                 <div className="flex items-center gap-3 px-4 py-3">
-                  <ListChecks className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                  <span className="w-24 shrink-0 text-xs text-coop-gray-600">Butik</span>
+                  <ListChecks className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                  <span className="w-24 shrink-0 text-xs text-coop-gray-900">Butik</span>
                   <Select
                     value={newTask.store_id || "__none"}
                     onValueChange={(v) =>
@@ -5355,8 +5355,8 @@ function TasksPage() {
 
                 <div className="px-4 py-3 space-y-2">
                   <div className="flex items-center gap-3">
-                    <Repeat className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                    <span className="w-24 shrink-0 text-xs text-coop-gray-600">
+                    <Repeat className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                    <span className="w-24 shrink-0 text-xs text-coop-gray-900">
                       Återkommande
                     </span>
                     <Select
@@ -5388,7 +5388,7 @@ function TasksPage() {
                   </div>
                   {newTask.recurrence_rule === "custom" && (
                     <div className="flex items-center gap-2 pl-7">
-                      <span className="text-[11px] text-coop-gray-600">Var</span>
+                      <span className="text-[11px] text-coop-gray-900">Var</span>
                       <input
                         type="number"
                         min={1}
@@ -5402,7 +5402,7 @@ function TasksPage() {
                         }
                         className="w-14 h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-center"
                       />
-                      <span className="text-[11px] text-coop-gray-600">dag(ar)</span>
+                      <span className="text-[11px] text-coop-gray-900">dag(ar)</span>
                     </div>
                   )}
                   {(newTask.recurrence_rule === "weekly" ||
@@ -5417,7 +5417,7 @@ function TasksPage() {
                               "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
                               newTask.recurrence_days.includes(idx)
                                 ? "bg-primary text-primary-foreground border-primary"
-                                : "border-border/60 text-coop-gray-600 hover:border-primary/50",
+                                : "border-border/60 text-coop-gray-900 hover:border-primary/50",
                             )}
                             onClick={() => {
                               const days = newTask.recurrence_days.includes(idx)
@@ -5431,7 +5431,7 @@ function TasksPage() {
                         ))}
                       </div>
                       {newTask.recurrence_rule === "biweekly" && (
-                        <p className="text-[11px] text-coop-gray-600">
+                        <p className="text-[11px] text-coop-gray-900">
                           Upprepas varannan vecka på valda dagar.
                         </p>
                       )}
@@ -5439,7 +5439,7 @@ function TasksPage() {
                   )}
                   {newTask.recurrence_rule === "monthly" && (
                     <div className="flex items-center gap-2 pl-7">
-                      <span className="text-[11px] text-coop-gray-600">Dag i månaden</span>
+                      <span className="text-[11px] text-coop-gray-900">Dag i månaden</span>
                       <input
                         type="number"
                         min={1}
@@ -5460,11 +5460,11 @@ function TasksPage() {
                   )}
                   {newTask.recurrence_rule === "quarterly" && (
                     <div className="pl-7 space-y-1.5">
-                      <p className="text-[11px] text-coop-gray-600">Välj månader per kvartal</p>
+                      <p className="text-[11px] text-coop-gray-900">Välj månader per kvartal</p>
                       <div className="space-y-1">
                         {QUARTER_MONTHS.map(({ q, months }) => (
                           <div key={q} className="flex items-center gap-1">
-                            <span className="text-[11px] font-medium text-coop-gray-600 w-6">
+                            <span className="text-[11px] font-medium text-coop-gray-900 w-6">
                               {q}
                             </span>
                             {months.map((m) => (
@@ -5475,7 +5475,7 @@ function TasksPage() {
                                   "rounded-full px-2 py-0.5 text-[11px] font-medium border transition-colors",
                                   newTask.recurrence_months.includes(m)
                                     ? "bg-primary text-primary-foreground border-primary"
-                                    : "border-border/60 text-coop-gray-600 hover:border-primary/50",
+                                    : "border-border/60 text-coop-gray-900 hover:border-primary/50",
                                 )}
                                 onClick={() => {
                                   const ms = newTask.recurrence_months.includes(m)
@@ -5491,7 +5491,7 @@ function TasksPage() {
                         ))}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-coop-gray-600">Dag i månaden</span>
+                        <span className="text-[11px] text-coop-gray-900">Dag i månaden</span>
                         <input
                           type="number"
                           min={1}
@@ -5514,7 +5514,7 @@ function TasksPage() {
                   {newTask.recurrence_rule && (
                     <div className="pl-7 space-y-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-coop-gray-600 w-12">Start</span>
+                        <span className="text-[11px] text-coop-gray-900 w-12">Start</span>
                         <Input
                           type="date"
                           value={newTask.recurrence_start}
@@ -5525,7 +5525,7 @@ function TasksPage() {
                         />
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-coop-gray-600 w-12">Slut</span>
+                        <span className="text-[11px] text-coop-gray-900 w-12">Slut</span>
                         <Input
                           type="date"
                           value={newTask.recurrence_end}
@@ -5541,7 +5541,7 @@ function TasksPage() {
                         newTask.recurrence_start,
                         newTask.recurrence_end,
                       ) && (
-                        <p className="text-[11px] text-coop-gray-600">
+                        <p className="text-[11px] text-coop-gray-900">
                           {getRecurrencePreview(
                             newTask.recurrence_rule,
                             newTask.recurrence_days,
@@ -5582,7 +5582,7 @@ function TasksPage() {
                 <div className="px-4 py-3 space-y-1.5">
                   <div className="flex items-center gap-2">
                     <Zap className="h-4 w-4 shrink-0 text-coop-orange-600" />
-                    <span className="text-xs text-coop-gray-600 flex-1">Händelsevillkor</span>
+                    <span className="text-xs text-coop-gray-900 flex-1">Händelsevillkor</span>
                   </div>
                   <input
                     type="text"
@@ -5591,11 +5591,11 @@ function TasksPage() {
                     onChange={(e) =>
                       setNewTask((p) => ({ ...p, event_trigger_description: e.target.value }))
                     }
-                    className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-coop-gray-900 placeholder:text-coop-gray-600/40 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-coop-gray-900 placeholder:text-coop-gray-900/40 focus:outline-none focus:ring-1 focus:ring-primary/40"
                   />
                   {newTask.event_trigger_description && (
                     <>
-                      <p className="text-[11px] text-coop-gray-600">
+                      <p className="text-[11px] text-coop-gray-900">
                         Vem kan bekräfta händelsen?
                       </p>
                       <Select
@@ -5625,8 +5625,8 @@ function TasksPage() {
 
                 <div className="px-4 py-3 space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <Link2 className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                    <span className="text-xs text-coop-gray-600 flex-1">Beror på uppgift</span>
+                    <Link2 className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                    <span className="text-xs text-coop-gray-900 flex-1">Beror på uppgift</span>
                   </div>
                   <Select
                     value={newTask.depends_on_task_id || "__none"}
@@ -5650,7 +5650,7 @@ function TasksPage() {
                     </SelectContent>
                   </Select>
                   {newTask.depends_on_task_id && (
-                    <p className="text-[11px] text-coop-gray-600">
+                    <p className="text-[11px] text-coop-gray-900">
                       Uppgiften visas som blockerad tills föregångaren är klar.
                     </p>
                   )}
@@ -5794,7 +5794,7 @@ function TasksPage() {
           <DialogContent className="sm:max-h-[92vh] sm:max-w-4xl overflow-hidden p-0 gap-0">
             <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
               <Pencil className="h-4 w-4 text-green-600" />
-              <span className="text-sm font-medium text-coop-gray-600 hidden sm:block">
+              <span className="text-sm font-medium text-coop-gray-900 hidden sm:block">
                 Redigera uppgift
               </span>
               <span className="text-sm font-semibold text-coop-gray-900 truncate max-w-[140px] sm:max-w-xs">
@@ -5804,7 +5804,7 @@ function TasksPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-xs text-coop-gray-600 hidden sm:flex"
+                  className="text-xs text-coop-gray-900 hidden sm:flex"
                   onClick={() => {
                     setEditTask(null);
                     setEditForm(null);
@@ -5875,7 +5875,7 @@ function TasksPage() {
                   placeholder="Titel..."
                   value={editForm.title}
                   onChange={(e) => setEditForm((p) => (p ? { ...p, title: e.target.value } : p))}
-                  className="w-full border-0 bg-transparent text-xl font-bold text-coop-gray-900 placeholder:text-coop-gray-600/50 outline-none"
+                  className="w-full border-0 bg-transparent text-xl font-bold text-coop-gray-900 placeholder:text-coop-gray-900/50 outline-none"
                 />
                 <Textarea
                   placeholder="Beskrivning..."
@@ -5884,10 +5884,10 @@ function TasksPage() {
                     setEditForm((p) => (p ? { ...p, description: e.target.value } : p))
                   }
                   rows={3}
-                  className="resize-none border-0 bg-transparent px-0 text-sm text-coop-gray-600 placeholder:text-coop-gray-600/40 focus-visible:ring-0 shadow-none"
+                  className="resize-none border-0 bg-transparent px-0 text-sm text-coop-gray-900 placeholder:text-coop-gray-900/40 focus-visible:ring-0 shadow-none"
                 />
                 <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-600">
+                  <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">
                     Checkpoints
                   </p>
                   {editForm.steps.map((step, i) => (
@@ -5896,7 +5896,7 @@ function TasksPage() {
                       className="group flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2"
                     >
                       <GripVertical
-                        className="h-4 w-4 shrink-0 text-coop-gray-600/30 cursor-grab active:cursor-grabbing touch-none"
+                        className="h-4 w-4 shrink-0 text-coop-gray-900/30 cursor-grab active:cursor-grabbing touch-none"
                         onPointerDown={(e) => {
                           e.currentTarget.setPointerCapture(e.pointerId);
                           dragStepRef.current = { idx: i, startY: e.clientY, currentY: e.clientY };
@@ -5943,7 +5943,7 @@ function TasksPage() {
                         }
                         className="flex-1 border-0 bg-transparent p-0 h-auto text-sm shadow-none focus-visible:ring-0"
                       />
-                      <label className="flex items-center gap-1 text-[11px] text-coop-gray-600/70 whitespace-nowrap cursor-pointer">
+                      <label className="flex items-center gap-1 text-[11px] text-coop-gray-900/70 whitespace-nowrap cursor-pointer">
                         <Checkbox
                           checked={step.requires_photo}
                           onCheckedChange={(v) =>
@@ -5991,7 +5991,7 @@ function TasksPage() {
                                 : p,
                             );
                         }}
-                        className="w-24 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-coop-gray-600/40"
+                        className="w-24 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-coop-gray-900/40"
                       />
                       {step.link_url && (
                         <a
@@ -6013,13 +6013,13 @@ function TasksPage() {
                           )
                         }
                       >
-                        <X className="h-3.5 w-3.5 text-coop-gray-600/60" />
+                        <X className="h-3.5 w-3.5 text-coop-gray-900/60" />
                       </button>
                     </div>
                   ))}
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-600 hover:border-primary/40 hover:text-primary"
+                    className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-900 hover:border-primary/40 hover:text-primary"
                     onClick={() =>
                       setEditForm((p) =>
                         p
@@ -6038,7 +6038,7 @@ function TasksPage() {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-600">
+                  <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">
                     Frågor
                   </p>
                   {editForm.questions.map((q, i) => (
@@ -6048,7 +6048,7 @@ function TasksPage() {
                     >
                       <div className="flex items-center gap-2">
                         <GripVertical
-                          className="h-4 w-4 shrink-0 text-coop-gray-600/30 cursor-grab active:cursor-grabbing touch-none"
+                          className="h-4 w-4 shrink-0 text-coop-gray-900/30 cursor-grab active:cursor-grabbing touch-none"
                           onPointerDown={(e) => {
                             e.currentTarget.setPointerCapture(e.pointerId);
                             dragQuestionRef.current = {
@@ -6115,7 +6115,7 @@ function TasksPage() {
                             )
                           }
                         >
-                          <X className="h-3.5 w-3.5 text-coop-gray-600/50" />
+                          <X className="h-3.5 w-3.5 text-coop-gray-900/50" />
                         </button>
                       </div>
                       <div className="flex items-center justify-between">
@@ -6128,7 +6128,7 @@ function TasksPage() {
                                 "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
                                 q.question_type === type
                                   ? "bg-primary text-primary-foreground border-primary"
-                                  : "border-border/60 text-coop-gray-600",
+                                  : "border-border/60 text-coop-gray-900",
                               )}
                               onClick={() =>
                                 setEditForm((p) =>
@@ -6147,7 +6147,7 @@ function TasksPage() {
                             </button>
                           ))}
                         </div>
-                        <label className="flex items-center gap-1 text-[11px] text-coop-gray-600 cursor-pointer">
+                        <label className="flex items-center gap-1 text-[11px] text-coop-gray-900 cursor-pointer">
                           <Checkbox
                             checked={q.is_required}
                             onCheckedChange={(v) =>
@@ -6168,7 +6168,7 @@ function TasksPage() {
                         </label>
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <ExternalLink className="h-3 w-3 shrink-0 text-coop-gray-600/40" />
+                        <ExternalLink className="h-3 w-3 shrink-0 text-coop-gray-900/40" />
                         <Input
                           placeholder="URL (valfri länk)"
                           value={q.link_url ?? ""}
@@ -6198,7 +6198,7 @@ function TasksPage() {
                                   : p,
                               );
                           }}
-                          className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-coop-gray-600/40"
+                          className="flex-1 border-0 bg-transparent p-0 h-auto text-xs shadow-none focus-visible:ring-0 text-primary placeholder:text-coop-gray-900/40"
                         />
                         {q.link_url && (
                           <a
@@ -6215,7 +6215,7 @@ function TasksPage() {
                   ))}
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-600 hover:border-primary/40 hover:text-primary"
+                    className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 py-2 text-xs text-coop-gray-900 hover:border-primary/40 hover:text-primary"
                     onClick={() =>
                       setEditForm((p) =>
                         p
@@ -6242,9 +6242,9 @@ function TasksPage() {
               <div className="w-full sm:w-72 shrink-0 overflow-y-auto border-t sm:border-t-0 sm:border-l border-border/60 bg-muted/30">
                 <div className="divide-y divide-border/50">
                   <div className="flex items-start gap-3 px-4 py-3">
-                    <Clock className="mt-0.5 h-4 w-4 shrink-0 text-coop-gray-600/60" />
+                    <Clock className="mt-0.5 h-4 w-4 shrink-0 text-coop-gray-900/60" />
                     <div className="flex flex-col gap-1 min-w-0 flex-1">
-                      <span className="text-xs text-coop-gray-600">Förfallodatum</span>
+                      <span className="text-xs text-coop-gray-900">Förfallodatum</span>
                       <input
                         type="date"
                         value={editForm.due_date ? editForm.due_date.slice(0, 10) : ""}
@@ -6260,7 +6260,7 @@ function TasksPage() {
                         }
                         className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-coop-gray-900 focus:outline-none focus:ring-1 focus:ring-primary/40"
                       />
-                      <span className="text-xs text-coop-gray-600 mt-1">Tid</span>
+                      <span className="text-xs text-coop-gray-900 mt-1">Tid</span>
                       <input
                         type="time"
                         value={
@@ -6281,8 +6281,8 @@ function TasksPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3 px-4 py-3">
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                    <span className="w-24 shrink-0 text-xs text-coop-gray-600">Prioritet</span>
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                    <span className="w-24 shrink-0 text-xs text-coop-gray-900">Prioritet</span>
                     <Select
                       value={editForm.priority}
                       onValueChange={(v) => setEditForm((p) => (p ? { ...p, priority: v } : p))}
@@ -6300,8 +6300,8 @@ function TasksPage() {
                     </Select>
                   </div>
                   <div className="flex items-center gap-3 px-4 py-3">
-                    <FileText className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                    <span className="w-24 shrink-0 text-xs text-coop-gray-600">Kategori</span>
+                    <FileText className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                    <span className="w-24 shrink-0 text-xs text-coop-gray-900">Kategori</span>
                     <Select
                       value={editForm.category}
                       onValueChange={(v) => setEditForm((p) => (p ? { ...p, category: v } : p))}
@@ -6319,11 +6319,11 @@ function TasksPage() {
                     </Select>
                   </div>
                   <div className="flex items-center gap-3 px-4 py-3">
-                    <Repeat className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                    <span className="w-24 shrink-0 text-xs text-coop-gray-600">
+                    <Repeat className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                    <span className="w-24 shrink-0 text-xs text-coop-gray-900">
                       Återkommande
                     </span>
-                    <span className="flex-1 text-right text-xs text-coop-gray-600">
+                    <span className="flex-1 text-right text-xs text-coop-gray-900">
                       {editForm.recurrence_rule
                         ? (RECURRENCE_OPTIONS.find((o) => o.value === editForm.recurrence_rule)
                             ?.label ?? editForm.recurrence_rule)
@@ -6333,7 +6333,7 @@ function TasksPage() {
                   {editForm.recurrence_rule && (
                     <div className="px-4 py-2 pl-11 space-y-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-coop-gray-600 w-12">Slut</span>
+                        <span className="text-[11px] text-coop-gray-900 w-12">Slut</span>
                         <Input
                           type="date"
                           value={editForm.recurrence_end}
@@ -6388,7 +6388,7 @@ function TasksPage() {
                   <div className="px-4 py-3 space-y-1.5">
                     <div className="flex items-center gap-2">
                       <Zap className="h-4 w-4 shrink-0 text-coop-orange-600" />
-                      <span className="text-xs text-coop-gray-600 flex-1">Händelsevillkor</span>
+                      <span className="text-xs text-coop-gray-900 flex-1">Händelsevillkor</span>
                     </div>
                     <input
                       type="text"
@@ -6399,11 +6399,11 @@ function TasksPage() {
                           p ? { ...p, event_trigger_description: e.target.value } : p,
                         )
                       }
-                      className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-coop-gray-900 placeholder:text-coop-gray-600/40 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      className="w-full rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-coop-gray-900 placeholder:text-coop-gray-900/40 focus:outline-none focus:ring-1 focus:ring-primary/40"
                     />
                     {editForm.event_trigger_description && (
                       <>
-                        <p className="text-[11px] text-coop-gray-600">
+                        <p className="text-[11px] text-coop-gray-900">
                           Vem kan bekräfta händelsen?
                         </p>
                         <Select
@@ -6432,8 +6432,8 @@ function TasksPage() {
 
                   <div className="px-4 py-3 space-y-1.5">
                     <div className="flex items-center gap-2">
-                      <Link2 className="h-4 w-4 shrink-0 text-coop-gray-600/60" />
-                      <span className="text-xs text-coop-gray-600 flex-1">Beror på uppgift</span>
+                      <Link2 className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
+                      <span className="text-xs text-coop-gray-900 flex-1">Beror på uppgift</span>
                     </div>
                     <Select
                       value={editForm.depends_on_task_id || "__none"}
@@ -6459,7 +6459,7 @@ function TasksPage() {
                       </SelectContent>
                     </Select>
                     {editForm.depends_on_task_id && (
-                      <p className="text-[11px] text-coop-gray-600">
+                      <p className="text-[11px] text-coop-gray-900">
                         Uppgiften visas som blockerad tills föregångaren är klar.
                       </p>
                     )}
@@ -6489,7 +6489,7 @@ function TasksPage() {
               <CalendarDays className="h-4 w-4 text-primary shrink-0" />
               <div className="min-w-0 flex-1">
                 <DialogTitle className="text-sm font-semibold">Framtida förekomster</DialogTitle>
-                <p className="text-[11px] text-coop-gray-600 truncate">
+                <p className="text-[11px] text-coop-gray-900 truncate">
                   {futureManagerTask.title}
                 </p>
               </div>
@@ -6498,7 +6498,7 @@ function TasksPage() {
                   setShowFutureManager(false);
                   setSelectedFutureIds(new Set());
                 }}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-coop-gray-600 hover:bg-muted/60 transition-colors"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-coop-gray-900 hover:bg-muted/60 transition-colors"
                 aria-label="Stäng"
               >
                 <X className="h-4 w-4" />
@@ -6521,7 +6521,7 @@ function TasksPage() {
                   </Button>
                 </div>
                 {selectedFutureIds.size > 1 && (
-                  <p className="text-[11px] text-coop-gray-600">
+                  <p className="text-[11px] text-coop-gray-900">
                     Flera valda: kan bara redigera innehåll och ansvariga (inte datum/tid)
                   </p>
                 )}
@@ -6533,7 +6533,7 @@ function TasksPage() {
                   className="resize-none text-xs"
                 />
                 <div className="space-y-1">
-                  <p className="text-[11px] text-coop-gray-600 font-medium">Ansvariga</p>
+                  <p className="text-[11px] text-coop-gray-900 font-medium">Ansvariga</p>
                   <AssigneePicker
                     users={storeUsers}
                     groups={groups}
@@ -6580,15 +6580,15 @@ function TasksPage() {
                 </div>
               ) : futureOccurrences.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <CalendarDays className="h-8 w-8 text-coop-gray-600/40 mb-2" />
-                  <p className="text-sm text-coop-gray-600">
+                  <CalendarDays className="h-8 w-8 text-coop-gray-900/40 mb-2" />
+                  <p className="text-sm text-coop-gray-900">
                     Inga framtida förekomster hittades
                   </p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs text-coop-gray-600">
+                    <p className="text-xs text-coop-gray-900">
                       {futureOccurrences.length} kommande förekomster
                     </p>
                     <button
@@ -6627,7 +6627,7 @@ function TasksPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{occ.title}</p>
                         {occ.due_date && (
-                          <p className="text-[11px] text-coop-gray-600 mt-0.5 flex items-center gap-1">
+                          <p className="text-[11px] text-coop-gray-900 mt-0.5 flex items-center gap-1">
                             <Clock className="h-3 w-3" />
                             {new Date(occ.due_date).toLocaleDateString("sv-SE", {
                               weekday: "short",
@@ -6635,7 +6635,7 @@ function TasksPage() {
                               month: "short",
                             })}
                             {occ.recurrence_period_start && (
-                              <span className="text-coop-gray-600/60">
+                              <span className="text-coop-gray-900/60">
                                 ({occ.recurrence_period_start.slice(0, 10)})
                               </span>
                             )}
@@ -6645,7 +6645,7 @@ function TasksPage() {
                       {selectedFutureIds.size === 0 && (
                         <div className="flex items-center gap-1 shrink-0">
                           <button
-                            className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-coop-gray-600 hover:bg-primary/10 hover:text-primary transition-colors"
+                            className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[10px] font-medium text-coop-gray-900 hover:bg-primary/10 hover:text-primary transition-colors"
                             onClick={() => {
                               void openEdit(occ);
                               setShowFutureManager(false);
@@ -6726,7 +6726,7 @@ function TasksPage() {
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-coop-gray-900">{entry.supplier}</p>
-                    <p className="text-xs text-coop-gray-600">
+                    <p className="text-xs text-coop-gray-900">
                       {entry.flow_name} · {entry.delivery_time}
                     </p>
                   </div>
@@ -6767,7 +6767,7 @@ function TasksPage() {
               <Users className="h-4 w-4 text-coop-orange-700" />
               Bekräfta tilldelade medarbetare
             </DialogTitle>
-            <p className="text-sm text-coop-gray-600 mt-1">
+            <p className="text-sm text-coop-gray-900 mt-1">
               Scheman ändras — kontrollera vem som ska utföra dessa uppgifter. Bekräfta samma person
               eller välj en annan.
             </p>
@@ -6786,7 +6786,7 @@ function TasksPage() {
                 }
                 className="h-4 w-4"
               />
-              <span className="text-xs text-coop-gray-600">
+              <span className="text-xs text-coop-gray-900">
                 {confirmSelectedIds.size === 0
                   ? "Välj uppgifter"
                   : `${confirmSelectedIds.size} valda`}
@@ -6807,7 +6807,7 @@ function TasksPage() {
 
           <div className="flex-1 overflow-y-auto space-y-2 py-2">
             {unconfirmedTasks.length === 0 ? (
-              <p className="text-sm text-coop-gray-600 py-4 text-center">
+              <p className="text-sm text-coop-gray-900 py-4 text-center">
                 Inga uppgifter att bekräfta.
               </p>
             ) : (
@@ -6848,7 +6848,7 @@ function TasksPage() {
                             </Badge>
                           )}
                           {task.due_date && (
-                            <span className="text-[11px] text-coop-gray-600">
+                            <span className="text-[11px] text-coop-gray-900">
                               {new Date(task.due_date).toLocaleDateString("sv-SE", {
                                 weekday: "short",
                                 month: "short",
@@ -6859,7 +6859,7 @@ function TasksPage() {
                           )}
                         </div>
                         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                          <span className="text-[11px] text-coop-gray-600">Tilldelad:</span>
+                          <span className="text-[11px] text-coop-gray-900">Tilldelad:</span>
                           {overrideUser ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-800 text-[11px] px-2 py-0.5">
                               {overrideUser.display_name}
@@ -6883,7 +6883,7 @@ function TasksPage() {
                               </span>
                             ))
                           ) : (
-                            <span className="text-[11px] text-coop-gray-600 italic">
+                            <span className="text-[11px] text-coop-gray-900 italic">
                               Ingen tilldelad
                             </span>
                           )}

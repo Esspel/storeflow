@@ -11,15 +11,15 @@ function LicensePage() {
     <div className="mx-auto max-w-3xl px-5 py-8 md:px-8 md:py-12">
       <Link
         to="/installningar"
-        className="mb-6 inline-flex items-center gap-1.5 text-sm text-coop-gray-600 hover:text-coop-gray-900 transition-colors"
+        className="mb-6 inline-flex items-center gap-1.5 text-sm text-coop-gray-900 hover:text-coop-gray-900 transition-colors"
       >
         <ChevronLeft className="h-4 w-4" /> Tillbaka till Inställningar
       </Link>
 
       <h1 className="mb-2 text-3xl font-bold tracking-tight">Licens</h1>
-      <p className="mb-8 text-sm text-coop-gray-600">GNU General Public License v3.0</p>
+      <p className="mb-8 text-sm text-coop-gray-900">GNU General Public License v3.0</p>
 
-      <div className="space-y-6 text-sm text-coop-gray-600 leading-relaxed">
+      <div className="space-y-6 text-sm text-coop-gray-900 leading-relaxed">
         <div className="rounded-xl border border-border/60 bg-muted/30 p-5">
           <p className="font-mono text-xs text-coop-gray-900">
             StoreFlow — Butiksdriftssystem
@@ -113,7 +113,7 @@ function LicensePage() {
               <div key={name} className="flex items-center gap-3">
                 <span className="w-36 text-coop-gray-900">{name}</span>
                 <span className="w-20 text-primary">{lic}</span>
-                <span className="text-coop-gray-600">{repo}</span>
+                <span className="text-coop-gray-900">{repo}</span>
               </div>
             ))}
           </div>

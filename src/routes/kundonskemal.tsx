@@ -81,19 +81,19 @@ function statusBadge(s: string) {
   if (s === "fulfilled") return <Badge className="bg-success/15 text-success">Uppfylld</Badge>;
   if (s === "declined")
     return (
-      <Badge variant="secondary" className="text-coop-gray-600">
+      <Badge variant="secondary" className="text-coop-gray-900">
         Avböjd
       </Badge>
     );
   if (s === "not_in_assortment")
     return (
-      <Badge variant="secondary" className="text-coop-gray-600">
+      <Badge variant="secondary" className="text-coop-gray-900">
         Finns ej i sortiment
       </Badge>
     );
   if (s === "discontinued")
     return (
-      <Badge variant="secondary" className="text-coop-gray-600">
+      <Badge variant="secondary" className="text-coop-gray-900">
         Utgått
       </Badge>
     );
@@ -102,7 +102,7 @@ function statusBadge(s: string) {
 
 function priorityClass(p: string) {
   if (p === "high") return "bg-destructive/10 text-destructive";
-  if (p === "low") return "bg-muted text-coop-gray-600";
+  if (p === "low") return "bg-muted text-coop-gray-900";
   return "bg-info/15 text-info";
 }
 
@@ -518,7 +518,7 @@ function CustomerRequestsPage() {
                   "rounded-full px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap",
                   filterStatus === f.value
                     ? "bg-coop-gray-100 text-coop-gray-900 shadow-sm"
-                    : "text-coop-gray-600 hover:text-coop-gray-900",
+                    : "text-coop-gray-900 hover:text-coop-gray-900",
                 )}
               >
                 {f.label}
@@ -527,7 +527,7 @@ function CustomerRequestsPage() {
           </div>
         </div>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600" />
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-900" />
           <Input
             placeholder="Sök produkt eller materialnummer..."
             value={search}
@@ -548,8 +548,8 @@ function CustomerRequestsPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-16 text-center">
-          <ShoppingCart className="mb-3 h-10 w-10 text-coop-gray-600/40" />
-          <p className="text-sm font-medium text-coop-gray-600">Inga kundönskemål hittades</p>
+          <ShoppingCart className="mb-3 h-10 w-10 text-coop-gray-900/40" />
+          <p className="text-sm font-medium text-coop-gray-900">Inga kundönskemål hittades</p>
           <Button className="mt-4 rounded-full" size="sm" onClick={() => setShowCreate(true)}>
             <Plus className="mr-1.5 h-3.5 w-3.5" /> Registrera önskemål
           </Button>
@@ -578,7 +578,7 @@ function CustomerRequestsPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-base leading-snug">{r.product_name}</p>
                       {r.source === "qr" && (
-                        <span className="inline-block mt-1 rounded-full border border-border/60 px-2 py-0.5 text-[10px] font-medium text-coop-gray-600">
+                        <span className="inline-block mt-1 rounded-full border border-border/60 px-2 py-0.5 text-[10px] font-medium text-coop-gray-900">
                           Via QR
                         </span>
                       )}
@@ -599,7 +599,7 @@ function CustomerRequestsPage() {
                   {/* Article number & Mitt Coop info */}
                   {r.article_number && (
                     <div className="rounded-xl border border-border/60 bg-muted/30 p-2.5 space-y-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600/70">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-900/70">
                         {decodedArticle?.type === "ean"
                           ? "EAN"
                           : decodedArticle?.type === "bnr"
@@ -631,7 +631,7 @@ function CustomerRequestsPage() {
                       <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-orange-700/90 dark:text-coop-orange-500/90 mb-0.5">
                         Anteckning (visas för kunden)
                       </p>
-                      <p className="text-xs text-coop-gray-600 leading-relaxed">{r.notes}</p>
+                      <p className="text-xs text-coop-gray-900 leading-relaxed">{r.notes}</p>
                     </div>
                   )}
 
@@ -648,10 +648,10 @@ function CustomerRequestsPage() {
                   {/* Internal Notes */}
                   {r.internal_notes && (
                     <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600/70 mb-0.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-900/70 mb-0.5">
                         Intern anteckning
                       </p>
-                      <p className="text-xs text-coop-gray-600 leading-relaxed">
+                      <p className="text-xs text-coop-gray-900 leading-relaxed">
                         {r.internal_notes}
                       </p>
                     </div>
@@ -660,7 +660,7 @@ function CustomerRequestsPage() {
                   {/* Images */}
                   {images.length > 0 && (
                     <div className="space-y-1">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-600/70">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-gray-900/70">
                         Bilder
                       </p>
                       <div className="flex flex-wrap gap-1.5">
@@ -686,7 +686,7 @@ function CustomerRequestsPage() {
 
                 {/* Footer: Meta & actions */}
                 <div className="pt-2 border-t border-border/40 space-y-2">
-                  <div className="flex items-center justify-between text-[11px] text-coop-gray-600/70">
+                  <div className="flex items-center justify-between text-[11px] text-coop-gray-900/70">
                     <span>{r.requester?.display_name ?? "Anonym/Kund"}</span>
                     <span>{new Date(r.created_at).toLocaleDateString("sv-SE")}</span>
                   </div>
@@ -720,7 +720,7 @@ function CustomerRequestsPage() {
                       <button
                         type="button"
                         onClick={() => openQrForRequest(r)}
-                        className="flex h-8 w-8 items-center justify-center rounded-full border border-border/60 text-coop-gray-600 hover:bg-muted/60 hover:text-primary transition-colors"
+                        className="flex h-8 w-8 items-center justify-center rounded-full border border-border/60 text-coop-gray-900 hover:bg-muted/60 hover:text-primary transition-colors"
                         title="Dela status-QR med kund"
                       >
                         <QrCode className="h-4 w-4" />
@@ -729,7 +729,7 @@ function CustomerRequestsPage() {
                         <button
                           type="button"
                           onClick={() => setDeleteTarget(r)}
-                          className="flex h-8 w-8 items-center justify-center rounded-full border border-border/60 text-coop-gray-600 hover:bg-muted/60 hover:text-destructive transition-colors"
+                          className="flex h-8 w-8 items-center justify-center rounded-full border border-border/60 text-coop-gray-900 hover:bg-muted/60 hover:text-destructive transition-colors"
                           title="Ta bort önskemål"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -783,7 +783,7 @@ function CustomerRequestsPage() {
                   ✓ Fälten har fyllts i automatiskt från länken!
                 </p>
               ) : (
-                <p className="text-[11px] text-coop-gray-600">
+                <p className="text-[11px] text-coop-gray-900">
                   Fyller automatiskt i artikelnummer, typ och produktnamn från länken.
                 </p>
               )}
@@ -812,7 +812,7 @@ function CustomerRequestsPage() {
 
             <div className="space-y-1.5">
               <Label className="text-xs flex items-center gap-1.5">
-                <Hash className="h-3 w-3 text-coop-gray-600" />
+                <Hash className="h-3 w-3 text-coop-gray-900" />
                 Materialnummer / EAN / BNR (valfritt)
               </Label>
               <div className="flex gap-2">
@@ -858,14 +858,14 @@ function CustomerRequestsPage() {
                 <button
                   type="button"
                   onClick={() => setArticleCameraOpen(true)}
-                  className="flex items-center gap-1 shrink-0 rounded-xl border border-border/60 px-2.5 py-1 text-[11px] text-coop-gray-600 transition-colors hover:border-primary/50 hover:text-primary"
+                  className="flex items-center gap-1 shrink-0 rounded-xl border border-border/60 px-2.5 py-1 text-[11px] text-coop-gray-900 transition-colors hover:border-primary/50 hover:text-primary"
                   title="Scanna EAN-streckkod"
                 >
                   <ScanLine className="h-3 w-3" />
                   Scanna
                 </button>
               </div>
-              <p className="text-[11px] text-coop-gray-600">
+              <p className="text-[11px] text-coop-gray-900">
                 Används för direktlänk till Mitt Coop-sortiment. Ange typ av nummer i rullgardinen.
               </p>
             </div>
@@ -947,7 +947,7 @@ function CustomerRequestsPage() {
                   <button
                     type="button"
                     onClick={() => createFileRef.current?.click()}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-coop-gray-600 transition-colors hover:border-primary/40 hover:bg-muted/50"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-coop-gray-900 transition-colors hover:border-primary/40 hover:bg-muted/50"
                   >
                     <ImagePlus className="h-3.5 w-3.5" />
                     Lägg till bild
@@ -1006,7 +1006,7 @@ function CustomerRequestsPage() {
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-coop-orange-700/90 dark:text-coop-orange-500/90 mb-0.5">
                       Anteckning (visas för kunden)
                     </p>
-                    <p className="text-xs text-coop-gray-600">{editTarget.notes}</p>
+                    <p className="text-xs text-coop-gray-900">{editTarget.notes}</p>
                   </div>
                 )}
               </div>
@@ -1031,7 +1031,7 @@ function CustomerRequestsPage() {
                     ✓ Artikelnummer har fyllts i från länken!
                   </p>
                 ) : (
-                  <p className="text-[11px] text-coop-gray-600">
+                  <p className="text-[11px] text-coop-gray-900">
                     Fyller automatiskt i artikelnummer och typ från länken.
                   </p>
                 )}
@@ -1083,7 +1083,7 @@ function CustomerRequestsPage() {
                     <button
                       type="button"
                       onClick={() => editFileRef.current?.click()}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-coop-gray-600 transition-colors hover:border-primary/40 hover:bg-muted/50"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/60 bg-muted/30 py-2.5 text-xs text-coop-gray-900 transition-colors hover:border-primary/40 hover:bg-muted/50"
                     >
                       <ImagePlus className="h-3.5 w-3.5" />
                       Lägg till bild
@@ -1102,7 +1102,7 @@ function CustomerRequestsPage() {
 
               <div className="space-y-1.5">
                 <Label className="text-xs flex items-center gap-1.5">
-                  <Hash className="h-3 w-3 text-coop-gray-600" />
+                  <Hash className="h-3 w-3 text-coop-gray-900" />
                   Materialnummer / EAN / BNR
                 </Label>
                 <div className="flex gap-2">
@@ -1144,7 +1144,7 @@ function CustomerRequestsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <p className="text-[11px] text-coop-gray-600">
+                <p className="text-[11px] text-coop-gray-900">
                   Syns bara internt — används för direktlänk till Mitt Coop-sortiment.
                 </p>
               </div>
@@ -1180,7 +1180,7 @@ function CustomerRequestsPage() {
                   className="resize-none text-sm"
                   placeholder="T.ex. Varan är nu i hylla 3, kyl..."
                 />
-                <p className="text-[11px] text-coop-gray-600">
+                <p className="text-[11px] text-coop-gray-900">
                   {editStatus === "declined"
                     ? "En kommentar måste anges när önskemålet avböjs."
                     : "Kunden ser detta meddelande på sin statuslänk."}
@@ -1281,7 +1281,7 @@ function CustomerRequestsPage() {
                 </div>
                 <div>
                   <DialogTitle className="text-base">Dela status med kund</DialogTitle>
-                  <p className="text-xs text-coop-gray-600">
+                  <p className="text-xs text-coop-gray-900">
                     Kunden kan följa önskemålets status via denna QR-kod.
                   </p>
                 </div>
@@ -1289,7 +1289,7 @@ function CustomerRequestsPage() {
             </DialogHeader>
             <div className="space-y-4">
               <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-                <p className="text-xs text-coop-gray-600 mb-0.5">Produkt</p>
+                <p className="text-xs text-coop-gray-900 mb-0.5">Produkt</p>
                 <p className="font-medium text-sm text-coop-gray-900">{qrRequest.product_name}</p>
               </div>
               {qrTokenUrl ? (
@@ -1298,7 +1298,7 @@ function CustomerRequestsPage() {
                     <QrDisplay url={qrTokenUrl} size={180} />
                   </div>
                   <div className="rounded-xl border border-border/60 bg-muted/20 p-2.5">
-                    <p className="break-all font-mono text-[10px] text-coop-gray-600 leading-relaxed">
+                    <p className="break-all font-mono text-[10px] text-coop-gray-900 leading-relaxed">
                       {qrTokenUrl}
                     </p>
                   </div>
@@ -1326,7 +1326,7 @@ function CustomerRequestsPage() {
                       Öppna
                     </a>
                   </div>
-                  <p className="text-xs text-center text-coop-gray-600">
+                  <p className="text-xs text-center text-coop-gray-900">
                     Länken är giltig i 30 dagar.
                   </p>
                 </div>
@@ -1360,7 +1360,7 @@ function CustomerRequestsPage() {
                 </div>
                 <div>
                   <DialogTitle className="text-base">Butiks-QR för kundönskemål</DialogTitle>
-                  <p className="text-xs text-coop-gray-600">
+                  <p className="text-xs text-coop-gray-900">
                     Kunder kan skanna och skicka in önskemål direkt.
                   </p>
                 </div>
@@ -1380,7 +1380,7 @@ function CustomerRequestsPage() {
                     />
                   </div>
                   <div className="rounded-xl border border-border/60 bg-muted/20 p-2.5">
-                    <p className="break-all font-mono text-[10px] text-coop-gray-600 leading-relaxed">
+                    <p className="break-all font-mono text-[10px] text-coop-gray-900 leading-relaxed">
                       {`${window.location.origin}/qr-kundonskemal-form?t=${storeQrToken}`}
                     </p>
                   </div>
@@ -1409,13 +1409,13 @@ function CustomerRequestsPage() {
                       Testa
                     </a>
                   </div>
-                  <p className="text-xs text-center text-coop-gray-600">
+                  <p className="text-xs text-center text-coop-gray-900">
                     Skriv ut och sätt upp i butiken. Kunder skannar och skickar önskemål direkt.
                   </p>
                 </>
               ) : (
                 <div className="rounded-2xl border border-dashed border-border/60 bg-muted/20 py-8 text-center">
-                  <p className="text-sm text-coop-gray-600">Kunde inte generera QR-kod</p>
+                  <p className="text-sm text-coop-gray-900">Kunde inte generera QR-kod</p>
                 </div>
               )}
             </div>

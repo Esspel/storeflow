@@ -28,7 +28,7 @@ export function ComingSoon({
           <Icon className="h-7 w-7" />
         </div>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight">{title}</h1>
-        <p className="mt-2 text-coop-gray-600">{description}</p>
+        <p className="mt-2 text-coop-gray-900">{description}</p>
 
         <div className="mt-8 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {features.map((f) => (

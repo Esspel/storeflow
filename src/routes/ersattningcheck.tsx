@@ -482,7 +482,7 @@ function ErstatningsCheckPage() {
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-coop-gray-900 mb-2">Inloggning krävs</h2>
-          <p className="text-coop-gray-600">
+          <p className="text-coop-gray-900">
             Du måste vara inloggad för att komma åt ersättnings-kontrollen.
           </p>
         </div>
@@ -495,7 +495,7 @@ function ErstatningsCheckPage() {
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-coop-gray-900 mb-2">Ingen aktiv butik</h2>
-          <p className="text-coop-gray-600">Välj en butik för att fortsätta.</p>
+          <p className="text-coop-gray-900">Välj en butik för att fortsätta.</p>
         </div>
       </div>
     );
@@ -2346,13 +2346,13 @@ function ErstatningsCheckPage() {
               )}
             </div>
             {testFixtureSapId && (
-              <p className="text-sm text-coop-gray-600">
+              <p className="text-sm text-coop-gray-900">
                 Aktiv testartikel: <span className="font-mono">{testFixtureSapId}</span>
               </p>
             )}
           </CardContent>
           <div className="pt-2 border-t mt-2">
-            <p className="text-xs font-medium text-coop-gray-600 mb-2">
+            <p className="text-xs font-medium text-coop-gray-900 mb-2">
               Testa SAP-flöde för enskild artikel (materialnummer):
             </p>
             <div className="flex items-end gap-2">
@@ -2458,7 +2458,7 @@ function ErstatningsCheckPage() {
                   {reclaimedProductCount} <TrendingDown size={20} />
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex items-center justify-between text-sm text-coop-gray-600">
+              <CardContent className="flex items-center justify-between text-sm text-coop-gray-900">
                 <span>
                   {reclaimedPercentage}% av totalt
                 </span>
@@ -2478,7 +2478,7 @@ function ErstatningsCheckPage() {
                   {goodProductCount} <TrendingUp size={20} />
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-coop-gray-600">
+              <CardContent className="text-sm text-coop-gray-900">
                 {productPercentage}% av totalt
               </CardContent>
             </Card>
@@ -2489,7 +2489,7 @@ function ErstatningsCheckPage() {
                   {totalProductCount} <Box size={20} />
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-coop-gray-600">
+              <CardContent className="text-sm text-coop-gray-900">
                 Alla aktiva produkter
               </CardContent>
             </Card>
@@ -2520,7 +2520,7 @@ function ErstatningsCheckPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="flex min-h-40 flex-col items-center justify-center text-center text-coop-gray-600">
+                  <div className="flex min-h-40 flex-col items-center justify-center text-center text-coop-gray-900">
                     <Package size={34} className="mb-3 opacity-50" />
                     <p>Ingen data ännu</p>
                   </div>
@@ -2542,11 +2542,11 @@ function ErstatningsCheckPage() {
                       >
                         <div>
                           <p className="font-medium">{delivery.product_name}</p>
-                          <p className="font-mono text-xs text-coop-gray-600">
+                          <p className="font-mono text-xs text-coop-gray-900">
                             {delivery.sap_article_id}
                           </p>
                         </div>
-                        <span className="text-sm text-coop-gray-600">
+                        <span className="text-sm text-coop-gray-900">
                           {delivery.arrival_date
                             ? new Date(delivery.arrival_date).toLocaleDateString("sv-SE")
                             : "Datum saknas"}
@@ -2555,7 +2555,7 @@ function ErstatningsCheckPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="flex min-h-40 flex-col items-center justify-center text-center text-coop-gray-600">
+                  <div className="flex min-h-40 flex-col items-center justify-center text-center text-coop-gray-900">
                     <Upload size={34} className="mb-3 opacity-50" />
                     <p>Inga leveranser ännu.</p>
                     <p className="text-sm">Ladda upp en följesedel för att komma igång.</p>
@@ -2590,9 +2590,9 @@ function ErstatningsCheckPage() {
                 onDragOver={(e) => e.preventDefault()}
                 onClick={() => document.getElementById("delivery-file")?.click()}
               >
-                <Upload className="w-8 h-8 mx-auto text-coop-gray-600 mb-2" />
+                <Upload className="w-8 h-8 mx-auto text-coop-gray-900 mb-2" />
                 <p className="text-sm font-medium">Dra och släpp Excel-filen här</p>
-                <p className="text-xs text-coop-gray-600 mt-1">
+                <p className="text-xs text-coop-gray-900 mt-1">
                   eller klicka för att välja .xlsx
                 </p>
               </div>
@@ -2608,7 +2608,7 @@ function ErstatningsCheckPage() {
 
             {importDates.length > 0 && (
               <div className="mb-4">
-                <Label className="text-sm font-medium text-coop-gray-600">
+                <Label className="text-sm font-medium text-coop-gray-900">
                   Senaste importerade leveransdatum
                 </Label>
                 <div className="mt-1 flex flex-wrap gap-2">
@@ -2729,12 +2729,12 @@ function ErstatningsCheckPage() {
                       ))}
                     </TableBody>
                   </Table>
-                  {deliveryNotes.length > 5 && (
+                  {deliveryNotes.length > 10 && (
                     <>
                       {!showAllDeliveryNotes ? (
                         <div className="flex flex-col items-center gap-2 py-3">
                           <p className="text-sm text-coop-gray-600 text-center">
-                            Visar {showAllDeliveryNotes} av {deliveryNotes.length} rader
+                            Visar 10 av {deliveryNotes.length} rader
                           </p>
                           <Button
                             variant="outline"
@@ -2775,7 +2775,7 @@ function ErstatningsCheckPage() {
               placeholder="Sök produkt, varumärke, hållbarhet, datum eller status..."
               aria-label="Sök i hållbarhetsdata"
             />
-            <p className="text-sm text-coop-gray-600">
+            <p className="text-sm text-coop-gray-900">
               Visar {filteredShelfLifeRecords.length} av {shelfLifeRecords.length} artiklar
             </p>
             <div className="flex gap-4">
@@ -2867,7 +2867,7 @@ function ErstatningsCheckPage() {
               )}
             </div>
             {shelfLifeSort.length > 0 && (
-              <div className="mt-2 text-xs text-coop-gray-600 flex flex-wrap items-center gap-2">
+              <div className="mt-2 text-xs text-coop-gray-900 flex flex-wrap items-center gap-2">
                 <span className="font-medium text-coop-gray-900">Sortering:</span>
                 {shelfLifeSort.map((entry, i) => (
                   <span
@@ -3090,14 +3090,14 @@ function ErstatningsCheckPage() {
                     </TableBody>
                   </Table>
                   {filteredShelfLifeRecords.length === 0 && (
-                    <p className="py-8 text-center text-sm text-coop-gray-600">
+                    <p className="py-8 text-center text-sm text-coop-gray-900">
                       Inga artiklar matchar sökningen.
                     </p>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="text-center py-8 text-coop-gray-600">
+              <div className="text-center py-8 text-coop-gray-900">
                 <Clock size={48} className="mx-auto mb-4 opacity-50" />
                 <p>Ingen hållbarhetsdata registrerad ännu.</p>
                 <p className="text-sm mt-2">
@@ -3123,7 +3123,7 @@ function ErstatningsCheckPage() {
             <div className="space-y-4">
               <div className="mb-4 rounded-lg border p-4">
                 <h3 className="mb-2 font-medium">Aktuella artiklar för ersättning</h3>
-                <p className="text-sm text-coop-gray-600">
+                <p className="text-sm text-coop-gray-900">
                   Dessa artiklar uppfyller inte Coop:s hållbarhetskrav och bör reklameras. Ange
                   artiklarna i Butikssupportportalen och klicka på "Skickat till Butikssupport" när
                   du gjort detta.
@@ -3150,7 +3150,7 @@ function ErstatningsCheckPage() {
                             {record.product_name} {record.brand && `- ${record.brand}`}
                           </div>
                           <div className="font-mono text-xs">{record.sap_article_id}</div>
-                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-coop-gray-600">
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-coop-gray-900">
                             <span>
                               <span className="font-medium">Leveransnr:</span>{" "}
                               {record.delivery_number || "—"}
@@ -3165,7 +3165,7 @@ function ErstatningsCheckPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
-                          <div className="text-right text-coop-gray-600">
+                          <div className="text-right text-coop-gray-900">
                             <div>
                               Bäst före: {new Date(record.expiry_date).toLocaleDateString("sv-SE")}
                             </div>
@@ -3188,11 +3188,11 @@ function ErstatningsCheckPage() {
                   })}
                 </div>
               ) : hasImportedDeliveries ? (
-                <p className="text-sm text-coop-gray-600">
+                <p className="text-sm text-coop-gray-900">
                   Inga leveranser understiger Coop:s hållbarhetskrav just nu.
                 </p>
               ) : (
-                <p className="text-sm text-coop-gray-600">Ingen leverans är importerad ännu.</p>
+                <p className="text-sm text-coop-gray-900">Ingen leverans är importerad ännu.</p>
               )}
             </div>
             <Alert className="mb-4">
@@ -3215,7 +3215,7 @@ function ErstatningsCheckPage() {
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 className="text-3xl font-semibold tracking-tight">Statistik</h2>
-              <p className="text-coop-gray-600">
+              <p className="text-coop-gray-900">
                 Din butiks reklamationer och återförda värden över tid.
               </p>
             </div>
@@ -3261,7 +3261,7 @@ function ErstatningsCheckPage() {
                       {formatSek(replacementStatistics.allStoresReturnedValue)}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-600">
+                  <CardContent className="text-sm text-coop-gray-900">
                     perioden pågår
                   </CardContent>
                 </Card>
@@ -3272,7 +3272,7 @@ function ErstatningsCheckPage() {
                       {formatSek(replacementStatistics.allStoresPendingValue)}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-600">
+                  <CardContent className="text-sm text-coop-gray-900">
                     {replacementStatistics.allStoresSentCount} skickade reklamationer
                   </CardContent>
                 </Card>
@@ -3283,7 +3283,7 @@ function ErstatningsCheckPage() {
                       {replacementStatistics.allStoresApprovalRate}%
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-600">
+                  <CardContent className="text-sm text-coop-gray-900">
                     {replacementStatistics.allStoresApprovedCount} av{" "}
                     {replacementStatistics.allStoresDecidedCount} avgjorda
                   </CardContent>
@@ -3295,7 +3295,7 @@ function ErstatningsCheckPage() {
                       {formatSek(replacementStatistics.allStoresAverageApprovedValue)}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-600">
+                  <CardContent className="text-sm text-coop-gray-900">
                     {replacementStatistics.allStoresTotalCount} reklamationer totalt
                   </CardContent>
                 </Card>
@@ -3313,7 +3313,7 @@ function ErstatningsCheckPage() {
                       {formatSek(replacementStatistics.allStoresReturnedValue)}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-600">
+                  <CardContent className="text-sm text-coop-gray-900">
                     Godkända reklamationer
                   </CardContent>
                 </Card>
@@ -3329,7 +3329,7 @@ function ErstatningsCheckPage() {
                       {formatSek(replacementStatistics.allStoresPendingValue)}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-600">
+                  <CardContent className="text-sm text-coop-gray-900">
                     {replacementStatistics.allStoresSentCount} skickade
                   </CardContent>
                 </Card>
@@ -3341,7 +3341,7 @@ function ErstatningsCheckPage() {
                         {replacementStatistics.allStoresApprovalRate}%
                       </CardTitle>
                     </div>
-                    <CardContent className="text-sm text-coop-gray-600">
+                    <CardContent className="text-sm text-coop-gray-900">
                       {replacementStatistics.allStoresApprovedCount} av{" "}
                       {replacementStatistics.allStoresDecidedCount} avgjorda
                     </CardContent>
@@ -3366,7 +3366,7 @@ function ErstatningsCheckPage() {
                         : "—"}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-600">
+                  <CardContent className="text-sm text-coop-gray-900">
                     Snitt per butik
                   </CardContent>
                 </Card>
@@ -3387,7 +3387,7 @@ function ErstatningsCheckPage() {
                         : "—"}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-600">
+                  <CardContent className="text-sm text-coop-gray-900">
                     Snitt per butik
                   </CardContent>
                 </Card>
@@ -3399,7 +3399,7 @@ function ErstatningsCheckPage() {
                         {replacementStatistics.allStoresApprovalRate}%
                       </CardTitle>
                     </div>
-                    <CardContent className="text-sm text-coop-gray-600">
+                    <CardContent className="text-sm text-coop-gray-900">
                       Snitt över {replacementStatistics.allStoresStoreCount} butiker
                     </CardContent>
                   </CardHeader>
@@ -3418,7 +3418,7 @@ function ErstatningsCheckPage() {
                       {formatSek(replacementStatistics.returnedValue)}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-600">
+                  <CardContent className="text-sm text-coop-gray-900">
                     Godkända reklamationer
                   </CardContent>
                 </Card>
@@ -3434,7 +3434,7 @@ function ErstatningsCheckPage() {
                       {formatSek(replacementStatistics.pendingValue)}
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-600">
+                  <CardContent className="text-sm text-coop-gray-900">
                     {replacementStatistics.sentCount} skickade
                   </CardContent>
                 </Card>
@@ -3446,7 +3446,7 @@ function ErstatningsCheckPage() {
                         {replacementStatistics.approvalRate.toFixed(2)}%
                       </CardTitle>
                     </div>
-                    <CardContent className="text-sm text-coop-gray-600">
+                    <CardContent className="text-sm text-coop-gray-900">
                       {replacementStatistics.approvedCount} av {replacementStatistics.decidedCount}{" "}
                       avgjorda
                     </CardContent>
@@ -3498,7 +3498,7 @@ function ErstatningsCheckPage() {
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
-                  <p className="text-sm text-coop-gray-600">
+                  <p className="text-sm text-coop-gray-900">
                     Vald period:{" "}
                     {statisticsPeriod === "ytd"
                       ? "Hittills i år"
@@ -3551,7 +3551,7 @@ function ErstatningsCheckPage() {
                         ),
                       )
                     ) : (
-                      <p className="text-sm text-coop-gray-600">
+                      <p className="text-sm text-coop-gray-900">
                         Inga godkända reklamationer i perioden.
                       </p>
                     )}
@@ -3574,7 +3574,7 @@ function ErstatningsCheckPage() {
                         </div>
                       ))
                     ) : (
-                      <p className="text-sm text-coop-gray-600">Inga återkommande varor ännu.</p>
+                      <p className="text-sm text-coop-gray-900">Inga återkommande varor ännu.</p>
                     )}
                   </CardContent>
                 </Card>
@@ -3582,7 +3582,7 @@ function ErstatningsCheckPage() {
                   <CardHeader>
                     <CardTitle>Väntar på svar</CardTitle>
                   </CardHeader>
-                  <CardContent className="text-sm text-coop-gray-600">
+                  <CardContent className="text-sm text-coop-gray-900">
                     {replacementStatistics.openCount > 0
                       ? `${replacementStatistics.openCount} öppna reklamationer`
                       : "Inga öppna reklamationer."}
@@ -3656,7 +3656,7 @@ function ErstatningsCheckPage() {
                 })}
               </div>
             ) : (
-              <div className="py-10 text-center text-coop-gray-600">
+              <div className="py-10 text-center text-coop-gray-900">
                 <p>Inga kategorier från följesedlar finns ännu.</p>
                 <p className="mt-1 text-sm">Importera en följesedel för att börja koppla flöden.</p>
               </div>
@@ -3676,7 +3676,7 @@ function ErstatningsCheckPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {weeklyTask.length === 0 ? (
-              <div className="text-center py-8 text-coop-gray-600">
+              <div className="text-center py-8 text-coop-gray-900">
                 <Clock size={48} className="mx-auto mb-4 opacity-50" />
                 <p>Inga produkter att hantera.</p>
               </div>
@@ -3778,7 +3778,7 @@ function ErstatningsCheckPage() {
                             {r.status}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-xs text-coop-gray-600">
+                        <TableCell className="text-xs text-coop-gray-900">
                           {new Date(r.updated_at).toLocaleDateString("sv-SE")}
                         </TableCell>
                         <TableCell>
@@ -3820,7 +3820,7 @@ function ErstatningsCheckPage() {
                     <TableRow>
                       <TableCell
                         colSpan={4}
-                        className="text-center text-sm text-coop-gray-600 py-6"
+                        className="text-center text-sm text-coop-gray-900 py-6"
                       >
                         Inga reklamationer med denna status.
                       </TableCell>

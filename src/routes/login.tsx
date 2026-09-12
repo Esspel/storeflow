@@ -124,7 +124,7 @@ function LoginPage() {
               <KeyRound className="h-7 w-7" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Byt lösenord</h1>
-            <p className="mt-1 text-sm text-coop-gray-600">
+            <p className="mt-1 text-sm text-coop-gray-900">
               Välj ett nytt lösenord för att fortsätta.
             </p>
           </div>
@@ -153,7 +153,7 @@ function LoginPage() {
                   />
                   <button
                     type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-coop-gray-600 hover:text-coop-gray-900"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-coop-gray-900 hover:text-coop-gray-900"
                     onClick={() => setShowNewPw((v) => !v)}
                     aria-label={showNewPw ? "Dölj lösenord" : "Visa lösenord"}
                     aria-pressed={showNewPw}
@@ -223,7 +223,7 @@ function LoginPage() {
             <Sparkles className="h-7 w-7" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">StoreFlow</h1>
-          <p className="mt-1 text-sm text-coop-gray-600">Logga in för att fortsätta</p>
+          <p className="mt-1 text-sm text-coop-gray-900">Logga in för att fortsätta</p>
         </div>
 
         <form
@@ -262,7 +262,7 @@ function LoginPage() {
                 />
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-coop-gray-600 hover:text-coop-gray-900"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-coop-gray-900 hover:text-coop-gray-900"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? "Dölj lösenord" : "Visa lösenord"}
                   aria-pressed={showPassword}

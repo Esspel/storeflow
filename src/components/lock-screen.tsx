@@ -283,7 +283,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
         </div>
         <button
           onClick={onCancel}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-coop-gray-600 hover:text-coop-gray-900 transition-colors"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-coop-gray-900 hover:text-coop-gray-900 transition-colors"
           aria-label="Avbryt"
         >
           <X className="h-4 w-4" />
@@ -300,10 +300,10 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                   {initials(currentUser.display_name)}
                 </div>
               </div>
-              <p className="text-sm text-coop-gray-600">Inloggad som</p>
+              <p className="text-sm text-coop-gray-900">Inloggad som</p>
               <p className="font-semibold">{currentUser.display_name}</p>
               <p className="mt-4 text-base font-semibold">Vem tar över enheten?</p>
-              <p className="mt-0.5 text-xs text-coop-gray-600">
+              <p className="mt-0.5 text-xs text-coop-gray-900">
                 Scanna ditt kort eller välj ditt namn för PIN
               </p>
             </div>
@@ -312,7 +312,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
             {!activeStoreId ? (
               <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-center">
                 <p className="text-sm text-warning-foreground font-medium">Ingen butik vald</p>
-                <p className="mt-0.5 text-xs text-coop-gray-600">
+                <p className="mt-0.5 text-xs text-coop-gray-900">
                   Välj en butik i toppmenyn för att kunna skanna
                 </p>
               </div>
@@ -331,12 +331,12 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                           setScannerTestActive(false);
                           setLastScanned(null);
                         }}
-                        className="text-xs text-coop-gray-600 hover:text-coop-gray-900"
+                        className="text-xs text-coop-gray-900 hover:text-coop-gray-900"
                       >
                         Avsluta test
                       </button>
                     </div>
-                    <p className="text-xs text-coop-gray-600 mb-2">
+                    <p className="text-xs text-coop-gray-900 mb-2">
                       Scanna en streckkod med Zebra-skannern för att testa att den fungerar.
                     </p>
                     {lastScanned ? (
@@ -344,15 +344,15 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                         <Check className="h-4 w-4 text-success shrink-0" />
                         <div>
                           <p className="text-xs font-medium text-success">Skanning lyckades!</p>
-                          <p className="text-[11px] text-coop-gray-600 font-mono break-all">
+                          <p className="text-[11px] text-coop-gray-900 font-mono break-all">
                             {lastScanned}
                           </p>
                         </div>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 rounded-lg bg-muted/50 border border-border/60 px-3 py-2">
-                        <ScanBarcode className="h-4 w-4 text-coop-gray-600 shrink-0 animate-pulse" />
-                        <p className="text-xs text-coop-gray-600">Väntar på skanning...</p>
+                        <ScanBarcode className="h-4 w-4 text-coop-gray-900 shrink-0 animate-pulse" />
+                        <p className="text-xs text-coop-gray-900">Väntar på skanning...</p>
                       </div>
                     )}
                   </div>
@@ -361,7 +361,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                     <ScanBarcode className="h-5 w-5 shrink-0 text-primary" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">Scanna passerkort</p>
-                      <p className="text-xs text-coop-gray-600">
+                      <p className="text-xs text-coop-gray-900">
                         Rikta Zebra-skannern mot streckkoden
                       </p>
                     </div>
@@ -370,7 +370,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                         setScannerTestActive(true);
                         setLastScanned(null);
                       }}
-                      className="text-[11px] text-coop-gray-600 hover:text-primary border border-border/60 rounded-full px-2 py-0.5 transition-colors shrink-0"
+                      className="text-[11px] text-coop-gray-900 hover:text-primary border border-border/60 rounded-full px-2 py-0.5 transition-colors shrink-0"
                     >
                       Testa
                     </button>
@@ -383,7 +383,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                   <Camera className="h-5 w-5 shrink-0 text-primary" />
                   <div className="text-left">
                     <p className="text-sm font-medium">Scanna med kamera</p>
-                    <p className="text-xs text-coop-gray-600">
+                    <p className="text-xs text-coop-gray-900">
                       Öppna kameran och scanna streckkod
                     </p>
                   </div>
@@ -400,33 +400,33 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
               </div>
             ) : pinUsers.length > 0 ? (
               <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-600">
+                <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">
                   Logga in med PIN
                 </p>
                 {/* Search for users */}
                 {pinUsers.length >= 5 && (
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-600" />
+                    <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-coop-gray-900" />
                     <input
                       type="text"
                       value={userSearch}
                       onChange={(e) => setUserSearch(e.target.value)}
                       placeholder="Sök person..."
-                      className="w-full h-9 rounded-xl border border-border/60 bg-coop-gray-100 pl-9 pr-3 text-sm outline-none placeholder:text-coop-gray-600/50 focus:border-primary/50"
+                      className="w-full h-9 rounded-xl border border-border/60 bg-coop-gray-100 pl-9 pr-3 text-sm outline-none placeholder:text-coop-gray-900/50 focus:border-primary/50"
                     />
                     {userSearch && (
                       <button
                         onClick={() => setUserSearch("")}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2"
                       >
-                        <X className="h-3.5 w-3.5 text-coop-gray-600" />
+                        <X className="h-3.5 w-3.5 text-coop-gray-900" />
                       </button>
                     )}
                   </div>
                 )}
                 <div className="space-y-1.5 max-h-52 overflow-y-auto">
                   {filteredPinUsers.length === 0 ? (
-                    <p className="py-3 text-center text-xs text-coop-gray-600">
+                    <p className="py-3 text-center text-xs text-coop-gray-900">
                       Ingen person matchar sökningen.
                     </p>
                   ) : (
@@ -447,7 +447,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                         </div>
                         <div>
                           <p className="text-sm font-medium">{u.display_name}</p>
-                          <p className="text-xs text-coop-gray-600">
+                          <p className="text-xs text-coop-gray-900">
                             {roleLabel[u.role] ?? u.role}
                           </p>
                         </div>
@@ -457,7 +457,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                 </div>
               </div>
             ) : (
-              <p className="text-center text-xs text-coop-gray-600">
+              <p className="text-center text-xs text-coop-gray-900">
                 Inga kollegor med PIN hittades i denna butik.
               </p>
             )}
@@ -471,7 +471,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                 {initials(selectedUser.display_name)}
               </div>
               <p className="font-semibold">{selectedUser.display_name}</p>
-              <p className="mt-0.5 text-sm text-coop-gray-600">Ange din 4-siffriga PIN</p>
+              <p className="mt-0.5 text-sm text-coop-gray-900">Ange din 4-siffriga PIN</p>
             </div>
 
             {/* PIN dots */}
@@ -514,7 +514,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                   setError("");
                 }}
                 disabled={loading}
-                className="flex h-16 items-center justify-center rounded-2xl text-xs text-coop-gray-600 transition-all active:scale-95 hover:bg-muted disabled:opacity-50"
+                className="flex h-16 items-center justify-center rounded-2xl text-xs text-coop-gray-900 transition-all active:scale-95 hover:bg-muted disabled:opacity-50"
               >
                 Tillbaka
               </button>
@@ -528,7 +528,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
               <button
                 onClick={handlePinDelete}
                 disabled={loading || pin.length === 0}
-                className="flex h-16 items-center justify-center rounded-2xl text-coop-gray-600 transition-all active:scale-95 hover:bg-muted disabled:opacity-30"
+                className="flex h-16 items-center justify-center rounded-2xl text-coop-gray-900 transition-all active:scale-95 hover:bg-muted disabled:opacity-30"
               >
                 <Delete className="h-5 w-5" />
               </button>
