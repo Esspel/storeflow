@@ -2077,7 +2077,7 @@ function ErstatningsCheckPage() {
     });
 
     return filtered.map((item) => item.record);
-  }, [shelfLifeRecords, shelfLifeSearch, hiddenCategories, hideOkRecords, shelfLifeSort]);
+  }, [shelfLifeRecords, shelfLifeSearch, hiddenCategories, hideOkRecords, shelfLifeSort, shelfLifeStatusFilter, brandFilter, deliveryDateFilter]);
 
   const toggleShelfLifeSort = (key: ShelfLifeSortKey, shiftKey = false) => {
     setShelfLifeSort((current) => {
