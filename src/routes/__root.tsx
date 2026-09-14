@@ -170,13 +170,16 @@ function AppLayout() {
   }, []);
 
   useEffect(() => {
-    if (loading || !hasCheckedAuth) return;
+    // Only redirect AFTER auth has been fully checked.
+    // This prevents redirect-to-login when the page reloads and the session
+    // from IndexedDB hasn't been validated yet by AuthProvider's async flow.
+    if (!hasCheckedAuth) return;
     if (!user && !isLoginPage && !isPublicRoute) {
-      navigate({ to: "/login" }, { replace: true });
+      navigate({ to: "/login" });
     } else if (user && isLoginPage && !user.must_change_password) {
-      navigate({ to: "/" }, { replace: true });
+      navigate({ to: "/" });
     }
-  }, [user, loading, hasCheckedAuth, isLoginPage, isPublicRoute, navigate]);
+  }, [user, hasCheckedAuth, isLoginPage, isPublicRoute, navigate]);
 
   if (loading && !isPublicRoute) {
     return (

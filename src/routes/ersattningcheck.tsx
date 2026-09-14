@@ -2595,13 +2595,11 @@ function ErstatningsCheckPage() {
       )}
       {step === "dashboard" && (
         <div className="space-y-6">
-          <section className="rounded-2xl bg-emerald-700 p-6 text-coop-vit shadow-sm md:p-8">
-            <div>
-              <h2 className="mt-2 text-4xl font-semibold">Hej!</h2>
-            </div>
-          </section>
+          <div>
+            <h2 className="mt-2 text-4xl font-semibold">Hej!</h2>
+          </div>
 
-          <section className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-3">
                 <CardDescription>REKLAMATION</CardDescription>
@@ -2642,9 +2640,9 @@ function ErstatningsCheckPage() {
                 Alla aktiva produkter
               </CardContent>
             </Card>
-          </section>
+          </div>
 
-          <section className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             <Card className="min-h-64">
               <CardHeader>
                 <CardTitle>Fördelning</CardTitle>
@@ -2712,7 +2710,7 @@ function ErstatningsCheckPage() {
                 )}
               </CardContent>
             </Card>
-          </section>
+          </div>
         </div>
       )}
 
