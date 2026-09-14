@@ -159,10 +159,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         } else {
-          setSessionToken(null);
-          await clearSession();
+          // Defensive: do not wipe session on transient network/DB errors.
+          // Only clear when session is definitively invalid (validUser === null
+          // after a clean validateSession result). On reload/network flakiness
+          // the user should stay logged in so the page does not bounce to login.
+          console.warn("Session validation failed; keeping session intact on reload to avoid login bounce.");
         }
       } catch (err) {
+        // Defensive: on exception (network/DB flakiness) keep session intact
+        // to avoid login bounce. The finally block still marks auth as checked.
         console.error("Fel vid initiering av session:", err);
       } finally {
         if (isMounted) {

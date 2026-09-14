@@ -147,7 +147,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function AppLayout() {
-  const { user, loading, hasCheckedAuth, showFirstTimeSetup, dismissFirstTimeSetup } = useAuth();
+  const { user, token, loading, hasCheckedAuth, showFirstTimeSetup, dismissFirstTimeSetup } = useAuth();
   const navigate = useNavigate();
   const router = useRouter();
   const pathname = router.state.location.pathname;
@@ -174,12 +174,15 @@ function AppLayout() {
     // This prevents redirect-to-login when the page reloads and the session
     // from IndexedDB hasn't been validated yet by AuthProvider's async flow.
     if (!hasCheckedAuth) return;
-    if (!user && !isLoginPage && !isPublicRoute) {
+    // Redirect to login only if there is genuinely no stored session token.
+    // A transient validation failure may leave `user` null while `token` still
+    // exists; in that case we must NOT redirect or the user bounces to login.
+    if (!token && !isLoginPage && !isPublicRoute) {
       navigate({ to: "/login" });
     } else if (user && isLoginPage && !user.must_change_password) {
       navigate({ to: "/" });
     }
-  }, [user, hasCheckedAuth, isLoginPage, isPublicRoute, navigate]);
+  }, [token, user, hasCheckedAuth, isLoginPage, isPublicRoute, navigate]);
 
   if (loading && !isPublicRoute) {
     return (

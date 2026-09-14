@@ -357,6 +357,7 @@ export function AppShell() {
 
   const nav = [
     { to: "/", label: "Översikt", mobileHidden: false, Icon: Home },
+    { to: "/uppgifter", label: "Uppgifter", mobileHidden: false, Icon: ClipboardList },
     { to: "/schema", label: "Schema", mobileHidden: false, Icon: CalendarDays },
     { to: "/avvikelser", label: "Avvikelser", mobileHidden: true, Icon: TriangleAlert },
     { to: "/kundrunda", label: "Kundrunda", mobileHidden: true, Icon: UserRound },
