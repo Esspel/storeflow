@@ -33,6 +33,14 @@ import {
   Send,
   ChevronDown,
   Search,
+  Trash2,
+  Info,
+  Check,
+  Ban,
+  XCircle,
+  ArrowLeft,
+  Calendar,
+  Filter,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -42,6 +50,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableBody,
@@ -78,10 +87,17 @@ import {
 import { exportTextAsCSV, downloadAsZip } from "@/lib/csv";
 import { checkExtensionInstalled, fetchViaProxy } from "@/lib/sap-proxy";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
 import {
   CartesianGrid,
   Line,
   LineChart,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -178,6 +194,37 @@ type Reclamation = {
   updated_at: string;
   notes?: string;
 };
+
+type HanteringsItem = {
+  id: string;
+  reclamationId?: string;
+  sap_article_id: string;
+  product_name: string;
+  brand: string;
+  category: string;
+  category_code: string;
+  delivery_date: string;
+  best_before_date: string;
+  quantity: number;
+  price: number;
+  status: "Väntande" | "Skickad" | "Löst" | "Nekad";
+  rawStatus: string;
+  notes?: string;
+  bnr: string;
+  shelf_lifetime_days: number;
+  delivery_number?: string | null;
+};
+
+function extractVarugrupp(category: string | undefined | null, sapId?: string): string {
+  if (!category) return sapId ? sapId.slice(0, 4) : "1141";
+  const match = category.match(/\((\s*\d+\s*)\)/);
+  if (match) return match[1].trim();
+  let hash = 0;
+  for (let i = 0; i < category.length; i++) {
+    hash = (hash * 31 + category.charCodeAt(i)) % 9000;
+  }
+  return String(1000 + Math.abs(hash));
+}
 
 function isDelivered(status: string | null | undefined) {
   const normalized = String(status ?? "")
@@ -346,16 +393,44 @@ export const Route = createFileRoute("/ersattningcheck")({
 function ErstatningsCheckPage() {
   const { user, activeStore, loading: authLoading } = useAuth();
   const [step, setStep] = useState<
+    | "manage-goods"
     | "dashboard"
     | "import"
     | "manage"
     | "generate"
     | "weekly"
     | "reclamations"
+    | "catalog"
     | "statistics"
     | "category-mapping"
     | "admin-test"
-  >("dashboard");
+  >("manage-goods");
+
+  // Vyn Hantera varor state
+  const [manageGoodsStatusFilter, setManageGoodsStatusFilter] = useState<
+    "ALL" | "Väntande" | "Skickad" | "Löst" | "Nekad"
+  >("ALL");
+  const [manageGoodsDeliveryFilter, setManageGoodsDeliveryFilter] = useState<string>("ALL");
+  const [selectedManageGoodsIds, setSelectedManageGoodsIds] = useState<Set<string>>(new Set());
+
+  // Vyn Reklamation / Inlämningslista state
+  const [reclamationSearch, setReclamationSearch] = useState("");
+  const [reclamationDeliveryFilter, setReclamationDeliveryFilter] = useState("ALL");
+  const [reclamationCategoryFilter, setReclamationCategoryFilter] = useState("ALL");
+  const [historyProduct, setHistoryProduct] = useState<HanteringsItem | null>(null);
+
+  // Vyn Produktkatalog state
+  const [catalogTab, setCatalogTab] = useState<"catalog" | "my-submissions">("catalog");
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<string | null>(null);
+  const [infoProduct, setInfoProduct] = useState<any | null>(null);
+
+  // Vyn Statistik state
+  const [statsMode, setStatsMode] = useState<"spotlight" | "cockpit">("spotlight");
+  const [statsChartType, setStatsChartType] = useState<"line" | "bar">("line");
+  const [extendedPeriod, setExtendedPeriod] = useState<
+    "thisMonth" | "lastMonth" | "thisQuarter" | "ytd" | "all" | "custom"
+  >("thisMonth");
   const [reclamations, setReclamations] = useState<Reclamation[]>([]);
   const [statusFilter, setStatusFilter] = useState<ReclamationStatus>("Ej skickad");
   const [importError, setImportError] = useState<string | null>(null);
@@ -1314,12 +1389,29 @@ function ErstatningsCheckPage() {
         })),
       );
       const now = new Date();
-      const periodStart = new Date(now.getFullYear(), 0, 1);
-      if (period === "last30") periodStart.setDate(now.getDate() - 30);
-      if (period === "last12") periodStart.setMonth(now.getMonth() - 11, 1);
-      const reclamationsForPeriod = (reclamationData ?? []).filter(
-        (row: any) => new Date(row.created_at) >= periodStart,
-      );
+      let periodStart = new Date(now.getFullYear(), 0, 1);
+      let periodEnd = new Date(now.getTime() + 86400000);
+      if (period === "thisMonth") {
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (period === "lastMonth") {
+        periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      } else if (period === "thisQuarter") {
+        const qMonth = Math.floor(now.getMonth() / 3) * 3;
+        periodStart = new Date(now.getFullYear(), qMonth, 1);
+      } else if (period === "ytd") {
+        periodStart = new Date(now.getFullYear(), 0, 1);
+      } else if (period === "all") {
+        periodStart = new Date(2020, 0, 1);
+      } else if (period === "last30") {
+        periodStart.setDate(now.getDate() - 30);
+      } else if (period === "last12") {
+        periodStart.setMonth(now.getMonth() - 11, 1);
+      }
+      const reclamationsForPeriod = (reclamationData ?? []).filter((row: any) => {
+        const d = new Date(row.created_at);
+        return d >= periodStart && d <= periodEnd;
+      });
       const deliveriesByArticle = new Map<string, any[]>();
       for (const delivery of deliveriesData ?? []) {
         const deliveries = deliveriesByArticle.get(delivery.sap_article_id) ?? [];
@@ -1357,10 +1449,11 @@ function ErstatningsCheckPage() {
         .filter((row: any) => !["Löst", "Nekad"].includes(row.status))
         .reduce((sum: number, row: any) => sum + getReclamationAmount(row), 0);
       const monthly = (() => {
-        if (period === "last30") {
-          const now = new Date();
-          return Array.from({ length: 30 }, (_, i) => {
-            const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (29 - i));
+        if (period === "last30" || period === "thisMonth" || period === "lastMonth") {
+          const daysCount = period === "lastMonth" ? 30 : period === "thisMonth" ? Math.max(now.getDate(), 7) : 30;
+          const baseDate = period === "lastMonth" ? new Date(now.getFullYear(), now.getMonth(), 0) : now;
+          return Array.from({ length: daysCount }, (_, i) => {
+            const d = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() - (daysCount - 1 - i));
             const key = d.toISOString().split("T")[0];
             const dayReclamations = reclamationsForPeriod.filter(
               (row: any) => row.status === "Löst" && row.created_at?.startsWith(key),
@@ -2346,6 +2439,425 @@ function ErstatningsCheckPage() {
     }
   };
 
+  // Data for Hantera varor, Reklamation and Produktkatalog
+  const hanteringsItems = useMemo<HanteringsItem[]>(() => {
+    const items: HanteringsItem[] = [];
+    const processedSapIds = new Set<string>();
+
+    const deliveryMap = new Map<string, any>();
+    for (const d of deliveryStatistics) {
+      if (!deliveryMap.has(d.sap_article_id)) {
+        deliveryMap.set(d.sap_article_id, d);
+      }
+    }
+    const shelfMap = new Map<string, ShelfLifeRecord>();
+    for (const s of shelfLifeRecords) {
+      shelfMap.set(s.sap_article_id, s);
+    }
+
+    // 1. From existing reclamations
+    for (const rec of reclamations) {
+      const shelf = shelfMap.get(rec.sap_article_id);
+      const del = deliveryMap.get(rec.sap_article_id);
+
+      let normStatus: "Väntande" | "Skickad" | "Löst" | "Nekad" = "Väntande";
+      if (rec.status === "Löst") normStatus = "Löst";
+      else if (rec.status === "Nekad") normStatus = "Nekad";
+      else if (rec.status === "Granskas av butikssupporten" || rec.status === "Skickad") normStatus = "Skickad";
+      else normStatus = "Väntande";
+
+      const arrivalDate = shelf?.arrival_date || del?.arrival_date || rec.created_at;
+      const expiryDate = shelf?.expiry_date || del?.expiry_date || "";
+      const productName = shelf?.product_name || del?.product_name || "Okänd artikel";
+      const category = shelf?.category || del?.category || "Övrigt";
+      const rawPrice = del?.total_price || (shelf?.compensation_price_ore ? shelf.compensation_price_ore / 100 : 85);
+      const price = typeof rawPrice === "number" ? rawPrice : parseSek(rawPrice) ?? 85;
+
+      items.push({
+        id: rec.id,
+        reclamationId: rec.id,
+        sap_article_id: rec.sap_article_id,
+        product_name: productName,
+        brand: shelf?.brand || del?.brand || "",
+        category,
+        category_code: extractVarugrupp(category, rec.sap_article_id),
+        delivery_date: arrivalDate ? new Date(arrivalDate).toISOString().split("T")[0] : "—",
+        best_before_date: expiryDate ? new Date(expiryDate).toISOString().split("T")[0] : "—",
+        quantity: del?.quantity || 1,
+        price,
+        status: normStatus,
+        rawStatus: rec.status,
+        notes: rec.notes,
+        bnr: del?.bnr || "BNR-" + rec.sap_article_id.slice(-4),
+        shelf_lifetime_days: shelf?.shelf_lifetime_days ?? 180,
+        delivery_number: shelf?.delivery_number || del?.delivery_number || null,
+      });
+      processedSapIds.add(rec.sap_article_id);
+    }
+
+    // 2. Add flagged items from shelf life records that are eligible for compensation
+    for (const shelf of shelfLifeRecords) {
+      if (processedSapIds.has(shelf.sap_article_id)) continue;
+      const assessment = assessDelivery(shelf.arrival_date, shelf.expiry_date, shelf.shelf_lifetime_days);
+      if (assessment?.isEligible) {
+        const del = deliveryMap.get(shelf.sap_article_id);
+        const rawPrice = del?.total_price || (shelf.compensation_price_ore ? shelf.compensation_price_ore / 100 : 85);
+        const price = typeof rawPrice === "number" ? rawPrice : parseSek(rawPrice) ?? 85;
+        items.push({
+          id: `gen-${shelf.id}`,
+          reclamationId: undefined,
+          sap_article_id: shelf.sap_article_id,
+          product_name: shelf.product_name,
+          brand: shelf.brand || del?.brand || "",
+          category: shelf.category || del?.category || "Övrigt",
+          category_code: extractVarugrupp(shelf.category, shelf.sap_article_id),
+          delivery_date: shelf.arrival_date ? new Date(shelf.arrival_date).toISOString().split("T")[0] : "—",
+          best_before_date: shelf.expiry_date ? new Date(shelf.expiry_date).toISOString().split("T")[0] : "—",
+          quantity: del?.quantity || 1,
+          price,
+          status: "Väntande",
+          rawStatus: "Ej skickad",
+          notes: "Automatiskt identifierad enligt datumregelverk",
+          bnr: del?.bnr || "BNR-" + shelf.sap_article_id.slice(-4),
+          shelf_lifetime_days: shelf.shelf_lifetime_days,
+          delivery_number: shelf.delivery_number || del?.delivery_number || null,
+        });
+        processedSapIds.add(shelf.sap_article_id);
+      }
+    }
+
+    return items;
+  }, [reclamations, shelfLifeRecords, deliveryStatistics]);
+
+  // Counts for status cards in Hantera varor
+  const waitingCount = useMemo(() => hanteringsItems.filter((i) => i.status === "Väntande").length, [hanteringsItems]);
+  const sentCount = useMemo(() => hanteringsItems.filter((i) => i.status === "Skickad").length, [hanteringsItems]);
+  const resolvedCount = useMemo(() => hanteringsItems.filter((i) => i.status === "Löst").length, [hanteringsItems]);
+  const rejectedCount = useMemo(() => hanteringsItems.filter((i) => i.status === "Nekad").length, [hanteringsItems]);
+  const totalActiveCases = useMemo(() => waitingCount + sentCount, [waitingCount, sentCount]);
+
+  // Unique delivery dates for dropdowns
+  const uniqueHanteringsDeliveryDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const item of hanteringsItems) {
+      if (item.delivery_date && item.delivery_date !== "—") set.add(item.delivery_date);
+    }
+    for (const d of deliveryStatistics) {
+      if (d.arrival_date) set.add(new Date(d.arrival_date).toISOString().split("T")[0]);
+    }
+    return Array.from(set).sort().reverse();
+  }, [hanteringsItems, deliveryStatistics]);
+
+  // Unique categories for dropdowns
+  const uniqueCategoryNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const item of hanteringsItems) {
+      if (item.category) set.add(item.category);
+    }
+    for (const s of shelfLifeRecords) {
+      if (s.category) set.add(s.category);
+    }
+    return Array.from(set).sort();
+  }, [hanteringsItems, shelfLifeRecords]);
+
+  // Visible items in Hantera varor table
+  const visibleHanteringsItems = useMemo(() => {
+    return hanteringsItems.filter((item) => {
+      if (manageGoodsStatusFilter !== "ALL" && item.status !== manageGoodsStatusFilter) return false;
+      if (manageGoodsDeliveryFilter !== "ALL" && item.delivery_date !== manageGoodsDeliveryFilter) return false;
+      return true;
+    });
+  }, [hanteringsItems, manageGoodsStatusFilter, manageGoodsDeliveryFilter]);
+
+  // Active price sum for metadata row
+  const activeSumPrice = useMemo(() => {
+    if (selectedManageGoodsIds.size > 0) {
+      return visibleHanteringsItems
+        .filter((i) => selectedManageGoodsIds.has(i.id))
+        .reduce((sum, i) => sum + i.price, 0);
+    }
+    return visibleHanteringsItems.reduce((sum, i) => sum + i.price, 0);
+  }, [visibleHanteringsItems, selectedManageGoodsIds]);
+
+  // Bulk selection toggles
+  const allVisibleSelected = useMemo(
+    () => visibleHanteringsItems.length > 0 && visibleHanteringsItems.every((i) => selectedManageGoodsIds.has(i.id)),
+    [visibleHanteringsItems, selectedManageGoodsIds],
+  );
+
+  const toggleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      setSelectedManageGoodsIds((prev) => {
+        const next = new Set(prev);
+        for (const item of visibleHanteringsItems) next.delete(item.id);
+        return next;
+      });
+    } else {
+      setSelectedManageGoodsIds((prev) => {
+        const next = new Set(prev);
+        for (const item of visibleHanteringsItems) next.add(item.id);
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectOne = (id: string, checked: boolean) => {
+    setSelectedManageGoodsIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  // Status update handler for Hantera varor
+  const updateItemStatus = async (
+    item: HanteringsItem,
+    newStatus: "Väntande" | "Skickad" | "Löst" | "Nekad",
+  ) => {
+    if (!activeStore?.id) return;
+    try {
+      const dbStatus: ReclamationStatus =
+        newStatus === "Skickad"
+          ? "Granskas av butikssupporten"
+          : newStatus === "Väntande"
+            ? "Ej skickad"
+            : newStatus;
+
+      if (item.reclamationId) {
+        await supabase
+          .from("reclamations")
+          .update({ status: dbStatus, updated_at: new Date().toISOString() })
+          .eq("id", item.reclamationId);
+      } else {
+        const { data } = await supabase
+          .from("reclamations")
+          .insert({
+            store_id: activeStore.id,
+            sap_article_id: item.sap_article_id,
+            status: dbStatus,
+            notes: `Hanterad via Hantera varor: ${new Date().toISOString()}`,
+          })
+          .select()
+          .single();
+        if (data) item.reclamationId = data.id;
+      }
+
+      setReclamations((prev) => {
+        const exists = prev.some((r) => r.sap_article_id === item.sap_article_id);
+        if (exists) {
+          return prev.map((r) =>
+            r.sap_article_id === item.sap_article_id
+              ? { ...r, status: dbStatus, updated_at: new Date().toISOString() }
+              : r,
+          );
+        }
+        return [
+          ...prev,
+          {
+            id: item.reclamationId || `rec-${Date.now()}`,
+            sap_article_id: item.sap_article_id,
+            status: dbStatus,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ];
+      });
+      setReclamationStatuses((prev) => new Map(prev).set(item.sap_article_id, dbStatus));
+      toast.success(`Artikel ${item.sap_article_id} markerad som ${newStatus}.`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Kunde inte uppdatera status.");
+    }
+  };
+
+  // Export to Excel with automatic Skickad marking
+  const exportHanteraVarorToExcel = async (itemsToExport: HanteringsItem[]) => {
+    if (itemsToExport.length === 0) {
+      toast.error("Inga artiklar att exportera.");
+      return;
+    }
+
+    const excelRows = itemsToExport.map((item) => ({
+      "Leveransdatum": item.delivery_date,
+      "SAP-ID": item.sap_article_id,
+      "Produktnamn": item.product_name,
+      "Varumärke": item.brand,
+      "Varugrupp": `${item.category} (${item.category_code})`,
+      "Antal": item.quantity,
+      "Bäst-före": item.best_before_date,
+      "Belopp (SEK)": item.price,
+      "Status": "Skickad",
+      "BNR": item.bnr,
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Reklamationer");
+    XLSX.writeFile(
+      workbook,
+      `reklamationer_${new Date().toISOString().split("T")[0]}.xlsx`,
+    );
+
+    // Auto mark exported rows as Skickade
+    for (const item of itemsToExport) {
+      void updateItemStatus(item, "Skickad");
+    }
+
+    toast.success(
+      `${itemsToExport.length} rader har exporterats till Excel och markerats som Skickade.`,
+    );
+  };
+
+  // Delete reclamation item from list
+  const deleteReclamationItem = async (item: HanteringsItem) => {
+    if (!activeStore?.id) return;
+    try {
+      if (item.reclamationId) {
+        await supabase.from("reclamations").delete().eq("id", item.reclamationId);
+      }
+      setReclamations((prev) => prev.filter((r) => r.sap_article_id !== item.sap_article_id));
+      setReclamationStatuses((prev) => {
+        const next = new Map(prev);
+        next.delete(item.sap_article_id);
+        return next;
+      });
+      toast.success(`Artikeln ${item.sap_article_id} togs bort.`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Kunde inte ta bort artikeln.");
+    }
+  };
+
+  // Filtered list for Reklamationsvyn (View 2)
+  const filteredReclamationList = useMemo(() => {
+    return hanteringsItems.filter((item) => {
+      if (reclamationSearch) {
+        const q = reclamationSearch.toLowerCase();
+        const match =
+          item.sap_article_id.toLowerCase().includes(q) ||
+          item.product_name.toLowerCase().includes(q) ||
+          item.brand.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      if (reclamationDeliveryFilter !== "ALL" && item.delivery_date !== reclamationDeliveryFilter) {
+        return false;
+      }
+      if (reclamationCategoryFilter !== "ALL" && item.category !== reclamationCategoryFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [hanteringsItems, reclamationSearch, reclamationDeliveryFilter, reclamationCategoryFilter]);
+
+  // Categories aggregated for Produktkatalog (View 3)
+  const catalogCategories = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        name: string;
+        code: string;
+        products: Set<string>;
+        deliveriesCount: number;
+        activeReclamations: number;
+      }
+    >();
+
+    for (const s of shelfLifeRecords) {
+      const catName = s.category || "Övrigt";
+      const catCode = extractVarugrupp(catName, s.sap_article_id);
+      const entry = map.get(catName) ?? {
+        name: catName,
+        code: catCode,
+        products: new Set<string>(),
+        deliveriesCount: 0,
+        activeReclamations: 0,
+      };
+      entry.products.add(s.sap_article_id);
+      map.set(catName, entry);
+    }
+
+    for (const d of deliveryStatistics) {
+      const catName = d.category || "Övrigt";
+      const entry = map.get(catName);
+      if (entry) {
+        entry.deliveriesCount += 1;
+        entry.products.add(d.sap_article_id);
+      }
+    }
+
+    for (const item of hanteringsItems) {
+      const entry = map.get(item.category);
+      if (entry && (item.status === "Väntande" || item.status === "Skickad")) {
+        entry.activeReclamations += 1;
+      }
+    }
+
+    return Array.from(map.values())
+      .map((entry) => {
+        const totalDel = Math.max(entry.deliveriesCount, entry.products.size);
+        const riskRate = entry.activeReclamations / (totalDel || 1);
+        let riskLevel = "Låg risk";
+        let riskColor = "text-emerald-600";
+        let riskBg = "bg-emerald-500";
+        if (riskRate > 0.3) {
+          riskLevel = "Hög risk";
+          riskColor = "text-red-600";
+          riskBg = "bg-red-500";
+        } else if (riskRate > 0.1 || entry.activeReclamations > 0) {
+          riskLevel = "Medel risk";
+          riskColor = "text-amber-600";
+          riskBg = "bg-amber-500";
+        }
+
+        return {
+          name: entry.name,
+          code: entry.code,
+          displayTitle: `${entry.name} ( ${entry.code} )`,
+          uniqueProductCount: entry.products.size,
+          totalDeliveries: totalDel,
+          activeReclamations: entry.activeReclamations,
+          riskRate,
+          riskLevel,
+          riskColor,
+          riskBg,
+        };
+      })
+      .filter((cat) => {
+        if (!catalogSearch) return true;
+        const q = catalogSearch.toLowerCase();
+        return (
+          cat.name.toLowerCase().includes(q) ||
+          cat.code.includes(q) ||
+          cat.displayTitle.toLowerCase().includes(q)
+        );
+      });
+  }, [shelfLifeRecords, deliveryStatistics, hanteringsItems, catalogSearch]);
+
+  // Selected category products for View 3 Detail view
+  const categoryProducts = useMemo(() => {
+    if (!selectedCatalogCategory) return [];
+    const prods = shelfLifeRecords.filter((s) => (s.category || "Övrigt") === selectedCatalogCategory);
+    return prods.map((p) => {
+      const deliveries = deliveryStatistics.filter((d) => d.sap_article_id === p.sap_article_id);
+      const reclamationsCount = hanteringsItems.filter((i) => i.sap_article_id === p.sap_article_id).length;
+      const latestDelivery = deliveries[0];
+      const riskPercent = Math.min(100, Math.round((reclamationsCount / Math.max(deliveries.length, 1)) * 100));
+      return {
+        ...p,
+        deliveriesCount: deliveries.length || 1,
+        latestDate: latestDelivery?.arrival_date
+          ? new Date(latestDelivery.arrival_date).toISOString().split("T")[0]
+          : p.arrival_date
+            ? new Date(p.arrival_date).toISOString().split("T")[0]
+            : "—",
+        reclamationsCount,
+        riskPercent,
+        riskLevel: riskPercent > 30 ? "Hög risk" : riskPercent > 10 ? "Medel risk" : "Låg risk",
+      };
+    });
+  }, [selectedCatalogCategory, shelfLifeRecords, deliveryStatistics, hanteringsItems]);
+
   return (
     <div className="container mx-auto p-6 max-w-7xl">
       <PageHeader
@@ -2354,22 +2866,53 @@ function ErstatningsCheckPage() {
       />
 
       {/* Step navigation */}
-      <div className="flex gap-4 mb-6 flex-wrap">
+      <div className="flex gap-2 mb-6 flex-wrap items-center">
         <Button
-          variant={step === "dashboard" ? "default" : "outline"}
-          onClick={() => setStep("dashboard")}
-          className="flex items-center gap-2"
+          variant={step === "manage-goods" || step === "dashboard" ? "default" : "outline"}
+          onClick={() => setStep("manage-goods")}
+          className="flex items-center gap-2 font-medium"
+        >
+          <Box size={16} />
+          1. Hantera varor
+        </Button>
+        <Button
+          variant={step === "reclamations" ? "default" : "outline"}
+          onClick={() => setStep("reclamations")}
+          className="flex items-center gap-2 font-medium"
+        >
+          <AlertTriangle size={16} />
+          2. Reklamation
+        </Button>
+        <Button
+          variant={step === "catalog" ? "default" : "outline"}
+          onClick={() => setStep("catalog")}
+          className="flex items-center gap-2 font-medium"
         >
           <Package size={16} />
-          Översikt
+          3. Produktkatalog
         </Button>
+        <Button
+          variant={step === "statistics" ? "default" : "outline"}
+          onClick={() => {
+            setStep("statistics");
+            void loadDeliveryStatistics(extendedPeriod);
+          }}
+          className="flex items-center gap-2 font-medium"
+        >
+          <BarChart3 size={16} />
+          4. Statistik
+        </Button>
+
+        <div className="h-6 w-px bg-gray-300 mx-1 hidden md:block" />
+
         <Button
           variant={step === "import" ? "default" : "outline"}
           onClick={() => setStep("import")}
-          className="flex items-center gap-2"
+          className="flex items-center gap-1.5 text-xs text-gray-600"
+          size="sm"
         >
-          <Upload size={16} />
-          1. Importera följesedel
+          <Upload size={14} />
+          Importera följesedel
         </Button>
         <Button
           variant={step === "manage" ? "default" : "outline"}
@@ -2377,34 +2920,20 @@ function ErstatningsCheckPage() {
             setStep("manage");
             loadShelfLifeData();
           }}
-          className="flex items-center gap-2"
+          className="flex items-center gap-1.5 text-xs text-gray-600"
+          size="sm"
         >
-          <Settings size={16} />
-          2. Hantera hållbarhetsdata
+          <Settings size={14} />
+          Hållbarhetsdata
         </Button>
         <Button
           variant={step === "generate" ? "default" : "outline"}
           onClick={() => setStep("generate")}
-          className="flex items-center gap-2"
+          className="flex items-center gap-1.5 text-xs text-gray-600"
+          size="sm"
         >
-          <Download size={16} />
-          3. Generera ersättning
-        </Button>
-        <Button
-          variant={step === "reclamations" ? "default" : "outline"}
-          onClick={() => setStep("reclamations")}
-          className="flex items-center gap-2"
-        >
-          <AlertTriangle size={16} />
-          4. Hantera varor
-        </Button>
-        <Button
-          variant={step === "statistics" ? "default" : "outline"}
-          onClick={() => void loadDeliveryStatistics()}
-          className="flex items-center gap-2"
-        >
-          <BarChart3 size={16} />
-          5. Statistik
+          <Download size={14} />
+          Generera ersättning
         </Button>
         {user.role === "admin" && (
           <>
