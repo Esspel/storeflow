@@ -376,18 +376,16 @@ export const Route = createFileRoute("/ersattningcheck")({
 function ErstatningsCheckPage() {
   const { user, activeStore, loading: authLoading } = useAuth();
   const [step, setStep] = useState<
-    | "manage-goods"
     | "dashboard"
-    | "import"
-    | "manage"
-    | "generate"
-    | "weekly"
     | "reclamations"
-    | "catalog"
+    | "products"
     | "statistics"
+    | "import"
+    | "shelf-life"
+    | "generate"
     | "category-mapping"
     | "admin-test"
-  >("manage-goods");
+  >("dashboard");
 
   // Vyn Hantera varor state
   const [manageGoodsStatusFilter, setManageGoodsStatusFilter] = useState<
@@ -403,7 +401,7 @@ function ErstatningsCheckPage() {
   const [historyProduct, setHistoryProduct] = useState<HanteringsItem | null>(null);
 
   // Vyn Produktkatalog state
-  const [catalogTab, setCatalogTab] = useState<"catalog" | "my-submissions">("catalog");
+  const [catalogTab, setCatalogTab] = useState<"products" | "my-submissions">("products");
   const [catalogSearch, setCatalogSearch] = useState("");
   const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<string | null>(null);
   const [infoProduct, setInfoProduct] = useState<any | null>(null);
@@ -745,7 +743,7 @@ function ErstatningsCheckPage() {
       }
 
       await loadShelfLifeData();
-      setStep("manage");
+      setStep("shelf-life");
       void refreshImportDates();
 
       setImportSuccess(
@@ -2928,8 +2926,8 @@ function ErstatningsCheckPage() {
           1. Reklamationsstatus
         </Button>
         <Button
-          variant={step === "catalog" ? "default" : "outline"}
-          onClick={() => setStep("catalog")}
+          variant={step === "products" ? "default" : "outline"}
+          onClick={() => setStep("products")}
           className="flex items-center gap-2 font-medium"
         >
           <Package size={16} />
@@ -2959,9 +2957,9 @@ function ErstatningsCheckPage() {
           Importera följesedel
         </Button>
         <Button
-          variant={step === "manage" ? "default" : "outline"}
+          variant={step === "shelf-life" ? "default" : "outline"}
           onClick={() => {
-            setStep("manage");
+            setStep("shelf-life");
             loadShelfLifeData();
           }}
           className="flex items-center gap-1.5 text-xs text-gray-600"
@@ -3485,7 +3483,7 @@ function ErstatningsCheckPage() {
       )}
 
       {/* Step 2: Manage shelf life */}
-      {step === "manage" && (
+      {step === "shelf-life" && (
         <Card>
           <CardHeader>
             <CardTitle>Hantera hållbarhetsdata</CardTitle>
