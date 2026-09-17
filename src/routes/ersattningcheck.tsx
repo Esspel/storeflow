@@ -2018,6 +2018,8 @@ function ErstatningsCheckPage() {
 
     const filtered = withStatus
       .filter(({ record, status }) => {
+        // Visa endast artiklar med ett registrerat bäst-före-datum (annars visas fel i tabellen)
+        if (!record.expiry_date) return false;
         if (!search) return true;
         return [
           record.sap_article_id,
@@ -2861,20 +2863,12 @@ function ErstatningsCheckPage() {
       {/* Step navigation */}
       <div className="flex gap-2 mb-6 flex-wrap items-center">
         <Button
-          variant={step === "manage-goods" || step === "dashboard" ? "default" : "outline"}
-          onClick={() => setStep("manage-goods")}
-          className="flex items-center gap-2 font-medium"
-        >
-          <Box size={16} />
-          1. Hantera varor
-        </Button>
-        <Button
           variant={step === "reclamations" ? "default" : "outline"}
           onClick={() => setStep("reclamations")}
           className="flex items-center gap-2 font-medium"
         >
           <AlertTriangle size={16} />
-          2. Reklamation
+          1. Reklamationsstatus
         </Button>
         <Button
           variant={step === "catalog" ? "default" : "outline"}
@@ -3737,6 +3731,21 @@ function ErstatningsCheckPage() {
                               {record.arrival_date
                                 ? new Date(record.arrival_date).toLocaleDateString("sv-SE")
                                 : "Ej registrerat"}
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">
+                              {record.shelf_lifetime_days > 0 && record.arrival_date && record.expiry_date ? (
+                                (() => {
+                                  const assessment = calculateShelfLifeStatus(record.arrival_date, record.expiry_date, record.shelf_lifetime_days);
+                                  return (
+                                    <span className={assessment.status === 'Reklamation' ? 'text-red-700 font-semibold' : 'text-emerald-700'}>
+                                      {assessment.remainingDays} av {record.shelf_lifetime_days} dagar
+                                      {assessment.status === 'Reklamation' && ' (minst ' + assessment.requiredDays + ' dagar)'}
+                                    </span>
+                                  );
+                                })()
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
                             </TableCell>
                             <TableCell>
                               {!hasValidDates ? (
