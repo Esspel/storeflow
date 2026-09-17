@@ -1,6 +1,6 @@
 export function calculateShelfLifeStatus(
-  deliveryDate: string,
-  bestBeforeDate: string,
+  deliveryDate: string | null | undefined,
+  bestBeforeDate: string | null | undefined,
   totalShelfLifeDays: number,
 ): {
   remainingDays: number;
