@@ -9,34 +9,38 @@ export function calculateShelfLifeStatus(
   percentageLeft: number;
 } {
   // Parse dates to UTC timestamps
-  const parseDate = (dateStr: string): number => {
+  const parseDate = (dateStr: string | null | undefined): number | null => {
+    if (dateStr == null || dateStr === "—" || dateStr.trim() === "") return null;
     // Handle SAP "Date(ms)" format
     if (dateStr.startsWith('Date(')) {
       const match = dateStr.match(/Date\((\d+)\)/);
-      if (match) {
-        const timestamp = parseInt(match[1], 10);
-        // Validate timestamp range (not negative or unreasonably large)
-        if (timestamp < 0 || timestamp > 86400000 * 365 * 100) {
-          throw new Error('Invalid SAP timestamp');
-        }
-        const d = new Date(timestamp);
-        if (isNaN(d.getTime())) {
-          throw new Error('Invalid date from SAP timestamp');
-        }
-        return d.getTime();
-      }
+      if (!match) return null;
+      const timestamp = parseInt(match[1], 10);
+      // Validate timestamp range (not negative or unreasonably large)
+      if (timestamp < 0 || timestamp > 86400000 * 365 * 100) return null;
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) return null;
+      return d.getTime();
     }
 
     // Handle ISO format
     const date = new Date(dateStr);
-    if (isNaN(date.getTime())) {
-      throw new Error('Invalid date format');
-    }
+    if (isNaN(date.getTime())) return null;
     return date.getTime();
   };
 
   const deliveryMs = parseDate(deliveryDate);
   const bestBeforeMs = parseDate(bestBeforeDate);
+
+  // If either date is missing/invalid, treat as Reklamation with zeros
+  if (deliveryMs === null || bestBeforeMs === null) {
+    return {
+      remainingDays: 0,
+      requiredDays: totalShelfLifeDays <= 0 ? 0 : totalShelfLifeDays > 548 ? 274 : Math.floor(totalShelfLifeDays * 0.5),
+      status: 'Reklamation',
+      percentageLeft: 0,
+    };
+  }
 
   // Calculate remaining days (UTC-safe)
   const msPerDay = 1000 * 60 * 60 * 24;

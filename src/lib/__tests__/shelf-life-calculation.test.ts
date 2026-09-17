@@ -112,5 +112,64 @@ describe("calculateShelfLifeStatus (requirement: Math.floor(totalDays*0.5), >=th
       expect(r.remainingDays).toBeLessThan(0);
       expect(r.status).toBe("Reklamation");
     });
+
+    // Regression: ogiltiga/manaingivande indata ska inte kasta ErrorBoundary
+    describe("edge cases - robust hantering", () => {
+      it("null delivery date -> Reklamation med nollor", () => {
+        const r = calculateShelfLifeStatus(null, "2026-07-02T00:00:00.000Z", 365);
+        expect(r.status).toBe("Reklamation");
+        expect(r.remainingDays).toBe(0);
+        expect(r.percentageLeft).toBe(0);
+      });
+
+      it("null bestBefore date -> Reklamation med nollor", () => {
+        const r = calculateShelfLifeStatus("2026-01-01T00:00:00.000Z", null, 365);
+        expect(r.status).toBe("Reklamation");
+        expect(r.remainingDays).toBe(0);
+        expect(r.percentageLeft).toBe(0);
+      });
+
+      it("both null -> Reklamation med nollor", () => {
+        const r = calculateShelfLifeStatus(null, null, 365);
+        expect(r.status).toBe("Reklamation");
+        expect(r.remainingDays).toBe(0);
+        expect(r.percentageLeft).toBe(0);
+      });
+
+      it("tom leveransd date -> Reklamation med nollor", () => {
+        const r = calculateShelfLifeStatus("", "2026-07-02T00:00:00.000Z", 365);
+        expect(r.status).toBe("Reklamation");
+        expect(r.remainingDays).toBe(0);
+        expect(r.percentageLeft).toBe(0);
+      });
+
+      it("tom bäst-före date -> Reklamation med nollor", () => {
+        const r = calculateShelfLifeStatus("2026-01-01T00:00:00.000Z", "", 365);
+        expect(r.status).toBe("Reklamation");
+        expect(r.remainingDays).toBe(0);
+        expect(r.percentageLeft).toBe(0);
+      });
+
+      it("em-dash-sträng -> Reklamation med nollor", () => {
+        const r = calculateShelfLifeStatus("—", "2026-07-02T00:00:00.000Z", 365);
+        expect(r.status).toBe("Reklamation");
+        expect(r.remainingDays).toBe(0);
+        expect(r.percentageLeft).toBe(0);
+      });
+
+      it("em-dash bäst-före -> Reklamation med nollor", () => {
+        const r = calculateShelfLifeStatus("2026-01-01T00:00:00.000Z", "—", 365);
+        expect(r.status).toBe("Reklamation");
+        expect(r.remainingDays).toBe(0);
+        expect(r.percentageLeft).toBe(0);
+      });
+
+      it("ogiltig ISO-sträng -> Reklamation med nollor", () => {
+        const r = calculateShelfLifeStatus("not-a-date", "2026-07-02T00:00:00.000Z", 365);
+        expect(r.status).toBe("Reklamation");
+        expect(r.remainingDays).toBe(0);
+        expect(r.percentageLeft).toBe(0);
+      });
+    });
   });
 });
