@@ -412,7 +412,7 @@ function ErstatningsCheckPage() {
   const [statsMode, setStatsMode] = useState<"spotlight" | "cockpit">("spotlight");
   const [statsChartType, setStatsChartType] = useState<"line" | "bar">("line");
   const [extendedPeriod, setExtendedPeriod] = useState<
-    "thisMonth" | "lastMonth" | "thisQuarter" | "ytd" | "all" | "custom"
+    "thisMonth" | "lastMonth" | "thisQuarter" | "ytd" | "all" | "last30" | "last12" | "custom"
   >("thisMonth");
   const [reclamations, setReclamations] = useState<Reclamation[]>([]);
   const [statusFilter, setStatusFilter] = useState<ReclamationStatus>("Ej skickad");
@@ -1318,7 +1318,9 @@ function ErstatningsCheckPage() {
     await removeAdminTestFixture();
   };
 
-  const loadDeliveryStatistics = async (period = statisticsPeriod) => {
+  const loadDeliveryStatistics = async (
+    period: "thisMonth" | "lastMonth" | "thisQuarter" | "ytd" | "all" | "last30" | "last12" | "custom" = statisticsPeriod,
+  ) => {
     setIsLoading(true);
     try {
       const [
@@ -2454,7 +2456,7 @@ function ErstatningsCheckPage() {
       let normStatus: "Väntande" | "Skickad" | "Löst" | "Nekad" = "Väntande";
       if (rec.status === "Löst") normStatus = "Löst";
       else if (rec.status === "Nekad") normStatus = "Nekad";
-      else if (rec.status === "Granskas av butikssupporten" || rec.status === "Skickad") normStatus = "Skickad";
+      else if (rec.status === "Granskas av butikssupporten") normStatus = "Skickad";
       else normStatus = "Väntande";
 
       const arrivalDate = shelf?.arrival_date || del?.arrival_date || rec.created_at;
@@ -2876,7 +2878,7 @@ function ErstatningsCheckPage() {
           className="flex items-center gap-2 font-medium"
         >
           <Package size={16} />
-          3. Produktkatalog
+          2. Produktkatalog
         </Button>
         <Button
           variant={step === "statistics" ? "default" : "outline"}
