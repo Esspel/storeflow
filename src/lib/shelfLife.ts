@@ -43,9 +43,14 @@ export function calculateShelfLifeStatus(
   const remainingDays = Math.floor((bestBeforeMs - deliveryMs) / msPerDay);
 
   // Calculate required days according to 50% rule
-  const requiredDays = totalShelfLifeDays <= 0 ? 0 : Math.floor(totalShelfLifeDays * 0.5);
+  // Artiklar med >18 månader (>548 dagar) kräver 9 månader (274 dagar) kvar
+  const requiredDays =
+    totalShelfLifeDays <= 0 ? 0 :
+    totalShelfLifeDays > 548 ? 274 :
+    Math.floor(totalShelfLifeDays * 0.5);
 
   // Determine status
+  // OK when remaining >= required, Reklamation when remaining < required
   const status: 'OK' | 'Reklamation' = remainingDays >= requiredDays ? 'OK' : 'Reklamation';
 
   // Calculate percentage left

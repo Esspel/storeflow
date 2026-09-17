@@ -42,6 +42,8 @@ import {
   Calendar,
   Filter,
 } from "lucide-react";
+// Re-export from shelfLife.ts for compatibility with existing imports
+import { calculateShelfLifeStatus } from "@/lib/shelfLife";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -256,27 +258,8 @@ function formatSek(value: number | null) {
     : new Intl.NumberFormat("sv-SE", { style: "currency", currency: "SEK" }).format(value);
 }
 
-function getMinimumShelfLifeDays(shelfLifetimeDays: number) {
-  if (!Number.isFinite(shelfLifetimeDays) || shelfLifetimeDays <= 0) return null;
-  return shelfLifetimeDays <= 548 ? Math.ceil(shelfLifetimeDays * 0.5) : 274;
-}
-
-function assessDelivery(
-  arrivalDate: string | null | undefined,
-  expiryDate: string | null | undefined,
-  shelfLifetimeDays: number,
-) {
-  const arrival = arrivalDate ? new Date(arrivalDate).getTime() : Number.NaN;
-  const expiry = expiryDate ? new Date(expiryDate).getTime() : Number.NaN;
-  const minimumDays = getMinimumShelfLifeDays(shelfLifetimeDays);
-  if (Number.isNaN(arrival) || Number.isNaN(expiry) || minimumDays === null) return null;
-  const daysRemaining = Math.floor((expiry - arrival) / (1000 * 60 * 60 * 24));
-  return {
-    daysRemaining,
-    minimumDays,
-    isEligible: daysRemaining < minimumDays,
-  };
-}
+// Re-export from shelfLife.ts for compatibility
+export { calculateShelfLifeStatus } from "@/lib/shelfLife";
 
 const SAP_BASE_URL = "https://s4r.sap.coop.se";
 
@@ -595,23 +578,21 @@ function ErstatningsCheckPage() {
     totalProductCount > 0 ? ((reclaimedProductCount / totalProductCount) * 100).toFixed(2) : "0.00";
   // Filter: Only eligible records where arrival is within last 4 days (regulatory requirement)
   // Users must apply for compensation within 4 days of delivery, otherwise no compensation
-  const fourDaysMs = 4 * 24 * 60 * 60 * 1000;
   const eligibleShelfLifeRecords = shelfLifeRecords.filter((record) => {
     const status = reclamationStatuses.get(record.sap_article_id);
     if (status && status !== "Ej skickat") {
       return false;
     }
-    return (
-      assessDelivery(record.arrival_date, record.expiry_date, record.shelf_lifetime_days)
-        ?.isEligible &&
-      (() => {
-        const arrival = record.arrival_date ? new Date(record.arrival_date).getTime() : null;
-        if (arrival === null || Number.isNaN(arrival)) return false;
-        const now = Date.now();
-        const daysSinceArrival = Math.floor((now - arrival) / (1000 * 60 * 60 * 24));
-        return daysSinceArrival >= 0 && daysSinceArrival <= 4;
-      })()
-    );
+    const assessment = calculateShelfLifeStatus(record.arrival_date, record.expiry_date, record.shelf_lifetime_days);
+    if (!assessment || assessment.status !== "Reklamation") {
+      return false;
+    }
+    // Check 4-day claim window
+    if (!record.arrival_date) return false;
+    const arrivalMs = new Date(record.arrival_date).getTime();
+    if (Number.isNaN(arrivalMs)) return false;
+    const daysSinceArrival = Math.floor((Date.now() - arrivalMs) / (1000 * 60 * 60 * 24));
+    return daysSinceArrival >= 0 && daysSinceArrival <= 4;
   });
   const hasImportedDeliveries = deliveryStatistics.length > 0;
 
@@ -1529,12 +1510,12 @@ function ErstatningsCheckPage() {
       >();
       for (const delivery of deliveriesData ?? []) {
         const master = masterMap.get(delivery.sap_article_id);
-        const assessment = assessDelivery(
+        const assessment = calculateShelfLifeStatus(
           delivery.arrival_date,
           delivery.best_before_date,
           master?.shelf_lifetime_days ?? 0,
         );
-        if (!assessment?.isEligible) continue;
+        if (assessment?.status !== "Reklamation") continue;
         const current = recurringBadDatesMap.get(delivery.sap_article_id) ?? {
           sap_article_id: delivery.sap_article_id,
           name: delivery.product_name || "Okänd produkt",
@@ -1550,12 +1531,12 @@ function ErstatningsCheckPage() {
         let badCount = 0;
         for (const delivery of deliveries) {
           const master = masterMap.get(delivery.sap_article_id);
-          const assessment = assessDelivery(
+          const assessment = calculateShelfLifeStatus(
             delivery.arrival_date,
             delivery.best_before_date,
             master?.shelf_lifetime_days ?? 0,
           );
-          if (assessment?.isEligible) badCount += 1;
+          if (assessment?.status === "Reklamation") badCount += 1;
         }
         if (badCount > 0) {
           const current = recurringBadDatesMap.get(sapArticleId) ?? {
@@ -1922,13 +1903,13 @@ function ErstatningsCheckPage() {
       const flagged = Array.from(latestByArticle.values())
         .map((delivery) => ({
           delivery,
-          assessment: assessDelivery(
+          assessment: calculateShelfLifeStatus(
             delivery.arrival_date,
             delivery.best_before_date,
             masterMap.get(delivery.sap_article_id)?.shelf_lifetime_days ?? 0,
           ),
         }))
-        .filter((item) => item.assessment?.isEligible)
+        .filter((item) => item.assessment?.status === "Reklamation")
         .map((item) => item.delivery);
       if (flagged.length === 0) {
         const totalArticles = latestByArticle.size;
@@ -1947,7 +1928,11 @@ function ErstatningsCheckPage() {
         const leverans = r.delivery_number ? String(r.delivery_number) : "okand";
         const zon = (master as any)?.temperature_zone || getMappedFlow(r.category).toLowerCase();
         const shelfDays = (master as any)?.shelf_lifetime_days || 0;
-        const assessment = assessDelivery(r.arrival_date, r.best_before_date, shelfDays);
+        const assessment = calculateShelfLifeStatus(
+  r.arrival_date,
+  r.best_before_date,
+  shelfDays,
+);
         const product = productMap.get(r.sap_article_id) || {};
         const key = `${leverans}__${zon}`;
         if (!groups[key]) groups[key] = [];
@@ -1958,7 +1943,7 @@ function ErstatningsCheckPage() {
           product_name: product.name || r.product_name || "Okänd produkt",
           brand: product.brand || r.brand || "",
           bnr: r.bnr || product.bnr || "",
-          reason: `Kvarvarande ${assessment?.daysRemaining ?? 0} dagar < minsta ${assessment?.minimumDays ?? 0} dagar enligt Coop:s regelverk`,
+          reason: `Kvarvarande ${assessment?.remainingDays ?? 0} dagar < minsta ${assessment?.requiredDays ?? 0} dagar enligt Coop:s regelverk`,
         });
       }
 
@@ -2011,8 +1996,12 @@ function ErstatningsCheckPage() {
     ) {
       return "Hållbarhet saknas";
     }
-    return assessDelivery(record.arrival_date, record.expiry_date, record.shelf_lifetime_days)
-      ?.isEligible
+    const assessment = calculateShelfLifeStatus(
+      record.arrival_date,
+      record.expiry_date,
+      record.shelf_lifetime_days,
+    );
+    return assessment?.status === "Reklamation"
       ? "Kräver ersättning"
       : "OK";
   };
@@ -2498,8 +2487,12 @@ function ErstatningsCheckPage() {
     // 2. Add flagged items from shelf life records that are eligible for compensation
     for (const shelf of shelfLifeRecords) {
       if (processedSapIds.has(shelf.sap_article_id)) continue;
-      const assessment = assessDelivery(shelf.arrival_date, shelf.expiry_date, shelf.shelf_lifetime_days);
-      if (assessment?.isEligible) {
+      const assessment = calculateShelfLifeStatus(
+  shelf.arrival_date,
+  shelf.expiry_date,
+  shelf.shelf_lifetime_days,
+);
+      if (assessment?.status === "Reklamation") {
         const del = deliveryMap.get(shelf.sap_article_id);
         const rawPrice = del?.total_price || (shelf.compensation_price_ore ? shelf.compensation_price_ore / 100 : 85);
         const price = typeof rawPrice === "number" ? rawPrice : parseSek(rawPrice) ?? 85;
@@ -3663,27 +3656,28 @@ function ErstatningsCheckPage() {
                             </TableRow>
                           );
                         }
-                        const arrival = new Date(record.arrival_date);
-                        const expiry = new Date(record.expiry_date);
-                        const hasValidDates =
-                          Boolean(record.arrival_date) &&
-                          Boolean(record.expiry_date) &&
-                          !Number.isNaN(arrival.getTime()) &&
-                          !Number.isNaN(expiry.getTime());
-                        const daysRemaining = hasValidDates
-                          ? Math.floor(
-                              (expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24),
-                            )
+                        const arrivalDate = record.arrival_date
+                          ? new Date(record.arrival_date)
                           : null;
+                        const expiryDate = record.expiry_date
+                          ? new Date(record.expiry_date)
+                          : null;
+                        const hasValidDates =
+                          arrivalDate !== null &&
+                          expiryDate !== null &&
+                          !Number.isNaN(arrivalDate.getTime()) &&
+                          !Number.isNaN(expiryDate.getTime());
                         const hasShelfLife =
                           Number.isFinite(record.shelf_lifetime_days) &&
                           record.shelf_lifetime_days > 0;
-                        const assessment = assessDelivery(
-                          record.arrival_date,
-                          record.expiry_date,
-                          record.shelf_lifetime_days,
-                        );
-                        const isFlagged = assessment?.isEligible ?? false;
+                        const assessment = hasValidDates
+                          ? calculateShelfLifeStatus(
+                              record.arrival_date!,
+                              record.expiry_date!,
+                              record.shelf_lifetime_days,
+                            )
+                          : null;
+                        const isFlagged = assessment?.status === "Reklamation";
 
                         return (
                           <TableRow key={record.id}>
@@ -3806,7 +3800,7 @@ function ErstatningsCheckPage() {
               {eligibleShelfLifeRecords.length > 0 ? (
                 <div className="max-h-64 overflow-y-auto text-sm">
                   {eligibleShelfLifeRecords.map((record) => {
-                    const assessment = assessDelivery(
+                    const assessment = calculateShelfLifeStatus(
                       record.arrival_date,
                       record.expiry_date,
                       record.shelf_lifetime_days,
@@ -3844,8 +3838,8 @@ function ErstatningsCheckPage() {
                               Bäst före: {new Date(record.expiry_date).toLocaleDateString("sv-SE")}
                             </div>
                             <div className="text-xs">
-                              Anledning: Kvarvarande {assessment?.daysRemaining} dagar är under
-                              miniminivån {assessment?.minimumDays} dagar
+                              Anledning: Kvarvarande {assessment?.remainingDays} dagar är under
+                              miniminivån {assessment?.requiredDays} dagar
                             </div>
                           </div>
                           <Button
@@ -4352,7 +4346,6 @@ function ErstatningsCheckPage() {
             <CardDescription>Uppdatera status per reklamation.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Filter buttons at the top */}
             <div className="flex gap-2 overflow-x-auto pb-2">
               {(
                 [
@@ -4372,437 +4365,85 @@ function ErstatningsCheckPage() {
                 </Button>
               ))}
             </div>
-
-            {/* Status cards for Hantera varor with 4-column grid */}
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-4">Statusöversikt - Hantera varor</h3>
-              <div className="grid grid-cols-4 gap-4">
-                {/* Väntande status card */}
-                <Card className="relative overflow-hidden transition-all hover:scale-105">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-sm text-gray-700">Väntande</h4>
-                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                        <AlertTriangle size={16} className="text-blue-600" />
-                      </div>
-                    </div>
-                    <p className="text-3xl font-bold text-gray-900">{waitingCount}</p>
-                    <p className="text-xs text-gray-600 mt-1">Artiklar som väntar på behandling</p>
-                    <div className="absolute top-0 right-0 w-1 h-8 bg-blue-500"></div>
-                  </CardContent>
-                </Card>
-
-                {/* Skickad status card */}
-                <Card className="relative overflow-hidden transition-all hover:scale-105">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-sm text-gray-700">Skickad</h4>
-                      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
-                        <Send size={16} className="text-amber-600" />
-                      </div>
-                    </div>
-                    <p className="text-3xl font-bold text-gray-900">{sentCount}</p>
-                    <p className="text-xs text-gray-600 mt-1">Artiklar som skickats till Butikssupport</p>
-                    <div className="absolute top-0 right-0 w-1 h-8 bg-amber-500"></div>
-                  </CardContent>
-                </Card>
-
-                {/* Löst status card */}
-                <Card className="relative overflow-hidden transition-all hover:scale-105">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-sm text-gray-700">Löst</h4>
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                        <CheckCircle2 size={16} className="text-emerald-600" />
-                      </div>
-                    </div>
-                    <p className="text-3xl font-bold text-gray-900">{resolvedCount}</p>
-                    <p className="text-xs text-gray-600 mt-1">Artiklar som lösts och ersattades</p>
-                    <div className="absolute top-0 right-0 w-1 h-8 bg-emerald-500"></div>
-                  </CardContent>
-                </Card>
-
-                {/* Nekad status card */}
-                <Card className="relative overflow-hidden transition-all hover:scale-105">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-sm text-gray-700">Nekad</h4>
-                      <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-                        <XCircle size={16} className="text-red-600" />
-                      </div>
-                    </div>
-                    <p className="text-3xl font-bold text-gray-900">{rejectedCount}</p>
-                    <p className="text-xs text-gray-600 mt-1">Artiklar som avslagits</p>
-                    <div className="absolute top-0 right-0 w-1 h-8 bg-red-500"></div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-
-            {/* Search and filter for Hantera varor */}
-            {/* Status cards with 4-column grid and filter tabs */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Statusöversikt - Hantera varor</h3>
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                  {[
-                    { key: "Väntande", value: "Väntande", count: waitingCount, color: "blue" },
-                    { key: "Skickad", value: "Skickad", count: sentCount, color: "amber" },
-                    { key: "Löst", value: "Löst", count: resolvedCount, color: "emerald" },
-                    { key: "Nekad", value: "Nekad", count: rejectedCount, color: "red" }
-                  ].map((status) => (
-                    <Button
-                      key={status.key}
-                      size="sm"
-                      variant={manageGoodsStatusFilter === status.value ? "default" : "outline"}
-                      onClick={() => setManageGoodsStatusFilter(status.value as "ALL" | "Väntande" | "Skickad" | "Löst" | "Nekad")}
-                      className={`relative ${manageGoodsStatusFilter === status.value ? `ring-2 ring-${status.color}-500` : ''}`}
-                    >
-                      {status.value}
-                      {status.count > 0 && (
-                        <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 text-xs">
-                          {status.count}
-                        </Badge>
-                      )}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-4 gap-4">
-                {/* Väntande status card */}
-                <Card
-                  className={`relative overflow-hidden transition-all hover:scale-105 cursor-pointer ${manageGoodsStatusFilter === "Väntande" ? 'ring-2 ring-blue-500' : ''}`}
-                  onClick={() => setManageGoodsStatusFilter("Väntande")}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-sm text-gray-700">Väntande</h4>
-                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                        <AlertTriangle size={16} className="text-blue-600" />
-                      </div>
-                    </div>
-                    <p className="text-3xl font-bold text-gray-900">{waitingCount}</p>
-                    <p className="text-xs text-gray-600 mt-1">Artiklar som väntar på behandling</p>
-                    <div className="absolute top-0 right-0 w-1 h-8 bg-blue-500"></div>
-                  </CardContent>
-                </Card>
-
-                {/* Skickad status card */}
-                <Card
-                  className={`relative overflow-hidden transition-all hover:scale-105 cursor-pointer ${manageGoodsStatusFilter === "Skickad" ? 'ring-2 ring-amber-500' : ''}`}
-                  onClick={() => setManageGoodsStatusFilter("Skickad")}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-sm text-gray-700">Skickad</h4>
-                      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
-                        <Send size={16} className="text-amber-600" />
-                      </div>
-                    </div>
-                    <p className="text-3xl font-bold text-gray-900">{sentCount}</p>
-                    <p className="text-xs text-gray-600 mt-1">Artiklar som skickats till Butikssupport</p>
-                    <div className="absolute top-0 right-0 w-1 h-8 bg-amber-500"></div>
-                  </CardContent>
-                </Card>
-
-                {/* Löst status card */}
-                <Card
-                  className={`relative overflow-hidden transition-all hover:scale-105 cursor-pointer ${manageGoodsStatusFilter === "Löst" ? 'ring-2 ring-emerald-500' : ''}`}
-                  onClick={() => setManageGoodsStatusFilter("Löst")}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-sm text-gray-700">Löst</h4>
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                        <CheckCircle2 size={16} className="text-emerald-600" />
-                      </div>
-                    </div>
-                    <p className="text-3xl font-bold text-gray-900">{resolvedCount}</p>
-                    <p className="text-xs text-gray-600 mt-1">Artiklar som lösts och ersattades</p>
-                    <div className="absolute top-0 right-0 w-1 h-8 bg-emerald-500"></div>
-                  </CardContent>
-                </Card>
-
-                {/* Nekad status card */}
-                <Card
-                  className={`relative overflow-hidden transition-all hover:scale-105 cursor-pointer ${manageGoodsStatusFilter === "Nekad" ? 'ring-2 ring-red-500' : ''}`}
-                  onClick={() => setManageGoodsStatusFilter("Nekad")}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-sm text-gray-700">Nekad</h4>
-                      <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-                        <XCircle size={16} className="text-red-600" />
-                      </div>
-                    </div>
-                    <p className="text-3xl font-bold text-gray-900">{rejectedCount}</p>
-                    <p className="text-xs text-gray-600 mt-1">Artiklar som avslagits</p>
-                    <div className="absolute top-0 right-0 w-1 h-8 bg-red-500"></div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-
-            {/* Search and filter for Hantera varor */}
-            <div className="flex flex-col sm:flex-row gap-3 mb-4">
-              <div className="relative flex-1">
-                <Input
-                  placeholder="Sök efter SAP-ID, produktnamn eller varumärke..."
-                  value={reclamationSearch}
-                  onChange={(e) => setReclamationSearch(e.target.value)}
-                  className="pl-10"
-                />
-                <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              </div>
-              <Select
-                value={reclamationCategoryFilter}
-                onValueChange={setReclamationCategoryFilter}
-              >
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="Kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Alla kategorier</SelectItem>
-                  {uniqueCategoryNames.map((cat) => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={reclamationDeliveryFilter}
-                onValueChange={setReclamationDeliveryFilter}
-              >
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="Leveransdatum" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Alla datum</SelectItem>
-                  {uniqueHanteringsDeliveryDates.map((date) => (
-                    <SelectItem key={date} value={date}>{date}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  const exportData = filteredReclamationList
-                    .filter((r) => (statusFilter ? r.status === statusFilter : true))
-                    .map((item) => [
-                      item.sap_article_id || '',
-                      item.product_name || '',
-                      item.brand || '',
-                      item.category || '',
-                      item.delivery_date || '',
-                      item.status || '',
-                      item.status === "Löst" ? "Markerad som löst" :
-                      item.status === "Nekad" ? "Markerad som nekad" :
-                      item.status === "Skickat" ? "Skickat till butikssupport" :
-                      "Väntar på behandling"
-                    ]);
-                  const headers = ['SAP-ID', 'Produktnamn', 'Varumärke', 'Kategori', 'Leveransdatum', 'Status', 'Åtgärd'];
-                  const csvContent = exportData
-                    .map(row => headers.map((header, idx) => row[idx] ? row[idx] : '').join(';'))
-                    .join('\n');
-                  exportTextAsCSV(csvContent, `reclamations_export_${new Date().toISOString().split('T')[0]}.csv`);
-                  toast.success(`Exporterade ${exportData.length} rader till reclamations_export_${new Date().toISOString().split('T')[0]}.csv");
-                }}
-                disabled={filteredReclamationList.length === 0}
-                title="Exportera filtrerade reclamationsdata som CSV med kolumnrubriker"
-              >
-                <Download size={16} className="mr-2" />
-                Exportera ({filteredReclamationList.length} rader)
-              </Button>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              {selectedManageGoodsIds.size > 0 && (
-                <Badge variant="secondary" className="px-3 py-1">
-                  {selectedManageGoodsIds.size} artiklar markerade
-                </Badge>
-              )}
-              {selectedManageGoodsIds.size > 0 && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => setSelectedManageGoodsIds(new Set())}
-                >
-                  Rensa markering
-                </Button>
-              )}
-            </div>
-
-            {/* Table for Hantera varor with per-row action buttons */}
             <div className="border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>SAP-ID</TableHead>
-                    <TableHead>Produktnamn</TableHead>
-                    <TableHead>Varumärke</TableHead>
-                    <TableHead>Kategori</TableHead>
-                    <TableHead>Leveransdatum</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-center">Åtgärder</TableHead>
+                    <TableHead>Uppdaterad</TableHead>
+                    <TableHead>Åtgärder</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredReclamationList
+                  {reclamations
                     .filter((r) => (statusFilter ? r.status === statusFilter : true))
-                    .map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-mono text-sm">{item.sap_article_id}</TableCell>
-                        <TableCell>{item.product_name}</TableCell>
-                        <TableCell>{item.brand}</TableCell>
-                        <TableCell>{item.category}</TableCell>
-                        <TableCell>{item.delivery_date}</TableCell>
+                    .map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell className="font-mono text-sm">{r.sap_article_id}</TableCell>
                         <TableCell>
                           <Badge
                             variant={
-                              item.status === "Löst"
+                              r.status === "Löst"
                                 ? "default"
-                                : item.status === "Nekad"
+                                : r.status === "Nekad"
                                   ? "destructive"
-                                  : item.status === "Skickad"
-                                    ? "secondary"
-                                    : "outline"
+                                  : "secondary"
                             }
                           >
-                            {item.status}
+                            {r.status}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-xs text-coop-gray-900">
+                          {new Date(r.updated_at).toLocaleDateString("sv-SE")}
+                        </TableCell>
                         <TableCell>
-                          <div className="flex justify-center gap-1">
-                            {item.status !== "Skickad" && item.status !== "Löst" && item.status !== "Nekad" && (
-                              <Button
-                                size="sm"
-                                variant="default"
-                                className="h-7 px-2 text-[11px]"
-                                onClick={async () => {
-                                  const newStatus = "Skickad";
-                                  if (item.reclamationId) {
-                                    await supabase
-                                      .from("reclamations")
-                                      .update({ status: "Granskas av butikssupporten", updated_at: new Date().toISOString() })
-                                      .eq("id", item.reclamationId);
-                                    setReclamations((prev) =>
-                                      prev.map((x) =>
-                                        x.id === item.reclamationId
-                                          ? { ...x, status: "Granskas av butikssupporten", updated_at: new Date().toISOString() }
-                                          : x,
-                                      ),
-                                    );
-                                  }
-                                  setReclamationStatuses((prev) => new Map(prev).set(item.sap_article_id, "Granskas av butikssupporten"));
-                                  toast.success(`Artikel ${item.sap_article_id} markerad som Skickad.`);
-                                }}
-                              >
-                                Skickat
-                              </Button>
-                            )}
-                            {item.status === "Skickad" && (
-                              <Button
-                                size="sm"
-                                variant="default"
-                                className="h-7 px-2 text-[11px]"
-                                onClick={async () => {
-                                  if (item.reclamationId) {
-                                    await supabase
-                                      .from("reclamations")
-                                      .update({ status: "Löst", updated_at: new Date().toISOString() })
-                                      .eq("id", item.reclamationId);
-                                    setReclamations((prev) =>
-                                      prev.map((x) =>
-                                        x.id === item.reclamationId
-                                          ? { ...x, status: "Löst", updated_at: new Date().toISOString() }
-                                          : x,
-                                      ),
-                                    );
-                                  }
-                                  toast.success(`Artikel ${item.sap_article_id} markerad som Löst.`);
-                                }}
-                              >
-                                Löst
-                              </Button>
-                            )}
-                            {item.status === "Skickad" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 px-2 text-[11px]"
-                                onClick={async () => {
-                                  if (item.reclamationId) {
-                                    await supabase
-                                      .from("reclamations")
-                                      .update({ status: "Nekad", updated_at: new Date().toISOString() })
-                                      .eq("id", item.reclamationId);
-                                    setReclamations((prev) =>
-                                      prev.map((x) =>
-                                        x.id === item.reclamationId
-                                          ? { ...x, status: "Nekad", updated_at: new Date().toISOString() }
-                                          : x,
-                                      ),
-                                    );
-                                  }
-                                  toast.success(`Artikel ${item.sap_article_id} markerad som Nekad.`);
-                                }}
-                              >
-                                Nekad
-                              </Button>
-                            )}
-                            {item.status === "Löst" && (
-                              <Badge className="bg-emerald-100 text-emerald-800">
-                                Löst
-                              </Badge>
-                            )}
-                            {item.status === "Nekad" && (
-                              <Badge variant="destructive">
-                                Nekad
-                              </Badge>
-                            )}
-                          </div>
+                          {(
+                            [
+                              "Ej skickad",
+                              "Granskas av butikssupporten",
+                              "Löst",
+                              "Nekad",
+                            ] as ReclamationStatus[]
+                          ).map((s) => (
+                            <Button
+                              key={s}
+                              size="sm"
+                              variant={r.status === s ? "default" : "outline"}
+                              onClick={async () => {
+                                await supabase
+                                  .from("reclamations")
+                                  .update({ status: s, updated_at: new Date().toISOString() })
+                                  .eq("id", r.id);
+                                setReclamations((prev) =>
+                                  prev.map((x) =>
+                                    x.id === r.id
+                                      ? { ...x, status: s, updated_at: new Date().toISOString() }
+                                      : x,
+                                  ),
+                                );
+                              }}
+                              className="mr-1 text-[10px]"
+                            >
+                              {s}
+                            </Button>
+                          ))}
                         </TableCell>
                       </TableRow>
                     ))}
-                  {filteredReclamationList
-                    .filter((r) => (statusFilter ? r.status === statusFilter : true))
+                  {reclamations.filter((r) => (statusFilter ? r.status === statusFilter : true))
                     .length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={4}
                         className="text-center text-sm text-coop-gray-900 py-6"
                       >
-                        Inga reklamationer matchar dina sökkriterier.
+                        Inga reklamationer med denna status.
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
-            </div>
-
-            {/* Export button with automatic marking */}
-            <div className="mt-4 flex justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2"
-                onClick={() => {
-                  const selectedItems = visibleHanteringsItems.filter(item => selectedManageGoodsIds.has(item.id));
-                  if (selectedItems.length > 0) {
-                    exportHanteraVarorToExcel(selectedItems);
-                    setSelectedManageGoodsIds(new Set());
-                  }
-                }}
-                disabled={selectedManageGoodsIds.size === 0}
-              >
-                <Download size={16} /> Exportera markerade artiklar
-                {selectedManageGoodsIds.size > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-xs">
-                    {selectedManageGoodsIds.size}
-                  </Badge>
-                )}
-              </Button>
             </div>
           </CardContent>
         </Card>
