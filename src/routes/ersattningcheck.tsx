@@ -43,7 +43,7 @@ import {
   Filter,
 } from "lucide-react";
 // Re-export from shelfLife.ts for compatibility with existing imports
-import { calculateShelfLifeStatus } from "@/lib/shelfLife";
+import { calculateShelfLifeStatus, getShelfLifeStatus, filterShelfLifeRecords, shouldIncludeInReplacement } from "@/lib/shelfLife";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1030,7 +1030,39 @@ function ErstatningsCheckPage() {
             );
 
         if (!sapData) {
+          // SAP returned HTTP 200 but no data (e.g. {"d":null}).
+          // Treat as missing — do NOT skip the article. Mark it as
+          // SAKNAS I SAP and set cooldown so it isn't retried every run.
           errorCount += 1;
+          const updatedAt = new Date().toISOString();
+          const existing = existingMap.get(record.sap_article_id);
+          const isFirstTime =
+            !existing ||
+            existing.shelf_lifetime_days == null ||
+            Number.isNaN(existing.shelf_lifetime_days) ||
+            existing.shelf_lifetime_days <= 0;
+          if (isFirstTime) firstTimeCount += 1;
+          missingInSapCount += 1;
+
+          const cooldownDays = Math.floor(Math.random() * (90 - 60 + 1)) + 60;
+          const nextSapCheck = new Date();
+          nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
+
+          const { error } = await supabase.from("product_shelf_life").upsert(
+            {
+              store_id: activeStore.id,
+              sap_article_id: record.sap_article_id,
+              shelf_lifetime_days: 0,
+              sap_data_missing: true,
+              next_sap_check: nextSapCheck.toISOString(),
+              updated_at: updatedAt,
+            },
+            { onConflict: "sap_article_id" },
+          );
+          if (error) {
+            console.error("Error upserting shelf life (missing SAP data):", error);
+            errorCount += 1;
+          }
           continue;
         }
 
@@ -1911,7 +1943,28 @@ function ErstatningsCheckPage() {
             masterMap.get(delivery.sap_article_id)?.shelf_lifetime_days ?? 0,
           ),
         }))
-        .filter((item) => item.assessment?.status === "Reklamation")
+        .filter((item) => {
+          const delivery = item.delivery;
+          const master = masterMap.get(delivery.sap_article_id) || {};
+          return shouldIncludeInReplacement({
+            id: delivery.id ?? delivery.sap_article_id ?? "",
+            sap_article_id: delivery.sap_article_id,
+            shelf_lifetime_days: master.shelf_lifetime_days ?? 0,
+            expiry_date: delivery.best_before_date ?? "",
+            arrival_date: delivery.arrival_date ?? "",
+            compensation_price_ore: master.default_compensation_price_ore ?? 2,
+            product_name: delivery.product_name ?? "Okänd artikel",
+            brand: delivery.brand ?? "",
+            category: delivery.category ?? "Övrigt",
+            created_at: delivery.created_at ?? new Date().toISOString(),
+            updated_at: delivery.updated_at ?? new Date().toISOString(),
+            product_url: null,
+            delivery_status: delivery.status ?? "",
+            delivery_number: delivery.delivery_number ?? null,
+            sap_data_missing: master.sap_data_missing ?? false,
+            next_sap_check: master.next_sap_check ?? null,
+          });
+        })
         .map((item) => item.delivery);
       if (flagged.length === 0) {
         const totalArticles = latestByArticle.size;
@@ -2020,8 +2073,10 @@ function ErstatningsCheckPage() {
 
     const filtered = withStatus
       .filter(({ record, status }) => {
-        // Visa endast artiklar med ett registrerat bäst-före-datum (annars visas fel i tabellen)
-        if (!record.expiry_date) return false;
+        // Visa artiklar utan bäst-före-datum med status "Datum saknas" eller "SAKNAS I SAP"
+        if (!record.expiry_date) {
+          return status === "Datum saknas" || status === "SAKNAS I SAP";
+        }
         if (!search) return true;
         return [
           record.sap_article_id,

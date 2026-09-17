@@ -1,30 +1,70 @@
+/**
+ * Shelf life calculation and status utilities.
+ * Used by the replacement check view and regression tests.
+ */
+
+export type ShelfLifeStatus =
+  | "OK"
+  | "Kräver ersättning"
+  | "Datum saknas"
+  | "Hållbarhet saknas"
+  | "SAKNAS I SAP";
+
+export interface ShelfLifeAssessment {
+  remainingDays: number;
+  requiredDays: number;
+  status: "OK" | "Reklamation";
+  percentageLeft: number;
+}
+
+export interface ShelfLifeRecord {
+  id: string;
+  sap_article_id: string;
+  shelf_lifetime_days: number;
+  expiry_date: string;
+  arrival_date: string;
+  compensation_price_ore: number;
+  product_name: string;
+  brand: string;
+  category: string;
+  created_at: string;
+  updated_at: string;
+  product_url: string | null;
+  delivery_status: string;
+  delivery_number: string | null;
+  sap_data_missing: boolean;
+  next_sap_check: string | null;
+}
+
+export interface FilterOptions {
+  search?: string;
+  statusFilter?: ShelfLifeStatus[];
+  excludedCategories?: string[];
+}
+
+/**
+ * Core shelf life status calculation using Coop's rules:
+ * - >548 days shelf life → required 274 days remaining
+ * - otherwise → required 50% of shelf life
+ * If either date is missing, treats as Reklamation (for UI purposes).
+ */
 export function calculateShelfLifeStatus(
   deliveryDate: string | null | undefined,
   bestBeforeDate: string | null | undefined,
   totalShelfLifeDays: number,
-): {
-  remainingDays: number;
-  requiredDays: number;
-  status: 'OK' | 'Reklamation';
-  percentageLeft: number;
-} {
-  // Parse dates to UTC timestamps
+): ShelfLifeAssessment {
   const parseDate = (dateStr: string | null | undefined): number | null => {
-    if (dateStr == null || dateStr === "—" || dateStr.trim() === "") return null;
-    // Handle SAP "Date(ms)" format
-    if (dateStr.startsWith('Date(')) {
-      const match = dateStr.match(/Date\((\d+)\)/);
+    if (dateStr == null || dateStr === "—" || String(dateStr).trim() === "") return null;
+    if (String(dateStr).startsWith("Date(")) {
+      const match = String(dateStr).match(/Date\((\d+)\)/);
       if (!match) return null;
       const timestamp = parseInt(match[1], 10);
-      // Validate timestamp range (not negative or unreasonably large)
       if (timestamp < 0 || timestamp > 86400000 * 365 * 100) return null;
       const d = new Date(timestamp);
       if (isNaN(d.getTime())) return null;
       return d.getTime();
     }
-
-    // Handle ISO format
-    const date = new Date(dateStr);
+    const date = new Date(String(dateStr));
     if (isNaN(date.getTime())) return null;
     return date.getTime();
   };
@@ -32,38 +72,124 @@ export function calculateShelfLifeStatus(
   const deliveryMs = parseDate(deliveryDate);
   const bestBeforeMs = parseDate(bestBeforeDate);
 
-  // If either date is missing/invalid, treat as Reklamation with zeros
   if (deliveryMs === null || bestBeforeMs === null) {
     return {
       remainingDays: 0,
       requiredDays: totalShelfLifeDays <= 0 ? 0 : totalShelfLifeDays > 548 ? 274 : Math.floor(totalShelfLifeDays * 0.5),
-      status: 'Reklamation',
+      status: "Reklamation",
       percentageLeft: 0,
     };
   }
 
-  // Calculate remaining days (UTC-safe)
   const msPerDay = 1000 * 60 * 60 * 24;
   const remainingDays = Math.floor((bestBeforeMs - deliveryMs) / msPerDay);
-
-  // Calculate required days according to 50% rule
-  // Artiklar med >18 månader (>548 dagar) kräver 9 månader (274 dagar) kvar
   const requiredDays =
-    totalShelfLifeDays <= 0 ? 0 :
-    totalShelfLifeDays > 548 ? 274 :
-    Math.floor(totalShelfLifeDays * 0.5);
-
-  // Determine status
-  // OK when remaining >= required, Reklamation when remaining < required
-  const status: 'OK' | 'Reklamation' = remainingDays >= requiredDays ? 'OK' : 'Reklamation';
-
-  // Calculate percentage left
-  const percentageLeft = totalShelfLifeDays > 0 ? (remainingDays / totalShelfLifeDays) * 100 : 0;
+    totalShelfLifeDays <= 0
+      ? 0
+      : totalShelfLifeDays > 548
+        ? 274
+        : Math.floor(totalShelfLifeDays * 0.5);
 
   return {
     remainingDays,
     requiredDays,
-    status,
-    percentageLeft: Math.round(percentageLeft * 10) / 10, // 1 decimal place
+    status: remainingDays < requiredDays ? "Reklamation" : "OK",
+    percentageLeft: totalShelfLifeDays > 0 ? remainingDays / totalShelfLifeDays : 0,
   };
+}
+
+/**
+ * Returns the human-readable status for a shelf life record.
+ * Order matters: sap_data_missing → datum → shelf_lifetime → calculate.
+ */
+export function getShelfLifeStatus(record: ShelfLifeRecord): ShelfLifeStatus {
+  if (record.sap_data_missing) return "SAKNAS I SAP";
+  if (!record.arrival_date || !record.expiry_date) return "Datum saknas";
+  if (
+    record.shelf_lifetime_days == null ||
+    Number.isNaN(record.shelf_lifetime_days) ||
+    record.shelf_lifetime_days <= 0
+  ) {
+    return "Hållbarhet saknas";
+  }
+  const assessment = calculateShelfLifeStatus(
+    record.arrival_date,
+    record.expiry_date,
+    record.shelf_lifetime_days,
+  );
+  return assessment?.status === "Reklamation" ? "Kräver ersättning" : "OK";
+}
+
+/**
+ * Filters shelf life records, INCLUDING those without expiry_date
+ * (they show as "Datum saknas" / "SAKNAS I SAP").
+ */
+export function filterShelfLifeRecords(
+  records: ShelfLifeRecord[],
+  options: FilterOptions = {},
+): ShelfLifeRecord[] {
+  const search = (options.search ?? "").trim().toLocaleLowerCase("sv");
+  const statusFilter = options.statusFilter ?? [];
+  const excludedCategories = new Set(
+    (options.excludedCategories ?? []).map((c) => c.toLocaleLowerCase("sv")),
+  );
+
+  return records.filter((record) => {
+    const status = getShelfLifeStatus(record);
+
+    // Always include records with missing dates (Datum saknas / SAKNAS I SAP)
+    // Only apply expiry filter when we have a date but want to exclude
+    if (!record.expiry_date && status !== "Datum saknas" && status !== "SAKNAS I SAP") {
+      return false;
+    }
+
+    if (search) {
+      const haystack = [
+        record.sap_article_id,
+        record.product_name,
+        record.brand,
+        String(record.shelf_lifetime_days ?? ""),
+        record.expiry_date,
+        record.arrival_date,
+        status,
+      ]
+        .map((v) => String(v ?? ""))
+        .join(" ")
+        .toLocaleLowerCase("sv");
+      if (!haystack.includes(search)) return false;
+    }
+
+    if (statusFilter.length > 0 && !statusFilter.includes(status)) return false;
+
+    const cat = record.category?.toLocaleLowerCase("sv") ?? "";
+    if (excludedCategories.size > 0 && excludedCategories.has(cat)) return false;
+
+    return true;
+  });
+}
+
+/**
+ * Determines whether a record should be included in replacement generation.
+ * Articles with missing dates or SAP data are included (flagged as missing).
+ */
+export function shouldIncludeInReplacement(record: ShelfLifeRecord): boolean {
+  // Always include articles where SAP data is missing
+  if (record.sap_data_missing) return true;
+  // Include articles with missing arrival/expiry dates (flagged as "Datum saknas")
+  if (!record.arrival_date || !record.expiry_date) return true;
+  // Include articles with no shelf life defined
+  if (
+    record.shelf_lifetime_days == null ||
+    Number.isNaN(record.shelf_lifetime_days) ||
+    record.shelf_lifetime_days <= 0
+  ) {
+    return true;
+  }
+  // Otherwise include if shelf life assessment is Reklamation
+  const assessment = calculateShelfLifeStatus(
+    record.arrival_date,
+    record.expiry_date,
+    record.shelf_lifetime_days,
+  );
+  return assessment?.status === "Reklamation";
 }
