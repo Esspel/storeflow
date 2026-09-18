@@ -4543,25 +4543,25 @@ function ErstatningsCheckPage() {
         </Card>
       )}
 
-      {/* Step 2: Product Catalog (Produktkatalog) */}
+      {/* Step 2: Product Catalog */}
       {step === "products" && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-3xl font-semibold tracking-tight">Produktkatalog</h2>
-            <p className="text-coop-gray-900">
-              Översikt över kategorier och produkter med historisk reklamationsrisk.
-            </p>
+        <div className="min-h-[70vh] bg-gradient-to-b from-slate-50 to-white rounded-2xl p-6 md:p-10 shadow-sm border border-slate-100">
+          {/* Header */}
+          <div className="mb-8">
+            <div className="inline-flex items-center gap-2 bg-coop-blue-50 text-coop-blue-700 px-3 py-1 rounded-full text-xs font-semibold mb-3 tracking-wide uppercase">Produktkatalog</div>
+            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900 leading-tight">Kategorier & produkter</h2>
+            <p className="text-slate-500 mt-2 max-w-xl text-base leading-relaxed">Välj en kategori för att se historisk reklamationsrisk, leveranser och risknivå per produkt.</p>
           </div>
 
           {/* Search bar */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch gap-3 mb-8 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-coop-gray-900" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 placeholder="Sök kategori eller produkt..."
                 value={catalogSearch}
                 onChange={(e) => setCatalogSearch(e.target.value)}
-                className="pl-9"
+                className="pl-9 h-11 bg-slate-50 border-slate-200 focus:border-coop-blue-300 focus:ring-coop-blue-100 rounded-lg"
               />
             </div>
             <Button
@@ -4572,6 +4572,7 @@ function ErstatningsCheckPage() {
                 setSelectedCatalogCategory(null);
                 setInfoProduct(null);
               }}
+              className="h-11 px-6 rounded-lg border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
             >
               Rensa
             </Button>
