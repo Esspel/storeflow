@@ -3440,12 +3440,13 @@ function ErstatningsCheckPage() {
                       const hasShelfLife = !!delivery.shelf_lifetime_days && delivery.shelf_lifetime_days > 0;
                       return (
                         <div
-                          key={`${delivery.sap_article_id}-${delivery.arrival_date}-${index}`}
-                          className="py-4 first:pt-0 last:pb-0 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6"
+                          key={`delivery-${delivery.delivery_number ?? delivery.id ?? index}-${delivery.arrival_date}-${index}`}
+                          className="py-4 first:pt-0 last:pb-0 grid grid-cols-2 gap-4 md:grid-cols-5 md:gap-6"
                         >
-                          <div>
-                            <p className="font-medium text-coop-gray-900 leading-snug">{delivery.product_name}</p>
-                            <p className="font-mono text-xs text-coop-gray-500">{delivery.sap_article_id}</p>
+                          <div className="md:col-span-2">
+                            <p className="text-xs text-coop-gray-500 uppercase tracking-wide">Leveransnummer</p>
+                            <p className="font-medium text-coop-gray-900">{delivery.delivery_number || delivery.id || delivery.sap_article_id}</p>
+                            <p className="text-xs text-coop-gray-500">{delivery.product_name || "—"} ({delivery.sap_article_id || "—"})</p>
                           </div>
                           <div>
                             <p className="text-xs text-coop-gray-500 uppercase tracking-wide font-semibold mb-0.5">Leveransdatum</p>
@@ -4581,7 +4582,7 @@ function ErstatningsCheckPage() {
 
       {/* Step 2: Product Catalog */}
       {step === "products" && (
-        <div className="min-h-[70vh] bg-gradient-to-b from-slate-50 to-white rounded-2xl p-6 md:p-10 shadow-sm border border-slate-100">
+        <div className="min-h-[70vh] bg-gradient-to-b from-white to-amber-50/30 rounded-2xl p-6 md:p-10 shadow-sm border border-amber-100/50">
           {/* Header */}
           <div className="mb-8">
             <div className="inline-flex items-center gap-2 bg-coop-blue-50 text-coop-blue-700 px-3 py-1 rounded-full text-xs font-semibold mb-3 tracking-wide uppercase">Produktkatalog</div>
@@ -4728,6 +4729,7 @@ function ErstatningsCheckPage() {
                             <TableHead>BNR</TableHead>
                             <TableHead>EAN</TableHead>
                             <TableHead className="text-right">Leveranser</TableHead>
+                            <TableHead className="text-right">Produkter</TableHead>
                             <TableHead className="text-right">Reklamationer</TableHead>
                             <TableHead className="text-right">Risk</TableHead>
                           </TableRow>
@@ -4766,8 +4768,15 @@ function ErstatningsCheckPage() {
                                   </TableCell>
                                   <TableCell className="text-xs">{product.bnr || "—"}</TableCell>
                                   <TableCell className="text-xs">{product.ean || "—"}</TableCell>
-                                  <TableCell className="text-right text-xs">
-                                    {product.deliveryCount}
+                                  <TableCell className="text-right text-xs font-medium text-coop-blue-700">
+                                    {product.deliveryCount > 0 ? (
+                                      <span className="inline-flex items-center gap-1">
+                                        <span className="font-semibold">{product.deliveryCount}</span>
+                                        <span className="text-coop-gray-400 font-normal">leveranser</span>
+                                      </span>
+                                    ) : (
+                                      <span className="text-coop-gray-400">0</span>
+                                    )}
                                   </TableCell>
                                   <TableCell className="text-right text-xs font-medium">
                                     {product.reclamationCount}
