@@ -228,7 +228,7 @@ function extractVarugrupp(category: string | undefined | null, sapId?: string): 
   const match = category.match(/\((\s*\d+\s*)\)/);
   if (match) return match[1].trim();
   let hash = 0;
-  for (let i = 0; i < category.length; i++) {
+  for (let i = 0; i < (category?.length ?? 0); i++) {
     hash = (hash * 31 + category.charCodeAt(i)) % 9000;
   }
   return String(1000 + Math.abs(hash));
@@ -672,7 +672,7 @@ function ErstatningsCheckPage() {
 
   // Handle product matching
   const handleMatchProducts = async (rows = deliveryNotes) => {
-    if (rows.length === 0) {
+    if (!rows || rows.length === 0) {
       setImportError("Ingen följesedel att matcha. Importera först.");
       return;
     }
@@ -1710,16 +1710,16 @@ function ErstatningsCheckPage() {
               baseDate.getDate() - (daysCount - 1 - i),
             );
             const key = d.toISOString().split("T")[0];
-            const dayReclamations = reclamationsForPeriod.filter(
-              (row: any) => row.status === "Löst" && row.created_at?.startsWith(key),
+            const dayReclamations = (reclamationsForPeriod ?? []).filter(
+              (row: any) => row?.status === "Löst" && row?.created_at?.startsWith(key),
             );
-            const dayCount = reclamationsForPeriod.filter((row: any) =>
-              row.created_at?.startsWith(key),
+            const dayCount = (reclamationsForPeriod ?? []).filter((row: any) =>
+              row?.created_at?.startsWith(key),
             ).length;
             return {
               month: d.toLocaleDateString("sv-SE", { day: "numeric", month: "short" }),
               value: dayReclamations.reduce(
-                (sum: number, row: any) => sum + getReclamationAmount(row),
+                (sum: number, row: any) => sum + (row?.amount ?? 0),
                 0,
               ),
               count: dayCount,
@@ -3102,6 +3102,14 @@ function ErstatningsCheckPage() {
       {/* Step navigation */}
       <div className="flex gap-2 mb-6 flex-wrap items-center">
         <Button
+          variant={step === "dashboard" ? "default" : "outline"}
+          onClick={() => setStep("dashboard")}
+          className="flex items-center gap-2 font-medium"
+        >
+          <LayoutDashboard size={16} />
+          Dashboard
+        </Button>
+        <Button
           variant={step === "reclamations" ? "default" : "outline"}
           onClick={() => setStep("reclamations")}
           className="flex items-center gap-2 font-medium"
@@ -4095,11 +4103,20 @@ function ErstatningsCheckPage() {
                         <div className="flex items-center gap-4">
                           <div className="text-right text-coop-gray-900">
                             <div>
-                              Bäst före: {new Date(record.expiry_date).toLocaleDateString("sv-SE")}
+                              Bäst före:{" "}
+                              {record.expiry_date
+                                ? (() => {
+                                    const d = new Date(record.expiry_date);
+                                    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("sv-SE");
+                                  })()
+                                : "—"}
                             </div>
                             <div className="text-xs">
-                              Anledning: Kvarvarande {assessment?.remainingDays} dagar är under
-                              miniminivån {assessment?.requiredDays} dagar
+                              {assessment?.status === "Reklamation"
+                                ? `Anledning: Kvarvarande ${assessment?.remainingDays ?? "—"} dagar är under miniminivån ${assessment?.requiredDays ?? "—"} dagar`
+                                : assessment?.status === "OK"
+                                  ? `Kvarvarande ${assessment?.remainingDays ?? "—"} dagar`
+                                  : "—"}
                             </div>
                           </div>
                           <Button
