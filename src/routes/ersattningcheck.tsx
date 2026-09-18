@@ -8,6 +8,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import {
+  LayoutDashboard,
   Upload,
   FileSpreadsheet,
   Table as TableIcon,
