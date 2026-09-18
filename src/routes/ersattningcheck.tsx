@@ -43,7 +43,12 @@ import {
   Filter,
 } from "lucide-react";
 // Re-export from shelfLife.ts for compatibility with existing imports
-import { calculateShelfLifeStatus, getShelfLifeStatus, filterShelfLifeRecords, shouldIncludeInReplacement } from "@/lib/shelfLife";
+import {
+  calculateShelfLifeStatus,
+  getShelfLifeStatus,
+  filterShelfLifeRecords,
+  shouldIncludeInReplacement,
+} from "@/lib/shelfLife";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -90,6 +95,7 @@ import { exportTextAsCSV, downloadAsZip } from "@/lib/csv";
 import { checkExtensionInstalled, fetchViaProxy } from "@/lib/sap-proxy";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
+import { calculateRiskScore, calculateRisk } from "@/lib/productCatalogRisk";
 import {
   CartesianGrid,
   Line,
@@ -405,6 +411,35 @@ function ErstatningsCheckPage() {
   const [catalogSearch, setCatalogSearch] = useState("");
   const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<string | null>(null);
   const [infoProduct, setInfoProduct] = useState<any | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogCategories, setCatalogCategories] = useState<
+    Array<{
+      name: string;
+      code: string;
+      displayTitle: string;
+      uniqueProductCount: number;
+      totalDeliveries: number;
+      activeReclamations: number;
+      riskScore: number;
+      riskPercentage: number;
+      riskLevel: string;
+      riskColor: string;
+      riskBg: string;
+    }>
+  >([]);
+  const [catalogProducts, setCatalogProducts] = useState<
+    Array<{
+      sap_article_id: string;
+      name: string;
+      brand: string;
+      category: string | null;
+      ean: string | null;
+      bnr: string | null;
+      reclamationCount: number;
+      deliveryCount: number;
+    }>
+  >([]);
 
   // Vyn Statistik state
   const [statsMode, setStatsMode] = useState<"spotlight" | "cockpit">("spotlight");
@@ -426,6 +461,16 @@ function ErstatningsCheckPage() {
   const [selectedWeeklyProduct, setSelectedWeeklyProduct] = useState<WeeklyTask | null>(null);
   const [weeklyDays, setWeeklyDays] = useState("");
   const [deliveryStatistics, setDeliveryStatistics] = useState<DeliveryStatistic[]>([]);
+  const [productReclamationStats, setProductReclamationStats] = useState<
+    Array<{
+      sap_article_id: string;
+      name: string | null;
+      ean: string | null;
+      bnr: string | null;
+      delivery_count: number;
+      reclamation_count: number;
+    }>
+  >([]);
   const [replacementStatistics, setReplacementStatistics] = useState<ReplacementStatistics | null>(
     null,
   );
@@ -581,7 +626,11 @@ function ErstatningsCheckPage() {
     if (status && status !== "Ej skickat") {
       return false;
     }
-    const assessment = calculateShelfLifeStatus(record.arrival_date, record.expiry_date, record.shelf_lifetime_days);
+    const assessment = calculateShelfLifeStatus(
+      record.arrival_date,
+      record.expiry_date,
+      record.shelf_lifetime_days,
+    );
     if (!assessment || assessment.status !== "Reklamation") {
       return false;
     }
@@ -796,6 +845,185 @@ function ErstatningsCheckPage() {
       setTotalProductCount(count ?? 0);
     })();
   }, [activeStore?.id]);
+
+  // Load product catalog data for the Product Catalog view (runs once on mount)
+  useEffect(() => {
+    if (!activeStore?.id) return;
+    void (async () => {
+      setCatalogLoading(true);
+      setCatalogError(null);
+      try {
+        // Fetch products for current store
+        const { data: productsData, error: productsErr } = await supabase
+          .from("products")
+          .select("id, sap_article_id, name, brand, category, ean, bnr, is_active")
+          .eq("store_id", activeStore.id)
+          .eq("is_active", true);
+
+        if (productsErr) throw productsErr;
+
+        // Fetch product_reclamation_stats for current store
+        const { data: statsData, error: statsErr } = await supabase
+          .from("product_reclamation_stats")
+          .select("*")
+          .eq("store_id", activeStore.id);
+
+        if (statsErr) throw statsErr;
+
+        // Fetch reclamations for calculating active reclamations
+        const { data: reclamationsData, error: reclamErr } = await supabase
+          .from("reclamations")
+          .select("sap_article_id, status")
+          .eq("store_id", activeStore.id);
+
+        if (reclamErr) throw reclamErr;
+
+        // Build lookup for active reclamations from reclamations table
+        const activeReclamationsMap = new Map<string, number>();
+        if (reclamationsData && reclamationsData.length > 0) {
+          for (const r of reclamationsData) {
+            const status = r.status ?? "";
+            if (status === "Väntande" || status === "Skickad") {
+              const id = r.sap_article_id ?? "";
+              activeReclamationsMap.set(id, (activeReclamationsMap.get(id) ?? 0) + 1);
+            }
+          }
+        }
+
+        // Build lookup for reclamation counts from product_reclamation_stats
+        const reclamationCountsMap = new Map<string, number>();
+        if (statsData && statsData.length > 0) {
+          for (const s of statsData) {
+            reclamationCountsMap.set(s.sap_article_id ?? "", s.reclamation_count ?? 0);
+          }
+        }
+
+        // Build lookup for delivery counts from product_reclamation_stats
+        const deliveryCountsMap = new Map<string, number>();
+        if (statsData && statsData.length > 0) {
+          for (const s of statsData) {
+            deliveryCountsMap.set(s.sap_article_id ?? "", s.delivery_count ?? 0);
+          }
+        }
+
+        // Build product map with reclamation info
+        const productMap = new Map<
+          string,
+          {
+            sap_article_id: string;
+            name: string;
+            brand: string;
+            category: string | null;
+            ean: string | null;
+            bnr: string | null;
+            reclamationCount: number;
+            deliveryCount: number;
+          }
+        >();
+
+        if (productsData && productsData.length > 0) {
+          for (const p of productsData) {
+            const sapId = p.sap_article_id ?? "";
+            const cat = p.category ?? "";
+            const ean = p.ean ?? null;
+            const bnr = p.bnr ?? null;
+            const existingReclamations = reclamationCountsMap.get(sapId) ?? 0;
+            const existingDeliveries = deliveryCountsMap.get(sapId) ?? 0;
+
+            productMap.set(sapId, {
+              sap_article_id: sapId,
+              name: p.name ?? "Okänd produkt",
+              brand: p.brand ?? "",
+              category: cat,
+              ean,
+              bnr,
+              reclamationCount: existingReclamations,
+              deliveryCount: existingDeliveries,
+            });
+          }
+        }
+
+        // Build categories from product data
+        const categoriesMap = new Map<
+          string,
+          {
+            name: string;
+            code: string;
+            products: Set<string>;
+            deliveriesCount: number;
+            activeReclamations: number;
+          }
+        >();
+
+        for (const [sapId, product] of productMap) {
+          const catName = product.category || "Övrigt";
+          const catCode = extractVarugrupp(catName, product.sap_article_id);
+          const entry = categoriesMap.get(catName) ?? {
+            name: catName,
+            code: catCode,
+            products: new Set<string>(),
+            deliveriesCount: 0,
+            activeReclamations: 0,
+          };
+          entry.products.add(sapId);
+          entry.deliveriesCount += product.deliveryCount;
+          entry.activeReclamations += product.reclamationCount;
+          categoriesMap.set(catName, entry);
+        }
+
+        // Calculate risk score for each category
+        const catalogCategories = Array.from(categoriesMap.values()).map((entry) => {
+          const totalDel = Math.max(entry.deliveriesCount, entry.products.size);
+          const riskScore = calculateRiskScore(entry.activeReclamations, totalDel);
+          const risk = calculateRisk({
+            reclamationCount: entry.activeReclamations,
+            deliveryCount: totalDel,
+          });
+          const riskLevel =
+            risk.level === "high"
+              ? "Hög risk"
+              : risk.level === "medium"
+                ? "Medel risk"
+                : "Låg risk";
+          const riskColor =
+            risk.level === "high"
+              ? "text-red-600"
+              : risk.level === "medium"
+                ? "text-amber-600"
+                : "text-green-600";
+          const riskBg =
+            risk.level === "high"
+              ? "bg-red-100"
+              : risk.level === "medium"
+                ? "bg-amber-50"
+                : "bg-green-50";
+
+          return {
+            name: entry.name,
+            code: entry.code,
+            displayTitle: `${entry.name} ( ${entry.code} )`,
+            uniqueProductCount: entry.products.size,
+            totalDeliveries: entry.deliveriesCount,
+            activeReclamations: entry.activeReclamations,
+            riskScore,
+            riskPercentage: risk.percentage,
+            riskLevel,
+            riskColor,
+            riskBg,
+          };
+        });
+
+        setCatalogCategories(catalogCategories);
+        setCatalogProducts(Array.from(productMap.values()));
+        setSelectedCatalogCategory(catalogCategories.length > 0 ? catalogCategories[0].name : null);
+        setCatalogLoading(false);
+      } catch (error) {
+        console.error("Error loading catalog data:", error);
+        setCatalogError("Kunde inte ladda produktkatalog-data. Försök igen senare.");
+        setCatalogLoading(false);
+      }
+    })();
+  }, [activeStore?.id, catalogCategories]);
 
   // Load shelf life data
   const loadShelfLifeData = async () => {
@@ -1349,7 +1577,15 @@ function ErstatningsCheckPage() {
   };
 
   const loadDeliveryStatistics = async (
-    period: "thisMonth" | "lastMonth" | "thisQuarter" | "ytd" | "all" | "last30" | "last12" | "custom" = statisticsPeriod,
+    period:
+      | "thisMonth"
+      | "lastMonth"
+      | "thisQuarter"
+      | "ytd"
+      | "all"
+      | "last30"
+      | "last12"
+      | "custom" = statisticsPeriod,
   ) => {
     setIsLoading(true);
     try {
@@ -1463,10 +1699,16 @@ function ErstatningsCheckPage() {
         .reduce((sum: number, row: any) => sum + getReclamationAmount(row), 0);
       const monthly = (() => {
         if (period === "last30" || period === "thisMonth" || period === "lastMonth") {
-          const daysCount = period === "lastMonth" ? 30 : period === "thisMonth" ? Math.max(now.getDate(), 7) : 30;
-          const baseDate = period === "lastMonth" ? new Date(now.getFullYear(), now.getMonth(), 0) : now;
+          const daysCount =
+            period === "lastMonth" ? 30 : period === "thisMonth" ? Math.max(now.getDate(), 7) : 30;
+          const baseDate =
+            period === "lastMonth" ? new Date(now.getFullYear(), now.getMonth(), 0) : now;
           return Array.from({ length: daysCount }, (_, i) => {
-            const d = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() - (daysCount - 1 - i));
+            const d = new Date(
+              baseDate.getFullYear(),
+              baseDate.getMonth(),
+              baseDate.getDate() - (daysCount - 1 - i),
+            );
             const key = d.toISOString().split("T")[0];
             const dayReclamations = reclamationsForPeriod.filter(
               (row: any) => row.status === "Löst" && row.created_at?.startsWith(key),
@@ -1736,7 +1978,7 @@ function ErstatningsCheckPage() {
       }
 
       setWeeklyTask(productsWithoutShelfLife);
-      setStep("weekly");
+      setStep("shelf-life");
     } catch (error) {
       console.error("Error loading weekly task:", error);
       toast.error("Kunde inte ladda veckouppdrag");
@@ -1981,11 +2223,7 @@ function ErstatningsCheckPage() {
         const leverans = r.delivery_number ? String(r.delivery_number) : "okand";
         const zon = (master as any)?.temperature_zone || getMappedFlow(r.category).toLowerCase();
         const shelfDays = (master as any)?.shelf_lifetime_days || 0;
-        const assessment = calculateShelfLifeStatus(
-  r.arrival_date,
-  r.best_before_date,
-  shelfDays,
-);
+        const assessment = calculateShelfLifeStatus(r.arrival_date, r.best_before_date, shelfDays);
         const product = productMap.get(r.sap_article_id) || {};
         const key = `${leverans}__${zon}`;
         if (!groups[key]) groups[key] = [];
@@ -2040,6 +2278,8 @@ function ErstatningsCheckPage() {
   };
 
   const getShelfLifeStatus = (record: ShelfLifeRecord) => {
+    // Om posten redan är godkänd (t.ex. delivery_status = "Löst" / "Godkänd"), returnera OK
+    if (record.delivery_status === "Löst" || record.delivery_status === "Godkänd") return "OK";
     if (record.sap_data_missing) return "SAKNAS I SAP";
     if (!record.arrival_date || !record.expiry_date) return "Datum saknas";
     if (
@@ -2054,9 +2294,7 @@ function ErstatningsCheckPage() {
       record.expiry_date,
       record.shelf_lifetime_days,
     );
-    return assessment?.status === "Reklamation"
-      ? "Kräver ersättning"
-      : "OK";
+    return assessment?.status === "Reklamation" ? "Kräver ersättning" : "OK";
   };
 
   const filteredShelfLifeRecords = useMemo(() => {
@@ -2516,8 +2754,10 @@ function ErstatningsCheckPage() {
       const expiryDate = shelf?.expiry_date || del?.expiry_date || "";
       const productName = shelf?.product_name || del?.product_name || "Okänd artikel";
       const category = shelf?.category || del?.category || "Övrigt";
-      const rawPrice = del?.total_price || (shelf?.compensation_price_ore ? shelf.compensation_price_ore / 100 : 85);
-      const price = typeof rawPrice === "number" ? rawPrice : parseSek(rawPrice) ?? 85;
+      const rawPrice =
+        del?.total_price ||
+        (shelf?.compensation_price_ore ? shelf.compensation_price_ore / 100 : 85);
+      const price = typeof rawPrice === "number" ? rawPrice : (parseSek(rawPrice) ?? 85);
 
       items.push({
         id: rec.id,
@@ -2545,14 +2785,16 @@ function ErstatningsCheckPage() {
     for (const shelf of shelfLifeRecords) {
       if (processedSapIds.has(shelf.sap_article_id)) continue;
       const assessment = calculateShelfLifeStatus(
-  shelf.arrival_date,
-  shelf.expiry_date,
-  shelf.shelf_lifetime_days,
-);
+        shelf.arrival_date,
+        shelf.expiry_date,
+        shelf.shelf_lifetime_days,
+      );
       if (assessment?.status === "Reklamation") {
         const del = deliveryMap.get(shelf.sap_article_id);
-        const rawPrice = del?.total_price || (shelf.compensation_price_ore ? shelf.compensation_price_ore / 100 : 85);
-        const price = typeof rawPrice === "number" ? rawPrice : parseSek(rawPrice) ?? 85;
+        const rawPrice =
+          del?.total_price ||
+          (shelf.compensation_price_ore ? shelf.compensation_price_ore / 100 : 85);
+        const price = typeof rawPrice === "number" ? rawPrice : (parseSek(rawPrice) ?? 85);
         items.push({
           id: `gen-${shelf.id}`,
           reclamationId: undefined,
@@ -2561,8 +2803,12 @@ function ErstatningsCheckPage() {
           brand: shelf.brand || del?.brand || "",
           category: shelf.category || del?.category || "Övrigt",
           category_code: extractVarugrupp(shelf.category, shelf.sap_article_id),
-          delivery_date: shelf.arrival_date ? new Date(shelf.arrival_date).toISOString().split("T")[0] : "—",
-          best_before_date: shelf.expiry_date ? new Date(shelf.expiry_date).toISOString().split("T")[0] : "—",
+          delivery_date: shelf.arrival_date
+            ? new Date(shelf.arrival_date).toISOString().split("T")[0]
+            : "—",
+          best_before_date: shelf.expiry_date
+            ? new Date(shelf.expiry_date).toISOString().split("T")[0]
+            : "—",
           quantity: del?.quantity || 1,
           price,
           status: "Väntande",
@@ -2580,10 +2826,22 @@ function ErstatningsCheckPage() {
   }, [reclamations, shelfLifeRecords, deliveryStatistics]);
 
   // Counts for status cards in Hantera varor
-  const waitingCount = useMemo(() => hanteringsItems.filter((i) => i.status === "Väntande").length, [hanteringsItems]);
-  const sentCount = useMemo(() => hanteringsItems.filter((i) => i.status === "Skickad").length, [hanteringsItems]);
-  const resolvedCount = useMemo(() => hanteringsItems.filter((i) => i.status === "Löst").length, [hanteringsItems]);
-  const rejectedCount = useMemo(() => hanteringsItems.filter((i) => i.status === "Nekad").length, [hanteringsItems]);
+  const waitingCount = useMemo(
+    () => hanteringsItems.filter((i) => i.status === "Väntande").length,
+    [hanteringsItems],
+  );
+  const sentCount = useMemo(
+    () => hanteringsItems.filter((i) => i.status === "Skickad").length,
+    [hanteringsItems],
+  );
+  const resolvedCount = useMemo(
+    () => hanteringsItems.filter((i) => i.status === "Löst").length,
+    [hanteringsItems],
+  );
+  const rejectedCount = useMemo(
+    () => hanteringsItems.filter((i) => i.status === "Nekad").length,
+    [hanteringsItems],
+  );
   const totalActiveCases = useMemo(() => waitingCount + sentCount, [waitingCount, sentCount]);
 
   // Unique delivery dates for dropdowns
@@ -2613,8 +2871,10 @@ function ErstatningsCheckPage() {
   // Visible items in Hantera varor table
   const visibleHanteringsItems = useMemo(() => {
     return hanteringsItems.filter((item) => {
-      if (manageGoodsStatusFilter !== "ALL" && item.status !== manageGoodsStatusFilter) return false;
-      if (manageGoodsDeliveryFilter !== "ALL" && item.delivery_date !== manageGoodsDeliveryFilter) return false;
+      if (manageGoodsStatusFilter !== "ALL" && item.status !== manageGoodsStatusFilter)
+        return false;
+      if (manageGoodsDeliveryFilter !== "ALL" && item.delivery_date !== manageGoodsDeliveryFilter)
+        return false;
       return true;
     });
   }, [hanteringsItems, manageGoodsStatusFilter, manageGoodsDeliveryFilter]);
@@ -2631,7 +2891,9 @@ function ErstatningsCheckPage() {
 
   // Bulk selection toggles
   const allVisibleSelected = useMemo(
-    () => visibleHanteringsItems.length > 0 && visibleHanteringsItems.every((i) => selectedManageGoodsIds.has(i.id)),
+    () =>
+      visibleHanteringsItems.length > 0 &&
+      visibleHanteringsItems.every((i) => selectedManageGoodsIds.has(i.id)),
     [visibleHanteringsItems, selectedManageGoodsIds],
   );
 
@@ -2729,25 +2991,22 @@ function ErstatningsCheckPage() {
     }
 
     const excelRows = itemsToExport.map((item) => ({
-      "Leveransdatum": item.delivery_date,
+      Leveransdatum: item.delivery_date,
       "SAP-ID": item.sap_article_id,
-      "Produktnamn": item.product_name,
-      "Varumärke": item.brand,
-      "Varugrupp": `${item.category} (${item.category_code})`,
-      "Antal": item.quantity,
+      Produktnamn: item.product_name,
+      Varumärke: item.brand,
+      Varugrupp: `${item.category} (${item.category_code})`,
+      Antal: item.quantity,
       "Bäst-före": item.best_before_date,
       "Belopp (SEK)": item.price,
-      "Status": "Skickad",
-      "BNR": item.bnr,
+      Status: "Skickad",
+      BNR: item.bnr,
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(excelRows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Reklamationer");
-    XLSX.writeFile(
-      workbook,
-      `reklamationer_${new Date().toISOString().split("T")[0]}.xlsx`,
-    );
+    XLSX.writeFile(workbook, `reklamationer_${new Date().toISOString().split("T")[0]}.xlsx`);
 
     // Auto mark exported rows as Skickade
     for (const item of itemsToExport) {
@@ -2800,99 +3059,22 @@ function ErstatningsCheckPage() {
     });
   }, [hanteringsItems, reclamationSearch, reclamationDeliveryFilter, reclamationCategoryFilter]);
 
-  // Categories aggregated for Produktkatalog (View 3)
-  const catalogCategories = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        name: string;
-        code: string;
-        products: Set<string>;
-        deliveriesCount: number;
-        activeReclamations: number;
-      }
-    >();
-
-    for (const s of shelfLifeRecords) {
-      const catName = s.category || "Övrigt";
-      const catCode = extractVarugrupp(catName, s.sap_article_id);
-      const entry = map.get(catName) ?? {
-        name: catName,
-        code: catCode,
-        products: new Set<string>(),
-        deliveriesCount: 0,
-        activeReclamations: 0,
-      };
-      entry.products.add(s.sap_article_id);
-      map.set(catName, entry);
-    }
-
-    for (const d of deliveryStatistics) {
-      const catName = d.category || "Övrigt";
-      const entry = map.get(catName);
-      if (entry) {
-        entry.deliveriesCount += 1;
-        entry.products.add(d.sap_article_id);
-      }
-    }
-
-    for (const item of hanteringsItems) {
-      const entry = map.get(item.category);
-      if (entry && (item.status === "Väntande" || item.status === "Skickad")) {
-        entry.activeReclamations += 1;
-      }
-    }
-
-    return Array.from(map.values())
-      .map((entry) => {
-        const totalDel = Math.max(entry.deliveriesCount, entry.products.size);
-        const riskRate = entry.activeReclamations / (totalDel || 1);
-        let riskLevel = "Låg risk";
-        let riskColor = "text-emerald-600";
-        let riskBg = "bg-emerald-500";
-        if (riskRate > 0.3) {
-          riskLevel = "Hög risk";
-          riskColor = "text-red-600";
-          riskBg = "bg-red-500";
-        } else if (riskRate > 0.1 || entry.activeReclamations > 0) {
-          riskLevel = "Medel risk";
-          riskColor = "text-amber-600";
-          riskBg = "bg-amber-500";
-        }
-
-        return {
-          name: entry.name,
-          code: entry.code,
-          displayTitle: `${entry.name} ( ${entry.code} )`,
-          uniqueProductCount: entry.products.size,
-          totalDeliveries: totalDel,
-          activeReclamations: entry.activeReclamations,
-          riskRate,
-          riskLevel,
-          riskColor,
-          riskBg,
-        };
-      })
-      .filter((cat) => {
-        if (!catalogSearch) return true;
-        const q = catalogSearch.toLowerCase();
-        return (
-          cat.name.toLowerCase().includes(q) ||
-          cat.code.includes(q) ||
-          cat.displayTitle.toLowerCase().includes(q)
-        );
-      });
-  }, [shelfLifeRecords, deliveryStatistics, hanteringsItems, catalogSearch]);
-
   // Selected category products for View 3 Detail view
   const categoryProducts = useMemo(() => {
     if (!selectedCatalogCategory) return [];
-    const prods = shelfLifeRecords.filter((s) => (s.category || "Övrigt") === selectedCatalogCategory);
+    const prods = shelfLifeRecords.filter(
+      (s) => (s.category || "Övrigt") === selectedCatalogCategory,
+    );
     return prods.map((p) => {
       const deliveries = deliveryStatistics.filter((d) => d.sap_article_id === p.sap_article_id);
-      const reclamationsCount = hanteringsItems.filter((i) => i.sap_article_id === p.sap_article_id).length;
+      const reclamationsCount = hanteringsItems.filter(
+        (i) => i.sap_article_id === p.sap_article_id,
+      ).length;
       const latestDelivery = deliveries[0];
-      const riskPercent = Math.min(100, Math.round((reclamationsCount / Math.max(deliveries.length, 1)) * 100));
+      const risk = calculateRisk({
+        reclamationCount: reclamationsCount,
+        deliveryCount: deliveries.length || 1,
+      });
       return {
         ...p,
         deliveriesCount: deliveries.length || 1,
@@ -2902,8 +3084,10 @@ function ErstatningsCheckPage() {
             ? new Date(p.arrival_date).toISOString().split("T")[0]
             : "—",
         reclamationsCount,
-        riskPercent,
-        riskLevel: riskPercent > 30 ? "Hög risk" : riskPercent > 10 ? "Medel risk" : "Låg risk",
+        riskScore: risk.score,
+        riskPercentage: risk.percentage,
+        riskLevel:
+          risk.level === "high" ? "Hög risk" : risk.level === "medium" ? "Medel risk" : "Låg risk",
       };
     });
   }, [selectedCatalogCategory, shelfLifeRecords, deliveryStatistics, hanteringsItems]);
@@ -2942,7 +3126,7 @@ function ErstatningsCheckPage() {
           className="flex items-center gap-2 font-medium"
         >
           <BarChart3 size={16} />
-          4. Statistik
+          3. Statistik
         </Button>
 
         <div className="h-6 w-px bg-gray-300 mx-1 hidden md:block" />
@@ -2954,7 +3138,7 @@ function ErstatningsCheckPage() {
           size="sm"
         >
           <Upload size={14} />
-          Importera följesedel
+          3. Importera följesedel
         </Button>
         <Button
           variant={step === "shelf-life" ? "default" : "outline"}
@@ -2966,7 +3150,7 @@ function ErstatningsCheckPage() {
           size="sm"
         >
           <Settings size={14} />
-          Hållbarhetsdata
+          4. Hållbarhetsdata
         </Button>
         <Button
           variant={step === "generate" ? "default" : "outline"}
@@ -2975,7 +3159,7 @@ function ErstatningsCheckPage() {
           size="sm"
         >
           <Download size={14} />
-          Generera ersättning
+          5. Generera ersättning
         </Button>
         {user.role === "admin" && (
           <>
@@ -3708,9 +3892,7 @@ function ErstatningsCheckPage() {
                         const arrivalDate = record.arrival_date
                           ? new Date(record.arrival_date)
                           : null;
-                        const expiryDate = record.expiry_date
-                          ? new Date(record.expiry_date)
-                          : null;
+                        const expiryDate = record.expiry_date ? new Date(record.expiry_date) : null;
                         const hasValidDates =
                           arrivalDate !== null &&
                           expiryDate !== null &&
@@ -3788,13 +3970,27 @@ function ErstatningsCheckPage() {
                                 : "Ej registrerat"}
                             </TableCell>
                             <TableCell className="font-mono text-sm">
-                              {record.shelf_lifetime_days > 0 && record.arrival_date && record.expiry_date ? (
+                              {record.shelf_lifetime_days > 0 &&
+                              record.arrival_date &&
+                              record.expiry_date ? (
                                 (() => {
-                                  const assessment = calculateShelfLifeStatus(record.arrival_date, record.expiry_date, record.shelf_lifetime_days);
+                                  const assessment = calculateShelfLifeStatus(
+                                    record.arrival_date,
+                                    record.expiry_date,
+                                    record.shelf_lifetime_days,
+                                  );
                                   return (
-                                    <span className={assessment.status === 'Reklamation' ? 'text-red-700 font-semibold' : 'text-emerald-700'}>
-                                      {assessment.remainingDays} av {record.shelf_lifetime_days} dagar
-                                      {assessment.status === 'Reklamation' && ' (minst ' + assessment.requiredDays + ' dagar)'}
+                                    <span
+                                      className={
+                                        assessment.status === "Reklamation"
+                                          ? "text-red-700 font-semibold"
+                                          : "text-emerald-700"
+                                      }
+                                    >
+                                      {assessment.remainingDays} av {record.shelf_lifetime_days}{" "}
+                                      dagar
+                                      {assessment.status === "Reklamation" &&
+                                        " (minst " + assessment.requiredDays + " dagar)"}
                                     </span>
                                   );
                                 })()
@@ -4346,7 +4542,7 @@ function ErstatningsCheckPage() {
       )}
 
       {/* Step 4: Weekly task */}
-      {false && step === "weekly" && (
+      {step === "shelf-life" && (
         <Card>
           <CardHeader>
             <CardTitle>Veckouppdrag</CardTitle>
@@ -4400,6 +4596,233 @@ function ErstatningsCheckPage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Step 2: Product Catalog (Produktkatalog) */}
+      {step === "products" && (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-3xl font-semibold tracking-tight">Produktkatalog</h2>
+            <p className="text-coop-gray-900">
+              Översikt över kategorier och produkter med historisk reklamationsrisk.
+            </p>
+          </div>
+
+          {/* Search bar */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-coop-gray-900" />
+              <Input
+                placeholder="Sök kategori eller produkt..."
+                value={catalogSearch}
+                onChange={(e) => setCatalogSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCatalogSearch("");
+                setSelectedCatalogCategory(null);
+                setInfoProduct(null);
+              }}
+            >
+              Rensa
+            </Button>
+          </div>
+
+          {/* Category Grid */}
+          {catalogLoading ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <Card key={i} className="p-6">
+                  <div className="h-4 w-24 bg-coop-gray-200 rounded animate-pulse mb-3" />
+                  <div className="h-3 w-20 bg-coop-gray-200 rounded animate-pulse mb-4" />
+                  <div className="h-2 w-full bg-coop-gray-200 rounded animate-pulse mb-2" />
+                  <div className="h-2 w-3/4 bg-coop-gray-200 rounded animate-pulse" />
+                </Card>
+              ))}
+            </div>
+          ) : catalogError ? (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{catalogError}</AlertDescription>
+            </Alert>
+          ) : catalogCategories.length === 0 ? (
+            <div className="text-center py-16 text-coop-gray-900">
+              <Package size={48} className="mx-auto mb-4 opacity-30" />
+              <p className="text-lg font-medium">Inga kategorier hittades</p>
+              <p className="text-sm mt-1">
+                Kontrollera att det finns produkter registrerade i databasen.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Category network cards */}
+              {!selectedCatalogCategory && (
+                <div>
+                  <h3 className="text-lg font-medium mb-3">Kategorinät</h3>
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    {catalogCategories
+                      .filter((cat) => {
+                        if (!catalogSearch.trim()) return true;
+                        const q = catalogSearch.toLowerCase();
+                        return (
+                          cat.name.toLowerCase().includes(q) || cat.code.toLowerCase().includes(q)
+                        );
+                      })
+                      .map((cat) => (
+                        <Card
+                          key={cat.name}
+                          className="cursor-pointer transition-shadow hover:shadow-md border"
+                          onClick={() => setSelectedCatalogCategory(cat.name)}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="font-semibold text-base truncate">
+                                  {cat.displayTitle}
+                                </div>
+                                <div className="text-xs text-coop-gray-900 mt-1">
+                                  {cat.uniqueProductCount} produkter • {cat.totalDeliveries}{" "}
+                                  leveranser • {cat.activeReclamations} reklamationer
+                                </div>
+                              </div>
+                              <div
+                                className={`text-xs font-medium px-2.5 py-1 rounded-full ${cat.riskBg} ${cat.riskColor}`}
+                              >
+                                {cat.riskLevel}
+                              </div>
+                            </div>
+                            {/* Risk progress bar */}
+                            <div className="mt-3">
+                              <div className="flex justify-between text-xs text-coop-gray-900 mb-1">
+                                <span>Riskindikator</span>
+                                <span>{cat.riskPercentage}%</span>
+                              </div>
+                              <Progress value={cat.riskPercentage} className="h-2" />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Category detail view */}
+              {selectedCatalogCategory && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedCatalogCategory(null);
+                        setInfoProduct(null);
+                      }}
+                    >
+                      <ArrowLeft size={16} className="mr-1" />
+                      Tillbaka till kategorier
+                    </Button>
+                    <h3 className="text-lg font-medium ml-2">{selectedCatalogCategory}</h3>
+                  </div>
+
+                  {catalogProducts.filter(
+                    (p) =>
+                      p.category === selectedCatalogCategory ||
+                      (selectedCatalogCategory === "Övrigt" && !p.category),
+                  ).length === 0 ? (
+                    <div className="text-center py-8 text-coop-gray-900">
+                      <p>Inga produkter i denna kategori.</p>
+                    </div>
+                  ) : (
+                    <div className="border rounded-lg overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Produkt</TableHead>
+                            <TableHead>SAP-ID</TableHead>
+                            <TableHead>BNR</TableHead>
+                            <TableHead>EAN</TableHead>
+                            <TableHead className="text-right">Leveranser</TableHead>
+                            <TableHead className="text-right">Reklamationer</TableHead>
+                            <TableHead className="text-right">Risk</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {catalogProducts
+                            .filter(
+                              (p) =>
+                                p.category === selectedCatalogCategory ||
+                                (selectedCatalogCategory === "Övrigt" && !p.category),
+                            )
+                            .map((product) => {
+                              const totalDel = Math.max(product.deliveryCount, 1);
+                              const riskScore = calculateRiskScore(
+                                product.reclamationCount,
+                                totalDel,
+                              );
+                              const risk = calculateRisk({
+                                reclamationCount: product.reclamationCount,
+                                deliveryCount: totalDel,
+                              });
+                              return (
+                                <TableRow
+                                  key={product.sap_article_id}
+                                  className="cursor-pointer hover:bg-coop-gray-100"
+                                  onClick={() => setInfoProduct(product)}
+                                >
+                                  <TableCell>
+                                    <div className="font-medium">{product.name}</div>
+                                    <div className="text-xs text-coop-gray-900">
+                                      {product.brand}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="font-mono text-xs">
+                                    {product.sap_article_id}
+                                  </TableCell>
+                                  <TableCell className="text-xs">{product.bnr || "—"}</TableCell>
+                                  <TableCell className="text-xs">{product.ean || "—"}</TableCell>
+                                  <TableCell className="text-right text-xs">
+                                    {product.deliveryCount}
+                                  </TableCell>
+                                  <TableCell className="text-right text-xs font-medium">
+                                    {product.reclamationCount}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <div
+                                        className={`w-16 h-1.5 rounded-full overflow-hidden bg-coop-gray-200`}
+                                      >
+                                        <div
+                                          className={`h-full rounded-full ${
+                                            risk.level === "high"
+                                              ? "bg-red-500"
+                                              : risk.level === "medium"
+                                                ? "bg-amber-500"
+                                                : "bg-green-500"
+                                          }`}
+                                          style={{ width: `${risk.percentage}%` }}
+                                        />
+                                      </div>
+                                      <span className="text-xs font-medium w-8 text-right">
+                                        {risk.percentage}%
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Step 5: Reclamation status / Hantera varor */}

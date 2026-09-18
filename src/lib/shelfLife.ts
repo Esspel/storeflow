@@ -8,12 +8,13 @@ export type ShelfLifeStatus =
   | "Kräver ersättning"
   | "Datum saknas"
   | "Hållbarhet saknas"
-  | "SAKNAS I SAP";
+  | "SAKNAS I SAP"
+  | "Kan inte bedömas";
 
 export interface ShelfLifeAssessment {
   remainingDays: number;
   requiredDays: number;
-  status: "OK" | "Reklamation";
+  status: "OK" | "Reklamation" | "Kan inte bedömas";
   percentageLeft: number;
 }
 
@@ -53,8 +54,21 @@ export function calculateShelfLifeStatus(
   bestBeforeDate: string | null | undefined,
   totalShelfLifeDays: number,
 ): ShelfLifeAssessment {
+  /**
+   * Parses a date string into a UTC timestamp (ms).
+   * Uses Date.UTC(y, mo, d) for YYYY-MM-DD strings so the result is
+   * independent of the client's local time zone. Other formats (e.g.
+   * ISO with time or "Date(xxx)") are parsed as before via new Date().
+   */
   const parseDate = (dateStr: string | null | undefined): number | null => {
     if (dateStr == null || dateStr === "—" || String(dateStr).trim() === "") return null;
+    // YYYY-MM-DD pure calendar date → deterministic UTC midnight
+    const isoMatch = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+      const [, y, mo, d] = isoMatch;
+      const ts = Date.UTC(parseInt(y, 10), parseInt(mo, 10) - 1, parseInt(d, 10));
+      return Number.isNaN(ts) ? null : ts;
+    }
     if (String(dateStr).startsWith("Date(")) {
       const match = String(dateStr).match(/Date\((\d+)\)/);
       if (!match) return null;
@@ -75,7 +89,7 @@ export function calculateShelfLifeStatus(
   if (deliveryMs === null || bestBeforeMs === null) {
     return {
       remainingDays: 0,
-      requiredDays: totalShelfLifeDays <= 0 ? 0 : totalShelfLifeDays > 548 ? 274 : Math.floor(totalShelfLifeDays * 0.5),
+      requiredDays: totalShelfLifeDays <= 0 ? 0 : Math.floor(totalShelfLifeDays * 0.5),
       status: "Reklamation",
       percentageLeft: 0,
     };
@@ -86,9 +100,7 @@ export function calculateShelfLifeStatus(
   const requiredDays =
     totalShelfLifeDays <= 0
       ? 0
-      : totalShelfLifeDays > 548
-        ? 274
-        : Math.floor(totalShelfLifeDays * 0.5);
+      : Math.floor(totalShelfLifeDays * 0.5);
 
   return {
     remainingDays,
