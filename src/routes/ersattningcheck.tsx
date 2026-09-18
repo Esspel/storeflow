@@ -128,7 +128,7 @@ type ShelfLifeRecord = {
   delivery_status: string;
   category: string;
   delivery_number?: string | null;
-  sap_data_missing?: boolean;
+  sap_data_missing?: boolean | null;
   next_sap_check?: string | null;
 };
 
@@ -183,14 +183,6 @@ type ReplacementStatistics = {
   allStoresMonthly: Array<{ month: string; value: number; count: number }>;
   allStoresStoreCount: number;
   allStoresAverageApprovedValue: number | null;
-};
-
-type WeeklyTask = {
-  sap_article_id: string;
-  name: string;
-  ean: string;
-  bnr: string;
-  delivery_count: number;
 };
 
 type ReclamationStatus = "Ej skickad" | "Granskas av butikssupporten" | "Löst" | "Nekad";
@@ -458,9 +450,6 @@ function ErstatningsCheckPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [editingShelfLifeId, setEditingShelfLifeId] = useState<string | null>(null);
   const [editingShelfLifeValue, setEditingShelfLifeValue] = useState("");
-  const [weeklyTask, setWeeklyTask] = useState<WeeklyTask[]>([]);
-  const [selectedWeeklyProduct, setSelectedWeeklyProduct] = useState<WeeklyTask | null>(null);
-  const [weeklyDays, setWeeklyDays] = useState("");
   const [deliveryStatistics, setDeliveryStatistics] = useState<DeliveryStatistic[]>([]);
   const [productReclamationStats, setProductReclamationStats] = useState<
     Array<{
@@ -1024,7 +1013,7 @@ function ErstatningsCheckPage() {
         setCatalogLoading(false);
       }
     })();
-  }, [activeStore?.id, catalogCategories]);
+  }, [activeStore?.id]);
 
   // Load shelf life data
   const loadShelfLifeData = async () => {
@@ -1967,36 +1956,6 @@ function ErstatningsCheckPage() {
     }
   };
 
-  // Load weekly task (products needing shelf life data)
-  const loadWeeklyTask = async () => {
-    setIsLoading(true);
-    try {
-      const { data: stats, error: dbErr } = await supabase
-        .from("product_reclamation_stats")
-        .select("*")
-        .eq("store_id", activeStore.id);
-      if (dbErr) throw dbErr;
-
-      // Filter for products with 0 reklamationes / missing shelf life data
-      const productsWithoutShelfLife = (stats || [])
-        .filter((p) => p.reclamation_count === 0 && p.delivery_count > 0)
-        .slice(0, 10);
-
-      if (productsWithoutShelfLife.length === 0) {
-        toast.info("Inga produkter saknar hållbarhetsdata i veckouppdraget");
-        return;
-      }
-
-      setWeeklyTask(productsWithoutShelfLife);
-      setStep("shelf-life");
-    } catch (error) {
-      console.error("Error loading weekly task:", error);
-      toast.error("Kunde inte ladda veckouppdrag");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // Save weekly shelf-life updates directly to DB
   const saveWeeklyShelfLife = async (
     updates: Array<{ id: string; shelf_lifetime_days: number; expiry_date: string }>,
@@ -2322,7 +2281,7 @@ function ErstatningsCheckPage() {
       .filter(({ record, status }) => {
         // Visa artiklar utan bäst-före-datum med status "Datum saknas" eller "SAKNAS I SAP"
         if (!record.expiry_date) {
-          return status === "Datum saknas" || status === "SAKNAS I SAP";
+          return status === "Datum saknas" || status === "SAKNAS I SAP" || status === "Hållbarhet saknas";
         }
         if (!search) return true;
         return [
@@ -2339,15 +2298,22 @@ function ErstatningsCheckPage() {
             .includes(search),
         );
       })
-      .filter(({ record, status }) => {
+      .filter(({ record }) => {
         const recordCategory = String(record.category ?? "").trim();
         const lowerCategory = recordCategory.toLowerCase();
         if (hiddenCategories.some((c) => c.toLowerCase() === lowerCategory)) return false;
         if (autoHiddenCategories.has(lowerCategory)) {
-          return Boolean(record.shelf_lifetime_days && record.shelf_lifetime_days > 0);
+          // Visa artiklar som saknar hållbarhetsdata (0/null/NaN) – de ska inte döljas
+          const hasShelfLife =
+            record.shelf_lifetime_days != null &&
+            !Number.isNaN(record.shelf_lifetime_days) &&
+            record.shelf_lifetime_days > 0;
+          if (!hasShelfLife) return true;
+          return true;
         }
         // Filter by status (multi-select)
-        if (shelfLifeStatusFilter.length > 0 && !shelfLifeStatusFilter.includes(status))
+        const recordStatus = getShelfLifeStatus(record);
+        if (shelfLifeStatusFilter.length > 0 && !shelfLifeStatusFilter.includes(recordStatus))
           return false;
         // Filter by brand (multi-select)
         if (brandFilter.length > 0 && !brandFilter.includes(record.brand)) return false;
@@ -4168,6 +4134,17 @@ function ErstatningsCheckPage() {
 
       {step === "statistics" && (
         <div className="space-y-6">
+          {isLoading && (
+            <div className="grid gap-4 md:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <Card key={i} className="p-6">
+                  <div className="h-4 w-24 bg-coop-gray-200 rounded animate-pulse mb-3" />
+                  <div className="h-8 w-32 bg-coop-gray-200 rounded animate-pulse mb-3" />
+                  <div className="h-3 w-full bg-coop-gray-200 rounded animate-pulse" />
+                </Card>
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 className="text-3xl font-semibold tracking-tight">Statistik</h2>
@@ -4569,63 +4546,6 @@ function ErstatningsCheckPage() {
         </Card>
       )}
 
-      {/* Step 4: Weekly task */}
-      {step === "shelf-life" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Veckouppdrag</CardTitle>
-            <CardDescription>
-              Produkter som saknar hållbarhetsdata och behöver fyllas i.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {weeklyTask.length === 0 ? (
-              <div className="text-center py-8 text-coop-gray-900">
-                <Clock size={48} className="mx-auto mb-4 opacity-50" />
-                <p>Inga produkter att hantera.</p>
-              </div>
-            ) : (
-              <div className="border rounded-lg overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>SAP-ID</TableHead>
-                      <TableHead>Produktnamn</TableHead>
-                      <TableHead>EAN</TableHead>
-                      <TableHead>BNR</TableHead>
-                      <TableHead>Leveranser</TableHead>
-                      <TableHead className="text-right">Åtgärder</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {weeklyTask.map((product) => (
-                      <TableRow key={product.sap_article_id}>
-                        <TableCell className="font-mono text-sm">
-                          {product.sap_article_id}
-                        </TableCell>
-                        <TableCell>{product.name}</TableCell>
-                        <TableCell>{product.ean || "-"}</TableCell>
-                        <TableCell>{product.bnr || "-"}</TableCell>
-                        <TableCell className="text-center">{product.delivery_count}</TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSelectedWeeklyProduct(product)}
-                          >
-                            Ange hållbarhet
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Step 2: Product Catalog (Produktkatalog) */}
       {step === "products" && (
         <div className="space-y-6">
@@ -4963,43 +4883,6 @@ function ErstatningsCheckPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* Weekly task dialog */}
-      <Dialog open={false} onOpenChange={(open) => !open && setSelectedWeeklyProduct(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Ange hållbarhetsdata</DialogTitle>
-            <DialogDescription>{selectedWeeklyProduct?.sap_article_id}</DialogDescription>
-          </DialogHeader>
-
-          {selectedWeeklyProduct && (
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.target as HTMLFormElement;
-                await saveShelfLife({
-                  sap_article_id: selectedWeeklyProduct.sap_article_id,
-                  shelf_lifetime_days: parseInt(
-                    (form.elements.namedItem("shelf_lifetime_days") as HTMLInputElement).value,
-                  ),
-                });
-                setSelectedWeeklyProduct(null);
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <Label>Hållbarhet (dagar)</Label>
-                <Input name="shelf_lifetime_days" type="number" placeholder="T.ex. 365" required />
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={isLoading}>
-                  Spara
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

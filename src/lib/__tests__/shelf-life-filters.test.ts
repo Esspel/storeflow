@@ -41,7 +41,7 @@ describe("Hållbarhetsstatus vid saknade data", () => {
   });
 
   it("sätter INTE 'SAKNAS I SAP' när sap_data_missing är null (ej hämtat ännu)", () => {
-    const result = getShelfLifeStatus({ ...baseRecord, sap_data_missing: null });
+    const result = getShelfLifeStatus({ ...baseRecord, sap_data_missing: null as unknown as boolean });
     expect(result).not.toBe("SAKNAS I SAP");
   });
 
