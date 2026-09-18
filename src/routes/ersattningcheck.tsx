@@ -1084,6 +1084,14 @@ function ErstatningsCheckPage() {
           const product = productMap.get(sapArticleId) ?? {};
           const master = masterMap.get(sapArticleId) ?? {};
           const delivery = latestDelivery.get(sapArticleId) ?? {};
+
+          // Determine if SAP data is missing (only true when explicitly set by SAP import)
+          const isSapDataMissing = master.sap_data_missing === true;
+
+          // If no SAP data exists at all (master is empty), set to null (not fetched yet)
+          const sapDataState = master && Object.keys(master).length > 0 ?
+            (isSapDataMissing ? true : null) : null;
+
           return {
             id: delivery.id ?? product.id ?? sapArticleId,
             sap_article_id: sapArticleId,
@@ -1099,7 +1107,8 @@ function ErstatningsCheckPage() {
             updated_at: product.updated_at ?? new Date().toISOString(),
             category: product.category ?? delivery.category ?? "",
             delivery_number: delivery.delivery_number ?? null,
-            sap_data_missing: master.sap_data_missing ?? false,
+            // Use the proper state: true = SAP said no data, null = not fetched yet
+            sap_data_missing: sapDataState,
             next_sap_check: master.next_sap_check ?? null,
           };
         }),
@@ -2281,7 +2290,8 @@ function ErstatningsCheckPage() {
   const getShelfLifeStatus = (record: ShelfLifeRecord) => {
     // Om posten redan är godkänd (t.ex. delivery_status = "Löst" / "Godkänd"), returnera OK
     if (record.delivery_status === "Löst" || record.delivery_status === "Godkänd") return "OK";
-    if (record.sap_data_missing) return "SAKNAS I SAP";
+    // Endast uttryckligt true = SAP svarade men heldbarhetsdata saknas; null = ej hämtat ännu
+    if (record.sap_data_missing === true) return "SAKNAS I SAP";
     if (!record.arrival_date || !record.expiry_date) return "Datum saknas";
     if (
       record.shelf_lifetime_days == null ||

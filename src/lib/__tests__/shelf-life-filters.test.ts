@@ -40,6 +40,16 @@ describe("Hållbarhetsstatus vid saknade data", () => {
     expect(result).toBe("Datum saknas");
   });
 
+  it("sätter INTE 'SAKNAS I SAP' när sap_data_missing är null (ej hämtat ännu)", () => {
+    const result = getShelfLifeStatus({ ...baseRecord, sap_data_missing: null });
+    expect(result).not.toBe("SAKNAS I SAP");
+  });
+
+  it("sätter 'SAKNAS I SAP' när sap_data_missing är true", () => {
+    const result = getShelfLifeStatus({ ...baseRecord, sap_data_missing: true });
+    expect(result).toBe("SAKNAS I SAP");
+  });
+
   it("sätter 'Hållbarhet saknas' när shelf_lifetime_days är 0", () => {
     const result = getShelfLifeStatus({
       ...baseRecord,

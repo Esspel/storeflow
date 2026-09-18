@@ -112,10 +112,11 @@ export function calculateShelfLifeStatus(
 
 /**
  * Returns the human-readable status for a shelf life record.
- * Order matters: sap_data_missing → datum → shelf_lifetime → calculate.
+ * Order matters: sap_data_missing === true → datum → shelf_lifetime → calculate.
+ * sap_data_missing: null = not yet fetched, sap_data_missing: true = SAP answered but no data.
  */
 export function getShelfLifeStatus(record: ShelfLifeRecord): ShelfLifeStatus {
-  if (record.sap_data_missing) return "SAKNAS I SAP";
+  if (record.sap_data_missing === true) return "SAKNAS I SAP";
   if (!record.arrival_date || !record.expiry_date) return "Datum saknas";
   if (
     record.shelf_lifetime_days == null ||
