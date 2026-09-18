@@ -877,12 +877,14 @@ function ErstatningsCheckPage() {
           }
         }
 
-        // Build lookup for delivery counts from store_product_deliveries
-        const deliveryCountsMap = new Map<string, number>();
+        // Count unique deliveries per article (not aggregated duplicates)
+        const deliveryCountsMap = new Map<string, Set<string>>();
         if (deliveriesData && deliveriesData.length > 0) {
           for (const d of deliveriesData) {
             const id = d.sap_article_id ?? "";
-            deliveryCountsMap.set(id, (deliveryCountsMap.get(id) ?? 0) + 1);
+            const deliveryId = d.id ?? d.delivery_number ?? ""; // use unique delivery identifier
+            if (!deliveryCountsMap.has(id)) deliveryCountsMap.set(id, new Set());
+            deliveryCountsMap.get(id)!.add(String(deliveryId));
           }
         }
 
@@ -908,7 +910,9 @@ function ErstatningsCheckPage() {
             const ean = p.ean ?? null;
             const bnr = p.bnr ?? null;
             const existingReclamations = reclamationCountsMap.get(sapId) ?? 0;
-            const existingDeliveries = deliveryCountsMap.get(sapId) ?? 0;
+            const deliverySet = deliveryCountsMap.get(sapId);
+            const uniqueDeliveryCount = deliverySet ? deliverySet.size : 0;
+            const existingDeliveries = uniqueDeliveryCount;
 
             productMap.set(sapId, {
               sap_article_id: sapId,
@@ -946,7 +950,8 @@ function ErstatningsCheckPage() {
             activeReclamations: 0,
           };
           entry.products.add(sapId);
-          entry.deliveriesCount += product.deliveryCount;
+          const deliverySet = deliveryCountsMap.get(sapId);
+          entry.deliveriesCount += deliverySet ? deliverySet.size : 0;
           entry.activeReclamations += product.reclamationCount;
           categoriesMap.set(catName, entry);
         }
@@ -2150,6 +2155,8 @@ function ErstatningsCheckPage() {
         }))
         .filter((item) => {
           const delivery = item.delivery;
+          // Exkludera artiklar utan bäst-före-datum (krav: endast artiklar med datum ska begäras ersättning)
+          if (!delivery.best_before_date || delivery.best_before_date === "" || delivery.best_before_date === "null") return false;
           const master = masterMap.get(delivery.sap_article_id) || {};
           return shouldIncludeInReplacement({
             id: delivery.id ?? delivery.sap_article_id ?? "",
@@ -2232,7 +2239,7 @@ function ErstatningsCheckPage() {
         `ersattningsansokan_${new Date().toISOString().split("T")[0]}.zip`,
       );
       setImportSuccess(
-        `Genererade ZIP med ${files.length} .txt-fil(er), ${flagged.length} produkter.`,
+        `Genererade ersättningsfil med ${files.length} produkter.`,
       );
     } catch (error) {
       console.error("Error generating zip:", error);
