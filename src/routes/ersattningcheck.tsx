@@ -1080,7 +1080,7 @@ function ErstatningsCheckPage() {
           return {
             id: delivery.id ?? product.id ?? sapArticleId,
             sap_article_id: sapArticleId,
-            shelf_lifetime_days: master.shelf_lifetime_days ?? 0,
+            shelf_lifetime_days: (master.shelf_lifetime_days > 0 ? master.shelf_lifetime_days : 0),
             expiry_date: delivery.best_before_date ?? "",
             arrival_date: delivery.arrival_date ?? "",
             compensation_price_ore: master.default_compensation_price_ore ?? 2,
@@ -2161,7 +2161,7 @@ function ErstatningsCheckPage() {
           return shouldIncludeInReplacement({
             id: delivery.id ?? delivery.sap_article_id ?? "",
             sap_article_id: delivery.sap_article_id,
-            shelf_lifetime_days: master.shelf_lifetime_days ?? 0,
+            shelf_lifetime_days: (master.shelf_lifetime_days > 0 ? master.shelf_lifetime_days : 0),
             expiry_date: delivery.best_before_date ?? "",
             arrival_date: delivery.arrival_date ?? "",
             compensation_price_ore: master.default_compensation_price_ore ?? 2,
@@ -3418,25 +3418,47 @@ function ErstatningsCheckPage() {
               </CardHeader>
               <CardContent>
                 {deliveryStatistics.length > 0 ? (
-                  <div className="space-y-2">
-                    {deliveryStatistics.slice(0, 5).map((delivery, index) => (
-                      <div
-                        key={`${delivery.sap_article_id}-${delivery.arrival_date}-${index}`}
-                        className="flex items-center justify-between border-b py-2 last:border-0"
-                      >
-                        <div>
-                          <p className="font-medium">{delivery.product_name}</p>
-                          <p className="font-mono text-xs text-coop-gray-900">
-                            {delivery.sap_article_id}
-                          </p>
+                  <div className="divide-y divide-coop-gray-100">
+                    {deliveryStatistics.slice(0, 5).map((delivery, index) => {
+                      const totalCount = delivery.totalProducts ?? 0;
+                      const reclCount = delivery.shouldReclaim ?? 0;
+                      const okCount = Math.max(0, totalCount - reclCount);
+                      const hasShelfLife = !!delivery.shelf_lifetime_days && delivery.shelf_lifetime_days > 0;
+                      return (
+                        <div
+                          key={`${delivery.sap_article_id}-${delivery.arrival_date}-${index}`}
+                          className="py-4 first:pt-0 last:pb-0 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6"
+                        >
+                          <div>
+                            <p className="font-medium text-coop-gray-900 leading-snug">{delivery.product_name}</p>
+                            <p className="font-mono text-xs text-coop-gray-500">{delivery.sap_article_id}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-coop-gray-500 uppercase tracking-wide font-semibold mb-0.5">Leveransdatum</p>
+                            <p className="text-sm">{delivery.arrival_date ? new Date(delivery.arrival_date).toLocaleDateString("sv-SE") : "—"}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-coop-gray-500 uppercase tracking-wide font-semibold mb-0.5">Produkter</p>
+                            <p className="text-sm font-medium">{totalCount} st</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div className={`rounded px-2 py-1 ${reclCount > 0 ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-green-50 text-green-700 border border-green-100'}`}>
+                              <span className="block text-xs text-coop-gray-500">Reklamation</span>
+                              <span className="font-semibold">{reclCount}</span>
+                            </div>
+                            <div className={`rounded px-2 py-1 ${okCount > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-coop-gray-50 text-coop-gray-500 border border-coop-gray-200'}`}>
+                              <span className="block text-xs text-coop-gray-500">OK</span>
+                              <span className="font-semibold">{okCount}</span>
+                            </div>
+                          </div>
+                          {!hasShelfLife && (
+                            <div className="md:col-span-4 text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded px-2 py-1 inline-flex items-center gap-1 w-fit">
+                              <span>⚠</span> Artikeln saknar total hållbarhet (dagar) — visas inte i ersättningsansökan
+                            </div>
+                          )}
                         </div>
-                        <span className="text-sm text-coop-gray-900">
-                          {delivery.arrival_date
-                            ? new Date(delivery.arrival_date).toLocaleDateString("sv-SE")
-                            : "Datum saknas"}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="flex min-h-40 flex-col items-center justify-center text-center text-coop-gray-900">
