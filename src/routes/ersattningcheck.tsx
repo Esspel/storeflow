@@ -852,15 +852,7 @@ function ErstatningsCheckPage() {
 
         if (productsErr) throw productsErr;
 
-        // Fetch product_reclamation_stats for current store
-        const { data: statsData, error: statsErr } = await supabase
-          .from("product_reclamation_stats")
-          .select("*")
-          .eq("store_id", activeStore.id);
-
-        if (statsErr) throw statsErr;
-
-        // Fetch reclamations for calculating active reclamations
+        // Fetch reclamations for calculating reclamation counts
         const { data: reclamationsData, error: reclamErr } = await supabase
           .from("reclamations")
           .select("sap_article_id, status")
@@ -868,31 +860,29 @@ function ErstatningsCheckPage() {
 
         if (reclamErr) throw reclamErr;
 
-        // Build lookup for active reclamations from reclamations table
-        const activeReclamationsMap = new Map<string, number>();
+        // Fetch deliveries for calculating delivery counts
+        const { data: deliveriesData, error: deliveriesErr } = await supabase
+          .from("store_product_deliveries")
+          .select("sap_article_id")
+          .eq("store_id", activeStore.id);
+
+        if (deliveriesErr) throw deliveriesErr;
+
+        // Build lookup for reclamation counts from reclamations table
+        const reclamationCountsMap = new Map<string, number>();
         if (reclamationsData && reclamationsData.length > 0) {
           for (const r of reclamationsData) {
-            const status = r.status ?? "";
-            if (status === "Väntande" || status === "Skickad") {
-              const id = r.sap_article_id ?? "";
-              activeReclamationsMap.set(id, (activeReclamationsMap.get(id) ?? 0) + 1);
-            }
+            const id = r.sap_article_id ?? "";
+            reclamationCountsMap.set(id, (reclamationCountsMap.get(id) ?? 0) + 1);
           }
         }
 
-        // Build lookup for reclamation counts from product_reclamation_stats
-        const reclamationCountsMap = new Map<string, number>();
-        if (statsData && statsData.length > 0) {
-          for (const s of statsData) {
-            reclamationCountsMap.set(s.sap_article_id ?? "", s.reclamation_count ?? 0);
-          }
-        }
-
-        // Build lookup for delivery counts from product_reclamation_stats
+        // Build lookup for delivery counts from store_product_deliveries
         const deliveryCountsMap = new Map<string, number>();
-        if (statsData && statsData.length > 0) {
-          for (const s of statsData) {
-            deliveryCountsMap.set(s.sap_article_id ?? "", s.delivery_count ?? 0);
+        if (deliveriesData && deliveriesData.length > 0) {
+          for (const d of deliveriesData) {
+            const id = d.sap_article_id ?? "";
+            deliveryCountsMap.set(id, (deliveryCountsMap.get(id) ?? 0) + 1);
           }
         }
 
@@ -2309,6 +2299,7 @@ function ErstatningsCheckPage() {
         if (hiddenCategories.some((c) => c.toLowerCase() === lowerCategory)) return false;
         if (autoHiddenCategories.has(lowerCategory)) {
           // Visa artiklar som saknar hållbarhetsdata (0/null/NaN) – de ska inte döljas
+          // oavsett kategori. Dessa artiklar hamnar i "Datum saknas"/"Hållbarhet saknas"-status.
           const hasShelfLife =
             record.shelf_lifetime_days != null &&
             !Number.isNaN(record.shelf_lifetime_days) &&
@@ -3092,12 +3083,37 @@ function ErstatningsCheckPage() {
           Dashboard
         </Button>
         <Button
+          variant={step === "import" ? "default" : "outline"}
+          onClick={() => setStep("import")}
+          className="flex items-center gap-1.5 text-xs text-gray-600"
+          size="sm"
+        >
+          <Upload size={14} />
+          Importera följesedel
+        </Button>
+        <Button
+          variant={step === "shelf-life" ? "default" : "outline"}
+          onClick={() => setStep("shelf-life")}
+          className="flex items-center gap-2 font-medium"
+        >
+          <FileSpreadsheet size={16} />
+          Hantera hållbarhetsdata
+        </Button>
+        <Button
+          variant={step === "generate" ? "default" : "outline"}
+          onClick={() => setStep("generate")}
+          className="flex items-center gap-2 font-medium"
+        >
+          <Download size={16} />
+          Generera ersättning
+        </Button>
+        <Button
           variant={step === "reclamations" ? "default" : "outline"}
           onClick={() => setStep("reclamations")}
           className="flex items-center gap-2 font-medium"
         >
           <AlertTriangle size={16} />
-          1. Reklamationsstatus
+          Reklamationsstatus
         </Button>
         <Button
           variant={step === "products" ? "default" : "outline"}
@@ -3105,7 +3121,7 @@ function ErstatningsCheckPage() {
           className="flex items-center gap-2 font-medium"
         >
           <Package size={16} />
-          2. Produktkatalog
+          Produktkatalog
         </Button>
         <Button
           variant={step === "statistics" ? "default" : "outline"}
@@ -3116,64 +3132,28 @@ function ErstatningsCheckPage() {
           className="flex items-center gap-2 font-medium"
         >
           <BarChart3 size={16} />
-          3. Statistik
+          Statistik
         </Button>
 
-        <div className="h-6 w-px bg-gray-300 mx-1 hidden md:block" />
-
         <Button
-          variant={step === "import" ? "default" : "outline"}
-          onClick={() => setStep("import")}
-          className="flex items-center gap-1.5 text-xs text-gray-600"
-          size="sm"
-        >
-          <Upload size={14} />
-          3. Importera följesedel
-        </Button>
-        <Button
-          variant={step === "shelf-life" ? "default" : "outline"}
+          variant={step === "category-mapping" ? "default" : "outline"}
           onClick={() => {
-            setStep("shelf-life");
-            loadShelfLifeData();
+            void loadCategoryMappings();
+            setStep("category-mapping");
           }}
-          className="flex items-center gap-1.5 text-xs text-gray-600"
-          size="sm"
+          className="flex items-center gap-2"
         >
-          <Settings size={14} />
-          4. Hållbarhetsdata
+          <Settings size={16} />
+          Koppla flöden
         </Button>
         <Button
-          variant={step === "generate" ? "default" : "outline"}
-          onClick={() => setStep("generate")}
-          className="flex items-center gap-1.5 text-xs text-gray-600"
-          size="sm"
+          variant={step === "admin-test" ? "default" : "outline"}
+          onClick={() => setStep("admin-test")}
+          className="flex items-center gap-2"
         >
-          <Download size={14} />
-          5. Generera ersättning
+          <CheckCircle2 size={16} />
+          Testa flöden
         </Button>
-        {user.role === "admin" && (
-          <>
-            <Button
-              variant={step === "category-mapping" ? "default" : "outline"}
-              onClick={() => {
-                void loadCategoryMappings();
-                setStep("category-mapping");
-              }}
-              className="flex items-center gap-2"
-            >
-              <Settings size={16} />
-              6. Koppla flöden
-            </Button>
-            <Button
-              variant={step === "admin-test" ? "default" : "outline"}
-              onClick={() => setStep("admin-test")}
-              className="flex items-center gap-2"
-            >
-              <CheckCircle2 size={16} />
-              Testa flöden
-            </Button>
-          </>
-        )}
       </div>
 
       {/* Alerts */}
