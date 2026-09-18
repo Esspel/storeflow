@@ -1099,15 +1099,29 @@ function ErstatningsCheckPage() {
         }),
       );
       setDeliveryStatistics(
-        (deliveriesData ?? []).map((delivery: any) => ({
-          sap_article_id: delivery.sap_article_id,
-          product_name: delivery.product_name || "Okänd produkt",
-          brand: delivery.brand || "",
-          arrival_date: delivery.arrival_date,
-          expiry_date: delivery.best_before_date,
-          delivery_status: delivery.status || "",
-          category: delivery.category || "",
-        })),
+        (deliveriesData ?? []).map((delivery: any) => {
+          const qty = parseInt(delivery.quantity || delivery.qty || 0, 10) || 0;
+          const expiry = delivery.best_before_date || "";
+          const arrival = delivery.arrival_date || "";
+          const shelfDays = (delivery.shelf_lifetime_days !== undefined && delivery.shelf_lifetime_days > 0) ? delivery.shelf_lifetime_days : (delivery.master_shelf_lifetime_days || 0);
+          const shouldReclaim = (arrival && expiry && shelfDays > 0) ? (
+            calculateShelfLifeStatus(arrival, expiry, shelfDays)?.status === "Reklamation" ? Math.ceil(qty * 0.5) : 0
+          ) : 0;
+          return {
+            sap_article_id: delivery.sap_article_id,
+            product_name: delivery.product_name || "Okänd produkt",
+            brand: delivery.brand || "",
+            arrival_date: delivery.arrival_date,
+            expiry_date: delivery.best_before_date,
+            delivery_status: delivery.status || "",
+            category: delivery.category || "",
+            totalProducts: qty,
+            shouldReclaim,
+            okCount: Math.max(0, qty - shouldReclaim),
+            shelf_lifetime_days: shelfDays,
+            hasShelfLife: shelfDays > 0,
+          };
+        }),
       );
     } catch (error) {
       console.error("Error loading shelf life:", error);
