@@ -1828,6 +1828,10 @@ function ErstatningsCheckPage() {
         .sort((a, b) => b.badDeliveryCount - a.badDeliveryCount)
         .slice(0, 5);
 
+      // Calculate distinct stores with delivery data (better denominator for "Snitt per butik")
+      const distinctStoresWithDelivery = new Set(
+        Array.from(deliveriesByArticle.values()).flat().map((d: any) => d.store_id).filter(Boolean),
+      );
       const storeIdsWithProducts = new Set(
         (storesWithProductsResult?.data ?? []).map((r: any) => r.store_id),
       );
@@ -1835,7 +1839,8 @@ function ErstatningsCheckPage() {
       const allStoresReclamationsForPeriod = allReclamations.filter(
         (row: any) => new Date(row.created_at) >= periodStart,
       );
-      const allStoresStoreCount = storeIdsWithProducts.size;
+      // Use stores with delivery data for "Snitt per butik" (avoid division by zero)
+      const allStoresStoreCount = Math.max(distinctStoresWithDelivery.size, 1);
       const allStoresTotalCount = allStoresReclamationsForPeriod.length;
       const allStoresSentCount = allStoresReclamationsForPeriod.filter(
         (row: any) => row.status === "Granskas av butikssupporten",
@@ -2309,7 +2314,7 @@ function ErstatningsCheckPage() {
             !Number.isNaN(record.shelf_lifetime_days) &&
             record.shelf_lifetime_days > 0;
           if (!hasShelfLife) return true;
-          return true;
+          return false; // Artikel med hållbarhetsdata i auto-hidden kategori döljs
         }
         // Filter by status (multi-select)
         const recordStatus = getShelfLifeStatus(record);
