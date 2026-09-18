@@ -995,7 +995,8 @@ function ErstatningsCheckPage() {
 
         setCatalogCategories(catalogCategories);
         setCatalogProducts(Array.from(productMap.values()));
-        setSelectedCatalogCategory(catalogCategories.length > 0 ? catalogCategories[0].name : null);
+        // Starta utan vald kategori för att visa ett tydligt kategorinät
+        setSelectedCatalogCategory(null);
         setCatalogLoading(false);
       } catch (error) {
         console.error("Error loading catalog data:", error);
@@ -4573,11 +4574,11 @@ function ErstatningsCheckPage() {
           {catalogLoading ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
-                <Card key={i} className="p-6">
-                  <div className="h-4 w-24 bg-coop-gray-200 rounded animate-pulse mb-3" />
-                  <div className="h-3 w-20 bg-coop-gray-200 rounded animate-pulse mb-4" />
-                  <div className="h-2 w-full bg-coop-gray-200 rounded animate-pulse mb-2" />
-                  <div className="h-2 w-3/4 bg-coop-gray-200 rounded animate-pulse" />
+                <Card key={i} className="p-6 hover:shadow-lg transition-shadow duration-200">
+                  <div className="h-4 w-24 bg-coop-gray-200 rounded" />
+                  <div className="h-3 w-20 bg-coop-gray-200 rounded" />
+                  <div className="h-2 w-full bg-coop-gray-200 rounded" />
+                  <div className="h-2 w-3/4 bg-coop-gray-200 rounded" />
                 </Card>
               ))}
             </div>
