@@ -2311,6 +2311,10 @@ function ErstatningsCheckPage() {
         const recordStatus = getShelfLifeStatus(record);
         if (shelfLifeStatusFilter.length > 0 && !shelfLifeStatusFilter.includes(recordStatus))
           return false;
+        // Visa artiklar utan Total hållbarhet (dagar) oavsett kategori/filter
+        if (!record.shelf_lifetime_days || Number.isNaN(record.shelf_lifetime_days) || record.shelf_lifetime_days <= 0) {
+          return true;
+        }
         // Filter by brand (multi-select)
         if (brandFilter.length > 0 && !brandFilter.includes(record.brand)) return false;
         // Filter by category (multi-select)

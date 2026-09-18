@@ -47,4 +47,22 @@ describe("shelf-life: articles without shelf life data are included", () => {
     expect(result.length).toBe(1);
     expect(getShelfLifeStatus(record)).toBe("Hållbarhet saknas");
   });
+
+  it("includes record with shelf_lifetime_days = 0 in search", () => {
+    const record = { ...baseRecord, shelf_lifetime_days: 0, product_name: "TestProdukt" };
+    const result = filterShelfLifeRecords([record], { search: "TestProdukt" });
+    expect(result.length).toBe(1);
+  });
+
+  it("includes record with shelf_lifetime_days = null in search", () => {
+    const record = { ...baseRecord, shelf_lifetime_days: null as any, product_name: "TestProdukt" };
+    const result = filterShelfLifeRecords([record], { search: "TestProdukt" });
+    expect(result.length).toBe(1);
+  });
+
+  it("includes record with NaN shelf_lifetime_days in search", () => {
+    const record = { ...baseRecord, shelf_lifetime_days: NaN, product_name: "TestProdukt" };
+    const result = filterShelfLifeRecords([record], { search: "TestProdukt" });
+    expect(result.length).toBe(1);
+  });
 });
