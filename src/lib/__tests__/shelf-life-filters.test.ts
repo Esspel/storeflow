@@ -92,6 +92,46 @@ describe("filterShelfLifeRecords", () => {
     expect(filtered).toHaveLength(1);
     expect(filtered[0]?.id).toBe("2");
   });
+
+  it("döljer SAKNAS I SAP-när 'SAKNAS I SAP' inte är i statusfiltret", () => {
+    const records = [
+      { ...baseRecord, id: "1", sap_data_missing: true, shelf_lifetime_days: null as any },
+      { ...baseRecord, id: "2", sap_data_missing: false },
+    ];
+    // Ingen statusfilter → SAKNAS I SAP döljs
+    let filtered = filterShelfLifeRecords(records, {});
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.id).toBe("2");
+
+    // Statusfilter utan SAKNAS I SAP → SAKNAS I SAP döljs
+    filtered = filterShelfLifeRecords(records, { statusFilter: ["OK"] });
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.id).toBe("2");
+  });
+
+  it("visar SAKNAS I SAP-när användaren aktivt väljer det i statusfiltret", () => {
+    const records = [
+      { ...baseRecord, id: "1", sap_data_missing: true, shelf_lifetime_days: null as any },
+      { ...baseRecord, id: "2", sap_data_missing: false },
+    ];
+    const filtered = filterShelfLifeRecords(records, { statusFilter: ["SAKNAS I SAP"] });
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.id).toBe("1");
+  });
+
+  it("visar SAKNAS I SAP-när användaren söker efter artikeln", () => {
+    const records = [
+      {
+        ...baseRecord,
+        id: "1",
+        sap_data_missing: true,
+        shelf_lifetime_days: null as any,
+        product_name: "Sökbar",
+      },
+    ];
+    const filtered = filterShelfLifeRecords(records, { search: "Sökbar" });
+    expect(filtered).toHaveLength(1);
+  });
 });
 
 describe("shouldIncludeInReplacement", () => {

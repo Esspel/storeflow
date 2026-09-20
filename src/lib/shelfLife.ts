@@ -173,6 +173,12 @@ export function filterShelfLifeRecords(
 
     if (statusFilter.length > 0 && !statusFilter.includes(status)) return false;
 
+    // SAKNAS I SAP records only visible when explicitly selected in status filter
+    // (or when actively searching to locate a specific article)
+    if (status === "SAKNAS I SAP" && !statusFilter.includes("SAKNAS I SAP") && !search) {
+      return false;
+    }
+
     const cat = record.category?.toLocaleLowerCase("sv") ?? "";
     if (excludedCategories.size > 0 && excludedCategories.has(cat)) return false;
 

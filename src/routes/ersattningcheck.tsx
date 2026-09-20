@@ -2480,12 +2480,22 @@ const filtered = withStatus
            if (!(record.sap_data_missing === true && showMissingInSap)) return false;
          }
 
-         // Filter by status (multi-select) - applies to ALL records including hidden categories
-         if (shelfLifeStatusFilter.length > 0 && !shelfLifeStatusFilter.includes(recordStatus))
-           return false;
+        // Filter by status (multi-select) - applies to ALL records including hidden categories
+        if (shelfLifeStatusFilter.length > 0 && !shelfLifeStatusFilter.includes(recordStatus))
+          return false;
 
-         // Visa artiklar utan Total hållbarhet (dagar) oavsett kategori/filter
-         if (
+        // SAKNAS I SAP-artiklar ska bara visas när användaren aktivt väljer
+        // "SAKNAS I SAP" i statusfiltret (eller söker aktivt efter en artikel)
+        if (
+          recordStatus === "SAKNAS I SAP" &&
+          !shelfLifeStatusFilter.includes("SAKNAS I SAP") &&
+          !search
+        ) {
+          return false;
+        }
+
+        // Visa artiklar utan Total hållbarhet (dagar) oavsett kategori/filter
+        if (
            !record.shelf_lifetime_days ||
            Number.isNaN(record.shelf_lifetime_days) ||
            record.shelf_lifetime_days <= 0
