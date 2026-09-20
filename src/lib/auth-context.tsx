@@ -143,11 +143,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         setSessionToken(stored.token);
+        if (isMounted) {
+          setToken(stored.token);
+          setUser(stored.user);
+        }
         const validUser = await validateSession(stored.token);
 
         if (validUser && isMounted) {
           setUser(validUser);
-          setToken(stored.token);
           const stores = await loadUserStores(validUser.id, validUser);
 
           if (isMounted) {

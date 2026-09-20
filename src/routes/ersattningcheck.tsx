@@ -84,6 +84,7 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ChartContainer, ChartTooltip, ChartLegend } from "@/components/ui/chart";
 import {
   parseDeliveryNoteExcel,
   matchDeliveryNoteToProducts,
@@ -1188,36 +1189,70 @@ function ErstatningsCheckPage() {
           };
         }),
       );
-      setDeliveryStatistics(
-        (deliveriesData ?? []).map((delivery: any) => {
-          const qty = parseInt(delivery.quantity || delivery.qty || 0, 10) || 0;
-          const expiry = delivery.best_before_date || "";
-          const arrival = delivery.arrival_date || "";
-          const shelfDays =
-            delivery.shelf_lifetime_days !== undefined && delivery.shelf_lifetime_days > 0
-              ? delivery.shelf_lifetime_days
-              : delivery.master_shelf_lifetime_days || 0;
-          const shouldReclaim =
-            arrival && expiry && shelfDays > 0
-              ? calculateShelfLifeStatus(arrival, expiry, shelfDays)?.status === "Reklamation"
-                ? Math.ceil(qty * 0.5)
-                : 0
-              : 0;
-          return {
-            sap_article_id: delivery.sap_article_id,
-            product_name: delivery.product_name || "Okänd produkt",
-            brand: delivery.brand || "",
-            arrival_date: delivery.arrival_date,
-            expiry_date: delivery.best_before_date,
-            delivery_status: delivery.status || "",
-            category: delivery.category || "",
-            totalProducts: qty,
-            shouldReclaim,
-            okCount: Math.max(0, qty - shouldReclaim),
-            shelf_lifetime_days: shelfDays,
-            hasShelfLife: shelfDays > 0,
-          };
-        }),
+setDeliveryStatistics(
+        Array.from(
+          (deliveriesData ?? [])
+            .filter((delivery: any) => delivery.delivery_number || delivery.arrival_date)
+            .reduce((acc: Map<string, DeliveryStatistic>, delivery: any) => {
+              const deliveryKey =
+                delivery.delivery_number ||
+                `article-${delivery.sap_article_id}-${delivery.arrival_date || "no-date"}`;
+              const qty = parseInt(delivery.quantity || delivery.qty || 0, 10) || 0;
+              const expiry = delivery.best_before_date || "";
+              const arrival = delivery.arrival_date || "";
+              const shelfDays =
+                delivery.shelf_lifetime_days !== undefined && delivery.shelf_lifetime_days > 0
+                  ? delivery.shelf_lifetime_days
+                  : delivery.master_shelf_lifetime_days || 0;
+              const shouldReclaim =
+                arrival && expiry && shelfDays > 0
+                  ? calculateShelfLifeStatus(arrival, expiry, shelfDays)?.status === "Reklamation"
+                    ? Math.ceil(qty * 0.5)
+                    : 0
+                  : 0;
+              const okCount = Math.max(0, qty - shouldReclaim);
+
+              const existing = acc.get(deliveryKey);
+              if (existing) {
+                existing.totalProducts = (existing.totalProducts ?? 0) + qty;
+                existing.shouldReclaim = (existing.shouldReclaim ?? 0) + shouldReclaim;
+                existing.okCount = (existing.okCount ?? 0) + okCount;
+                existing.product_name =
+                  existing.product_name || delivery.product_name || "Okänd produkt";
+                existing.brand = existing.brand || delivery.brand || "";
+                existing.category = existing.category || delivery.category || "";
+                existing.arrival_date = existing.arrival_date || arrival;
+                existing.expiry_date = existing.expiry_date || expiry;
+                existing.delivery_status = existing.delivery_status || delivery.status || "";
+                existing.hasShelfLife = existing.hasShelfLife || shelfDays > 0;
+                existing.shelf_lifetime_days = existing.shelf_lifetime_days || shelfDays;
+              } else {
+                acc.set(deliveryKey, {
+                  sap_article_id: delivery.sap_article_id,
+                  product_name: delivery.product_name || "Okänd produkt",
+                  brand: delivery.brand || "",
+                  arrival_date: arrival,
+                  expiry_date: expiry,
+                  delivery_status: delivery.status || "",
+                  category: delivery.category || "",
+                  totalProducts: qty,
+                  shouldReclaim,
+                  okCount,
+                  shelf_lifetime_days: shelfDays,
+                  hasShelfLife: shelfDays > 0,
+                  id: delivery.id,
+                  delivery_number: delivery.delivery_number || null,
+                });
+              }
+              return acc;
+            }, new Map<string, DeliveryStatistic>()).values(),
+        )
+          .sort((a: DeliveryStatistic, b: DeliveryStatistic) => {
+            const aDate = a.arrival_date ? new Date(a.arrival_date).getTime() : 0;
+            const bDate = b.arrival_date ? new Date(b.arrival_date).getTime() : 0;
+            return bDate - aDate;
+          })
+          .map((stat: DeliveryStatistic) => stat),
       );
     } catch (error) {
       console.error("Error loading shelf life:", error);
@@ -2404,94 +2439,105 @@ function ErstatningsCheckPage() {
       status: getShelfLifeStatus(record),
     }));
 
-    const filtered = withStatus
-      .filter(({ record, status }) => {
-        // Visa artiklar utan bäst-före-datum med status "Datum saknas" eller "SAKNAS I SAP"
-        if (!record.expiry_date) {
-          return (
-            status === "Datum saknas" || status === "SAKNAS I SAP" || status === "Hållbarhet saknas"
-          );
-        }
-        if (!search) return true;
-        return [
-          record.sap_article_id,
-          record.product_name,
-          record.brand,
-          String(record.shelf_lifetime_days ?? ""),
-          record.expiry_date,
-          record.arrival_date,
-          status,
-        ].some((value) =>
-          String(value ?? "")
-            .toLocaleLowerCase("sv")
-            .includes(search),
-        );
-      })
-      .filter(({ record, status }) => {
-        const recordCategory = String(record.category ?? "").trim();
-        const lowerCategory = recordCategory.toLowerCase();
-        if (!autoHiddenCategories.has(lowerCategory)) {
-          // Filter by status (multi-select)
-          const recordStatus = getShelfLifeStatus(record);
-          if (shelfLifeStatusFilter.length > 0 && !shelfLifeStatusFilter.includes(recordStatus))
-            return false;
-          // Visa artiklar utan Total hållbarhet (dagar) oavsett kategori/filter
-          if (
-            !record.shelf_lifetime_days ||
-            Number.isNaN(record.shelf_lifetime_days) ||
-            record.shelf_lifetime_days <= 0
-          ) {
-            return true;
-          }
-          // Filter by brand (multi-select)
-          if (brandFilter.length > 0 && !brandFilter.includes(record.brand)) return false;
-          // Filter by category (multi-select)
-          if (categoryFilter.length > 0 && !categoryFilter.includes(recordCategory)) return false;
-          // Filter by delivery date
-          if (deliveryDateFilter) {
-            const arrival = record.arrival_date;
-            if (!arrival) {
-              if (deliveryDateFilter !== "alla") return false;
-            } else {
-              const arrivalDate = new Date(String(arrival));
-              const now = new Date();
-              const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              const weekStart = new Date(todayStart);
-              weekStart.setDate(weekStart.getDate() - todayStart.getDay());
-              const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
-              switch (deliveryDateFilter) {
-                case "idag":
-                  if (!(
-                    arrivalDate >= todayStart &&
-                    arrivalDate < new Date(todayStart.getTime() + 86400000)
-                  ))
-                    return false;
-                  break;
-                case "denna_vecka":
-                  if (!(
-                    arrivalDate >= weekStart &&
-                    arrivalDate < new Date(weekStart.getTime() + 604800000)
-                  ))
-                    return false;
-                  break;
-                case "denna_månad":
-                  if (!(
-                    arrivalDate >= monthStart &&
-                    arrivalDate < new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1)
-                  ))
-                    return false;
-                  break;
-              }
-            }
-          }
-          return true;
-        }
-        // I dolda kategorier: visa INTE artiklar som standard
-        // Endast visa om användaren aktivt filtrerar på "SAKNAS I SAP"
-        const showMissingInSap = shelfLifeStatusFilter.includes("SAKNAS I SAP");
-        if (record.sap_data_missing === true && showMissingInSap) return true;
-        return false;
-      })
+const filtered = withStatus
+       .filter(({ record, status }) => {
+         // Visa artiklar utan bäst-före-datum endast om statusen återspeglar saknad data
+         if (!record.expiry_date) {
+           if (!(
+             status === "Datum saknas" ||
+             status === "SAKNAS I SAP" ||
+             status === "Hållbarhet saknas"
+           )) {
+             return false;
+           }
+         }
+         // Tillämpa sökning på ALLA record, inklusive de med saknade datum
+         if (!search) return true;
+         return [
+           record.sap_article_id,
+           record.product_name,
+           record.brand,
+           String(record.shelf_lifetime_days ?? ""),
+           record.expiry_date,
+           record.arrival_date,
+           status,
+         ].some((value) =>
+           String(value ?? "")
+             .toLocaleLowerCase("sv")
+             .includes(search),
+         );
+       })
+.filter(({ record, status }) => {
+         const recordCategory = String(record.category ?? "").trim();
+         const lowerCategory = recordCategory.toLowerCase();
+         const recordStatus = getShelfLifeStatus(record);
+         const isHiddenCategory = autoHiddenCategories.has(lowerCategory);
+
+         // Dolda kategorier visas bara om användaren aktivt filtrerar på "SAKNAS I SAP"
+         // och record har sap_data_missing === true
+         if (isHiddenCategory) {
+           const showMissingInSap = shelfLifeStatusFilter.includes("SAKNAS I SAP");
+           if (!(record.sap_data_missing === true && showMissingInSap)) return false;
+         }
+
+         // Filter by status (multi-select) - applies to ALL records including hidden categories
+         if (shelfLifeStatusFilter.length > 0 && !shelfLifeStatusFilter.includes(recordStatus))
+           return false;
+
+         // Visa artiklar utan Total hållbarhet (dagar) oavsett kategori/filter
+         if (
+           !record.shelf_lifetime_days ||
+           Number.isNaN(record.shelf_lifetime_days) ||
+           record.shelf_lifetime_days <= 0
+         ) {
+           return true;
+         }
+
+         // Filter by brand (multi-select) - applies to ALL records
+         if (brandFilter.length > 0 && !brandFilter.includes(record.brand)) return false;
+
+         // Filter by category (multi-select) - applies to ALL records
+         if (categoryFilter.length > 0 && !categoryFilter.includes(recordCategory)) return false;
+
+         // Filter by delivery date
+         if (deliveryDateFilter) {
+           const arrival = record.arrival_date;
+           if (!arrival) {
+             if (deliveryDateFilter !== "alla") return false;
+           } else {
+             const arrivalDate = new Date(String(arrival));
+             const now = new Date();
+             const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+             const weekStart = new Date(todayStart);
+             weekStart.setDate(weekStart.getDate() - todayStart.getDay());
+             const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+             switch (deliveryDateFilter) {
+               case "idag":
+                 if (!(
+                   arrivalDate >= todayStart &&
+                   arrivalDate < new Date(todayStart.getTime() + 86400000)
+                 ))
+                   return false;
+                 break;
+               case "denna_vecka":
+                 if (!(
+                   arrivalDate >= weekStart &&
+                   arrivalDate < new Date(weekStart.getTime() + 604800000)
+                 ))
+                   return false;
+                 break;
+               case "denna_månad":
+                 if (!(
+                   arrivalDate >= monthStart &&
+                   arrivalDate < new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1)
+                 ))
+                   return false;
+                 break;
+             }
+           }
+         }
+         return true;
+       })
       .filter(({ status }) => {
         if (!hideOkRecords) return true;
         return status !== "OK";
@@ -3508,32 +3554,61 @@ function ErstatningsCheckPage() {
             <Card className="min-h-64">
               <CardHeader>
                 <CardTitle>Fördelning</CardTitle>
+                <CardDescription>OK vs Reklamation</CardDescription>
               </CardHeader>
               <CardContent>
-                {shelfLifeRecords.length > 0 ? (
-                  <div className="space-y-3">
-                    {Object.entries(
-                      shelfLifeRecords.reduce<Record<string, number>>((counts, record) => {
-                        const flow = getMappedFlow(record.category);
-                        counts[flow] = (counts[flow] ?? 0) + 1;
-                        return counts;
-                      }, {}),
-                    ).map(([flow, count]) => (
-                      <div
-                        key={flow}
-                        className="flex justify-between border-b py-2 text-sm last:border-0"
-                      >
-                        <span>{flow}</span>
-                        <strong>{count}</strong>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex min-h-40 flex-col items-center justify-center text-center text-coop-gray-900">
-                    <Package size={34} className="mb-3 opacity-50" />
-                    <p>Ingen data ännu</p>
-                  </div>
-                )}
+                {(() => {
+                  const okCount = shelfLifeRecords.filter(
+                    (r) => getShelfLifeStatus(r) === "OK"
+                  ).length;
+                  const reclaimCount = shelfLifeRecords.filter(
+                    (r) => getShelfLifeStatus(r) === "Kräver ersättning"
+                  ).length;
+                  const missingCount = shelfLifeRecords.length - okCount - reclaimCount;
+                  const donutData = [
+                    { name: "OK", value: okCount, color: "#107c41" },
+                    { name: "Reklamation", value: reclaimCount, color: "#d13d3d" },
+                    ...(missingCount > 0
+                      ? [{ name: "Övrigt", value: missingCount, color: "#8c8c8c" }]
+                      : []),
+                  ];
+                  return donutData.some((d) => d.value > 0) ? (
+                    <ChartContainer
+                      config={{
+                        OK: { label: "OK", color: "#107c41" },
+                        Reklamation: { label: "Reklamation", color: "#d13d3d" },
+                        Övrigt: { label: "Övrigt", color: "#8c8c8c" },
+                      }}
+                      className="mx-auto aspect-square max-h-[260px]"
+                    >
+                      <PieChart>
+                        <Pie
+                          data={donutData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }: any) =>
+                            `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                          }
+                          outerRadius={90}
+                          innerRadius={50}
+                          dataKey="value"
+                        >
+                          {donutData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ChartContainer>
+                  ) : (
+                    <div className="flex min-h-40 flex-col items-center justify-center text-center text-coop-gray-900">
+                      <Package size={34} className="mb-3 opacity-50" />
+                      <p>Ingen data ännu</p>
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
             <Card className="min-h-64">

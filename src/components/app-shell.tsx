@@ -574,7 +574,7 @@ export function AppShell() {
             </DropdownMenu>
 
             {nav
-              .filter((item) => item.to !== "/")
+              .filter((item) => item.to !== "/" && item.to !== "/uppgifter")
               .map((item) => (
                 <Link
                   key={item.to}
