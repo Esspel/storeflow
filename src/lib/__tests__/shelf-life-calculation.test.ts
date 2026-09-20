@@ -10,11 +10,7 @@ describe("calculateShelfLifeStatus (gränsvärden & regressioner)", () => {
   it("är OK när tillräckligt många dagar kvar över 50% gränsen", () => {
     // 30 dagar total → kräver 15 dagar kvar (50%)
     // Leverans 2024-04-01, bäst-före 2024-04-17 = 16 dagar kvar → OK
-    const result = calculateShelfLifeStatus(
-      "2024-04-01",
-      "2024-04-17",
-      30,
-    );
+    const result = calculateShelfLifeStatus("2024-04-01", "2024-04-17", 30);
     expect(result.status).toBe("OK");
     expect(result.remainingDays).toBe(16);
     expect(result.requiredDays).toBe(15);
@@ -23,11 +19,7 @@ describe("calculateShelfLifeStatus (gränsvärden & regressioner)", () => {
   it("är Reklamation när för få dagar kvar under 50% gränsen", () => {
     // 30 dagar total → kräver 15 dagar kvar (50%)
     // Leverans 2024-04-01, bäst-före 2024-04-15 = 14 dagar kvar → Reklamation
-    const result = calculateShelfLifeStatus(
-      "2024-04-01",
-      "2024-04-15",
-      30,
-    );
+    const result = calculateShelfLifeStatus("2024-04-01", "2024-04-15", 30);
     expect(result.status).toBe("Reklamation");
     expect(result.remainingDays).toBe(14);
     expect(result.requiredDays).toBe(15);
@@ -36,11 +28,7 @@ describe("calculateShelfLifeStatus (gränsvärden & regressioner)", () => {
   it("är OK på exakt 50% gränsen", () => {
     // 30 dagar total → kräver 15 dagar kvar
     // Leverans 2024-04-01, bäst-före 2024-04-16 = 15 dagar kvar → OK
-    const result = calculateShelfLifeStatus(
-      "2024-04-01",
-      "2024-04-16",
-      30,
-    );
+    const result = calculateShelfLifeStatus("2024-04-01", "2024-04-16", 30);
     expect(result.status).toBe("OK");
     expect(result.remainingDays).toBe(15);
     expect(result.requiredDays).toBe(15);
@@ -74,20 +62,12 @@ describe("calculateShelfLifeStatus (gränsvärden & regressioner)", () => {
 
   describe("med ISO-datumsträng", () => {
     it("hanterar datum som är längre bort", () => {
-      const result = calculateShelfLifeStatus(
-        "2024-04-01",
-        "2024-05-01",
-        30,
-      );
+      const result = calculateShelfLifeStatus("2024-04-01", "2024-05-01", 30);
       expect(["OK", "FRESH"]).toContain(result.status);
     });
 
     it("hanterar utgånget datum", () => {
-      const result = calculateShelfLifeStatus(
-        "2024-04-01",
-        "2024-03-01",
-        30,
-      );
+      const result = calculateShelfLifeStatus("2024-04-01", "2024-03-01", 30);
       expect(["Reklamation", "OK"]).toContain(result.status);
     });
   });
@@ -220,7 +200,7 @@ describe("filterShelfLifeRecords", () => {
 });
 
 describe("shouldIncludeInReplacement", () => {
-  it("inkluderar artiklar utan datum", () => {
+  it("exkluderar artiklar utan datum från ersättning", () => {
     const record = {
       id: "1",
       sap_article_id: "SAP001",
@@ -239,10 +219,10 @@ describe("shouldIncludeInReplacement", () => {
       sap_data_missing: false,
       next_sap_check: null,
     } as any;
-    expect(shouldIncludeInReplacement(record)).toBe(true);
+    expect(shouldIncludeInReplacement(record)).toBe(false);
   });
 
-  it("inkluderar artiklar med SAP-data saknas", () => {
+  it("exkluderar artiklar med SAP-data saknas från ersättning", () => {
     const record = {
       id: "1",
       sap_article_id: "SAP001",
@@ -261,10 +241,10 @@ describe("shouldIncludeInReplacement", () => {
       sap_data_missing: true,
       next_sap_check: null,
     } as any;
-    expect(shouldIncludeInReplacement(record)).toBe(true);
+    expect(shouldIncludeInReplacement(record)).toBe(false);
   });
 
-  it("innefogar artiklar utan hållbarhetsdata (0 eller null)", () => {
+  it("exkluderar artiklar utan hållbarhetsdata (0 eller null) från ersättning", () => {
     const record = {
       id: "1",
       sap_article_id: "SAP001",
@@ -283,6 +263,6 @@ describe("shouldIncludeInReplacement", () => {
       sap_data_missing: false,
       next_sap_check: null,
     } as any;
-    expect(shouldIncludeInReplacement(record)).toBe(true);
+    expect(shouldIncludeInReplacement(record)).toBe(false);
   });
 });

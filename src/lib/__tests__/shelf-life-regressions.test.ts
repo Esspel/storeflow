@@ -25,7 +25,7 @@ const minimalRecord = {
  * These tests verify the EXPECTED behavior after the fix.
  */
 describe("Generate replacements - articles with missing data", () => {
-  it("should include articles with missing best-before dates in replacement generation", () => {
+  it("should exclude articles with missing best-before dates from replacement generation", () => {
     const recordMissingDates = {
       ...minimalRecord,
       sap_article_id: "test-1",
@@ -35,11 +35,10 @@ describe("Generate replacements - articles with missing data", () => {
       sap_data_missing: false,
     };
 
-    // shouldIncludeInReplacement returns true for articles without dates
-    expect(shouldIncludeInReplacement(recordMissingDates)).toBe(true);
+    expect(shouldIncludeInReplacement(recordMissingDates)).toBe(false);
   });
 
-  it("should include articles with SAKNAS I SAP status in replacement generation", () => {
+  it("should exclude articles with SAKNAS I SAP status from replacement generation", () => {
     const recordSapMissing = {
       ...minimalRecord,
       sap_article_id: "test-2",
@@ -49,8 +48,7 @@ describe("Generate replacements - articles with missing data", () => {
       sap_data_missing: true,
     };
 
-    // shouldIncludeInReplacement returns true when sap_data_missing is true
-    expect(shouldIncludeInReplacement(recordSapMissing)).toBe(true);
+    expect(shouldIncludeInReplacement(recordSapMissing)).toBe(false);
   });
 
   it("should include articles as Kräver ersättning when assessment is Reklamation", () => {

@@ -612,6 +612,9 @@ function ErstatningsCheckPage() {
   // Filter: Only eligible records where arrival is within last 4 days (regulatory requirement)
   // Users must apply for compensation within 4 days of delivery, otherwise no compensation
   const eligibleShelfLifeRecords = shelfLifeRecords.filter((record) => {
+    // Artiklar som saknas i SAP eller saknar bästföredatum får inte komma upp i ersättningsansökan
+    if (record.sap_data_missing === true) return false;
+    if (!record.arrival_date || !record.expiry_date) return false;
     const status = reclamationStatuses.get(record.sap_article_id);
     if (status && status !== "Ej skickat") {
       return false;
@@ -1074,13 +1077,13 @@ function ErstatningsCheckPage() {
           const isSapDataMissing = master.sap_data_missing === true;
 
           // If no SAP data exists at all (master is empty), set to null (not fetched yet)
-          const sapDataState = master && Object.keys(master).length > 0 ?
-            (isSapDataMissing ? true : null) : null;
+          const sapDataState =
+            master && Object.keys(master).length > 0 ? (isSapDataMissing ? true : null) : null;
 
           return {
             id: delivery.id ?? product.id ?? sapArticleId,
             sap_article_id: sapArticleId,
-            shelf_lifetime_days: (master.shelf_lifetime_days > 0 ? master.shelf_lifetime_days : 0),
+            shelf_lifetime_days: master.shelf_lifetime_days > 0 ? master.shelf_lifetime_days : 0,
             expiry_date: delivery.best_before_date ?? "",
             arrival_date: delivery.arrival_date ?? "",
             compensation_price_ore: master.default_compensation_price_ore ?? 2,
@@ -1103,10 +1106,16 @@ function ErstatningsCheckPage() {
           const qty = parseInt(delivery.quantity || delivery.qty || 0, 10) || 0;
           const expiry = delivery.best_before_date || "";
           const arrival = delivery.arrival_date || "";
-          const shelfDays = (delivery.shelf_lifetime_days !== undefined && delivery.shelf_lifetime_days > 0) ? delivery.shelf_lifetime_days : (delivery.master_shelf_lifetime_days || 0);
-          const shouldReclaim = (arrival && expiry && shelfDays > 0) ? (
-            calculateShelfLifeStatus(arrival, expiry, shelfDays)?.status === "Reklamation" ? Math.ceil(qty * 0.5) : 0
-          ) : 0;
+          const shelfDays =
+            delivery.shelf_lifetime_days !== undefined && delivery.shelf_lifetime_days > 0
+              ? delivery.shelf_lifetime_days
+              : delivery.master_shelf_lifetime_days || 0;
+          const shouldReclaim =
+            arrival && expiry && shelfDays > 0
+              ? calculateShelfLifeStatus(arrival, expiry, shelfDays)?.status === "Reklamation"
+                ? Math.ceil(qty * 0.5)
+                : 0
+              : 0;
           return {
             sap_article_id: delivery.sap_article_id,
             product_name: delivery.product_name || "Okänd produkt",
@@ -1172,10 +1181,10 @@ function ErstatningsCheckPage() {
 
     const now = new Date();
 
+    // Hämta global cooldown-status (alla butiker, inte bara aktiv butik)
     const { data: existingShelfLife } = await supabase
       .from("product_shelf_life")
-      .select("sap_article_id, shelf_lifetime_days, next_sap_check, sap_data_missing")
-      .eq("store_id", activeStore.id);
+      .select("sap_article_id, shelf_lifetime_days, next_sap_check, sap_data_missing");
 
     const existingMap = new Map(
       (existingShelfLife ?? []).map((r: any) => [
@@ -1188,11 +1197,19 @@ function ErstatningsCheckPage() {
       ]),
     );
 
-    const eligible = shelfLifeRecords.filter((record) => {
-      const existing = existingMap.get(record.sap_article_id);
+    // Samla alla kända artikel-ID:n globalt: från product_shelf_life (alla butiker)
+    // plus aktiv butiks shelfLifeRecords som inte har någon rad ännu.
+    const knownArticleIds = new Set<string>([
+      ...(existingShelfLife ?? []).map((r: any) => r.sap_article_id),
+      ...shelfLifeRecords.map((r) => r.sap_article_id),
+    ]);
+
+    // Bestäm vilka artiklar som är eligible (global cooldown per sap_article_id)
+    const eligible = [...knownArticleIds].filter((sapArticleId) => {
+      const existing = existingMap.get(sapArticleId);
       const nextCheck = existing?.next_sap_check;
       if (nextCheck && new Date(nextCheck) > now) return false;
-      return Boolean(record.sap_article_id);
+      return true;
     });
 
     console.log(
@@ -1217,31 +1234,31 @@ function ErstatningsCheckPage() {
     let missingInSapCount = 0;
 
     for (let i = 0; i < eligible.length; i++) {
-      const record = eligible[i];
+      const sapArticleId = eligible[i];
       try {
         const sapData = useProxy
           ? await (async () => {
-              console.log(`[SAP Proxy] Fetching for article ${record.sap_article_id}`);
+              console.log(`[SAP Proxy] Fetching for article ${sapArticleId}`);
               const proxyResponse = await fetchViaProxy(
-                `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore.sap_site_id ?? activeStore.id)}',ProductID='${encodeURIComponent(record.sap_article_id)}')?$format=json`,
+                `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore.sap_site_id ?? activeStore.id)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
                 "GET",
                 { Accept: "application/json" },
               );
-              console.log(`[SAP Proxy] Response for ${record.sap_article_id}:`, proxyResponse);
+              console.log(`[SAP Proxy] Response for ${sapArticleId}:`, proxyResponse);
               if (!proxyResponse.success) {
                 console.error(
-                  `[SAP Proxy] Failed for ${record.sap_article_id}:`,
+                  `[SAP Proxy] Failed for ${sapArticleId}:`,
                   proxyResponse.error,
                 );
                 return null;
               }
               const json = proxyResponse.data ?? "";
               if (!json) {
-                console.error(`[SAP Proxy] No JSON data for ${record.sap_article_id}`);
+                console.error(`[SAP Proxy] No JSON data for ${sapArticleId}`);
                 return null;
               }
               console.log(
-                `[SAP Proxy] Raw JSON for ${record.sap_article_id}:`,
+                `[SAP Proxy] Raw JSON for ${sapArticleId}:`,
                 json.substring(0, 200),
               );
               let parsed;
@@ -1249,19 +1266,19 @@ function ErstatningsCheckPage() {
                 parsed = JSON.parse(json);
               } catch (e) {
                 console.error(
-                  `[SAP Proxy] JSON parse error for ${record.sap_article_id}:`,
+                  `[SAP Proxy] JSON parse error for ${sapArticleId}:`,
                   e,
                   json.substring(0, 200),
                 );
                 return null;
               }
               const result = parsed.d || null;
-              console.log(`[SAP Proxy] Extracted data for ${record.sap_article_id}:`, result);
+              console.log(`[SAP Proxy] Extracted data for ${sapArticleId}:`, result);
               return result;
             })()
           : await fetchSapProductData(
               activeStore.sap_site_id ?? activeStore.id,
-              record.sap_article_id,
+              sapArticleId,
             );
 
         if (!sapData) {
@@ -1270,7 +1287,7 @@ function ErstatningsCheckPage() {
           // SAKNAS I SAP and set cooldown so it isn't retried every run.
           errorCount += 1;
           const updatedAt = new Date().toISOString();
-          const existing = existingMap.get(record.sap_article_id);
+          const existing = existingMap.get(sapArticleId);
           const isFirstTime =
             !existing ||
             existing.shelf_lifetime_days == null ||
@@ -1286,7 +1303,7 @@ function ErstatningsCheckPage() {
           const { error } = await supabase.from("product_shelf_life").upsert(
             {
               store_id: activeStore.id,
-              sap_article_id: record.sap_article_id,
+              sap_article_id: sapArticleId,
               shelf_lifetime_days: 0,
               sap_data_missing: true,
               next_sap_check: nextSapCheck.toISOString(),
@@ -1305,7 +1322,7 @@ function ErstatningsCheckPage() {
         const hasValidSapData = Number.isFinite(shelfLifeDays) && shelfLifeDays > 0;
         const updatedAt = new Date().toISOString();
 
-        const existing = existingMap.get(record.sap_article_id);
+        const existing = existingMap.get(sapArticleId);
         const isFirstTime =
           !existing ||
           existing.shelf_lifetime_days == null ||
@@ -1331,7 +1348,7 @@ function ErstatningsCheckPage() {
         const { error } = await supabase.from("product_shelf_life").upsert(
           {
             store_id: activeStore.id,
-            sap_article_id: record.sap_article_id,
+            sap_article_id: sapArticleId,
             shelf_lifetime_days: hasValidSapData ? shelfLifeDays : 0,
             sap_data_missing: !hasValidSapData,
             next_sap_check: nextSapCheck.toISOString(),
@@ -1727,10 +1744,7 @@ function ErstatningsCheckPage() {
             ).length;
             return {
               month: d.toLocaleDateString("sv-SE", { day: "numeric", month: "short" }),
-              value: dayReclamations.reduce(
-                (sum: number, row: any) => sum + (row?.amount ?? 0),
-                0,
-              ),
+              value: dayReclamations.reduce((sum: number, row: any) => sum + (row?.amount ?? 0), 0),
               count: dayCount,
             };
           });
@@ -1840,7 +1854,10 @@ function ErstatningsCheckPage() {
 
       // Calculate distinct stores with delivery data (better denominator for "Snitt per butik")
       const distinctStoresWithDelivery = new Set(
-        Array.from(deliveriesByArticle.values()).flat().map((d: any) => d.store_id).filter(Boolean),
+        Array.from(deliveriesByArticle.values())
+          .flat()
+          .map((d: any) => d.store_id)
+          .filter(Boolean),
       );
       const storeIdsWithProducts = new Set(
         (storesWithProductsResult?.data ?? []).map((r: any) => r.store_id),
@@ -2148,7 +2165,7 @@ function ErstatningsCheckPage() {
       // Hämta masterdata för shelf_lifetime_days och temperature_zone
       const { data: masterData, error: masterErr } = await supabase
         .from("product_shelf_life")
-        .select("sap_article_id, shelf_lifetime_days, temperature_zone");
+        .select("sap_article_id, shelf_lifetime_days, temperature_zone, sap_data_missing");
       if (masterErr) throw masterErr;
       const masterMap = new Map((masterData ?? []).map((m: any) => [m.sap_article_id, m]));
       const products = await fetchAllRows(
@@ -2170,12 +2187,17 @@ function ErstatningsCheckPage() {
         .filter((item) => {
           const delivery = item.delivery;
           // Exkludera artiklar utan bäst-före-datum (krav: endast artiklar med datum ska begäras ersättning)
-          if (!delivery.best_before_date || delivery.best_before_date === "" || delivery.best_before_date === "null") return false;
+          if (
+            !delivery.best_before_date ||
+            delivery.best_before_date === "" ||
+            delivery.best_before_date === "null"
+          )
+            return false;
           const master = masterMap.get(delivery.sap_article_id) || {};
           return shouldIncludeInReplacement({
             id: delivery.id ?? delivery.sap_article_id ?? "",
             sap_article_id: delivery.sap_article_id,
-            shelf_lifetime_days: (master.shelf_lifetime_days > 0 ? master.shelf_lifetime_days : 0),
+            shelf_lifetime_days: master.shelf_lifetime_days > 0 ? master.shelf_lifetime_days : 0,
             expiry_date: delivery.best_before_date ?? "",
             arrival_date: delivery.arrival_date ?? "",
             compensation_price_ore: master.default_compensation_price_ore ?? 2,
@@ -2252,9 +2274,7 @@ function ErstatningsCheckPage() {
         files,
         `ersattningsansokan_${new Date().toISOString().split("T")[0]}.zip`,
       );
-      setImportSuccess(
-        `Genererade ersättningsfil med ${files.length} produkter.`,
-      );
+      setImportSuccess(`Genererade ersättningsfil med ${files.length} produkter.`);
     } catch (error) {
       console.error("Error generating zip:", error);
       setImportError("Kunde inte generera ersättningsfil.");
@@ -2287,7 +2307,10 @@ function ErstatningsCheckPage() {
   const filteredShelfLifeRecords = useMemo(() => {
     const search = shelfLifeSearch.trim().toLocaleLowerCase("sv");
 
-    const autoHiddenCategories = new Set(hiddenCategories.map((c) => c.toLowerCase()));
+    const autoHiddenCategories = new Set([
+      ...hiddenCategories.map((c) => c.toLowerCase()),
+      ...globalHiddenCategories.map((c) => c.toLowerCase()),
+    ]);
 
     const withStatus = shelfLifeRecords.map((record) => ({
       record,
@@ -2298,7 +2321,9 @@ function ErstatningsCheckPage() {
       .filter(({ record, status }) => {
         // Visa artiklar utan bäst-före-datum med status "Datum saknas" eller "SAKNAS I SAP"
         if (!record.expiry_date) {
-          return status === "Datum saknas" || status === "SAKNAS I SAP" || status === "Hållbarhet saknas";
+          return (
+            status === "Datum saknas" || status === "SAKNAS I SAP" || status === "Hållbarhet saknas"
+          );
         }
         if (!search) return true;
         return [
@@ -2315,73 +2340,78 @@ function ErstatningsCheckPage() {
             .includes(search),
         );
       })
-      .filter(({ record }) => {
+      .filter(({ record, status }) => {
         const recordCategory = String(record.category ?? "").trim();
         const lowerCategory = recordCategory.toLowerCase();
-        if (hiddenCategories.some((c) => c.toLowerCase() === lowerCategory)) return false;
-        if (autoHiddenCategories.has(lowerCategory)) {
-          // Visa artiklar som saknar hållbarhetsdata (0/null/NaN) – de ska inte döljas
-          // oavsett kategori. Dessa artiklar hamnar i "Datum saknas"/"Hållbarhet saknas"-status.
-          const hasShelfLife =
-            record.shelf_lifetime_days != null &&
-            !Number.isNaN(record.shelf_lifetime_days) &&
-            record.shelf_lifetime_days > 0;
-          if (!hasShelfLife) return true;
-          return false; // Artikel med hållbarhetsdata i auto-hidden kategori döljs
-        }
-        // Filter by status (multi-select)
-        const recordStatus = getShelfLifeStatus(record);
-        if (shelfLifeStatusFilter.length > 0 && !shelfLifeStatusFilter.includes(recordStatus))
-          return false;
-        // Visa artiklar utan Total hållbarhet (dagar) oavsett kategori/filter
-        if (!record.shelf_lifetime_days || Number.isNaN(record.shelf_lifetime_days) || record.shelf_lifetime_days <= 0) {
-          return true;
-        }
-        // Filter by brand (multi-select)
-        if (brandFilter.length > 0 && !brandFilter.includes(record.brand)) return false;
-        // Filter by category (multi-select)
-        if (categoryFilter.length > 0 && !categoryFilter.includes(recordCategory)) return false;
-        // Filter by delivery date
-        if (deliveryDateFilter) {
-          const arrival = record.arrival_date;
-          if (!arrival) {
-            if (deliveryDateFilter !== "alla") return false;
-          } else {
-            const arrivalDate = new Date(String(arrival));
-            const now = new Date();
-            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const weekStart = new Date(todayStart);
-            weekStart.setDate(weekStart.getDate() - todayStart.getDay());
-            const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
-            switch (deliveryDateFilter) {
-              case "idag":
-                if (!(
-                  arrivalDate >= todayStart &&
-                  arrivalDate < new Date(todayStart.getTime() + 86400000)
-                ))
-                  return false;
-                break;
-              case "denna_vecka":
-                if (!(
-                  arrivalDate >= weekStart &&
-                  arrivalDate < new Date(weekStart.getTime() + 604800000)
-                ))
-                  return false;
-                break;
-              case "denna_månad":
-                if (!(
-                  arrivalDate >= monthStart &&
-                  arrivalDate < new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1)
-                ))
-                  return false;
-                break;
+        if (!autoHiddenCategories.has(lowerCategory)) {
+          // Filter by status (multi-select)
+          const recordStatus = getShelfLifeStatus(record);
+          if (shelfLifeStatusFilter.length > 0 && !shelfLifeStatusFilter.includes(recordStatus))
+            return false;
+          // Visa artiklar utan Total hållbarhet (dagar) oavsett kategori/filter
+          if (
+            !record.shelf_lifetime_days ||
+            Number.isNaN(record.shelf_lifetime_days) ||
+            record.shelf_lifetime_days <= 0
+          ) {
+            return true;
+          }
+          // Filter by brand (multi-select)
+          if (brandFilter.length > 0 && !brandFilter.includes(record.brand)) return false;
+          // Filter by category (multi-select)
+          if (categoryFilter.length > 0 && !categoryFilter.includes(recordCategory)) return false;
+          // Filter by delivery date
+          if (deliveryDateFilter) {
+            const arrival = record.arrival_date;
+            if (!arrival) {
+              if (deliveryDateFilter !== "alla") return false;
+            } else {
+              const arrivalDate = new Date(String(arrival));
+              const now = new Date();
+              const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const weekStart = new Date(todayStart);
+              weekStart.setDate(weekStart.getDate() - todayStart.getDay());
+              const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+              switch (deliveryDateFilter) {
+                case "idag":
+                  if (!(
+                    arrivalDate >= todayStart &&
+                    arrivalDate < new Date(todayStart.getTime() + 86400000)
+                  ))
+                    return false;
+                  break;
+                case "denna_vecka":
+                  if (!(
+                    arrivalDate >= weekStart &&
+                    arrivalDate < new Date(weekStart.getTime() + 604800000)
+                  ))
+                    return false;
+                  break;
+                case "denna_månad":
+                  if (!(
+                    arrivalDate >= monthStart &&
+                    arrivalDate < new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1)
+                  ))
+                    return false;
+                  break;
+              }
             }
           }
+          return true;
         }
-        return true;
+        // I dolda kategorier: visa alltid artiklar som behöver uppmärksamhet
+        if (record.sap_data_missing === true) return true;
+        if (!record.arrival_date || !record.expiry_date) return true;
+        if (
+          record.shelf_lifetime_days == null ||
+          Number.isNaN(record.shelf_lifetime_days) ||
+          record.shelf_lifetime_days <= 0
+        ) {
+          return true;
+        }
+        return false;
       })
       .filter(({ status }) => {
-        if (status === "SAKNAS I SAP") return false;
         if (!hideOkRecords) return true;
         return status !== "OK";
       });
@@ -2462,6 +2492,7 @@ function ErstatningsCheckPage() {
     shelfLifeRecords,
     shelfLifeSearch,
     hiddenCategories,
+    globalHiddenCategories,
     hideOkRecords,
     shelfLifeSort,
     shelfLifeStatusFilter,
@@ -3437,38 +3468,58 @@ function ErstatningsCheckPage() {
                       const totalCount = delivery.totalProducts ?? 0;
                       const reclCount = delivery.shouldReclaim ?? 0;
                       const okCount = Math.max(0, totalCount - reclCount);
-                      const hasShelfLife = !!delivery.shelf_lifetime_days && delivery.shelf_lifetime_days > 0;
+                      const hasShelfLife =
+                        !!delivery.shelf_lifetime_days && delivery.shelf_lifetime_days > 0;
                       return (
                         <div
                           key={`delivery-${delivery.delivery_number ?? delivery.id ?? index}-${delivery.arrival_date}-${index}`}
                           className="py-4 first:pt-0 last:pb-0 grid grid-cols-2 gap-4 md:grid-cols-5 md:gap-6"
                         >
                           <div className="md:col-span-2">
-                            <p className="text-xs text-coop-gray-500 uppercase tracking-wide">Leveransnummer</p>
-                            <p className="font-medium text-coop-gray-900">{delivery.delivery_number || delivery.id || delivery.sap_article_id}</p>
-                            <p className="text-xs text-coop-gray-500">{delivery.product_name || "—"} ({delivery.sap_article_id || "—"})</p>
+                            <p className="text-xs text-coop-gray-500 uppercase tracking-wide">
+                              Leveransnummer
+                            </p>
+                            <p className="font-medium text-coop-gray-900">
+                              {delivery.delivery_number || delivery.id || delivery.sap_article_id}
+                            </p>
+                            <p className="text-xs text-coop-gray-500">
+                              {delivery.product_name || "—"} ({delivery.sap_article_id || "—"})
+                            </p>
                           </div>
                           <div>
-                            <p className="text-xs text-coop-gray-500 uppercase tracking-wide font-semibold mb-0.5">Leveransdatum</p>
-                            <p className="text-sm">{delivery.arrival_date ? new Date(delivery.arrival_date).toLocaleDateString("sv-SE") : "—"}</p>
+                            <p className="text-xs text-coop-gray-500 uppercase tracking-wide font-semibold mb-0.5">
+                              Leveransdatum
+                            </p>
+                            <p className="text-sm">
+                              {delivery.arrival_date
+                                ? new Date(delivery.arrival_date).toLocaleDateString("sv-SE")
+                                : "—"}
+                            </p>
                           </div>
                           <div>
-                            <p className="text-xs text-coop-gray-500 uppercase tracking-wide font-semibold mb-0.5">Produkter</p>
+                            <p className="text-xs text-coop-gray-500 uppercase tracking-wide font-semibold mb-0.5">
+                              Produkter
+                            </p>
                             <p className="text-sm font-medium">{totalCount} st</p>
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div className={`rounded px-2 py-1 ${reclCount > 0 ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-green-50 text-green-700 border border-green-100'}`}>
+                            <div
+                              className={`rounded px-2 py-1 ${reclCount > 0 ? "bg-red-50 text-red-700 border border-red-100" : "bg-green-50 text-green-700 border border-green-100"}`}
+                            >
                               <span className="block text-xs text-coop-gray-500">Reklamation</span>
                               <span className="font-semibold">{reclCount}</span>
                             </div>
-                            <div className={`rounded px-2 py-1 ${okCount > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-coop-gray-50 text-coop-gray-500 border border-coop-gray-200'}`}>
+                            <div
+                              className={`rounded px-2 py-1 ${okCount > 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-coop-gray-50 text-coop-gray-500 border border-coop-gray-200"}`}
+                            >
                               <span className="block text-xs text-coop-gray-500">OK</span>
                               <span className="font-semibold">{okCount}</span>
                             </div>
                           </div>
                           {!hasShelfLife && (
                             <div className="md:col-span-4 text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded px-2 py-1 inline-flex items-center gap-1 w-fit">
-                              <span>⚠</span> Artikeln saknar total hållbarhet (dagar) — visas inte i ersättningsansökan
+                              <span>⚠</span> Artikeln saknar total hållbarhet (dagar) — visas inte i
+                              ersättningsansökan
                             </div>
                           )}
                         </div>
@@ -4018,7 +4069,9 @@ function ErstatningsCheckPage() {
                               )}
                             </TableCell>
                             <TableCell>
-                              {!hasValidDates ? (
+                              {record.sap_data_missing === true ? (
+                                <Badge variant="outline">SAKNAS I SAP</Badge>
+                              ) : !hasValidDates ? (
                                 <Badge variant="outline">Datum saknas</Badge>
                               ) : !hasShelfLife ? (
                                 <Badge variant="outline">Hållbarhet saknas</Badge>
@@ -4118,7 +4171,9 @@ function ErstatningsCheckPage() {
                               {record.expiry_date
                                 ? (() => {
                                     const d = new Date(record.expiry_date);
-                                    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("sv-SE");
+                                    return Number.isNaN(d.getTime())
+                                      ? "—"
+                                      : d.toLocaleDateString("sv-SE");
                                   })()
                                 : "—"}
                             </div>
@@ -4585,9 +4640,16 @@ function ErstatningsCheckPage() {
         <div className="min-h-[70vh] bg-gradient-to-b from-white to-amber-50/30 rounded-2xl p-6 md:p-10 shadow-sm border border-amber-100/50">
           {/* Header */}
           <div className="mb-8">
-            <div className="inline-flex items-center gap-2 bg-coop-blue-50 text-coop-blue-700 px-3 py-1 rounded-full text-xs font-semibold mb-3 tracking-wide uppercase">Produktkatalog</div>
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900 leading-tight">Kategorier & produkter</h2>
-            <p className="text-slate-500 mt-2 max-w-xl text-base leading-relaxed">Välj en kategori för att se historisk reklamationsrisk, leveranser och risknivå per produkt.</p>
+            <div className="inline-flex items-center gap-2 bg-coop-blue-50 text-coop-blue-700 px-3 py-1 rounded-full text-xs font-semibold mb-3 tracking-wide uppercase">
+              Produktkatalog
+            </div>
+            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900 leading-tight">
+              Kategorier & produkter
+            </h2>
+            <p className="text-slate-500 mt-2 max-w-xl text-base leading-relaxed">
+              Välj en kategori för att se historisk reklamationsrisk, leveranser och risknivå per
+              produkt.
+            </p>
           </div>
 
           {/* Search bar */}
@@ -4771,8 +4833,12 @@ function ErstatningsCheckPage() {
                                   <TableCell className="text-right text-xs font-medium text-coop-blue-700">
                                     {product.deliveryCount > 0 ? (
                                       <span className="inline-flex items-center gap-1">
-                                        <span className="font-semibold">{product.deliveryCount}</span>
-                                        <span className="text-coop-gray-400 font-normal">leveranser</span>
+                                        <span className="font-semibold">
+                                          {product.deliveryCount}
+                                        </span>
+                                        <span className="text-coop-gray-400 font-normal">
+                                          leveranser
+                                        </span>
                                       </span>
                                     ) : (
                                       <span className="text-coop-gray-400">0</span>

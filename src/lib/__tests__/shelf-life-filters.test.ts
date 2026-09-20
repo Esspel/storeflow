@@ -41,7 +41,10 @@ describe("Hållbarhetsstatus vid saknade data", () => {
   });
 
   it("sätter INTE 'SAKNAS I SAP' när sap_data_missing är null (ej hämtat ännu)", () => {
-    const result = getShelfLifeStatus({ ...baseRecord, sap_data_missing: null as unknown as boolean });
+    const result = getShelfLifeStatus({
+      ...baseRecord,
+      sap_data_missing: null as unknown as boolean,
+    });
     expect(result).not.toBe("SAKNAS I SAP");
   });
 
@@ -92,7 +95,7 @@ describe("filterShelfLifeRecords", () => {
 });
 
 describe("shouldIncludeInReplacement", () => {
-  it("inkluderar artiklar utan bäst-före-datum i ersättning", () => {
+  it("exkluderar artiklar utan bäst-före-datum från ersättning", () => {
     const recordWithoutDate = {
       ...baseRecord,
       id: "2",
@@ -102,13 +105,13 @@ describe("shouldIncludeInReplacement", () => {
       sap_data_missing: false,
     };
     const result = shouldIncludeInReplacement(recordWithoutDate);
-    expect(result).toBe(true);
+    expect(result).toBe(false);
   });
 
-  it("inkluderar artiklar med SAKNAS I SAP-status", () => {
+  it("exkluderar artiklar med SAKNAS I SAP-status från ersättning", () => {
     const record = { ...baseRecord, sap_data_missing: true };
     const result = shouldIncludeInReplacement(record);
-    expect(result).toBe(true);
+    expect(result).toBe(false);
   });
 
   it("inkluderar artiklar som kräver ersättning", () => {

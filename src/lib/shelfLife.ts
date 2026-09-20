@@ -63,7 +63,9 @@ export function calculateShelfLifeStatus(
   const parseDate = (dateStr: string | null | undefined): number | null => {
     if (dateStr == null || dateStr === "—" || String(dateStr).trim() === "") return null;
     // YYYY-MM-DD pure calendar date → deterministic UTC midnight
-    const isoMatch = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const isoMatch = String(dateStr)
+      .trim()
+      .match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (isoMatch) {
       const [, y, mo, d] = isoMatch;
       const ts = Date.UTC(parseInt(y, 10), parseInt(mo, 10) - 1, parseInt(d, 10));
@@ -97,10 +99,7 @@ export function calculateShelfLifeStatus(
 
   const msPerDay = 1000 * 60 * 60 * 24;
   const remainingDays = Math.floor((bestBeforeMs - deliveryMs) / msPerDay);
-  const requiredDays =
-    totalShelfLifeDays <= 0
-      ? 0
-      : Math.floor(totalShelfLifeDays * 0.5);
+  const requiredDays = totalShelfLifeDays <= 0 ? 0 : Math.floor(totalShelfLifeDays * 0.5);
 
   return {
     remainingDays,
@@ -183,22 +182,20 @@ export function filterShelfLifeRecords(
 
 /**
  * Determines whether a record should be included in replacement generation.
- * Articles with missing dates or SAP data are included (flagged as missing).
+ * Articles with missing data (sap_data_missing, no dates, no shelf life) are
+ * EXCLUDED from replacement generation – they should be resolved manually
+ * in "Hantera hållbarhetsdata" instead.
  */
 export function shouldIncludeInReplacement(record: ShelfLifeRecord): boolean {
-  // Always include articles where SAP data is missing
-  if (record.sap_data_missing) return true;
-  // Include articles with missing arrival/expiry dates (flagged as "Datum saknas")
-  if (!record.arrival_date || !record.expiry_date) return true;
-  // Include articles with no shelf life defined
+  if (record.sap_data_missing === true) return false;
+  if (!record.arrival_date || !record.expiry_date) return false;
   if (
     record.shelf_lifetime_days == null ||
     Number.isNaN(record.shelf_lifetime_days) ||
     record.shelf_lifetime_days <= 0
   ) {
-    return true;
+    return false;
   }
-  // Otherwise include if shelf life assessment is Reklamation
   const assessment = calculateShelfLifeStatus(
     record.arrival_date,
     record.expiry_date,
