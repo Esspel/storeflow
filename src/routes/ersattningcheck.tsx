@@ -963,16 +963,23 @@ function ErstatningsCheckPage() {
           (product) => product.is_active === true,
         );
 
+        // Räkna antalet leveransrader per artikel (varje rad i store_product_deliveries
+        // representerar en importerad leverans, oavsett om datum upprepas).
+        // Separat karta med unika leveransdatum för visning i detaljvyn.
+        const deliveryCountsMap = new Map<string, number>();
         const deliveryDateCountsMap = new Map<string, Set<string>>();
         if (deliveriesData && deliveriesData.length > 0) {
           for (const delivery of deliveriesData) {
             const sapId = delivery.sap_article_id;
-            const deliveryDate = getDeliveryDateKey(delivery.arrival_date);
-            if (!sapId || !deliveryDate) continue;
+            if (!sapId) continue;
+            deliveryCountsMap.set(sapId, (deliveryCountsMap.get(sapId) ?? 0) + 1);
 
-            const dates = deliveryDateCountsMap.get(sapId) ?? new Set<string>();
-            dates.add(deliveryDate);
-            deliveryDateCountsMap.set(sapId, dates);
+            const deliveryDate = getDeliveryDateKey(delivery.arrival_date);
+            if (deliveryDate) {
+              const dates = deliveryDateCountsMap.get(sapId) ?? new Set<string>();
+              dates.add(deliveryDate);
+              deliveryDateCountsMap.set(sapId, dates);
+            }
           }
         }
 
@@ -995,6 +1002,7 @@ function ErstatningsCheckPage() {
             const ean = product.ean ?? null;
             const bnr = product.bnr ?? null;
             const existingReclamations = reclamationCountsMap.get(sapId) ?? 0;
+            const deliveryCount = deliveryCountsMap.get(sapId) ?? 0;
             const deliveryDates = deliveryDateCountsMap.get(sapId);
 
             productMap.set(sapId, {
@@ -1005,7 +1013,7 @@ function ErstatningsCheckPage() {
               ean,
               bnr,
               reclamationCount: existingReclamations,
-              deliveryCount: deliveryDates?.size ?? 0,
+              deliveryCount,
               deliveryDates: Array.from(deliveryDates ?? []).sort(),
             });
           }
@@ -1034,8 +1042,7 @@ function ErstatningsCheckPage() {
             activeReclamations: 0,
           };
           entry.products.add(sapId);
-          const deliveryDates = deliveryDateCountsMap.get(sapId);
-          entry.deliveriesCount += deliveryDates?.size ?? 0;
+          entry.deliveriesCount += deliveryCountsMap.get(sapId) ?? 0;
           entry.activeReclamations += product.reclamationCount;
           categoriesMap.set(catName, entry);
         }
