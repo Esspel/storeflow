@@ -778,7 +778,7 @@ function ErstatningsCheckPage() {
           return {
             store_id: activeStore.id,
             sap_article_id: sapId,
-            ean: bnr && bnr.length > 0 ? bnr : null,
+            ean: null,
             bnr: bnr && bnr.length > 0 ? bnr : null,
             name: r.row.produkt || "Okänd produkt",
             brand: r.row.varumärke || null,
@@ -1483,6 +1483,18 @@ setDeliveryStatistics(
           console.error("Error upserting shelf life:", error);
           errorCount += 1;
           continue;
+        }
+
+        // Update EAN from SAP data (GlobalTradeItemNumber)
+        if (sapData.GlobalTradeItemNumber) {
+          const { error: eanError } = await supabase
+            .from("products")
+            .update({ ean: sapData.GlobalTradeItemNumber, updated_at: updatedAt })
+            .eq("sap_article_id", sapArticleId)
+            .eq("store_id", activeStore.id);
+          if (eanError) {
+            console.error("Error updating EAN:", eanError);
+          }
         }
 
         successCount += 1;
