@@ -132,10 +132,11 @@ export async function secureSetSession(token: string, user: unknown): Promise<vo
 
   try {
     const db = await openDB();
+    const encryptedToken = await encryptToken(token);
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
-      store.put(token, TOKEN_KEY);
+      store.put(encryptedToken, TOKEN_KEY);
       store.put(user, USER_KEY);
       store.put(expiresAt, EXPIRY_KEY);
 
