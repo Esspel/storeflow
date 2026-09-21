@@ -41,6 +41,7 @@ import {
   ArrowLeft,
   Calendar,
   Filter,
+  Plus,
 } from "lucide-react";
 // Re-export from shelfLife.ts for compatibility with existing imports
 import {
@@ -509,6 +510,20 @@ function ErstatningsCheckPage() {
   const [reclamationDeliveryFilter, setReclamationDeliveryFilter] = useState("ALL");
   const [reclamationCategoryFilter, setReclamationCategoryFilter] = useState("ALL");
   const [historyProduct, setHistoryProduct] = useState<HanteringsItem | null>(null);
+
+  // Add Reclamation dialog state
+  const [addReclamationOpen, setAddReclamationOpen] = useState(false);
+  const [addReclamationInput, setAddReclamationInput] = useState("");
+  const [addReclamationType, setAddReclamationType] = useState<"sap" | "bnr">("sap");
+  const [addReclamationLoading, setAddReclamationLoading] = useState(false);
+  const [addReclamationError, setAddReclamationError] = useState<string | null>(null);
+  const [addReclamationFoundProduct, setAddReclamationFoundProduct] = useState<{
+    sap_article_id: string;
+    name: string;
+    brand: string;
+    bnr: string | null;
+    ean: string | null;
+  } | null>(null);
 
   // Vyn Produktkatalog state
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -3217,6 +3232,128 @@ const filtered = withStatus
     }
   };
 
+  // Look up product by SAP article ID (materialnummer) or BNR
+  const lookupProductForReclamation = async (
+    identifier: string,
+    type: "sap" | "bnr",
+  ): Promise<{
+    sap_article_id: string;
+    name: string;
+    brand: string;
+    bnr: string | null;
+    ean: string | null;
+  } | null> => {
+    if (!activeStore?.id) return null;
+
+    try {
+      let query = supabase
+        .from("products")
+        .select("sap_article_id, name, brand, bnr, ean")
+        .eq("store_id", activeStore.id)
+        .eq("is_active", true);
+
+      if (type === "sap") {
+        query = query.eq("sap_article_id", identifier.trim());
+      } else {
+        query = query.eq("bnr", identifier.trim());
+      }
+
+      const { data, error } = await query.maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+
+      return {
+        sap_article_id: data.sap_article_id,
+        name: data.name,
+        brand: data.brand || "",
+        bnr: data.bnr,
+        ean: data.ean,
+      };
+    } catch (error) {
+      console.error("Error looking up product:", error);
+      return null;
+    }
+  };
+
+  // Add a new reclamation manually
+  const addManualReclamation = async () => {
+    if (!activeStore?.id) return;
+    if (!addReclamationInput.trim()) {
+      setAddReclamationError("Ange materialnummer eller BNR");
+      return;
+    }
+
+    setAddReclamationLoading(true);
+    setAddReclamationError(null);
+
+    try {
+      const product = await lookupProductForReclamation(addReclamationInput, addReclamationType);
+
+      if (!product) {
+        setAddReclamationError(
+          `Ingen produkt hittades med ${addReclamationType === "sap" ? "materialnummer" : "BNR"}: ${addReclamationInput}`,
+        );
+        return;
+      }
+
+      // Check if reclamation already exists
+      const { data: existing } = await supabase
+        .from("reclamations")
+        .select("id")
+        .eq("store_id", activeStore.id)
+        .eq("sap_article_id", product.sap_article_id)
+        .maybeSingle();
+
+      if (existing) {
+        setAddReclamationError(
+          `Reklamation för ${product.sap_article_id} (${product.name}) finns redan.`,
+        );
+        return;
+      }
+
+      // Create the reclamation
+      const { error } = await supabase.from("reclamations").insert({
+        store_id: activeStore.id,
+        sap_article_id: product.sap_article_id,
+        status: "Ej skickad",
+        notes: `Manuellt tillagd via ${addReclamationType === "sap" ? "materialnummer" : "BNR"}: ${addReclamationInput}`,
+      });
+
+      if (error) throw error;
+
+      // Refresh reclamations list
+      const { data } = await supabase
+        .from("reclamations")
+        .select("*")
+        .eq("store_id", activeStore.id);
+      if (data) setReclamations(data as Reclamation[]);
+
+      // Reset form and close dialog
+      setAddReclamationInput("");
+      setAddReclamationFoundProduct(null);
+      setAddReclamationOpen(false);
+      toast.success(`Reklamation skapad för ${product.sap_article_id} (${product.name})`);
+    } catch (error) {
+      console.error("Error adding reclamation:", error);
+      setAddReclamationError("Kunde inte skapa reklamation. Försök igen.");
+    } finally {
+      setAddReclamationLoading(false);
+    }
+  };
+
+  // Handle input change in add reclamation dialog - auto-lookup product
+  const handleAddReclamationInputChange = async (value: string) => {
+    setAddReclamationInput(value);
+    setAddReclamationError(null);
+
+    if (value.trim().length >= 3) {
+      const product = await lookupProductForReclamation(value, addReclamationType);
+      setAddReclamationFoundProduct(product);
+    } else {
+      setAddReclamationFoundProduct(null);
+    }
+  };
+
   // Filtered list for Reklamationsvyn (View 2)
   const filteredReclamationList = useMemo(() => {
     return hanteringsItems.filter((item) => {
@@ -5169,8 +5306,16 @@ const filtered = withStatus
       {step === "reclamations" && (
         <Card>
           <CardHeader>
-            <CardTitle>Hantera varor — Reklamationsstatus</CardTitle>
-            <CardDescription>Uppdatera status per reklamation.</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Hantera varor — Reklamationsstatus</CardTitle>
+                <CardDescription>Uppdatera status per reklamation.</CardDescription>
+              </div>
+              <Button onClick={() => setAddReclamationOpen(true)} className="gap-2">
+                <Plus size={16} />
+                Lägg till reklamation
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-2 overflow-x-auto pb-2">
@@ -5272,6 +5417,113 @@ const filtered = withStatus
                 </TableBody>
               </Table>
             </div>
+
+            {/* Add Reclamation Dialog */}
+            <Dialog open={addReclamationOpen} onOpenChange={setAddReclamationOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Lägg till reklamation</DialogTitle>
+                  <DialogDescription>
+                    Sök produkt via materialnummer (SAP-ID) eller BNR för att skapa en ny reklamation.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-sm font-medium">Sök typ</Label>
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        variant={addReclamationType === "sap" ? "default" : "outline"}
+                        onClick={() => {
+                          setAddReclamationType("sap");
+                          handleAddReclamationInputChange(addReclamationInput);
+                        }}
+                        className="flex-1"
+                      >
+                        Materialnummer (SAP-ID)
+                      </Button>
+                      <Button
+                        variant={addReclamationType === "bnr" ? "default" : "outline"}
+                        onClick={() => {
+                          setAddReclamationType("bnr");
+                          handleAddReclamationInputChange(addReclamationInput);
+                        }}
+                        className="flex-1"
+                      >
+                        BNR
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium">
+                      {addReclamationType === "sap" ? "Materialnummer (SAP-ID)" : "BNR"}
+                    </Label>
+                    <Input
+                      placeholder={
+                        addReclamationType === "sap"
+                          ? "t.ex. 123456"
+                          : "t.ex. 1234567"
+                      }
+                      value={addReclamationInput}
+                      onChange={(e) => handleAddReclamationInputChange(e.target.value)}
+                      className="mt-2"
+                      disabled={addReclamationLoading}
+                    />
+                    {addReclamationError && (
+                      <p className="mt-1 text-sm text-red-600">{addReclamationError}</p>
+                    )}
+                  </div>
+
+                  {addReclamationFoundProduct && (
+                    <div className="rounded-lg border bg-green-50 p-3">
+                      <p className="text-sm font-medium text-green-800">
+                        Produkt hittades:
+                      </p>
+                      <div className="mt-1 space-y-1 text-sm text-green-700">
+                        <p>
+                          <span className="font-medium">Namn:</span>{" "}
+                          {addReclamationFoundProduct.name}
+                        </p>
+                        <p>
+                          <span className="font-medium">SAP-ID:</span>{" "}
+                          {addReclamationFoundProduct.sap_article_id}
+                        </p>
+                        <p>
+                          <span className="font-medium">Varumärke:</span>{" "}
+                          {addReclamationFoundProduct.brand || "—"}
+                        </p>
+                        <p>
+                          <span className="font-medium">BNR:</span>{" "}
+                          {addReclamationFoundProduct.bnr || "—"}
+                        </p>
+                        <p>
+                          <span className="font-medium">EAN:</span>{" "}
+                          {addReclamationFoundProduct.ean || "—"}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {!addReclamationFoundProduct && addReclamationInput.trim().length >= 3 && (
+                    <p className="text-sm text-amber-600">
+                      Ingen produkt hittades med detta{" "}
+                      {addReclamationType === "sap" ? "materialnummer" : "BNR"}.
+                    </p>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setAddReclamationOpen(false)}>
+                    Avbryt
+                  </Button>
+                  <Button
+                    onClick={addManualReclamation}
+                    disabled={addReclamationLoading || !addReclamationFoundProduct}
+                  >
+                    {addReclamationLoading ? "Skapar..." : "Skapa reklamation"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </CardContent>
         </Card>
       )}
