@@ -552,9 +552,6 @@ function ErstatningsCheckPage() {
   // Vyn Statistik state
   const [statsMode, setStatsMode] = useState<"spotlight" | "cockpit">("spotlight");
   const [statsChartType, setStatsChartType] = useState<"line" | "bar">("line");
-  const [extendedPeriod, setExtendedPeriod] = useState<
-    "thisMonth" | "lastMonth" | "thisQuarter" | "ytd" | "all" | "last30" | "last12" | "custom"
-  >("thisMonth");
   const [reclamations, setReclamations] = useState<Reclamation[]>([]);
   const [statusFilter, setStatusFilter] = useState<ReclamationStatus>("Ej skickad");
   const [importError, setImportError] = useState<string | null>(null);
@@ -2020,7 +2017,8 @@ setDeliveryStatistics(
         .sort((a, b) => b.badDeliveryCount - a.badDeliveryCount)
         .slice(0, 5);
 
-      // Calculate distinct stores with delivery data (better denominator for "Snitt per butik")
+      // Calculate distinct stores with delivery data across ALL stores
+      // (not just the active store) for a meaningful "Snitt per butik" denominator.
       const distinctStoresWithDelivery = new Set(
         Array.from(allDeliveriesByArticle.values())
           .flat()
@@ -3491,7 +3489,7 @@ const filtered = withStatus
           variant={step === "statistics" ? "default" : "outline"}
           onClick={() => {
             setStep("statistics");
-            void loadDeliveryStatistics(extendedPeriod);
+            void loadDeliveryStatistics(statisticsPeriod);
           }}
           className="flex items-center gap-2 font-medium"
         >
@@ -3731,7 +3729,7 @@ const filtered = withStatus
             </Card>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-1">
             <Card className="min-h-64">
               <CardHeader>
                 <CardTitle>Fördelning</CardTitle>
@@ -3833,9 +3831,8 @@ const filtered = withStatus
                     })()}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
-                      </div>
+              </CardContent            </Card>
+          </div>
         </div>
       )}
 
