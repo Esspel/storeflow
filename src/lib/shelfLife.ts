@@ -45,8 +45,7 @@ export interface FilterOptions {
 
 /**
  * Core shelf life status calculation using Coop's rules:
- * - >548 days shelf life → required 274 days remaining
- * - otherwise → required 50% of shelf life
+ * - requiredDays = shelf_lifetime_days (direct comparison, no halving)
  * If either date is missing, treats as Reklamation (for UI purposes).
  */
 export function calculateShelfLifeStatus(
@@ -91,7 +90,7 @@ export function calculateShelfLifeStatus(
   if (deliveryMs === null || bestBeforeMs === null) {
     return {
       remainingDays: 0,
-      requiredDays: totalShelfLifeDays <= 0 ? 0 : Math.floor(totalShelfLifeDays * 0.5),
+      requiredDays: totalShelfLifeDays <= 0 ? 0 : totalShelfLifeDays,
       status: "Reklamation",
       percentageLeft: 0,
     };
@@ -99,7 +98,7 @@ export function calculateShelfLifeStatus(
 
   const msPerDay = 1000 * 60 * 60 * 24;
   const remainingDays = Math.floor((bestBeforeMs - deliveryMs) / msPerDay);
-  const requiredDays = totalShelfLifeDays <= 0 ? 0 : Math.floor(totalShelfLifeDays * 0.5);
+  const requiredDays = totalShelfLifeDays <= 0 ? 0 : totalShelfLifeDays;
 
   return {
     remainingDays,

@@ -21,10 +21,10 @@ const baseRecord = {
 };
 
 describe("calculateShelfLifeStatus regression", () => {
-  it("invalid/missing dates ger Reklamation med requiredDays baserat på shelf_lifetime", () => {
-    // 2024-04-01 → 2024-04-23 = 22 dagar kvar, shelf life 224 → kräver 112 (50%). 22 < 112 → Reklamation
+  it("invalid/missing dates ger Reklamation med requiredDays lika med shelf_lifetime_days", () => {
+    // 2024-04-01 → 2024-04-23 = 22 dagar kvar, shelf life 224 → kräver 224. 22 < 224 → Reklamation
     const result = calculateShelfLifeStatus("2024-04-01", "2024-04-23", 224);
-    expect(result.requiredDays).toBe(112);
+    expect(result.requiredDays).toBe(224);
     expect(result.status).toBe("Reklamation");
   });
 
@@ -50,8 +50,20 @@ describe("calculateShelfLifeStatus regression", () => {
 
   it("filterShelfLifeRecords inkluderar post med tom expiry_date", () => {
     const records = [
-      { ...baseRecord, id: "1", expiry_date: "2026-12-01T00:00:00.000Z", arrival_date: "2026-01-01", shelf_lifetime_days: 365 },
-      { ...baseRecord, id: "2", expiry_date: "", arrival_date: "2026-01-01", shelf_lifetime_days: 30 },
+      {
+        ...baseRecord,
+        id: "1",
+        expiry_date: "2026-12-01T00:00:00.000Z",
+        arrival_date: "2026-01-01",
+        shelf_lifetime_days: 365,
+      },
+      {
+        ...baseRecord,
+        id: "2",
+        expiry_date: "",
+        arrival_date: "2026-01-01",
+        shelf_lifetime_days: 30,
+      },
     ];
     const filtered = filterShelfLifeRecords(records);
     expect(filtered.length).toBe(2);
@@ -59,7 +71,13 @@ describe("calculateShelfLifeStatus regression", () => {
 
   it("filterShelfLifeRecords hanterar null expiry_date utan att krascha", () => {
     const records = [
-      { ...baseRecord, id: "1", expiry_date: null as unknown as string, arrival_date: "2026-01-01", shelf_lifetime_days: 30 },
+      {
+        ...baseRecord,
+        id: "1",
+        expiry_date: null as unknown as string,
+        arrival_date: "2026-01-01",
+        shelf_lifetime_days: 30,
+      },
     ];
     const filtered = filterShelfLifeRecords(records);
     expect(filtered.length).toBe(1);

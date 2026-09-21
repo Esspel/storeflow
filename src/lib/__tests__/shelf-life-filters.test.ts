@@ -10,7 +10,7 @@ const baseRecord = {
   id: "1",
   sap_article_id: "1234567890",
   shelf_lifetime_days: 365,
-  expiry_date: "2026-12-01T00:00:00.000Z",
+  expiry_date: "2027-12-01T00:00:00.000Z",
   arrival_date: "2026-01-01T00:00:00.000Z",
   compensation_price_ore: 100,
   product_name: "Test",
@@ -58,7 +58,7 @@ describe("Hållbarhetsstatus vid saknade data", () => {
       ...baseRecord,
       shelf_lifetime_days: 0,
       arrival_date: "2026-01-01T00:00:00.000Z",
-      expiry_date: "2026-12-01T00:00:00.000Z",
+      expiry_date: "2027-12-01T00:00:00.000Z",
     });
     expect(result).toBe("Hållbarhet saknas");
   });

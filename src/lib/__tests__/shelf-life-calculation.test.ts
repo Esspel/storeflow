@@ -7,38 +7,38 @@ import {
 } from "../shelfLife";
 
 describe("calculateShelfLifeStatus (gränsvärden & regressioner)", () => {
-  it("är OK när tillräckligt många dagar kvar över 50% gränsen", () => {
-    // 30 dagar total → kräver 15 dagar kvar (50%)
-    // Leverans 2024-04-01, bäst-före 2024-04-17 = 16 dagar kvar → OK
-    const result = calculateShelfLifeStatus("2024-04-01", "2024-04-17", 30);
+  it("är OK när tillräckligt många dagar kvar jämfört mot shelf_lifetime_days", () => {
+    // 30 dagar total → kräver 30 dagar kvar (direkt jämförelse)
+    // Leverans 2024-04-01, bäst-före 2024-05-15 = 44 dagar kvar → OK
+    const result = calculateShelfLifeStatus("2024-04-01", "2024-05-15", 30);
     expect(result.status).toBe("OK");
-    expect(result.remainingDays).toBe(16);
-    expect(result.requiredDays).toBe(15);
+    expect(result.remainingDays).toBe(44);
+    expect(result.requiredDays).toBe(30);
   });
 
-  it("är Reklamation när för få dagar kvar under 50% gränsen", () => {
-    // 30 dagar total → kräver 15 dagar kvar (50%)
+  it("är Reklamation när för få dagar kvar jämfört mot shelf_lifetime_days", () => {
+    // 30 dagar total → kräver 30 dagar kvar (direkt jämförelse)
     // Leverans 2024-04-01, bäst-före 2024-04-15 = 14 dagar kvar → Reklamation
     const result = calculateShelfLifeStatus("2024-04-01", "2024-04-15", 30);
     expect(result.status).toBe("Reklamation");
     expect(result.remainingDays).toBe(14);
-    expect(result.requiredDays).toBe(15);
+    expect(result.requiredDays).toBe(30);
   });
 
-  it("är OK på exakt 50% gränsen", () => {
-    // 30 dagar total → kräver 15 dagar kvar
-    // Leverans 2024-04-01, bäst-före 2024-04-16 = 15 dagar kvar → OK
-    const result = calculateShelfLifeStatus("2024-04-01", "2024-04-16", 30);
+  it("är OK på exakt gränsen (remainingDays === shelf_lifetime_days)", () => {
+    // 30 dagar total → kräver 30 dagar kvar
+    // Leverans 2024-04-01, bäst-före 2024-05-01 = 30 dagar kvar → OK
+    const result = calculateShelfLifeStatus("2024-04-01", "2024-05-01", 30);
     expect(result.status).toBe("OK");
-    expect(result.remainingDays).toBe(15);
-    expect(result.requiredDays).toBe(15);
+    expect(result.remainingDays).toBe(30);
+    expect(result.requiredDays).toBe(30);
   });
 
   it("är Reklamation om datum saknas", () => {
     const result = calculateShelfLifeStatus(null, "2024-04-15", 30);
     expect(result.status).toBe("Reklamation");
     expect(result.remainingDays).toBe(0);
-    expect(result.requiredDays).toBe(15);
+    expect(result.requiredDays).toBe(30);
   });
 
   it("är Reklamation om leveransdatum saknas", () => {

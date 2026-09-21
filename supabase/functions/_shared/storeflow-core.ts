@@ -599,7 +599,8 @@ export async function updateCustomerRequest(
 
   const updates: Record<string, unknown> = {};
   if (input.status !== undefined) updates.status = input.status;
-  if (input.staff_comment !== undefined) updates.staff_comment = input.staff_comment ? htmlEscape(input.staff_comment) : null;
+  if (input.staff_comment !== undefined)
+    updates.staff_comment = input.staff_comment ? htmlEscape(input.staff_comment) : null;
   if (input.internal_notes !== undefined) updates.internal_notes = input.internal_notes;
   if (input.priority !== undefined) updates.priority = input.priority;
   if (input.product_name !== undefined) updates.product_name = input.product_name.trim();
@@ -1274,14 +1275,8 @@ export async function calculateShelfLifeRulesHandler(
   const expiryDate = new Date(expiry_date);
   const daysRemaining = Math.floor((expiryDate - arrivalDate) / (1000 * 60 * 60 * 24));
 
-  // Beräkna minsta kravda hållbarhet
-  let minRequiredDays;
-  if (shelf_lifetime_days <= 548) {
-    // 18 månader ≈ 548 dagar
-    minRequiredDays = Math.ceil(shelf_lifetime_days * 0.5);
-  } else {
-    minRequiredDays = 274; // 9 månader
-  }
+  // Beräkna minsta kravda hållbarhet (direkt jämförelse mot shelf_lifetime_days)
+  const minRequiredDays = shelf_lifetime_days;
 
   const isFlagged = daysRemaining < minRequiredDays;
 
@@ -1331,12 +1326,7 @@ export async function getShelfLifeForProductsHandler(
         (expiry.getTime() - arrival.getTime()) / (1000 * 60 * 60 * 24),
       );
 
-      let minRequired: number;
-      if (record.shelf_lifetime_days <= 548) {
-        minRequired = Math.ceil(record.shelf_lifetime_days * 0.5);
-      } else {
-        minRequired = 274;
-      }
+      const minRequired = record.shelf_lifetime_days;
 
       const isFlagged = daysRemaining < minRequired;
 
@@ -1398,12 +1388,7 @@ export async function generateShelfLifeZipHandler(
     const expiryDate = new Date(expiry_date);
     const daysRemaining = Math.floor((expiryDate - arrivalDate) / (1000 * 60 * 60 * 24));
 
-    let minRequiredDays;
-    if (shelf_lifetime_days <= 548) {
-      minRequiredDays = Math.ceil(shelf_lifetime_days * 0.5);
-    } else {
-      minRequiredDays = 274;
-    }
+    const minRequiredDays = shelf_lifetime_days;
 
     const isFlagged = daysRemaining < minRequiredDays;
 
@@ -1516,12 +1501,7 @@ export async function groupShelfLifeByDeliveryHandler(
     const expiryDate = new Date(expiry_date);
     const daysRemaining = Math.floor((expiryDate - arrivalDate) / (1000 * 60 * 60 * 24));
 
-    let minRequiredDays;
-    if (shelf_lifetime_days <= 548) {
-      minRequiredDays = Math.ceil(shelf_lifetime_days * 0.5);
-    } else {
-      minRequiredDays = 274;
-    }
+    const minRequiredDays = shelf_lifetime_days;
 
     const isFlagged = daysRemaining < minRequiredDays;
 
