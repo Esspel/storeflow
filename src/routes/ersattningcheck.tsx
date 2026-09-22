@@ -3770,86 +3770,7 @@ const filtered = withStatus
                 })()}
               </CardContent>
             </Card>
-            <Card className="min-h-64">
-              <CardHeader className="flex-row items-center justify-between">
-                <CardTitle>Senaste leveranserna</CardTitle>
-                <Badge variant="outline">Senaste 5</Badge>
-              </CardHeader>
-              <CardContent>
-                {deliveryStatistics.length > 0 ? (
-                  <div className="divide-y divide-coop-gray-100">
-                    {deliveryStatistics.slice(0, 5).map((delivery, index) => {
-                      const totalCount = delivery.totalProducts ?? 0;
-                      const reclCount = delivery.shouldReclaim ?? 0;
-                      const okCount = Math.max(0, totalCount - reclCount);
-                      const hasShelfLife =
-                        !!delivery.shelf_lifetime_days && delivery.shelf_lifetime_days > 0;
-                      return (
-                        <div
-                          key={`delivery-${delivery.delivery_number ?? delivery.id ?? index}-${delivery.arrival_date}-${index}`}
-                          className="py-4 first:pt-0 last:pb-0 grid grid-cols-2 gap-4 md:grid-cols-5 md:gap-6"
-                        >
-                          <div className="md:col-span-2">
-                            <p className="text-xs text-coop-gray-500 uppercase tracking-wide">
-                              Leveransnummer
-                            </p>
-                            <p className="font-medium text-coop-gray-900">
-                              {delivery.delivery_number || delivery.id || delivery.sap_article_id}
-                            </p>
-                            <p className="text-xs text-coop-gray-500">
-                              {delivery.product_name || "—"} ({delivery.sap_article_id || "—"})
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-coop-gray-500 uppercase tracking-wide font-semibold mb-0.5">
-                              Leveransdatum
-                            </p>
-                            <p className="text-sm">
-                              {delivery.arrival_date
-                                ? new Date(delivery.arrival_date).toLocaleDateString("sv-SE")
-                                : "—"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-coop-gray-500 uppercase tracking-wide font-semibold mb-0.5">
-                              Produkter
-                            </p>
-                            <p className="text-sm font-medium">{totalCount} st</p>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div
-                              className={`rounded px-2 py-1 ${reclCount > 0 ? "bg-red-50 text-red-700 border border-red-100" : "bg-green-50 text-green-700 border border-green-100"}`}
-                            >
-                              <span className="block text-xs text-coop-gray-500">Reklamation</span>
-                              <span className="font-semibold">{reclCount}</span>
-                            </div>
-                            <div
-                              className={`rounded px-2 py-1 ${okCount > 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-coop-gray-50 text-coop-gray-500 border border-coop-gray-200"}`}
-                            >
-                              <span className="block text-xs text-coop-gray-500">OK</span>
-                              <span className="font-semibold">{okCount}</span>
-                            </div>
-                          </div>
-                          {!hasShelfLife && (
-                            <div className="md:col-span-4 text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded px-2 py-1 inline-flex items-center gap-1 w-fit">
-                              <span>⚠</span> Artikeln saknar total hållbarhet (dagar) — visas inte i
-                              ersättningsansökan
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex min-h-40 flex-col items-center justify-center text-center text-coop-gray-900">
-                    <Upload size={34} className="mb-3 opacity-50" />
-                    <p>Inga leveranser ännu.</p>
-                    <p className="text-sm">Ladda upp en följesedel för att komma igång.</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                      </div>
         </div>
       )}
 
@@ -4459,8 +4380,7 @@ const filtered = withStatus
           <CardHeader>
             <CardTitle>Generera ersättningsansökan</CardTitle>
             <CardDescription>
-              Skapa en ZIP-fil med produkter som omfattas av datumregelverket för ersättning hos
-              Butikssupport.
+              Skapa en ersättningsansökan med produkter som omfattas av datumregelverket för ersättning hos Butikssupport.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -4567,17 +4487,6 @@ const filtered = withStatus
 
       {step === "statistics" && (
         <div className="space-y-6">
-          {isLoading && (
-            <div className="grid gap-4 md:grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <Card key={i} className="p-6">
-                  <div className="h-4 w-24 bg-coop-gray-200 rounded animate-pulse mb-3" />
-                  <div className="h-8 w-32 bg-coop-gray-200 rounded animate-pulse mb-3" />
-                  <div className="h-3 w-full bg-coop-gray-200 rounded animate-pulse" />
-                </Card>
-              ))}
-            </div>
-          )}
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 className="text-3xl font-semibold tracking-tight">Statistik</h2>
@@ -4616,6 +4525,17 @@ const filtered = withStatus
               </Button>
             </div>
           </div>
+          {isLoading && (
+            <div className="grid gap-4 md:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <Card key={i} className="p-6">
+                  <div className="h-4 w-24 bg-coop-gray-200 rounded animate-pulse mb-3" />
+                  <div className="h-8 w-32 bg-coop-gray-200 rounded animate-pulse mb-3" />
+                  <div className="h-3 w-full bg-coop-gray-200 rounded animate-pulse" />
+                </Card>
+              ))}
+            </div>
+          )}
 
           {replacementStatistics && (
             <>
