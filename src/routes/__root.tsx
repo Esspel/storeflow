@@ -8,7 +8,7 @@ import {
   useNavigate,
   Outlet,
 } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
@@ -157,6 +157,20 @@ function AppLayout() {
     pathname === "/qr-kundonskemal-form" ||
     pathname === "/customer-nav";
 
+  // Cooldown before redirecting to login on reload. The first render after
+  // mount has no user/token yet, but the session is being restored from
+  // IndexedDB. Redirecting immediately would bounce an already-logged-in
+  // user to /login on every page reload. A 500 ms grace period lets the
+  // async session validation complete before we commit to a redirect.
+  const [redirectPending, setRedirectPending] = useState(true);
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    redirectTimerRef.current = setTimeout(() => setRedirectPending(false), 500);
+    return () => {
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js", { scope: "/" })
@@ -174,6 +188,8 @@ function AppLayout() {
     // This prevents redirect-to-login when the page reloads and the session
     // from IndexedDB hasn't been validated yet by AuthProvider's async flow.
     if (!hasCheckedAuth) return;
+    // Wait out the cooldown so a session restored from IndexedDB can arrive.
+    if (redirectPending) return;
     // Redirect to login only if there is genuinely no stored session token.
     // A transient validation failure may leave `user` null while `token` still
     // exists; in that case we must NOT redirect or the user bounces to login.
@@ -182,7 +198,7 @@ function AppLayout() {
     } else if (user && isLoginPage && !user.must_change_password) {
       navigate({ to: "/" });
     }
-  }, [token, user, hasCheckedAuth, isLoginPage, isPublicRoute, navigate]);
+  }, [token, user, hasCheckedAuth, isLoginPage, isPublicRoute, redirectPending, navigate]);
 
   if (loading && !isPublicRoute) {
     return (
