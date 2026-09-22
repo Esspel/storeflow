@@ -3770,6 +3770,49 @@ const filtered = withStatus
                 })()}
               </CardContent>
             </Card>
+
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Leveranser</CardTitle>
+                <CardDescription>Per leveransdatum</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Datum</TableHead>
+                      <TableHead>Totalt antal</TableHead>
+                      <TableHead>Borde reklamerats</TableHead>
+                      <TableHead>OK</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(() => {
+                      const groups = new Map<string, { total: number; reclaim: number; ok: number }>();
+                      for (const d of deliveryStatistics) {
+                        const date = d.arrival_date ? new Date(d.arrival_date).toISOString().split("T")[0] : "Okänt";
+                        const g = groups.get(date) || { total: 0, reclaim: 0, ok: 0 };
+                        g.total += 1;
+                        const shelf = shelfLifeRecords.find((r) => r.sap_article_id === d.sap_article_id);
+                        const shouldReclaim = shelf ? (d.expiry_date && new Date(d.expiry_date) < new Date()) : false;
+                        if (shouldReclaim) g.reclaim += 1;
+                        else g.ok += 1;
+                        groups.set(date, g);
+                      }
+                      const sorted = Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+                      return sorted.map(([date, g]) => (
+                        <TableRow key={date}>
+                          <TableCell className="whitespace-nowrap">{date}</TableCell>
+                          <TableCell>{g.total}</TableCell>
+                          <TableCell className="text-red-600 font-medium">{g.reclaim}</TableCell>
+                          <TableCell className="text-green-700 font-medium">{g.ok}</TableCell>
+                        </TableRow>
+                      ));
+                    })()}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
                       </div>
         </div>
       )}
