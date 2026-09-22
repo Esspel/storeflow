@@ -572,7 +572,9 @@ function ErstatningsCheckPage() {
   const [statisticsView, setStatisticsView] = useState<"value" | "count">("value");
   const [totalProductCount, setTotalProductCount] = useState(0);
   const [showAllDeliveryNotes, setShowAllDeliveryNotes] = useState(false);
-  const [statisticsPeriod, setStatisticsPeriod] = useState<"ytd" | "last30" | "last12">("ytd");
+  const [statisticsPeriod, setStatisticsPeriod] = useState<
+  "thisMonth" | "lastMonth" | "thisQuarter" | "ytd" | "last30" | "last12" | "week" | "all"
+>("ytd");
   const [categoryMappings, setCategoryMappings] = useState<DeliveryCategoryMapping[]>([]);
   const [deliveryCategories, setDeliveryCategories] = useState<string[]>([]);
   const [mappingLoading, setMappingLoading] = useState(false);
@@ -1823,14 +1825,31 @@ setDeliveryStatistics(
       } else if (period === "thisQuarter") {
         const qMonth = Math.floor(now.getMonth() / 3) * 3;
         periodStart = new Date(now.getFullYear(), qMonth, 1);
+        periodEnd = new Date(now.getFullYear(), qMonth + 3, 0, 23, 59, 59);
       } else if (period === "ytd") {
         periodStart = new Date(now.getFullYear(), 0, 1);
+        periodEnd = new Date(now.getTime() + 86400000);
       } else if (period === "all") {
         periodStart = new Date(2020, 0, 1);
+        periodEnd = new Date(now.getTime() + 86400000);
       } else if (period === "last30") {
         periodStart.setDate(now.getDate() - 30);
       } else if (period === "last12") {
         periodStart.setMonth(now.getMonth() - 11, 1);
+      } else if (period === "week") {
+        const dayOfWeek = now.getDay();
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - dayOfWeek);
+        weekStart.setHours(0, 0, 0, 0);
+        periodStart = weekStart;
+        periodEnd = new Date(weekStart);
+        periodEnd.setDate(weekStart.getDate() + 7);
+      } else if (period === "thisMonth") {
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      } else if (period === "lastMonth") {
+        periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
       }
       const reclamationsForPeriod = (reclamationData ?? []).filter((row: any) => {
         const d = new Date(row.created_at);
@@ -2013,7 +2032,10 @@ setDeliveryStatistics(
       );
       const allReclamations = allReclamationsResult?.data ?? [];
       const allStoresReclamationsForPeriod = allReclamations.filter(
-        (row: any) => new Date(row.created_at) >= periodStart,
+        (row: any) => {
+          const d = new Date(row.created_at);
+          return d >= periodStart && d <= periodEnd;
+        },
       );
       // Use stores with delivery data for "Snitt per butik" (avoid division by zero)
       const allStoresStoreCount = Math.max(distinctStoresWithDelivery.size, 1);
@@ -4553,6 +4575,11 @@ const filtered = withStatus
                   <SelectItem value="ytd">Hittills i år</SelectItem>
                   <SelectItem value="last30">Senaste 30 dagarna</SelectItem>
                   <SelectItem value="last12">Senaste 12 månaderna</SelectItem>
+                  <SelectItem value="thisMonth">Denna månad</SelectItem>
+                  <SelectItem value="lastMonth">Förra månaden</SelectItem>
+                  <SelectItem value="thisQuarter">Hittills i kvartal</SelectItem>
+                  <SelectItem value="week">Denna vecka</SelectItem>
+                  <SelectItem value="all">Alla tider</SelectItem>
                 </SelectContent>
               </Select>
               <Button
