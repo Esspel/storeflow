@@ -2003,7 +2003,7 @@ setDeliveryStatistics(
 
       // Calculate distinct stores with delivery data (better denominator for "Snitt per butik")
       const distinctStoresWithDelivery = new Set(
-        Array.from(deliveriesByArticle.values())
+        Array.from(allDeliveriesByArticle.values())
           .flat()
           .map((d: any) => d.store_id)
           .filter(Boolean),
