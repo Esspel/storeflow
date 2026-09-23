@@ -14,8 +14,8 @@ describe("calculateRiskScore (Produktkatalog riskindikator)", () => {
     expect(calculateRiskScore(3, 5)).toBeCloseTo(0.6, 10);
   });
 
-  it("beräknar korrekt för 1 av 1 leverans som har reklamerats", () => {
-    expect(calculateRiskScore(1, 1)).toBe(1);
+  it("returnerar konservativt värde för 1 av 1 leverans (lågt underlag)", () => {
+    expect(calculateRiskScore(1, 1)).toBeCloseTo(0.2, 10);
   });
 
   it("returnerar 0 för negativa värden (datafel)", () => {
@@ -29,6 +29,10 @@ describe("calculateRiskScore (Produktkatalog riskindikator)", () => {
   });
 
   it("beräknar korrekt för 2 av 4 leveranser", () => {
-    expect(calculateRiskScore(2, 4)).toBeCloseTo(0.5, 10);
+    expect(calculateRiskScore(2, 4)).toBeCloseTo(0.4, 10);
+  });
+
+  it("ger full risk vid 5+ leveranser", () => {
+    expect(calculateRiskScore(2, 5)).toBeCloseTo(0.4, 10);
   });
 });

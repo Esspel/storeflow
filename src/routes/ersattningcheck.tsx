@@ -265,8 +265,12 @@ function CatalogProductTable({
                 <TableCell className="font-mono text-xs text-coop-gray-900/80">
                   {product.sap_article_id}
                 </TableCell>
-                <TableCell className="text-xs text-coop-gray-900/80">{product.bnr || "—"}</TableCell>
-                <TableCell className="text-xs text-coop-gray-900/80">{product.ean || "—"}</TableCell>
+                <TableCell className="text-xs text-coop-gray-900/80">
+                  {product.bnr || "—"}
+                </TableCell>
+                <TableCell className="text-xs text-coop-gray-900/80">
+                  {product.ean || "—"}
+                </TableCell>
                 <TableCell className="text-right text-xs font-medium text-coop-blue-700">
                   {product.deliveryCount}{" "}
                   <span className="font-normal text-coop-gray-900/50">
@@ -403,9 +407,7 @@ function getDeliveryDateKey(dateValue: unknown): string | null {
   if (dateOnlyMatch) return dateOnlyMatch[1];
 
   const sapDateMatch = value.match(/Date\((\d+)\)/);
-  const parsed = sapDateMatch
-    ? new Date(Number(sapDateMatch[1]))
-    : new Date(value);
+  const parsed = sapDateMatch ? new Date(Number(sapDateMatch[1])) : new Date(value);
 
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
 }
@@ -553,7 +555,7 @@ function ErstatningsCheckPage() {
   const [statsMode, setStatsMode] = useState<"spotlight" | "cockpit">("spotlight");
   const [statsChartType, setStatsChartType] = useState<"line" | "bar">("line");
   const [reclamations, setReclamations] = useState<Reclamation[]>([]);
-  const [statusFilter, setStatusFilter] = useState<ReclamationStatus>("Ej skickad");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNoteRow[]>([]);
@@ -570,8 +572,8 @@ function ErstatningsCheckPage() {
   const [totalProductCount, setTotalProductCount] = useState(0);
   const [showAllDeliveryNotes, setShowAllDeliveryNotes] = useState(false);
   const [statisticsPeriod, setStatisticsPeriod] = useState<
-  "thisMonth" | "lastMonth" | "thisQuarter" | "ytd" | "last30" | "last12" | "week" | "all"
->("ytd");
+    "thisMonth" | "lastMonth" | "thisQuarter" | "ytd" | "last30" | "last12" | "week" | "all" | "custom"
+  >("ytd");
   const [categoryMappings, setCategoryMappings] = useState<DeliveryCategoryMapping[]>([]);
   const [deliveryCategories, setDeliveryCategories] = useState<string[]>([]);
   const [mappingLoading, setMappingLoading] = useState(false);
@@ -720,7 +722,7 @@ function ErstatningsCheckPage() {
     if (record.sap_data_missing === true) return false;
     if (!record.arrival_date || !record.expiry_date) return false;
     const status = reclamationStatuses.get(record.sap_article_id);
-    if (status && status !== "Ej skickat") {
+    if (status && status !== "Granskas av butikssupporten") {
       return false;
     }
     const assessment = calculateShelfLifeStatus(
@@ -739,6 +741,11 @@ function ErstatningsCheckPage() {
     return daysSinceArrival >= 0 && daysSinceArrival <= 4;
   });
   const hasImportedDeliveries = deliveryStatistics.length > 0;
+
+  // Dashboard records: only articles with actual delivery data
+  const dashboardRecords = useMemo(() => {
+    return shelfLifeRecords.filter((r) => r.arrival_date && r.delivery_number);
+  }, [shelfLifeRecords]);
 
   // Handle file upload
   const handleFileUpload = async (fileOrEvent: File | React.ChangeEvent<HTMLInputElement>) => {
@@ -960,18 +967,14 @@ function ErstatningsCheckPage() {
             "id, sap_article_id, name, brand, category, ean, bnr, is_active",
             { column: "store_id", value: activeStore.id },
           ),
-          fetchAllRows(
-            supabase,
-            "reclamations",
-            "sap_article_id, status",
-            { column: "store_id", value: activeStore.id },
-          ),
-          fetchAllRows(
-            supabase,
-            "store_product_deliveries",
-            "sap_article_id, arrival_date",
-            { column: "store_id", value: activeStore.id },
-          ),
+          fetchAllRows(supabase, "reclamations", "sap_article_id, status", {
+            column: "store_id",
+            value: activeStore.id,
+          }),
+          fetchAllRows(supabase, "store_product_deliveries", "sap_article_id, arrival_date", {
+            column: "store_id",
+            value: activeStore.id,
+          }),
         ]);
 
         const activeProductsData = (productsData ?? []).filter(
@@ -1027,6 +1030,28 @@ function ErstatningsCheckPage() {
               category: cat,
               ean,
               bnr,
+              reclamationCount: existingReclamations,
+              deliveryCount,
+              deliveryDates: Array.from(deliveryDates ?? []).sort(),
+            });
+          }
+        }
+
+        // Include products from reclamations that are not in products table
+        if (reclamationsData && reclamationsData.length > 0) {
+          for (const reclamation of reclamationsData) {
+            const sapId = reclamation.sap_article_id ?? "";
+            if (!sapId || productMap.has(sapId)) continue;
+            const existingReclamations = reclamationCountsMap.get(sapId) ?? 0;
+            const deliveryCount = deliveryCountsMap.get(sapId) ?? 0;
+            const deliveryDates = deliveryDateCountsMap.get(sapId);
+            productMap.set(sapId, {
+              sap_article_id: sapId,
+              name: sapId,
+              brand: "",
+              category: null,
+              ean: null,
+              bnr: null,
               reclamationCount: existingReclamations,
               deliveryCount,
               deliveryDates: Array.from(deliveryDates ?? []).sort(),
@@ -1203,7 +1228,7 @@ function ErstatningsCheckPage() {
           };
         }),
       );
-setDeliveryStatistics(
+      setDeliveryStatistics(
         Array.from(
           (deliveriesData ?? [])
             .filter((delivery: any) => delivery.delivery_number || delivery.arrival_date)
@@ -1259,7 +1284,8 @@ setDeliveryStatistics(
                 });
               }
               return acc;
-            }, new Map<string, DeliveryStatistic>()).values(),
+            }, new Map<string, DeliveryStatistic>())
+            .values(),
         )
           .sort((a: DeliveryStatistic, b: DeliveryStatistic) => {
             const aDate = a.arrival_date ? new Date(a.arrival_date).getTime() : 0;
@@ -1291,7 +1317,11 @@ setDeliveryStatistics(
       for (const row of data ?? []) {
         const existing = map.get(row.sap_article_id);
         if (!existing) {
-          map.set(row.sap_article_id, row.status);
+          // Normalize old "Ej skickad" status to "Granskas av butikssupporten"
+          map.set(
+            row.sap_article_id,
+            row.status === "Ej skickad" ? "Granskas av butikssupporten" : row.status,
+          );
         }
       }
       setReclamationStatuses(map);
@@ -1382,10 +1412,7 @@ setDeliveryStatistics(
               );
               console.log(`[SAP Proxy] Response for ${sapArticleId}:`, proxyResponse);
               if (!proxyResponse.success) {
-                console.error(
-                  `[SAP Proxy] Failed for ${sapArticleId}:`,
-                  proxyResponse.error,
-                );
+                console.error(`[SAP Proxy] Failed for ${sapArticleId}:`, proxyResponse.error);
                 return null;
               }
               const json = proxyResponse.data ?? "";
@@ -1393,10 +1420,7 @@ setDeliveryStatistics(
                 console.error(`[SAP Proxy] No JSON data for ${sapArticleId}`);
                 return null;
               }
-              console.log(
-                `[SAP Proxy] Raw JSON for ${sapArticleId}:`,
-                json.substring(0, 200),
-              );
+              console.log(`[SAP Proxy] Raw JSON for ${sapArticleId}:`, json.substring(0, 200));
               let parsed;
               try {
                 parsed = JSON.parse(json);
@@ -1412,10 +1436,7 @@ setDeliveryStatistics(
               console.log(`[SAP Proxy] Extracted data for ${sapArticleId}:`, result);
               return result;
             })()
-          : await fetchSapProductData(
-              activeStore.sap_site_id ?? activeStore.id,
-              sapArticleId,
-            );
+          : await fetchSapProductData(activeStore.sap_site_id ?? activeStore.id, sapArticleId);
 
         if (!sapData) {
           // SAP returned HTTP 200 but no data (e.g. {"d":null}).
@@ -1954,7 +1975,7 @@ setDeliveryStatistics(
         flowCounts[flow] += 1;
       }
       const categoryCounts: Record<string, number> = {};
-      for (const reclamation of reclamationData ?? []) {
+      for (const reclamation of reclamationsForPeriod) {
         if (reclamation.status === "Löst") {
           const category = deliveryMap.get(reclamation.sap_article_id)?.category || "Okänd";
           categoryCounts[category] = (categoryCounts[category] || 0) + 1;
@@ -2345,6 +2366,11 @@ setDeliveryStatistics(
       );
       const productMap = new Map(products.map((p: any) => [p.sap_article_id, p]));
       const flagged = Array.from(latestByArticle.values())
+        .sort((a, b) => {
+          const numA = a.delivery_number ?? "";
+          const numB = b.delivery_number ?? "";
+          return numA.localeCompare(numB);
+        })
         .map((delivery) => ({
           delivery,
           assessment: calculateShelfLifeStatus(
@@ -2486,46 +2512,46 @@ setDeliveryStatistics(
       status: getShelfLifeStatus(record),
     }));
 
-const filtered = withStatus
-       .filter(({ record, status }) => {
-         // Visa artiklar utan bäst-före-datum endast om statusen återspeglar saknad data
-         if (!record.expiry_date) {
-           if (!(
-             status === "Datum saknas" ||
-             status === "SAKNAS I SAP" ||
-             status === "Hållbarhet saknas"
-           )) {
-             return false;
-           }
-         }
-         // Tillämpa sökning på ALLA record, inklusive de med saknade datum
-         if (!search) return true;
-         return [
-           record.sap_article_id,
-           record.product_name,
-           record.brand,
-           String(record.shelf_lifetime_days ?? ""),
-           record.expiry_date,
-           record.arrival_date,
-           status,
-         ].some((value) =>
-           String(value ?? "")
-             .toLocaleLowerCase("sv")
-             .includes(search),
-         );
-       })
-.filter(({ record, status }) => {
-         const recordCategory = String(record.category ?? "").trim();
-         const lowerCategory = recordCategory.toLowerCase();
-         const recordStatus = getShelfLifeStatus(record);
-         const isHiddenCategory = autoHiddenCategories.has(lowerCategory);
+    const filtered = withStatus
+      .filter(({ record, status }) => {
+        // Visa artiklar utan bäst-före-datum endast om statusen återspeglar saknad data
+        if (!record.expiry_date) {
+          if (!(
+            status === "Datum saknas" ||
+            status === "SAKNAS I SAP" ||
+            status === "Hållbarhet saknas"
+          )) {
+            return false;
+          }
+        }
+        // Tillämpa sökning på ALLA record, inklusive de med saknade datum
+        if (!search) return true;
+        return [
+          record.sap_article_id,
+          record.product_name,
+          record.brand,
+          String(record.shelf_lifetime_days ?? ""),
+          record.expiry_date,
+          record.arrival_date,
+          status,
+        ].some((value) =>
+          String(value ?? "")
+            .toLocaleLowerCase("sv")
+            .includes(search),
+        );
+      })
+      .filter(({ record, status }) => {
+        const recordCategory = String(record.category ?? "").trim();
+        const lowerCategory = recordCategory.toLowerCase();
+        const recordStatus = getShelfLifeStatus(record);
+        const isHiddenCategory = autoHiddenCategories.has(lowerCategory);
 
-         // Dolda kategorier visas bara om användaren aktivt filtrerar på "SAKNAS I SAP"
-         // och record har sap_data_missing === true
-         if (isHiddenCategory) {
-           const showMissingInSap = shelfLifeStatusFilter.includes("SAKNAS I SAP");
-           if (!(record.sap_data_missing === true && showMissingInSap)) return false;
-         }
+        // Dolda kategorier visas bara om användaren aktivt filtrerar på "SAKNAS I SAP"
+        // och record har sap_data_missing === true
+        if (isHiddenCategory) {
+          const showMissingInSap = shelfLifeStatusFilter.includes("SAKNAS I SAP");
+          if (!(record.sap_data_missing === true && showMissingInSap)) return false;
+        }
 
         // Filter by status (multi-select) - applies to ALL records including hidden categories
         if (shelfLifeStatusFilter.length > 0 && !shelfLifeStatusFilter.includes(recordStatus))
@@ -2543,58 +2569,58 @@ const filtered = withStatus
 
         // Visa artiklar utan Total hållbarhet (dagar) oavsett kategori/filter
         if (
-           !record.shelf_lifetime_days ||
-           Number.isNaN(record.shelf_lifetime_days) ||
-           record.shelf_lifetime_days <= 0
-         ) {
-           return true;
-         }
+          !record.shelf_lifetime_days ||
+          Number.isNaN(record.shelf_lifetime_days) ||
+          record.shelf_lifetime_days <= 0
+        ) {
+          return true;
+        }
 
-         // Filter by brand (multi-select) - applies to ALL records
-         if (brandFilter.length > 0 && !brandFilter.includes(record.brand)) return false;
+        // Filter by brand (multi-select) - applies to ALL records
+        if (brandFilter.length > 0 && !brandFilter.includes(record.brand)) return false;
 
-         // Filter by category (multi-select) - applies to ALL records
-         if (categoryFilter.length > 0 && !categoryFilter.includes(recordCategory)) return false;
+        // Filter by category (multi-select) - applies to ALL records
+        if (categoryFilter.length > 0 && !categoryFilter.includes(recordCategory)) return false;
 
-         // Filter by delivery date
-         if (deliveryDateFilter) {
-           const arrival = record.arrival_date;
-           if (!arrival) {
-             if (deliveryDateFilter !== "alla") return false;
-           } else {
-             const arrivalDate = new Date(String(arrival));
-             const now = new Date();
-             const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-             const weekStart = new Date(todayStart);
-             weekStart.setDate(weekStart.getDate() - todayStart.getDay());
-             const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
-             switch (deliveryDateFilter) {
-               case "idag":
-                 if (!(
-                   arrivalDate >= todayStart &&
-                   arrivalDate < new Date(todayStart.getTime() + 86400000)
-                 ))
-                   return false;
-                 break;
-               case "denna_vecka":
-                 if (!(
-                   arrivalDate >= weekStart &&
-                   arrivalDate < new Date(weekStart.getTime() + 604800000)
-                 ))
-                   return false;
-                 break;
-               case "denna_månad":
-                 if (!(
-                   arrivalDate >= monthStart &&
-                   arrivalDate < new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1)
-                 ))
-                   return false;
-                 break;
-             }
-           }
-         }
-         return true;
-       })
+        // Filter by delivery date
+        if (deliveryDateFilter) {
+          const arrival = record.arrival_date;
+          if (!arrival) {
+            if (deliveryDateFilter !== "alla") return false;
+          } else {
+            const arrivalDate = new Date(String(arrival));
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const weekStart = new Date(todayStart);
+            weekStart.setDate(weekStart.getDate() - todayStart.getDay());
+            const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+            switch (deliveryDateFilter) {
+              case "idag":
+                if (!(
+                  arrivalDate >= todayStart &&
+                  arrivalDate < new Date(todayStart.getTime() + 86400000)
+                ))
+                  return false;
+                break;
+              case "denna_vecka":
+                if (!(
+                  arrivalDate >= weekStart &&
+                  arrivalDate < new Date(weekStart.getTime() + 604800000)
+                ))
+                  return false;
+                break;
+              case "denna_månad":
+                if (!(
+                  arrivalDate >= monthStart &&
+                  arrivalDate < new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1)
+                ))
+                  return false;
+                break;
+            }
+          }
+        }
+        return true;
+      })
       .filter(({ status }) => {
         if (!hideOkRecords) return true;
         return status !== "OK";
@@ -2967,6 +2993,7 @@ const filtered = withStatus
       const arrivalDate = shelf?.arrival_date || del?.arrival_date || rec.created_at;
       const expiryDate = shelf?.expiry_date || del?.expiry_date || "";
       const productName = shelf?.product_name || del?.product_name || "Okänd artikel";
+      const brandVal = shelf?.brand || del?.brand || "";
       const category = shelf?.category || del?.category || "Övrigt";
       const rawPrice =
         del?.total_price ||
@@ -2978,7 +3005,7 @@ const filtered = withStatus
         reclamationId: rec.id,
         sap_article_id: rec.sap_article_id,
         product_name: productName,
-        brand: shelf?.brand || del?.brand || "",
+        brand: brandVal,
         category,
         category_code: extractVarugrupp(category, rec.sap_article_id),
         delivery_date: arrivalDate ? new Date(arrivalDate).toISOString().split("T")[0] : "—",
@@ -3026,7 +3053,7 @@ const filtered = withStatus
           quantity: del?.quantity || 1,
           price,
           status: "Väntande",
-          rawStatus: "Ej skickad",
+          rawStatus: "Granskas av butikssupporten",
           notes: "Automatiskt identifierad enligt datumregelverk",
           bnr: del?.bnr || "BNR-" + shelf.sap_article_id.slice(-4),
           shelf_lifetime_days: shelf.shelf_lifetime_days,
@@ -3144,11 +3171,9 @@ const filtered = withStatus
     if (!activeStore?.id) return;
     try {
       const dbStatus: ReclamationStatus =
-        newStatus === "Skickad"
+        newStatus === "Skickad" || newStatus === "Väntande"
           ? "Granskas av butikssupporten"
-          : newStatus === "Väntande"
-            ? "Ej skickad"
-            : newStatus;
+          : newStatus;
 
       if (item.reclamationId) {
         await supabase
@@ -3335,7 +3360,7 @@ const filtered = withStatus
       const { error } = await supabase.from("reclamations").insert({
         store_id: activeStore.id,
         sap_article_id: product.sap_article_id,
-        status: "Ej skickad",
+        status: "Granskas av butikssupporten",
         notes: `Manuellt tillagd via ${addReclamationType === "sap" ? "materialnummer" : "BNR"}: ${addReclamationInput}`,
       });
 
@@ -3737,26 +3762,21 @@ const filtered = withStatus
               </CardHeader>
               <CardContent>
                 {(() => {
-                  const okCount = shelfLifeRecords.filter(
-                    (r) => getShelfLifeStatus(r) === "OK"
+                  const okCount = dashboardRecords.filter(
+                    (r) => getShelfLifeStatus(r) === "OK",
                   ).length;
-                  const reclaimCount = shelfLifeRecords.filter(
-                    (r) => getShelfLifeStatus(r) === "Kräver ersättning"
+                  const reclaimCount = dashboardRecords.filter(
+                    (r) => getShelfLifeStatus(r) === "Kräver ersättning",
                   ).length;
-                  const missingCount = shelfLifeRecords.length - okCount - reclaimCount;
                   const donutData = [
                     { name: "OK", value: okCount, color: "#107c41" },
                     { name: "Reklamation", value: reclaimCount, color: "#d13d3d" },
-                    ...(missingCount > 0
-                      ? [{ name: "Övrigt", value: missingCount, color: "#8c8c8c" }]
-                      : []),
                   ];
                   return donutData.some((d) => d.value > 0) ? (
                     <ChartContainer
                       config={{
                         OK: { label: "OK", color: "#107c41" },
                         Reklamation: { label: "Reklamation", color: "#d13d3d" },
-                        Övrigt: { label: "Övrigt", color: "#8c8c8c" },
                       }}
                       className="mx-auto aspect-square max-h-[260px]"
                     >
@@ -4569,14 +4589,15 @@ const filtered = withStatus
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="thisMonth">Den här månaden</SelectItem>
+                  <SelectItem value="lastMonth">Föregående månad</SelectItem>
+                  <SelectItem value="thisQuarter">Den här kvartalen</SelectItem>
                   <SelectItem value="ytd">Hittills i år</SelectItem>
                   <SelectItem value="last30">Senaste 30 dagarna</SelectItem>
                   <SelectItem value="last12">Senaste 12 månaderna</SelectItem>
-                  <SelectItem value="thisMonth">Denna månad</SelectItem>
-                  <SelectItem value="lastMonth">Förra månaden</SelectItem>
-                  <SelectItem value="thisQuarter">Hittills i kvartal</SelectItem>
                   <SelectItem value="week">Denna vecka</SelectItem>
                   <SelectItem value="all">Alla tider</SelectItem>
+                  <SelectItem value="custom">Anpassad</SelectItem>
                 </SelectContent>
               </Select>
               <Button
@@ -4979,7 +5000,8 @@ const filtered = withStatus
                   Kategorier &amp; produkter
                 </CardTitle>
                 <CardDescription className="mt-1 max-w-2xl">
-                  Utforska produkter, importerade leveransdatum, reklamationer och risk per kategori.
+                  Utforska produkter, importerade leveransdatum, reklamationer och risk per
+                  kategori.
                 </CardDescription>
               </div>
               <Button
@@ -4989,10 +5011,7 @@ const filtered = withStatus
                 disabled={catalogLoading}
                 className="shrink-0"
               >
-                <RefreshCw
-                  size={16}
-                  className={catalogLoading ? "animate-spin" : ""}
-                />
+                <RefreshCw size={16} className={catalogLoading ? "animate-spin" : ""} />
                 Uppdatera
               </Button>
             </div>
@@ -5046,7 +5065,9 @@ const filtered = withStatus
             ) : catalogCategories.length === 0 ? (
               <div className="rounded-xl border border-dashed bg-coop-gray-100 px-6 py-16 text-center">
                 <Package size={44} className="mx-auto mb-4 text-coop-gray-900/40" />
-                <p className="text-base font-semibold text-coop-gray-900">Inga kategorier hittades</p>
+                <p className="text-base font-semibold text-coop-gray-900">
+                  Inga kategorier hittades
+                </p>
                 <p className="mt-1 text-sm text-coop-gray-900/70">
                   Kontrollera att det finns aktiva produkter registrerade i databasen.
                 </p>
@@ -5306,21 +5327,14 @@ const filtered = withStatus
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-2 overflow-x-auto pb-2">
-              {(
-                [
-                  "Ej skickad",
-                  "Granskas av butikssupporten",
-                  "Löst",
-                  "Nekad",
-                ] as ReclamationStatus[]
-              ).map((s) => (
+              {(["ALL", "Granskas av butikssupporten", "Löst", "Nekad"] as string[]).map((s) => (
                 <Button
                   key={s}
                   size="sm"
                   variant={statusFilter === s ? "default" : "outline"}
                   onClick={() => setStatusFilter(s)}
                 >
-                  {s}
+                  {s === "ALL" ? "Alla" : s}
                 </Button>
               ))}
             </div>
@@ -5329,72 +5343,98 @@ const filtered = withStatus
                 <TableHeader>
                   <TableRow>
                     <TableHead>SAP-ID</TableHead>
+                    <TableHead>Produktnamn</TableHead>
+                    <TableHead>Varumärke</TableHead>
+                    <TableHead>Belopp (SEK)</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Uppdaterad</TableHead>
                     <TableHead>Åtgärder</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {reclamations
-                    .filter((r) => (statusFilter ? r.status === statusFilter : true))
-                    .map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell className="font-mono text-sm">{r.sap_article_id}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              r.status === "Löst"
-                                ? "default"
-                                : r.status === "Nekad"
-                                  ? "destructive"
-                                  : "secondary"
-                            }
-                          >
-                            {r.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-xs text-coop-gray-900">
-                          {new Date(r.updated_at).toLocaleDateString("sv-SE")}
-                        </TableCell>
-                        <TableCell>
-                          {(
-                            [
-                              "Ej skickad",
-                              "Granskas av butikssupporten",
-                              "Löst",
-                              "Nekad",
-                            ] as ReclamationStatus[]
-                          ).map((s) => (
-                            <Button
-                              key={s}
-                              size="sm"
-                              variant={r.status === s ? "default" : "outline"}
-                              onClick={async () => {
-                                await supabase
-                                  .from("reclamations")
-                                  .update({ status: s, updated_at: new Date().toISOString() })
-                                  .eq("id", r.id);
-                                setReclamations((prev) =>
-                                  prev.map((x) =>
-                                    x.id === r.id
-                                      ? { ...x, status: s, updated_at: new Date().toISOString() }
-                                      : x,
-                                  ),
-                                );
-                              }}
-                              className="mr-1 text-[10px]"
-                            >
-                              {s}
-                            </Button>
-                          ))}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  {reclamations.filter((r) => (statusFilter ? r.status === statusFilter : true))
-                    .length === 0 && (
+                  {(() => {
+                    const dMap = new Map<string, any>();
+                    for (const d of deliveryStatistics) {
+                      if (!dMap.has(d.sap_article_id)) {
+                        dMap.set(d.sap_article_id, d);
+                      }
+                    }
+                    return reclamations
+                      .filter((r) =>
+                        statusFilter !== "ALL" && statusFilter ? r.status === statusFilter : true,
+                      )
+                      .map((r) => {
+                        const del = dMap.get(r.sap_article_id);
+                        const price = del?.total_price ? (parseSek(del.total_price) ?? 85) : 85;
+                        return (
+                          <TableRow key={r.id}>
+                            <TableCell className="font-mono text-sm">{r.sap_article_id}</TableCell>
+                            <TableCell className="text-sm">
+                              {del?.product_name || r.sap_article_id}
+                            </TableCell>
+                            <TableCell className="text-sm">{del?.brand || "—"}</TableCell>
+                            <TableCell className="text-right text-sm">{formatSek(price)}</TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  r.status === "Löst"
+                                    ? "default"
+                                    : r.status === "Nekad"
+                                      ? "destructive"
+                                      : "secondary"
+                                }
+                              >
+                                {r.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-coop-gray-900">
+                              {new Date(r.updated_at).toLocaleDateString("sv-SE")}
+                            </TableCell>
+                            <TableCell>
+                              {(
+                                [
+                                  "Granskas av butikssupporten",
+                                  "Löst",
+                                  "Nekad",
+                                ] as ReclamationStatus[]
+                              ).map((s) => (
+                                <Button
+                                  key={s}
+                                  size="sm"
+                                  variant={r.status === s ? "default" : "outline"}
+                                  onClick={async () => {
+                                    await supabase
+                                      .from("reclamations")
+                                      .update({ status: s, updated_at: new Date().toISOString() })
+                                      .eq("id", r.id);
+                                    setReclamations((prev) =>
+                                      prev.map((x) =>
+                                        x.id === r.id
+                                          ? {
+                                              ...x,
+                                              status: s,
+                                              updated_at: new Date().toISOString(),
+                                            }
+                                          : x,
+                                      ),
+                                    );
+                                  }}
+                                  className="mr-1 text-[10px]"
+                                >
+                                  {s}
+                                </Button>
+                              ))}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      });
+                  })()}
+                  {reclamations.filter((r) =>
+                    statusFilter !== "ALL" && statusFilter ? r.status === statusFilter : true,
+                  ).length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={4}
+                        colSpan={7}
                         className="text-center text-sm text-coop-gray-900 py-6"
                       >
                         Inga reklamationer med denna status.
@@ -5411,7 +5451,8 @@ const filtered = withStatus
                 <DialogHeader>
                   <DialogTitle>Lägg till reklamation</DialogTitle>
                   <DialogDescription>
-                    Sök produkt via materialnummer (SAP-ID) eller BNR för att skapa en ny reklamation.
+                    Sök produkt via materialnummer (SAP-ID) eller BNR för att skapa en ny
+                    reklamation.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
@@ -5446,11 +5487,7 @@ const filtered = withStatus
                       {addReclamationType === "sap" ? "Materialnummer (SAP-ID)" : "BNR"}
                     </Label>
                     <Input
-                      placeholder={
-                        addReclamationType === "sap"
-                          ? "t.ex. 123456"
-                          : "t.ex. 1234567"
-                      }
+                      placeholder={addReclamationType === "sap" ? "t.ex. 123456" : "t.ex. 1234567"}
                       value={addReclamationInput}
                       onChange={(e) => handleAddReclamationInputChange(e.target.value)}
                       className="mt-2"
@@ -5463,9 +5500,7 @@ const filtered = withStatus
 
                   {addReclamationFoundProduct && (
                     <div className="rounded-lg border bg-green-50 p-3">
-                      <p className="text-sm font-medium text-green-800">
-                        Produkt hittades:
-                      </p>
+                      <p className="text-sm font-medium text-green-800">Produkt hittades:</p>
                       <div className="mt-1 space-y-1 text-sm text-green-700">
                         <p>
                           <span className="font-medium">Namn:</span>{" "}

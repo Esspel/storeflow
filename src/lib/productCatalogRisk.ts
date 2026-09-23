@@ -18,6 +18,7 @@ export interface RiskResult {
 
 /**
  * Beräknar riskpoäng (0–1) utifrån antal reklamationer och totala leveranser.
+ * Justerar för kunddatamängd: färre leveranser ger mer konservativ risk.
  * Returnerar alltid 0 vid datafel (negativa värden, NaN, noll leveranser).
  */
 export function calculateRiskScore(
@@ -32,7 +33,11 @@ export function calculateRiskScore(
   if (deliveries <= 0) return 0;
   if (reclamations === 0) return 0;
 
-  return reclamations / deliveries;
+  const ratio = reclamations / deliveries;
+  // Confidence factor: requires at least 5 deliveries for full risk weight.
+  // Low volume gets a conservative scaling to avoid misleading high risk scores.
+  const confidence = Math.min(deliveries / 5, 1);
+  return ratio * confidence;
 }
 
 export function getRiskLevel(score: number): RiskResult["level"] {
