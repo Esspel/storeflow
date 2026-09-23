@@ -118,8 +118,12 @@ export async function secureGetUser<T>(): Promise<T | null> {
   return idbGet<T>(USER_KEY);
 }
 
-export async function secureSetSession(token: string, user: unknown): Promise<void> {
-  const expiresAt = Date.now() + SESSION_LIFETIME_MS;
+export async function secureSetSession(
+  token: string,
+  user: unknown,
+  customExpiresAt?: number,
+): Promise<void> {
+  const expiresAt = customExpiresAt ?? Date.now() + SESSION_LIFETIME_MS;
   if (!isBrowser()) return;
 
   if (!isIDBAvailable()) {
@@ -190,4 +194,27 @@ export async function secureGetSessionExpiresAt(): Promise<number | null> {
     return raw ? Number(raw) : null;
   }
   return idbGet<number>(EXPIRY_KEY);
+}
+
+// Update only the session expiry timestamp (used by sliding-window refresh)
+export async function secureSetSessionExpiry(expiresAt: number): Promise<void> {
+  if (!isBrowser()) return;
+
+  if (!isIDBAvailable()) {
+    if (!isLocalStorageAvailable()) return;
+    localStorage.setItem("sf_session_expires_at", String(expiresAt));
+    return;
+  }
+
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).put(expiresAt, EXPIRY_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {
+    // Silently fail
+  }
 }

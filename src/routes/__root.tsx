@@ -8,7 +8,7 @@ import {
   useNavigate,
   Outlet,
 } from "@tanstack/react-router";
-import { useEffect, useState, useRef } from "react";
+import { useEffect } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
@@ -69,9 +69,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <h1 className="text-xl font-semibold tracking-tight text-coop-gray-900">
           Sidan laddades inte
         </h1>
-        <p className="mt-2 text-sm text-coop-gray-900">
-          Något gick fel. Prova att ladda om sidan.
-        </p>
+        <p className="mt-2 text-sm text-coop-gray-900">Något gick fel. Prova att ladda om sidan.</p>
 
         <div className="mt-4 rounded-md border border-border bg-muted/50 px-4 py-3 text-left">
           <p className="mb-1 text-xs font-medium text-coop-gray-900">Feldetaljer:</p>
@@ -147,7 +145,8 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function AppLayout() {
-  const { user, token, loading, hasCheckedAuth, showFirstTimeSetup, dismissFirstTimeSetup } = useAuth();
+  const { user, token, loading, hasCheckedAuth, showFirstTimeSetup, dismissFirstTimeSetup } =
+    useAuth();
   const navigate = useNavigate();
   const router = useRouter();
   const pathname = router.state.location.pathname;
@@ -157,23 +156,10 @@ function AppLayout() {
     pathname === "/qr-kundonskemal-form" ||
     pathname === "/customer-nav";
 
-  // Cooldown before redirecting to login on reload. The first render after
-  // mount has no user/token yet, but the session is being restored from
-  // IndexedDB. Redirecting immediately would bounce an already-logged-in
-  // user to /login on every page reload. A 500 ms grace period lets the
-  // async session validation complete before we commit to a redirect.
-  const [redirectPending, setRedirectPending] = useState(true);
-  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    redirectTimerRef.current = setTimeout(() => setRedirectPending(false), 500);
-    return () => {
-      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
-    };
-  }, []);
-
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js", { scope: "/" })
+      navigator.serviceWorker
+        .register("/sw.js", { scope: "/" })
         .then((reg) => {
           console.log("[SW] Registrerad:", reg.scope);
         })
@@ -185,20 +171,21 @@ function AppLayout() {
 
   useEffect(() => {
     // Only redirect AFTER auth has been fully checked.
-    // This prevents redirect-to-login when the page reloads and the session
-    // from IndexedDB hasn't been validated yet by AuthProvider's async flow.
+    // hasCheckedAuth is set by AuthProvider after the IndexedDB session read
+    // completes (with built-in retries), so this prevents redirect-to-login
+    // when the page reloads and the session from IndexedDB hasn't been restored yet.
     if (!hasCheckedAuth) return;
-    // Wait out the cooldown so a session restored from IndexedDB can arrive.
-    if (redirectPending) return;
+
     // Redirect to login only if there is genuinely no stored session token.
-    // A transient validation failure may leave `user` null while `token` still
-    // exists; in that case we must NOT redirect or the user bounces to login.
+    // Trust-first: the session is restored synchronously from IndexedDB on
+    // reload; if a token exists, we keep the user logged in even if a
+    // background network validation hasn't completed yet.
     if (!token && !isLoginPage && !isPublicRoute) {
       navigate({ to: "/login" });
     } else if (user && isLoginPage && !user.must_change_password) {
       navigate({ to: "/" });
     }
-  }, [token, user, hasCheckedAuth, isLoginPage, isPublicRoute, redirectPending, navigate]);
+  }, [token, user, hasCheckedAuth, isLoginPage, isPublicRoute, navigate]);
 
   if (loading && !isPublicRoute) {
     return (

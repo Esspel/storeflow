@@ -1,16 +1,21 @@
 // Edge Function: secure-login
 //
 // Handles app user login with rate limiting, exponential backoff, account lockout,
-// password verification via RPC, and app_sessions token generation.
+// and app_sessions token generation.
+//
+// Supports three authentication modes:
+//   - "password" (default): { username, password }
+//   - "pin":                 { username, pin } — same PIN verification as quick-switch
+//   - "barcode":             { barcode, store_id } — employee access card scan
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, json } from "../_shared/cors.ts";
 import { serviceRoleClient } from "../_shared/auth.ts";
 
-// Exponential backoff delays per failed attempt (0-indexed, capped at 8s)
 const BACKOFF_MS = [0, 1000, 2000, 4000, 8000, 8000, 8000, 8000, 8000, 8000];
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
+const SESSION_TTL_HOURS = 12;
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -18,25 +23,61 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    let body: { username?: string; password?: string };
+    let body: { username?: string; password?: string; pin?: string; barcode?: string; store_id?: string };
     try {
       body = await req.json();
     } catch {
       return json({ error: "Ogiltig JSON i request-body." }, 400);
     }
 
-    const { username, password } = body;
+    const { username, password, pin, barcode, store_id } = body;
 
-    if (!username || !password) {
-      return json({ error: "Ogiltigt användarnamn eller lösenord." }, 400);
+    const usePin = pin !== undefined;
+    const useBarcode = barcode !== undefined;
+
+    if (!username && !useBarcode) {
+      return json({ error: "Ange användarnamn eller skanna kort." }, 400);
+    }
+    if (!password && !usePin && !useBarcode) {
+      return json({ error: "Ange lösenord eller PIN." }, 400);
     }
 
-    // 1. Skapa serviceRoleClient via det gemensamma auth-biblioteket
     const supabase = serviceRoleClient();
 
-    // 2. Check if account is locked
+    // ── Barcode login: resolve barcode to a user ──────────────────────────────
+    let resolvedUserId: string | null = null;
+    if (useBarcode) {
+      if (!store_id) {
+        return json({ error: "store_id krävs för streckkod inloggning." }, 400);
+      }
+      const { data: rows } = await supabase.rpc("lookup_user_by_barcode", {
+        p_barcode: barcode!,
+        p_store_id: store_id,
+      });
+      if (!rows || rows.length === 0) {
+        return json({ error: "Okänd streckkod." }, 401);
+      }
+      resolvedUserId = rows[0].id;
+    }
+
+    // ── Determine the username for rate-limiting (needed for both password and pin) ──
+    let rateLimitUsername = username;
+    if (useBarcode && !rateLimitUsername && resolvedUserId) {
+      const { data: u } = await supabase
+        .from("app_users")
+        .select("username")
+        .eq("id", resolvedUserId)
+        .maybeSingle();
+      if (u) rateLimitUsername = u.username;
+    }
+
+    if (!rateLimitUsername) {
+      return json({ error: "Ogiltig inloggning." }, 401);
+    }
+
+    // ── Check if account is locked ────────────────────────────────────────────
     const { data: lockedUntil } = await supabase.rpc("check_account_locked", {
-      p_username: username,
+      p_username: rateLimitUsername,
     });
 
     if (lockedUntil) {
@@ -54,39 +95,71 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 3. Fetch user
-    const { data: user, error: userError } = await supabase
-      .from("app_users")
-      .select(
-        "id, username, password_hash, is_active, failed_login_count, locked_until, display_name, role, role_manually_set, employee_group, store_id, active_store_id, must_change_password, last_login, created_at, hierarchy_level, forening_id, distrikt_id",
-      )
-      .eq("username", username)
-      .eq("is_active", true)
-      .maybeSingle();
+    // ── Fetch user (full columns for either username or barcode lookup) ────────
+    const selectCols =
+      "id, username, password_hash, quick_pin_hash, is_active, failed_login_count, locked_until, display_name, role, role_manually_set, employee_group, store_id, active_store_id, must_change_password, last_login, created_at, hierarchy_level, forening_id, distrikt_id";
+
+    let user: Record<string, unknown> | null = null;
+    let userError: unknown = null;
+
+    if (useBarcode && resolvedUserId) {
+      const res = await supabase.from("app_users").select(selectCols).eq("id", resolvedUserId).eq("is_active", true).maybeSingle();
+      user = res.data ?? null;
+      userError = res.error;
+    } else if (username) {
+      const res = await supabase
+        .from("app_users")
+        .select(selectCols)
+        .eq("username", username)
+        .eq("is_active", true)
+        .maybeSingle();
+      user = res.data ?? null;
+      userError = res.error;
+    }
 
     if (userError || !user) {
       // Record attempt for non-existent users too (prevent username enumeration timing)
-      await supabase.rpc("record_failed_login", { p_username: username });
-      // Small fixed delay for non-existent users
+      if (rateLimitUsername) {
+        await supabase.rpc("record_failed_login", { p_username: rateLimitUsername });
+      }
       await new Promise((r) => setTimeout(r, 500));
       return json({ error: "Ogiltigt användarnamn eller lösenord." }, 401);
     }
 
-    // 4. Exponential backoff delay based on current failed count
+    // ── Exponential backoff delay based on current failed count ────────────────
     const failCount = user.failed_login_count ?? 0;
-    const delay = BACKOFF_MS[Math.min(failCount, BACKOFF_MS.length - 1)];
+    const delay = BACKOFF_MS[Math.min(failCount as number, BACKOFF_MS.length - 1)];
     if (delay > 0) {
       await new Promise((r) => setTimeout(r, delay));
     }
 
-    // 5. Verify password
-    const { data: verified } = await supabase.rpc("verify_password", {
-      plain_password: password,
-      hashed_password: user.password_hash,
-    });
+    // ── Verify credentials ─────────────────────────────────────────────────────
+    let verified = false;
+
+    if (usePin) {
+      // PIN login uses the same verification as quick-switch (verify_quick_pin)
+      const { data: valid } = await supabase.rpc("verify_quick_pin", {
+        p_user_id: user.id,
+        p_pin: pin!,
+      });
+      verified = !!valid;
+    } else if (useBarcode) {
+      // Barcode login is pre-authenticated by lookup_user_by_barcode;
+      // the PIN verification step is skipped (barcode is the credential)
+      verified = true;
+    } else {
+      // Password login
+      const { data: valid } = await supabase.rpc("verify_password", {
+        plain_password: password!,
+        hashed_password: user.password_hash,
+      });
+      verified = !!valid;
+    }
 
     if (!verified) {
-      await supabase.rpc("record_failed_login", { p_username: username });
+      if (rateLimitUsername) {
+        await supabase.rpc("record_failed_login", { p_username: rateLimitUsername });
+      }
 
       const newCount = failCount + 1;
       const remainingAttempts = MAX_ATTEMPTS - newCount;
@@ -112,11 +185,13 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 6. Success — reset counter, create session
-    await supabase.rpc("record_successful_login", { p_username: username });
+    // ── Success — reset counter, create session ────────────────────────────────
+    if (rateLimitUsername) {
+      await supabase.rpc("record_successful_login", { p_username: rateLimitUsername });
+    }
 
     const token = crypto.randomUUID() + "-" + Date.now();
-    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + SESSION_TTL_HOURS * 60 * 60 * 1000).toISOString();
 
     await supabase.from("app_sessions").insert({
       user_id: user.id,
@@ -124,10 +199,8 @@ Deno.serve(async (req: Request) => {
       expires_at: expiresAt,
     });
 
-    await supabase
-      .from("app_users")
-      .update({ last_login: new Date().toISOString() })
-      .eq("id", user.id);
+    const newLastLogin = new Date().toISOString();
+    await supabase.from("app_users").update({ last_login: newLastLogin }).eq("id", user.id);
 
     const appUser = {
       id: user.id,
@@ -140,7 +213,7 @@ Deno.serve(async (req: Request) => {
       active_store_id: user.active_store_id ?? null,
       is_active: user.is_active,
       must_change_password: user.must_change_password ?? false,
-      last_login: user.last_login,
+      last_login: newLastLogin,
       created_at: user.created_at,
       hierarchy_level: user.hierarchy_level ?? null,
       forening_id: user.forening_id ?? null,

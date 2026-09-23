@@ -7,6 +7,9 @@ import {
   login as doLogin,
   logout as doLogout,
   validateSession,
+  isSessionLocallyExpired,
+  backgroundValidateAndRefresh,
+  refreshSession,
 } from "./auth";
 import { secureGetSessionExpiresAt } from "./secure-storage";
 
@@ -26,6 +29,7 @@ type AuthContextType = {
   login: (
     username: string,
     password: string,
+    pin?: string,
   ) => Promise<{ error?: string; mustChangePassword?: boolean }>;
   logout: () => Promise<void>;
   refreshUser: (user: AppUser) => void;
@@ -34,9 +38,24 @@ type AuthContextType = {
   openLockScreen: () => void;
   closeLockScreen: () => void;
   quickSwitch: (newUser: AppUser, newToken: string) => Promise<void>;
+  isOffline: boolean;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
+
+const IDB_RETRY_COUNT = 3;
+const IDB_RETRY_DELAY_MS = 200;
+const BACKGROUND_VALIDATE_INTERVAL_MS = 5 * 60 * 1000;
+const NETWORK_RETRY_INTERVAL_MS = 30_000;
+
+function isNetworkError(err: unknown): boolean {
+  if (!err) return false;
+  const msg = String(err);
+  return (
+    /failed to fetch|network|timeout|offline|TypeError/i.test(msg) ||
+    (typeof navigator !== "undefined" && !navigator.onLine)
+  );
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
@@ -48,14 +67,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [lockScreenOpen, setLockScreenOpen] = useState(false);
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const [showFirstTimeSetup, setShowFirstTimeSetup] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
 
-  // Keep a ref so the timeout interval can access the latest token without stale closures
   const tokenRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+
   useEffect(() => {
     tokenRef.current = token;
   }, [token]);
 
-  // effectiveStore is always activeStore — kept for API compat
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const effectiveStore = activeStore;
 
   const loadUserStores = useCallback(async (userId: string, currentUser: AppUser) => {
@@ -80,7 +107,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { data, error } = await query;
       if (error) {
-        console.error("Fel vid hämtning av överordnade butiker:", error.message);
+        if (!isNetworkError(error)) {
+          console.error("Fel vid hämtning av överordnade butiker:", error.message);
+        }
         setUserStores([]);
         return [];
       }
@@ -95,7 +124,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq("user_id", userId);
 
     if (error) {
-      console.error("Fel vid hämtning av användarbutiker:", error.message);
+      if (!isNetworkError(error)) {
+        console.error("Fel vid hämtning av användarbutiker:", error.message);
+      }
       setUserStores([]);
       return [];
     }
@@ -106,6 +137,168 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setUserStores(stores);
     return stores;
+  }, []);
+
+  const refreshUserStores = useCallback(async () => {
+    if (!user) return;
+    await loadUserStores(user.id, user);
+  }, [user, loadUserStores]);
+
+  // ─── Trust-first session restoration on initial mount ──────────────────────
+  //
+  // NEW APPROACH (trust-first): Restore the session from IndexedDB immediately
+  // and trust it. The local expiry timestamp is checked first — if the session
+  // hasn't expired locally, we set the token + user right away and show the app
+  // instantly. Background validation runs after the initial render without
+  // blocking.
+  //
+  // This replaces the old "validate first or redirect" approach that bounced
+  // users to /login whenever a network call to validateSession failed on reload.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreSession() {
+      // Retry IDB reads a few times — IndexedDB may not be open yet on first load
+      let stored: { token: string; user: AppUser } | null = null;
+
+      for (let attempt = 0; attempt < IDB_RETRY_COUNT && !cancelled; attempt++) {
+        try {
+          stored = await getStoredSession();
+        } catch {
+          stored = null;
+        }
+        if (stored) break;
+        if (attempt < IDB_RETRY_COUNT - 1) {
+          await new Promise((r) => setTimeout(r, IDB_RETRY_DELAY_MS));
+        }
+      }
+
+      if (!mountedRef.current || cancelled) return;
+
+      if (!stored) {
+        setLoading(false);
+        setHasCheckedAuth(true);
+        return;
+      }
+
+      // Check local expiry before trusting
+      let locallyExpired: boolean;
+      try {
+        locallyExpired = await isSessionLocallyExpired();
+      } catch {
+        locallyExpired = false;
+      }
+      if (!mountedRef.current || cancelled) return;
+
+      if (locallyExpired) {
+        setSessionToken(null);
+        await clearSession();
+        setLoading(false);
+        setHasCheckedAuth(true);
+        return;
+      }
+
+      // TRUST-FIRST: Restore session immediately — show the app without waiting
+      setSessionToken(stored.token);
+      setToken(stored.token);
+      setUser(stored.user);
+
+      setLoading(false);
+      setHasCheckedAuth(true);
+    }
+
+    restoreSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ─── Background session validation — runs whenever a token is present ──────
+  //
+  // This effect kicks in after the initial session is restored. It validates
+  // the session against the server in the background (non-blocking) and:
+  //  - If valid: updates user data, loads stores, refreshes session if near expiry
+  //  - If network error: keeps the local session alive, retries sooner
+  //  - If invalid (expired/revoked): clears session and redirects to login
+  useEffect(() => {
+    if (!token) return;
+
+    let isMounted = true;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    // Seed: load stores for the restored user
+    const initialUser = user;
+
+    async function tick(currentToken: string, currentUser: AppUser | null) {
+      if (!isMounted || !mountedRef.current) return;
+
+      const result = await backgroundValidateAndRefresh(currentToken);
+
+      if (!isMounted || !mountedRef.current) return;
+
+      if (result.needsRemoval) {
+        setSessionToken(null);
+        setUser(null);
+        setToken(null);
+        setUserStores([]);
+        setActiveStoreState(null);
+        await clearSession();
+        if (isMounted) {
+          window.location.href = "/login";
+        }
+        return;
+      }
+
+      if (result.user) {
+        setIsOffline(false);
+        const freshUser = result.user;
+        setUser(freshUser);
+        await storeSession(currentToken, freshUser);
+
+        if (!isMounted || !mountedRef.current) return;
+
+        const stores = await loadUserStores(freshUser.id, freshUser);
+        if (!isMounted || !mountedRef.current) return;
+
+        if (freshUser.active_store_id) {
+          const active = stores.find((s) => s.id === freshUser.active_store_id) ?? null;
+          setActiveStoreState(active);
+        } else if (stores.length > 0 && !activeStore) {
+          setActiveStoreState(stores[0]);
+        }
+
+        timeoutId = setTimeout(
+          () => tick(currentToken, freshUser),
+          BACKGROUND_VALIDATE_INTERVAL_MS,
+        );
+        return;
+      }
+
+      // result.user is null and !needsRemoval → network error
+      // Keep session alive, retry sooner
+      setIsOffline(true);
+      timeoutId = setTimeout(() => tick(currentToken, currentUser), NETWORK_RETRY_INTERVAL_MS);
+    }
+
+    tick(token, initialUser);
+
+    return () => {
+      isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [token, user, loadUserStores, activeStore]);
+
+  // Network status monitoring
+  useEffect(() => {
+    const onOnline = () => setIsOffline(false);
+    const onOffline = () => setIsOffline(true);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
   }, []);
 
   const setActiveStore = useCallback(
@@ -125,76 +318,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user],
   );
 
-  const refreshUserStores = useCallback(async () => {
-    if (!user) return;
-    await loadUserStores(user.id, user);
-  }, [user, loadUserStores]);
-
-  // Initial session validation
-  useEffect(() => {
-    let isMounted = true;
-
-    (async () => {
-      try {
-        const stored = await getStoredSession();
-        if (!stored) {
-          if (isMounted) setLoading(false);
-          return;
-        }
-
-        setSessionToken(stored.token);
-        if (isMounted) {
-          setToken(stored.token);
-          setUser(stored.user);
-        }
-        const validUser = await validateSession(stored.token);
-
-        if (validUser && isMounted) {
-          setUser(validUser);
-          const stores = await loadUserStores(validUser.id, validUser);
-
-          if (isMounted) {
-            if (validUser.active_store_id) {
-              const active = stores.find((s) => s.id === validUser.active_store_id) ?? null;
-              setActiveStoreState(active);
-            } else if (stores.length > 0) {
-              setActiveStoreState(stores[0]);
-            }
-          }
-        } else {
-          // Defensive: do not wipe session on transient network/DB errors.
-          // Only clear when session is definitively invalid (validUser === null
-          // after a clean validateSession result). On reload/network flakiness
-          // the user should stay logged in so the page does not bounce to login.
-          console.warn("Session validation failed; keeping session intact on reload to avoid login bounce.");
-        }
-      } catch (err) {
-        // Defensive: on exception (network/DB flakiness) keep session intact
-        // to avoid login bounce. The finally block still marks auth as checked.
-        console.error("Fel vid initiering av session:", err);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-          setHasCheckedAuth(true);
-        }
-      }
-    })();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [loadUserStores]);
-
-  // Absolute session timeout: check every 60 s whether the limit has passed
+  // Absolute session timeout: check every 60s whether the local limit has passed
   useEffect(() => {
     const CHECK_INTERVAL_MS = 60_000;
     const id = setInterval(async () => {
-      if (!tokenRef.current) return;
+      const currentToken = tokenRef.current;
+      if (!currentToken) return;
       const expiresAt = await secureGetSessionExpiresAt();
       if (expiresAt !== null && Date.now() >= expiresAt) {
-        if (tokenRef.current) {
-          await supabase.from("app_sessions").delete().eq("token", tokenRef.current);
-        }
+        await supabase.from("app_sessions").delete().eq("token", currentToken);
         setSessionToken(null);
         setUser(null);
         setToken(null);
@@ -208,7 +340,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(id);
   }, []);
 
-  // Warn 5 minutes before absolute expiry
+  // Warn 5 minutes before absolute expiry, and attempt proactive refresh
   useEffect(() => {
     let warnId: ReturnType<typeof setTimeout> | null = null;
     (async () => {
@@ -220,6 +352,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (delay > 0) {
         warnId = setTimeout(() => {
           window.dispatchEvent(new CustomEvent("session-expiring-soon"));
+          // Attempt proactive refresh
+          if (tokenRef.current) {
+            refreshSession(tokenRef.current)
+              .then((ok) => {
+                if (ok) setIsOffline(false);
+              })
+              .catch(() => {});
+          }
         }, delay);
       }
     })();
@@ -230,8 +370,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token]);
 
   const login = useCallback(
-    async (username: string, password: string) => {
-      const result = await doLogin(username, password);
+    async (username: string, password: string, pin?: string) => {
+      const result = await doLogin(username, password, pin);
       if ("error" in result) return { error: result.error };
 
       setSessionToken(result.token);
@@ -247,9 +387,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setActiveStoreState(stores[0]);
       }
 
-      if (result.user.must_change_password || result.user.last_login === null) {
-        const firstLogin = result.user.last_login === null;
-        setIsFirstLogin(firstLogin);
+      const isFirst = result.user.last_login === null;
+      if (result.user.must_change_password || isFirst) {
+        setIsFirstLogin(isFirst);
         const userWithFlag = { ...result.user, must_change_password: true };
         setUser(userWithFlag);
         await storeSession(result.token, userWithFlag);
@@ -257,6 +397,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setIsFirstLogin(false);
+      setIsOffline(false);
       return {};
     },
     [loadUserStores],
@@ -309,6 +450,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setActiveStoreState(stores[0]);
       }
       setLockScreenOpen(false);
+      setIsOffline(false);
     },
     [token, loadUserStores],
   );
@@ -336,6 +478,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         openLockScreen,
         closeLockScreen,
         quickSwitch,
+        isOffline,
       }}
     >
       {children}
