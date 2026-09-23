@@ -6,7 +6,7 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   LayoutDashboard,
   Upload,
@@ -413,11 +413,12 @@ function getDeliveryDateKey(dateValue: unknown): string | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
 }
 
-function getMappedFlow(categoryMappings: DeliveryCategoryMapping[], category: string | null | undefined): DeliveryFlow {
+function getMappedFlow(
+  categoryMappings: DeliveryCategoryMapping[],
+  category: string | null | undefined,
+): DeliveryFlow {
   const normalizedCategory = String(category ?? "").trim();
-  const mapped = categoryMappings.find(
-    (mapping) => mapping.category === normalizedCategory,
-  )?.flow;
+  const mapped = categoryMappings.find((mapping) => mapping.category === normalizedCategory)?.flow;
   if (mapped) return mapped;
   const lowerCategory = normalizedCategory.toLowerCase();
   if (lowerCategory.includes("frys")) return "Fryst";
@@ -493,6 +494,105 @@ async function fetchAllRows(
     from += batchSize;
   }
   return all;
+}
+
+interface FilterDropdownProps {
+  label: string;
+  options: string[];
+  selected: string[];
+  onSelectionChange: (values: string[]) => void;
+}
+
+function FilterDropdown({ label, options, selected, onSelectionChange }: FilterDropdownProps) {
+  const [search, setSearch] = useState("");
+  const filteredOptions = options.filter((option) =>
+    option.toLocaleLowerCase("sv").includes(search.toLocaleLowerCase("sv")),
+  );
+  const isAllSelected = selected.length === 0;
+  const activeCount = selected.length;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 gap-2 rounded-xl border-gray-300 bg-white px-3.5 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50 hover:text-gray-900"
+        >
+          {label}
+          {activeCount > 0 && (
+            <Badge
+              variant="secondary"
+              className="h-5 min-w-[20px] rounded-full px-1.5 text-xs bg-emerald-100 text-emerald-800"
+            >
+              {activeCount}
+            </Badge>
+          )}
+          <ChevronDown className="h-4 w-4 text-gray-700" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-72 rounded-2xl border border-gray-200 bg-white p-3 shadow-xl"
+        align="start"
+      >
+        <div className="mb-2">
+          <div className="relative flex items-center">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={`Sök bland ${label.toLowerCase()}...`}
+              className="h-10 w-full rounded-xl border border-gray-900/80 bg-white pr-9 pl-3 text-sm placeholder:text-gray-400 focus-visible:ring-1 focus-visible:ring-gray-900"
+            />
+            <Search className="absolute right-3 h-4 w-4 text-gray-500 pointer-events-none" />
+          </div>
+        </div>
+        <div className="py-1">
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm text-gray-800 hover:bg-gray-100 transition-colors"
+            onClick={() => onSelectionChange([])}
+          >
+            <span
+              className={`flex h-4 w-4 items-center justify-center rounded-full border-2 ${isAllSelected ? "border-[#107c41] bg-[#107c41]" : "border-gray-400"}`}
+            >
+              {isAllSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+            </span>
+            <span className="font-normal text-gray-800">Alla</span>
+          </button>
+        </div>
+        <div className="border-t border-gray-100 max-h-[260px] overflow-y-auto pt-1 divide-y divide-gray-100">
+          {filteredOptions.map((option) => {
+            const isSelected = selected.includes(option);
+            return (
+              <button
+                key={option}
+                type="button"
+                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm text-gray-800 hover:bg-gray-100 transition-colors"
+                onClick={() => {
+                  if (isSelected) {
+                    onSelectionChange(selected.filter((v) => v !== option));
+                  } else {
+                    onSelectionChange([...selected, option]);
+                  }
+                }}
+              >
+                <span
+                  className={`flex h-4 w-4 items-center justify-center rounded border ${isSelected ? "border-[#107c41] bg-[#107c41] text-white" : "border-gray-300 bg-white"}`}
+                >
+                  {isSelected && <span className="text-[10px] leading-none font-bold">✓</span>}
+                </span>
+                <span className="truncate text-gray-800">{option}</span>
+              </button>
+            );
+          })}
+          {filteredOptions.length === 0 && (
+            <p className="px-3 py-3 text-center text-sm text-gray-500">Inga resultat</p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export const Route = createFileRoute("/ersattningcheck")({
@@ -585,7 +685,15 @@ function ErstatningsCheckPage() {
   const [totalProductCount, setTotalProductCount] = useState(0);
   const [showAllDeliveryNotes, setShowAllDeliveryNotes] = useState(false);
   const [statisticsPeriod, setStatisticsPeriod] = useState<
-    "thisMonth" | "lastMonth" | "thisQuarter" | "ytd" | "last30" | "last12" | "week" | "all" | "custom"
+    | "thisMonth"
+    | "lastMonth"
+    | "thisQuarter"
+    | "ytd"
+    | "last30"
+    | "last12"
+    | "week"
+    | "all"
+    | "custom"
   >("ytd");
   const [statisticsCustomFrom, setStatisticsCustomFrom] = useState("");
   const [statisticsCustomTo, setStatisticsCustomTo] = useState("");
@@ -652,7 +760,7 @@ function ErstatningsCheckPage() {
         supabaseClient
           .from("store_hidden_categories")
           .select("category")
-          .eq("store_id", activeStore.id)
+          .eq("store_id", activeStore!.id)
           .eq("is_hidden", true),
         supabaseClient.from("global_hidden_categories").select("category").eq("is_hidden", true),
       ]);
@@ -669,7 +777,7 @@ function ErstatningsCheckPage() {
       supabaseClient,
       "store_product_deliveries",
       "arrival_date",
-      { column: "store_id", value: activeStore.id },
+      { column: "store_id", value: activeStore!.id },
       { column: "arrival_date", ascending: false },
     );
     const unique = Array.from(
@@ -685,42 +793,9 @@ function ErstatningsCheckPage() {
   useEffect(() => {
     if (!activeStore?.id) return;
     void (async () => {
-      await refreshImportDates();
+      void refreshImportDates();
     })();
   }, [activeStore?.id]);
-
-  // Check for auth/store
-  if (authLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent"></div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-coop-gray-900 mb-2">Inloggning krävs</h2>
-          <p className="text-coop-gray-900">
-            Du måste vara inloggad för att komma åt ersättnings-kontrollen.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!activeStore) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-coop-gray-900 mb-2">Ingen aktiv butik</h2>
-          <p className="text-coop-gray-900">Välj en butik för att fortsätta.</p>
-        </div>
-      </div>
-    );
-  }
 
   const reclaimedProductCount = new Set(
     reclamations.map((reclamation) => reclamation.sap_article_id),
@@ -732,6 +807,7 @@ function ErstatningsCheckPage() {
     totalProductCount > 0 ? ((reclaimedProductCount / totalProductCount) * 100).toFixed(2) : "0.00";
   // Filter: Only eligible records where arrival is within last 4 days (regulatory requirement)
   // Users must apply for compensation within 4 days of delivery, otherwise no compensation
+  const now = Date.now();
   const eligibleShelfLifeRecords = useMemo(() => {
     const filtered = shelfLifeRecords.filter((record) => {
       if (record.sap_data_missing === true) return false;
@@ -751,7 +827,7 @@ function ErstatningsCheckPage() {
       if (!record.arrival_date) return false;
       const arrivalMs = new Date(record.arrival_date).getTime();
       if (Number.isNaN(arrivalMs)) return false;
-      const daysSinceArrival = Math.floor((Date.now() - arrivalMs) / (1000 * 60 * 60 * 24));
+      const daysSinceArrival = Math.floor((now - arrivalMs) / (1000 * 60 * 60 * 24));
       return daysSinceArrival >= 0 && daysSinceArrival <= 4;
     });
     // Sort by delivery_number so articles with same delivery number are grouped together
@@ -763,7 +839,7 @@ function ErstatningsCheckPage() {
       const zoneB = getMappedFlow(categoryMappings, b.category).toLowerCase();
       return zoneA.localeCompare(zoneB);
     });
-  }, [shelfLifeRecords, reclamationStatuses]);
+  }, [shelfLifeRecords, reclamationStatuses, now, categoryMappings]);
   const hasImportedDeliveries = deliveryStatistics.length > 0;
 
   // Dashboard records: only articles with actual delivery data that can be assessed
@@ -814,7 +890,7 @@ function ErstatningsCheckPage() {
     setImportError(null);
 
     try {
-      const results = await matchDeliveryNoteToProducts(supabase, activeStore.id, rows);
+      const results = await matchDeliveryNoteToProducts(supabase, activeStore!.id, rows);
       setMatchResults(results);
 
       // Auto-create unmatched products
@@ -826,7 +902,7 @@ function ErstatningsCheckPage() {
           const bnr = r.row.bnr ? String(r.row.bnr).trim() : null;
           const sapId = r.row.sapProduktId ? String(r.row.sapProduktId).trim() : null;
           return {
-            store_id: activeStore.id,
+            store_id: activeStore!.id,
             sap_article_id: sapId,
             ean: null,
             bnr: bnr && bnr.length > 0 ? bnr : null,
@@ -867,7 +943,7 @@ function ErstatningsCheckPage() {
       const deliveryRows = results
         .map((result) => ({
           sap_article_id: result.row.sapProduktId?.trim(),
-          store_id: activeStore.id,
+          store_id: activeStore!.id,
           arrival_date: result.row.leveransdag,
           best_before_date: result.row.bastForeDatum,
           quantity: Number.parseInt(result.row.levereradKvantitet, 10) || 0,
@@ -910,7 +986,7 @@ function ErstatningsCheckPage() {
           await supabase
             .from("store_product_deliveries")
             .delete()
-            .eq("store_id", activeStore.id)
+            .eq("store_id", activeStore!.id)
             .in("delivery_number", deliveryNumbers);
         }
 
@@ -946,7 +1022,7 @@ function ErstatningsCheckPage() {
       supabase
         .from("reclamations")
         .select("*")
-        .eq("store_id", activeStore.id)
+        .eq("store_id", activeStore!.id)
         .then(({ data, error }) => {
           if (!error && data) setReclamations(data as Reclamation[]);
         });
@@ -959,7 +1035,7 @@ function ErstatningsCheckPage() {
     supabase
       .from("reclamations")
       .select("*")
-      .eq("store_id", activeStore.id)
+      .eq("store_id", activeStore!.id)
       .then(({ data, error }) => {
         if (!error && data) setReclamations(data as Reclamation[]);
       });
@@ -974,7 +1050,7 @@ function ErstatningsCheckPage() {
       const { count } = await supabase
         .from("products")
         .select("id", { count: "exact", head: true })
-        .eq("store_id", activeStore.id)
+        .eq("store_id", activeStore!.id)
         .eq("is_active", true);
       setTotalProductCount(count ?? 0);
     })();
@@ -994,15 +1070,15 @@ function ErstatningsCheckPage() {
             supabase,
             "products",
             "id, sap_article_id, name, brand, category, ean, bnr, is_active",
-            { column: "store_id", value: activeStore.id },
+            { column: "store_id", value: activeStore!.id },
           ),
           fetchAllRows(supabase, "reclamations", "sap_article_id, status, store_id", {
             column: "store_id",
-            value: activeStore.id,
+            value: activeStore!.id,
           }),
           fetchAllRows(supabase, "store_product_deliveries", "sap_article_id, arrival_date", {
             column: "store_id",
-            value: activeStore.id,
+            value: activeStore!.id,
           }),
         ]);
 
@@ -1038,7 +1114,7 @@ function ErstatningsCheckPage() {
             const sapId = reclamation.sap_article_id ?? "";
             const recStoreId = reclamation.store_id ?? null;
             // Include if it's for this store or has no store_id (legacy/global)
-            if (recStoreId === activeStore.id || recStoreId === null) {
+            if (recStoreId === activeStore!.id || recStoreId === null) {
               reclamationCountsMap.set(sapId, (reclamationCountsMap.get(sapId) ?? 0) + 1);
             }
           }
@@ -1130,7 +1206,11 @@ function ErstatningsCheckPage() {
 
         // Calculate risk score for each category
         const catalogCategories = Array.from(categoriesMap.values()).map((entry) => {
-          const riskScore = calculateRiskScore(entry.activeReclamations, entry.deliveriesCount, entry.uniqueDeliveryDates.size);
+          const riskScore = calculateRiskScore(
+            entry.activeReclamations,
+            entry.deliveriesCount,
+            entry.uniqueDeliveryDates.size,
+          );
           const risk = calculateRisk({
             reclamationCount: entry.activeReclamations,
             deliveryCount: entry.deliveriesCount,
@@ -1184,13 +1264,13 @@ function ErstatningsCheckPage() {
   }, [activeStore?.id, catalogRefreshKey]);
 
   // Load shelf life data
-  const loadShelfLifeData = async () => {
+  async function loadShelfLifeData() {
     setIsLoading(true);
     try {
       const [productsData, masterData, deliveriesData] = await Promise.all([
         fetchAllRows(supabaseClient, "products", "id, sap_article_id, name, brand, category", {
           column: "store_id",
-          value: activeStore.id,
+          value: activeStore!.id,
         }),
         fetchAllRows(
           supabaseClient,
@@ -1201,7 +1281,7 @@ function ErstatningsCheckPage() {
           supabaseClient,
           "store_product_deliveries",
           "id, sap_article_id, best_before_date, arrival_date, status, delivery_number, product_name, brand, category",
-          { column: "store_id", value: activeStore.id },
+          { column: "store_id", value: activeStore!.id },
           { column: "arrival_date", ascending: false },
         ),
       ]);
@@ -1258,7 +1338,7 @@ function ErstatningsCheckPage() {
             compensation_price_ore: master.default_compensation_price_ore ?? 2,
             product_name: product.name ?? delivery.product_name ?? "Okänd produkt",
             brand: product.brand ?? delivery.brand ?? "",
-            product_url: getSapProductUrl(activeStore.sap_site_id, sapArticleId),
+            product_url: getSapProductUrl(activeStore!.sap_site_id, sapArticleId),
             delivery_status: delivery.status ?? "",
             created_at: product.created_at ?? new Date().toISOString(),
             updated_at: product.updated_at ?? new Date().toISOString(),
@@ -1342,15 +1422,15 @@ function ErstatningsCheckPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
-  const loadReclamationStatuses = async () => {
+  async function loadReclamationStatuses() {
     if (!activeStore?.id) return;
     try {
       const { data, error } = await supabase
         .from("reclamations")
         .select("sap_article_id, status")
-        .eq("store_id", activeStore.id);
+        .eq("store_id", activeStore!.id);
       if (error) {
         console.error("Error loading reclamations:", error);
         return;
@@ -1370,7 +1450,7 @@ function ErstatningsCheckPage() {
     } catch (error) {
       console.error("Error loading reclamations:", error);
     }
-  };
+  }
 
   const importShelfLifeFromSap = async () => {
     console.log("[importShelfLifeFromSap] Starting...");
@@ -1448,7 +1528,7 @@ function ErstatningsCheckPage() {
           ? await (async () => {
               console.log(`[SAP Proxy] Fetching for article ${sapArticleId}`);
               const proxyResponse = await fetchViaProxy(
-                `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore.sap_site_id ?? activeStore.id)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
+                `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore.sap_site_id ?? activeStore!.id)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
                 "GET",
                 { Accept: "application/json" },
               );
@@ -1478,7 +1558,7 @@ function ErstatningsCheckPage() {
               console.log(`[SAP Proxy] Extracted data for ${sapArticleId}:`, result);
               return result;
             })()
-          : await fetchSapProductData(activeStore.sap_site_id ?? activeStore.id, sapArticleId);
+          : await fetchSapProductData(activeStore.sap_site_id ?? activeStore!.id, sapArticleId);
 
         if (!sapData) {
           // SAP returned HTTP 200 but no data (e.g. {"d":null}).
@@ -1501,7 +1581,7 @@ function ErstatningsCheckPage() {
 
           const { error } = await supabase.from("product_shelf_life").upsert(
             {
-              store_id: activeStore.id,
+              store_id: activeStore!.id,
               sap_article_id: sapArticleId,
               shelf_lifetime_days: 0,
               sap_data_missing: true,
@@ -1546,7 +1626,7 @@ function ErstatningsCheckPage() {
 
         const { error } = await supabase.from("product_shelf_life").upsert(
           {
-            store_id: activeStore.id,
+            store_id: activeStore!.id,
             sap_article_id: sapArticleId,
             shelf_lifetime_days: hasValidSapData ? shelfLifeDays : 0,
             sap_data_missing: !hasValidSapData,
@@ -1568,7 +1648,7 @@ function ErstatningsCheckPage() {
             .from("products")
             .update({ ean: sapData.GlobalTradeItemNumber, updated_at: updatedAt })
             .eq("sap_article_id", sapArticleId)
-            .eq("store_id", activeStore.id);
+            .eq("store_id", activeStore!.id);
           if (eanError) {
             console.error("Error updating EAN:", eanError);
           }
@@ -1612,7 +1692,7 @@ function ErstatningsCheckPage() {
           .select("id, category, flow")
           .order("category"),
         supabase.rpc("get_store_distinct_categories", {
-          p_store_id: activeStore.id,
+          p_store_id: activeStore!.id,
         }),
       ]);
       if (!mappingsResult.error) {
@@ -1673,12 +1753,12 @@ function ErstatningsCheckPage() {
   };
 
   const createAdminTestFixture = async (includeReclamation: boolean) => {
-    if (user.role !== "admin") return null;
+    if (user!.role !== "admin") return null;
     setIsLoading(true);
     const sapArticleId = `TEST-${Date.now()}`;
     try {
       const { error: productError } = await supabase.from("products").insert({
-        store_id: activeStore.id,
+        store_id: activeStore!.id,
         sap_article_id: sapArticleId,
         bnr: `TEST-${Date.now()}`,
         name: "TEST - Ersättningsartikel",
@@ -1692,7 +1772,7 @@ function ErstatningsCheckPage() {
       const expiryDate = new Date(arrivalDate);
       expiryDate.setDate(expiryDate.getDate() + 30);
       const { error: deliveryError } = await supabase.from("store_product_deliveries").insert({
-        store_id: activeStore.id,
+        store_id: activeStore!.id,
         sap_article_id: sapArticleId,
         arrival_date: arrivalDate.toISOString(),
         best_before_date: expiryDate.toISOString(),
@@ -1709,7 +1789,7 @@ function ErstatningsCheckPage() {
 
       const { error: shelfLifeError } = await supabase.from("product_shelf_life").upsert(
         {
-          store_id: activeStore.id,
+          store_id: activeStore!.id,
           sap_article_id: sapArticleId,
           shelf_lifetime_days: 365,
           sap_data_missing: false,
@@ -1722,7 +1802,7 @@ function ErstatningsCheckPage() {
 
       if (includeReclamation) {
         const { error: reclamationError } = await supabase.from("reclamations").insert({
-          store_id: activeStore.id,
+          store_id: activeStore!.id,
           sap_article_id: sapArticleId,
           status: "Granskas av butikssupporten",
           notes: "TESTDATA - kan tas bort från testsidan",
@@ -1736,7 +1816,7 @@ function ErstatningsCheckPage() {
         const { data } = await supabase
           .from("reclamations")
           .select("*")
-          .eq("store_id", activeStore.id);
+          .eq("store_id", activeStore!.id);
         if (data) setReclamations(data as Reclamation[]);
       }
       toast.success("Testdata skapad. Den är märkt TESTDATA och kan rensas från testsidan.");
@@ -1751,13 +1831,13 @@ function ErstatningsCheckPage() {
   };
 
   const removeAdminTestFixture = async () => {
-    if (user.role !== "admin") return;
+    if (user!.role !== "admin") return;
     setIsLoading(true);
     try {
       const { data: testProducts } = await supabase
         .from("products")
         .select("sap_article_id")
-        .eq("store_id", activeStore.id)
+        .eq("store_id", activeStore!.id)
         .like("sap_article_id", "TEST-%");
       const testSapIds = (testProducts ?? []).map((p: any) => p.sap_article_id);
       if (testSapIds.length === 0) {
@@ -1767,18 +1847,18 @@ function ErstatningsCheckPage() {
       await supabase
         .from("reclamations")
         .delete()
-        .eq("store_id", activeStore.id)
+        .eq("store_id", activeStore!.id)
         .in("sap_article_id", testSapIds);
       await supabase
         .from("store_product_deliveries")
         .delete()
-        .eq("store_id", activeStore.id)
+        .eq("store_id", activeStore!.id)
         .in("sap_article_id", testSapIds);
       await supabase.from("product_shelf_life").delete().in("sap_article_id", testSapIds);
       await supabase
         .from("products")
         .delete()
-        .eq("store_id", activeStore.id)
+        .eq("store_id", activeStore!.id)
         .in("sap_article_id", testSapIds);
       setTestFixtureSapId(null);
       await loadShelfLifeData();
@@ -1810,6 +1890,7 @@ function ErstatningsCheckPage() {
       | "all"
       | "last30"
       | "last12"
+      | "week"
       | "custom" = statisticsPeriod,
   ) => {
     setIsLoading(true);
@@ -1826,13 +1907,13 @@ function ErstatningsCheckPage() {
           supabaseClient,
           "store_product_deliveries",
           "sap_article_id, product_name, brand, category, total_price, arrival_date, best_before_date, status",
-          { column: "store_id", value: activeStore.id },
+          { column: "store_id", value: activeStore!.id },
           { column: "arrival_date", ascending: false },
         ),
         supabase
           .from("reclamations")
           .select("sap_article_id, status, created_at")
-          .eq("store_id", activeStore.id),
+          .eq("store_id", activeStore!.id),
         fetchAllRows(
           supabaseClient,
           "product_shelf_life",
@@ -2005,7 +2086,10 @@ function ErstatningsCheckPage() {
         .slice(0, 5);
       const flowCounts: Record<string, number> = { Färsk: 0, Fryst: 0, Torrt: 0 };
       for (const reclamation of reclamationsForPeriod) {
-        const flow = getMappedFlow(categoryMappings, deliveryMap.get(reclamation.sap_article_id)?.category);
+        const flow = getMappedFlow(
+          categoryMappings,
+          deliveryMap.get(reclamation.sap_article_id)?.category,
+        );
         flowCounts[flow] += 1;
       }
       const categoryCounts: Record<string, number> = {};
@@ -2084,12 +2168,10 @@ function ErstatningsCheckPage() {
         (storesWithProductsResult?.data ?? []).map((r: any) => r.store_id),
       );
       const allReclamations = allReclamationsResult?.data ?? [];
-      const allStoresReclamationsForPeriod = allReclamations.filter(
-        (row: any) => {
-          const d = new Date(row.created_at);
-          return d >= periodStart && d <= periodEnd;
-        },
-      );
+      const allStoresReclamationsForPeriod = allReclamations.filter((row: any) => {
+        const d = new Date(row.created_at);
+        return d >= periodStart && d <= periodEnd;
+      });
       // Use stores with delivery data for "Snitt per butik" (avoid division by zero)
       const allStoresStoreCount = Math.max(distinctStoresWithDelivery.size, 1);
       const allStoresTotalCount = allStoresReclamationsForPeriod.length;
@@ -2232,7 +2314,7 @@ function ErstatningsCheckPage() {
           .from("products")
           .select("sap_article_id")
           .in("sap_article_id", articleIds)
-          .eq("store_id", activeStore.id);
+          .eq("store_id", activeStore!.id);
 
         if (productError) throw productError;
 
@@ -2242,7 +2324,7 @@ function ErstatningsCheckPage() {
         const newProducts = batch
           .filter((u) => !existingSapIds.has(u.id))
           .map((u) => ({
-            store_id: activeStore.id,
+            store_id: activeStore!.id,
             sap_article_id: u.id,
             bnr: `TEMP-${u.id}`, // Temporärt BNR tills produkt uppdateras
             name: `Produkt ${u.id}`,
@@ -2259,7 +2341,7 @@ function ErstatningsCheckPage() {
           // Skriv ny leveransrad till store_product_deliveries
           await supabase.from("store_product_deliveries").insert({
             sap_article_id: u.id,
-            store_id: activeStore.id,
+            store_id: activeStore!.id,
             arrival_date: new Date().toISOString(),
             best_before_date: u.expiry_date,
             quantity: 0,
@@ -2268,10 +2350,12 @@ function ErstatningsCheckPage() {
             updated_at: new Date().toISOString(),
           });
           // Uppdatera masterdata om nödvändigt
-          const nextSapCheck = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+          const nextSapCheckDate = new Date();
+          nextSapCheckDate.setDate(nextSapCheckDate.getDate() + 14);
+          const nextSapCheck = nextSapCheckDate.toISOString();
           await supabase.from("product_shelf_life").upsert(
             {
-              store_id: activeStore.id,
+              store_id: activeStore!.id,
               sap_article_id: u.id,
               shelf_lifetime_days: u.shelf_lifetime_days,
               sap_data_missing: false,
@@ -2296,7 +2380,7 @@ function ErstatningsCheckPage() {
       const nextSapCheck = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
       const { error: upsertErr } = await supabase.from("product_shelf_life").upsert(
         {
-          store_id: activeStore.id,
+          store_id: activeStore!.id,
           sap_article_id: record.sap_article_id,
           shelf_lifetime_days: record.shelf_lifetime_days,
           sap_data_missing: false,
@@ -2336,7 +2420,7 @@ function ErstatningsCheckPage() {
     setIsLoading(true);
     try {
       const { error } = await supabase.from("reclamations").insert({
-        store_id: activeStore.id,
+        store_id: activeStore!.id,
         sap_article_id: record.sap_article_id,
         status: "Granskas av butikssupporten",
         notes: `Automatiskt genererad: ${new Date().toISOString()}`,
@@ -2363,7 +2447,7 @@ function ErstatningsCheckPage() {
         supabaseClient,
         "store_product_deliveries",
         "sap_article_id, bnr, best_before_date, arrival_date, quantity, status, delivery_number, product_name, brand, category",
-        { column: "store_id", value: activeStore.id },
+        { column: "store_id", value: activeStore!.id },
         { column: "arrival_date", ascending: false },
       );
 
@@ -2396,7 +2480,7 @@ function ErstatningsCheckPage() {
         supabaseClient,
         "products",
         "sap_article_id, name, brand, bnr",
-        { column: "store_id", value: activeStore.id },
+        { column: "store_id", value: activeStore!.id },
       );
       const productMap = new Map(products.map((p: any) => [p.sap_article_id, p]));
       const flagged = Array.from(latestByArticle.values())
@@ -2461,7 +2545,9 @@ function ErstatningsCheckPage() {
       for (const r of flagged) {
         const master = masterMap.get(r.sap_article_id) || {};
         const leverans = r.delivery_number ? String(r.delivery_number) : "okand";
-        const zon = (master as any)?.temperature_zone || getMappedFlow(categoryMappings, r.category).toLowerCase();
+        const zon =
+          (master as any)?.temperature_zone ||
+          getMappedFlow(categoryMappings, r.category).toLowerCase();
         const shelfDays = (master as any)?.shelf_lifetime_days || 0;
         const assessment = calculateShelfLifeStatus(r.arrival_date, r.best_before_date, shelfDays);
         const product = productMap.get(r.sap_article_id) || {};
@@ -2776,112 +2862,6 @@ function ErstatningsCheckPage() {
     return [...set].sort((a, b) => a.localeCompare(b, "sv"));
   }, [shelfLifeRecords]);
 
-  // Reusable filter dropdown component matching the screenshot design
-  const FilterDropdown = useCallback(
-    ({
-      label,
-      options,
-      selected,
-      onSelectionChange,
-    }: {
-      label: string;
-      options: string[];
-      selected: string[];
-      onSelectionChange: (values: string[]) => void;
-    }) => {
-      const [search, setSearch] = useState("");
-      const filteredOptions = options.filter((option) =>
-        option.toLocaleLowerCase("sv").includes(search.toLocaleLowerCase("sv")),
-      );
-      const isAllSelected = selected.length === 0;
-      const activeCount = selected.length;
-
-      return (
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9 gap-2 rounded-xl border-gray-300 bg-white px-3.5 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50 hover:text-gray-900"
-            >
-              {label}
-              {activeCount > 0 && (
-                <Badge
-                  variant="secondary"
-                  className="h-5 min-w-[20px] rounded-full px-1.5 text-xs bg-emerald-100 text-emerald-800"
-                >
-                  {activeCount}
-                </Badge>
-              )}
-              <ChevronDown className="h-4 w-4 text-gray-700" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            className="w-72 rounded-2xl border border-gray-200 bg-white p-3 shadow-xl"
-            align="start"
-          >
-            <div className="mb-2">
-              <div className="relative flex items-center">
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={`Sök bland ${label.toLowerCase()}...`}
-                  className="h-10 w-full rounded-xl border border-gray-900/80 bg-white pr-9 pl-3 text-sm placeholder:text-gray-400 focus-visible:ring-1 focus-visible:ring-gray-900"
-                />
-                <Search className="absolute right-3 h-4 w-4 text-gray-500 pointer-events-none" />
-              </div>
-            </div>
-            <div className="py-1">
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm text-gray-800 hover:bg-gray-100 transition-colors"
-                onClick={() => onSelectionChange([])}
-              >
-                <span
-                  className={`flex h-4 w-4 items-center justify-center rounded-full border-2 ${isAllSelected ? "border-[#107c41] bg-[#107c41]" : "border-gray-400"}`}
-                >
-                  {isAllSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
-                </span>
-                <span className="font-normal text-gray-800">Alla</span>
-              </button>
-            </div>
-            <div className="border-t border-gray-100 max-h-[260px] overflow-y-auto pt-1 divide-y divide-gray-100">
-              {filteredOptions.map((option) => {
-                const isSelected = selected.includes(option);
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm text-gray-800 hover:bg-gray-100 transition-colors"
-                    onClick={() => {
-                      if (isSelected) {
-                        onSelectionChange(selected.filter((v) => v !== option));
-                      } else {
-                        onSelectionChange([...selected, option]);
-                      }
-                    }}
-                  >
-                    <span
-                      className={`flex h-4 w-4 items-center justify-center rounded border ${isSelected ? "border-[#107c41] bg-[#107c41] text-white" : "border-gray-300 bg-white"}`}
-                    >
-                      {isSelected && <span className="text-[10px] leading-none font-bold">✓</span>}
-                    </span>
-                    <span className="truncate text-gray-800">{option}</span>
-                  </button>
-                );
-              })}
-              {filteredOptions.length === 0 && (
-                <p className="px-3 py-3 text-center text-sm text-gray-500">Inga resultat</p>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-      );
-    },
-    [],
-  );
-
   const toggleShelfLifeSort = (key: ShelfLifeSortKey, shiftKey = false) => {
     setShelfLifeSort((current) => {
       const existingIndex = current.findIndex((s) => s.key === key);
@@ -2935,7 +2915,7 @@ function ErstatningsCheckPage() {
         // Category is in both scopes - remove from both
         await supabase.from("store_hidden_categories").upsert(
           {
-            store_id: activeStore.id,
+            store_id: activeStore!.id,
             category,
             is_hidden: false,
             updated_at: new Date().toISOString(),
@@ -2958,7 +2938,7 @@ function ErstatningsCheckPage() {
         // Remove from local scope only
         await supabase.from("store_hidden_categories").upsert(
           {
-            store_id: activeStore.id,
+            store_id: activeStore!.id,
             category,
             is_hidden: false,
             updated_at: new Date().toISOString(),
@@ -2983,7 +2963,7 @@ function ErstatningsCheckPage() {
         // Category not in any scope - add to local scope (store-specific)
         await supabase.from("store_hidden_categories").upsert(
           {
-            store_id: activeStore.id,
+            store_id: activeStore!.id,
             category,
             is_hidden: true,
             updated_at: new Date().toISOString(),
@@ -3021,7 +3001,7 @@ function ErstatningsCheckPage() {
       const shelf = shelfMap.get(rec.sap_article_id);
       const del = deliveryMap.get(rec.sap_article_id);
 
-      let normStatus: "Väntande" | "Skickad" | "Löst" | "Nekad" = "Väntande";
+      let normStatus: "Väntande" | "Skickad" | "Löst" | "Nekad";
       if (rec.status === "Löst") normStatus = "Löst";
       else if (rec.status === "Nekad") normStatus = "Nekad";
       else if (rec.status === "Granskas av butikssupporten") normStatus = "Skickad";
@@ -3221,7 +3201,7 @@ function ErstatningsCheckPage() {
         const { data } = await supabase
           .from("reclamations")
           .insert({
-            store_id: activeStore.id,
+            store_id: activeStore!.id,
             sap_article_id: item.sap_article_id,
             status: dbStatus,
             notes: `Hanterad via Hantera varor: ${new Date().toISOString()}`,
@@ -3331,7 +3311,7 @@ function ErstatningsCheckPage() {
       let query = supabase
         .from("products")
         .select("sap_article_id, name, brand, bnr, ean")
-        .eq("store_id", activeStore.id)
+        .eq("store_id", activeStore!.id)
         .eq("is_active", true);
 
       if (type === "sap") {
@@ -3382,7 +3362,7 @@ function ErstatningsCheckPage() {
       const { data: existing } = await supabase
         .from("reclamations")
         .select("id")
-        .eq("store_id", activeStore.id)
+        .eq("store_id", activeStore!.id)
         .eq("sap_article_id", product.sap_article_id)
         .maybeSingle();
 
@@ -3395,7 +3375,7 @@ function ErstatningsCheckPage() {
 
       // Create the reclamation
       const { error } = await supabase.from("reclamations").insert({
-        store_id: activeStore.id,
+        store_id: activeStore!.id,
         sap_article_id: product.sap_article_id,
         status: "Granskas av butikssupporten",
         notes: `Manuellt tillagd via ${addReclamationType === "sap" ? "materialnummer" : "BNR"}: ${addReclamationInput}`,
@@ -3407,7 +3387,7 @@ function ErstatningsCheckPage() {
       const { data } = await supabase
         .from("reclamations")
         .select("*")
-        .eq("store_id", activeStore.id);
+        .eq("store_id", activeStore!.id);
       if (data) setReclamations(data as Reclamation[]);
 
       // Reset form and close dialog
@@ -3488,6 +3468,38 @@ function ErstatningsCheckPage() {
       );
     });
   }, [catalogHasSearch, catalogProducts, catalogSearch, selectedCatalogCategory]);
+
+  if (authLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-coop-gray-900 mb-2">Inloggning krävs</h2>
+          <p className="text-coop-gray-900">
+            Du måste vara inloggad för att komma åt ersättnings-kontrollen.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!activeStore) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-coop-gray-900 mb-2">Ingen aktiv butik</h2>
+          <p className="text-coop-gray-900">Välj en butik för att fortsätta.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -3616,7 +3628,7 @@ function ErstatningsCheckPage() {
         </Alert>
       )}
 
-      {step === "admin-test" && user.role === "admin" && (
+      {step === "admin-test" && user!.role === "admin" && (
         <Card>
           <CardHeader>
             <CardTitle>Testa ersättningsflödet</CardTitle>
@@ -3711,7 +3723,7 @@ function ErstatningsCheckPage() {
                     nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
                     const { error } = await supabase.from("product_shelf_life").upsert(
                       {
-                        store_id: activeStore.id,
+                        store_id: activeStore!.id,
                         sap_article_id: sapArticleId,
                         shelf_lifetime_days: hasValidSapData ? shelfLifeDays : 0,
                         sap_data_missing: !hasValidSapData,
@@ -3865,20 +3877,37 @@ function ErstatningsCheckPage() {
                   </TableHeader>
                   <TableBody>
                     {(() => {
-                      const groups = new Map<string, { total: number; reclaim: number; ok: number }>();
+                      const groups = new Map<
+                        string,
+                        { total: number; reclaim: number; ok: number }
+                      >();
                       for (const d of deliveryStatistics) {
-                        const date = d.arrival_date ? new Date(d.arrival_date).toISOString().split("T")[0] : "Okänt";
+                        const date = d.arrival_date
+                          ? new Date(d.arrival_date).toISOString().split("T")[0]
+                          : "Okänt";
                         const g = groups.get(date) || { total: 0, reclaim: 0, ok: 0 };
                         g.total += 1;
-                        const shelf = shelfLifeRecords.find((r) => r.sap_article_id === d.sap_article_id);
-                        const shouldReclaim = shelf && shelf.arrival_date && shelf.expiry_date && shelf.shelf_lifetime_days > 0
-                          ? calculateShelfLifeStatus(shelf.arrival_date, shelf.expiry_date, shelf.shelf_lifetime_days)?.status === "Reklamation"
-                          : false;
+                        const shelf = shelfLifeRecords.find(
+                          (r) => r.sap_article_id === d.sap_article_id,
+                        );
+                        const shouldReclaim =
+                          shelf &&
+                          shelf.arrival_date &&
+                          shelf.expiry_date &&
+                          shelf.shelf_lifetime_days > 0
+                            ? calculateShelfLifeStatus(
+                                shelf.arrival_date,
+                                shelf.expiry_date,
+                                shelf.shelf_lifetime_days,
+                              )?.status === "Reklamation"
+                            : false;
                         if (shouldReclaim) g.reclaim += 1;
                         else g.ok += 1;
                         groups.set(date, g);
                       }
-                      const sorted = Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+                      const sorted = Array.from(groups.entries()).sort((a, b) =>
+                        b[0].localeCompare(a[0]),
+                      );
                       return sorted.map(([date, g]) => (
                         <TableRow key={date}>
                           <TableCell className="whitespace-nowrap">{date}</TableCell>
@@ -3888,10 +3917,10 @@ function ErstatningsCheckPage() {
                         </TableRow>
                       ));
                     })()}
-</TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}
@@ -4502,7 +4531,8 @@ function ErstatningsCheckPage() {
           <CardHeader>
             <CardTitle>Generera ersättningsansökan</CardTitle>
             <CardDescription>
-              Skapa en ersättningsansökan med produkter som omfattas av datumregelverket för ersättning hos Butikssupport.
+              Skapa en ersättningsansökan med produkter som omfattas av datumregelverket för
+              ersättning hos Butikssupport.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -4925,24 +4955,31 @@ function ErstatningsCheckPage() {
                   <CardHeader>
                     <CardTitle>Återfört per kategori</CardTitle>
                     <CardDescription>
-                      Fördelat på {Object.keys(replacementStatistics.categoryCounts).filter(c => c !== "Övrigt" && c !== "Okänd" && c !== "").length}{" "}
+                      Fördelat på{" "}
+                      {
+                        Object.keys(replacementStatistics.categoryCounts).filter(
+                          (c) => c !== "Övrigt" && c !== "Okänd" && c !== "",
+                        ).length
+                      }{" "}
                       varugrupper
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {Object.entries(replacementStatistics.categoryCounts)
-                      .filter(([category]) => category !== "Övrigt" && category !== "Okänd" && category !== "")
-                      .length > 0 ? (
+                    {Object.entries(replacementStatistics.categoryCounts).filter(
+                      ([category]) =>
+                        category !== "Övrigt" && category !== "Okänd" && category !== "",
+                    ).length > 0 ? (
                       Object.entries(replacementStatistics.categoryCounts)
-                        .filter(([category]) => category !== "Övrigt" && category !== "Okänd" && category !== "")
-                        .map(
-                          ([category, count]) => (
-                            <div key={category} className="flex justify-between text-sm">
-                              <span>{category}</span>
-                              <strong>{count}</strong>
-                            </div>
-                          ),
+                        .filter(
+                          ([category]) =>
+                            category !== "Övrigt" && category !== "Okänd" && category !== "",
                         )
+                        .map(([category, count]) => (
+                          <div key={category} className="flex justify-between text-sm">
+                            <span>{category}</span>
+                            <strong>{count}</strong>
+                          </div>
+                        ))
                     ) : (
                       <p className="text-sm text-coop-gray-900">
                         Inga godkända reklamationer i perioden.
@@ -4987,7 +5024,7 @@ function ErstatningsCheckPage() {
         </div>
       )}
 
-      {step === "category-mapping" && user.role === "admin" && (
+      {step === "category-mapping" && user!.role === "admin" && (
         <Card>
           <CardHeader>
             <CardTitle>Koppla följesedelskategorier till flöden</CardTitle>
