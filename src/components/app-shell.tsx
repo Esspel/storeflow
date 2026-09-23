@@ -1,4 +1,4 @@
-import { Link, Outlet, useRouterState, useNavigate } from "@tanstack/react-router";
+import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import {
@@ -273,7 +273,6 @@ export function AppShell() {
     closeLockScreen,
     quickSwitch,
   } = useAuth();
-  const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -449,7 +448,6 @@ export function AppShell() {
 
   const handleLogout = async () => {
     await logout();
-    navigate({ to: "/login" });
   };
 
   const initials = user?.display_name

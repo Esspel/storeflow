@@ -390,7 +390,6 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                 </button>
               </div>
             )}
-
             {/* User list for PIN */}
             {loadingUsers ? (
               <div className="space-y-2">
