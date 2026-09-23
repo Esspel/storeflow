@@ -413,6 +413,18 @@ function getDeliveryDateKey(dateValue: unknown): string | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
 }
 
+function getMappedFlow(category: string | null | undefined): DeliveryFlow {
+  const normalizedCategory = String(category ?? "").trim();
+  const mapped = categoryMappings.find(
+    (mapping) => mapping.category === normalizedCategory,
+  )?.flow;
+  if (mapped) return mapped;
+  const lowerCategory = normalizedCategory.toLowerCase();
+  if (lowerCategory.includes("frys")) return "Fryst";
+  if (lowerCategory.includes("färsk") || lowerCategory.includes("farsk")) return "Färsk";
+  return "Torrt";
+}
+
 interface SapProductData {
   ProductID: string;
   ProductName: string;
@@ -1658,18 +1670,6 @@ function ErstatningsCheckPage() {
     } finally {
       setMappingLoading(false);
     }
-  };
-
-  const getMappedFlow = (category: string | null | undefined): DeliveryFlow => {
-    const normalizedCategory = String(category ?? "").trim();
-    const mapped = categoryMappings.find(
-      (mapping) => mapping.category === normalizedCategory,
-    )?.flow;
-    if (mapped) return mapped;
-    const lowerCategory = normalizedCategory.toLowerCase();
-    if (lowerCategory.includes("frys")) return "Fryst";
-    if (lowerCategory.includes("färsk") || lowerCategory.includes("farsk")) return "Färsk";
-    return "Torrt";
   };
 
   const createAdminTestFixture = async (includeReclamation: boolean) => {
