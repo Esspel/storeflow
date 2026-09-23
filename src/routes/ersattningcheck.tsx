@@ -413,7 +413,7 @@ function getDeliveryDateKey(dateValue: unknown): string | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
 }
 
-function getMappedFlow(category: string | null | undefined): DeliveryFlow {
+function getMappedFlow(categoryMappings: DeliveryCategoryMapping[], category: string | null | undefined): DeliveryFlow {
   const normalizedCategory = String(category ?? "").trim();
   const mapped = categoryMappings.find(
     (mapping) => mapping.category === normalizedCategory,
@@ -759,8 +759,8 @@ function ErstatningsCheckPage() {
       const numA = a.delivery_number ?? "";
       const numB = b.delivery_number ?? "";
       if (numA !== numB) return numA.localeCompare(numB);
-      const zoneA = getMappedFlow(a.category).toLowerCase();
-      const zoneB = getMappedFlow(b.category).toLowerCase();
+      const zoneA = getMappedFlow(categoryMappings, a.category).toLowerCase();
+      const zoneB = getMappedFlow(categoryMappings, b.category).toLowerCase();
       return zoneA.localeCompare(zoneB);
     });
   }, [shelfLifeRecords, reclamationStatuses]);
@@ -2005,7 +2005,7 @@ function ErstatningsCheckPage() {
         .slice(0, 5);
       const flowCounts: Record<string, number> = { Färsk: 0, Fryst: 0, Torrt: 0 };
       for (const reclamation of reclamationsForPeriod) {
-        const flow = getMappedFlow(deliveryMap.get(reclamation.sap_article_id)?.category);
+        const flow = getMappedFlow(categoryMappings, deliveryMap.get(reclamation.sap_article_id)?.category);
         flowCounts[flow] += 1;
       }
       const categoryCounts: Record<string, number> = {};
@@ -2404,8 +2404,8 @@ function ErstatningsCheckPage() {
           const numA = a.delivery_number ?? "";
           const numB = b.delivery_number ?? "";
           if (numA !== numB) return numA.localeCompare(numB);
-          const zoneA = getMappedFlow(a.category).toLowerCase();
-          const zoneB = getMappedFlow(b.category).toLowerCase();
+          const zoneA = getMappedFlow(categoryMappings, a.category).toLowerCase();
+          const zoneB = getMappedFlow(categoryMappings, b.category).toLowerCase();
           return zoneA.localeCompare(zoneB);
         })
         .map((delivery) => ({
@@ -2461,7 +2461,7 @@ function ErstatningsCheckPage() {
       for (const r of flagged) {
         const master = masterMap.get(r.sap_article_id) || {};
         const leverans = r.delivery_number ? String(r.delivery_number) : "okand";
-        const zon = (master as any)?.temperature_zone || getMappedFlow(r.category).toLowerCase();
+        const zon = (master as any)?.temperature_zone || getMappedFlow(categoryMappings, r.category).toLowerCase();
         const shelfDays = (master as any)?.shelf_lifetime_days || 0;
         const assessment = calculateShelfLifeStatus(r.arrival_date, r.best_before_date, shelfDays);
         const product = productMap.get(r.sap_article_id) || {};
