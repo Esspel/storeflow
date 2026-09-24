@@ -35,8 +35,6 @@ build: {
         manualChunks: (id) => {
           if (id.includes("pdfjs-dist") || id.includes("pdf-parse")) return "vendor-pdf";
           if (id.includes("react") || id.includes("react-dom")) return "vendor-react";
-          if (id.includes("jszip") || id.includes("lucide"))
-            return "vendor-utils";
           if (id.includes("recharts")) return "vendor-recharts";
           if (id.includes("@zxing") || id.includes("@zxing/library") || id.includes("@zxing/browser"))
             return "vendor-zxing";
