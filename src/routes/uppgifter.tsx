@@ -523,7 +523,7 @@ function AssigneePicker({
 }
 
 function TasksPage() {
-  const { user, activeStore, userStores } = useAuth();
+  const { user, activeStore, userStores, isClient } = useAuth();
   const isManager = user?.role === "manager" || user?.role === "admin";
   const isEmployee = user?.role === "employee";
 
@@ -3575,7 +3575,7 @@ function TasksPage() {
         )}
       </div>
 
-      {loading ? (
+      {loading && isClient ? (
         <div className="space-y-3">
           {[1, 2, 3, 4].map((i) => (
             <SkeletonCard key={i} rows={2} />
@@ -6563,7 +6563,7 @@ function TasksPage() {
             )}
 
             <div className="flex-1 overflow-y-auto p-4">
-              {futureOccLoading ? (
+              {futureOccLoading && isClient ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map((i) => (
                     <div key={i} className="h-14 rounded-xl animate-pulse bg-muted" />
