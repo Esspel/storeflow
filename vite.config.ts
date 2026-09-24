@@ -41,6 +41,8 @@ build: {
           if (id.includes("supabase")) return "vendor-supabase";
           if (id.includes("date-fns")) return "vendor-date-fns";
           if (id.includes("xlsx")) return "vendor-xlsx";
+          if (id.includes("lucide-react") || id.includes("lucide")) return "vendor-lucide";
+          if (id.includes("jszip")) return "vendor-jszip";
           if (id.includes("node_modules")) return "vendor-misc";
         },
       },
