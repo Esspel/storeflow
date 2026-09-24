@@ -29,12 +29,13 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          if (id.includes("pdfjs-dist") || id.includes("pdf-parse")) return "vendor-pdf";
-          if (id.includes("react") || id.includes("react-dom")) return "vendor-react";
-          if (id.includes("jszip") || id.includes("xlsx") || id.includes("lucide"))
-            return "vendor-utils";
-        },
+manualChunks: (id) => {
+        if (id.includes("pdfjs-dist") || id.includes("pdf-parse")) return "vendor-pdf";
+        if (id.includes("react") || id.includes("react-dom")) return "vendor-react";
+        if (id.includes("jszip") || id.includes("xlsx") || id.includes("lucide"))
+          return "vendor-utils";
+        if (id.includes("recharts")) return "vendor-recharts";
+      },
       },
       external: [/^fs$/, /^path$/, /^crypto$/],
     },
