@@ -93,7 +93,9 @@ function LicensePage() {
         </section>
 
         <section>
-          <h2 className="text-base font-semibold text-coop-gray-900 mb-2">Tredjepartskomponenter</h2>
+          <h2 className="text-base font-semibold text-coop-gray-900 mb-2">
+            Tredjepartskomponenter
+          </h2>
           <p className="mb-3">StoreFlow använder följande bibliotek med öppen källkod:</p>
           <div className="space-y-1.5 rounded-lg border border-border/60 bg-background p-4 font-mono text-xs">
             {[

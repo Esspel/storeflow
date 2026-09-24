@@ -947,18 +947,20 @@ function SchemaPage() {
 
   // Ensure selected week is valid (not older than 2 weeks)
   useEffect(() => {
-    setSelectedWeek((prev) => {
-      const minAllowed = getMinAllowedWeek();
-      if (
-        selectedWeek.year < minAllowed.year ||
-        (selectedWeek.year === minAllowed.year && selectedWeek.weekNumber < minAllowed.weekNumber)
-      ) {
-        // Week is too old, use closest valid week
-        const now = new Date();
-        return { weekNumber: getISOWeek(now), year: now.getFullYear() };
-      }
-      return selectedWeek;
-    });
+    const updateSelectedWeek = () =>
+      setSelectedWeek((prev) => {
+        const minAllowed = getMinAllowedWeek();
+        if (
+          selectedWeek.year < minAllowed.year ||
+          (selectedWeek.year === minAllowed.year && selectedWeek.weekNumber < minAllowed.weekNumber)
+        ) {
+          // Week is too old, use closest valid week
+          const now = new Date();
+          return { weekNumber: getISOWeek(now), year: now.getFullYear() };
+        }
+        return selectedWeek;
+      });
+    updateSelectedWeek();
   }, [selectedWeek]);
   const [scheduleEmployees, setScheduleEmployees] = useState<ScheduleEmployee[]>([]);
   const [scheduleShifts, setScheduleShifts] = useState<ScheduleShift[]>([]);
@@ -1106,8 +1108,11 @@ function SchemaPage() {
     if (activeImport) {
       loadScheduleData(activeImport.id);
     } else {
-      setScheduleEmployees([]);
-      setScheduleShifts([]);
+      const resetSchedule = () => {
+        setScheduleEmployees([]);
+        setScheduleShifts([]);
+      };
+      resetSchedule();
     }
   }, [activeImport, selectedWeek.weekNumber, selectedWeek.year]);
 
@@ -3096,9 +3101,7 @@ function SchemaPage() {
                         <Truck className="h-5 w-5 shrink-0" style={{ color: c.text }} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-coop-gray-900">{label}</p>
-                          {d.supplier && (
-                            <p className="text-xs text-coop-gray-900">{d.supplier}</p>
-                          )}
+                          {d.supplier && <p className="text-xs text-coop-gray-900">{d.supplier}</p>}
                         </div>
                         <span
                           className="text-sm font-mono font-bold shrink-0"
@@ -4137,9 +4140,7 @@ function SchemaPage() {
                           );
                         })}
                         {dayDeliveries.length === 0 && (
-                          <span className="text-center text-[10px] text-coop-gray-900/20">
-                            –
-                          </span>
+                          <span className="text-center text-[10px] text-coop-gray-900/20">–</span>
                         )}
                       </div>
                     );
@@ -4192,9 +4193,7 @@ function SchemaPage() {
                           );
                         })}
                         {dayTasksForDate.length === 0 && (
-                          <span className="text-center text-[10px] text-coop-gray-900/20">
-                            –
-                          </span>
+                          <span className="text-center text-[10px] text-coop-gray-900/20">–</span>
                         )}
                       </div>
                     );
@@ -4418,7 +4417,9 @@ function SchemaPage() {
                           <FileCode2 className="h-4 w-4 shrink-0 text-primary" />
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-medium text-coop-gray-900">{f.name}</p>
+                          <p className="truncate text-xs font-medium text-coop-gray-900">
+                            {f.name}
+                          </p>
                           <p className="text-[10px] text-coop-gray-900">
                             {isCsv ? "Leveransplan CSV" : "Schema XML"} ·{" "}
                             {(f.size / 1024).toFixed(0)} KB
@@ -4463,7 +4464,9 @@ function SchemaPage() {
                             <div
                               className={[
                                 "border-t border-border/40 px-3 py-2.5 space-y-2",
-                                holiday ? "bg-coop-orange-100/40 dark:bg-coop-orange-1000/10" : "bg-muted/20",
+                                holiday
+                                  ? "bg-coop-orange-100/40 dark:bg-coop-orange-1000/10"
+                                  : "bg-muted/20",
                               ].join(" ")}
                             >
                               <div className="flex flex-wrap items-center gap-2">
@@ -4860,9 +4863,7 @@ function SchemaPage() {
                                   />
                                 </div>
                                 <div>
-                                  <Label className="text-[11px] text-coop-gray-900">
-                                    Lösenord
-                                  </Label>
+                                  <Label className="text-[11px] text-coop-gray-900">Lösenord</Label>
                                   <Input
                                     type="password"
                                     value={me.newPassword}

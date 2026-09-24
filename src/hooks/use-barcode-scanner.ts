@@ -28,9 +28,11 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Keep callbacks in refs so the event listener never needs to be re-registered
   const onScanRef = useRef(onScan);
-  onScanRef.current = onScan;
   const acceptAlphaRef = useRef(acceptAlpha);
-  acceptAlphaRef.current = acceptAlpha;
+  useEffect(() => {
+    onScanRef.current = onScan;
+    acceptAlphaRef.current = acceptAlpha;
+  }, [onScan, acceptAlpha]);
 
   useEffect(() => {
     const flush = () => {
@@ -89,7 +91,7 @@ export function useBarcodeScanner({ onScan, acceptAlpha = false }: Options) {
       const char = e.key;
 
       // If not accepting alpha, only digits, hyphens and alphanumeric chars during a burst
-      if (!acceptAlphaRef.current && !/[\d\-]/.test(char)) {
+      if (!acceptAlphaRef.current && !/[\d-]/.test(char)) {
         if (bufRef.current.length > 0 && gap < 150) {
           // Mid-burst non-numeric (some barcodes include letters even in digit mode)
           if (char !== " ") bufRef.current += char;

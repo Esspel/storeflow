@@ -723,7 +723,7 @@ Deno.serve(async (req: Request) => {
     if (!contentType.includes("application/json")) {
       return json(
         {
-          error: `Felaktig Content-Type: \"${contentType}\". Denna endpoint kräver Content-Type: application/json med ett JSON-objekt i body som innehåller fälten store_id, imported_by_user_id och xml/xml_base64.`,
+          error: `Felaktig Content-Type: "${contentType}". Denna endpoint kräver Content-Type: application/json med ett JSON-objekt i body som innehåller fälten store_id, imported_by_user_id och xml/xml_base64.`,
         },
         400,
       );

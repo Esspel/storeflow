@@ -13,11 +13,11 @@ export const SESSION_LIFETIME_MS = 12 * 60 * 60 * 1000; // 12 hours absolute
 // AES-GCM encryption for IndexedDB token storage (STATE-01)
 async function getCryptoKey(): Promise<CryptoKey> {
   const raw = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode('storeflow-crypto-key-2026'),
-    'AES-GCM',
+    "raw",
+    new TextEncoder().encode("storeflow-crypto-key-2026"),
+    "AES-GCM",
     false,
-    ['encrypt', 'decrypt']
+    ["encrypt", "decrypt"],
   );
   return raw;
 }
@@ -26,9 +26,9 @@ export async function encryptToken(token: string): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await getCryptoKey();
   const cipher = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: "AES-GCM", iv },
     key,
-    new TextEncoder().encode(token)
+    new TextEncoder().encode(token),
   );
   // Store as iv + ciphertext, base64 encoded
   const combined = new Uint8Array(iv.byteLength + cipher.byteLength);
@@ -39,17 +39,16 @@ export async function encryptToken(token: string): Promise<string> {
 
 export async function decryptToken(encrypted: string): Promise<string | null> {
   try {
-    const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+    const combined = Uint8Array.from(atob(encrypted), (c) => c.charCodeAt(0));
     const iv = combined.slice(0, 12);
     const cipher = combined.slice(12);
     const key = await getCryptoKey();
-    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
     return new TextDecoder().decode(plain);
   } catch {
     return null;
   }
 }
-
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {

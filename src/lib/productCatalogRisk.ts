@@ -30,7 +30,8 @@ export function calculateRiskScore(
 ): number {
   const reclamations = Number(reclamationCount);
   // Använd unika leveransdatum om tillgängligt, annars fall tillbaka på totala rader
-  const deliveries = uniqueDeliveryDates != null ? Number(uniqueDeliveryDates) : Number(deliveryCount);
+  const deliveries =
+    uniqueDeliveryDates != null ? Number(uniqueDeliveryDates) : Number(deliveryCount);
 
   if (!Number.isFinite(reclamations) || !Number.isFinite(deliveries)) return 0;
   if (reclamations < 0 || deliveries < 0) return 0;
@@ -51,7 +52,11 @@ export function getRiskLevel(score: number): RiskResult["level"] {
 }
 
 export function calculateRisk(input: RiskInput): RiskResult {
-  const score = calculateRiskScore(input.reclamationCount, input.deliveryCount, input.uniqueDeliveryDates);
+  const score = calculateRiskScore(
+    input.reclamationCount,
+    input.deliveryCount,
+    input.uniqueDeliveryDates,
+  );
   return {
     score,
     percentage: Math.round(score * 100),

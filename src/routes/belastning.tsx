@@ -97,13 +97,14 @@ function BelastningPage() {
 
   useEffect(() => {
     if (!activeStore) {
-      setLoading(false);
+      const stopLoading = () => setLoading(false);
+      stopLoading();
       return;
     }
     fetchData();
   }, [activeStore]);
 
-  const fetchData = async () => {
+  async function fetchData() {
     if (!activeStore) return;
     setLoading(true);
 
@@ -198,7 +199,7 @@ function BelastningPage() {
 
     setLoads(result);
     setLoading(false);
-  };
+  }
 
   const maxTotal = Math.max(1, ...loads.map((l) => l.total));
 
@@ -321,7 +322,9 @@ function BelastningPage() {
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-xl font-bold tabular-nums text-coop-gray-900">{load.total}</p>
+                      <p className="text-xl font-bold tabular-nums text-coop-gray-900">
+                        {load.total}
+                      </p>
                       <p className="text-xs text-coop-gray-900">uppgifter</p>
                     </div>
                   </div>

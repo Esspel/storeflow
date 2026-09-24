@@ -78,7 +78,7 @@ function Section({
   span2 = false,
   children,
 }: {
-  icon: React.ComponentType<{className?:string}>;
+  icon: React.ComponentType<{ className?: string }>;
   title: string;
   span2?: boolean;
   children: React.ReactNode;
@@ -151,6 +151,24 @@ function TestPanel() {
   useEffect(() => {
     if (user?.role === "admin") loadStats();
   }, [user]);
+
+  type FileInspection = {
+    name: string;
+    type: "csv" | "xml";
+    encoding: string;
+    sizeKb: number;
+    columns?: string[];
+    rowCount?: number;
+    sampleRows?: Record<string, string>[];
+    rootTags?: string[];
+    recordTag?: string;
+    sampleFields?: { tag: string; sample: string }[];
+    recordCount?: number;
+    error?: string;
+  };
+
+  const [fileInspections, setFileInspections] = useState<FileInspection[]>([]);
+  const fileInspectorRef = useRef<HTMLInputElement>(null);
 
   if (!user || user.role !== "admin") return null;
 
@@ -1379,25 +1397,6 @@ function TestPanel() {
     setRunning(false);
   }
 
-  // ---- File format inspector ----
-  type FileInspection = {
-    name: string;
-    type: "csv" | "xml";
-    encoding: string;
-    sizeKb: number;
-    columns?: string[];
-    rowCount?: number;
-    sampleRows?: Record<string, string>[];
-    rootTags?: string[];
-    recordTag?: string;
-    sampleFields?: { tag: string; sample: string }[];
-    recordCount?: number;
-    error?: string;
-  };
-
-  const [fileInspections, setFileInspections] = useState<FileInspection[]>([]);
-  const fileInspectorRef = useRef<HTMLInputElement>(null);
-
   async function inspectFile(file: File): Promise<FileInspection> {
     const ext = file.name.split(".").pop()?.toLowerCase();
     const isXml = ext === "xml";
@@ -1719,9 +1718,7 @@ function TestPanel() {
 
         {/* Notifications */}
         <Section icon={Bell} title="Notiser">
-          <p className="mb-3 text-xs text-coop-gray-900">
-            Testa och rensa notifieringssystemet.
-          </p>
+          <p className="mb-3 text-xs text-coop-gray-900">Testa och rensa notifieringssystemet.</p>
           <div className="space-y-2">
             <ActionBtn
               label="Skicka testnotis"
@@ -2345,9 +2342,7 @@ function TestPanel() {
               </div>
               <div className="max-h-72 overflow-y-auto">
                 {auditLog.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-sm text-coop-gray-900">
-                    Inga händelser
-                  </p>
+                  <p className="px-4 py-6 text-center text-sm text-coop-gray-900">Inga händelser</p>
                 ) : (
                   auditLog.map((entry) => (
                     <div

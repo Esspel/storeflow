@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Simple virtual list for scrollable containers with roughly fixed row heights.
@@ -7,12 +7,22 @@ import { useCallback, useRef, useState } from "react";
 export function useVirtualList<T>(items: T[], rowHeight = 56, overscan = 5) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(600);
+
+  useEffect(() => {
+    const syncHeight = () => {
+      const update = () => setContainerHeight(scrollRef.current?.clientHeight ?? 600);
+      update();
+    };
+    syncHeight();
+    window.addEventListener("resize", syncHeight);
+    return () => window.removeEventListener("resize", syncHeight);
+  }, []);
 
   const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     setScrollTop(e.currentTarget.scrollTop);
+    setContainerHeight(e.currentTarget.clientHeight);
   }, []);
-
-  const containerHeight = scrollRef.current?.clientHeight ?? 600;
   const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
   const endIndex = Math.min(
     items.length,

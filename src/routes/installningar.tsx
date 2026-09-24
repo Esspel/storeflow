@@ -24,12 +24,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  supabase,
-  logAudit,
-  HIERARCHY_LABELS,
-  errorToSwedish,
-} from "@/lib/supabase";
+import { supabase, logAudit, HIERARCHY_LABELS, errorToSwedish } from "@/lib/supabase";
 import { getQueueLength as getOfflineQueueLength } from "@/lib/offline-queue";
 import { getRecentErrors, initErrorCapture } from "@/lib/error-capture";
 import { useAuth } from "@/lib/auth-context";
@@ -799,9 +794,7 @@ function SettingsPage() {
                 </div>
                 <div>
                   <h2 className="font-semibold">Diagnostik</h2>
-                  <p className="text-xs text-coop-gray-900">
-                    Realtidsstatus för Helpdesk-support.
-                  </p>
+                  <p className="text-xs text-coop-gray-900">Realtidsstatus för Helpdesk-support.</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">

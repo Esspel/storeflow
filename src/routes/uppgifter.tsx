@@ -603,7 +603,11 @@ function TasksPage() {
         setTasks((prev) =>
           prev.map((t) =>
             t.id === task.id
-              ? { ...t, status: previousState, completed_at: previousState === "done" ? t.completed_at : null }
+              ? {
+                  ...t,
+                  status: previousState,
+                  completed_at: previousState === "done" ? t.completed_at : null,
+                }
               : t,
           ),
         );
@@ -3230,9 +3234,7 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-destructive">
                 Försenade
               </h2>
-              <span className="ml-auto text-[11px] text-coop-gray-900">
-                {overdueTasks.length}
-              </span>
+              <span className="ml-auto text-[11px] text-coop-gray-900">{overdueTasks.length}</span>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {overdueTasks.map((t) => renderTaskCard(t))}
@@ -3262,9 +3264,7 @@ function TasksPage() {
               <h2 className="text-xs font-semibold uppercase tracking-widest text-coop-gray-900">
                 Utan datum
               </h2>
-              <span className="ml-auto text-[11px] text-coop-gray-900">
-                {noDateTasks.length}
-              </span>
+              <span className="ml-auto text-[11px] text-coop-gray-900">{noDateTasks.length}</span>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {noDateTasks.map((t) => renderTaskCard(t))}
@@ -3601,9 +3601,7 @@ function TasksPage() {
         ) : (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-16 text-center">
             <ListChecks className="mb-3 h-10 w-10 text-coop-gray-900/40" />
-            <p className="text-sm font-medium text-coop-gray-900">
-              Inga uppgifter matchar filtren
-            </p>
+            <p className="text-sm font-medium text-coop-gray-900">Inga uppgifter matchar filtren</p>
           </div>
         )
       ) : (
@@ -3800,7 +3798,9 @@ function TasksPage() {
                           : "text-coop-orange-700 dark:text-coop-orange-500",
                       )}
                     />
-                    <p className="text-xs font-semibold text-coop-gray-900">Händelsebaserad uppgift</p>
+                    <p className="text-xs font-semibold text-coop-gray-900">
+                      Händelsebaserad uppgift
+                    </p>
                   </div>
                   <p className="text-xs text-coop-gray-900">
                     {detailTask.event_trigger_description}
@@ -5355,9 +5355,7 @@ function TasksPage() {
                 <div className="px-4 py-3 space-y-2">
                   <div className="flex items-center gap-3">
                     <Repeat className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
-                    <span className="w-24 shrink-0 text-xs text-coop-gray-900">
-                      Återkommande
-                    </span>
+                    <span className="w-24 shrink-0 text-xs text-coop-gray-900">Återkommande</span>
                     <Select
                       value={newTask.recurrence_rule || "__none"}
                       onValueChange={(v) => {
@@ -5594,9 +5592,7 @@ function TasksPage() {
                   />
                   {newTask.event_trigger_description && (
                     <>
-                      <p className="text-[11px] text-coop-gray-900">
-                        Vem kan bekräfta händelsen?
-                      </p>
+                      <p className="text-[11px] text-coop-gray-900">Vem kan bekräfta händelsen?</p>
                       <Select
                         value={newTask.event_trigger_user_id || "__none"}
                         onValueChange={(v) =>
@@ -6319,9 +6315,7 @@ function TasksPage() {
                   </div>
                   <div className="flex items-center gap-3 px-4 py-3">
                     <Repeat className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
-                    <span className="w-24 shrink-0 text-xs text-coop-gray-900">
-                      Återkommande
-                    </span>
+                    <span className="w-24 shrink-0 text-xs text-coop-gray-900">Återkommande</span>
                     <span className="flex-1 text-right text-xs text-coop-gray-900">
                       {editForm.recurrence_rule
                         ? (RECURRENCE_OPTIONS.find((o) => o.value === editForm.recurrence_rule)
@@ -6488,9 +6482,7 @@ function TasksPage() {
               <CalendarDays className="h-4 w-4 text-primary shrink-0" />
               <div className="min-w-0 flex-1">
                 <DialogTitle className="text-sm font-semibold">Framtida förekomster</DialogTitle>
-                <p className="text-[11px] text-coop-gray-900 truncate">
-                  {futureManagerTask.title}
-                </p>
+                <p className="text-[11px] text-coop-gray-900 truncate">{futureManagerTask.title}</p>
               </div>
               <button
                 onClick={() => {
@@ -6580,9 +6572,7 @@ function TasksPage() {
               ) : futureOccurrences.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <CalendarDays className="h-8 w-8 text-coop-gray-900/40 mb-2" />
-                  <p className="text-sm text-coop-gray-900">
-                    Inga framtida förekomster hittades
-                  </p>
+                  <p className="text-sm text-coop-gray-900">Inga framtida förekomster hittades</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -6877,7 +6867,10 @@ function TasksPage() {
                             </span>
                           ) : currentAssignees.length > 0 ? (
                             currentAssignees.map((a) => (
-                              <span key={a.id} className="text-[11px] font-medium text-coop-gray-900">
+                              <span
+                                key={a.id}
+                                className="text-[11px] font-medium text-coop-gray-900"
+                              >
                                 {a.user?.display_name ?? "Okänd"}
                               </span>
                             ))

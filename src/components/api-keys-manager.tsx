@@ -329,9 +329,7 @@ export function ApiKeysManager() {
                         {status.label}
                       </Badge>
                     </div>
-                    <p className="mt-0.5 font-mono text-xs text-coop-gray-900">
-                      {key.key_prefix}…
-                    </p>
+                    <p className="mt-0.5 font-mono text-xs text-coop-gray-900">{key.key_prefix}…</p>
                   </div>
                   <div className="flex gap-2 shrink-0">
                     {!key.revoked_at && (

@@ -57,8 +57,11 @@ function QrKundonskemalPage() {
 
   useEffect(() => {
     if (!token) {
-      setInvalid(true);
-      setResolving(false);
+      const handleNoToken = () => {
+        setInvalid(true);
+        setResolving(false);
+      };
+      handleNoToken();
       return;
     }
 
@@ -127,9 +130,7 @@ function QrKundonskemalPage() {
             <AlertTriangle className="h-8 w-8 text-destructive" />
           </div>
           <h1 className="text-xl font-semibold text-coop-gray-900">Ogiltig länk</h1>
-          <p className="mt-2 text-sm text-coop-gray-900">
-            Den här QR-koden är inte längre giltig.
-          </p>
+          <p className="mt-2 text-sm text-coop-gray-900">Den här QR-koden är inte längre giltig.</p>
         </div>
       </div>
     );

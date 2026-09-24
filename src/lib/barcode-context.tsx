@@ -80,7 +80,9 @@ export function BarcodeProvider({ children }: { children: React.ReactNode }) {
         navigate({ to: "/avvikelser" });
         return;
       }
-    } catch {}
+    } catch {
+      /* ignore */
+    }
 
     // Unknown code — dispatch event so product search panel can open with this code pre-filled
     void label;

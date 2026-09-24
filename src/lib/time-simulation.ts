@@ -17,7 +17,9 @@ export function setTimeOffsetMs(ms: number): void {
       localStorage.setItem(STORAGE_KEY, String(ms));
     }
     window.dispatchEvent(new CustomEvent("sf-time-changed"));
-  } catch {}
+  } catch {
+    /* ignore */
+  }
 }
 
 export function getSimulatedDate(): Date {

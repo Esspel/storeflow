@@ -54,7 +54,10 @@ function GdprPage() {
               ],
               ["Platsdata", "Ingen GPS- eller positionsdata samlas in."],
             ].map(([type, desc]) => (
-              <div key={type} className="flex gap-3 rounded-lg border border-border/60 bg-coop-gray-100 p-3">
+              <div
+                key={type}
+                className="flex gap-3 rounded-lg border border-border/60 bg-coop-gray-100 p-3"
+              >
                 <span className="font-medium text-coop-gray-900 shrink-0 w-48">{type}</span>
                 <span>{desc}</span>
               </div>
@@ -115,16 +118,16 @@ function GdprPage() {
               klicka på "Exportera mina uppgifter" i GDPR-avsnittet.
             </li>
             <li>
-              <strong className="text-coop-gray-900">Rättelse:</strong> Ändra ditt visningsnamn direkt
-              i Inställningar. Övriga uppgifter via administratören.
+              <strong className="text-coop-gray-900">Rättelse:</strong> Ändra ditt visningsnamn
+              direkt i Inställningar. Övriga uppgifter via administratören.
             </li>
             <li>
               <strong className="text-coop-gray-900">Radering / invändning:</strong> Kontakta din
               närmaste systemadministratör eller dataskyddsombud.
             </li>
             <li>
-              <strong className="text-coop-gray-900">Klagomål:</strong> Du har rätt att inge klagomål
-              till Integritetsskyddsmyndigheten (IMY) på{" "}
+              <strong className="text-coop-gray-900">Klagomål:</strong> Du har rätt att inge
+              klagomål till Integritetsskyddsmyndigheten (IMY) på{" "}
               <a
                 href="https://www.imy.se"
                 target="_blank"

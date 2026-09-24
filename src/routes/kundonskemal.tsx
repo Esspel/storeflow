@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   Copy,
@@ -15,7 +15,9 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { CameraScanner } from "@/components/camera-scanner";
+const CameraScanner = React.lazy(() =>
+  import("@/components/camera-scanner").then((m) => ({ default: m.CameraScanner })),
+);
 import { QrDisplay } from "@/components/qr-display";
 import { PageHeader, StatCard } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -259,9 +261,11 @@ function CustomerRequestsPage() {
 
   useEffect(() => {
     if (editTarget) {
-      setCurrentEditImages(requestImagesMap[editTarget.id] || []);
+      const setEditImages = (imgs: ImageMeta[]) => setCurrentEditImages(imgs);
+      setEditImages(requestImagesMap[editTarget.id] || []);
     } else {
-      setCurrentEditImages([]);
+      const clearEditImages = () => setCurrentEditImages([]);
+      clearEditImages();
     }
   }, [editTarget]);
 
@@ -347,8 +351,10 @@ function CustomerRequestsPage() {
   };
 
   useEffect(() => {
-    setLoading(true);
-    fetchRequests();
+    const startLoading = () => setLoading(true);
+    startLoading();
+    const loadRequests = () => void fetchRequests();
+    loadRequests();
     if (isAdmin) {
       supabase
         .from("stores")
@@ -540,7 +546,10 @@ function CustomerRequestsPage() {
       {loading ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-2xl border border-border/60 bg-coop-gray-100 p-4 space-y-3">
+            <div
+              key={i}
+              className="rounded-2xl border border-border/60 bg-coop-gray-100 p-4 space-y-3"
+            >
               <div className="h-4 w-3/4 animate-pulse rounded-md bg-muted" />
               <div className="h-3 w-1/2 animate-pulse rounded-md bg-muted/60" />
             </div>
@@ -907,17 +916,19 @@ function CustomerRequestsPage() {
             </div>
 
             {articleCameraOpen && (
-              <CameraScanner
-                onScan={(code) => {
-                  setArticleCameraOpen(false);
-                  setForm((p) => ({
-                    ...p,
-                    article_number: code.replace(/\D/g, ""),
-                    article_type: "ean",
-                  }));
-                }}
-                onClose={() => setArticleCameraOpen(false)}
-              />
+              <React.Suspense fallback={null}>
+                <CameraScanner
+                  onScan={(code) => {
+                    setArticleCameraOpen(false);
+                    setForm((p) => ({
+                      ...p,
+                      article_number: code.replace(/\D/g, ""),
+                      article_type: "ean",
+                    }));
+                  }}
+                  onClose={() => setArticleCameraOpen(false)}
+                />
+              </React.Suspense>
             )}
 
             {/* Images */}

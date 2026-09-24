@@ -1203,4 +1203,3 @@ export async function getKundrundaAssignmentsThisWeek(
   if (error) throw error;
   return (data ?? []) as KundrundaAssignment[];
 }
-

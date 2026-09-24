@@ -9,7 +9,6 @@
  */
 
 declare global {
-  // eslint-disable-next-line no-var
   var chrome: {
     runtime?: {
       sendMessage: (
@@ -106,10 +105,16 @@ export function fetchViaProxy(
           return reject(new Error("Inget svar från extensionen"));
         }
         if (resp.success) {
-          console.log("[SAP Proxy] Success, status:", resp.status, "data length:", resp.data?.length);
+          console.log(
+            "[SAP Proxy] Success, status:",
+            resp.status,
+            "data length:",
+            resp.data?.length,
+          );
           resolve({
             success: true,
-            status: typeof resp.status === "number" ? resp.status : parseInt(String(resp.status), 10),
+            status:
+              typeof resp.status === "number" ? resp.status : parseInt(String(resp.status), 10),
             data: resp.data,
           });
         } else {

@@ -72,8 +72,15 @@ Deno.serve(async (req: Request) => {
         .eq("id", user_id)
         .single();
 
-      if (userCheck && userCheck.locked_until && new Date(userCheck.locked_until).getTime() > Date.now()) {
-        return json({ error: "Konto låst på grund av för många misslyckade försök. Försök igen senare." }, 403);
+      if (
+        userCheck &&
+        userCheck.locked_until &&
+        new Date(userCheck.locked_until).getTime() > Date.now()
+      ) {
+        return json(
+          { error: "Konto låst på grund av för många misslyckade försök. Försök igen senare." },
+          403,
+        );
       }
 
       // AUTHZ-05: Verify the requested user is associated with the requested store

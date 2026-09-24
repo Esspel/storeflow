@@ -66,11 +66,13 @@ export function usePushNotifications(): PushNotificationState {
     let isMounted = true;
 
     if (!isSupported || !user) {
-      setIsLoading(false);
+      const stopLoading = () => setIsLoading(false);
+      stopLoading();
       return;
     }
 
-    setPermissionState(Notification.permission);
+    const setPermission = () => setPermissionState(Notification.permission);
+    setPermission();
 
     const checkSubscription = async () => {
       try {

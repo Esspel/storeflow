@@ -443,9 +443,7 @@ function DeliveryPicker({
                   />
                   <div className="flex-1 min-w-0">
                     <span className="text-xs">{entry.supplier}</span>
-                    <span className="text-[10px] text-coop-gray-900 ml-1.5">
-                      {entry.flow_name}
-                    </span>
+                    <span className="text-[10px] text-coop-gray-900 ml-1.5">{entry.flow_name}</span>
                   </div>
                   {entry.delivery_time && (
                     <span className="text-[11px] font-medium text-coop-gray-900/70 tabular-nums shrink-0">
@@ -602,65 +600,69 @@ function MallarPage() {
   // backfill delivery_entry_keys from the current week's entries so the picker shows correctly.
   useEffect(() => {
     if (!editTarget || deliveryWeekEntries.length === 0) return;
-    setEditForm((prev) => {
-      if (!prev.is_delivery_task) return prev;
-      if (prev.delivery_entry_keys) return prev; // already has keys
-      if (!prev.delivery_supplier_name && !prev.delivery_flow_name) return prev;
-      const tmplFlows = prev.delivery_flow_name
-        .split("|")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean);
-      const tmplSuppliers = prev.delivery_supplier_name
-        .split("|")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean);
-      const matchedEntries = deliveryWeekEntries.filter((e) => {
-        const flowOk =
-          tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
-        const suppOk =
-          tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
-        return flowOk && suppOk;
+    const updateEditForm = () =>
+      setEditForm((prev) => {
+        if (!prev.is_delivery_task) return prev;
+        if (prev.delivery_entry_keys) return prev; // already has keys
+        if (!prev.delivery_supplier_name && !prev.delivery_flow_name) return prev;
+        const tmplFlows = prev.delivery_flow_name
+          .split("|")
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean);
+        const tmplSuppliers = prev.delivery_supplier_name
+          .split("|")
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean);
+        const matchedEntries = deliveryWeekEntries.filter((e) => {
+          const flowOk =
+            tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
+          const suppOk =
+            tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
+          return flowOk && suppOk;
+        });
+        if (matchedEntries.length === 0) return prev;
+        return {
+          ...prev,
+          delivery_entry_keys: matchedEntries
+            .map((e) => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`)
+            .join("|"),
+        };
       });
-      if (matchedEntries.length === 0) return prev;
-      return {
-        ...prev,
-        delivery_entry_keys: matchedEntries
-          .map((e) => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`)
-          .join("|"),
-      };
-    });
+    updateEditForm();
   }, [editTarget, deliveryWeekEntries]);
 
   // Same backfill for the create form when delivery_entry_keys is empty but supplier/flow are set.
   useEffect(() => {
     if (deliveryWeekEntries.length === 0) return;
-    setForm((prev) => {
-      if (!prev.is_delivery_task) return prev;
-      if (prev.delivery_entry_keys) return prev;
-      if (!prev.delivery_supplier_name && !prev.delivery_flow_name) return prev;
-      const tmplFlows = prev.delivery_flow_name
-        .split("|")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean);
-      const tmplSuppliers = prev.delivery_supplier_name
-        .split("|")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean);
-      const matchedEntries = deliveryWeekEntries.filter((e) => {
-        const flowOk =
-          tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
-        const suppOk =
-          tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
-        return flowOk && suppOk;
+    const updateForm = () =>
+      setForm((prev) => {
+        if (!prev.is_delivery_task) return prev;
+        if (prev.delivery_entry_keys) return prev;
+        if (!prev.delivery_supplier_name && !prev.delivery_flow_name) return prev;
+        const tmplFlows = prev.delivery_flow_name
+          .split("|")
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean);
+        const tmplSuppliers = prev.delivery_supplier_name
+          .split("|")
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean);
+        const matchedEntries = deliveryWeekEntries.filter((e) => {
+          const flowOk =
+            tmplFlows.length === 0 || tmplFlows.includes(e.flow_name?.toLowerCase() ?? "");
+          const suppOk =
+            tmplSuppliers.length === 0 || tmplSuppliers.includes(e.supplier?.toLowerCase() ?? "");
+          return flowOk && suppOk;
+        });
+        if (matchedEntries.length === 0) return prev;
+        return {
+          ...prev,
+          delivery_entry_keys: matchedEntries
+            .map((e) => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`)
+            .join("|"),
+        };
       });
-      if (matchedEntries.length === 0) return prev;
-      return {
-        ...prev,
-        delivery_entry_keys: matchedEntries
-          .map((e) => `${e.delivery_day}||${e.supplier?.trim()}||${e.flow_name?.trim()}`)
-          .join("|"),
-      };
-    });
+    updateForm();
   }, [deliveryWeekEntries]);
 
   async function load() {
@@ -3186,7 +3188,10 @@ function MallarPage() {
       return { label: "HK-mall", cls: "border-coop-blue-300 text-coop-blue-600" };
     if (scope === "forening") {
       const f = allForeningar.find((x) => x.id === t.forening_id);
-      return { label: `${f?.name ?? "Förening"}-mall`, cls: "border-coop-gron-300 text-coop-gron-600" };
+      return {
+        label: `${f?.name ?? "Förening"}-mall`,
+        cls: "border-coop-gron-300 text-coop-gron-600",
+      };
     }
     return null;
   };
@@ -3228,9 +3233,7 @@ function MallarPage() {
 
           {/* Steg */}
           <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">
-              Steg
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">Steg</p>
             <div className="space-y-1.5">
               {f.items.map((item, idx) => {
                 const yesNoQuestions = f.questions.filter(
@@ -3374,9 +3377,7 @@ function MallarPage() {
 
           {/* Frågor */}
           <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">
-              Frågor
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wide text-coop-gray-900">Frågor</p>
             <div className="space-y-2">
               {f.questions.map((q, idx) => (
                 <div
@@ -3867,9 +3868,7 @@ function MallarPage() {
                   <div className="space-y-1">
                     {QUARTER_MONTHS.map(({ q, months }) => (
                       <div key={q} className="flex items-center gap-1">
-                        <span className="text-[11px] font-medium text-coop-gray-900 w-6">
-                          {q}
-                        </span>
+                        <span className="text-[11px] font-medium text-coop-gray-900 w-6">{q}</span>
                         {months.map((m) => (
                           <button
                             key={m}
@@ -3941,11 +3940,16 @@ function MallarPage() {
                           setF((p) => ({ ...p, recurrence_start_week: "" }));
                         } else {
                           // Skydda mot ogiltiga recurrence_start-värden
-                          const isoCheck = f.recurrence_start?.match(/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?$/);
-                          const baseDate = (f.recurrence_start && isoCheck)
-                            ? new Date(f.recurrence_start)
-                            : new Date();
-                          if (isNaN(baseDate.getTime())) { return; }
+                          const isoCheck = f.recurrence_start?.match(
+                            /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?$/,
+                          );
+                          const baseDate =
+                            f.recurrence_start && isoCheck
+                              ? new Date(f.recurrence_start)
+                              : new Date();
+                          if (isNaN(baseDate.getTime())) {
+                            return;
+                          }
                           const year = baseDate.getFullYear();
                           const date = getDateFromISOWeek(year, val as number);
                           setF((p) => ({
@@ -4358,9 +4362,7 @@ function MallarPage() {
               <div className="px-4 py-3 space-y-1">
                 <div className="flex items-center gap-2">
                   <CalendarClock className="h-4 w-4 shrink-0 text-coop-gray-900/60" />
-                  <span className="text-xs text-coop-gray-900">
-                    Granskningsintervall (månader)
-                  </span>
+                  <span className="text-xs text-coop-gray-900">Granskningsintervall (månader)</span>
                 </div>
                 <Input
                   type="number"
@@ -4775,7 +4777,8 @@ function MallarPage() {
                           variant={overdue ? "destructive" : "outline"}
                           className={cn(
                             "shrink-0 rounded-full h-7 text-xs",
-                            !overdue && "border-coop-orange-400 text-coop-orange-700 hover:bg-coop-orange-200",
+                            !overdue &&
+                              "border-coop-orange-400 text-coop-orange-700 hover:bg-coop-orange-200",
                           )}
                           onClick={() => setReviewTarget(t)}
                         >
@@ -4793,7 +4796,10 @@ function MallarPage() {
             <div>
               <div className="mb-3 flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-coop-gray-900">Mallpaket</h2>
-                <Badge variant="outline" className="text-xs border-coop-orange-300 text-coop-orange-700">
+                <Badge
+                  variant="outline"
+                  className="text-xs border-coop-orange-300 text-coop-orange-700"
+                >
                   Paket
                 </Badge>
                 <button
@@ -5424,9 +5430,7 @@ function MallarPage() {
                                 {expanded === v.id && (
                                   <div className="border-t border-border/60 px-5 py-4 space-y-3">
                                     {v.description && (
-                                      <p className="text-sm text-coop-gray-900">
-                                        {v.description}
-                                      </p>
+                                      <p className="text-sm text-coop-gray-900">{v.description}</p>
                                     )}
                                     {(v.items?.length ?? 0) > 0 && (
                                       <div>
@@ -6002,9 +6006,7 @@ function MallarPage() {
                           })}
                         </div>
                       ) : (
-                        <p className="text-xs text-coop-gray-900 italic">
-                          Inga spårade ändringar
-                        </p>
+                        <p className="text-xs text-coop-gray-900 italic">Inga spårade ändringar</p>
                       )}
                     </div>
                   );
@@ -6437,7 +6439,9 @@ function MallarPage() {
                   key={cfg.templateId}
                   className={cn(
                     "rounded-2xl border bg-coop-gray-100 p-4 space-y-4",
-                    isDeliveryTmpl ? "border-coop-orange-300/60 bg-coop-orange-100/30" : "border-border/60",
+                    isDeliveryTmpl
+                      ? "border-coop-orange-300/60 bg-coop-orange-100/30"
+                      : "border-border/60",
                   )}
                 >
                   <div className="flex items-start gap-3">
@@ -6533,7 +6537,9 @@ function MallarPage() {
                     <div className="flex items-start gap-2 rounded-lg border border-coop-orange-300 bg-coop-orange-100/60 px-3 py-2.5">
                       <AlertTriangle className="h-3.5 w-3.5 text-coop-orange-700 mt-0.5 shrink-0" />
                       <div>
-                        <p className="text-xs font-medium text-coop-orange-700">Uppgifter finns redan</p>
+                        <p className="text-xs font-medium text-coop-orange-700">
+                          Uppgifter finns redan
+                        </p>
                         <p className="text-[11px] text-coop-orange-800 mt-0.5">
                           Kontrollera vem som jobbar dagen innan uppgiften ska göras och justera
                           tilldelningen nedan om det behövs.
@@ -6743,7 +6749,9 @@ function MallarPage() {
                                               </span>
                                             )}
                                             {suggested && hasSuggestions && (
-                                              <span className="text-[10px] text-coop-blue-600">●</span>
+                                              <span className="text-[10px] text-coop-blue-600">
+                                                ●
+                                              </span>
                                             )}
                                           </div>
                                         </label>
@@ -6771,9 +6779,7 @@ function MallarPage() {
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Users className="h-3.5 w-3.5 text-coop-gray-900" />
-                        <label className="text-xs font-medium text-coop-gray-900">
-                          Tilldelad
-                        </label>
+                        <label className="text-xs font-medium text-coop-gray-900">Tilldelad</label>
                         {hasScheduleData && scheduledOnDays.size > 0 && !showAll && (
                           <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                             {visibleUsers.length} inplanerade

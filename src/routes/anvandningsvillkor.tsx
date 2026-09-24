@@ -21,7 +21,9 @@ function TosPage() {
 
       <div className="space-y-8 text-sm text-coop-gray-900 leading-relaxed">
         <section>
-          <h2 className="text-lg font-semibold text-coop-gray-900 mb-3">1. Godkännande av villkor</h2>
+          <h2 className="text-lg font-semibold text-coop-gray-900 mb-3">
+            1. Godkännande av villkor
+          </h2>
           <p>
             Genom att logga in och använda StoreFlow godkänner du dessa användarvillkor. Om du inte
             godkänner villkoren ska du inte använda systemet. Kontakta din administratör om du har
@@ -30,7 +32,9 @@ function TosPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-coop-gray-900 mb-3">2. Behörighet och åtkomst</h2>
+          <h2 className="text-lg font-semibold text-coop-gray-900 mb-3">
+            2. Behörighet och åtkomst
+          </h2>
           <ul className="list-disc list-inside space-y-1.5">
             <li>Du är ansvarig för att hålla dina inloggningsuppgifter konfidentiella.</li>
             <li>Dela inte ditt lösenord eller PIN med obehöriga personer.</li>
@@ -109,7 +113,9 @@ function TosPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-coop-gray-900 mb-3">9. Ändringar av villkoren</h2>
+          <h2 className="text-lg font-semibold text-coop-gray-900 mb-3">
+            9. Ändringar av villkoren
+          </h2>
           <p>
             Dessa villkor kan uppdateras. Fortsatt användning av systemet efter att uppdaterade
             villkor publicerats innebär att du godkänner de nya villkoren. Datum för senaste

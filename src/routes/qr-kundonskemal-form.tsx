@@ -60,8 +60,11 @@ function QrKundonskemalFormPage() {
 
   useEffect(() => {
     if (!token) {
-      setInvalid(true);
-      setResolving(false);
+      const handleNoToken = () => {
+        setInvalid(true);
+        setResolving(false);
+      };
+      handleNoToken();
       return;
     }
 

@@ -23,7 +23,13 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    let body: { username?: string; password?: string; pin?: string; barcode?: string; store_id?: string };
+    let body: {
+      username?: string;
+      password?: string;
+      pin?: string;
+      barcode?: string;
+      store_id?: string;
+    };
     try {
       body = await req.json();
     } catch {
@@ -103,7 +109,12 @@ Deno.serve(async (req: Request) => {
     let userError: unknown = null;
 
     if (useBarcode && resolvedUserId) {
-      const res = await supabase.from("app_users").select(selectCols).eq("id", resolvedUserId).eq("is_active", true).maybeSingle();
+      const res = await supabase
+        .from("app_users")
+        .select(selectCols)
+        .eq("id", resolvedUserId)
+        .eq("is_active", true)
+        .maybeSingle();
       user = res.data ?? null;
       userError = res.error;
     } else if (username) {

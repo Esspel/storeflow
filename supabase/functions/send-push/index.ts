@@ -44,10 +44,16 @@ Deno.serve(async (req: Request) => {
     // Validate VAPID keys format (URL-safe base64)
     const VAPID_KEY_REGEX = /^[A-Za-z0-9_-]+=*$/;
     if (!vapidPublicKey || !VAPID_KEY_REGEX.test(vapidPublicKey)) {
-      return json({ error: "Invalid VAPID_PUBLIC_KEY format. Must be URL-safe base64 encoded." }, 500);
+      return json(
+        { error: "Invalid VAPID_PUBLIC_KEY format. Must be URL-safe base64 encoded." },
+        500,
+      );
     }
     if (!vapidPrivateKey || !VAPID_KEY_REGEX.test(vapidPrivateKey)) {
-      return json({ error: "Invalid VAPID_PRIVATE_KEY format. Must be URL-safe base64 encoded." }, 500);
+      return json(
+        { error: "Invalid VAPID_PRIVATE_KEY format. Must be URL-safe base64 encoded." },
+        500,
+      );
     }
     if (vapidPublicKey === vapidPrivateKey) {
       return json({ error: "VAPID public and private keys must be different." }, 500);

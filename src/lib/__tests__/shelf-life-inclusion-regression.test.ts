@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  filterShelfLifeRecords,
-  getShelfLifeStatus,
-} from "../shelfLife";
+import { filterShelfLifeRecords, getShelfLifeStatus } from "../shelfLife";
 
 // TDD-regression: articles that lack shelf-life data must be visible
 // in "Hantera hållbarhetsdata" and in weekly-task calculations.

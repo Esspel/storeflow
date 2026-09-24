@@ -27,11 +27,11 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
 
   // Only show if user has more than one store or is above-store
   const hasMultiple = userStores.length > 1 || isAboveStore;
-  if (!hasMultiple) return null;
 
   useEffect(() => {
     if (!open || !isAboveStore) return;
-    setLoading(true);
+    const startLoading = () => setLoading(true);
+    startLoading();
     let query = supabase.from("stores").select("*").order("name");
 
     if (hierarchyLevel === "forening" && user?.forening_id) {
@@ -40,10 +40,14 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
       query = supabase.from("stores").select("*").eq("distrikt_id", user.distrikt_id).order("name");
     }
 
-    query.then(({ data }) => {
-      setAllStores((data ?? []) as Store[]);
-      setLoading(false);
-    });
+    const loadStores = () =>
+      query.then(({ data }) => {
+        const setAll = (d: Store[]) => setAllStores(d);
+        setAll((data ?? []) as Store[]);
+        const stopLoading = () => setLoading(false);
+        stopLoading();
+      });
+    loadStores();
   }, [open, isAboveStore, hierarchyLevel, user?.forening_id, user?.distrikt_id]);
 
   useEffect(() => {
@@ -55,6 +59,8 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
     if (open && !inline) document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open, inline]);
+
+  if (!hasMultiple) return null;
 
   const stores = isAboveStore && allStores.length > 0 ? allStores : userStores;
   const filtered = search.trim()
@@ -120,9 +126,7 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
               );
             })}
             {filtered.length === 0 && (
-              <p className="py-2 text-center text-xs text-coop-gray-900">
-                Inga butiker hittades
-              </p>
+              <p className="py-2 text-center text-xs text-coop-gray-900">Inga butiker hittades</p>
             )}
           </div>
         )}

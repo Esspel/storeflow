@@ -267,7 +267,9 @@ function IssuesPage() {
     try {
       const saved = localStorage.getItem(`sf-incident-draft-${user?.id ?? ""}`);
       if (saved) return JSON.parse(saved) as ReturnType<typeof emptyIncident>;
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     return emptyIncident();
   });
   const setNewIncident = (
@@ -279,7 +281,9 @@ function IssuesPage() {
       const next = typeof v === "function" ? v(prev) : v;
       try {
         localStorage.setItem(INCIDENT_DRAFT_KEY, JSON.stringify(next));
-      } catch {}
+      } catch {
+        /* ignore */
+      }
       return next;
     });
   };
@@ -406,8 +410,10 @@ function IssuesPage() {
   };
 
   useEffect(() => {
-    setLoading(true);
-    fetchIncidents();
+    const startLoading = () => setLoading(true);
+    startLoading();
+    const loadIncidents = () => void fetchIncidents();
+    loadIncidents();
     const storeQ = isAdmin
       ? supabase.from("stores").select("*").eq("is_active", true)
       : supabase
@@ -458,9 +464,12 @@ function IssuesPage() {
         });
     }
 
-    setNewIncident((p) => ({ ...p, store_id: activeStore?.id ?? "" }));
+    const setStoreIdInNewIncident = () =>
+      setNewIncident((p) => ({ ...p, store_id: activeStore?.id ?? "" }));
+    setStoreIdInNewIncident();
 
-    fetchCommonDefects();
+    const loadCommonDefects = () => void fetchCommonDefects();
+    loadCommonDefects();
 
     // Auto-restore draft if exists
     try {
@@ -475,7 +484,9 @@ function IssuesPage() {
           });
         }
       }
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   }, [activeStore, user]);
 
   const createIncident = async () => {
@@ -570,7 +581,9 @@ function IssuesPage() {
       setUploadFiles([]);
       try {
         localStorage.removeItem(INCIDENT_DRAFT_KEY);
-      } catch {}
+      } catch {
+        /* ignore */
+      }
       setNewIncident(emptyIncident());
     }
   };

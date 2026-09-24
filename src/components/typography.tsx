@@ -31,13 +31,7 @@ export function Typography({
   asymmetric = false,
 }: TypographyProps) {
   const base = getTypographyClass(variant);
-  const alignClass = asymmetric
-    ? "text-asymmetric"
-    : centered
-      ? "text-center"
-      : "text-left";
+  const alignClass = asymmetric ? "text-asymmetric" : centered ? "text-center" : "text-left";
 
-  return (
-    <span className={`${base} ${alignClass} ${className}`}>{children}</span>
-  );
+  return <span className={`${base} ${alignClass} ${className}`}>{children}</span>;
 }

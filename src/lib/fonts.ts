@@ -43,9 +43,7 @@ export function initializeFonts(): void {
     },
     {
       family: "Coop Sans Price",
-      weights: [
-        { weight: 900, filename: "CoopSansPrice-Black.woff2" },
-      ],
+      weights: [{ weight: 900, filename: "CoopSansPrice-Black.woff2" }],
     },
     {
       family: "Coop Marker",

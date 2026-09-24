@@ -44,7 +44,9 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
   const [scannerTestActive, setScannerTestActive] = useState(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const scannerTestRef = useRef(scannerTestActive);
-  scannerTestRef.current = scannerTestActive;
+  useEffect(() => {
+    scannerTestRef.current = scannerTestActive;
+  }, [scannerTestActive]);
 
   // Hidden input that captures DataWedge / barcode scanner input regardless of focus state
   const hiddenInputRef = useRef<HTMLInputElement>(null);
@@ -93,28 +95,31 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
-  const handleHiddenInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    const now = Date.now();
-    const gap = now - hiddenInputLastKeyTime.current;
-    hiddenInputLastKeyTime.current = now;
+  const handleHiddenInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      const now = Date.now();
+      const gap = now - hiddenInputLastKeyTime.current;
+      hiddenInputLastKeyTime.current = now;
 
-    if (e.key === "Enter") {
-      const val = hiddenInputRef.current?.value.trim() ?? "";
-      if (hiddenInputRef.current) hiddenInputRef.current.value = "";
-      if (val.length >= 4) {
-        if (scannerTestRef.current) {
-          setLastScanned(val);
-        } else if (!loadingRef.current) {
-          submitSwitchRef.current?.({ mode: "barcode", barcode: val });
+      if (e.key === "Enter") {
+        const val = hiddenInputRef.current?.value.trim() ?? "";
+        if (hiddenInputRef.current) hiddenInputRef.current.value = "";
+        if (val.length >= 4) {
+          if (scannerTestRef.current) {
+            setLastScanned(val);
+          } else if (!loading) {
+            submitSwitchRef.current?.({ mode: "barcode", barcode: val });
+          }
         }
+        e.preventDefault();
+        return;
       }
-      e.preventDefault();
-      return;
-    }
 
-    // Suppress gap warning — accumulation still works via Enter
-    void gap;
-  }, []);
+      // Suppress gap warning — accumulation still works via Enter
+      void gap;
+    },
+    [loading],
+  );
 
   // Take exclusive ownership of barcode events while the lock screen is mounted
   useEffect(() => {
@@ -123,14 +128,17 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
   }, [setScanSuppressed]);
 
   const pinRef = useRef(pin);
-  pinRef.current = pin;
+  useEffect(() => {
+    pinRef.current = pin;
+  }, [pin]);
 
   useEffect(() => {
     // Avbryt direkt om vi saknar storeId eller användare
     if (!activeStoreId || !currentUser?.id) return;
 
     let isMounted = true;
-    setLoadingUsers(true);
+    const startLoadingUsers = () => setLoadingUsers(true);
+    startLoadingUsers();
 
     supabase
       .from("user_stores")
@@ -205,10 +213,9 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
     },
     [activeStoreId, onUnlock],
   );
-  submitSwitchRef.current = submitSwitch;
-
-  const loadingRef = useRef(loading);
-  loadingRef.current = loading;
+  useEffect(() => {
+    submitSwitchRef.current = submitSwitch;
+  }, [submitSwitch]);
 
   useBarcodeScanner({
     onScan: useCallback(
@@ -217,10 +224,10 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
           setLastScanned(code);
           return;
         }
-        if (loadingRef.current) return;
-        submitSwitch({ mode: "barcode", barcode: code });
+        if (loading) return;
+        void submitSwitch({ mode: "barcode", barcode: code });
       },
-      [submitSwitch],
+      [loading, submitSwitch],
     ),
     acceptAlpha: true,
   });
@@ -383,9 +390,7 @@ export function LockScreen({ currentUser, activeStoreId, onUnlock, onCancel }: P
                   <Camera className="h-5 w-5 shrink-0 text-primary" />
                   <div className="text-left">
                     <p className="text-sm font-medium">Scanna med kamera</p>
-                    <p className="text-xs text-coop-gray-900">
-                      Öppna kameran och scanna streckkod
-                    </p>
+                    <p className="text-xs text-coop-gray-900">Öppna kameran och scanna streckkod</p>
                   </div>
                 </button>
               </div>

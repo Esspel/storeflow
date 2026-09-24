@@ -122,6 +122,21 @@ function hierarchyLevelToRole(level: string): "admin" | "manager" | "employee" {
 type UserWithStores = AppUser & { assignedStoreIds: string[] };
 type SortDir = "asc" | "desc";
 
+interface SortIconProps {
+  field: string;
+  current: string;
+  dir: SortDir;
+}
+
+function SortIcon({ field, current, dir }: SortIconProps) {
+  if (field !== current) return <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" />;
+  return dir === "asc" ? (
+    <ChevronUp className="ml-1 h-3 w-3" />
+  ) : (
+    <ChevronDown className="ml-1 h-3 w-3" />
+  );
+}
+
 // CSV Import result
 type CsvImportResult = {
   success: number;
@@ -1192,15 +1207,6 @@ function AccountsPage() {
     }
   }
 
-  function SortIcon({ field, current, dir }: { field: string; current: string; dir: SortDir }) {
-    if (field !== current) return <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" />;
-    return dir === "asc" ? (
-      <ChevronUp className="ml-1 h-3 w-3" />
-    ) : (
-      <ChevronDown className="ml-1 h-3 w-3" />
-    );
-  }
-
   // Filtered & sorted users
   const filteredUsers = useMemo(() => {
     let list = users.filter((u) => u.display_name !== "Gallrad användare");
@@ -1490,9 +1496,7 @@ function AccountsPage() {
                             </div>
                             <div>
                               <p className="font-medium">{u.display_name}</p>
-                              <p className="font-mono text-xs text-coop-gray-900">
-                                {u.username}
-                              </p>
+                              <p className="font-mono text-xs text-coop-gray-900">{u.username}</p>
                             </div>
                           </div>
                         </td>
@@ -3240,9 +3244,7 @@ function AccountsPage() {
                   ))}
               </div>
               {newGroup.memberIds.length > 0 && (
-                <p className="text-[11px] text-coop-gray-900">
-                  {newGroup.memberIds.length} valda
-                </p>
+                <p className="text-[11px] text-coop-gray-900">{newGroup.memberIds.length} valda</p>
               )}
             </div>
             {error && (

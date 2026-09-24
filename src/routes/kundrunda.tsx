@@ -386,7 +386,9 @@ function KundrundaPage() {
         const form: Record<number, string> = {};
         asg.forEach((a) => (form[a.day_of_week] = a.assigned_user_id ?? ""));
         setAssignmentForm(form);
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     }
     setLoading(false);
   };
@@ -398,7 +400,9 @@ function KundrundaPage() {
         `kundrunda-draft-${user?.id ?? "anon"}-${activeStore?.id ?? "all"}`,
       );
       if (raw) return (JSON.parse(raw) as { savedAt?: string }).savedAt ?? null;
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     return null;
   });
 
@@ -410,7 +414,9 @@ function KundrundaPage() {
         JSON.stringify({ sessionId: session.id, responses: respMap, savedAt }),
       );
       setLocalDraftTime(savedAt);
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   };
 
   const flushPendingSync = async () => {
@@ -452,7 +458,10 @@ function KundrundaPage() {
     const onOffline = () => setSyncStatus("offline");
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
-    if (!navigator.onLine) setSyncStatus("offline");
+    if (!navigator.onLine) {
+      const setOff = () => setSyncStatus("offline");
+      setOff();
+    }
     return () => {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
@@ -460,7 +469,8 @@ function KundrundaPage() {
   }, []);
 
   useEffect(() => {
-    fetchData();
+    const callFetchData = () => void fetchData();
+    callFetchData();
     if (activeStore) {
       supabase
         .from("user_stores")
@@ -481,7 +491,8 @@ function KundrundaPage() {
           if (data) setStoreUsers(data as AppUser[]);
         });
     }
-    setEditScope(isAdmin ? "global" : "local");
+    const applyEditScope = () => setEditScope(isAdmin ? "global" : "local");
+    applyEditScope();
   }, [activeStore]);
 
   useEffect(() => {
@@ -523,11 +534,19 @@ function KundrundaPage() {
     };
   }, [activeStore?.id, activeSession?.id]);
 
+  async function ensureLocalVersionRecord() {
+    if (!activeStore || !user) return;
+    if (localVersion) return;
+    await supabase.rpc("init_store_local_kundrunda", { p_store_id: activeStore.id });
+    await fetchData();
+  }
+
   // Auto-initialize local version for managers; show version dialog when pending flag transitions false→true
   useEffect(() => {
     if (loading) return;
     if (isManager && activeStore && localVersion === null) {
-      ensureLocalVersionRecord();
+      const ensure = () => void ensureLocalVersionRecord();
+      ensure();
     }
     const pending = localVersion?.central_version_pending ?? false;
     if (pending && prevCentralPendingRef.current === false) {
@@ -537,18 +556,27 @@ function KundrundaPage() {
   }, [loading, localVersion, isManager, isAdmin, activeStore]);
 
   // Zones used during a session: prefer store-local, fall back to global
-  const storeLocalZones = activeStore ? zones.filter((z) => z.store_id === activeStore.id) : [];
-  const globalZones = zones.filter((z) => !z.store_id);
+  const storeLocalZones = useMemo(
+    () => (activeStore ? zones.filter((z) => z.store_id === activeStore.id) : []),
+    [zones, activeStore],
+  );
+  const globalZones = useMemo(() => zones.filter((z) => !z.store_id), [zones]);
   // For parallel mode, use the user's last pick; default to local if not yet chosen
-  const parallelUsesCentral =
-    localVersion?.version_type === "parallel" && localVersion?.parallel_choice === "central";
-  const activeZones = parallelUsesCentral
-    ? globalZones.length > 0
-      ? globalZones
-      : storeLocalZones
-    : storeLocalZones.length > 0
-      ? storeLocalZones
-      : globalZones;
+  const parallelUsesCentral = useMemo(
+    () => localVersion?.version_type === "parallel" && localVersion?.parallel_choice === "central",
+    [localVersion],
+  );
+  const activeZones = useMemo(
+    () =>
+      parallelUsesCentral
+        ? globalZones.length > 0
+          ? globalZones
+          : storeLocalZones
+        : storeLocalZones.length > 0
+          ? storeLocalZones
+          : globalZones,
+    [parallelUsesCentral, globalZones, storeLocalZones],
+  );
 
   // Zones filtered by current edit scope
   const editableZones = editScope === "global" ? globalZones : activeStore ? storeLocalZones : [];
@@ -585,8 +613,12 @@ function KundrundaPage() {
     if (choice === "central") {
       // Replace store-local zones with current HK zones server-side
       // Use authenticated client to avoid 401 errors
-      const { data: { session } } = await supabase.auth.getSession();
-      const { error: rpcError } = await supabase.rpc("apply_central_kundrunda_to_store", { p_store_id: activeStore.id });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const { error: rpcError } = await supabase.rpc("apply_central_kundrunda_to_store", {
+        p_store_id: activeStore.id,
+      });
       if (rpcError) throw rpcError;
     } else {
       const updates: Partial<LocalVersionRecord> = {
@@ -598,13 +630,6 @@ function KundrundaPage() {
       await supabase.from("kundrunda_local_versions").update(updates).eq("id", lv.id);
     }
     setShowVersionChoiceDialog(false);
-    await fetchData();
-  };
-
-  const ensureLocalVersionRecord = async () => {
-    if (!activeStore || !user) return;
-    if (localVersion) return;
-    await supabase.rpc("init_store_local_kundrunda", { p_store_id: activeStore.id });
     await fetchData();
   };
 
@@ -790,8 +815,14 @@ function KundrundaPage() {
           .select()
           .maybeSingle();
         if (data) {
-          updatedResponses = { ...updatedResponses, [checkpoint.id]: data as KundrundaResponse };
+          const finalResponses = {
+            ...updatedResponses,
+            [checkpoint.id]: data as KundrundaResponse,
+          };
           setResponses((p) => ({ ...p, [checkpoint.id]: data as KundrundaResponse }));
+          await updateScore(finalResponses);
+          if (navigator.onLine) await bumpVersion();
+          return;
         }
       }
     } else {
@@ -1098,7 +1129,9 @@ function KundrundaPage() {
     );
     try {
       localStorage.removeItem(draftKey);
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     await fetchData();
     setActiveSession(null);
     setResponses({});
@@ -1133,9 +1166,13 @@ function KundrundaPage() {
             localStorage.removeItem(key);
             break;
           }
-        } catch {}
+        } catch {
+          /* ignore */
+        }
       }
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     // Radera först filerna i storage, sedan DB-raderna (annars blir bilderna föräldralösa)
     const { data: sessionImages } = await supabase
       .from("kundrunda_response_images")
@@ -1450,10 +1487,7 @@ function KundrundaPage() {
     }
   };
 
-  const totalCheckpoints = useMemo(
-    () => activeZones.reduce((s, z) => s + z.checkpoints.length, 0),
-    [activeZones],
-  );
+  const totalCheckpoints = activeZones.reduce((s, z) => s + z.checkpoints.length, 0);
   const { answeredCount, defectCount } = useMemo(() => {
     let answered = 0,
       defects = 0;
@@ -1518,9 +1552,7 @@ function KundrundaPage() {
                 <p className="truncate text-sm font-semibold">
                   {sessionReadOnly ? "Granskning — låst" : "Kundrunda"}
                 </p>
-                <p className="text-xs text-coop-gray-900">
-                  {activeSession.store?.name ?? "Butik"}
-                </p>
+                <p className="text-xs text-coop-gray-900">{activeSession.store?.name ?? "Butik"}</p>
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-3">
@@ -2334,7 +2366,7 @@ function KundrundaPage() {
         )}
 
         {/* Defects merge pending banner */}
-        {false && isManager &&
+        {isManager &&
           localVersion?.defects_pending_hk_update &&
           localVersion?.pending_defects_snapshot && (
             <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-coop-orange-100 px-4 py-3 dark:border-amber-800/40 dark:bg-coop-orange-1000/20">
@@ -3212,7 +3244,8 @@ function KundrundaPage() {
                       onClick={() =>
                         setSelectedSessionIds((prev) => {
                           const n = new Set(prev);
-                          isSelected ? n.delete(s.id) : n.add(s.id);
+                          if (isSelected) n.delete(s.id);
+                          else n.add(s.id);
                           return n;
                         })
                       }
