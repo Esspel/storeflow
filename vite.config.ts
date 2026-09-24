@@ -25,25 +25,25 @@ export default defineConfig({
     }),
     react(),
   ],
-  build: {
+build: {
     chunkSizeWarningLimit: 1000,
+    minify: "esbuild",
     rollupOptions: {
       output: {
-manualChunks: (id) => {
-        if (id.includes("pdfjs-dist") || id.includes("pdf-parse")) return "vendor-pdf";
-        if (id.includes("react") || id.includes("react-dom")) return "vendor-react";
-        if (id.includes("jszip") || id.includes("xlsx") || id.includes("lucide"))
-          return "vendor-utils";
-        if (id.includes("recharts")) return "vendor-recharts";
-        if (id.includes("@zxing") || id.includes("@zxing/library") || id.includes("@zxing/browser"))
-          return "vendor-zxing";
-        if (id.includes("supabase")) return "vendor-supabase";
-        if (id.includes("date-fns")) return "vendor-date-fns";
-        if (id.includes("xlsx")) return "vendor-xlsx";
-        if (id.includes("node_modules")) return "vendor-misc";
+        manualChunks: (id) => {
+          if (id.includes("pdfjs-dist") || id.includes("pdf-parse")) return "vendor-pdf";
+          if (id.includes("react") || id.includes("react-dom")) return "vendor-react";
+          if (id.includes("jszip") || id.includes("lucide"))
+            return "vendor-utils";
+          if (id.includes("recharts")) return "vendor-recharts";
+          if (id.includes("@zxing") || id.includes("@zxing/library") || id.includes("@zxing/browser"))
+            return "vendor-zxing";
+          if (id.includes("supabase")) return "vendor-supabase";
+          if (id.includes("date-fns")) return "vendor-date-fns";
+          if (id.includes("xlsx")) return "vendor-xlsx";
+          if (id.includes("node_modules")) return "vendor-misc";
+        },
       },
-      },
-      external: [/^fs$/, /^path$/, /^crypto$/],
     },
   },
   resolve: {
