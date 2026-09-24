@@ -10,6 +10,8 @@ export default defineConfig({
       // Disable prerendering globally - we use auth-dependent routes
       prerender: {
         enabled: false,
+        // Force no routes to be prerendered
+        routes: [],
       },
       // Enable SPA to generate client HTML shell (index.html) for post-build script
       spa: {
@@ -63,6 +65,34 @@ build: {
     port: 8080,
   },
   ssr: {
-    noExternal: [],
+    noExternal: [
+      // Externalize packages that don't work well in SSR
+      "lucide-react",
+      "@zxing/browser",
+      "@zxing/library",
+      "recharts",
+      "sonner",
+      "@radix-ui/react-popover",
+      "@radix-ui/react-dropdown-menu",
+      "@radix-ui/react-dialog",
+      "@radix-ui/react-select",
+      "@radix-ui/react-tabs",
+      "@radix-ui/react-tooltip",
+      "@radix-ui/react-checkbox",
+      "@radix-ui/react-switch",
+      "@radix-ui/react-label",
+      "@radix-ui/react-slot",
+      "@radix-ui/react-separator",
+      "@radix-ui/react-scroll-area",
+      "@radix-ui/react-avatar",
+      "@radix-ui/react-collapsible",
+      "@radix-ui/react-hover-card",
+      "@radix-ui/react-menubar",
+      "@radix-ui/react-navigation-menu",
+      "@radix-ui/react-progress",
+      "@radix-ui/react-radio-group",
+      "@radix-ui/react-slider",
+      "@radix-ui/react-toast",
+    ],
   },
 });

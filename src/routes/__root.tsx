@@ -145,7 +145,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function AppLayout() {
-  const { user, token, loading, hasCheckedAuth, showFirstTimeSetup, dismissFirstTimeSetup } =
+  const { user, token, loading, hasCheckedAuth, showFirstTimeSetup, dismissFirstTimeSetup, isClient } =
     useAuth();
   const navigate = useNavigate();
   const router = useRouter();
@@ -187,7 +187,8 @@ function AppLayout() {
     }
   }, [token, user, hasCheckedAuth, isLoginPage, isPublicRoute, navigate]);
 
-  if (loading && !isPublicRoute) {
+  // During SSR and initial hydration, show loading to avoid hydration mismatch
+  if (!isClient || (loading && !isPublicRoute)) {
     return (
       <div role="status" className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent motion-reduce:animate-none" />

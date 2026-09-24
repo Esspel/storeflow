@@ -68,20 +68,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isFirstLogin, setIsFirstLogin] = useState(false);
   const [showFirstTimeSetup, setShowFirstTimeSetup] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   const tokenRef = useRef<string | null>(null);
-  const mountedRef = useRef(true);
+  const mountedRef = useRef(false);
 
   useEffect(() => {
-    tokenRef.current = token;
-  }, [token]);
-
-  useEffect(() => {
+    setIsClient(true);
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
 
   const effectiveStore = activeStore;
 
@@ -479,6 +481,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         closeLockScreen,
         quickSwitch,
         isOffline,
+        isClient,
       }}
     >
       {children}
