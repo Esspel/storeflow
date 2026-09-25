@@ -21,7 +21,6 @@ export function useVirtualList<T>(items: T[], rowHeight = 56, overscan = 5) {
 
   const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     setScrollTop(e.currentTarget.scrollTop);
-    setContainerHeight(e.currentTarget.clientHeight);
   }, []);
   const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
   const endIndex = Math.min(

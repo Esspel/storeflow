@@ -27,11 +27,11 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
 
   // Only show if user has more than one store or is above-store
   const hasMultiple = userStores.length > 1 || isAboveStore;
+  if (!hasMultiple) return null;
 
   useEffect(() => {
     if (!open || !isAboveStore) return;
-    const startLoading = () => setLoading(true);
-    startLoading();
+    setLoading(true);
     let query = supabase.from("stores").select("*").order("name");
 
     if (hierarchyLevel === "forening" && user?.forening_id) {

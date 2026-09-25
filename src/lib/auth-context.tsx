@@ -277,9 +277,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // result.user is null and !needsRemoval → network error
-      // Keep session alive, retry sooner
-      setIsOffline(true);
+      // Network error — keep session alive, do NOT mark global offline
+      // on first transient failure. Retries occur naturally via tick().
+      // Only set offline after sustained failure (handled elsewhere if needed).
+      // setIsOffline(true); <-- REMOVED to prevent breaking all routes
       timeoutId = setTimeout(() => tick(currentToken, currentUser), NETWORK_RETRY_INTERVAL_MS);
     }
 

@@ -105,12 +105,7 @@ export function fetchViaProxy(
           return reject(new Error("Inget svar från extensionen"));
         }
         if (resp.success) {
-          console.log(
-            "[SAP Proxy] Success, status:",
-            resp.status,
-            "data length:",
-            resp.data?.length,
-          );
+          console.log("[SAP Proxy] Success, status:", resp.status, "data length:", resp.data?.length);
           resolve({
             success: true,
             status:

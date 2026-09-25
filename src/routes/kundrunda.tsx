@@ -545,8 +545,7 @@ function KundrundaPage() {
   useEffect(() => {
     if (loading) return;
     if (isManager && activeStore && localVersion === null) {
-      const ensure = () => void ensureLocalVersionRecord();
-      ensure();
+      ensureLocalVersionRecord();
     }
     const pending = localVersion?.central_version_pending ?? false;
     if (pending && prevCentralPendingRef.current === false) {
@@ -1487,7 +1486,10 @@ function KundrundaPage() {
     }
   };
 
-  const totalCheckpoints = activeZones.reduce((s, z) => s + z.checkpoints.length, 0);
+  const totalCheckpoints = useMemo(
+    () => activeZones.reduce((s, z) => s + z.checkpoints.length, 0),
+    [activeZones],
+  );
   const { answeredCount, defectCount } = useMemo(() => {
     let answered = 0,
       defects = 0;

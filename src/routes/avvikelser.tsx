@@ -410,10 +410,8 @@ function IssuesPage() {
   };
 
   useEffect(() => {
-    const startLoading = () => setLoading(true);
-    startLoading();
-    const loadIncidents = () => void fetchIncidents();
-    loadIncidents();
+    setLoading(true);
+    fetchIncidents();
     const storeQ = isAdmin
       ? supabase.from("stores").select("*").eq("is_active", true)
       : supabase
