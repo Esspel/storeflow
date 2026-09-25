@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+import { storeQueryKeys } from "@/lib/query-config";
 import React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
@@ -226,10 +228,6 @@ function IssuesPage() {
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "manager" || isAdmin;
 
-  const [incidents, setIncidents] = useState<IncidentFull[]>([]);
-  const [stores, setStores] = useState<StoreType[]>([]);
-  const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
-  const [groups, setGroups] = useState<UserGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("active");
   const [filterPriority, setFilterPriority] = useState("all");
@@ -372,23 +370,7 @@ function IssuesPage() {
   };
 
   const fetchIncidents = async () => {
-    let q = supabase
-      .from("incidents")
-      .select(
-        "*, store:stores(*), reporter:app_users!reported_by(id,display_name,username), responsible:app_users!responsible_user_id(id,display_name,username), responsible_group:user_groups!responsible_group_id(id,name,store_id,created_at), images:incident_images(*)",
-      )
-      .order("created_at", { ascending: false });
-    if (activeStore) {
-      q = q.eq("store_id", activeStore.id);
-    } else if (userStores.length > 0) {
-      q = q.in(
-        "store_id",
-        userStores.map((s) => s.id),
-      );
-    }
-    const { data } = await q;
-    if (data) setIncidents(data as IncidentFull[]);
-    setLoading(false);
+    // Kept for manual refresh if needed, but primary loading uses useQuery
   };
 
   const fetchComments = async (incidentId: string) => {
@@ -409,63 +391,97 @@ function IssuesPage() {
     if (data) setDetailImages(data as IncidentImage[]);
   };
 
-  useEffect(() => {
-    setLoading(true);
-    fetchIncidents();
-    const storeQ = isAdmin
-      ? supabase.from("stores").select("*").eq("is_active", true)
-      : supabase
-          .from("stores")
-          .select("*")
-          .in(
-            "id",
-            userStores.map((s) => s.id),
-          );
-    storeQ.then(({ data }) => {
-      if (data) setStores(data);
-    });
+  const incidentsQuery = useQuery({
+    queryKey: storeQueryKeys.incidents(activeStore?.id),
+    queryFn: async () => {
+      let q = supabase
+        .from("incidents")
+        .select(
+          "*, store:stores(*), reporter:app_users!reported_by(id,display_name,username), responsible:app_users!responsible_user_id(id,display_name,username), responsible_group:user_groups!responsible_group_id(id,name,store_id,created_at), images:incident_images(*)",
+        )
+        .order("created_at", { ascending: false });
+      if (activeStore) q = q.eq("store_id", activeStore.id);
+      else if (userStores.length > 0)
+        q = q.in(
+          "store_id",
+          userStores.map((s) => s.id),
+        );
+      const { data } = await q;
+      return (data ?? []) as IncidentFull[];
+    },
+    enabled: !!user && !!(activeStore || userStores.length > 0),
+  });
 
-    // Load users for assignment
-    if (activeStore) {
-      supabase
-        .from("user_stores")
-        .select("user:app_users(*)")
-        .eq("store_id", activeStore.id)
-        .then(({ data }) => {
-          if (data)
-            setStoreUsers(
-              (data as unknown as { user: AppUser }[]).map((d) => d.user).filter(Boolean),
+  const storesQuery = useQuery({
+    queryKey: storeQueryKeys.stores(),
+    queryFn: async () => {
+      const q = isAdmin
+        ? supabase.from("stores").select("*").eq("is_active", true)
+        : supabase
+            .from("stores")
+            .select("*")
+            .in(
+              "id",
+              userStores.map((s) => s.id),
             );
-        });
-      supabase
-        .from("user_groups")
-        .select("*")
-        .eq("store_id", activeStore.id)
-        .order("name")
-        .then(({ data }) => {
-          if (data) setGroups(data as UserGroup[]);
-        });
-    } else {
-      supabase
-        .from("app_users")
-        .select("*")
-        .eq("is_active", true)
-        .then(({ data }) => {
-          if (data) setStoreUsers(data as AppUser[]);
-        });
-      supabase
-        .from("user_groups")
-        .select("*")
-        .order("name")
-        .then(({ data }) => {
-          if (data) setGroups(data as UserGroup[]);
-        });
-    }
+      const { data } = await q;
+      return (data ?? []) as StoreType[];
+    },
+    enabled: !!user,
+  });
 
+  const storeUsersQuery = useQuery({
+    queryKey: ["users", activeStore?.id ?? "all"],
+    queryFn: async () => {
+      if (activeStore) {
+        const { data } = await supabase
+          .from("user_stores")
+          .select("user:app_users(*)")
+          .eq("store_id", activeStore.id);
+        return (data ?? [])
+          .map((d: unknown) => (d as { user: AppUser }).user)
+          .filter(Boolean) as AppUser[];
+      } else {
+        const { data } = await supabase.from("app_users").select("*").eq("is_active", true);
+        return (data ?? []) as AppUser[];
+      }
+    },
+    enabled: !!user,
+  });
+
+  const groupsQuery = useQuery({
+    queryKey: storeQueryKeys.groups(activeStore?.id),
+    queryFn: async () => {
+      if (activeStore) {
+        const { data } = await supabase
+          .from("user_groups")
+          .select("*")
+          .eq("store_id", activeStore.id)
+          .order("name");
+        return (data ?? []) as UserGroup[];
+      } else {
+        const { data } = await supabase.from("user_groups").select("*").order("name");
+        return (data ?? []) as UserGroup[];
+      }
+    },
+    enabled: !!user,
+  });
+
+  const incidents = incidentsQuery.data ?? [];
+  const stores = storesQuery.data ?? [];
+  const storeUsers = storeUsersQuery.data ?? [];
+  const groups = groupsQuery.data ?? [];
+
+  useEffect(() => {
+    setLoading(incidentsQuery.isLoading || storesQuery.isLoading || !user);
+    // Queries now handled by useQuery above; this effect only manages loading state
+  }, [incidentsQuery.isLoading, storesQuery.isLoading, user]);
+
+  useEffect(() => {
+    if (!user) return;
     const setStoreIdInNewIncident = () =>
       setNewIncident((p) => ({ ...p, store_id: activeStore?.id ?? "" }));
     setStoreIdInNewIncident();
-
     const loadCommonDefects = () => void fetchCommonDefects();
     loadCommonDefects();
 

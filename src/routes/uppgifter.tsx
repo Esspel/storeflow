@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { storeQueryKeys } from "@/lib/query-config";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowDownUp,
@@ -527,8 +529,30 @@ function TasksPage() {
   const isManager = user?.role === "manager" || user?.role === "admin";
   const isEmployee = user?.role === "employee";
 
-  const [tasks, setTasks] = useState<TaskFull[]>([]);
   const [storeUsers, setStoreUsers] = useState<AppUser[]>([]);
+  const [tasksState, setTasksState] = useState<TaskFull[]>([]);
+  const tasksQuery = useQuery({
+    queryKey: storeQueryKeys.tasks(activeStore?.id),
+    queryFn: async () => {
+      let q = supabase
+        .from("tasks")
+        .select(
+          "*, store:stores(*), steps:task_steps(*), questions:task_questions(*), assignees:task_assignees(*, user:app_users(id,display_name,username), group:user_groups(id,name)), images:task_images(*)",
+        )
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      if (activeStore) q = q.eq("store_id", activeStore.id);
+      else if (userStores.length > 0)
+        q = q.in(
+          "store_id",
+          userStores.map((s) => s.id),
+        );
+      const { data } = await q;
+      return (data ?? []) as TaskFull[];
+    },
+    enabled: !!user,
+  });
+  const tasks = tasksQuery.data ?? tasksState;
   const [groups, setGroups] = useState<UserGroup[]>([]);
   const [stores, setStores] = useState<StoreType[]>([]);
   const [templates, setTemplates] = useState<
@@ -586,7 +610,7 @@ function TasksPage() {
     const isDone = task.status === "done";
     const nowIso = getSimulatedDate().toISOString();
     const previousState = task.status;
-    setTasks((prev) =>
+    setTasksState((prev) =>
       prev.map((t) =>
         t.id === task.id
           ? { ...t, status: isDone ? "todo" : "done", completed_at: isDone ? null : nowIso }
@@ -600,7 +624,7 @@ function TasksPage() {
       } catch (error) {
         // Rulla tillbaka UI-ändringen om DB-uppdatering misslyckas
         console.error("Failed to complete task:", error);
-        setTasks((prev) =>
+        setTasksState((prev) =>
           prev.map((t) =>
             t.id === task.id
               ? {
@@ -807,7 +831,9 @@ function TasksPage() {
   const confirmEventTrigger = async (task: TaskFull) => {
     const now = getSimulatedDate().toISOString();
     await supabase.from("tasks").update({ event_triggered_at: now }).eq("id", task.id);
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, event_triggered_at: now } : t)));
+    setTasksState((prev) =>
+      prev.map((t) => (t.id === task.id ? { ...t, event_triggered_at: now } : t)),
+    );
     if (detailTask?.id === task.id)
       setDetailTask((prev) => (prev ? { ...prev, event_triggered_at: now } : prev));
   };
@@ -866,7 +892,7 @@ function TasksPage() {
       return;
     }
 
-    setTasks((prev) =>
+    setTasksState((prev) =>
       prev.map((t) =>
         taskIds.includes(t.id)
           ? ({
@@ -902,28 +928,8 @@ function TasksPage() {
   };
 
   const fetchTasks = useCallback(async () => {
-    let q = supabase
-      .from("tasks")
-      .select(
-        "*, store:stores(*), steps:task_steps(*), questions:task_questions(*), assignees:task_assignees(*, user:app_users(id,display_name,username), group:user_groups(id,name)), images:task_images(*)",
-      )
-      .order("created_at", { ascending: false })
-      .limit(1000);
-
-    if (activeStore) {
-      q = q.eq("store_id", activeStore.id);
-    } else if (userStores.length > 0) {
-      q = q.in(
-        "store_id",
-        userStores.map((s) => s.id),
-      );
-    }
-
-    const { data } = await q;
-    if (data) setTasks(data as TaskFull[]);
-
-    setLoading(false);
-  }, [activeStore, userStores]);
+    await tasksQuery.refetch();
+  }, [tasksQuery]);
 
   const fetchUserGroups = useCallback(async () => {
     if (!user) return;
@@ -935,13 +941,22 @@ function TasksPage() {
   }, [user]);
 
   useEffect(() => {
-    setTimeout(() => {
-      if (tasks.length === 0) setLoading(true);
-      fetchTasks();
-      fetchUserGroups();
-      fetchTodayDeliveries();
+    if (!user) {
+      setLoading(true);
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (tasksQuery.isLoading && (tasksQuery.data ?? []).length === 0) {
+        setLoading(true);
+      } else {
+        setLoading(tasksQuery.isLoading);
+      }
     }, 0);
+    return () => clearTimeout(timer);
+  }, [tasksQuery.isLoading, tasksQuery.data, user]);
 
+  useEffect(() => {
+    if (!user) return;
     const storeQ =
       user?.role === "admin"
         ? supabase.from("stores").select("*").eq("is_active", true)
@@ -1458,7 +1473,7 @@ function TasksPage() {
   const markInProgress = async (task: TaskFull) => {
     if (task.status !== "todo" && task.status !== "late") return;
     await supabase.from("tasks").update({ status: "progress" }).eq("id", task.id);
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: "progress" } : t)));
+    setTasksState((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: "progress" } : t)));
     if (detailTask?.id === task.id) setDetailTask((p) => (p ? { ...p, status: "progress" } : null));
   };
 
@@ -1794,7 +1809,7 @@ function TasksPage() {
     }
 
     logAudit(user?.id ?? null, "task.delete", "tasks", t.id, { title: t.title, scope });
-    setTasks((prev) => prev.filter((taskItem) => !deletedIds.includes(taskItem.id)));
+    setTasksState((prev) => prev.filter((taskItem) => !deletedIds.includes(taskItem.id)));
     setDeleteTarget(null);
     setDeleteScope(null);
     setDetailTask(null);
@@ -3660,7 +3675,7 @@ function TasksPage() {
               className="ml-1 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-coop-gray-900 hover:bg-muted/70 active:scale-95 transition-transform"
               onClick={() => {
                 dismissUndoToast();
-                setTasks((prev) =>
+                setTasksState((prev) =>
                   prev.map((t) => (t.id === undoToast.task.id ? undoToast.task : t)),
                 );
               }}

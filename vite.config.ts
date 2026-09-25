@@ -11,7 +11,7 @@ export default defineConfig({
       prerender: {
         enabled: false,
         // Force no routes to be prerendered
-        routes: [],
+        /* routes: [], */
       },
       // Enable SPA to generate client HTML shell (index.html) for post-build script
       spa: {
@@ -27,7 +27,7 @@ export default defineConfig({
     }),
     react(),
   ],
-build: {
+  build: {
     chunkSizeWarningLimit: 1000,
     minify: "esbuild",
     rollupOptions: {
@@ -36,7 +36,11 @@ build: {
           if (id.includes("pdfjs-dist") || id.includes("pdf-parse")) return "vendor-pdf";
           if (id.includes("react") || id.includes("react-dom")) return "vendor-react";
           if (id.includes("recharts")) return "vendor-recharts";
-          if (id.includes("@zxing") || id.includes("@zxing/library") || id.includes("@zxing/browser"))
+          if (
+            id.includes("@zxing") ||
+            id.includes("@zxing/library") ||
+            id.includes("@zxing/browser")
+          )
             return "vendor-zxing";
           if (id.includes("supabase")) return "vendor-supabase";
           if (id.includes("date-fns")) return "vendor-date-fns";
