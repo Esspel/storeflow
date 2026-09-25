@@ -936,10 +936,10 @@ function TasksPage() {
 
   useEffect(() => {
     setTimeout(() => {
+      if (tasks.length === 0) setLoading(true);
       fetchTasks();
       fetchUserGroups();
       fetchTodayDeliveries();
-      setLoading(true);
     }, 0);
 
     const storeQ =
