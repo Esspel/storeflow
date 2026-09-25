@@ -325,7 +325,7 @@ function AccountsPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading && !hasCheckedAuth) return;
     if (!currentUser) return;
     if (!isManager) {
       navigate({ to: "/" });
@@ -333,7 +333,7 @@ function AccountsPage() {
     }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.id, authLoading]);
+  }, [currentUser?.id, authLoading, hasCheckedAuth]);
 
   const manageableStoreIds = isAdmin ? null : currentUserStores.map((s) => s.id);
 

@@ -63,8 +63,8 @@ function ReportsPage() {
   const [dateTo, setDateTo] = useState("");
 
   useEffect(() => {
-    if (user && user.role === "employee") navigate({ to: "/" });
-  }, [user]);
+    if (user && user.role === "employee" && hasCheckedAuth) navigate({ to: "/" });
+  }, [user, hasCheckedAuth]);
 
   useEffect(() => {
     const load = async () => {
