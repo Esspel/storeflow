@@ -46,7 +46,6 @@ import {
 // Re-export from shelfLife.ts for compatibility with existing imports
 import {
   calculateShelfLifeStatus,
-  getShelfLifeStatus,
   filterShelfLifeRecords,
   shouldIncludeInReplacement,
 } from "@/lib/shelfLife";
@@ -847,7 +846,7 @@ function ErstatningsCheckPage() {
     return shelfLifeRecords.filter((r) => {
       if (!r.arrival_date || !r.delivery_number) return false;
       // Exclude records that can't be properly assessed (missing dates or shelf life)
-      const status = getShelfLifeStatus(r);
+      const status = getReplacementCheckStatus(r);
       return status === "OK" || status === "Kräver ersättning";
     });
   }, [shelfLifeRecords]);
@@ -2601,7 +2600,7 @@ function ErstatningsCheckPage() {
     }
   };
 
-  const getShelfLifeStatus = (record: ShelfLifeRecord) => {
+  const getReplacementCheckStatus = (record: ShelfLifeRecord) => {
     // Om posten redan är godkänd (t.ex. delivery_status = "Löst" / "Godkänd"), returnera OK
     if (record.delivery_status === "Löst" || record.delivery_status === "Godkänd") return "OK";
     // Endast uttryckligt true = SAP svarade men heldbarhetsdata saknas; null = ej hämtat ännu
@@ -2632,7 +2631,7 @@ function ErstatningsCheckPage() {
 
     const withStatus = shelfLifeRecords.map((record) => ({
       record,
-      status: getShelfLifeStatus(record),
+      status: getReplacementCheckStatus(record),
     }));
 
     const filtered = withStatus
@@ -2666,7 +2665,7 @@ function ErstatningsCheckPage() {
       .filter(({ record, status }) => {
         const recordCategory = String(record.category ?? "").trim();
         const lowerCategory = recordCategory.toLowerCase();
-        const recordStatus = getShelfLifeStatus(record);
+        const recordStatus = getReplacementCheckStatus(record);
         const isHiddenCategory = autoHiddenCategories.has(lowerCategory);
 
         // Dolda kategorier visas bara om användaren aktivt filtrerar på "SAKNAS I SAP"
@@ -2856,7 +2855,7 @@ function ErstatningsCheckPage() {
   const uniqueStatuses = useMemo(() => {
     const set = new Set<string>();
     for (const record of shelfLifeRecords) {
-      const s = getShelfLifeStatus(record);
+      const s = getReplacementCheckStatus(record);
       if (s) set.add(s);
     }
     return [...set].sort((a, b) => a.localeCompare(b, "sv"));
@@ -3812,10 +3811,10 @@ function ErstatningsCheckPage() {
               <CardContent>
                 {(() => {
                   const okCount = dashboardRecords.filter(
-                    (r) => getShelfLifeStatus(r) === "OK",
+                    (r) => getReplacementCheckStatus(r) === "OK",
                   ).length;
                   const reclaimCount = dashboardRecords.filter(
-                    (r) => getShelfLifeStatus(r) === "Kräver ersättning",
+                    (r) => getReplacementCheckStatus(r) === "Kräver ersättning",
                   ).length;
                   const donutData = [
                     { name: "OK", value: okCount, color: "#107c41" },
