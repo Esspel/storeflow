@@ -52,7 +52,7 @@ type KundrunSummary = {
 };
 
 function ReportsPage() {
-  const { user, activeStore } = useAuth();
+  const { user, activeStore, hasCheckedAuth } = useAuth();
   const navigate = useNavigate();
 
   const [tasks, setTasks] = useState<Task[]>([]);

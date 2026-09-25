@@ -39,6 +39,7 @@ type AuthContextType = {
   closeLockScreen: () => void;
   quickSwitch: (newUser: AppUser, newToken: string) => Promise<void>;
   isOffline: boolean;
+  isClient: boolean;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);

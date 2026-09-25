@@ -229,6 +229,7 @@ function AccountsPage() {
     userStores: currentUserStores,
     loading: authLoading,
     activeStore,
+    hasCheckedAuth,
   } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();

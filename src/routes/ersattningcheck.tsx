@@ -113,24 +113,7 @@ import {
   YAxis,
 } from "recharts";
 
-type ShelfLifeRecord = {
-  id: string;
-  sap_article_id: string;
-  shelf_lifetime_days: number;
-  expiry_date: string;
-  arrival_date: string;
-  compensation_price_ore: number;
-  created_at: string;
-  updated_at: string;
-  product_name: string;
-  brand: string;
-  product_url: string | null;
-  delivery_status: string;
-  category: string;
-  delivery_number?: string | null;
-  sap_data_missing?: boolean | null;
-  next_sap_check?: string | null;
-};
+type ShelfLifeRecord = import("@/lib/shelfLife").ShelfLifeRecord;
 
 type DeliveryStatistic = {
   sap_article_id: string;
@@ -1332,22 +1315,21 @@ function ErstatningsCheckPage() {
           return {
             id: delivery.id ?? product.id ?? sapArticleId,
             sap_article_id: sapArticleId,
-            shelf_lifetime_days: master.shelf_lifetime_days > 0 ? master.shelf_lifetime_days : 0,
-            expiry_date: delivery.best_before_date ?? "",
-            arrival_date: delivery.arrival_date ?? "",
-            compensation_price_ore: master.default_compensation_price_ore ?? 2,
-            product_name: product.name ?? delivery.product_name ?? "Okänd produkt",
-            brand: product.brand ?? delivery.brand ?? "",
+            shelf_lifetime_days: Number(master.shelf_lifetime_days > 0 ? master.shelf_lifetime_days : 0),
+            expiry_date: (delivery.best_before_date ?? "") as string,
+            arrival_date: (delivery.arrival_date ?? "") as string,
+            compensation_price_ore: Number(master.default_compensation_price_ore ?? 2),
+            product_name: (product.name ?? delivery.product_name ?? "Okänd produkt") as string,
+            brand: (product.brand ?? delivery.brand ?? "") as string,
             product_url: getSapProductUrl(activeStore!.sap_site_id, sapArticleId),
-            delivery_status: delivery.status ?? "",
-            created_at: product.created_at ?? new Date().toISOString(),
-            updated_at: product.updated_at ?? new Date().toISOString(),
-            category: product.category ?? delivery.category ?? "",
-            delivery_number: delivery.delivery_number ?? null,
-            // Use the proper state: true = SAP said no data, null = not fetched yet
-            sap_data_missing: sapDataState,
-            next_sap_check: master.next_sap_check ?? null,
-          };
+            delivery_status: (delivery.status ?? "") as string,
+            created_at: (product.created_at ?? new Date().toISOString()) as string,
+            updated_at: (product.updated_at ?? new Date().toISOString()) as string,
+            category: (product.category ?? delivery.category ?? "") as string,
+            delivery_number: (delivery.delivery_number ?? null) as string | null,
+            sap_data_missing: Boolean(sapDataState),
+            next_sap_check: (master.next_sap_check ?? null) as string | null,
+          } as ShelfLifeRecord;
         }),
       );
       setDeliveryStatistics(
