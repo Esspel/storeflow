@@ -48,6 +48,7 @@ import {
   calculateShelfLifeStatus,
   filterShelfLifeRecords,
   shouldIncludeInReplacement,
+  getShelfLifeStatus,
 } from "@/lib/shelfLife";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -599,7 +600,7 @@ export const Route = createFileRoute("/ersattningcheck")({
 });
 
 function ErstatningsCheckPage() {
-  const { user, activeStore, loading: authLoading } = useAuth();
+  const { user, activeStore, loading: authLoading, hasCheckedAuth } = useAuth();
   const [step, setStep] = useState<
     | "dashboard"
     | "reclamations"
@@ -846,7 +847,7 @@ function ErstatningsCheckPage() {
     return shelfLifeRecords.filter((r) => {
       if (!r.arrival_date || !r.delivery_number) return false;
       // Exclude records that can't be properly assessed (missing dates or shelf life)
-      const status = getReplacementCheckStatus(r);
+      const status = getShelfLifeStatus(r);
       return status === "OK" || status === "Kräver ersättning";
     });
   }, [shelfLifeRecords]);
@@ -2600,27 +2601,6 @@ function ErstatningsCheckPage() {
     }
   };
 
-  const getReplacementCheckStatus = (record: ShelfLifeRecord) => {
-    // Om posten redan är godkänd (t.ex. delivery_status = "Löst" / "Godkänd"), returnera OK
-    if (record.delivery_status === "Löst" || record.delivery_status === "Godkänd") return "OK";
-    // Endast uttryckligt true = SAP svarade men heldbarhetsdata saknas; null = ej hämtat ännu
-    if (record.sap_data_missing === true) return "SAKNAS I SAP";
-    if (!record.arrival_date || !record.expiry_date) return "Datum saknas";
-    if (
-      record.shelf_lifetime_days == null ||
-      Number.isNaN(record.shelf_lifetime_days) ||
-      record.shelf_lifetime_days <= 0
-    ) {
-      return "Hållbarhet saknas";
-    }
-    const assessment = calculateShelfLifeStatus(
-      record.arrival_date,
-      record.expiry_date,
-      record.shelf_lifetime_days,
-    );
-    return assessment?.status === "Reklamation" ? "Kräver ersättning" : "OK";
-  };
-
   const filteredShelfLifeRecords = useMemo(() => {
     const search = shelfLifeSearch.trim().toLocaleLowerCase("sv");
 
@@ -2631,7 +2611,7 @@ function ErstatningsCheckPage() {
 
     const withStatus = shelfLifeRecords.map((record) => ({
       record,
-      status: getReplacementCheckStatus(record),
+      status: getShelfLifeStatus(record),
     }));
 
     const filtered = withStatus
@@ -2665,7 +2645,7 @@ function ErstatningsCheckPage() {
       .filter(({ record, status }) => {
         const recordCategory = String(record.category ?? "").trim();
         const lowerCategory = recordCategory.toLowerCase();
-        const recordStatus = getReplacementCheckStatus(record);
+        const recordStatus = getShelfLifeStatus(record);
         const isHiddenCategory = autoHiddenCategories.has(lowerCategory);
 
         // Dolda kategorier visas bara om användaren aktivt filtrerar på "SAKNAS I SAP"
@@ -2855,7 +2835,7 @@ function ErstatningsCheckPage() {
   const uniqueStatuses = useMemo(() => {
     const set = new Set<string>();
     for (const record of shelfLifeRecords) {
-      const s = getReplacementCheckStatus(record);
+      const s = getShelfLifeStatus(record);
       if (s) set.add(s);
     }
     return [...set].sort((a, b) => a.localeCompare(b, "sv"));
@@ -3468,7 +3448,7 @@ function ErstatningsCheckPage() {
     });
   }, [catalogHasSearch, catalogProducts, catalogSearch, selectedCatalogCategory]);
 
-  if (authLoading) {
+  if (authLoading && !hasCheckedAuth) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent"></div>
@@ -3811,10 +3791,10 @@ function ErstatningsCheckPage() {
               <CardContent>
                 {(() => {
                   const okCount = dashboardRecords.filter(
-                    (r) => getReplacementCheckStatus(r) === "OK",
+                    (r) => getShelfLifeStatus(r) === "OK",
                   ).length;
                   const reclaimCount = dashboardRecords.filter(
-                    (r) => getReplacementCheckStatus(r) === "Kräver ersättning",
+                    (r) => getShelfLifeStatus(r) === "Kräver ersättning",
                   ).length;
                   const donutData = [
                     { name: "OK", value: okCount, color: "#107c41" },

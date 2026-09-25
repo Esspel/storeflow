@@ -158,16 +158,33 @@ function AppLayout() {
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
+      // Prevent duplicate registrations that could cause reload loops
+      // When auth state changes, service worker registration can cause
+      // re-renders that trigger auth validation again. We guard with a
+      // more conservative approach: only register once per session.
+      if (!isClient) return;
+
       navigator.serviceWorker
-        .register("/sw.js", { scope: "/" })
+        .getRegistration()
         .then((reg) => {
-          console.log("[SW] Registrerad:", reg.scope);
+          if (reg) {
+            console.log("[SW] Registrerad sedan tidigare", reg.scope);
+            return;
+          }
+          return navigator.serviceWorker
+            .register("/sw.js", { scope: "/" })
+            .then((reg) => {
+              console.log("[SW] Registrerad:", reg.scope);
+            })
+            .catch((err) => {
+              console.error("[SW] Registrering misslyckades:", err);
+            });
         })
         .catch((err) => {
-          console.error("[SW] Registrering misslyckades:", err);
+          console.error("[SW] Kontroll misslyckades:", err);
         });
     }
-  }, []);
+  }, [isClient]);
 
   useEffect(() => {
     // Only redirect AFTER auth has been fully checked.
