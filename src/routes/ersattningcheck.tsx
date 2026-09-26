@@ -796,7 +796,7 @@ function ErstatningsCheckPage() {
       if (record.sap_data_missing === true) return false;
       if (!record.arrival_date || !record.expiry_date) return false;
       const status = reclamationStatuses.get(record.sap_article_id);
-      if (status && status !== "Granskas av butikssupporten") {
+      if (status) {
         return false;
       }
       const assessment = calculateShelfLifeStatus(
@@ -1315,7 +1315,9 @@ function ErstatningsCheckPage() {
           return {
             id: delivery.id ?? product.id ?? sapArticleId,
             sap_article_id: sapArticleId,
-            shelf_lifetime_days: Number(master.shelf_lifetime_days > 0 ? master.shelf_lifetime_days : 0),
+            shelf_lifetime_days: Number(
+              master.shelf_lifetime_days > 0 ? master.shelf_lifetime_days : 0,
+            ),
             expiry_date: (delivery.best_before_date ?? "") as string,
             arrival_date: (delivery.arrival_date ?? "") as string,
             compensation_price_ore: Number(master.default_compensation_price_ore ?? 2),
@@ -5428,20 +5430,33 @@ function ErstatningsCheckPage() {
                         dMap.set(d.sap_article_id, d);
                       }
                     }
+                    const shelfMap = new Map<string, ShelfLifeRecord>();
+                    for (const s of shelfLifeRecords) {
+                      if (!shelfMap.has(s.sap_article_id)) {
+                        shelfMap.set(s.sap_article_id, s);
+                      }
+                    }
                     return reclamations
                       .filter((r) =>
                         statusFilter !== "ALL" && statusFilter ? r.status === statusFilter : true,
                       )
                       .map((r) => {
                         const del = dMap.get(r.sap_article_id);
-                        const price = del?.total_price ? (parseSek(del.total_price) ?? 85) : 85;
+                        const shelf = shelfMap.get(r.sap_article_id);
+                        const price = del?.total_price
+                          ? (parseSek(del.total_price) ?? 85)
+                          : shelf?.compensation_price_ore
+                            ? shelf.compensation_price_ore / 100
+                            : 85;
                         return (
                           <TableRow key={r.id}>
                             <TableCell className="font-mono text-sm">{r.sap_article_id}</TableCell>
                             <TableCell className="text-sm">
-                              {del?.product_name || r.sap_article_id}
+                              {del?.product_name || shelf?.product_name || r.sap_article_id}
                             </TableCell>
-                            <TableCell className="text-sm">{del?.brand || "—"}</TableCell>
+                            <TableCell className="text-sm">
+                              {del?.brand || shelf?.brand || "—"}
+                            </TableCell>
                             <TableCell className="text-right text-sm">{formatSek(price)}</TableCell>
                             <TableCell>
                               <Badge
