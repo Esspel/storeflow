@@ -144,6 +144,16 @@ type DeliveryCategoryMapping = {
 type ShelfLifeSortKey =
   "product_name" | "brand" | "shelf_lifetime_days" | "expiry_date" | "arrival_date" | "status";
 
+type ReclamationSortKey =
+  | "sap_article_id"
+  | "product_name"
+  | "brand"
+  | "amount"
+  | "best_before_date"
+  | "arrival_date"
+  | "status"
+  | "updated_at";
+
 type ReplacementStatistics = {
   returnedValue: number;
   pendingValue: number;
@@ -612,6 +622,9 @@ function ErstatningsCheckPage() {
   const [reclamationSearch, setReclamationSearch] = useState("");
   const [reclamationDeliveryFilter, setReclamationDeliveryFilter] = useState("ALL");
   const [reclamationCategoryFilter, setReclamationCategoryFilter] = useState("ALL");
+  const [reclamationSort, setReclamationSort] = useState<
+    Array<{ key: ReclamationSortKey; direction: "asc" | "desc" }>
+  >([{ key: "updated_at", direction: "desc" }]);
   const [historyProduct, setHistoryProduct] = useState<HanteringsItem | null>(null);
 
   // Add Reclamation dialog state
@@ -2419,6 +2432,13 @@ function ErstatningsCheckPage() {
     if (!activeStore?.id) return;
     setIsLoading(true);
     try {
+      // Beräkna ersättningsbelopp: använd compensation_price_ore (i öre) som primär källa,
+      // fallback till total_price om den finns (leveransens faktiska värde).
+      const compensationPrice = record.compensation_price_ore
+        ? record.compensation_price_ore / 100
+        : null;
+      const totalPrice = parseSek((record as any).total_price);
+      const amount = compensationPrice !== null ? compensationPrice : totalPrice;
       const { error } = await supabase.from("reclamations").insert({
         store_id: activeStore!.id,
         sap_article_id: record.sap_article_id,
@@ -2427,11 +2447,29 @@ function ErstatningsCheckPage() {
         arrival_date: record.arrival_date || null,
         best_before_date: record.expiry_date || null,
         delivery_number: (record.delivery_number as string) || null,
+        amount: amount,
       });
       if (error) throw error;
       setReclamationStatuses((prev) =>
         new Map(prev).set(record.sap_article_id, "Granskas av butikssupporten"),
       );
+      // Uppdatera reclamations-arrayen så att eligibleShelfLifeRecords återberäknas
+      // och artikeln inte längre visas under "Generera ersättningsansökan".
+      setReclamations((prev) => [
+        ...prev,
+        {
+          id: `auto-${record.sap_article_id}-${Date.now()}`,
+          sap_article_id: record.sap_article_id,
+          status: "Granskas av butikssupporten",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          notes: `Automatiskt genererad: ${new Date().toISOString()}`,
+          arrival_date: record.arrival_date || null,
+          best_before_date: record.expiry_date || null,
+          delivery_number: (record.delivery_number as string) || null,
+          amount: amount,
+        },
+      ]);
       toast.success("Artikel skickades till Butikssupport.");
     } catch (error) {
       console.error("Error sending to Butikssupport:", error);
@@ -2877,6 +2915,55 @@ function ErstatningsCheckPage() {
 
   const removeShelfLifeSort = (key: ShelfLifeSortKey) => {
     setShelfLifeSort((current) => current.filter((s) => s.key !== key));
+  };
+
+  const toggleReclamationSort = (key: ReclamationSortKey, shiftKey = false) => {
+    setReclamationSort((current) => {
+      const existingIndex = current.findIndex((s) => s.key === key);
+
+      if (existingIndex >= 0) {
+        // Column exists - toggle direction
+        const newDirection = current[existingIndex].direction === "asc" ? "desc" : "asc";
+        const updated = [...current];
+        updated[existingIndex] = { ...updated[existingIndex], direction: newDirection };
+        return updated;
+      }
+
+      // Column doesn't exist - add with asc direction
+      if (!shiftKey) {
+        // No shift key: only this column should be sorted
+        return [{ key, direction: "asc" }];
+      }
+      // Shift key: add to existing sort array
+      return [...current, { key, direction: "asc" }];
+    });
+  };
+
+  const moveReclamationSortToFront = (key: ReclamationSortKey) => {
+    setReclamationSort((current) => {
+      const entry = current.find((s) => s.key === key);
+      if (!entry) return current;
+      const others = current.filter((s) => s.key !== key);
+      return [{ ...entry }, ...others];
+    });
+  };
+
+  const removeReclamationSort = (key: ReclamationSortKey) => {
+    setReclamationSort((current) => current.filter((s) => s.key !== key));
+  };
+
+  const renderReclamationSortIcon = (key: ReclamationSortKey) => {
+    const active = reclamationSort.find((s) => s.key === key);
+    if (!active) return null;
+    const priority = reclamationSort.indexOf(active) + 1;
+    return (
+      <span className="ml-1 inline-flex items-center text-[10px]">
+        {active.direction === "asc" ? "▲" : "▼"}
+        {reclamationSort.length > 1 && (
+          <span className="ml-0.5 rounded bg-coop-gray-200 px-1 text-[9px]">{priority}</span>
+        )}
+      </span>
+    );
   };
 
   const toggleHiddenCategory = async (category: string) => {
@@ -3448,6 +3535,123 @@ function ErstatningsCheckPage() {
       return true;
     });
   }, [hanteringsItems, reclamationSearch, reclamationDeliveryFilter, reclamationCategoryFilter]);
+
+  // Sorted list for Reklamationsstatus-tabellen (standard: senast uppdaterad högst upp)
+  const sortedReclamations = useMemo(() => {
+    const list = [...reclamations];
+    const dMap = new Map<string, any>();
+    for (const d of deliveryStatistics) {
+      if (!dMap.has(d.sap_article_id)) dMap.set(d.sap_article_id, d);
+    }
+    const shelfMap = new Map<string, ShelfLifeRecord>();
+    for (const s of shelfLifeRecords) {
+      if (!shelfMap.has(s.sap_article_id)) shelfMap.set(s.sap_article_id, s);
+    }
+    list.sort((a, b) => {
+      for (const sort of reclamationSort) {
+        let left: any;
+        let right: any;
+        switch (sort.key) {
+          case "sap_article_id":
+            left = a.sap_article_id;
+            right = b.sap_article_id;
+            break;
+          case "product_name":
+            left =
+              dMap.get(a.sap_article_id)?.product_name ||
+              shelfMap.get(a.sap_article_id)?.product_name ||
+              a.sap_article_id;
+            right =
+              dMap.get(b.sap_article_id)?.product_name ||
+              shelfMap.get(b.sap_article_id)?.product_name ||
+              b.sap_article_id;
+            break;
+          case "brand":
+            left = dMap.get(a.sap_article_id)?.brand || shelfMap.get(a.sap_article_id)?.brand || "";
+            right =
+              dMap.get(b.sap_article_id)?.brand || shelfMap.get(b.sap_article_id)?.brand || "";
+            break;
+          case "amount": {
+            const leftPrice = a.amount
+              ? a.amount
+              : parseSek(dMap.get(a.sap_article_id)?.total_price);
+            const rightPrice = b.amount
+              ? b.amount
+              : parseSek(dMap.get(b.sap_article_id)?.total_price);
+            const lv = leftPrice !== null && leftPrice !== undefined ? leftPrice : 0;
+            const rv = rightPrice !== null && rightPrice !== undefined ? rightPrice : 0;
+            left = lv;
+            right = rv;
+            break;
+          }
+          case "best_before_date":
+            left =
+              a.best_before_date ||
+              dMap.get(a.sap_article_id)?.expiry_date ||
+              shelfMap.get(a.sap_article_id)?.expiry_date ||
+              "";
+            right =
+              b.best_before_date ||
+              dMap.get(b.sap_article_id)?.expiry_date ||
+              shelfMap.get(b.sap_article_id)?.expiry_date ||
+              "";
+            break;
+          case "arrival_date":
+            left =
+              a.arrival_date ||
+              dMap.get(a.sap_article_id)?.arrival_date ||
+              shelfMap.get(a.sap_article_id)?.arrival_date ||
+              "";
+            right =
+              b.arrival_date ||
+              dMap.get(b.sap_article_id)?.arrival_date ||
+              shelfMap.get(b.sap_article_id)?.arrival_date ||
+              "";
+            break;
+          case "status":
+            left = a.status;
+            right = b.status;
+            break;
+          case "updated_at":
+            left = a.updated_at;
+            right = b.updated_at;
+            break;
+        }
+        let comparison: number;
+        if (sort.key === "amount") {
+          comparison = (left as number) - (right as number);
+        } else if (
+          sort.key === "best_before_date" ||
+          sort.key === "arrival_date" ||
+          sort.key === "updated_at"
+        ) {
+          const leftDate = left ? new Date(String(left)).getTime() : 0;
+          const rightDate = right ? new Date(String(right)).getTime() : 0;
+          const hasLeft = !!left && !isNaN(leftDate) && leftDate > 0;
+          const hasRight = !!right && !isNaN(rightDate) && rightDate > 0;
+          if (hasLeft && !hasRight) comparison = 1;
+          else if (!hasLeft && hasRight) comparison = -1;
+          else if (!hasLeft && !hasRight) comparison = 0;
+          else comparison = leftDate - rightDate;
+        } else if (sort.key === "status") {
+          const statusOrder: Record<string, number> = {
+            "Granskas av butikssupporten": 0,
+            Löst: 1,
+            Nekad: 2,
+          };
+          comparison = (statusOrder[left as string] ?? 99) - (statusOrder[right as string] ?? 99);
+        } else {
+          comparison = String(left).localeCompare(String(right), "sv", {
+            numeric: true,
+            sensitivity: "base",
+          });
+        }
+        if (comparison !== 0) return sort.direction === "asc" ? comparison : -comparison;
+      }
+      return 0;
+    });
+    return list;
+  }, [reclamations, reclamationSort, deliveryStatistics, shelfLifeRecords]);
 
   const catalogHasSearch = catalogSearch.trim().length > 0;
   const visibleCatalogCategories = useMemo(() => {
@@ -5465,14 +5669,54 @@ function ErstatningsCheckPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>SAP-ID</TableHead>
-                    <TableHead>Produktnamn</TableHead>
-                    <TableHead>Varumärke</TableHead>
-                    <TableHead>Belopp (SEK)</TableHead>
-                    <TableHead>Bäst-före-datum</TableHead>
-                    <TableHead>Leveransdatum</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Uppdaterad</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-coop-gray-200"
+                      onClick={() => toggleReclamationSort("sap_article_id")}
+                    >
+                      SAP-ID {renderReclamationSortIcon("sap_article_id")}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-coop-gray-200"
+                      onClick={() => toggleReclamationSort("product_name")}
+                    >
+                      Produktnamn {renderReclamationSortIcon("product_name")}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-coop-gray-200"
+                      onClick={() => toggleReclamationSort("brand")}
+                    >
+                      Varumärke {renderReclamationSortIcon("brand")}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none text-right hover:bg-coop-gray-200"
+                      onClick={() => toggleReclamationSort("amount")}
+                    >
+                      Belopp (SEK) {renderReclamationSortIcon("amount")}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-coop-gray-200"
+                      onClick={() => toggleReclamationSort("best_before_date")}
+                    >
+                      Bäst-före-datum {renderReclamationSortIcon("best_before_date")}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-coop-gray-200"
+                      onClick={() => toggleReclamationSort("arrival_date")}
+                    >
+                      Leveransdatum {renderReclamationSortIcon("arrival_date")}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-coop-gray-200"
+                      onClick={() => toggleReclamationSort("status")}
+                    >
+                      Status {renderReclamationSortIcon("status")}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-coop-gray-200"
+                      onClick={() => toggleReclamationSort("updated_at")}
+                    >
+                      Uppdaterad {renderReclamationSortIcon("updated_at")}
+                    </TableHead>
                     <TableHead>Åtgärder</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -5490,20 +5734,19 @@ function ErstatningsCheckPage() {
                         shelfMap.set(s.sap_article_id, s);
                       }
                     }
-                    return reclamations
+                    return sortedReclamations
                       .filter((r) =>
                         statusFilter !== "ALL" && statusFilter ? r.status === statusFilter : true,
                       )
                       .map((r) => {
                         const del = dMap.get(r.sap_article_id);
                         const shelf = shelfMap.get(r.sap_article_id);
-                        const totalPrice = r.amount ? r.amount : parseSek(del?.total_price);
-                        const price =
-                          totalPrice !== null && totalPrice !== undefined
-                            ? totalPrice
-                            : shelf?.compensation_price_ore
+                        const totalPrice = r.amount
+                          ? r.amount
+                          : (parseSek(del?.total_price) ??
+                            (shelf?.compensation_price_ore
                               ? shelf.compensation_price_ore / 100
-                              : 85;
+                              : null));
                         const bestBeforeDate =
                           r.best_before_date || del?.expiry_date || shelf?.expiry_date || "";
                         const arrivalDate =
@@ -5517,7 +5760,9 @@ function ErstatningsCheckPage() {
                             <TableCell className="text-sm">
                               {del?.brand || shelf?.brand || "—"}
                             </TableCell>
-                            <TableCell className="text-right text-sm">{formatSek(price)}</TableCell>
+                            <TableCell className="text-right text-sm">
+                              {formatSek(totalPrice)}
+                            </TableCell>
                             <TableCell className="text-sm">
                               {bestBeforeDate
                                 ? new Date(bestBeforeDate).toLocaleDateString("sv-SE")
@@ -5583,7 +5828,7 @@ function ErstatningsCheckPage() {
                         );
                       });
                   })()}
-                  {reclamations.filter((r) =>
+                  {sortedReclamations.filter((r) =>
                     statusFilter !== "ALL" && statusFilter ? r.status === statusFilter : true,
                   ).length === 0 && (
                     <TableRow>
