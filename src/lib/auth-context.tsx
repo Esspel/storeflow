@@ -1,4 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { type AppUser, type Store, supabase, setSessionToken } from "./supabase";
 import {
   getStoredSession,
@@ -73,6 +81,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const tokenRef = useRef<string | null>(null);
   const mountedRef = useRef(false);
+  const activeStoreRef = useRef<Store | null>(null);
+  const userRef = useRef<AppUser | null>(null);
 
   useEffect(() => {
     setIsClient(true);
@@ -231,7 +241,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     // Seed: load stores for the restored user
-    const initialUser = user;
+    const initialUser = userRef.current;
 
     async function tick(currentToken: string, currentUser: AppUser | null) {
       if (!isMounted || !mountedRef.current) return;
@@ -267,7 +277,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (freshUser.active_store_id) {
           const active = stores.find((s) => s.id === freshUser.active_store_id) ?? null;
           setActiveStoreState(active);
-        } else if (stores.length > 0 && !activeStore) {
+        } else if (stores.length > 0 && !activeStoreRef.current) {
           setActiveStoreState(stores[0]);
         }
 
@@ -291,7 +301,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [token, user, loadUserStores, activeStore]);
+  }, [token, loadUserStores]);
+
+  useEffect(() => {
+    activeStoreRef.current = activeStore;
+  }, [activeStore]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Network status monitoring
   useEffect(() => {
@@ -459,36 +477,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [token, loadUserStores],
   );
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        loading,
-        hasCheckedAuth,
-        userStores,
-        activeStore,
-        setActiveStore,
-        effectiveStore,
-        isFirstLogin,
-        showFirstTimeSetup,
-        triggerFirstTimeSetup,
-        dismissFirstTimeSetup,
-        login,
-        logout,
-        refreshUser,
-        refreshUserStores,
-        lockScreenOpen,
-        openLockScreen,
-        closeLockScreen,
-        quickSwitch,
-        isOffline,
-        isClient,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      token,
+      loading,
+      hasCheckedAuth,
+      userStores,
+      activeStore,
+      setActiveStore,
+      effectiveStore,
+      isFirstLogin,
+      showFirstTimeSetup,
+      triggerFirstTimeSetup,
+      dismissFirstTimeSetup,
+      login,
+      logout,
+      refreshUser,
+      refreshUserStores,
+      lockScreenOpen,
+      openLockScreen,
+      closeLockScreen,
+      quickSwitch,
+      isOffline,
+      isClient,
+    }),
+    [
+      user,
+      token,
+      loading,
+      hasCheckedAuth,
+      userStores,
+      activeStore,
+      setActiveStore,
+      effectiveStore,
+      isFirstLogin,
+      showFirstTimeSetup,
+      triggerFirstTimeSetup,
+      dismissFirstTimeSetup,
+      login,
+      logout,
+      refreshUser,
+      refreshUserStores,
+      lockScreenOpen,
+      openLockScreen,
+      closeLockScreen,
+      quickSwitch,
+      isOffline,
+      isClient,
+    ],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

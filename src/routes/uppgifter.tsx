@@ -927,9 +927,14 @@ function TasksPage() {
     );
   };
 
-  const fetchTasks = useCallback(async () => {
-    await tasksQuery.refetch();
+  const tasksQueryRef = useRef(tasksQuery);
+  useEffect(() => {
+    tasksQueryRef.current = tasksQuery;
   }, [tasksQuery]);
+
+  const fetchTasks = useCallback(async () => {
+    await tasksQueryRef.current.refetch();
+  }, []);
 
   const fetchUserGroups = useCallback(async () => {
     if (!user) return;
