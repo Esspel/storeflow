@@ -191,7 +191,10 @@ export function filterShelfLifeRecords(
  * EXCLUDED from replacement generation – they should be resolved manually
  * in "Hantera hållbarhetsdata" instead.
  */
-export function shouldIncludeInReplacement(record: ShelfLifeRecord): boolean {
+export function shouldIncludeInReplacement(
+  record: ShelfLifeRecord,
+  reclamations?: Array<{ sap_article_id: string; status: string; arrival_date?: string | null; delivery_number?: string | null }>,
+): boolean {
   if (record.sap_data_missing === true) return false;
   if (!record.arrival_date || !record.expiry_date) return false;
   if (
@@ -206,5 +209,22 @@ export function shouldIncludeInReplacement(record: ShelfLifeRecord): boolean {
     record.expiry_date,
     record.shelf_lifetime_days,
   );
-  return assessment?.status === "Reklamation";
+  if (assessment?.status !== "Reklamation") return false;
+
+  // Exclude articles that already have a reclamation registered for the same
+  // delivery (same sap_article_id + same arrival_date/delivery_number).
+  // Status does not matter — any existing reclamation blocks a new one.
+  if (reclamations?.length) {
+    const hasReclamationForDelivery = reclamations.some(
+      (r) =>
+        r.sap_article_id === record.sap_article_id &&
+        (r.arrival_date === record.arrival_date ||
+          r.delivery_number === record.delivery_number),
+    );
+    if (hasReclamationForDelivery) {
+      return false;
+    }
+  }
+
+  return true;
 }

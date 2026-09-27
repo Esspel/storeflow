@@ -164,4 +164,77 @@ describe("shouldIncludeInReplacement", () => {
     const result = shouldIncludeInReplacement(record);
     expect(result).toBe(true);
   });
+
+  it("exkluderar artiklar som redan är reklamerade med samma leveransdatum", () => {
+    const record = {
+      ...baseRecord,
+      arrival_date: "2026-01-01T00:00:00.000Z",
+      expiry_date: "2026-02-01T00:00:00.000Z",
+      shelf_lifetime_days: 365,
+    };
+    const reclamations = [
+      {
+        sap_article_id: "1234567890",
+        status: "Granskas av butikssupporten",
+        arrival_date: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+    const result = shouldIncludeInReplacement(record, reclamations);
+    expect(result).toBe(false);
+  });
+
+  it("exkluderar artiklar som redan är reklamerade med samma leveransnummer", () => {
+    const record = {
+      ...baseRecord,
+      arrival_date: "2026-01-01T00:00:00.000Z",
+      expiry_date: "2026-02-01T00:00:00.000Z",
+      shelf_lifetime_days: 365,
+      delivery_number: "123",
+    };
+    const reclamations = [
+      {
+        sap_article_id: "1234567890",
+        status: "Granskas av butikssupporten",
+        delivery_number: "123",
+      },
+    ];
+    const result = shouldIncludeInReplacement(record, reclamations);
+    expect(result).toBe(false);
+  });
+
+  it("inkluderar artikel om redan reklamerad artikel har annan leveransdag", () => {
+    const record = {
+      ...baseRecord,
+      arrival_date: "2026-01-15T00:00:00.000Z", // Different arrival date
+      expiry_date: "2026-02-01T00:00:00.000Z",
+      shelf_lifetime_days: 365,
+    };
+    const reclamations = [
+      {
+        sap_article_id: "1234567890",
+        status: "Granskas av butikssupporten",
+        arrival_date: "2026-01-01T00:00:00.000Z", // Different day
+      },
+    ];
+    const result = shouldIncludeInReplacement(record, reclamations);
+    expect(result).toBe(true);
+  });
+
+  it("exkluderar artiklar som redan är reklamerade oavsett status", () => {
+    const record = {
+      ...baseRecord,
+      arrival_date: "2026-01-01T00:00:00.000Z",
+      expiry_date: "2026-02-01T00:00:00.000Z",
+      shelf_lifetime_days: 365,
+    };
+    const reclamations = [
+      {
+        sap_article_id: "1234567890",
+        status: "Löst",
+        arrival_date: "2026-01-01T00:00:00.000Z",
+      },
+    ];
+    const result = shouldIncludeInReplacement(record, reclamations);
+    expect(result).toBe(false);
+  });
 });

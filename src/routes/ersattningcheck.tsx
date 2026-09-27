@@ -2508,6 +2508,21 @@ function ErstatningsCheckPage() {
           latestByArticle.set(withArrival[0].sap_article_id, withArrival[0]);
         }
       }
+
+      // Hämta reklamationsdata för att kontrollera vilka artiklar som redan är reklamerade
+      const reclamationRows = await supabase
+        .from("reclamations")
+        .select("sap_article_id, status, arrival_date, delivery_number")
+        .eq("store_id", activeStore!.id)
+        .order("created_at", { ascending: false });
+
+      const reclamations = reclamationRows.data as Array<{
+        sap_article_id: string;
+        status: string;
+        arrival_date?: string | null;
+        delivery_number?: string | null;
+      }> || [];
+
       // Hämta masterdata för shelf_lifetime_days och temperature_zone
       const { data: masterData, error: masterErr } = await supabase
         .from("product_shelf_life")
@@ -2548,24 +2563,27 @@ function ErstatningsCheckPage() {
           )
             return false;
           const master = masterMap.get(delivery.sap_article_id) || {};
-          return shouldIncludeInReplacement({
-            id: delivery.id ?? delivery.sap_article_id ?? "",
-            sap_article_id: delivery.sap_article_id,
-            shelf_lifetime_days: master.shelf_lifetime_days > 0 ? master.shelf_lifetime_days : 0,
-            expiry_date: delivery.best_before_date ?? "",
-            arrival_date: delivery.arrival_date ?? "",
-            compensation_price_ore: master.default_compensation_price_ore ?? 2,
-            product_name: delivery.product_name ?? "Okänd artikel",
-            brand: delivery.brand ?? "",
-            category: delivery.category ?? "Övrigt",
-            created_at: delivery.created_at ?? new Date().toISOString(),
-            updated_at: delivery.updated_at ?? new Date().toISOString(),
-            product_url: null,
-            delivery_status: delivery.status ?? "",
-            delivery_number: delivery.delivery_number ?? null,
-            sap_data_missing: master.sap_data_missing ?? false,
-            next_sap_check: master.next_sap_check ?? null,
-          });
+          return shouldIncludeInReplacement(
+            {
+              id: delivery.id ?? delivery.sap_article_id ?? "",
+              sap_article_id: delivery.sap_article_id,
+              shelf_lifetime_days: master.shelf_lifetime_days > 0 ? master.shelf_lifetime_days : 0,
+              expiry_date: delivery.best_before_date ?? "",
+              arrival_date: delivery.arrival_date ?? "",
+              compensation_price_ore: master.default_compensation_price_ore ?? 2,
+              product_name: delivery.product_name ?? "Okänd artikel",
+              brand: delivery.brand ?? "",
+              category: delivery.category ?? "Övrigt",
+              created_at: delivery.created_at ?? new Date().toISOString(),
+              updated_at: delivery.updated_at ?? new Date().toISOString(),
+              product_url: null,
+              delivery_status: delivery.status ?? "",
+              delivery_number: delivery.delivery_number ?? null,
+              sap_data_missing: master.sap_data_missing ?? false,
+              next_sap_check: master.next_sap_check ?? null,
+            },
+            reclamations
+          );
         })
         .map((item) => item.delivery);
       if (flagged.length === 0) {
