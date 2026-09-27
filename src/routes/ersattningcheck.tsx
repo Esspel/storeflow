@@ -2424,25 +2424,32 @@ function ErstatningsCheckPage() {
     setEditingShelfLifeId((currentId) => (currentId === record.id ? null : currentId));
   };
 
+  // Normaliserar datum till ISO-format för databasen
+  const normalizeDate = (date: string | null | undefined): string | null => {
+    if (!date) return null;
+    const d = new Date(date);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  };
+
   // Send a single product to Butikssupport for reimbursement
   const sendToButikssupport = async (record: ShelfLifeRecord) => {
     if (!activeStore?.id) return;
     setIsLoading(true);
     try {
-      // Beräkna ersättningsbelopp: använd compensation_price_ore (i öre) som primär källa,
-      // fallback till total_price om den finns (leveransens faktiska värde).
+      // Beräkna ersättningsbelopp: använd total_price från leverans (delivery) som primär källa,
+      // fallback till compensation_price_ore om den finns.
+      const totalPrice = parseSek((record as any).total_price);
       const compensationPrice = record.compensation_price_ore
         ? record.compensation_price_ore / 100
         : null;
-      const totalPrice = parseSek((record as any).total_price);
-      const amount = compensationPrice !== null ? compensationPrice : totalPrice;
+      const amount = totalPrice !== null ? totalPrice : (compensationPrice !== null ? compensationPrice : 85);
       const { error } = await supabase.from("reclamations").insert({
         store_id: activeStore!.id,
         sap_article_id: record.sap_article_id,
         status: "Granskas av butikssupporten",
         notes: `Automatiskt genererad: ${new Date().toISOString()}`,
-        arrival_date: record.arrival_date || null,
-        best_before_date: record.expiry_date || null,
+        arrival_date: normalizeDate(record.arrival_date),
+        best_before_date: normalizeDate(record.expiry_date),
         delivery_number: (record.delivery_number as string) || null,
         amount: amount,
       });
@@ -2461,8 +2468,8 @@ function ErstatningsCheckPage() {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           notes: `Automatiskt genererad: ${new Date().toISOString()}`,
-          arrival_date: record.arrival_date || null,
-          best_before_date: record.expiry_date || null,
+          arrival_date: normalizeDate(record.arrival_date),
+          best_before_date: normalizeDate(record.expiry_date),
           delivery_number: (record.delivery_number as string) || null,
           amount: amount,
         },
@@ -3476,18 +3483,31 @@ function ErstatningsCheckPage() {
         return;
       }
 
+      // Matcha leverans mot rätt leveransdatum (om angetts) för att få rätt total_price
+      let matchedDelivery: any = null;
+      if (addReclamationDeliveryDate) {
+        const { data: deliveries } = await supabase
+          .from("store_product_deliveries")
+          .select("id, total_price, arrival_date, delivery_number, product_name, brand, category")
+          .eq("store_id", activeStore!.id)
+          .eq("sap_article_id", product.sap_article_id)
+          .eq("arrival_date", addReclamationDeliveryDate)
+          .maybeSingle();
+        matchedDelivery = deliveries ?? null;
+      }
+
       // Create the reclamation
       const amountValue = addReclamationAmount.trim()
         ? parseFloat(addReclamationAmount.replace(",", "."))
-        : null;
+        : parseSek(matchedDelivery?.total_price);
       const { error } = await supabase.from("reclamations").insert({
         store_id: activeStore!.id,
         sap_article_id: product.sap_article_id,
         status: "Granskas av butikssupporten",
         notes: `Manuellt tillagd via ${addReclamationType === "sap" ? "materialnummer" : "BNR"}: ${addReclamationInput}`,
-        delivery_number: addReclamationDeliveryNumber.trim() || null,
-        arrival_date: addReclamationDeliveryDate || null,
-        best_before_date: addReclamationExpiryDate || null,
+        delivery_number: addReclamationDeliveryNumber.trim() || matchedDelivery?.delivery_number || null,
+        arrival_date: normalizeDate(addReclamationDeliveryDate),
+        best_before_date: normalizeDate(addReclamationExpiryDate),
         amount: amountValue,
       });
 
