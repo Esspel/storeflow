@@ -817,21 +817,18 @@ function ErstatningsCheckPage() {
     const filtered = shelfLifeRecords.filter((record) => {
       if (record.sap_data_missing === true) return false;
       if (!record.arrival_date || !record.expiry_date) return false;
-      const status = reclamationStatuses.get(record.sap_article_id);
-      // Exclude only if there's an active (pending) reclamation for the same product
-      // AND the same delivery date. Multiple reclamations of the same product on
-      // different delivery dates are independent and should each be eligible.
-      if (status === "Granskas av butikssupporten") {
-        const hasActiveReclamationForDelivery = reclamations.some(
-          (r) =>
-            r.sap_article_id === record.sap_article_id &&
-            r.status === "Granskas av butikssupporten" &&
-            (r.arrival_date === record.arrival_date ||
-              r.delivery_number === record.delivery_number),
-        );
-        if (hasActiveReclamationForDelivery) {
-          return false;
-        }
+      // Per-delivery check: only exclude if there's an active reclamation
+      // specifically for this delivery (same sap_article_id + same arrival_date/delivery_number).
+      // Same product delivered again is independent.
+      const hasActiveReclamationForDelivery = reclamations.some(
+        (r) =>
+          r.sap_article_id === record.sap_article_id &&
+          r.status === "Granskas av butikssupporten" &&
+          (r.arrival_date === record.arrival_date ||
+            r.delivery_number === record.delivery_number),
+      );
+      if (hasActiveReclamationForDelivery) {
+        return false;
       }
       const assessment = calculateShelfLifeStatus(
         record.arrival_date,
@@ -856,7 +853,7 @@ function ErstatningsCheckPage() {
       const zoneB = getMappedFlow(categoryMappings, b.category).toLowerCase();
       return zoneA.localeCompare(zoneB);
     });
-  }, [shelfLifeRecords, reclamationStatuses, reclamations, now, categoryMappings]);
+  }, [shelfLifeRecords, reclamations, now, categoryMappings]);
   const hasImportedDeliveries = deliveryStatistics.length > 0;
 
   // Dashboard records: only articles with actual delivery data that can be assessed
