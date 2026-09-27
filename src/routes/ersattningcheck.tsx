@@ -2513,7 +2513,7 @@ function ErstatningsCheckPage() {
       const reclamationRows = await supabase
         .from("reclamations")
         .select("sap_article_id, status, arrival_date, delivery_number")
-        .eq("store_id", activeStore!.id)
+        .or(`store_id.eq.${activeStore!.id},store_id.is.null`)
         .order("created_at", { ascending: false });
 
       const reclamations = reclamationRows.data as Array<{
