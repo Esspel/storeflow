@@ -26,6 +26,7 @@ describe("ShelfLifeRecord expiry_date handling", () => {
       product_url: null,
       delivery_status: "Levererad",
       delivery_number: "D1",
+      total_price: null,
       sap_data_missing: false,
       next_sap_check: null,
     } as any;

@@ -90,6 +90,7 @@ describe("getShelfLifeStatus", () => {
       product_url: null,
       delivery_status: "Levererad",
       delivery_number: "D1",
+      total_price: null,
       sap_data_missing: false,
       next_sap_check: null,
     } as any;
@@ -137,6 +138,7 @@ describe("filterShelfLifeRecords", () => {
       product_url: null,
       delivery_status: "Levererad",
       delivery_number: "D1",
+      total_price: null,
       sap_data_missing: false,
       next_sap_check: null,
     } as any,
@@ -155,6 +157,7 @@ describe("filterShelfLifeRecords", () => {
       product_url: null,
       delivery_status: "Levererad",
       delivery_number: "D2",
+      total_price: null,
       sap_data_missing: false,
       next_sap_check: null,
     } as any,
@@ -173,6 +176,7 @@ describe("filterShelfLifeRecords", () => {
       product_url: null,
       delivery_status: "Levererad",
       delivery_number: "D3",
+      total_price: null,
       sap_data_missing: false,
       next_sap_check: null,
     } as any,
@@ -216,6 +220,7 @@ describe("shouldIncludeInReplacement", () => {
       product_url: null,
       delivery_status: "Levererad",
       delivery_number: "D1",
+      total_price: null,
       sap_data_missing: false,
       next_sap_check: null,
     } as any;
@@ -260,6 +265,7 @@ describe("shouldIncludeInReplacement", () => {
       product_url: null,
       delivery_status: "Levererad",
       delivery_number: "D1",
+      total_price: null,
       sap_data_missing: false,
       next_sap_check: null,
     } as any;

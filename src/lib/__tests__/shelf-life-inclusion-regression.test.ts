@@ -20,6 +20,7 @@ describe("shelf-life: articles without shelf life data are included", () => {
     product_url: null,
     delivery_status: "Levererad",
     delivery_number: null,
+    total_price: null,
     sap_data_missing: false,
     next_sap_check: null,
   };

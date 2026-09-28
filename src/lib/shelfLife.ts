@@ -33,6 +33,7 @@ export interface ShelfLifeRecord {
   product_url: string | null;
   delivery_status: string;
   delivery_number: string | null;
+  total_price: string | null;
   sap_data_missing: boolean;
   next_sap_check: string | null;
 }
@@ -193,7 +194,12 @@ export function filterShelfLifeRecords(
  */
 export function shouldIncludeInReplacement(
   record: ShelfLifeRecord,
-  reclamations?: Array<{ sap_article_id: string; status: string; arrival_date?: string | null; delivery_number?: string | null }>,
+  reclamations?: Array<{
+    sap_article_id: string;
+    status: string;
+    arrival_date?: string | null;
+    delivery_number?: string | null;
+  }>,
 ): boolean {
   if (record.sap_data_missing === true) return false;
   if (!record.arrival_date || !record.expiry_date) return false;
@@ -218,8 +224,7 @@ export function shouldIncludeInReplacement(
     const hasReclamationForDelivery = reclamations.some(
       (r) =>
         r.sap_article_id === record.sap_article_id &&
-        (r.arrival_date === record.arrival_date ||
-          r.delivery_number === record.delivery_number),
+        (r.arrival_date === record.arrival_date || r.delivery_number === record.delivery_number),
     );
     if (hasReclamationForDelivery) {
       return false;

@@ -149,6 +149,7 @@ type ReclamationSortKey =
   | "product_name"
   | "brand"
   | "amount"
+  | "delivery_number"
   | "best_before_date"
   | "arrival_date"
   | "status"
@@ -824,8 +825,7 @@ function ErstatningsCheckPage() {
         (r) =>
           r.sap_article_id === record.sap_article_id &&
           r.status === "Granskas av butikssupporten" &&
-          (r.arrival_date === record.arrival_date ||
-            r.delivery_number === record.delivery_number),
+          (r.arrival_date === record.arrival_date || r.delivery_number === record.delivery_number),
       );
       if (hasActiveReclamationForDelivery) {
         return false;
@@ -1360,6 +1360,7 @@ function ErstatningsCheckPage() {
             updated_at: (product.updated_at ?? new Date().toISOString()) as string,
             category: (product.category ?? delivery.category ?? "") as string,
             delivery_number: (delivery.delivery_number ?? null) as string | null,
+            total_price: (delivery.total_price ?? null) as string | null,
             sap_data_missing: Boolean(sapDataState),
             next_sap_check: (master.next_sap_check ?? null) as string | null,
           } as ShelfLifeRecord;
@@ -2438,11 +2439,12 @@ function ErstatningsCheckPage() {
     try {
       // Beräkna ersättningsbelopp: använd total_price från leverans (delivery) som primär källa,
       // fallback till compensation_price_ore om den finns.
-      const totalPrice = parseSek((record as any).total_price);
+      const totalPrice = parseSek(record.total_price);
       const compensationPrice = record.compensation_price_ore
         ? record.compensation_price_ore / 100
         : null;
-      const amount = totalPrice !== null ? totalPrice : (compensationPrice !== null ? compensationPrice : 85);
+      const amount =
+        totalPrice !== null ? totalPrice : compensationPrice !== null ? compensationPrice : 85;
       const { error } = await supabase.from("reclamations").insert({
         store_id: activeStore!.id,
         sap_article_id: record.sap_article_id,
@@ -2491,7 +2493,7 @@ function ErstatningsCheckPage() {
       const shelfData = await fetchAllRows(
         supabaseClient,
         "store_product_deliveries",
-        "sap_article_id, bnr, best_before_date, arrival_date, quantity, status, delivery_number, product_name, brand, category",
+        "sap_article_id, bnr, best_before_date, arrival_date, quantity, status, delivery_number, product_name, brand, category, total_price",
         { column: "store_id", value: activeStore!.id },
         { column: "arrival_date", ascending: false },
       );
@@ -2523,12 +2525,13 @@ function ErstatningsCheckPage() {
         .or(`store_id.eq.${activeStore!.id},store_id.is.null`)
         .order("created_at", { ascending: false });
 
-      const reclamations = reclamationRows.data as Array<{
-        sap_article_id: string;
-        status: string;
-        arrival_date?: string | null;
-        delivery_number?: string | null;
-      }> || [];
+      const reclamations =
+        (reclamationRows.data as Array<{
+          sap_article_id: string;
+          status: string;
+          arrival_date?: string | null;
+          delivery_number?: string | null;
+        }>) || [];
 
       // Hämta masterdata för shelf_lifetime_days och temperature_zone
       const { data: masterData, error: masterErr } = await supabase
@@ -2586,10 +2589,11 @@ function ErstatningsCheckPage() {
               product_url: null,
               delivery_status: delivery.status ?? "",
               delivery_number: delivery.delivery_number ?? null,
+              total_price: delivery.total_price ?? null,
               sap_data_missing: master.sap_data_missing ?? false,
               next_sap_check: master.next_sap_check ?? null,
             },
-            reclamations
+            reclamations,
           );
         })
         .map((item) => item.delivery);
@@ -3104,15 +3108,20 @@ function ErstatningsCheckPage() {
       const productName = shelf?.product_name || del?.product_name || rec.sap_article_id;
       const brandVal = shelf?.brand || del?.brand || "";
       const category = shelf?.category || del?.category || "Övrigt";
+      const deliveryNumber =
+        rec.delivery_number || shelf?.delivery_number || del?.delivery_number || null;
       const rawPrice =
         rec.amount !== null && rec.amount !== undefined
           ? rec.amount
-          : del?.total_price ||
-            (shelf?.compensation_price_ore ? shelf.compensation_price_ore / 100 : 85);
+          : parseSek(del?.total_price) ||
+            (shelf?.compensation_price_ore ? shelf.compensation_price_ore / 100 : null) ||
+            85;
       const price =
         rec.amount !== null && rec.amount !== undefined
           ? rawPrice
-          : (calculateReimbursement(rawPrice) ?? 0);
+          : (calculateReimbursement(parseSek(del?.total_price)) ??
+            calculateReimbursement(rawPrice) ??
+            0);
 
       items.push({
         id: rec.id,
@@ -3131,7 +3140,7 @@ function ErstatningsCheckPage() {
         notes: rec.notes,
         bnr: del?.bnr || "BNR-" + rec.sap_article_id.slice(-4),
         shelf_lifetime_days: shelf?.shelf_lifetime_days ?? 180,
-        delivery_number: shelf?.delivery_number || del?.delivery_number || null,
+        delivery_number: deliveryNumber,
       });
       processedSapIds.add(rec.sap_article_id);
     }
@@ -3483,15 +3492,30 @@ function ErstatningsCheckPage() {
         return;
       }
 
-      // Matcha leverans mot rätt leveransdatum (om angetts) för att få rätt total_price
+      // Matcha leverans mot rätt leveransdatum OCH/ORDER leveransnummer (om angetts)
+      // för att få rätt total_price från just den leveransen av artikeln
       let matchedDelivery: any = null;
-      if (addReclamationDeliveryDate) {
+      const deliveryNumber = addReclamationDeliveryNumber.trim();
+      const deliveryDate = addReclamationDeliveryDate.trim();
+
+      if (deliveryNumber) {
+        const { data: deliveriesByNumber } = await supabase
+          .from("store_product_deliveries")
+          .select("id, total_price, arrival_date, delivery_number, product_name, brand, category")
+          .eq("store_id", activeStore!.id)
+          .eq("sap_article_id", product.sap_article_id)
+          .eq("delivery_number", deliveryNumber)
+          .maybeSingle();
+        matchedDelivery = deliveriesByNumber ?? null;
+      }
+
+      if (!matchedDelivery && deliveryDate) {
         const { data: deliveries } = await supabase
           .from("store_product_deliveries")
           .select("id, total_price, arrival_date, delivery_number, product_name, brand, category")
           .eq("store_id", activeStore!.id)
           .eq("sap_article_id", product.sap_article_id)
-          .eq("arrival_date", addReclamationDeliveryDate)
+          .eq("arrival_date", deliveryDate)
           .maybeSingle();
         matchedDelivery = deliveries ?? null;
       }
@@ -3505,7 +3529,8 @@ function ErstatningsCheckPage() {
         sap_article_id: product.sap_article_id,
         status: "Granskas av butikssupporten",
         notes: `Manuellt tillagd via ${addReclamationType === "sap" ? "materialnummer" : "BNR"}: ${addReclamationInput}`,
-        delivery_number: addReclamationDeliveryNumber.trim() || matchedDelivery?.delivery_number || null,
+        delivery_number:
+          addReclamationDeliveryNumber.trim() || matchedDelivery?.delivery_number || null,
         arrival_date: normalizeDate(addReclamationDeliveryDate),
         best_before_date: normalizeDate(addReclamationExpiryDate),
         amount: amountValue,
@@ -3641,6 +3666,18 @@ function ErstatningsCheckPage() {
               b.arrival_date ||
               dMap.get(b.sap_article_id)?.arrival_date ||
               shelfMap.get(b.sap_article_id)?.arrival_date ||
+              "";
+            break;
+          case "delivery_number":
+            left =
+              a.delivery_number ||
+              dMap.get(a.sap_article_id)?.delivery_number ||
+              shelfMap.get(a.sap_article_id)?.delivery_number ||
+              "";
+            right =
+              b.delivery_number ||
+              dMap.get(b.sap_article_id)?.delivery_number ||
+              shelfMap.get(b.sap_article_id)?.delivery_number ||
               "";
             break;
           case "status":
@@ -5742,6 +5779,12 @@ function ErstatningsCheckPage() {
                     </TableHead>
                     <TableHead
                       className="cursor-pointer select-none hover:bg-coop-gray-200"
+                      onClick={() => toggleReclamationSort("delivery_number")}
+                    >
+                      Leveransnummer {renderReclamationSortIcon("delivery_number")}
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:bg-coop-gray-200"
                       onClick={() => toggleReclamationSort("status")}
                     >
                       Status {renderReclamationSortIcon("status")}
@@ -5779,9 +5822,12 @@ function ErstatningsCheckPage() {
                         const totalPrice = r.amount
                           ? r.amount
                           : (parseSek(del?.total_price) ??
+                            parseSek(shelf?.total_price) ??
                             (shelf?.compensation_price_ore
                               ? shelf.compensation_price_ore / 100
                               : null));
+                        const deliveryNumber =
+                          r.delivery_number || del?.delivery_number || shelf?.delivery_number || "";
                         const bestBeforeDate =
                           r.best_before_date || del?.expiry_date || shelf?.expiry_date || "";
                         const arrivalDate =
@@ -5807,6 +5853,9 @@ function ErstatningsCheckPage() {
                               {arrivalDate
                                 ? new Date(arrivalDate).toLocaleDateString("sv-SE")
                                 : "—"}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs text-coop-gray-900">
+                              {deliveryNumber || "—"}
                             </TableCell>
                             <TableCell>
                               <Badge
@@ -5868,7 +5917,7 @@ function ErstatningsCheckPage() {
                   ).length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={9}
+                        colSpan={10}
                         className="text-center text-sm text-coop-gray-900 py-6"
                       >
                         Inga reklamationer med denna status.
