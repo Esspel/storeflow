@@ -218,13 +218,16 @@ export function shouldIncludeInReplacement(
   if (assessment?.status !== "Reklamation") return false;
 
   // Exclude articles that already have a reclamation registered for the same
-  // delivery (same sap_article_id + same arrival_date/delivery_number).
+  // delivery (same sap_article_id + same arrival_date OR same delivery_number).
+  // A reclamation with null arrival_date AND null delivery_number is a legacy
+  // /global reclamation that does NOT block delivery-specific compensation.
   // Status does not matter — any existing reclamation blocks a new one.
   if (reclamations?.length) {
     const hasReclamationForDelivery = reclamations.some(
       (r) =>
         r.sap_article_id === record.sap_article_id &&
-        (r.arrival_date === record.arrival_date || r.delivery_number === record.delivery_number),
+        ((r.arrival_date && r.arrival_date === record.arrival_date) ||
+         (r.delivery_number && r.delivery_number === record.delivery_number)),
     );
     if (hasReclamationForDelivery) {
       return false;

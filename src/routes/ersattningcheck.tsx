@@ -2521,7 +2521,7 @@ function ErstatningsCheckPage() {
       // Hämta reklamationsdata för att kontrollera vilka artiklar som redan är reklamerade
       const reclamationRows = await supabase
         .from("reclamations")
-        .select("sap_article_id, status, arrival_date, delivery_number")
+        .select("sap_article_id, status, arrival_date, delivery_number, store_id")
         .or(`store_id.eq.${activeStore!.id},store_id.is.null`)
         .order("created_at", { ascending: false });
 
