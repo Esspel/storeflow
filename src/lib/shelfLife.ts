@@ -191,15 +191,22 @@ export function filterShelfLifeRecords(
  * Articles with missing data (sap_data_missing, no dates, no shelf life) are
  * EXCLUDED from replacement generation – they should be resolved manually
  * in "Hantera hållbarhetsdata" instead.
+ *
+ * A record is excluded if a reclamation already exists for the same store,
+ * article, and delivery (matching by arrival_date OR delivery_number).
+ * Status is not checked — any existing reclamation blocks replacement,
+ * regardless of whether it is pending, resolved, or rejected.
  */
 export function shouldIncludeInReplacement(
   record: ShelfLifeRecord,
   reclamations?: Array<{
+    store_id?: string;
     sap_article_id: string;
     status: string;
     arrival_date?: string | null;
     delivery_number?: string | null;
   }>,
+  currentStoreId?: string,
 ): boolean {
   if (record.sap_data_missing === true) return false;
   if (!record.arrival_date || !record.expiry_date) return false;
@@ -217,17 +224,12 @@ export function shouldIncludeInReplacement(
   );
   if (assessment?.status !== "Reklamation") return false;
 
-  // Exclude articles that already have a reclamation registered for the same
-  // delivery (same sap_article_id + same arrival_date OR same delivery_number).
-  // A reclamation with null arrival_date AND null delivery_number is a legacy
-  // /global reclamation that does NOT block delivery-specific compensation.
-  // Status does not matter — any existing reclamation blocks a new one.
   if (reclamations?.length) {
     const hasReclamationForDelivery = reclamations.some(
       (r) =>
+        (!currentStoreId || r.store_id === currentStoreId) &&
         r.sap_article_id === record.sap_article_id &&
-        ((r.arrival_date && r.arrival_date === record.arrival_date) ||
-         (r.delivery_number && r.delivery_number === record.delivery_number)),
+        (r.arrival_date === record.arrival_date || r.delivery_number === record.delivery_number),
     );
     if (hasReclamationForDelivery) {
       return false;

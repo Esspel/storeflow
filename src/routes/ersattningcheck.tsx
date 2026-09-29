@@ -191,6 +191,7 @@ type ReclamationStatus = "Granskas av butikssupporten" | "Löst" | "Nekad";
 
 type Reclamation = {
   id: string;
+  store_id: string;
   sap_article_id: string;
   status: ReclamationStatus;
   created_at: string;
@@ -731,6 +732,12 @@ function ErstatningsCheckPage() {
   // Show all import dates state (#7)
   const [showAllImportDates, setShowAllImportDates] = useState(false);
 
+  // Butiksfiltrerade reclamations för matchning
+  const storeSpecificReclamations = useMemo(() => {
+    if (!activeStore?.id) return [];
+    return reclamations.filter((r) => r.store_id === activeStore.id);
+  }, [reclamations, activeStore?.id]);
+
   useEffect(() => {
     if (!importSuccess) return;
     const timeoutId = window.setTimeout(() => setImportSuccess(null), 5000);
@@ -818,16 +825,16 @@ function ErstatningsCheckPage() {
     const filtered = shelfLifeRecords.filter((record) => {
       if (record.sap_data_missing === true) return false;
       if (!record.arrival_date || !record.expiry_date) return false;
-      // Per-delivery check: only exclude if there's an active reclamation
-      // specifically for this delivery (same sap_article_id + same arrival_date/delivery_number).
+      // Per-delivery check: exclude if there's ANY reclamation
+      // specifically for this delivery (same store + same sap_article_id + same arrival_date/delivery_number).
       // Same product delivered again is independent.
-      const hasActiveReclamationForDelivery = reclamations.some(
+      // Status does NOT matter — any existing reclamation blocks a new one.
+      const hasExistingReclamationForDelivery = storeSpecificReclamations.some(
         (r) =>
           r.sap_article_id === record.sap_article_id &&
-          r.status === "Granskas av butikssupporten" &&
           (r.arrival_date === record.arrival_date || r.delivery_number === record.delivery_number),
       );
-      if (hasActiveReclamationForDelivery) {
+      if (hasExistingReclamationForDelivery) {
         return false;
       }
       const assessment = calculateShelfLifeStatus(
@@ -2465,6 +2472,7 @@ function ErstatningsCheckPage() {
         ...prev,
         {
           id: `auto-${record.sap_article_id}-${Date.now()}`,
+          store_id: activeStore!.id,
           sap_article_id: record.sap_article_id,
           status: "Granskas av butikssupporten",
           created_at: new Date().toISOString(),
@@ -2593,7 +2601,7 @@ function ErstatningsCheckPage() {
               sap_data_missing: master.sap_data_missing ?? false,
               next_sap_check: master.next_sap_check ?? null,
             },
-            reclamations,
+            storeSpecificReclamations, // Använd den butiksfiltrerade versionen
           );
         })
         .map((item) => item.delivery);
@@ -3338,6 +3346,7 @@ function ErstatningsCheckPage() {
           ...prev,
           {
             id: item.reclamationId || `rec-${Date.now()}`,
+            store_id: activeStore?.id ?? "",
             sap_article_id: item.sap_article_id,
             status: dbStatus,
             created_at: new Date().toISOString(),
