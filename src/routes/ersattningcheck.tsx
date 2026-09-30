@@ -1517,23 +1517,41 @@ function ErstatningsCheckPage() {
     ]);
 
     // Bestäm vilka artiklar som är eligible (global cooldown per sap_article_id)
-    const eligible = [...knownArticleIds].filter((sapArticleId) => {
+    // Filter eligible articles based on cooldown
+    const eligibleByCooldown = [...knownArticleIds].filter((sapArticleId) => {
       const existing = existingMap.get(sapArticleId);
       const nextCheck = existing?.next_sap_check;
       if (nextCheck && new Date(nextCheck) > now) return false;
       return true;
     });
 
+    // Prioritize: articles without valid shelf_lifetime_days (<= 0 or null) first
+    const prioritizedEligible = eligibleByCooldown.sort((a, b) => {
+      const existingA = existingMap.get(a);
+      const existingB = existingMap.get(b);
+      const hasShelfLifeA = !!existingA && existingA.shelf_lifetime_days > 0;
+      const hasShelfLifeB = !!existingB && existingB.shelf_lifetime_days > 0;
+
+      // Articles without shelf_lifetime_days should come first
+      if (hasShelfLifeA && !hasShelfLifeB) return 1;
+      if (!hasShelfLifeA && hasShelfLifeB) return -1;
+
+      // Then sort by remaining shelf life (shorter first for quicker results)
+      const daysA = hasShelfLifeA ? existingA.shelf_lifetime_days : 0;
+      const daysB = hasShelfLifeB ? existingB.shelf_lifetime_days : 0;
+      return daysA - daysB;
+    });
+
     console.log(
       "[importShelfLifeFromSap] eligible (cooldown expired or not set):",
-      eligible.length,
+      prioritizedEligible.length,
       "articles",
     );
-    if (eligible.length > 0) {
-      console.log("[importShelfLifeFromSap] First eligible:", eligible[0]);
+    if (prioritizedEligible.length > 0) {
+      console.log("[importShelfLifeFromSap] First eligible:", prioritizedEligible[0]);
     }
 
-    if (eligible.length === 0) {
+    if (prioritizedEligible.length === 0) {
       toast.info("Inga artiklar att uppdatera från SAP just nu.");
       return;
     }
@@ -1545,46 +1563,112 @@ function ErstatningsCheckPage() {
     let changedCount = 0;
     let missingInSapCount = 0;
 
-    for (let i = 0; i < eligible.length; i++) {
-      const sapArticleId = eligible[i];
-      try {
-        const sapData = useProxy
-          ? await (async () => {
-              console.log(`[SAP Proxy] Fetching for article ${sapArticleId}`);
-              const proxyResponse = await fetchViaProxy(
-                `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore.sap_site_id ?? activeStore!.id)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
-                "GET",
-                { Accept: "application/json" },
-              );
-              console.log(`[SAP Proxy] Response for ${sapArticleId}:`, proxyResponse);
-              if (!proxyResponse.success) {
-                console.error(`[SAP Proxy] Failed for ${sapArticleId}:`, proxyResponse.error);
-                return null;
-              }
-              const json = proxyResponse.data ?? "";
-              if (!json) {
-                console.error(`[SAP Proxy] No JSON data for ${sapArticleId}`);
-                return null;
-              }
-              console.log(`[SAP Proxy] Raw JSON for ${sapArticleId}:`, json.substring(0, 200));
-              let parsed;
-              try {
-                parsed = JSON.parse(json);
-              } catch (e) {
-                console.error(
-                  `[SAP Proxy] JSON parse error for ${sapArticleId}:`,
-                  e,
-                  json.substring(0, 200),
-                );
-                return null;
-              }
-              const result = parsed.d || null;
-              console.log(`[SAP Proxy] Extracted data for ${sapArticleId}:`, result);
-              return result;
-            })()
-          : await fetchSapProductData(activeStore.sap_site_id ?? activeStore!.id, sapArticleId);
+    // Parallel processing for faster data fetching
+    const fetchPromises: Promise<any>[] = [];
+    for (let i = 0; i < prioritizedEligible.length; i++) {
+      const sapArticleId = prioritizedEligible[i];
 
-        if (!sapData) {
+      const fetchPromise: Promise<any> = (async () => {
+        try {
+          const sapData = useProxy
+            ? await (async () => {
+                console.log(`[SAP Proxy] Fetching for article ${sapArticleId}`);
+                const proxyResponse = await fetchViaProxy(
+                  `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore.sap_site_id ?? activeStore!.id)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
+                  "GET",
+                  { Accept: "application/json" },
+                );
+                console.log(`[SAP Proxy] Response for ${sapArticleId}:`, proxyResponse);
+                if (!proxyResponse.success) {
+                  console.error(`[SAP Proxy] Failed for ${sapArticleId}:`, proxyResponse.error);
+                  return { sapArticleId, error: proxyResponse.error, success: false, type: "proxy_failure" };
+                }
+                const json = proxyResponse.data ?? "";
+                if (!json) {
+                  console.error(`[SAP Proxy] No JSON data for ${sapArticleId}`);
+                  return { sapArticleId, error: "No JSON data", success: false, type: "no_json" };
+                }
+                console.log(`[SAP Proxy] Raw JSON for ${sapArticleId}:`, json.substring(0, 200));
+                let parsed;
+                try {
+                  parsed = JSON.parse(json);
+                } catch (e) {
+                  console.error(
+                    `[SAP Proxy] JSON parse error for ${sapArticleId}:`,
+                    e,
+                    json.substring(0, 200),
+                  );
+                  return { sapArticleId, error: "JSON parse error", success: false, type: "parse_error" };
+                }
+                const result = parsed.d || null;
+                console.log(`[SAP Proxy] Extracted data for ${sapArticleId}:`, result);
+                return { sapArticleId, data: result, success: true, type: "proxy_success" };
+              })()
+            : await fetchSapProductData(activeStore.sap_site_id ?? activeStore!.id, sapArticleId)
+              .then(data => ({ sapArticleId, data, success: true, type: "direct_success" }))
+              .catch(error => ({ sapArticleId, error: error.message, success: false, type: "direct_error" }));
+
+          return sapData;
+        } catch (err) {
+          console.error(`[importShelfLifeFromSap] Unexpected error for ${sapArticleId}:`, err);
+          return {
+            sapArticleId,
+            error: err instanceof Error ? err.message : String(err),
+            success: false,
+            type: "unexpected_error"
+          };
+        }
+      })();
+
+      fetchPromises.push(fetchPromise);
+    }
+
+    // Execute all fetch operations in parallel
+    const fetchResults = await Promise.allSettled(fetchPromises);
+
+    // Process results
+    for (const result of fetchResults) {
+      if (result.status === 'fulfilled') {
+        const { sapArticleId, data, success, type, error } = result.value;
+
+        if (!success) {
+          // Handle failed fetch (network/proxy errors)
+          errorCount += 1;
+          console.error(`[importShelfLifeFromSap] Fetch failed for ${sapArticleId}:`, error);
+
+          const updatedAt = new Date().toISOString();
+          const existing = existingMap.get(sapArticleId);
+          const isFirstTime =
+            !existing ||
+            existing.shelf_lifetime_days == null ||
+            Number.isNaN(existing.shelf_lifetime_days) ||
+            existing.shelf_lifetime_days <= 0;
+          if (isFirstTime) firstTimeCount += 1;
+          missingInSapCount += 1;
+
+          const cooldownDays = Math.floor(Math.random() * (90 - 60 + 1)) + 60;
+          const nextSapCheck = new Date();
+          nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
+
+          const { error: upsertError } = await supabase.from("product_shelf_life").upsert(
+            {
+              store_id: activeStore!.id,
+              sap_article_id: sapArticleId,
+              shelf_lifetime_days: 0,
+              sap_data_missing: true,
+              next_sap_check: nextSapCheck.toISOString(),
+              updated_at: updatedAt,
+            },
+            { onConflict: "sap_article_id" },
+          );
+          if (upsertError) {
+            console.error("Error upserting shelf life (missing SAP data):", upsertError);
+            errorCount += 1;
+          }
+          continue;
+        }
+
+        if (!data) {
           // SAP returned HTTP 200 but no data (e.g. {"d":null}).
           // Treat as missing — do NOT skip the article. Mark it as
           // SAKNAS I SAP and set cooldown so it isn't retried every run.
@@ -1603,7 +1687,7 @@ function ErstatningsCheckPage() {
           const nextSapCheck = new Date();
           nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
 
-          const { error } = await supabase.from("product_shelf_life").upsert(
+          const { error: upsertError } = await supabase.from("product_shelf_life").upsert(
             {
               store_id: activeStore!.id,
               sap_article_id: sapArticleId,
@@ -1614,14 +1698,14 @@ function ErstatningsCheckPage() {
             },
             { onConflict: "sap_article_id" },
           );
-          if (error) {
-            console.error("Error upserting shelf life (missing SAP data):", error);
+          if (upsertError) {
+            console.error("Error upserting shelf life (missing SAP data):", upsertError);
             errorCount += 1;
           }
           continue;
         }
 
-        const shelfLifeDays = parseInt(sapData.RemainingShelfLifeInDays, 10);
+        const shelfLifeDays = parseInt(data.RemainingShelfLifeInDays, 10);
         const hasValidSapData = Number.isFinite(shelfLifeDays) && shelfLifeDays > 0;
         const updatedAt = new Date().toISOString();
 
@@ -1648,7 +1732,7 @@ function ErstatningsCheckPage() {
         const nextSapCheck = new Date();
         nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
 
-        const { error } = await supabase.from("product_shelf_life").upsert(
+        const { error: upsertError } = await supabase.from("product_shelf_life").upsert(
           {
             store_id: activeStore!.id,
             sap_article_id: sapArticleId,
@@ -1660,17 +1744,17 @@ function ErstatningsCheckPage() {
           { onConflict: "sap_article_id" },
         );
 
-        if (error) {
-          console.error("Error upserting shelf life:", error);
+        if (upsertError) {
+          console.error("Error upserting shelf life:", upsertError);
           errorCount += 1;
           continue;
         }
 
         // Update EAN from SAP data (GlobalTradeItemNumber)
-        if (sapData.GlobalTradeItemNumber) {
+        if (data.GlobalTradeItemNumber) {
           const { error: eanError } = await supabase
             .from("products")
-            .update({ ean: sapData.GlobalTradeItemNumber, updated_at: updatedAt })
+            .update({ ean: data.GlobalTradeItemNumber, updated_at: updatedAt })
             .eq("sap_article_id", sapArticleId)
             .eq("store_id", activeStore!.id);
           if (eanError) {
@@ -1679,18 +1763,17 @@ function ErstatningsCheckPage() {
         }
 
         successCount += 1;
-      } catch (err) {
-        console.error("Error fetching from SAP:", err);
+      } else {
+        // Promise.allSettled rejection
         errorCount += 1;
+        const sapArticleId = result.reason?.sapArticleId || "unknown";
+        console.error(`[importShelfLifeFromSap] Promise rejected for ${sapArticleId}:`, result.reason);
       }
+    }
 
-      if (i < eligible.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-
-      if (successCount + (errorCount % 10) === 0) {
-        toast.info(`Hämtad ${successCount}/${eligible.length}...`);
-      }
+    // Progress updates (less frequent now due to parallel processing)
+    if (successCount + (errorCount % 10) === 0) {
+      toast.info(`Hämtad ${successCount}/${prioritizedEligible.length}...`);
     }
 
     await loadShelfLifeData();
