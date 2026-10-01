@@ -238,4 +238,40 @@ describe("shouldIncludeInReplacement", () => {
     const result = shouldIncludeInReplacement(record, reclamations);
     expect(result).toBe(false);
   });
+
+  it("exkluderar artikel när reklamation har datum utan tid och record har ISO-format (samma kalenderdag)", () => {
+    const record = {
+      ...baseRecord,
+      arrival_date: "2026-09-24T00:00:00.000Z", // ISO with time
+      expiry_date: "2026-10-01T00:00:00.000Z",
+      shelf_lifetime_days: 365,
+    };
+    const reclamations = [
+      {
+        sap_article_id: "1234567890",
+        status: "Nekad",
+        arrival_date: "2026-09-24", // Date-only format
+      },
+    ];
+    const result = shouldIncludeInReplacement(record, reclamations);
+    expect(result).toBe(false);
+  });
+
+  it("exkluderar artikel när reklamation har ISO-format och record har datum utan tid (samma kalenderdag)", () => {
+    const record = {
+      ...baseRecord,
+      arrival_date: "2026-09-24", // Date-only format
+      expiry_date: "2026-10-01T00:00:00.000Z",
+      shelf_lifetime_days: 365,
+    };
+    const reclamations = [
+      {
+        sap_article_id: "1234567890",
+        status: "Granskas av butikssupporten",
+        arrival_date: "2026-09-24T00:00:00.000Z", // ISO with time
+      },
+    ];
+    const result = shouldIncludeInReplacement(record, reclamations);
+    expect(result).toBe(false);
+  });
 });

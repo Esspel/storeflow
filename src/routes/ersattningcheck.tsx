@@ -873,6 +873,49 @@ function ErstatningsCheckPage() {
     });
   }, [shelfLifeRecords]);
 
+  // Dashboard records filtered by the selected statistics period
+  const periodDashboardRecords = useMemo(() => {
+    if (!deliveryStatistics.length) return dashboardRecords;
+    const now = new Date();
+    let start = new Date(2020, 0, 1);
+    let end = new Date(now.getTime() + 86400000);
+    if (statisticsPeriod === "thisMonth") {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    } else if (statisticsPeriod === "lastMonth") {
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    } else if (statisticsPeriod === "thisQuarter") {
+      const qMonth = Math.floor(now.getMonth() / 3) * 3;
+      start = new Date(now.getFullYear(), qMonth, 1);
+      end = new Date(now.getFullYear(), qMonth + 3, 0, 23, 59, 59);
+    } else if (statisticsPeriod === "ytd") {
+      start = new Date(now.getFullYear(), 0, 1);
+      end = new Date(now.getTime() + 86400000);
+    } else if (statisticsPeriod === "all") {
+      start = new Date(2020, 0, 1);
+    } else if (statisticsPeriod === "last30") {
+      start = new Date(now.getTime() - 30 * 86400000);
+    } else if (statisticsPeriod === "last12") {
+      start = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+    } else if (statisticsPeriod === "week") {
+      const dayOfWeek = now.getDay();
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - dayOfWeek);
+      weekStart.setHours(0, 0, 0, 0);
+      start = weekStart;
+      end = new Date(weekStart); end.setDate(weekStart.getDate() + 7);
+    } else if (statisticsPeriod === "custom") {
+      if (statisticsCustomFrom) start = new Date(statisticsCustomFrom);
+      if (statisticsCustomTo) end = new Date(statisticsCustomTo);
+    }
+    return dashboardRecords.filter((r) => {
+      if (!r.arrival_date) return false;
+      const d = new Date(r.arrival_date);
+      return d >= start && d <= end;
+    });
+  }, [dashboardRecords, statisticsPeriod, statisticsCustomFrom, statisticsCustomTo, deliveryStatistics.length]);
+
   // Handle file upload
   const handleFileUpload = async (fileOrEvent: File | React.ChangeEvent<HTMLInputElement>) => {
     const file = fileOrEvent instanceof File ? fileOrEvent : fileOrEvent.target.files?.[0];
@@ -3885,7 +3928,7 @@ function ErstatningsCheckPage() {
     <div className="container mx-auto p-6 max-w-7xl">
       <PageHeader
         title="Ersättningskontroll"
-        description="Hantera följesedel, hållbarhetsdata och leveranser"
+        description="Sida för hantering av korta-datum vid leverans"
       />
 
       {/* Step navigation */}
@@ -4191,10 +4234,10 @@ function ErstatningsCheckPage() {
               </CardHeader>
               <CardContent>
                 {(() => {
-                  const okCount = dashboardRecords.filter(
+                  const okCount = periodDashboardRecords.filter(
                     (r) => getShelfLifeStatus(r) === "OK",
                   ).length;
-                  const reclaimCount = dashboardRecords.filter(
+                  const reclaimCount = periodDashboardRecords.filter(
                     (r) => getShelfLifeStatus(r) === "Kräver ersättning",
                   ).length;
                   const donutData = [
@@ -4207,7 +4250,7 @@ function ErstatningsCheckPage() {
                         OK: { label: "OK", color: "#107c41" },
                         Reklamation: { label: "Reklamation", color: "#d13d3d" },
                       }}
-                      className="mx-auto aspect-square max-h-[260px]"
+                      className="mx-auto aspect-square max-h-[420px]"
                     >
                       <PieChart>
                         <Pie
@@ -4237,68 +4280,6 @@ function ErstatningsCheckPage() {
                     </div>
                   );
                 })()}
-              </CardContent>
-            </Card>
-
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle>Leveranser</CardTitle>
-                <CardDescription>Per leveransdatum</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Datum</TableHead>
-                      <TableHead>Totalt antal</TableHead>
-                      <TableHead>Borde reklamerats</TableHead>
-                      <TableHead>OK</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(() => {
-                      const groups = new Map<
-                        string,
-                        { total: number; reclaim: number; ok: number }
-                      >();
-                      for (const d of deliveryStatistics) {
-                        const date = d.arrival_date
-                          ? new Date(d.arrival_date).toISOString().split("T")[0]
-                          : "Okänt";
-                        const g = groups.get(date) || { total: 0, reclaim: 0, ok: 0 };
-                        g.total += 1;
-                        const shelf = shelfLifeRecords.find(
-                          (r) => r.sap_article_id === d.sap_article_id,
-                        );
-                        const shouldReclaim =
-                          shelf &&
-                          shelf.arrival_date &&
-                          shelf.expiry_date &&
-                          shelf.shelf_lifetime_days > 0
-                            ? calculateShelfLifeStatus(
-                                shelf.arrival_date,
-                                shelf.expiry_date,
-                                shelf.shelf_lifetime_days,
-                              )?.status === "Reklamation"
-                            : false;
-                        if (shouldReclaim) g.reclaim += 1;
-                        else g.ok += 1;
-                        groups.set(date, g);
-                      }
-                      const sorted = Array.from(groups.entries()).sort((a, b) =>
-                        b[0].localeCompare(a[0]),
-                      );
-                      return sorted.map(([date, g]) => (
-                        <TableRow key={date}>
-                          <TableCell className="whitespace-nowrap">{date}</TableCell>
-                          <TableCell>{g.total}</TableCell>
-                          <TableCell className="text-red-600 font-medium">{g.reclaim}</TableCell>
-                          <TableCell className="text-green-700 font-medium">{g.ok}</TableCell>
-                        </TableRow>
-                      ));
-                    })()}
-                  </TableBody>
-                </Table>
               </CardContent>
             </Card>
           </div>

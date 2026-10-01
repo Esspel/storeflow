@@ -187,6 +187,20 @@ export function filterShelfLifeRecords(
 }
 
 /**
+ * Normalizes a date string to YYYY-MM-DD format (date only, no time).
+ * Strips time/timezone info from ISO timestamps like "2026-09-24T00:00:00.000Z".
+ * Returns null for empty/invalid input.
+ */
+export function formatDateOnly(dateStr: string | null | undefined): string | null {
+  if (dateStr == null) return null;
+  const trimmed = String(dateStr).trim();
+  if (!trimmed || trimmed === "—" || trimmed === "null") return null;
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+/**
  * Determines whether a record should be included in replacement generation.
  * Articles with missing data (sap_data_missing, no dates, no shelf life) are
  * EXCLUDED from replacement generation – they should be resolved manually
@@ -224,13 +238,29 @@ export function shouldIncludeInReplacement(
   );
   if (assessment?.status !== "Reklamation") return false;
 
+  // Exclude articles that already have a reclamation registered for the same
+  // delivery (same sap_article_id + same arrival_date calendar date / delivery_number).
+  // Status does not matter — any existing reclamation blocks a new one.
   if (reclamations?.length) {
-    const hasReclamationForDelivery = reclamations.some(
-      (r) =>
-        (!currentStoreId || r.store_id === currentStoreId) &&
-        r.sap_article_id === record.sap_article_id &&
-        (r.arrival_date === record.arrival_date || r.delivery_number === record.delivery_number),
-    );
+    const hasReclamationForDelivery = reclamations.some((r) => {
+      if (r.sap_article_id !== record.sap_article_id) return false;
+
+      // Compare arrival_date by calendar date (YYYY-MM-DD), ignoring time/timezone differences
+      let datesMatch = false;
+      if (r.arrival_date && record.arrival_date) {
+        const rDatePart = r.arrival_date.split("T")[0];
+        const recDatePart = record.arrival_date.split("T")[0];
+        datesMatch = rDatePart === recDatePart;
+      }
+
+      // Also match on delivery_number if available
+      const numbersMatch =
+        r.delivery_number !== null &&
+        r.delivery_number !== undefined &&
+        r.delivery_number === record.delivery_number;
+
+      return datesMatch || numbersMatch;
+    });
     if (hasReclamationForDelivery) {
       return false;
     }
