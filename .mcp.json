@@ -1,0 +1,12 @@
+[
+  {
+    "name": "supabase",
+    "command": "claude mcp add supabase",
+    "description": "Supabase database operations"
+  },
+  {
+    "name": "context7",
+    "command": "claude mcp add context7",
+    "description": "Live documentation lookup for libraries/SDKs"
+  }
+]
