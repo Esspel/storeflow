@@ -149,6 +149,53 @@ export interface SapProductData {
 const SAP_BASE_URL = "https://s4r.sap.coop.se";
 
 /**
+ * Fetch data through the Chrome Extension proxy with retry logic.
+ *
+ * The "Intern Proxy Bridge" Chrome Extension can be slow to warm up on
+ * the first request after page load — the first 1-2 requests often fail
+ * with a transient "unknown error" before the connection is established.
+ * This wrapper retries transient failures with exponential backoff.
+ *
+ * Only transient errors (chrome.runtime errors, missing responses) are
+ * retried. Proxy-reported application errors are NOT retried.
+ */
+export async function retryFetchViaProxy(
+  url: string,
+  method: string = "GET",
+  headers: Record<string, string> = {},
+  maxRetries: number = 3,
+  baseDelayMs: number = 200,
+): Promise<ProxyResponse> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fetchViaProxy(url, method, headers);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const isTransient =
+        lastError.message.includes("Chrome Extension") ||
+        lastError.message.includes("Runtime error") ||
+        lastError.message.includes("Inget svar från extensionen") ||
+        lastError.message.includes("Okänt fel vid hämtning via proxy");
+
+      if (!isTransient || attempt === maxRetries) {
+        throw lastError;
+      }
+
+      const delayMs = baseDelayMs * Math.pow(2, attempt);
+      console.warn(
+        `[SAP Proxy] Retry ${attempt + 1}/${maxRetries} after ${delayMs}ms:`,
+        lastError.message,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  throw lastError ?? new Error("Okänt fel vid hämtning via proxy");
+}
+
+/**
  * Fetch product data from SAP via the Chrome Extension proxy.
  * Uses 2 second interval to avoid rate limits.
  */

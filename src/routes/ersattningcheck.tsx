@@ -93,7 +93,7 @@ import {
   type ProductMatchResult,
 } from "@/lib/excel-parser";
 import { exportTextAsCSV, downloadAsZip } from "@/lib/csv";
-import { checkExtensionInstalled, fetchViaProxy } from "@/lib/sap-proxy";
+import { checkExtensionInstalled, fetchViaProxy, retryFetchViaProxy } from "@/lib/sap-proxy";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { calculateRiskScore, calculateRisk } from "@/lib/productCatalogRisk";
@@ -1616,7 +1616,7 @@ function ErstatningsCheckPage() {
           const sapData = useProxy
             ? await (async () => {
                 console.log(`[SAP Proxy] Fetching for article ${sapArticleId}`);
-                const proxyResponse = await fetchViaProxy(
+                const proxyResponse = await retryFetchViaProxy(
                   `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore.sap_site_id ?? activeStore!.id)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
                   "GET",
                   { Accept: "application/json" },
@@ -4112,7 +4112,7 @@ function ErstatningsCheckPage() {
                   try {
                     const sapData = sapExtensionInstalled
                       ? await (async () => {
-                          const proxyResponse = await fetchViaProxy(
+                          const proxyResponse = await retryFetchViaProxy(
                             `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore?.sap_site_id ?? activeStore?.id ?? "")}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
                             "GET",
                             { Accept: "application/json" },
