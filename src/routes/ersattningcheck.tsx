@@ -93,7 +93,7 @@ import {
   type ProductMatchResult,
 } from "@/lib/excel-parser";
 import { exportTextAsCSV, downloadAsZip } from "@/lib/csv";
-import { checkExtensionInstalled, fetchViaProxy, retryFetchViaProxy } from "@/lib/sap-proxy";
+import { checkExtensionInstalled, ensureExtensionReady, fetchViaProxy, retryFetchViaProxy } from "@/lib/sap-proxy";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { calculateRiskScore, calculateRisk } from "@/lib/productCatalogRisk";
@@ -1597,6 +1597,19 @@ function ErstatningsCheckPage() {
     if (prioritizedEligible.length === 0) {
       toast.info("Inga artiklar att uppdatera från SAP just nu.");
       return;
+    }
+
+    // Vänta på att Chrome Extension är redo innan vi skickar artiklar
+    if (useProxy) {
+      console.log("[importShelfLifeFromSap] Waiting for Chrome Extension to be ready...");
+      const extensionReady = await ensureExtensionReady(10, 500);
+      if (!extensionReady) {
+        console.error("[importShelfLifeFromSap] Chrome Extension not ready after retries");
+        toast.error("Chrome Extension är inte redo. Kontrollera att 'Intern Proxy Bridge' är installerat och aktiverat.");
+        setIsLoading(false);
+        return;
+      }
+      console.log("[importShelfLifeFromSap] Chrome Extension is ready");
     }
 
     setIsLoading(true);
