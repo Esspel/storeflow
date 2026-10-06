@@ -62,7 +62,12 @@ export function checkExtensionInstalled(): Promise<boolean> {
       { type: "PING" } as SapProxyMessage,
       (response: unknown) => {
         const resp = response as SapProxyResponse | undefined;
-        if (chrome.runtime?.lastError || !resp || resp.status !== "PONG") {
+        if (chrome.runtime?.lastError) {
+          // Extension svarade inte eller gav ett fel
+          console.warn("[SAP Proxy] PING failed:", chrome.runtime.lastError.message);
+          resolve(false);
+        } else if (!resp || resp.status !== "PONG") {
+          // Ogiltigt svar
           resolve(false);
         } else {
           resolve(true);
@@ -97,8 +102,17 @@ export function fetchViaProxy(
       (response: unknown) => {
         const resp = response as SapProxyResponse | undefined;
         if (chrome.runtime?.lastError) {
-          console.error("[SAP Proxy] Runtime error:", chrome.runtime.lastError.message);
-          return reject(new Error(chrome.runtime.lastError.message));
+          const rawMsg = chrome.runtime.lastError.message;
+          console.error("[SAP Proxy] Runtime error:", rawMsg);
+          // Normalisera Chrome runtime-fel till kända transienta meddelanden
+          // så att retryFetchViaProxy kan känna igen och retrya.
+          const normalized =
+            rawMsg.includes("Could not establish connection") ||
+            rawMsg.includes("The message port closed") ||
+            rawMsg.includes("Extension not found")
+              ? "Runtime error"
+              : rawMsg;
+          return reject(new Error(normalized));
         }
         if (!resp) {
           console.error("[SAP Proxy] No response from extension");
