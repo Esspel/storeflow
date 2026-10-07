@@ -338,16 +338,25 @@ export async function matchDeliveryNoteToProducts(
 
   if (error) throw error;
 
+  // Bygg Maps för O(1)-lookup istället för Array.find() per rad (O(n²)).
+  // Matchning: primärt på sap_article_id, fallback på bnr.
+  const bySapId = new Map<string, ProductMatchResult["product"]>();
+  const byBnr = new Map<string, ProductMatchResult["product"]>();
+  for (const p of storeProducts ?? []) {
+    if (p.sap_article_id && !bySapId.has(p.sap_article_id)) {
+      bySapId.set(p.sap_article_id, p);
+    }
+    if (p.bnr && !byBnr.has(p.bnr)) {
+      byBnr.set(p.bnr, p);
+    }
+  }
+
   const results: ProductMatchResult[] = rows.map((row) => {
     const sapId = row.sapProduktId ?? "";
     const bnr = row.bnr ?? "";
 
     // Matcha först mot Mat-nr (SAP produkt-ID), sedan BNR
-    const existing = (storeProducts ?? []).find(
-      (p) =>
-        (sapId && p.sap_article_id && p.sap_article_id === sapId) ||
-        (bnr && p.bnr && p.bnr === bnr),
-    );
+    const existing = sapId ? bySapId.get(sapId) : bnr ? byBnr.get(bnr) : undefined;
 
     if (existing) {
       return { row, product: existing, isNewProduct: false };

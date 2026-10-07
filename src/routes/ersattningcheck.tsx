@@ -478,8 +478,8 @@ async function fetchAllRows(
   eq?: { column: string; value: unknown },
   order?: { column: string; ascending?: boolean },
   idColumn = "id",
+  batchSize = 10000,
 ): Promise<any[]> {
-  const batchSize = 1000;
   const all: any[] = [];
   let from = 0;
   while (true) {
@@ -489,7 +489,6 @@ async function fetchAllRows(
       .range(from, from + batchSize - 1);
     if (eq) query = query.eq(eq.column, eq.value);
     if (order) query = query.order(order.column, { ascending: order.ascending ?? false });
-    query = query.order(idColumn, { ascending: true });
     const { data, error } = await query;
     if (error) throw error;
     if (!data || data.length === 0) break;
@@ -605,6 +604,22 @@ export const Route = createFileRoute("/ersattningcheck")({
 
 function ErstatningsCheckPage() {
   const { user, activeStore, loading: authLoading, hasCheckedAuth } = useAuth();
+  // Cache products-data per store so we don't fetch it 3+ times.
+  const [productsCache, setProductsCache] = useState<
+    Array<{ id: string; sap_article_id: string; name: string; brand: string; category: string; ean: string | null; bnr: string | null; is_active: boolean }> | null
+  >(null);
+
+  async function getProductsData(storeId: string) {
+    if (productsCache) return productsCache;
+    const data = await fetchAllRows(
+      supabase,
+      "products",
+      "id, sap_article_id, name, brand, category, ean, bnr, is_active",
+      { column: "store_id", value: storeId },
+    );
+    setProductsCache(data ?? []);
+    return data ?? [];
+  }
   const [step, setStep] = useState<
     | "dashboard"
     | "reclamations"
@@ -1343,10 +1358,7 @@ function ErstatningsCheckPage() {
     setIsLoading(true);
     try {
       const [productsData, masterData, deliveriesData] = await Promise.all([
-        fetchAllRows(supabaseClient, "products", "id, sap_article_id, name, brand, category", {
-          column: "store_id",
-          value: activeStore!.id,
-        }),
+        getProductsData(activeStore!.id),
         fetchAllRows(
           supabaseClient,
           "product_shelf_life",
