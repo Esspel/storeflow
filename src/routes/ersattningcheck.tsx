@@ -1394,25 +1394,24 @@ function ErstatningsCheckPage() {
       setShelfLifeRecords(
         [...mergedArticleIds].map((sapArticleId) => {
           const product = productMap.get(sapArticleId) ?? {};
-          const master = masterMap.get(sapArticleId) ?? {};
+          const masterRecord = masterMap.get(sapArticleId);
           const delivery = latestDelivery.get(sapArticleId) ?? {};
 
           // Determine if SAP data is missing (only true when explicitly set by SAP import)
-          const isSapDataMissing = master.sap_data_missing === true;
+          const isSapDataMissing = masterRecord?.sap_data_missing === true;
 
-          // If no SAP data exists at all (master is empty), set to null (not fetched yet)
-          const sapDataState =
-            master && Object.keys(master).length > 0 ? (isSapDataMissing ? true : null) : null;
+          // If no SAP data exists at all (master is undefined), set to null (not fetched yet)
+          const sapDataState = masterRecord ? (isSapDataMissing ? true : null) : null;
 
           return {
             id: delivery.id ?? product.id ?? sapArticleId,
             sap_article_id: sapArticleId,
             shelf_lifetime_days: Number(
-              master.shelf_lifetime_days > 0 ? master.shelf_lifetime_days : 0,
+              masterRecord?.shelf_lifetime_days > 0 ? masterRecord.shelf_lifetime_days : 0,
             ),
             expiry_date: (delivery.best_before_date ?? "") as string,
             arrival_date: (delivery.arrival_date ?? "") as string,
-            compensation_price_ore: Number(master.default_compensation_price_ore ?? 2),
+            compensation_price_ore: Number(masterRecord?.default_compensation_price_ore ?? 2),
             product_name: (product.name ?? delivery.product_name ?? "Okänd produkt") as string,
             brand: (product.brand ?? delivery.brand ?? "") as string,
             product_url: getSapProductUrl(activeStore!.sap_site_id, sapArticleId),
@@ -1423,18 +1422,17 @@ function ErstatningsCheckPage() {
             delivery_number: (delivery.delivery_number ?? null) as string | null,
             total_price: (delivery.total_price ?? null) as string | null,
             sap_data_missing: Boolean(sapDataState),
-            next_sap_check: (master.next_sap_check ?? null) as string | null,
+            next_sap_check: (masterRecord?.next_sap_check ?? null) as string | null,
           } as ShelfLifeRecord;
         }),
       );
       setDeliveryStatistics(
         Array.from(
-          (deliveriesData ?? [])
-            .filter((delivery: any) => delivery.delivery_number || delivery.arrival_date)
-            .reduce((acc: Map<string, DeliveryStatistic>, delivery: any) => {
-              const deliveryKey =
-                delivery.delivery_number ||
-                `article-${delivery.sap_article_id}-${delivery.arrival_date || "no-date"}`;
+          (deliveriesData ?? []).reduce((acc: Map<string, DeliveryStatistic>, delivery: any) => {
+            if (!delivery.delivery_number && !delivery.arrival_date) return acc;
+            const deliveryKey =
+              delivery.delivery_number ||
+              `article-${delivery.sap_article_id}-${delivery.arrival_date || "no-date"}`;
               const qty = parseInt(delivery.quantity || delivery.qty || 0, 10) || 0;
               const expiry = delivery.best_before_date || "";
               const arrival = delivery.arrival_date || "";
@@ -1875,7 +1873,25 @@ function ErstatningsCheckPage() {
 
     clearInterval(statusInterval);
 
-    await loadShelfLifeData();
+    // Uppdatera shelfLifeRecords direkt från existingMap utan att läsa om
+    // alla 3 tabeller från Supabase (products, product_shelf_life,
+    // store_product_deliveries). loadShelfLifeData() återskapade 4397+
+    // record-objekt och var en stor flaskhals.
+    if (successCount > 0 || missingInSapCount > 0) {
+      setShelfLifeRecords((prev) =>
+        prev.map((record) => {
+          const updated = existingMap.get(record.sap_article_id);
+          if (!updated) return record;
+          return {
+            ...record,
+            shelf_lifetime_days: updated.shelf_lifetime_days,
+            sap_data_missing: updated.sap_data_missing,
+            next_sap_check: updated.next_sap_check,
+          };
+        }),
+      );
+    }
+
     if (successCount > 0) {
       const parts = [`Hämtade hållbarhetsdata för ${successCount} artiklar.`];
       if (firstTimeCount > 0) parts.push(`${firstTimeCount} nya.`);
@@ -1886,6 +1902,8 @@ function ErstatningsCheckPage() {
     if (errorCount > 0) {
       toast.error(`Kunde inte hämta ${errorCount} artiklar (får fel från SAP).`);
     }
+
+    setIsLoading(false);
   };
 
   const loadCategoryMappings = async () => {
