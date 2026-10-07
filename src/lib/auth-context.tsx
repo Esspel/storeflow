@@ -85,9 +85,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const userRef = useRef<AppUser | null>(null);
 
   useEffect(() => {
-    setIsClient(true);
+    const timer = setTimeout(() => setIsClient(true), 0);
     mountedRef.current = true;
     return () => {
+      clearTimeout(timer);
       mountedRef.current = false;
     };
   }, []);
@@ -472,7 +473,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setActiveStoreState(stores[0]);
       }
       setLockScreenOpen(false);
-      setIsOffline(false);
+      setTimeout(() => setIsOffline(false), 0);
     },
     [token, loadUserStores],
   );

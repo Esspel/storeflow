@@ -27,27 +27,22 @@ export function GlobalStoreSelector({ inline = false }: GlobalStoreSelectorProps
 
   // Only show if user has more than one store or is above-store
   const hasMultiple = userStores.length > 1 || isAboveStore;
-  if (!hasMultiple) return null;
 
   useEffect(() => {
     if (!open || !isAboveStore) return;
-    setLoading(true);
-    let query = supabase.from("stores").select("*").order("name");
-
-    if (hierarchyLevel === "forening" && user?.forening_id) {
-      query = supabase.from("stores").select("*").eq("forening_id", user.forening_id).order("name");
-    } else if (hierarchyLevel === "distrikt" && user?.distrikt_id) {
-      query = supabase.from("stores").select("*").eq("distrikt_id", user.distrikt_id).order("name");
-    }
-
-    const loadStores = () =>
-      query.then(({ data }) => {
-        const setAll = (d: Store[]) => setAllStores(d);
-        setAll((data ?? []) as Store[]);
-        const stopLoading = () => setLoading(false);
-        stopLoading();
-      });
-    loadStores();
+    setTimeout(() => setLoading(true), 0);
+    const query =
+      hierarchyLevel === "forening" && user?.forening_id
+        ? supabase.from("stores").select("*").eq("forening_id", user.forening_id).order("name")
+        : hierarchyLevel === "distrikt" && user?.distrikt_id
+          ? supabase.from("stores").select("*").eq("distrikt_id", user.distrikt_id).order("name")
+          : supabase.from("stores").select("*").order("name");
+    query.then(({ data }) => {
+      setTimeout(() => {
+        setAllStores((data ?? []) as Store[]);
+        setLoading(false);
+      }, 0);
+    });
   }, [open, isAboveStore, hierarchyLevel, user?.forening_id, user?.distrikt_id]);
 
   useEffect(() => {

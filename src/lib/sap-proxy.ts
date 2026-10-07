@@ -119,7 +119,12 @@ export function fetchViaProxy(
           return reject(new Error("Inget svar från extensionen"));
         }
         if (resp.success) {
-          console.log("[SAP Proxy] Success, status:", resp.status, "data length:", resp.data?.length);
+          console.log(
+            "[SAP Proxy] Success, status:",
+            resp.status,
+            "data length:",
+            resp.data?.length,
+          );
           resolve({
             success: true,
             status:
@@ -158,6 +163,28 @@ export interface SapProductData {
   DeliveryDate: string | null;
   SalesPrice: string;
   GlobalTradeItemNumber: string;
+}
+
+/**
+ * Väntar tills Chrome Extension är installerad och redo att ta emot meddelanden.
+ *
+ * Skickar PING-meddelanden med exponential backoff tills extensionen svarar med
+ * PONG, eller tills maxAttempts uppnås. Används innan batchar av artiklar skickas
+ * så att extensionen hinner initiera innan den första frågan.
+ */
+export async function ensureExtensionReady(
+  maxAttempts: number = 10,
+  baseDelayMs: number = 500,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const ok = await checkExtensionInstalled();
+    if (ok) return true;
+    if (attempt < maxAttempts - 1) {
+      const delay = Math.min(baseDelayMs * Math.pow(2, attempt), 5000);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  return false;
 }
 
 const SAP_BASE_URL = "https://s4r.sap.coop.se";
