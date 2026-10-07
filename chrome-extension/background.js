@@ -32,7 +32,10 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
       try {
         const response = await fetch(url, {
           method: request.method || "GET",
-          headers: request.headers || {},
+          headers: {
+            ...request.headers,
+            "Accept": "application/json",
+          },
           credentials: "include", // Sends saved auth cookies for the internal domain
         });
         const text = await response.text();

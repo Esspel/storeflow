@@ -246,7 +246,7 @@ export async function fetchSapProductData(
   const url = `${SAP_BASE_URL}/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(storeId)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`;
 
   try {
-    const data = await fetchViaProxy(url, "GET", {
+    const data = await retryFetchViaProxy(url, "GET", {
       Accept: "application/json",
     });
     const jsonStr = typeof data === "string" ? data : (data.data ?? "");

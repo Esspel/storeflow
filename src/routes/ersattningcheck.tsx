@@ -5311,7 +5311,7 @@ function ErstatningsCheckPage() {
                   <div className="h-72 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart
-                        data={replacementStatistics.allStoresMonthly}
+                        data={replacementStatistics?.allStoresMonthly ?? []}
                         margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" />
