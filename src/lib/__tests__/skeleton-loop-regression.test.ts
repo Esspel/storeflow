@@ -26,19 +26,16 @@ describe("skeleton loading loop regression", () => {
   it("backgroundValidateAndRefresh must not set hasCheckedAuth=false on network error", () => {
     const src = fs.readFileSync(AUTH_CONTEXT, "utf-8");
     // TRUST-FIRST marker: background validation must never roll back hasCheckedAuth
-    expect(
-      src,
-      "hasCheckedAuth must not be reset during background validation",
-    ).not.toMatch(/setHasCheckedAuth\(\s*false\s*\)/);
+    expect(src, "hasCheckedAuth must not be reset during background validation").not.toMatch(
+      /setHasCheckedAuth\(\s*false\s*\)/,
+    );
   });
 
   it("ersattningcheck must guard auth-loading with hasCheckedAuth to prevent skeleton loop", () => {
     const src = fs.readFileSync(ERS_ROOT, "utf-8");
     // The condition for showing auth-loading spinner must include hasCheckedAuth
     // to prevent background tick cycles from re-triggering the spinner.
-    expect(
-      src,
-    ).toMatch(/if\s*\(authLoading\s*&&\s*!hasCheckedAuth\)/);
+    expect(src).toMatch(/if\s*\(authLoading\s*&&\s*!hasCheckedAuth\)/);
   });
 
   it("ersattningcheck must not rely solely on auth-loading for skeleton gate", () => {
@@ -47,7 +44,7 @@ describe("skeleton loading loop regression", () => {
     const bareLoadingCheck = src.match(/if\s*\(\s*authLoading\s*\)\s*[^{]*\{/);
     expect(
       bareLoadingCheck,
-      "ersattningcheck.tsx must not have a bare `if (authLoading)` guard without hasCheckedAuth"
+      "ersattningcheck.tsx must not have a bare `if (authLoading)` guard without hasCheckedAuth",
     ).toBeNull();
   });
 });

@@ -93,7 +93,12 @@ import {
   type ProductMatchResult,
 } from "@/lib/excel-parser";
 import { exportTextAsCSV, downloadAsZip } from "@/lib/csv";
-import { checkExtensionInstalled, ensureExtensionReady, fetchViaProxy, retryFetchViaProxy } from "@/lib/sap-proxy";
+import {
+  checkExtensionInstalled,
+  ensureExtensionReady,
+  fetchViaProxy,
+  retryFetchViaProxy,
+} from "@/lib/sap-proxy";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { calculateRiskScore, calculateRisk } from "@/lib/productCatalogRisk";
@@ -904,7 +909,8 @@ function ErstatningsCheckPage() {
       weekStart.setDate(now.getDate() - dayOfWeek);
       weekStart.setHours(0, 0, 0, 0);
       start = weekStart;
-      end = new Date(weekStart); end.setDate(weekStart.getDate() + 7);
+      end = new Date(weekStart);
+      end.setDate(weekStart.getDate() + 7);
     } else if (statisticsPeriod === "custom") {
       if (statisticsCustomFrom) start = new Date(statisticsCustomFrom);
       if (statisticsCustomTo) end = new Date(statisticsCustomTo);
@@ -914,7 +920,13 @@ function ErstatningsCheckPage() {
       const d = new Date(r.arrival_date);
       return d >= start && d <= end;
     });
-  }, [dashboardRecords, statisticsPeriod, statisticsCustomFrom, statisticsCustomTo, deliveryStatistics.length]);
+  }, [
+    dashboardRecords,
+    statisticsPeriod,
+    statisticsCustomFrom,
+    statisticsCustomTo,
+    deliveryStatistics.length,
+  ]);
 
   // Handle file upload
   const handleFileUpload = async (fileOrEvent: File | React.ChangeEvent<HTMLInputElement>) => {
@@ -1605,7 +1617,9 @@ function ErstatningsCheckPage() {
       const extensionReady = await ensureExtensionReady(10, 500);
       if (!extensionReady) {
         console.error("[importShelfLifeFromSap] Chrome Extension not ready after retries");
-        toast.error("Chrome Extension är inte redo. Kontrollera att 'Intern Proxy Bridge' är installerat och aktiverat.");
+        toast.error(
+          "Chrome Extension är inte redo. Kontrollera att 'Intern Proxy Bridge' är installerat och aktiverat.",
+        );
         setIsLoading(false);
         return;
       }
@@ -1628,23 +1642,25 @@ function ErstatningsCheckPage() {
         try {
           const sapData = useProxy
             ? await (async () => {
-                console.log(`[SAP Proxy] Fetching for article ${sapArticleId}`);
                 const proxyResponse = await retryFetchViaProxy(
                   `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore.sap_site_id ?? activeStore!.id)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
                   "GET",
                   { Accept: "application/json" },
                 );
-                console.log(`[SAP Proxy] Response for ${sapArticleId}:`, proxyResponse);
                 if (!proxyResponse.success) {
                   console.error(`[SAP Proxy] Failed for ${sapArticleId}:`, proxyResponse.error);
-                  return { sapArticleId, error: proxyResponse.error, success: false, type: "proxy_failure" };
+                  return {
+                    sapArticleId,
+                    error: proxyResponse.error,
+                    success: false,
+                    type: "proxy_failure",
+                  };
                 }
                 const json = proxyResponse.data ?? "";
                 if (!json) {
                   console.error(`[SAP Proxy] No JSON data for ${sapArticleId}`);
                   return { sapArticleId, error: "No JSON data", success: false, type: "no_json" };
                 }
-                console.log(`[SAP Proxy] Raw JSON for ${sapArticleId}:`, json.substring(0, 200));
                 let parsed;
                 try {
                   parsed = JSON.parse(json);
@@ -1654,15 +1670,24 @@ function ErstatningsCheckPage() {
                     e,
                     json.substring(0, 200),
                   );
-                  return { sapArticleId, error: "JSON parse error", success: false, type: "parse_error" };
+                  return {
+                    sapArticleId,
+                    error: "JSON parse error",
+                    success: false,
+                    type: "parse_error",
+                  };
                 }
                 const result = parsed.d || null;
-                console.log(`[SAP Proxy] Extracted data for ${sapArticleId}:`, result);
                 return { sapArticleId, data: result, success: true, type: "proxy_success" };
               })()
             : await fetchSapProductData(activeStore.sap_site_id ?? activeStore!.id, sapArticleId)
-              .then(data => ({ sapArticleId, data, success: true, type: "direct_success" }))
-              .catch(error => ({ sapArticleId, error: error.message, success: false, type: "direct_error" }));
+                .then((data) => ({ sapArticleId, data, success: true, type: "direct_success" }))
+                .catch((error) => ({
+                  sapArticleId,
+                  error: error.message,
+                  success: false,
+                  type: "direct_error",
+                }));
 
           return sapData;
         } catch (err) {
@@ -1671,7 +1696,7 @@ function ErstatningsCheckPage() {
             sapArticleId,
             error: err instanceof Error ? err.message : String(err),
             success: false,
-            type: "unexpected_error"
+            type: "unexpected_error",
           };
         }
       })();
@@ -1684,7 +1709,7 @@ function ErstatningsCheckPage() {
 
     // Process results
     for (const result of fetchResults) {
-      if (result.status === 'fulfilled') {
+      if (result.status === "fulfilled") {
         const { sapArticleId, data, success, type, error } = result.value;
 
         if (!success) {
@@ -1806,6 +1831,13 @@ function ErstatningsCheckPage() {
           continue;
         }
 
+        // Uppdatera existingMap så att eligible-listan minskar korrekt
+        existingMap.set(sapArticleId, {
+          shelf_lifetime_days: hasValidSapData ? shelfLifeDays : 0,
+          next_sap_check: nextSapCheck.toISOString(),
+          sap_data_missing: !hasValidSapData,
+        });
+
         // Update EAN from SAP data (GlobalTradeItemNumber)
         if (data.GlobalTradeItemNumber) {
           const { error: eanError } = await supabase
@@ -1823,7 +1855,10 @@ function ErstatningsCheckPage() {
         // Promise.allSettled rejection
         errorCount += 1;
         const sapArticleId = result.reason?.sapArticleId || "unknown";
-        console.error(`[importShelfLifeFromSap] Promise rejected for ${sapArticleId}:`, result.reason);
+        console.error(
+          `[importShelfLifeFromSap] Promise rejected for ${sapArticleId}:`,
+          result.reason,
+        );
       }
     }
 

@@ -176,9 +176,14 @@ export async function ensureExtensionReady(
   maxAttempts: number = 10,
   baseDelayMs: number = 500,
 ): Promise<boolean> {
+  // Vänta några sekunder så att Chrome Extension hinner vakna
+  await new Promise((resolve) => setTimeout(resolve, 3000));
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const ok = await checkExtensionInstalled();
-    if (ok) return true;
+    if (ok) {
+      console.log("[SAP Proxy] Chrome Extension redo — tar emot artiklar");
+      return true;
+    }
     if (attempt < maxAttempts - 1) {
       const delay = Math.min(baseDelayMs * Math.pow(2, attempt), 5000);
       await new Promise((resolve) => setTimeout(resolve, delay));

@@ -261,7 +261,8 @@ function CustomerRequestsPage() {
 
   useEffect(() => {
     if (editTarget) {
-      const setEditImages = (imgs: { id: string; storage_path: string }[]) => setCurrentEditImages(imgs);
+      const setEditImages = (imgs: { id: string; storage_path: string }[]) =>
+        setCurrentEditImages(imgs);
       setEditImages(requestImagesMap[editTarget.id] || []);
     } else {
       const clearEditImages = () => setCurrentEditImages([]);

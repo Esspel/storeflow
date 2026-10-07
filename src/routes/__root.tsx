@@ -145,8 +145,15 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function AppLayout() {
-  const { user, token, loading, hasCheckedAuth, showFirstTimeSetup, dismissFirstTimeSetup, isClient } =
-    useAuth();
+  const {
+    user,
+    token,
+    loading,
+    hasCheckedAuth,
+    showFirstTimeSetup,
+    dismissFirstTimeSetup,
+    isClient,
+  } = useAuth();
   const navigate = useNavigate();
   const router = useRouter();
   const pathname = router.state.location.pathname;
