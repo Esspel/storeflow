@@ -1633,6 +1633,18 @@ function ErstatningsCheckPage() {
     let changedCount = 0;
     let missingInSapCount = 0;
 
+    // Statuslogg var 15 sekund i console — visa antal hämtade/med shelfLife/utan/kvar
+    const statusInterval = setInterval(() => {
+      const total = prioritizedEligible.length;
+      const fetched = successCount + errorCount;
+      const withShelfLife = successCount;
+      const withoutShelfLife = errorCount + missingInSapCount;
+      const remaining = total - fetched;
+      console.log(
+        `[SAP Status] Hämtade: ${fetched}/${total} | Med shelfLife: ${withShelfLife} | Utan: ${withoutShelfLife} | Kvar: ${remaining}`,
+      );
+    }, 15000);
+
     // Parallel processing for faster data fetching
     const fetchPromises: Promise<any>[] = [];
     for (let i = 0; i < prioritizedEligible.length; i++) {
@@ -1648,7 +1660,7 @@ function ErstatningsCheckPage() {
                   { Accept: "application/json" },
                 );
                 if (!proxyResponse.success) {
-                  console.error(`[SAP Proxy] Failed for ${sapArticleId}:`, proxyResponse.error);
+                  // Per-artikel-fel loggas ej till console (endast aggregerad status vart 15e s)
                   return {
                     sapArticleId,
                     error: proxyResponse.error,
@@ -1658,7 +1670,6 @@ function ErstatningsCheckPage() {
                 }
                 const json = proxyResponse.data ?? "";
                 if (!json) {
-                  console.error(`[SAP Proxy] No JSON data for ${sapArticleId}`);
                   return { sapArticleId, error: "No JSON data", success: false, type: "no_json" };
                 }
                 let parsed;
@@ -1691,7 +1702,6 @@ function ErstatningsCheckPage() {
 
           return sapData;
         } catch (err) {
-          console.error(`[importShelfLifeFromSap] Unexpected error for ${sapArticleId}:`, err);
           return {
             sapArticleId,
             error: err instanceof Error ? err.message : String(err),
@@ -1713,9 +1723,8 @@ function ErstatningsCheckPage() {
         const { sapArticleId, data, success, type, error } = result.value;
 
         if (!success) {
-          // Handle failed fetch (network/proxy errors)
+          // Handle failed fetch (network/proxy errors) — agg. status loggas ej per artikel
           errorCount += 1;
-          console.error(`[importShelfLifeFromSap] Fetch failed for ${sapArticleId}:`, error);
 
           const updatedAt = new Date().toISOString();
           const existing = existingMap.get(sapArticleId);
@@ -1866,6 +1875,8 @@ function ErstatningsCheckPage() {
     if (successCount + (errorCount % 10) === 0) {
       toast.info(`Hämtad ${successCount}/${prioritizedEligible.length}...`);
     }
+
+    clearInterval(statusInterval);
 
     await loadShelfLifeData();
     if (successCount > 0) {
