@@ -119,12 +119,6 @@ export function fetchViaProxy(
           return reject(new Error("Inget svar från extensionen"));
         }
         if (resp.success) {
-          console.log(
-            "[SAP Proxy] Success, status:",
-            resp.status,
-            "data length:",
-            resp.data?.length,
-          );
           resolve({
             success: true,
             status:
@@ -259,7 +253,6 @@ export async function fetchSapProductData(
     const json = JSON.parse(jsonStr);
     return (json.d ?? null) as SapProductData | null;
   } catch (err) {
-    console.warn(`Error fetching SAP data for ${sapArticleId}:`, err);
     return null;
   }
 }

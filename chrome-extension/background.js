@@ -14,11 +14,11 @@
 // SAP_COOLDOWN_INFO - returns cooldown status for SAP checks
 // SAP_RECORD_CHECK - logs that an article check was performed (for debugging)
 chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
-  console.log("[Intern Proxy Bridge] Received message:", request?.type, "from", sender?.origin);
+  // Endast fel och redo-meddelanden loggas — inte varje artikel
 
   // 1. Handle PING - for extension detection
   if (request.type === "PING") {
-    console.log("[Intern Proxy Bridge] PING received, responding PONG to", sender?.origin);
+    // PING svarar tyst — loggas inte per anrop
     sendResponse({ success: true, status: "PONG" });
     return true;
   }
@@ -29,12 +29,6 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
     (async () => {
       const url = request.url;
       const startTime = Date.now();
-      console.log("[Intern Proxy Bridge] FETCH_INTERNAL started:", {
-        method: request.method || "GET",
-        url: url,
-        origin: sender?.origin,
-        timestamp: new Date(startTime).toISOString(),
-      });
       try {
         const response = await fetch(url, {
           method: request.method || "GET",
@@ -43,12 +37,6 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
         });
         const text = await response.text();
         const duration = Date.now() - startTime;
-        console.log("[Intern Proxy Bridge] FETCH_INTERNAL complete:", {
-          url: url,
-          status: response.status,
-          dataLength: text.length,
-          durationMs: duration,
-        });
         sendResponse({ success: true, status: response.status, data: text });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Okänt fel";
@@ -74,38 +62,13 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
     const daysRemaining = last ? Math.max(0, cooldownDays - elapsedDays) : 0;
     const shouldCheck = !last || elapsedDays >= cooldownDays;
 
-    console.log("[Intern Proxy Bridge] SAP_COOLDOWN_CHECK:", {
-      sapArticleId,
-      lastCheck: lastCheck || "never",
-      cooldownDays,
-      minDays,
-      maxDays,
-      elapsedDays: elapsedDays.toFixed(2),
-      daysRemaining: daysRemaining.toFixed(2),
-      shouldCheckNow: shouldCheck,
-    });
-
-    sendResponse({
-      success: true,
-      shouldCheck,
-      elapsedDays,
-      daysRemaining,
-      minDays,
-      maxDays,
-    });
+    sendResponse({ success: true, shouldCheck, elapsedDays, daysRemaining, minDays, maxDays });
     return true;
   }
 
-  // 4. Handle SAP_RECORD_CHECK - record that an article was checked (debug logging)
+  // 4. Handle SAP_RECORD_CHECK - loggas ej per artikel
   if (request.type === "SAP_RECORD_CHECK") {
     const { sapArticleId, hasShelfLife, shelfLifeDays, nextCheckDays } = request;
-    console.log("[Intern Proxy Bridge] SAP_RECORD_CHECK:", {
-      sapArticleId,
-      hasShelfLife,
-      shelfLifeDays: shelfLifeDays ?? "N/A",
-      nextCheckInDays: nextCheckDays,
-      recordedAt: new Date().toISOString(),
-    });
     sendResponse({ success: true, recorded: true });
     return true;
   }

@@ -460,14 +460,12 @@ async function fetchSapProductData(
     });
 
     if (!resp.ok) {
-      console.warn(`SAP request failed for ${sapArticleId}: ${resp.status} ${resp.statusText}`);
       return null;
     }
 
     const json = await resp.json();
     return (json.d ?? null) as SapProductData | null;
   } catch (err) {
-    console.warn(`Network error fetching SAP data for ${sapArticleId}:`, err);
     return null;
   }
 }
@@ -1676,11 +1674,6 @@ function ErstatningsCheckPage() {
                 try {
                   parsed = JSON.parse(json);
                 } catch (e) {
-                  console.error(
-                    `[SAP Proxy] JSON parse error for ${sapArticleId}:`,
-                    e,
-                    json.substring(0, 200),
-                  );
                   return {
                     sapArticleId,
                     error: "JSON parse error",
@@ -1861,13 +1854,8 @@ function ErstatningsCheckPage() {
 
         successCount += 1;
       } else {
-        // Promise.allSettled rejection
+        // Promise.allSettled rejection — agg. loggas ej per artikel
         errorCount += 1;
-        const sapArticleId = result.reason?.sapArticleId || "unknown";
-        console.error(
-          `[importShelfLifeFromSap] Promise rejected for ${sapArticleId}:`,
-          result.reason,
-        );
       }
     }
 
