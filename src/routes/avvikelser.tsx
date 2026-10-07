@@ -473,17 +473,17 @@ function IssuesPage() {
   const groups = groupsQuery.data ?? [];
 
   useEffect(() => {
-    setLoading(incidentsQuery.isLoading || storesQuery.isLoading || !user);
-    // Queries now handled by useQuery above; this effect only manages loading state
+    const next = incidentsQuery.isLoading || storesQuery.isLoading || !user;
+    setTimeout(() => setLoading(next), 0); // deferred to avoid cascading render
   }, [incidentsQuery.isLoading, storesQuery.isLoading, user]);
 
   useEffect(() => {
     if (!user) return;
-    const setStoreIdInNewIncident = () =>
+    // Defer state updates to avoid synchronous cascade in effect
+    setTimeout(() => {
       setNewIncident((p) => ({ ...p, store_id: activeStore?.id ?? "" }));
-    setStoreIdInNewIncident();
-    const loadCommonDefects = () => void fetchCommonDefects();
-    loadCommonDefects();
+      void fetchCommonDefects();
+    }, 0);
 
     // Auto-restore draft if exists
     try {

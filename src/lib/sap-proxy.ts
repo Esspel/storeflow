@@ -199,59 +199,6 @@ const SAP_BASE_URL = "https://s4r.sap.coop.se";
  * Only transient errors (chrome.runtime errors, missing responses) are
  * retried. Proxy-reported application errors are NOT retried.
  */
-export async function retryFetchViaProxy(
-  url: string,
-  method: string = "GET",
-  headers: Record<string, string> = {},
-  maxRetries: number = 3,
-  baseDelayMs: number = 500,
-): Promise<ProxyResponse> {
-  let lastError: Error | null = null;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fetchViaProxy(url, method, headers);
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      const isTransient =
-        lastError.message.includes("Chrome Extension") ||
-        lastError.message.includes("Runtime error") ||
-        lastError.message.includes("Inget svar från extensionen") ||
-        lastError.message.includes("Okänt fel vid hämtning via proxy") ||
-        lastError.message.includes("Failed") ||
-        lastError.message.includes("port") ||
-        lastError.message.includes("connection") ||
-        lastError.message.includes("Could not establish connection") ||
-        lastError.message.includes("The message port closed");
-
-      if (!isTransient || attempt === maxRetries) {
-        console.error("[SAP PROXY FAILURE — EXPLICIT] URL=" + url + " | ATTEMPT=" + (attempt + 1) + "/" + maxRetries + " | IS_TRANSIENT=" + isTransient + " | ERROR_MESSAGE=" + (lastError ? lastError.message : "NONE") + " | ERROR_TYPE=" + (lastError ? (lastError.constructor ? lastError.constructor.name : "unknown") : "none") + " | FULL_ERROR_DETAIL=", {
-          url: url,
-          attempt: attempt + 1,
-          maxRetries: maxRetries,
-          error: lastError.message,
-          isTransient: isTransient,
-          timestamp: new Date().toISOString(),
-        });
-        throw lastError;
-      }
-
-      const delayMs = baseDelayMs * Math.pow(2, attempt);
-      console.warn(
-        `[SAP Proxy] Retry ${attempt + 1}/${maxRetries} after ${delayMs}ms:`,
-        lastError.message,
-      );
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
-  }
-
-  throw lastError ?? new Error("Okänt fel vid hämtning via proxy");
-}
-
-/**
- * Fetch product data from SAP via the Chrome Extension proxy.
- * Uses 2 second interval to avoid rate limits.
- */
 export async function fetchSapProductData(
   storeId: string,
   sapArticleId: string,

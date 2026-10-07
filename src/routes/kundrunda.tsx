@@ -544,14 +544,16 @@ function KundrundaPage() {
   // Auto-initialize local version for managers; show version dialog when pending flag transitions false→true
   useEffect(() => {
     if (loading) return;
-    if (isManager && activeStore && localVersion === null) {
-      ensureLocalVersionRecord();
-    }
-    const pending = localVersion?.central_version_pending ?? false;
-    if (pending && prevCentralPendingRef.current === false) {
-      setShowVersionChoiceDialog(true);
-    }
-    prevCentralPendingRef.current = pending;
+    setTimeout(() => {
+      if (isManager && activeStore && localVersion === null) {
+        ensureLocalVersionRecord();
+      }
+      const pending = localVersion?.central_version_pending ?? false;
+      if (pending && prevCentralPendingRef.current === false) {
+        setShowVersionChoiceDialog(true);
+      }
+      prevCentralPendingRef.current = pending;
+    }, 0);
   }, [loading, localVersion, isManager, isAdmin, activeStore]);
 
   // Zones used during a session: prefer store-local, fall back to global

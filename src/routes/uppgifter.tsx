@@ -947,7 +947,7 @@ function TasksPage() {
 
   useEffect(() => {
     if (!user) {
-      setLoading(true);
+      setTimeout(() => setLoading(true), 0);
       return;
     }
     const timer = setTimeout(() => {

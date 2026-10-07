@@ -1989,7 +1989,6 @@ function ErstatningsCheckPage() {
 
       const { error: shelfLifeError } = await supabase.from("product_shelf_life").upsert(
         {
-          store_id: activeStore!.id,
           sap_article_id: sapArticleId,
           shelf_lifetime_days: 365,
           sap_data_missing: false,
