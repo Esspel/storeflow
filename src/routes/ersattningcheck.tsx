@@ -1350,6 +1350,7 @@ function ErstatningsCheckPage() {
           supabaseClient,
           "product_shelf_life",
           "sap_article_id, shelf_lifetime_days, default_compensation_price_ore, sap_data_missing, next_sap_check",
+          { column: "store_id", value: activeStore!.id },
         ),
         fetchAllRows(
           supabaseClient,
@@ -1549,7 +1550,8 @@ function ErstatningsCheckPage() {
     // Hämta global cooldown-status (alla butiker, inte bara aktiv butik)
     const { data: existingShelfLife } = await supabase
       .from("product_shelf_life")
-      .select("sap_article_id, shelf_lifetime_days, next_sap_check, sap_data_missing");
+      .select("sap_article_id, shelf_lifetime_days, next_sap_check, sap_data_missing")
+      .eq("store_id", activeStore!.id);
 
     const existingMap = new Map(
       (existingShelfLife ?? []).map((r: any) => [
