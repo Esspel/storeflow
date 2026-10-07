@@ -1729,13 +1729,13 @@ function ErstatningsCheckPage() {
           if (isFirstTime) firstTimeCount += 1;
           missingInSapCount += 1;
 
-          const cooldownDays = Math.floor(Math.random() * (90 - 60 + 1)) + 60;
+          // Kort cooldown vid transient/proxy-fel så artikeln försöks igen
+          const cooldownDays = 3;
           const nextSapCheck = new Date();
           nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
 
           const { error: upsertError } = await supabase.from("product_shelf_life").upsert(
             {
-              store_id: activeStore!.id,
               sap_article_id: sapArticleId,
               shelf_lifetime_days: 0,
               sap_data_missing: true,
@@ -1772,7 +1772,6 @@ function ErstatningsCheckPage() {
 
           const { error: upsertError } = await supabase.from("product_shelf_life").upsert(
             {
-              store_id: activeStore!.id,
               sap_article_id: sapArticleId,
               shelf_lifetime_days: 0,
               sap_data_missing: true,
@@ -1812,12 +1811,16 @@ function ErstatningsCheckPage() {
           cooldownDays = Math.floor(Math.random() * (90 - 60 + 1)) + 60;
         }
 
+        // Vid proxy-/parse-fel: sätt kort cooldown så artikeln försöks igen snart
+        if (type === "proxy_failure" || type === "parse_error" || type === "no_json") {
+          cooldownDays = 3; // kort väntan vid transient fel
+        }
+
         const nextSapCheck = new Date();
         nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
 
         const { error: upsertError } = await supabase.from("product_shelf_life").upsert(
           {
-            store_id: activeStore!.id,
             sap_article_id: sapArticleId,
             shelf_lifetime_days: hasValidSapData ? shelfLifeDays : 0,
             sap_data_missing: !hasValidSapData,
