@@ -1021,7 +1021,7 @@ function ErstatningsCheckPage() {
           arrival_date: result.row.leveransdag,
           best_before_date: result.row.bastForeDatum,
           quantity: Number.parseInt(result.row.levereradKvantitet, 10) || 0,
-          status: result.row.leveransstatus || "delivered",
+          status: result.row.leveransstatus || "Levererad",
           delivery_number: result.row.leveransnummer || null,
           order_number: result.row.ordernummer || null,
           order_line: result.row.orderrad || null,
@@ -1372,20 +1372,25 @@ function ErstatningsCheckPage() {
 
       const latestDelivery = new Map<string, any>();
       for (const [sapArticleId, deliveries] of deliveriesByArticle) {
-        let delivered: any = null;
-        let withArrival: any = null;
+        // Arrayen är sorterad med senaste arrival_date först.
+        // Prioritet: först "Levererad"-status, annars vilken som helst med arrival_date.
+        let found: any = null;
         for (const d of deliveries) {
-          if (!delivered && d.status === "Levererad" && d.arrival_date) {
-            delivered = d;
-          } else if (!withArrival && d.arrival_date) {
-            withArrival = d;
+          if (d.status === "Levererad" && d.arrival_date) {
+            found = d;
+            break;
           }
-          if (delivered && withArrival) break;
         }
-        if (delivered) {
-          latestDelivery.set(sapArticleId, delivered);
-        } else if (withArrival) {
-          latestDelivery.set(sapArticleId, withArrival);
+        if (!found) {
+          for (const d of deliveries) {
+            if (d.arrival_date) {
+              found = d;
+              break;
+            }
+          }
+        }
+        if (found) {
+          latestDelivery.set(sapArticleId, found);
         }
       }
 
@@ -2558,7 +2563,7 @@ function ErstatningsCheckPage() {
             arrival_date: new Date().toISOString(),
             best_before_date: u.expiry_date,
             quantity: 0,
-            status: "delivered",
+            status: "Levererad",
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
