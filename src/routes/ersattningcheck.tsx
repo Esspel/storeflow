@@ -604,22 +604,6 @@ export const Route = createFileRoute("/ersattningcheck")({
 
 function ErstatningsCheckPage() {
   const { user, activeStore, loading: authLoading, hasCheckedAuth } = useAuth();
-  // Cache products-data per store so we don't fetch it 3+ times.
-  const [productsCache, setProductsCache] = useState<
-    Array<{ id: string; sap_article_id: string; name: string; brand: string; category: string; ean: string | null; bnr: string | null; is_active: boolean }> | null
-  >(null);
-
-  async function getProductsData(storeId: string) {
-    if (productsCache) return productsCache;
-    const data = await fetchAllRows(
-      supabase,
-      "products",
-      "id, sap_article_id, name, brand, category, ean, bnr, is_active",
-      { column: "store_id", value: storeId },
-    );
-    setProductsCache(data ?? []);
-    return data ?? [];
-  }
   const [step, setStep] = useState<
     | "dashboard"
     | "reclamations"
@@ -1358,7 +1342,10 @@ function ErstatningsCheckPage() {
     setIsLoading(true);
     try {
       const [productsData, masterData, deliveriesData] = await Promise.all([
-        getProductsData(activeStore!.id),
+        fetchAllRows(supabaseClient, "products", "id, sap_article_id, name, brand, category", {
+          column: "store_id",
+          value: activeStore!.id,
+        }),
         fetchAllRows(
           supabaseClient,
           "product_shelf_life",
@@ -1385,14 +1372,20 @@ function ErstatningsCheckPage() {
 
       const latestDelivery = new Map<string, any>();
       for (const [sapArticleId, deliveries] of deliveriesByArticle) {
-        const delivered = deliveries.filter((d) => d.status === "Levererad" && d.arrival_date);
-        if (delivered.length > 0) {
-          latestDelivery.set(sapArticleId, delivered[0]);
-          continue;
+        let delivered: any = null;
+        let withArrival: any = null;
+        for (const d of deliveries) {
+          if (!delivered && d.status === "Levererad" && d.arrival_date) {
+            delivered = d;
+          } else if (!withArrival && d.arrival_date) {
+            withArrival = d;
+          }
+          if (delivered && withArrival) break;
         }
-        const withArrival = deliveries.filter((d) => d.arrival_date);
-        if (withArrival.length > 0) {
-          latestDelivery.set(sapArticleId, withArrival[0]);
+        if (delivered) {
+          latestDelivery.set(sapArticleId, delivered);
+        } else if (withArrival) {
+          latestDelivery.set(sapArticleId, withArrival);
         }
       }
 
@@ -1440,11 +1433,12 @@ function ErstatningsCheckPage() {
       );
       setDeliveryStatistics(
         Array.from(
-          (deliveriesData ?? []).reduce((acc: Map<string, DeliveryStatistic>, delivery: any) => {
-            if (!delivery.delivery_number && !delivery.arrival_date) return acc;
-            const deliveryKey =
-              delivery.delivery_number ||
-              `article-${delivery.sap_article_id}-${delivery.arrival_date || "no-date"}`;
+          (deliveriesData ?? [])
+            .reduce((acc: Map<string, DeliveryStatistic>, delivery: any) => {
+              if (!delivery.delivery_number && !delivery.arrival_date) return acc;
+              const deliveryKey =
+                delivery.delivery_number ||
+                `article-${delivery.sap_article_id}-${delivery.arrival_date || "no-date"}`;
               const qty = parseInt(delivery.quantity || delivery.qty || 0, 10) || 0;
               const expiry = delivery.best_before_date || "";
               const arrival = delivery.arrival_date || "";
