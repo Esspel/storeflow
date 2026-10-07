@@ -355,8 +355,9 @@ export async function matchDeliveryNoteToProducts(
     const sapId = row.sapProduktId ?? "";
     const bnr = row.bnr ?? "";
 
-    // Matcha först mot Mat-nr (SAP produkt-ID), sedan BNR
-    const existing = sapId ? bySapId.get(sapId) : bnr ? byBnr.get(bnr) : undefined;
+    // Matcha först mot Mat-nr (SAP produkt-ID), sedan BNR.
+    // Ursprunglig logik: matcha om ANTALINEN sapId ELLER bnr matchar.
+    const existing = (sapId && bySapId.get(sapId)) || (bnr && byBnr.get(bnr)) || undefined;
 
     if (existing) {
       return { row, product: existing, isNewProduct: false };
