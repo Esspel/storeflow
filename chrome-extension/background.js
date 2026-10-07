@@ -42,7 +42,7 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
         const duration = Date.now() - startTime;
         sendResponse({ success: true, status: response.status, data: text });
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Okänt fel";
+        const message = error instanceof Error ? ("PROXY_ERROR: " + (error.message || "No message") + " | Type: " + error.constructor.name + " | Stack: " + (error.stack || "none")) : ("PROXY_ERROR: " + String(error) + " | Type: unknown");
         console.error("[Intern Proxy Bridge] FETCH_INTERNAL failed (DETALJ):", {
           url: url,
           error: message,

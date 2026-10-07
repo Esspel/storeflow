@@ -1636,7 +1636,7 @@ function ErstatningsCheckPage() {
       const total = prioritizedEligible.length;
       const fetched = successCount + errorCount;
       const withShelfLife = successCount;
-      const withoutShelfLife = errorCount + missingInSapCount;
+      const withoutShelfLife = missingInSapCount; // endast artiklar som saknas i SAP, inte fel
       const remaining = total - fetched;
       console.log(
         `[SAP Status] Hämtade: ${fetched}/${total} | Med shelfLife: ${withShelfLife} | Utan: ${withoutShelfLife} | Kvar: ${remaining}`,
