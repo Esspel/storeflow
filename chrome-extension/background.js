@@ -43,10 +43,16 @@ chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => 
         sendResponse({ success: true, status: response.status, data: text });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Okänt fel";
-        console.error("[Intern Proxy Bridge] FETCH_INTERNAL failed:", {
+        console.error("[Intern Proxy Bridge] FETCH_INTERNAL failed (DETALJ):", {
           url: url,
           error: message,
           durationMs: Date.now() - startTime,
+          method: request.method || "GET",
+          responseStatus: "N/A (fetch kastade)",
+          senderTabUrl: sender?.tab?.url ?? "N/A",
+          senderTabId: sender?.tab?.id ?? "N/A",
+          requestHeaders: request.headers || {},
+          timestamp: new Date().toISOString(),
         });
         sendResponse({ success: false, error: message });
       }

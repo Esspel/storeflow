@@ -220,7 +220,15 @@ export async function retryFetchViaProxy(
         lastError.message.includes("Okänt fel vid hämtning via proxy");
 
       if (!isTransient || attempt === maxRetries) {
-        throw lastError;
+        console.error("[SAP Proxy] RETRY FAILED (detalj):", {
+        url: url,
+        attempt: attempt + 1,
+        maxRetries: maxRetries,
+        error: lastError.message,
+        isTransient: isTransient,
+        timestamp: new Date().toISOString(),
+      });
+      throw lastError;
       }
 
       const delayMs = baseDelayMs * Math.pow(2, attempt);
