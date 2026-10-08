@@ -2221,28 +2221,36 @@ function AccountsPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label>IP-adress</Label>
-                    <Input
-                      value={bindIpAddress}
-                      onChange={(e) => setBindIpAddress(e.target.value)}
-                      placeholder="t.ex. 192.168.1.10"
-                    />
+                    <Label>IP-adress (auto)</Label>
+                    <Input disabled value="Hämtas automatiskt från nätverk..." className="text-coop-gray-500" />
                   </div>
                 </div>
                 <DialogFooter>
                   <Button
                     onClick={async () => {
-                      if (!bindIpStore || !bindIpAddress) return;
-                      await supabase
-                        .from("store_ips")
-                        .insert({ store_id: bindIpStore, ip_address: bindIpAddress });
+                      if (!bindIpStore) return;
+                      // Auto-hämta IP från ifconfig.co
+                      let myIp = "";
+                      try {
+                        const res = await fetch("https://ifconfig.co/?format=json", { method: "GET", cache: "no-store" }).catch(() => null);
+                        if (res && res.ok) {
+                          const j = await res.json();
+                          myIp = j.ip || j.ipv4 || "";
+                        }
+                      } catch {
+                        // Ignorera
+                      }
+                      if (!myIp) {
+                        alert("Kunde inte automatiskt hämta IP-adress från nätverket.");
+                        return;
+                      }
+                      await supabase.from("store_ips").insert({ store_id: bindIpStore, ip_address: myIp });
                       setShowBindIp(false);
                       setBindIpStore("");
-                      setBindIpAddress("");
                       loadStoreIps();
                     }}
                   >
-                    Spara
+                    Bind IP automatiskt
                   </Button>
                 </DialogFooter>
               </DialogContent>
