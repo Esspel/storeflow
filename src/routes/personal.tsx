@@ -234,6 +234,11 @@ function AccountsPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
+  const [showBindIp, setShowBindIp] = useState(false);
+  const [bindIpStore, setBindIpStore] = useState("");
+  const [bindIpAddress, setBindIpAddress] = useState("");
+  const [bindIpList, setBindIpList] = useState<{ id: string; ip_address: string }[]>([]);
+
   const isAdmin = currentUser?.role === "admin";
   const isManager = currentUser?.role === "manager" || isAdmin;
 
@@ -1306,14 +1311,12 @@ function AccountsPage() {
             Användare
           </TabsTrigger>
           {isAdmin && (
-            <TabsTrigger
-              value="stores"
-              className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
-            >
-              Butiker
+            <TabsTrigger value="store-ips" className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm">
+              Butik IP
             </TabsTrigger>
           )}
           <TabsTrigger
+            value="stores"
             value="groups"
             className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
           >
@@ -2101,6 +2104,14 @@ function AccountsPage() {
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          {/* ─── STORE IPs TAB ─── */}
+          <TabsContent value="store-ips" className="mt-6 space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold text-coop-gray-900">Butik IP-bindning</h2>
+              <p className="text-sm text-coop-gray-600">Bind IP-adresser till butiker för snabb inloggning</p>
+            </div>
           </TabsContent>
         )}
       </Tabs>
