@@ -32,25 +32,29 @@ function QuickLoginPage() {
     })();
   }, []);
 
-  // Auto-identifiera butik via IP (om store_ips finns)
+  // Auto-identifiera butik via IP (om store_ips finns) — fallback vid blockering
   useEffect(() => {
     (async () => {
+      let myIp: string | null = null;
       try {
-        const res = await fetch("https://api.ipify.org?format=json").catch(() => null);
-        const myIp = res ? (await res.json()).ip : null;
-        if (!myIp) return;
-        const { data: ipMatch } = await supabase
-          .from("store_ips")
-          .select("store_id")
-          .eq("ip_address", myIp)
-          .limit(1);
+        const res = await fetch("https://api.ipify.org?format=json", { method: "GET", cache: "no-store" }).catch(() => null);
+        if (res && res.ok) {
+          const json = await res.json();
+          myIp = json.ip || null;
+        }
+      } catch {
+        // IGNORERA — ipify kan blockeras
+      }
+      if (!myIp) return;
+      try {
+        const { data: ipMatch } = await supabase.from("store_ips").select("store_id").eq("ip_address", myIp).limit(1);
         if (ipMatch && ipMatch.length > 0) {
           setStoreId(ipMatch[0].store_id);
           const storeData = stores.find((s) => s.id === ipMatch[0].store_id);
           if (storeData) setAutoStoreName(storeData.name);
         }
       } catch {
-        // Ignorera IP-fel
+        // IGNORERA DB-fel
       }
     })();
   }, [stores]);

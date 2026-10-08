@@ -2138,8 +2138,15 @@ function AccountsPage() {
             <div className="flex flex-wrap gap-3">
               <Button
                 variant="outline"
-                onClick={() => {
-                  setBindIpStore("");
+                onClick={async () => {
+                  const activeStoreId = currentUserStores[0]?.id ?? "";
+                  if (!activeStoreId) {
+                    setBindIpStore("");
+                    setBindIpAddress("");
+                    setShowBindIp(true);
+                    return;
+                  }
+                  setBindIpStore(activeStoreId);
                   setBindIpAddress("");
                   setShowBindIp(true);
                 }}
