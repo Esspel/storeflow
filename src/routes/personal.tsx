@@ -2232,7 +2232,7 @@ function AccountsPage() {
                       // Auto-hämta IP från ifconfig.co
                       let myIp = "";
                       try {
-                        const res = await fetch("https://ifconfig.co/?format=json", { method: "GET", cache: "no-store" }).catch(() => null);
+                        const res = await fetch("https://ifconfig.co/json", { method: "GET", cache: "no-store" }).catch(() => null);
                         if (res && res.ok) {
                           const j = await res.json();
                           myIp = j.ip || j.ipv4 || "";
