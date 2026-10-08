@@ -38,7 +38,11 @@ function QuickLoginPage() {
       let myIp: string | null = null;
       try {
         // curl -4 ifconfig.co/ motsvarar IPv4-only; här använder vi fetch med prefer IPv4
-        const res = await fetch("https://ifconfig.co/?format=json", { method: "GET", cache: "no-store", headers: { "Accept": "application/json" } }).catch(() => null);
+        const res = await fetch("https://ifconfig.co/?format=json", {
+          method: "GET",
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }).catch(() => null);
         if (res && res.ok) {
           const json = await res.json();
           myIp = json.ip || null;
@@ -48,7 +52,11 @@ function QuickLoginPage() {
       }
       if (!myIp) return;
       try {
-        const { data: ipMatch } = await supabase.from("store_ips").select("store_id").eq("ip_address", myIp).limit(1);
+        const { data: ipMatch } = await supabase
+          .from("store_ips")
+          .select("store_id")
+          .eq("ip_address", myIp)
+          .limit(1);
         if (ipMatch && ipMatch.length > 0) {
           setStoreId(ipMatch[0].store_id);
           const storeData = stores.find((s) => s.id === ipMatch[0].store_id);
