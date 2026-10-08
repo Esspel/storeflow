@@ -237,7 +237,9 @@ function AccountsPage() {
   const [showBindIp, setShowBindIp] = useState(false);
   const [bindIpStore, setBindIpStore] = useState("");
   const [bindIpAddress, setBindIpAddress] = useState("");
-  const [bindIpList, setBindIpList] = useState<{ id: string; ip_address: string }[]>([]);
+  const [bindIpList, setBindIpList] = useState<
+    { id: string; store_id: string; ip_address: string }[]
+  >([]);
 
   const isAdmin = currentUser?.role === "admin";
   const isManager = currentUser?.role === "manager" || isAdmin;
@@ -418,6 +420,7 @@ function AccountsPage() {
     setDistrikt((distriktRes.data ?? []) as Distrikt[]);
     setLoading(false);
     loadGroups();
+    loadStoreIps();
   }
 
   async function fetchUsers() {
@@ -439,6 +442,14 @@ function AccountsPage() {
       );
     }
     setUsers(mapped);
+  }
+
+  async function loadStoreIps() {
+    const { data } = await supabase
+      .from("store_ips")
+      .select("id, store_id, ip_address")
+      .order("ip_address");
+    setBindIpList((data ?? []) as { id: string; store_id: string; ip_address: string }[]);
   }
 
   const USER_CSV_HEADERS = [
@@ -1311,12 +1322,20 @@ function AccountsPage() {
             Användare
           </TabsTrigger>
           {isAdmin && (
-            <TabsTrigger value="store-ips" className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm">
+            <TabsTrigger
+              value="store-ips"
+              className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
+            >
               Butik IP
             </TabsTrigger>
           )}
           <TabsTrigger
             value="stores"
+            className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
+          >
+            Butiker
+          </TabsTrigger>
+          <TabsTrigger
             value="groups"
             className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
           >
@@ -2105,13 +2124,122 @@ function AccountsPage() {
               </div>
             )}
           </TabsContent>
+        )}
 
-          {/* ─── STORE IPs TAB ─── */}
+        {isAdmin && (
           <TabsContent value="store-ips" className="mt-6 space-y-6">
             <div>
               <h2 className="text-xl font-semibold text-coop-gray-900">Butik IP-bindning</h2>
-              <p className="text-sm text-coop-gray-600">Bind IP-adresser till butiker för snabb inloggning</p>
+              <p className="text-sm text-coop-gray-600">
+                Bind IP-adresser till butiker för snabb inloggning
+              </p>
             </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setBindIpStore("");
+                  setBindIpAddress("");
+                  setShowBindIp(true);
+                }}
+              >
+                <Plus className="h-4 w-4 mr-1" /> Binda IP
+              </Button>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/60 text-coop-gray-900">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-medium">Butik</th>
+                    <th className="text-left px-4 py-3 font-medium">IP-adress</th>
+                    <th className="text-right px-4 py-3 font-medium">Åtgärd</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {bindIpList.map((row) => (
+                    <tr key={row.id} className="hover:bg-muted/40">
+                      <td className="px-4 py-3">
+                        {stores.find((s) => s.id === row.store_id)?.name || row.store_id}
+                      </td>
+                      <td className="px-4 py-3 font-mono">{row.ip_address}</td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            supabase
+                              .from("store_ips")
+                              .delete()
+                              .eq("id", row.id)
+                              .then(() => loadStoreIps())
+                          }
+                        >
+                          Radera
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {bindIpList.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-6 text-center text-coop-gray-500">
+                        Inga IP-bindningar än.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <Dialog open={showBindIp} onOpenChange={setShowBindIp}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Binda IP till butik</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3 py-2">
+                  <div>
+                    <Label>Butik</Label>
+                    <Select value={bindIpStore} onValueChange={setBindIpStore}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Välj butik" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stores.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>IP-adress</Label>
+                    <Input
+                      value={bindIpAddress}
+                      onChange={(e) => setBindIpAddress(e.target.value)}
+                      placeholder="t.ex. 192.168.1.10"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    onClick={async () => {
+                      if (!bindIpStore || !bindIpAddress) return;
+                      await supabase
+                        .from("store_ips")
+                        .insert({ store_id: bindIpStore, ip_address: bindIpAddress });
+                      setShowBindIp(false);
+                      setBindIpStore("");
+                      setBindIpAddress("");
+                      loadStoreIps();
+                    }}
+                  >
+                    Spara
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
         )}
       </Tabs>

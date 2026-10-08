@@ -39,7 +39,11 @@ function QuickLoginPage() {
         const res = await fetch("https://api.ipify.org?format=json").catch(() => null);
         const myIp = res ? (await res.json()).ip : null;
         if (!myIp) return;
-        const { data: ipMatch } = await supabase.from("store_ips").select("store_id").eq("ip_address", myIp).limit(1);
+        const { data: ipMatch } = await supabase
+          .from("store_ips")
+          .select("store_id")
+          .eq("ip_address", myIp)
+          .limit(1);
         if (ipMatch && ipMatch.length > 0) {
           setStoreId(ipMatch[0].store_id);
           const storeData = stores.find((s) => s.id === ipMatch[0].store_id);
@@ -59,7 +63,11 @@ function QuickLoginPage() {
       return;
     }
     (async () => {
-      const { data } = await supabase.from("app_users").select("id, username, display_name").eq("store_id", storeId).order("display_name");
+      const { data } = await supabase
+        .from("app_users")
+        .select("id, username, display_name")
+        .eq("store_id", storeId)
+        .order("display_name");
       if (data) setUsers(data);
     })();
   }, [storeId]);
@@ -81,7 +89,7 @@ function QuickLoginPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/quick-switch`, {
+      const res = await fetch(`/functions/v1/quick-switch`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -111,16 +119,22 @@ function QuickLoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coop-green-100 text-coop-green-700 mb-4">
             <Store size={32} />
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-coop-gray-900">Välj butik</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-coop-gray-900">
+            Välj butik
+          </h1>
           <p className="text-coop-gray-600 text-sm mt-2">För snabb inloggning på butiksdator</p>
           {autoStoreName && (
-            <p className="text-xs text-coop-green-700 font-medium mt-1">Automatiskt identifierad: {autoStoreName}</p>
+            <p className="text-xs text-coop-green-700 font-medium mt-1">
+              Automatiskt identifierad: {autoStoreName}
+            </p>
           )}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <Label htmlFor="store" className="text-base text-coop-gray-900">Butik</Label>
+            <Label htmlFor="store" className="text-base text-coop-gray-900">
+              Butik
+            </Label>
             <select
               id="store"
               value={storeId}
@@ -131,14 +145,17 @@ function QuickLoginPage() {
               <option value="">Välj butik...</option>
               {stores.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name}{s.city ? ` (${s.city})` : ""}
+                  {s.name}
+                  {s.city ? ` (${s.city})` : ""}
                 </option>
               ))}
             </select>
           </div>
 
           <div>
-            <Label htmlFor="user" className="text-base text-coop-gray-900">Användare</Label>
+            <Label htmlFor="user" className="text-base text-coop-gray-900">
+              Användare
+            </Label>
             <select
               id="user"
               value={userId}
@@ -157,7 +174,9 @@ function QuickLoginPage() {
           </div>
 
           <div>
-            <Label htmlFor="pin" className="text-base text-coop-gray-900">PIN-kod</Label>
+            <Label htmlFor="pin" className="text-base text-coop-gray-900">
+              PIN-kod
+            </Label>
             <div className="relative mt-2">
               <Input
                 id="pin"
@@ -173,13 +192,19 @@ function QuickLoginPage() {
                 className="text-center text-2xl tracking-[0.5em] h-16 rounded-xl border-2 border-coop-gray-300 focus:border-coop-green-600 focus:ring-coop-green-300 font-mono bg-coop-gray-50 text-coop-gray-900"
                 autoComplete="off"
               />
-              <KeyRound className="absolute right-4 top-1/2 -translate-y-1/2 text-coop-gray-500" size={20} />
+              <KeyRound
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-coop-gray-500"
+                size={20}
+              />
             </div>
             <p className="text-xs text-coop-gray-500 mt-2">Endast siffror. Minst 4 tecken.</p>
           </div>
 
           {error && (
-            <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200" role="alert">
+            <div
+              className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 border border-red-200"
+              role="alert"
+            >
               {error}
             </div>
           )}
@@ -201,7 +226,10 @@ function QuickLoginPage() {
 
         <div className="mt-6 pt-6 border-t border-coop-gray-200 text-center text-sm text-coop-gray-600">
           <p>Administratör?</p>
-          <Link to="/login" className="text-coop-green-700 hover:text-coop-green-800 font-medium underline underline-offset-2">
+          <Link
+            to="/login"
+            className="text-coop-green-700 hover:text-coop-green-800 font-medium underline underline-offset-2"
+          >
             Logga in med användarnamn och lösenord
           </Link>
         </div>
