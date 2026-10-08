@@ -72,30 +72,13 @@ function QuickLoginPage() {
       return;
     }
     (async () => {
-      // Hämta användare kopplade till butik via user_stores (fler-butik-användare)
-      const { data: linked } = await supabase
-        .from("user_stores")
-        .select("user_id")
-        .eq("store_id", storeId);
-      const userIds = (linked ?? []).map((r: any) => r.user_id);
-      if (userIds.length === 0) {
-        // Fallback: användare med direkt store_id på app_users
-        const { data } = await supabase
-          .from("app_users")
-          .select("id, username, display_name")
-          .eq("store_id", storeId)
-          .eq("is_active", true)
-          .order("display_name");
-        if (data) setUsers(data);
-      } else {
-        const { data } = await supabase
-          .from("app_users")
-          .select("id, username, display_name")
-          .in("id", userIds)
-          .eq("is_active", true)
-          .order("display_name");
-        if (data) setUsers(data);
-      }
+      const { data } = await supabase
+        .from("app_users")
+        .select("id, username, display_name")
+        .eq("store_id", storeId)
+        .eq("is_active", true)
+        .order("display_name");
+      if (data) setUsers(data);
     })();
   }, [storeId]);
 
@@ -143,7 +126,7 @@ function QuickLoginPage() {
     <div className="min-h-screen bg-coop-gray-100 flex flex-col items-center justify-center px-6 py-12">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-8 md:p-10 border border-coop-gray-200">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coop-green-100 text-coop-green-700 mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coop-gron-100 text-coop-gron-700 mb-4">
             <Store size={32} />
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-coop-gray-900">
@@ -151,7 +134,7 @@ function QuickLoginPage() {
           </h1>
           <p className="text-coop-gray-600 text-sm mt-2">För snabb inloggning på butiksdator</p>
           {autoStoreName && (
-            <p className="text-xs text-coop-green-700 font-medium mt-1">
+            <p className="text-xs text-coop-gron-700 font-medium mt-1">
               Automatiskt identifierad: {autoStoreName}
             </p>
           )}
@@ -166,7 +149,7 @@ function QuickLoginPage() {
               id="store"
               value={storeId}
               onChange={(e) => setStoreId(e.target.value)}
-              className="mt-2 w-full rounded-xl border border-coop-gray-300 bg-white px-4 py-3 text-base text-coop-gray-900 focus:outline-none focus:ring-2 focus:ring-coop-green-500 focus:ring-offset-1"
+              className="mt-2 w-full rounded-xl border border-coop-gray-300 bg-white px-4 py-3 text-base text-coop-gray-900 focus:outline-none focus:ring-2 focus:ring-coop-gron-500 focus:ring-offset-1"
               required
             >
               <option value="">Välj butik...</option>
@@ -188,7 +171,7 @@ function QuickLoginPage() {
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
               disabled={!storeId}
-              className="mt-2 w-full rounded-xl border border-coop-gray-300 bg-white px-4 py-3 text-base text-coop-gray-900 focus:outline-none focus:ring-2 focus:ring-coop-green-500 focus:ring-offset-1 disabled:opacity-50"
+              className="mt-2 w-full rounded-xl border border-coop-gray-300 bg-white px-4 py-3 text-base text-coop-gray-900 focus:outline-none focus:ring-2 focus:ring-coop-gron-500 focus:ring-offset-1 disabled:opacity-50"
               required
             >
               <option value="">Välj användare...</option>
@@ -204,27 +187,55 @@ function QuickLoginPage() {
             <Label htmlFor="pin" className="text-base text-coop-gray-900">
               PIN-kod
             </Label>
-            <div className="relative mt-2">
-              <Input
-                id="pin"
-                type="password"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="4 siffror"
-                value={pin}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, "").slice(0, 6);
-                  setPin(val);
-                }}
-                className="text-center text-2xl tracking-[0.5em] h-16 rounded-xl border-2 border-coop-gray-300 focus:border-coop-green-600 focus:ring-coop-green-300 font-mono bg-coop-gray-50 text-coop-gray-900"
-                autoComplete="off"
-              />
-              <KeyRound
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-coop-gray-500"
-                size={20}
-              />
+            <div className="mt-2 text-center">
+              {/* PIN dots */}
+              <div className="flex justify-center gap-3 mb-3">
+                {[0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className={`h-3 w-3 rounded-full border-2 transition-all duration-100 ${pin.length > i ? "border-coop-gron-600 bg-coop-gron-600 scale-110" : "border-coop-gray-300 bg-transparent"}`}
+                  />
+                ))}
+              </div>
+              <p className="text-xs text-coop-gray-600 mb-3">Ange din 4-siffriga PIN</p>
             </div>
-            <p className="text-xs text-coop-gray-500 mt-2">Endast siffror. Minst 4 tecken.</p>
+            {/* PIN pad */}
+            <div className="grid grid-cols-3 gap-3">
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => {
+                    if (pin.length >= 4 || loading) return;
+                    setPin(pin + d);
+                    setError("");
+                  }}
+                  disabled={loading || pin.length >= 4}
+                  className="flex h-14 items-center justify-center rounded-2xl border border-coop-gray-300 bg-coop-gray-50 text-xl font-semibold text-coop-gray-900 transition-all active:scale-95 hover:bg-coop-gray-100 disabled:opacity-50"
+                >
+                  {d}
+                </button>
+              ))}
+              <button
+                onClick={() => {
+                  setPin("");
+                  setError("");
+                }}
+                disabled={loading}
+                className="flex h-14 items-center justify-center rounded-2xl text-xs font-medium text-coop-gray-600 transition-all hover:bg-coop-gray-100 disabled:opacity-50"
+              >
+                Rensa
+              </button>
+              <button
+                onClick={() => {
+                  if (pin.length < 4 && !loading) setPin(pin + "0");
+                  setError("");
+                }}
+                disabled={loading || pin.length >= 4}
+                className="flex h-14 items-center justify-center rounded-2xl border border-coop-gray-300 bg-coop-gray-50 text-xl font-semibold text-coop-gray-900 transition-all active:scale-95 hover:bg-coop-gray-100 disabled:opacity-50"
+              >
+                0
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -239,7 +250,7 @@ function QuickLoginPage() {
           <Button
             type="submit"
             disabled={loading || !storeId || !userId || !pin || pin.length < 4}
-            className="w-full h-16 rounded-2xl text-xl font-bold shadow-lg bg-coop-green-600 hover:bg-coop-green-700 text-white transition-all duration-200 active:scale-[0.98]"
+            className="w-full h-16 rounded-2xl text-xl font-bold shadow-lg bg-coop-gron-600 hover:bg-coop-gron-700 text-white transition-all duration-200 active:scale-[0.98]"
           >
             {loading ? (
               <span className="animate-pulse">Loggar in...</span>
@@ -255,7 +266,7 @@ function QuickLoginPage() {
           <p>Administratör?</p>
           <Link
             to="/login"
-            className="text-coop-green-700 hover:text-coop-green-800 font-medium underline underline-offset-2"
+            className="text-coop-gron-700 hover:text-coop-gron-800 font-medium underline underline-offset-2"
           >
             Logga in med användarnamn och lösenord
           </Link>
