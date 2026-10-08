@@ -607,6 +607,32 @@ export const Route = createFileRoute("/ersattningcheck")({
 
 function ErstatningsCheckPage() {
   const { user, activeStore, loading: authLoading, hasCheckedAuth } = useAuth();
+  // Cache products-data per store, men invalidera vid ändringar
+  // (efter följesedelimport, upsert, etc.) så vi inte läser 5000+
+  // rader 3 gånger per render-cykel.
+  const [productsCache, setProductsCache] = useState<any[] | null>(null);
+  const [productsCacheStore, setProductsCacheStore] = useState<string | null>(null);
+  const [productsCacheVersion, setProductsCacheVersion] = useState(0);
+
+  async function getProductsData(storeId: string, columns: string) {
+    const cacheKey = `${storeId}:${columns}:${productsCacheVersion}`;
+    if (productsCache && productsCacheStore === cacheKey) {
+      return productsCache;
+    }
+    const data = await fetchAllRows(
+      supabase,
+      "products",
+      columns,
+      { column: "store_id", value: storeId },
+    );
+    setProductsCache(data ?? []);
+    setProductsCacheStore(cacheKey);
+    return data ?? [];
+  }
+
+  function invalidateProductsCache() {
+    setProductsCacheVersion((v) => v + 1);
+  }
   const [step, setStep] = useState<
     | "dashboard"
     | "reclamations"
@@ -1078,6 +1104,7 @@ function ErstatningsCheckPage() {
       }
 
       await loadShelfLifeData();
+      invalidateProductsCache();
       setCatalogRefreshKey((current) => current + 1);
       setStep("shelf-life");
       void refreshImportDates();
@@ -1345,10 +1372,7 @@ function ErstatningsCheckPage() {
     setIsLoading(true);
     try {
       const [productsData, masterData, deliveriesData] = await Promise.all([
-        fetchAllRows(supabaseClient, "products", "id, sap_article_id, name, brand, category", {
-          column: "store_id",
-          value: activeStore!.id,
-        }),
+        getProductsData(activeStore!.id, "id, sap_article_id, name, brand, category"),
         fetchAllRows(
           supabaseClient,
           "product_shelf_life",
