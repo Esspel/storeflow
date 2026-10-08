@@ -1672,8 +1672,8 @@ function ErstatningsCheckPage() {
     const statusInterval = setInterval(() => {
       const total = prioritizedEligible.length;
       const fetched = successCount + errorCount;
-      const withShelfLife = successCount;
-      const withoutShelfLife = missingInSapCount; // endast artiklar som saknas i SAP, inte fel
+      const withShelfLife = successCount - missingInSapCount;
+      const withoutShelfLife = missingInSapCount; // artiklar som saknas i SAP eller har ogiltig data
       const remaining = total - fetched;
       console.log(
         `[SAP Status] Hämtade: ${fetched}/${total} | Med shelfLife: ${withShelfLife} | Utan: ${withoutShelfLife} | Kvar: ${remaining}`,
@@ -1891,15 +1891,43 @@ function ErstatningsCheckPage() {
       }
     }
 
-    for (const batch of chunk(eanUpdates, UPSERT_BATCH_SIZE)) {
-      for (const { sapArticleId, ean, updatedAt } of batch) {
-        const { error: eanError } = await supabase
-          .from("products")
-          .update({ ean, updated_at: updatedAt })
-          .eq("sap_article_id", sapArticleId)
-          .eq("store_id", activeStore!.id);
-        if (eanError) {
-          console.error("Error updating EAN:", eanError);
+    // EAN updates — check for global uniqueness before updating.
+    // The products_ean_unique constraint makes EAN globally unique across
+    // all stores, so we must avoid setting an EAN that already exists in
+    // another store. If it does, skip the update for this store.
+    if (eanUpdates.length > 0) {
+      // Fetch all products that already have these EANs (any store)
+      const eanValues = eanUpdates.map((u) => u.ean);
+      const { data: existingProducts } = await supabase
+        .from("products")
+        .select("ean, store_id, sap_article_id")
+        .in("ean", eanValues);
+
+      const eanToStoreMap = new Map<string, string>();
+      for (const p of existingProducts ?? []) {
+        // Only flag as conflicting if it's a different store
+        if (p.store_id !== activeStore!.id) {
+          eanToStoreMap.set(p.ean, p.store_id);
+        }
+      }
+
+      for (const batch of chunk(eanUpdates, UPSERT_BATCH_SIZE)) {
+        for (const { sapArticleId, ean, updatedAt } of batch) {
+          // Skip if this EAN already exists in another store
+          if (eanToStoreMap.has(ean)) {
+            console.warn(
+              `EAN ${ean} already exists in store ${eanToStoreMap.get(ean)}, skipping update for article ${sapArticleId}`,
+            );
+            continue;
+          }
+          const { error: eanError } = await supabase
+            .from("products")
+            .update({ ean, updated_at: updatedAt })
+            .eq("sap_article_id", sapArticleId)
+            .eq("store_id", activeStore!.id);
+          if (eanError) {
+            console.error("Error updating EAN:", eanError);
+          }
         }
       }
     }

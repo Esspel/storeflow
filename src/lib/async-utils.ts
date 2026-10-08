@@ -28,6 +28,7 @@ export async function runWithConcurrency<T, R = T>(
   options: ConcurrencyPoolOptions,
 ): Promise<R[]> {
   const { concurrency, batchDelayMs = 0 } = options;
+  if (!items || !Array.isArray(items)) return [];
   const results: R[] = new Array(items.length);
 
   if (items.length === 0) return results;
@@ -62,6 +63,7 @@ export async function runWithConcurrencySettled<T, R = T>(
   options: ConcurrencyPoolOptions,
 ): Promise<Array<{ status: "fulfilled"; value: R } | { status: "rejected"; reason: unknown }>> {
   const { concurrency, batchDelayMs = 0 } = options;
+  if (!items || !Array.isArray(items)) return [];
   const results: Array<
     { status: "fulfilled"; value: R } | { status: "rejected"; reason: unknown }
   > = new Array(items.length);
@@ -96,6 +98,7 @@ export async function runWithConcurrencySettled<T, R = T>(
  * Split an array into chunks of at most `size` elements.
  */
 export function chunk<T>(items: T[], size: number): T[][] {
+  if (!items || !Array.isArray(items)) return [];
   const chunkSize = Math.max(1, size);
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += chunkSize) {
