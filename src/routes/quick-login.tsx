@@ -38,11 +38,7 @@ function QuickLoginPage() {
       let myIp: string | null = null;
       try {
         // curl -4 ifconfig.co/ motsvarar IPv4-only; här använder vi fetch med prefer IPv4
-        const res = await fetch("https://ifconfig.co/json", {
-          method: "GET",
-          cache: "no-store",
-          headers: { Accept: "application/json" },
-        }).catch(() => null);
+        const res = await fetch("/functions/v1/get-public-ip", { method: "GET" }).catch(() => null);
         if (res && res.ok) {
           const json = await res.json();
           myIp = json.ip || null;
