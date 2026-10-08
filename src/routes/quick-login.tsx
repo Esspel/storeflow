@@ -73,8 +73,8 @@ function QuickLoginPage() {
     }
     (async () => {
       const { data } = await supabase
-        .from("app_users")
-        .select("id, username, display_name")
+        .from("app_users_public_lookup")
+        .select("id, username, display_name, store_id")
         .eq("store_id", storeId)
         .eq("is_active", true)
         .order("display_name");
