@@ -37,7 +37,8 @@ function QuickLoginPage() {
     (async () => {
       let myIp: string | null = null;
       try {
-        const res = await fetch("https://api.ipify.org?format=json", { method: "GET", cache: "no-store" }).catch(() => null);
+        // curl -4 ifconfig.co/ motsvarar IPv4-only; här använder vi fetch med prefer IPv4
+        const res = await fetch("https://ifconfig.co/?format=json", { method: "GET", cache: "no-store", headers: { "Accept": "application/json" } }).catch(() => null);
         if (res && res.ok) {
           const json = await res.json();
           myIp = json.ip || null;
@@ -59,7 +60,7 @@ function QuickLoginPage() {
     })();
   }, [stores]);
 
-  // Hämta användare när butik valts
+  // Hämta användare när butik valts (från både store_id och user_stores koppling)
   useEffect(() => {
     if (!storeId) {
       setUsers([]);
@@ -67,12 +68,30 @@ function QuickLoginPage() {
       return;
     }
     (async () => {
-      const { data } = await supabase
-        .from("app_users")
-        .select("id, username, display_name")
-        .eq("store_id", storeId)
-        .order("display_name");
-      if (data) setUsers(data);
+      // Hämta användare kopplade till butik via user_stores (fler-butik-användare)
+      const { data: linked } = await supabase
+        .from("user_stores")
+        .select("user_id")
+        .eq("store_id", storeId);
+      const userIds = (linked ?? []).map((r: any) => r.user_id);
+      if (userIds.length === 0) {
+        // Fallback: användare med direkt store_id på app_users
+        const { data } = await supabase
+          .from("app_users")
+          .select("id, username, display_name")
+          .eq("store_id", storeId)
+          .eq("is_active", true)
+          .order("display_name");
+        if (data) setUsers(data);
+      } else {
+        const { data } = await supabase
+          .from("app_users")
+          .select("id, username, display_name")
+          .in("id", userIds)
+          .eq("is_active", true)
+          .order("display_name");
+        if (data) setUsers(data);
+      }
     })();
   }, [storeId]);
 
