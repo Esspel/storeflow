@@ -478,7 +478,7 @@ async function fetchAllRows(
   eq?: { column: string; value: unknown },
   order?: { column: string; ascending?: boolean },
   idColumn = "id",
-  batchSize = 10000,
+  batchSize = 1000,
 ): Promise<any[]> {
   const all: any[] = [];
   let from = 0;
@@ -489,6 +489,9 @@ async function fetchAllRows(
       .range(from, from + batchSize - 1);
     if (eq) query = query.eq(eq.column, eq.value);
     if (order) query = query.order(order.column, { ascending: order.ascending ?? false });
+    // PostgREST .range() paginering kräver en deterministisk ORDER BY,
+    // annars kan rader hoppas över eller dupliceras mellan batchar.
+    query = query.order(idColumn, { ascending: true });
     const { data, error } = await query;
     if (error) throw error;
     if (!data || data.length === 0) break;
