@@ -1,6 +1,6 @@
 BEGIN;
 DROP VIEW IF EXISTS public.app_users_public_lookup;
-CREATE OR REPLACE VIEW public.app_users_public_lookup AS
+CREATE VIEW public.app_users_public_lookup WITH (security_invoker = true) AS
 SELECT
   a.id,
   a.username,
