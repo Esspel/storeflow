@@ -157,7 +157,7 @@ function AppLayout() {
   const navigate = useNavigate();
   const router = useRouter();
   const pathname = router.state.location.pathname;
-  const isLoginPage = pathname === "/login";
+  const isLoginPage = pathname === "/login" || pathname === "/quick-login";
   const isPublicRoute =
     pathname === "/qr-kundonskemal" ||
     pathname === "/qr-kundonskemal-form" ||
@@ -205,7 +205,7 @@ function AppLayout() {
     // reload; if a token exists, we keep the user logged in even if a
     // background network validation hasn't completed yet.
     if (!token && !isLoginPage && !isPublicRoute) {
-      navigate({ to: "/login" });
+      navigate({ to: "/quick-login" });
     } else if (user && isLoginPage && !user.must_change_password) {
       navigate({ to: "/" });
     }

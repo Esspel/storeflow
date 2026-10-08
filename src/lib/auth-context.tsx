@@ -259,7 +259,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setActiveStoreState(null);
         await clearSession();
         if (isMounted) {
-          window.location.href = "/login";
+          window.location.href = "/quick-login";
         }
         return;
       }
@@ -356,7 +356,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserStores([]);
         setActiveStoreState(null);
         await clearSession();
-        window.location.href = "/login";
+        window.location.href = "/quick-login";
       }
     }, CHECK_INTERVAL_MS);
 
