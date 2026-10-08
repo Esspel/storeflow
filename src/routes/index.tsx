@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import {
   TriangleAlert as AlertTriangle,
@@ -16,7 +16,7 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { getKundrundaAssignmentsThisWeek } from "@/lib/supabase";
+import { getKundrundaAssignmentsThisWeek, supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
@@ -25,7 +25,32 @@ export const Route = createFileRoute("/")({
 
 function HubPage() {
   const { user, activeStore } = useAuth();
+  const navigate = useNavigate();
+  const [missingPinUsers, setMissingPinUsers] = useState<
+    { id: string; display_name: string; username: string }[]
+  >([]);
+
+  // Omdirigera oinloggade användare till quick-login (PIN + butik)
+  useEffect(() => {
+    if (!user) {
+      navigate({ to: "/quick-login" });
+    }
+  }, [user, navigate]);
+
+  // Varning för chefer/admin om användare utan PIN i aktuell butik
   const isManager = user?.role === "manager" || user?.role === "admin";
+  useEffect(() => {
+    if (!user || !isManager || !activeStore?.id) return;
+    (async () => {
+      const { data } = await supabase
+        .from("app_users")
+        .select("id, display_name, username, quick_pin_hash")
+        .eq("store_id", activeStore.id)
+        .is("quick_pin_hash", null);
+      if (data) setMissingPinUsers(data as typeof missingPinUsers);
+    })();
+  }, [user, isManager, activeStore?.id]);
+
   const firstName = user?.display_name?.split(" ")[0] ?? "";
 
   // Hämta min tilldelade kundrunda denna vecka
@@ -125,6 +150,28 @@ function HubPage() {
               tone="destructive"
             />
           </ErrorBoundary>
+          {isManager && missingPinUsers.length > 0 && (
+            <div className="col-span-full mb-4 rounded-2xl border-2 border-amber-400 bg-amber-50/70 p-4 shadow-md">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-6 w-6 shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  <h3 className="font-bold text-amber-800">Varning: Saknade PIN-koder</h3>
+                  <p className="text-sm text-amber-700 mt-1">
+                    Följande användare i <strong>{activeStore?.name ?? "butiken"}</strong> saknar
+                    PIN-kod och kan inte logga in med snabbbytesmetoden:
+                  </p>
+                  <ul className="mt-2 space-y-1 text-sm text-amber-800">
+                    {missingPinUsers.map((u) => (
+                      <li key={u.id} className="flex items-center gap-2">
+                        <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                        <span className="font-medium">{u.display_name || u.username}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
           {isManager && (
             <>
               <ErrorBoundary section="Rapporter" fallback={<WidgetFallback name="Rapporter" />}>

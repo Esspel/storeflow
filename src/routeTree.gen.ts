@@ -26,6 +26,7 @@ import { Route as MallarRouteImport } from './routes/mallar'
 import { Route as PersonalRouteImport } from './routes/personal'
 import { Route as QrKundonskemalRouteImport } from './routes/qr-kundonskemal'
 import { Route as QrKundonskemalFormRouteImport } from './routes/qr-kundonskemal-form'
+import { Route as QuickLoginRouteImport } from './routes/quick-login'
 import { Route as RapporterRouteImport } from './routes/rapporter'
 import { Route as SchemaRouteImport } from './routes/schema'
 import { Route as TestpanelRouteImport } from './routes/testpanel'
@@ -116,6 +117,11 @@ const QrKundonskemalFormRoute = QrKundonskemalFormRouteImport.update({
   path: '/qr-kundonskemal-form',
   getParentRoute: () => rootRouteImport,
 } as any)
+const QuickLoginRoute = QuickLoginRouteImport.update({
+  id: '/quick-login',
+  path: '/quick-login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RapporterRoute = RapporterRouteImport.update({
   id: '/rapporter',
   path: '/rapporter',
@@ -155,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/personal': typeof PersonalRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
+  '/quick-login': typeof QuickLoginRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
@@ -178,6 +185,7 @@ export interface FileRoutesByTo {
   '/personal': typeof PersonalRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
+  '/quick-login': typeof QuickLoginRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
@@ -202,6 +210,7 @@ export interface FileRoutesById {
   '/personal': typeof PersonalRoute
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
+  '/quick-login': typeof QuickLoginRoute
   '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
   '/testpanel': typeof TestpanelRoute
@@ -227,6 +236,7 @@ export interface FileRouteTypes {
     | '/personal'
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
+    | '/quick-login'
     | '/rapporter'
     | '/schema'
     | '/testpanel'
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
     | '/personal'
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
+    | '/quick-login'
     | '/rapporter'
     | '/schema'
     | '/testpanel'
@@ -273,6 +284,7 @@ export interface FileRouteTypes {
     | '/personal'
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
+    | '/quick-login'
     | '/rapporter'
     | '/schema'
     | '/testpanel'
@@ -297,6 +309,7 @@ export interface RootRouteChildren {
   PersonalRoute: typeof PersonalRoute
   QrKundonskemalRoute: typeof QrKundonskemalRoute
   QrKundonskemalFormRoute: typeof QrKundonskemalFormRoute
+  QuickLoginRoute: typeof QuickLoginRoute
   RapporterRoute: typeof RapporterRoute
   SchemaRoute: typeof SchemaRoute
   TestpanelRoute: typeof TestpanelRoute
@@ -424,6 +437,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QrKundonskemalFormRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/quick-login': {
+      id: '/quick-login'
+      path: '/quick-login'
+      fullPath: '/quick-login'
+      preLoaderRoute: typeof QuickLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/rapporter': {
       id: '/rapporter'
       path: '/rapporter'
@@ -473,6 +493,7 @@ const rootRouteChildren: RootRouteChildren = {
   PersonalRoute: PersonalRoute,
   QrKundonskemalRoute: QrKundonskemalRoute,
   QrKundonskemalFormRoute: QrKundonskemalFormRoute,
+  QuickLoginRoute: QuickLoginRoute,
   RapporterRoute: RapporterRoute,
   SchemaRoute: SchemaRoute,
   TestpanelRoute: TestpanelRoute,
