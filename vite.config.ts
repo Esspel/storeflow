@@ -29,7 +29,7 @@ export default defineConfig({
   ],
   build: {
     chunkSizeWarningLimit: 1000,
-    minify: "esbuild",
+    minify: "terser",
     rollupOptions: {
       output: {
         manualChunks: (id) => {
