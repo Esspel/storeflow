@@ -2479,7 +2479,7 @@ function SchemaPage() {
                       navigateToWeek(w, y);
                     }}
                   >
-                    <SelectTrigger className="h-9 w-40 text-sm font-medium">
+                    <SelectTrigger className="h-[var(--touch-target-height)] w-40 text-sm font-medium">
                       <SelectValue placeholder="Välj vecka" />
                     </SelectTrigger>
                     <SelectContent className="max-h-64">

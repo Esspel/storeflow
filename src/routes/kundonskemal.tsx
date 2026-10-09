@@ -539,7 +539,7 @@ function CustomerRequestsPage() {
             placeholder="Sök produkt eller materialnummer..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-9 rounded-full pl-9 text-sm"
+            className="h-[var(--touch-target-height)] rounded-full pl-9 text-sm"
           />
         </div>
       </div>

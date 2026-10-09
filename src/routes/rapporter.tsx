@@ -276,7 +276,7 @@ function ReportsPage() {
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="h-9 w-40 rounded-full text-sm"
+            className="h-[var(--touch-target-height)] w-40 rounded-full text-sm"
           />
         </div>
         <div className="space-y-1">
@@ -285,7 +285,7 @@ function ReportsPage() {
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="h-9 w-40 rounded-full text-sm"
+            className="h-[var(--touch-target-height)] w-40 rounded-full text-sm"
           />
         </div>
         {(dateFrom || dateTo) && (

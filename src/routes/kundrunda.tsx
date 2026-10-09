@@ -1513,7 +1513,7 @@ function KundrundaPage() {
               <div className="h-4 w-1/2 animate-pulse motion-reduce:animate-none rounded-md bg-muted" />
               <div className="h-3 w-1/3 animate-pulse motion-reduce:animate-none rounded-md bg-muted/60" />
             </div>
-            <div className="h-9 w-24 animate-pulse motion-reduce:animate-none rounded-full bg-muted shrink-0" />
+            <div className="h-[var(--touch-target-height)] w-24 animate-pulse motion-reduce:animate-none rounded-full bg-muted shrink-0" />
           </div>
         </div>
         {[1, 2, 3].map((i) => (

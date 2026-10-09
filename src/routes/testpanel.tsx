@@ -1676,7 +1676,7 @@ function TestPanel() {
                 min="1"
                 value={timeAmount}
                 onChange={(e) => setTimeAmount(e.target.value)}
-                className="h-9 text-sm"
+                className="h-[var(--touch-target-height)] text-sm"
               />
             </div>
             <div className="flex-1 min-w-[120px] space-y-1">
@@ -1684,7 +1684,7 @@ function TestPanel() {
                 Enhet
               </Label>
               <Select value={timeUnit} onValueChange={(v) => setTimeUnit(v as typeof timeUnit)}>
-                <SelectTrigger id="time-unit" aria-label="Enhet" className="h-9 text-sm">
+                <SelectTrigger id="time-unit" aria-label="Enhet" className="h-[var(--touch-target-height)] text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1698,7 +1698,7 @@ function TestPanel() {
             </div>
             <Button
               size="sm"
-              className="rounded-full h-9"
+              className="rounded-full h-[var(--touch-target-height)]"
               onClick={applyTimeSimulation}
               disabled={running}
             >
@@ -1707,7 +1707,7 @@ function TestPanel() {
             <Button
               size="sm"
               variant="outline"
-              className="rounded-full h-9"
+              className="rounded-full h-[var(--touch-target-height)]"
               onClick={resetTime}
               disabled={running}
             >

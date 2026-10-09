@@ -27,6 +27,16 @@ input, select, textarea {
   min-width: var(--touch-target-height-sm);
 }
 
+/* ── TAILWIND @utility för valfri användning i routes (ett ställe att ändra) ── */
+@utility touch-target {
+  min-height: var(--touch-target-height);
+  min-width: var(--touch-target-width);
+}
+@utility touch-target-sm {
+  min-height: var(--touch-target-height-sm);
+  min-width: var(--touch-target-height-sm);
+}
+
 /*
  * ============================================
  * COOP FÄRGKARTA — CSS CUSTOM PROPERTIES

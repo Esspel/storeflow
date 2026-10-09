@@ -3506,7 +3506,7 @@ function TasksPage() {
                 placeholder="Sök uppgifter..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-9 rounded-full pl-9 text-sm w-full"
+                className="h-[var(--touch-target-height)] rounded-full pl-9 text-sm w-full touch-target"
               />
             </div>
             {[...new Set(tasks.map((t) => t.category).filter(Boolean))].length > 0 && (
@@ -3514,7 +3514,7 @@ function TasksPage() {
                 value={filterCategory || "__all"}
                 onValueChange={(v) => setFilterCategory(v === "__all" ? "" : v)}
               >
-                <SelectTrigger className="h-9 w-auto min-w-[110px] rounded-full text-xs gap-1.5">
+                <SelectTrigger className="h-[var(--touch-target-height)] w-auto min-w-[110px] rounded-full text-xs gap-1.5">
                   <SelectValue placeholder="Kategori" />
                 </SelectTrigger>
                 <SelectContent>
@@ -3533,7 +3533,7 @@ function TasksPage() {
               value={filterPriority || "__all"}
               onValueChange={(v) => setFilterPriority(v === "__all" ? "" : v)}
             >
-              <SelectTrigger className="h-9 w-auto min-w-[110px] rounded-full text-xs gap-1.5">
+              <SelectTrigger className="h-[var(--touch-target-height)] w-auto min-w-[110px] rounded-full text-xs gap-1.5">
                 <SelectValue placeholder="Prioritet" />
               </SelectTrigger>
               <SelectContent>
@@ -3546,7 +3546,7 @@ function TasksPage() {
               </SelectContent>
             </Select>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-              <SelectTrigger className="h-9 w-auto min-w-[120px] rounded-full text-xs gap-1.5">
+              <SelectTrigger className="h-[var(--touch-target-height)] w-auto min-w-[120px] rounded-full text-xs gap-1.5">
                 <ArrowDownUp className="h-3.5 w-3.5 text-coop-gray-900 shrink-0" />
                 <SelectValue />
               </SelectTrigger>
@@ -3562,7 +3562,7 @@ function TasksPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 w-9 rounded-full p-0 shrink-0"
+                className="h-[var(--touch-target-height)] w-9 rounded-full p-0 shrink-0"
                 onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
                 title={sortDir === "asc" ? "Stigande" : "Fallande"}
               >
@@ -3577,7 +3577,7 @@ function TasksPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 rounded-full text-xs shrink-0"
+                className="h-[var(--touch-target-height)] rounded-full text-xs shrink-0"
                 onClick={() => {
                   if (selectedTaskIds.size === filtered.length) {
                     setSelectedTaskIds(new Set());

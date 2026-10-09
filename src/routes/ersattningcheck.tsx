@@ -524,7 +524,7 @@ function FilterDropdown({ label, options, selected, onSelectionChange }: FilterD
           type="button"
           variant="outline"
           size="sm"
-          className="h-9 gap-2 rounded-xl border-gray-300 bg-white px-3.5 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50 hover:text-gray-900"
+          className="h-[var(--touch-target-height)] gap-2 rounded-xl border-gray-300 bg-white px-3.5 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50 hover:text-gray-900"
         >
           {label}
           {activeCount > 0 && (
@@ -4665,7 +4665,7 @@ function ErstatningsCheckPage() {
                 value={deliveryDateFilter}
                 onValueChange={(value) => setDeliveryDateFilter(value)}
               >
-                <SelectTrigger className="h-9 w-40 rounded-xl border-gray-300 bg-white">
+                <SelectTrigger className="h-[var(--touch-target-height)] w-40 rounded-xl border-gray-300 bg-white">
                   <SelectValue placeholder="Leveransdatum" />
                 </SelectTrigger>
                 <SelectContent>
@@ -5179,14 +5179,14 @@ function ErstatningsCheckPage() {
                     type="date"
                     value={statisticsCustomFrom}
                     onChange={(e) => setStatisticsCustomFrom(e.target.value)}
-                    className="h-9 w-36 rounded-full text-sm"
+                    className="h-[var(--touch-target-height)] w-36 rounded-full text-sm"
                     placeholder="Från"
                   />
                   <Input
                     type="date"
                     value={statisticsCustomTo}
                     onChange={(e) => setStatisticsCustomTo(e.target.value)}
-                    className="h-9 w-36 rounded-full text-sm"
+                    className="h-[var(--touch-target-height)] w-36 rounded-full text-sm"
                     placeholder="Till"
                   />
                   <Button

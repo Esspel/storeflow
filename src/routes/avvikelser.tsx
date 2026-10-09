@@ -868,11 +868,11 @@ function IssuesPage() {
             placeholder="Sök avvikelser..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-9 rounded-full pl-9 text-sm w-52"
+            className="h-[var(--touch-target-height)] rounded-full pl-9 text-sm w-52"
           />
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="h-9 w-40 rounded-full text-sm">
+          <SelectTrigger className="h-[var(--touch-target-height)] w-40 rounded-full text-sm">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -886,7 +886,7 @@ function IssuesPage() {
           </SelectContent>
         </Select>
         <Select value={filterPriority} onValueChange={setFilterPriority}>
-          <SelectTrigger className="h-9 w-36 rounded-full text-sm">
+          <SelectTrigger className="h-[var(--touch-target-height)] w-36 rounded-full text-sm">
             <SelectValue placeholder="Prioritet" />
           </SelectTrigger>
           <SelectContent>
@@ -1560,7 +1560,7 @@ function IssuesPage() {
                         assignResponsible(showDetail.id, v === "__none" ? "" : v)
                       }
                     >
-                      <SelectTrigger className="h-9 rounded-full text-sm">
+                      <SelectTrigger className="h-[var(--touch-target-height)] rounded-full text-sm">
                         <SelectValue placeholder="Ingen" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1582,7 +1582,7 @@ function IssuesPage() {
                         value={showDetail.responsible_group_id ?? "__none"}
                         onValueChange={(v) => assignGroup(showDetail.id, v === "__none" ? "" : v)}
                       >
-                        <SelectTrigger className="h-9 rounded-full text-sm">
+                        <SelectTrigger className="h-[var(--touch-target-height)] rounded-full text-sm">
                           <SelectValue placeholder="Ingen" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1769,7 +1769,7 @@ function IssuesPage() {
                   value={editForm.category}
                   onValueChange={(v) => setEditForm((p) => ({ ...p, category: v }))}
                 >
-                  <SelectTrigger className="h-9 text-sm">
+                  <SelectTrigger className="h-[var(--touch-target-height)] text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1787,7 +1787,7 @@ function IssuesPage() {
                   value={editForm.priority}
                   onValueChange={(v) => setEditForm((p) => ({ ...p, priority: v }))}
                 >
-                  <SelectTrigger className="h-9 text-sm">
+                  <SelectTrigger className="h-[var(--touch-target-height)] text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1809,7 +1809,7 @@ function IssuesPage() {
                     setEditForm((p) => ({ ...p, responsible_user_id: v === "__none" ? "" : v }))
                   }
                 >
-                  <SelectTrigger className="h-9 text-sm">
+                  <SelectTrigger className="h-[var(--touch-target-height)] text-sm">
                     <SelectValue placeholder="Ingen" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1831,7 +1831,7 @@ function IssuesPage() {
                       setEditForm((p) => ({ ...p, responsible_group_id: v === "__none" ? "" : v }))
                     }
                   >
-                    <SelectTrigger className="h-9 text-sm">
+                    <SelectTrigger className="h-[var(--touch-target-height)] text-sm">
                       <SelectValue placeholder="Ingen" />
                     </SelectTrigger>
                     <SelectContent>
