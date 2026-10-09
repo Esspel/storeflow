@@ -68,7 +68,8 @@ function QuickLoginPage() {
       // Hämta användare kopplade via user_stores för butiken (via app_users)
       const userStoresRes = await supabase
         .from("user_stores")
-        .select("app_users(id, username, display_name, is_active)");
+        .select("app_users(id, username, display_name, is_active)")
+        .eq("store_id", storeId);
 
       // Hämta användare via direct store_id på app_users (primär butik)
       const directUsersRes = await supabase
