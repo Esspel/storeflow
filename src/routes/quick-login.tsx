@@ -64,27 +64,36 @@ function QuickLoginPage() {
 
     (async () => {
       setUserId(""); // Nollställ vald användare när butik ändras
-      
-      // Hämta både kopplade via user_stores samt direkt via store_id i ett effektivare anrop
-      const [userStoresRes, directUsersRes] = await Promise.all([
-        supabase
-          .from("user_stores")
-          .select("app_users_public_lookup!inner(id, username, display_name, is_active)")
-          .eq("store_id", storeId)
-          .eq("app_users_public_lookup.is_active", true),
-        supabase
-          .from("app_users_public_lookup")
-          .select("id, username, display_name")
-          .eq("store_id", storeId)
-          .eq("is_active", true)
-      ]);
 
-      const mappedFromStores = (userStoresRes.data || []).map((row: any) => row.app_users_public_lookup);
+      // Hämta användare kopplade via user_stores för butiken
+      const userStoresRes = await supabase
+        .from("user_stores")
+        .select("user_id")
+        .eq("store_id", storeId);
+
+      // Hämta användare via direct store_id på app_users (primär butik)
+      const directUsersRes = await supabase
+        .from("app_users_public_lookup")
+        .select("id, username, display_name")
+        .eq("store_id", storeId)
+        .eq("is_active", true);
+
+      // Hämta användare från user_stores-listan via app_users_public_lookup
+      const userIds = (userStoresRes.data || []).map((row: any) => row.user_id);
+      const usersFromStoresRes = userIds.length > 0
+        ? await supabase
+            .from("app_users_public_lookup")
+            .select("id, username, display_name")
+            .in("id", userIds)
+            .eq("is_active", true)
+        : { data: [] };
+
+      const usersFromStores = usersFromStoresRes.data || [];
       const directUsers = directUsersRes.data || [];
 
       // Slå ihop och ta bort dubbletter baserat på id
       const combinedMap = new Map<string, { id: string; username: string; display_name: string }>();
-      [...mappedFromStores, ...directUsers].forEach((u) => {
+      [...usersFromStores, ...directUsers].forEach((u) => {
         if (u && u.id) combinedMap.set(u.id, u);
       });
 
