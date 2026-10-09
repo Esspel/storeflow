@@ -481,13 +481,13 @@ export function AppShell() {
               key={to}
               to={to}
               className={cn(
-                "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
+                "flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors touch-target",
                 isActive(to) ? "text-primary" : "text-coop-gray-900",
               )}
             >
               <div
                 className={cn(
-                  "flex h-7 w-10 items-center justify-center rounded-full transition-all",
+                  "flex h-6 w-10 items-center justify-center rounded-full transition-all",
                   isActive(to) ? "bg-primary/10" : "bg-transparent",
                 )}
               >
@@ -499,13 +499,13 @@ export function AppShell() {
         <button
           onClick={() => setMoreOpen(true)}
           className={cn(
-            "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
+            "flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors touch-target",
             isMoreActive ? "text-primary" : "text-coop-gray-900",
           )}
         >
           <div
             className={cn(
-              "flex h-7 w-10 items-center justify-center rounded-full transition-all",
+              "flex h-5 w-12 items-center justify-center rounded-full transition-all",
               isMoreActive ? "bg-primary/10" : "bg-transparent",
             )}
           >

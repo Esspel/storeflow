@@ -4,6 +4,29 @@
 
 /* dark mode disabled - Coop colors fixed */
 
+/* ── TOUCH / MOBIL (per modern-web-guidance: touch targets, forms, a11y) ── */
+:root {
+  --touch-target-height: 44px;
+  --touch-target-width: 44px;
+  --touch-target-height-sm: 40px;
+}
+button, [role="button"], a {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+input, select, textarea {
+  font-size: 16px;
+  touch-action: manipulation;
+}
+[role="button"], .touch-target {
+  min-height: var(--touch-target-height);
+  min-width: var(--touch-target-width);
+}
+.touch-target-sm {
+  min-height: var(--touch-target-height-sm);
+  min-width: var(--touch-target-height-sm);
+}
+
 /*
  * ============================================
  * COOP FÄRGKARTA — CSS CUSTOM PROPERTIES
