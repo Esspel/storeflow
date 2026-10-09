@@ -1,7 +1,8 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Store, ArrowRight } from "lucide-react";
-import { supabase, setSessionToken } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
@@ -10,7 +11,7 @@ export const Route = createFileRoute("/quick-login")({
 });
 
 function QuickLoginPage() {
-  const navigate = useNavigate();
+  const { quickSwitch } = useAuth();
   const [storeId, setStoreId] = useState("");
   const [userId, setUserId] = useState("");
   const [pin, setPin] = useState("");
@@ -127,8 +128,9 @@ function QuickLoginPage() {
         setLoading(false);
         return;
       }
-      setSessionToken(data.token);
-      navigate({ to: "/" });
+
+      console.debug("[quick-login] login OK, hasToken:", !!data.token);
+      await quickSwitch(data.user, data.token);
     } catch (err) {
       console.error(err);
       setError("Ett fel uppstod. Försök igen.");
