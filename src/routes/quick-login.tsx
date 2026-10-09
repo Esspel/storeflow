@@ -121,6 +121,7 @@ function QuickLoginPage() {
         body: JSON.stringify({ mode: "pin", user_id: userId, pin, store_id: storeId }),
       });
       const data = await res.json();
+      console.log("[quick-login] quick-switch res.ok:", res.ok, "data:", data);
       if (!res.ok || data.error) {
         setError(data.error || "Ogiltig PIN-kod eller butik.");
         setLoading(false);
