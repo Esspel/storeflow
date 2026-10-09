@@ -1,0 +1,1 @@
+Done — diagnostic SQL file created at supabase/migrations/check_quick_login_data_diagnostic.sql (SELECT only, no mods). .mcp.json restored for MCP access. Waiting on user's DB verification / MCP call before final fix.

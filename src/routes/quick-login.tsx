@@ -110,6 +110,7 @@ function QuickLoginPage() {
         .select("id, username, display_name, store_id")
         .in("id", allIds)
         .eq("is_active", true)
+        .eq("store_id", storeId)
         .order("display_name");
 
       if (fullData) setUsers(fullData);
