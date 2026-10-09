@@ -50,6 +50,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { getTimeOffsetMs, setTimeOffsetMs, getSimulatedDate } from "@/lib/time-simulation";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/testpanel")({
   component: TestPanel,

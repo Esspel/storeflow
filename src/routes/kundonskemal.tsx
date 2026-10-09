@@ -58,6 +58,7 @@ import {
 } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/kundonskemal")({
   component: CustomerRequestsPage,

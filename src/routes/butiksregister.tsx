@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { supabase, type Store as StoreType } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/butiksregister")({
   component: ButiksregisterPage,

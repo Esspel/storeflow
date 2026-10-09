@@ -74,6 +74,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { SkeletonCard } from "@/components/skeleton-card";
 import { EmptyState } from "@/components/empty-state";
+import { Progress } from "@/components/ui/progress";
 import {
   supabase,
   type Task,
@@ -3596,7 +3597,8 @@ function TasksPage() {
       </div>
 
       {loading && isClient ? (
-        <div className="space-y-3">
+        <div className="space-y-4" aria-busy="true" aria-label="Laddar uppgifter">
+          <Progress value={60} label="Laddar uppgifter..." />
           {[1, 2, 3, 4].map((i) => (
             <SkeletonCard key={i} rows={2} />
           ))}

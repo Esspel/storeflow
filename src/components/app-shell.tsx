@@ -1,6 +1,7 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import { SkipLink } from "@/components/ui/skip-link";
 import {
   Bell,
   ClipboardList,
@@ -466,6 +467,7 @@ export function AppShell() {
       className="flex min-h-screen w-full flex-col bg-background"
       style={{ isolation: "isolate" }}
     >
+      <SkipLink />
       <SwUpdateBanner />
       <div className="pt-safe" />
 
@@ -700,19 +702,6 @@ export function AppShell() {
                   <DropdownMenuSeparator />
                   <GlobalStoreSelector inline />
                 </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild className="md:hidden">
-                  <Link to="/rapporter" className="cursor-pointer">
-                    <ChartBar className="mr-2 h-4 w-4" />
-                    Rapporter
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="md:hidden">
-                  <Link to="/rapporter" className="cursor-pointer">
-                    <ChartBar className="mr-2 h-4 w-4" />
-                    Rapporter
-                  </Link>
-                </DropdownMenuItem>
                 <DropdownMenuSeparator className="md:hidden" />
                 <DropdownMenuItem asChild>
                   <Link to="/butiksregister" className="cursor-pointer">
@@ -787,7 +776,7 @@ export function AppShell() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 pb-24 md:pb-0">
+      <main id="main-content" tabIndex={-1} className="flex-1 pb-24 md:pb-0">
         <ErrorBoundary section="Sida" storeId={activeStore?.id ?? null}>
           <Outlet />
         </ErrorBoundary>

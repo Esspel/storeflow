@@ -64,6 +64,7 @@ import { exportTextAsCSV, parseCSVLine } from "@/lib/csv";
 import { toast } from "sonner";
 import { getSpecialWeekHoliday, stockholmToUtc } from "@/lib/swedish-holidays";
 import { getYear } from "date-fns";
+import { Progress } from "@/components/ui/progress";
 
 function SchemaRoute() {
   const { activeStore, user } = useAuth();

@@ -18,6 +18,7 @@ import { useAuth } from "@/lib/auth-context";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { getKundrundaAssignmentsThisWeek, supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/")({
   component: HubPage,

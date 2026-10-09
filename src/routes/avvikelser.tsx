@@ -35,6 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SkeletonCard } from "@/components/skeleton-card";
 import { EmptyState } from "@/components/empty-state";
+import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -941,7 +942,8 @@ function IssuesPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">
+        <div className="space-y-4" aria-busy="true" aria-label="Laddar...">
+          <Progress value={50} label="Laddar innehåll..." />
           {[1, 2, 3, 4].map((i) => (
             <SkeletonCard key={i} rows={2} />
           ))}

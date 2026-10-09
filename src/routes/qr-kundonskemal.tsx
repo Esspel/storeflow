@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
 
 const searchSchema = z.object({
   t: z.string().optional(),

@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/auth-context";
 import { PageHeader, StatCard } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/belastning")({
   component: BelastningPage,

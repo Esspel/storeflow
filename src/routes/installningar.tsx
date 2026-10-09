@@ -31,6 +31,7 @@ import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { PushNotificationSetup } from "@/components/push-notification-setup";
 import { toast } from "sonner";
+import { Progress } from "@/components/ui/progress";
 
 const APP_VERSION = "2.4.1";
 

@@ -19,6 +19,7 @@ import { dedupRecurringSeries } from "@/lib/task-utils";
 import { exportCSV } from "@/lib/csv";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/rapporter")({
   component: ReportsPage,

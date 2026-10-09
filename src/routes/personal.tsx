@@ -72,6 +72,7 @@ import { useAuth } from "@/lib/auth-context";
 import { GdprExport } from "@/components/gdpr-export";
 import { ApiKeysManager } from "@/components/api-keys-manager";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Progress } from "@/components/ui/progress";
 
 const MIN_PW_LENGTH = 12;
 

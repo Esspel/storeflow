@@ -84,6 +84,7 @@ import { ImportDialog, type ImportDialogResult } from "@/components/import-dialo
 import { cn, sanitizeCsvCell } from "@/lib/utils";
 import { exportTextAsCSV, parseCSVLine } from "@/lib/csv";
 import { haptic } from "@/lib/haptic";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/kundrunda")({
   component: KundrundaPage,

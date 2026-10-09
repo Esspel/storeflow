@@ -97,6 +97,7 @@ import {
 } from "@/lib/task-utils";
 import { exportTextAsCSV, parseCSVLine } from "@/lib/csv";
 import { toast } from "sonner";
+import { Progress } from "@/components/ui/progress";
 
 const RECURRENCE_OPTIONS = [
   { value: "", label: "Ingen" },
