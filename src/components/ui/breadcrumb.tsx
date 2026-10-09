@@ -44,7 +44,7 @@ const BreadcrumbLink = React.forwardRef<
   return (
     <Comp
       ref={ref}
-      className={cn("transition-colors hover:text-coop-gray-900", className)}
+      className={cn("inline-flex items-center touch-target transition-colors hover:text-coop-gray-900", className)}
       {...props}
     />
   );
@@ -79,7 +79,7 @@ const BreadcrumbEllipsis = ({ className, ...props }: React.ComponentProps<"span"
   <span
     role="presentation"
     aria-hidden="true"
-    className={cn("flex h-9 w-9 items-center justify-center", className)}
+    className={cn("flex h-[var(--touch-target-height)] w-[var(--touch-target-width)] items-center justify-center touch-target-sm", className)}
     {...props}
   >
     <MoreHorizontal className="h-4 w-4" />
