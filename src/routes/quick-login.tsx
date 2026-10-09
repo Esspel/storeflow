@@ -38,7 +38,7 @@ function QuickLoginPage() {
       let myIp: string | null = null;
       try {
         // curl -4 ifconfig.co/ motsvarar IPv4-only; här använder vi fetch med prefer IPv4
-        const res = await fetch("/functions/v1/get-public-ip", { method: "GET" }).catch(() => null);
+        const res = await fetch("https://zjongicwgixyvysqpawj.supabase.co/functions/v1/get-public-ip", { method: "GET" }).catch(() => null);
         if (res && res.ok) {
           const json = await res.json();
           myIp = json.ip || null;
@@ -112,7 +112,10 @@ function QuickLoginPage() {
         .eq("is_active", true)
         .order("display_name");
 
-      if (fullData) setUsers(fullData);
+      if (fullData) {
+        console.log("DEBUG fullData rows:", fullData.length, fullData.map((u) => u.id));
+        setUsers(fullData);
+      }
     })();
   }, [storeId]);
 
@@ -133,7 +136,7 @@ function QuickLoginPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch(`/functions/v1/quick-switch`, {
+      const res = await fetch(`https://zjongicwgixyvysqpawj.supabase.co/functions/v1/quick-switch`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
