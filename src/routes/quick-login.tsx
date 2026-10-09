@@ -1,10 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { KeyRound, Store, ArrowRight, User } from "lucide-react";
-import { useAuth } from "@/lib/auth-context";
+import { Store, ArrowRight } from "lucide-react";
 import { supabase, setSessionToken } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/quick-login")({
@@ -18,122 +16,93 @@ function QuickLoginPage() {
   const [pin, setPin] = useState("");
   const [stores, setStores] = useState<{ id: string; name: string; city?: string }[]>([]);
   const [users, setUsers] = useState<{ id: string; username: string; display_name: string }[]>([]);
-  const [loadingStores, setLoadingStores] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [autoStoreName, setAutoStoreName] = useState<string | null>(null);
 
-  // Hämta butiker
+  // 1. Hämta butiker
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from("stores").select("id, name, city").order("name");
       if (data) setStores(data);
-      setLoadingStores(false);
     })();
   }, []);
 
-  // Auto-identifiera butik via IP (om store_ips finns) — fallback vid blockering
+  // 2. IP-Identifiering (Körs endast en gång vid mount)
   useEffect(() => {
     (async () => {
-      let myIp: string | null = null;
       try {
-        // curl -4 ifconfig.co/ motsvarar IPv4-only; här använder vi fetch med prefer IPv4
-        const res = await fetch("https://zjongicwgixyvysqpawj.supabase.co/functions/v1/get-public-ip", { method: "GET" }).catch(() => null);
-        if (res && res.ok) {
-          const json = await res.json();
-          myIp = json.ip || null;
-        }
-      } catch {
-        // IGNORERA — ipify kan blockeras
-      }
-      if (!myIp) return;
-      try {
+        const res = await fetch("https://zjongicwgixyvysqpawj.supabase.co/functions/v1/get-public-ip").catch(() => null);
+        if (!res || !res.ok) return;
+        const json = await res.json();
+        if (!json.ip) return;
+
         const { data: ipMatch } = await supabase
           .from("store_ips")
-          .select("store_id")
-          .eq("ip_address", myIp)
-          .limit(1);
-        if (ipMatch && ipMatch.length > 0) {
-          setStoreId(ipMatch[0].store_id);
-          const storeData = stores.find((s) => s.id === ipMatch[0].store_id);
-          if (storeData) setAutoStoreName(storeData.name);
+          .select("store_id, stores(name)")
+          .eq("ip_address", json.ip)
+          .maybeSingle();
+
+        if (ipMatch?.store_id) {
+          setStoreId(ipMatch.store_id);
+          // @ts-ignore om relationen är konfigurerad i Supabase
+          if (ipMatch.stores?.name) setAutoStoreName(ipMatch.stores.name);
         }
       } catch {
-        // IGNORERA DB-fel
+        // Ignorera IP-fel
       }
     })();
-  }, [stores]);
+  }, []);
 
-  // Hämta användare när butik valts (från både store_id och user_stores koppling)
+  // 3. Hämta användare för vald butik
   useEffect(() => {
     if (!storeId) {
-      // Endast rensa om det faktiskt finns data att rensa — undvik onödig re-render
-      if (users.length > 0 || userId !== "") {
-        setUsers([]);
-        setUserId("");
-      }
+      setUsers([]);
+      setUserId("");
       return;
     }
+
     (async () => {
-      // Primärt: användare kopplade till butiken via user_stores
-      const { data: userStoresData } = await supabase
-        .from("user_stores")
-        .select("user_id")
-        .eq("store_id", storeId);
-      const userIdsFromStores = (userStoresData ?? [])
-        .map((r: { user_id: string }) => r.user_id)
-        .filter(Boolean);
+      setUserId(""); // Nollställ vald användare när butik ändras
+      
+      // Hämta både kopplade via user_stores samt direkt via store_id i ett effektivare anrop
+      const [userStoresRes, directUsersRes] = await Promise.all([
+        supabase
+          .from("user_stores")
+          .select("app_users_public_lookup!inner(id, username, display_name, is_active)")
+          .eq("store_id", storeId)
+          .eq("app_users_public_lookup.is_active", true),
+        supabase
+          .from("app_users_public_lookup")
+          .select("id, username, display_name")
+          .eq("store_id", storeId)
+          .eq("is_active", true)
+      ]);
 
-      // Sekundärt: användare med direkt store_id i app_users (för bakåtkompatibilitet)
-      const { data: directData } = await supabase
-        .from("app_users_public_lookup")
-        .select("id, username, display_name, store_id")
-        .eq("store_id", storeId)
-        .eq("is_active", true)
-        .order("display_name");
+      const mappedFromStores = (userStoresRes.data || []).map((row: any) => row.app_users_public_lookup);
+      const directUsers = directUsersRes.data || [];
 
-      const directIds = (directData ?? [])
-        .map((u: { id: string }) => u.id)
-        .filter(Boolean);
+      // Slå ihop och ta bort dubbletter baserat på id
+      const combinedMap = new Map<string, { id: string; username: string; display_name: string }>();
+      [...mappedFromStores, ...directUsers].forEach((u) => {
+        if (u && u.id) combinedMap.set(u.id, u);
+      });
 
-      // Slå ihop unika användar-ID:n
-      const allIds = Array.from(new Set([...directIds, ...userIdsFromStores]));
+      const uniqueUsers = Array.from(combinedMap.values()).sort((a, b) =>
+        (a.display_name || a.username).localeCompare(b.display_name || b.username)
+      );
 
-      // Hämta fullständiga användardata för alla unika ID:n
-      if (allIds.length === 0) {
-        setUsers([]);
-        return;
-      }
-
-      const { data: fullData } = await supabase
-        .from("app_users_public_lookup")
-        .select("id, username, display_name, store_id")
-        .in("id", allIds)
-        .eq("is_active", true)
-        .order("display_name");
-
-      if (fullData) {
-        console.log("DEBUG fullData rows:", fullData.length, fullData.map((u) => u.id));
-        setUsers(fullData);
-      }
+      setUsers(uniqueUsers);
     })();
   }, [storeId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!storeId) {
-      setError("Välj en butik först.");
-      return;
-    }
-    if (!userId) {
-      setError("Välj en användare.");
-      return;
-    }
-    if (pin.length < 4) {
-      setError("PIN-koden måste vara minst 4 siffror.");
-      return;
-    }
+    if (!storeId) return setError("Välj en butik först.");
+    if (!userId) return setError("Välj en användare.");
+    if (pin.length < 4) return setError("PIN-koden måste vara minst 4 siffror.");
+
     setLoading(true);
     try {
       const res = await fetch(`https://zjongicwgixyvysqpawj.supabase.co/functions/v1/quick-switch`, {
