@@ -65,10 +65,10 @@ function QuickLoginPage() {
     (async () => {
       setUserId(""); // Nollställ vald användare när butik ändras
 
-      // Hämta användare kopplade via user_stores för butiken (via app_users)
+      // Hämta användare kopplade via user_stores för butiken
       const userStoresRes = await supabase
         .from("user_stores")
-        .select("app_users(id, username, display_name, is_active)")
+        .select("user_id")
         .eq("store_id", storeId);
 
       // Hämta användare via direct store_id på app_users (primär butik)
@@ -78,15 +78,21 @@ function QuickLoginPage() {
         .eq("store_id", storeId)
         .eq("is_active", true);
 
-      const usersFromStores = (userStoresRes.data || []).flatMap((row: any) => row.app_users || []);
-      const directUsers = directUsersRes.data || [];
+      const userIds = (userStoresRes.data || []).map((row: any) => row.user_id);
+      const usersFromStoresRes = userIds.length > 0
+        ? await supabase
+            .from("app_users")
+            .select("id, username, display_name")
+            .in("id", userIds)
+            .eq("is_active", true)
+        : { data: [] };
 
-      // Filtrera ut inaktiva från user_stores-källan
-      const activeFromStores = usersFromStores.filter((u: any) => u.is_active);
+      const usersFromStores = usersFromStoresRes.data || [];
+      const directUsers = directUsersRes.data || [];
 
       // Slå ihop och ta bort dubbletter baserat på id
       const combinedMap = new Map<string, { id: string; username: string; display_name: string }>();
-      [...activeFromStores, ...directUsers].forEach((u) => {
+      [...usersFromStores, ...directUsers].forEach((u) => {
         if (u && u.id) combinedMap.set(u.id, u);
       });
 
