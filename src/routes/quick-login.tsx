@@ -67,18 +67,52 @@ function QuickLoginPage() {
   // Hämta användare när butik valts (från både store_id och user_stores koppling)
   useEffect(() => {
     if (!storeId) {
-      setUsers([]);
-      setUserId("");
+      // Endast rensa om det faktiskt finns data att rensa — undvik onödig re-render
+      if (users.length > 0 || userId !== "") {
+        setUsers([]);
+        setUserId("");
+      }
       return;
     }
     (async () => {
-      const { data } = await supabase
+      // Primärt: användare kopplade till butiken via user_stores
+      const { data: userStoresData } = await supabase
+        .from("user_stores")
+        .select("user_id")
+        .eq("store_id", storeId);
+      const userIdsFromStores = (userStoresData ?? [])
+        .map((r: { user_id: string }) => r.user_id)
+        .filter(Boolean);
+
+      // Sekundärt: användare med direkt store_id i app_users (för bakåtkompatibilitet)
+      const { data: directData } = await supabase
         .from("app_users_public_lookup")
         .select("id, username, display_name, store_id")
         .eq("store_id", storeId)
         .eq("is_active", true)
         .order("display_name");
-      if (data) setUsers(data);
+
+      const directIds = (directData ?? [])
+        .map((u: { id: string }) => u.id)
+        .filter(Boolean);
+
+      // Slå ihop unika användar-ID:n
+      const allIds = Array.from(new Set([...directIds, ...userIdsFromStores]));
+
+      // Hämta fullständiga användardata för alla unika ID:n
+      if (allIds.length === 0) {
+        setUsers([]);
+        return;
+      }
+
+      const { data: fullData } = await supabase
+        .from("app_users_public_lookup")
+        .select("id, username, display_name, store_id")
+        .in("id", allIds)
+        .eq("is_active", true)
+        .order("display_name");
+
+      if (fullData) setUsers(fullData);
     })();
   }, [storeId]);
 
