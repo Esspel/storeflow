@@ -65,11 +65,17 @@ function QuickLoginPage() {
     (async () => {
       setUserId(""); // Nollställ vald användare när butik ändras
 
+      console.log("[quick-login] storeId:", storeId);
+
       // Hämta användare kopplade via user_stores för butiken
       const userStoresRes = await supabase
         .from("user_stores")
         .select("user_id")
         .eq("store_id", storeId);
+      console.log("[quick-login] user_stores:", userStoresRes);
+
+      const userIds = (userStoresRes.data || []).map((row: any) => row.user_id);
+      console.log("[quick-login] userIds:", userIds);
 
       // Hämta användare via direct store_id på app_users (primär butik)
       const directUsersRes = await supabase
@@ -77,8 +83,8 @@ function QuickLoginPage() {
         .select("id, username, display_name")
         .eq("store_id", storeId)
         .eq("is_active", true);
+      console.log("[quick-login] direct users:", directUsersRes);
 
-      const userIds = (userStoresRes.data || []).map((row: any) => row.user_id);
       const usersFromStoresRes = userIds.length > 0
         ? await supabase
             .from("app_users")
@@ -86,6 +92,7 @@ function QuickLoginPage() {
             .in("id", userIds)
             .eq("is_active", true)
         : { data: [] };
+      console.log("[quick-login] usersFromStores:", usersFromStoresRes);
 
       const usersFromStores = usersFromStoresRes.data || [];
       const directUsers = directUsersRes.data || [];
