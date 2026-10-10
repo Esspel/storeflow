@@ -2230,10 +2230,10 @@ function AccountsPage() {
                   <Button
                     onClick={async () => {
                       if (!bindIpStore) return;
-                      // Auto-hämta IP från ifconfig.co
+                      // Auto-hämta IP från Supabase Edge Function get-public-ip
                       let myIp = "";
                       try {
-                        const res = await fetch("/functions/v1/get-public-ip", { method: "GET" }).catch(() => null);
+                        const res = await fetch("https://zjongicwgixyvysqpawj.supabase.co/functions/v1/get-public-ip", { method: "GET" }).catch(() => null);
                         if (res && res.ok) {
                           const j = await res.json();
                           myIp = j.ip || "";
