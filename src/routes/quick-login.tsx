@@ -30,31 +30,35 @@ function QuickLoginPage() {
     })();
   }, []);
 
-  // 2. IP-Identifiering (Körs endast en gång vid mount)
+  const COOKIE_KEY = "qf-store-id";
+
+  function getCookieStoreId(): string {
+    try {
+      const match = document.cookie.match(new RegExp("(?:^|; )" + COOKIE_KEY + "=([^;]*)"));
+      return match ? decodeURIComponent(match[1]) : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function setCookieStoreId(id: string) {
+    document.cookie = `${COOKIE_KEY}=${encodeURIComponent(id)}; path=/; max-age=${60*60*24*30}`; // 30 dagar
+  }
+
+  // 2. Cookie-baserad butik (tidigare IP-matchning — borttagen pga Cloudflare-proxy)
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("https://zjongicwgixyvysqpawj.supabase.co/functions/v1/get-public-ip").catch(() => null);
-        if (!res || !res.ok) return;
-        const json = await res.json();
-        if (!json.ip) return;
+    const saved = getCookieStoreId();
+    if (saved) {
+      setStoreId(saved);
+      const s = stores.find(st => st.id === saved);
+      if (s?.name) setAutoStoreName(s.name);
+    }
+  }, [stores]);
 
-        const { data: ipMatch } = await supabase
-          .from("store_ips")
-          .select("store_id, stores(name)")
-          .eq("ip_address", json.ip)
-          .maybeSingle();
-
-        if (ipMatch?.store_id) {
-          setStoreId(ipMatch.store_id);
-          // @ts-ignore om relationen är konfigurerad i Supabase
-          if (ipMatch.stores?.name) setAutoStoreName(ipMatch.stores.name);
-        }
-      } catch {
-        // Ignorera IP-fel
-      }
-    })();
-  }, []);
+  // 3. Spara butik i cookie när användaren väljer
+  useEffect(() => {
+    if (storeId) setCookieStoreId(storeId);
+  }, [storeId]);
 
   // 3. Hämta användare för vald butik
   useEffect(() => {
