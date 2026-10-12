@@ -11,9 +11,10 @@ export const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
   ({ className, value = 0, max = 100, label, ...props }, ref) => {
     const safeValue = Number(value);
     const safeMax = Number(max);
-    const pct = Number.isFinite(safeMax) && safeMax > 0
-      ? Math.min(100, Math.max(0, (safeValue / safeMax) * 100))
-      : 0;
+    const pct =
+      Number.isFinite(safeMax) && safeMax > 0
+        ? Math.min(100, Math.max(0, (safeValue / safeMax) * 100))
+        : 0;
     return (
       <div
         ref={ref}
@@ -34,6 +35,6 @@ export const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
         {label && <span className="mt-1 text-xs text-coop-gray-900">{label}</span>}
       </div>
     );
-  }
+  },
 );
 Progress.displayName = "Progress";

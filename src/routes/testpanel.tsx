@@ -1685,7 +1685,11 @@ function TestPanel() {
                 Enhet
               </Label>
               <Select value={timeUnit} onValueChange={(v) => setTimeUnit(v as typeof timeUnit)}>
-                <SelectTrigger id="time-unit" aria-label="Enhet" className="h-[var(--touch-target-height)] text-sm">
+                <SelectTrigger
+                  id="time-unit"
+                  aria-label="Enhet"
+                  className="h-[var(--touch-target-height)] text-sm"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

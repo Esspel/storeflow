@@ -30,6 +30,8 @@ function QuickLoginPage() {
     })();
   }, []);
 
+  // 2. Cookie-baserad butik (tidigare IP-matchning — borttagen pga Cloudflare-proxy)
+  // Funktioner deklareras före användning (getCookieStoreId används i useState-initializer)
   const COOKIE_KEY = "qf-store-id";
 
   function getCookieStoreId(): string {
@@ -42,18 +44,24 @@ function QuickLoginPage() {
   }
 
   function setCookieStoreId(id: string) {
-    document.cookie = `${COOKIE_KEY}=${encodeURIComponent(id)}; path=/; max-age=${60*60*24*30}`; // 30 dagar
+    document.cookie = `${COOKIE_KEY}=${encodeURIComponent(id)}; path=/; max-age=${60 * 60 * 24 * 30}`; // 30 dagar
   }
 
-  // 2. Cookie-baserad butik (tidigare IP-matchning — borttagen pga Cloudflare-proxy)
+  // 2. Cookie-baserad butik
+  // Sätt storeId från cookie vid init för att undvika setState i effekt
+  // (automatisk butiksnamn-uppdatering hanteras i separat effekt nedan)
+  const [storeIdFromCookie, setStoreIdFromCookie] = useState(() => getCookieStoreId());
+
+  // Initiera storeId från cookie (ingen setState i effekt)
+  const [storeId, setStoreId] = useState(() => storeIdFromCookie || "");
+
+  // Uppdatera autoStoreName när butiker laddas eller cookie-butik ändras
   useEffect(() => {
-    const saved = getCookieStoreId();
-    if (saved) {
-      setStoreId(saved);
-      const s = stores.find(st => st.id === saved);
+    if (storeIdFromCookie) {
+      const s = stores.find((st) => st.id === storeIdFromCookie);
       if (s?.name) setAutoStoreName(s.name);
     }
-  }, [stores]);
+  }, [stores, storeIdFromCookie]);
 
   // 3. Spara butik i cookie när användaren väljer
   useEffect(() => {
@@ -85,13 +93,14 @@ function QuickLoginPage() {
         .select("id, username, display_name")
         .eq("store_id", storeId)
         .eq("is_active", true);
-      const usersFromStoresRes = userIds.length > 0
-        ? await supabase
-            .from("app_users")
-            .select("id, username, display_name")
-            .in("id", userIds)
-            .eq("is_active", true)
-        : { data: [] };
+      const usersFromStoresRes =
+        userIds.length > 0
+          ? await supabase
+              .from("app_users")
+              .select("id, username, display_name")
+              .in("id", userIds)
+              .eq("is_active", true)
+          : { data: [] };
       const usersFromStores = usersFromStoresRes.data || [];
       const directUsers = directUsersRes.data || [];
 
@@ -102,7 +111,7 @@ function QuickLoginPage() {
       });
 
       const uniqueUsers = Array.from(combinedMap.values()).sort((a, b) =>
-        (a.display_name || a.username).localeCompare(b.display_name || b.username)
+        (a.display_name || a.username).localeCompare(b.display_name || b.username),
       );
 
       setUsers(uniqueUsers);
@@ -118,14 +127,17 @@ function QuickLoginPage() {
 
     setLoading(true);
     try {
-      const res = await fetch(`https://zjongicwgixyvysqpawj.supabase.co/functions/v1/quick-switch`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      const res = await fetch(
+        `https://zjongicwgixyvysqpawj.supabase.co/functions/v1/quick-switch`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ mode: "pin", user_id: userId, pin, store_id: storeId }),
         },
-        body: JSON.stringify({ mode: "pin", user_id: userId, pin, store_id: storeId }),
-      });
+      );
       const data = await res.json();
       console.log("[quick-login] quick-switch res.ok:", res.ok, "data:", data);
       if (!res.ok || data.error) {

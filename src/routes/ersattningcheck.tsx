@@ -619,12 +619,10 @@ function ErstatningsCheckPage() {
     if (productsCache && productsCacheStore === cacheKey) {
       return productsCache;
     }
-    const data = await fetchAllRows(
-      supabase,
-      "products",
-      columns,
-      { column: "store_id", value: storeId },
-    );
+    const data = await fetchAllRows(supabase, "products", columns, {
+      column: "store_id",
+      value: storeId,
+    });
     setProductsCache(data ?? []);
     setProductsCacheStore(cacheKey);
     return data ?? [];
@@ -1680,6 +1678,23 @@ function ErstatningsCheckPage() {
       );
     }, 15000);
 
+    // Förbered produkttabellen ( EAN-check) — hämta alla produkter som matchar
+    // artiklarna vi ska hämta, så att vi tidigt kan se om artikeln redan har
+    // ett EAN. Detta undviker uppdateringar av EAN som redan finns i databasen
+    // och därmed unikvitetsfel från Supabase.
+    const productsResponse = await supabase
+      .from("products")
+      .select("ean, sap_article_id, store_id")
+      .in("sap_article_id", prioritizedEligible);
+    const existingProducts: { ean?: string | null; sap_article_id?: string; store_id?: string }[] =
+      productsResponse.data ?? [];
+    const existingProductsByArticle = new Map<string, { ean?: string | null; store_id?: string }>();
+    for (const p of existingProducts) {
+      if (p.sap_article_id) {
+        existingProductsByArticle.set(p.sap_article_id, p);
+      }
+    }
+
     // Bounded-concurrency fetch: avoids flooding the Chrome Extension message
     // port (or the browser connection pool) with thousands of simultaneous
     // requests, which previously caused timeouts and mass failures.
@@ -1868,13 +1883,19 @@ function ErstatningsCheckPage() {
         sap_data_missing: !hasValidSapData,
       });
 
-      // Update EAN from SAP data (GlobalTradeItemNumber)
+      // Update EAN from SAP data (GlobalTradeItemNumber) — only if the article
+      // does not already have an EAN in the database (avoids Supabase unique conflict).
       if (data.GlobalTradeItemNumber) {
-        eanUpdates.push({
-          sapArticleId,
-          ean: data.GlobalTradeItemNumber,
-          updatedAt,
-        });
+        // Check whether this article already has an EAN in the products DB.
+        // If it does, skip to avoid Supabase unique-constraint errors (products_ean_unique).
+        const existingProduct = existingProductsByArticle.get(sapArticleId);
+        if (!existingProduct || !existingProduct.ean) {
+          eanUpdates.push({
+            sapArticleId,
+            ean: data.GlobalTradeItemNumber,
+            updatedAt,
+          });
+        }
       }
 
       successCount += 1;
@@ -1896,22 +1917,30 @@ function ErstatningsCheckPage() {
     // all stores, so we must avoid setting an EAN that already exists in
     // another store. If it does, skip the update for this store.
     if (eanUpdates.length > 0) {
-      // Fetch all products that already have these EANs (any store)
-      const eanValues = eanUpdates.map((u) => u.ean);
-      const { data: existingProducts } = await supabase
-        .from("products")
-        .select("ean, store_id, sap_article_id")
-        .in("ean", eanValues);
+      // Filter eanUpdates to exclude those whose article already has an EAN in the DB.
+      // existingProductsByArticle was populated earlier before the fetch loop.
+      const filteredEanUpdates = eanUpdates.filter((update) => {
+        const existing = existingProductsByArticle.get(update.sapArticleId);
+        // Skip if this article already has an EAN (any value, including empty string) —
+        // it would cause Supabase unique-constraint error or overwrite existing data.
+        if (existing && existing.ean) {
+          console.warn(
+            `Article ${update.sapArticleId} already has EAN ${existing.ean}, skipping update for ${update.ean}`,
+          );
+          return false;
+        }
+        return true;
+      });
 
+      // Build a map for store-level conflicts (different stores)
       const eanToStoreMap = new Map<string, string>();
       for (const p of existingProducts ?? []) {
-        // Only flag as conflicting if it's a different store
-        if (p.store_id !== activeStore!.id) {
+        if (p.ean && p.store_id && p.store_id !== activeStore!.id) {
           eanToStoreMap.set(p.ean, p.store_id);
         }
       }
 
-      for (const batch of chunk(eanUpdates, UPSERT_BATCH_SIZE)) {
+      for (const batch of chunk(filteredEanUpdates, UPSERT_BATCH_SIZE)) {
         for (const { sapArticleId, ean, updatedAt } of batch) {
           // Skip if this EAN already exists in another store
           if (eanToStoreMap.has(ean)) {

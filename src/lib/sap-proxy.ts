@@ -225,14 +225,33 @@ export async function retryFetchViaProxy(
         lastError.message.includes("The message port closed");
 
       if (!isTransient || attempt === maxRetries) {
-        console.error("[SAP PROXY FAILURE — EXPLICIT] URL=" + url + " | ATTEMPT=" + (attempt + 1) + "/" + maxRetries + " | IS_TRANSIENT=" + isTransient + " | ERROR_MESSAGE=" + (lastError ? lastError.message : "NONE") + " | ERROR_TYPE=" + (lastError ? (lastError.constructor ? lastError.constructor.name : "unknown") : "none") + " | FULL_ERROR_DETAIL=", {
-          url: url,
-          attempt: attempt + 1,
-          maxRetries: maxRetries,
-          error: lastError.message,
-          isTransient: isTransient,
-          timestamp: new Date().toISOString(),
-        });
+        console.error(
+          "[SAP PROXY FAILURE — EXPLICIT] URL=" +
+            url +
+            " | ATTEMPT=" +
+            (attempt + 1) +
+            "/" +
+            maxRetries +
+            " | IS_TRANSIENT=" +
+            isTransient +
+            " | ERROR_MESSAGE=" +
+            (lastError ? lastError.message : "NONE") +
+            " | ERROR_TYPE=" +
+            (lastError
+              ? lastError.constructor
+                ? lastError.constructor.name
+                : "unknown"
+              : "none") +
+            " | FULL_ERROR_DETAIL=",
+          {
+            url: url,
+            attempt: attempt + 1,
+            maxRetries: maxRetries,
+            error: lastError.message,
+            isTransient: isTransient,
+            timestamp: new Date().toISOString(),
+          },
+        );
         throw lastError;
       }
 
