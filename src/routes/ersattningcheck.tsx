@@ -1889,7 +1889,7 @@ function ErstatningsCheckPage() {
         // Check whether this article already has an EAN in the products DB.
         // If it does, skip to avoid Supabase unique-constraint errors (products_ean_unique).
         const existingProduct = existingProductsByArticle.get(sapArticleId);
-        if (!existingProduct || !existingProduct.ean) {
+        if (!existingProduct || existingProduct.ean == null) {
           eanUpdates.push({
             sapArticleId,
             ean: data.GlobalTradeItemNumber,
@@ -1923,7 +1923,7 @@ function ErstatningsCheckPage() {
         const existing = existingProductsByArticle.get(update.sapArticleId);
         // Skip if this article already has an EAN (any value, including empty string) —
         // it would cause Supabase unique-constraint error or overwrite existing data.
-        if (existing && existing.ean) {
+        if (existing && existing.ean != null) {
           console.warn(
             `Article ${update.sapArticleId} already has EAN ${existing.ean}, skipping update for ${update.ean}`,
           );
