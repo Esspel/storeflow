@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/quick-login")({
   component: QuickLoginPage,
@@ -53,7 +52,9 @@ function QuickLoginPage() {
   useEffect(() => {
     if (storeId) {
       const s = stores.find((st) => st.id === storeId);
-      if (s?.name) setAutoStoreName(s.name);
+      if (s?.name) {
+        queueMicrotask(() => setAutoStoreName(s.name));
+      }
     }
   }, [stores, storeId]);
 
@@ -65,8 +66,10 @@ function QuickLoginPage() {
   // 3. Hämta användare för vald butik
   useEffect(() => {
     if (!storeId) {
-      setUsers([]);
-      setUserId("");
+      queueMicrotask(() => {
+        setUsers([]);
+        setUserId("");
+      });
       return;
     }
 
@@ -112,7 +115,7 @@ function QuickLoginPage() {
     })();
   }, [storeId]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!storeId) return setError("Välj en butik först.");

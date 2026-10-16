@@ -341,7 +341,6 @@ function AccountsPage() {
       return;
     }
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, authLoading, hasCheckedAuth]);
 
   const manageableStoreIds = isAdmin ? null : currentUserStores.map((s) => s.id);
