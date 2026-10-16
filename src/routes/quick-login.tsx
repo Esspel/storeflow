@@ -13,7 +13,6 @@ export const Route = createFileRoute("/quick-login")({
 
 function QuickLoginPage() {
   const { quickSwitch } = useAuth();
-  const [storeId, setStoreId] = useState("");
   const [userId, setUserId] = useState("");
   const [pin, setPin] = useState("");
   const [stores, setStores] = useState<{ id: string; name: string; city?: string }[]>([]);
@@ -47,21 +46,16 @@ function QuickLoginPage() {
     document.cookie = `${COOKIE_KEY}=${encodeURIComponent(id)}; path=/; max-age=${60 * 60 * 24 * 30}`; // 30 dagar
   }
 
-  // 2. Cookie-baserad butik
-  // Sätt storeId från cookie vid init för att undvika setState i effekt
-  // (automatisk butiksnamn-uppdatering hanteras i separat effekt nedan)
-  const [storeIdFromCookie, setStoreIdFromCookie] = useState(() => getCookieStoreId());
-
   // Initiera storeId från cookie (ingen setState i effekt)
-  const [storeId, setStoreId] = useState(() => storeIdFromCookie || "");
+  const [storeId, setStoreId] = useState(() => getCookieStoreId());
 
-  // Uppdatera autoStoreName när butiker laddas eller cookie-butik ändras
+  // Uppdatera autoStoreName när butiker laddas
   useEffect(() => {
-    if (storeIdFromCookie) {
-      const s = stores.find((st) => st.id === storeIdFromCookie);
+    if (storeId) {
+      const s = stores.find((st) => st.id === storeId);
       if (s?.name) setAutoStoreName(s.name);
     }
-  }, [stores, storeIdFromCookie]);
+  }, [stores, storeId]);
 
   // 3. Spara butik i cookie när användaren väljer
   useEffect(() => {
@@ -118,7 +112,7 @@ function QuickLoginPage() {
     })();
   }, [storeId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     if (!storeId) return setError("Välj en butik först.");
@@ -156,8 +150,8 @@ function QuickLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-coop-gray-100 flex flex-col items-center justify-center px-6 py-12">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-8 md:p-10 border border-coop-gray-200">
+    <div className="min-h-screen bg-coop-gray-100 flex flex-col items-center justify-center px-6 py-12 selection:bg-coop-gron-200 selection:text-coop-morkgron">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-md p-6 md:p-8 border border-coop-gray-200">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-coop-gron-100 text-coop-gron-700 mb-4">
             <Store size={32} />
@@ -182,7 +176,7 @@ function QuickLoginPage() {
               id="store"
               value={storeId}
               onChange={(e) => setStoreId(e.target.value)}
-              className="mt-2 w-full rounded-xl border border-coop-gray-300 bg-white px-4 py-3 text-base text-coop-gray-900 focus:outline-none focus:ring-2 focus:ring-coop-gron-500 focus:ring-offset-1"
+              className="mt-2 w-full rounded-xl border border-coop-gray-300 bg-white px-4 py-3 text-base text-coop-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-coop-gron-500 focus-visible:ring-offset-1 transition-colors"
               required
             >
               <option value="">Välj butik...</option>
@@ -204,7 +198,7 @@ function QuickLoginPage() {
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
               disabled={!storeId}
-              className="mt-2 w-full rounded-xl border border-coop-gray-300 bg-white px-4 py-3 text-base text-coop-gray-900 focus:outline-none focus:ring-2 focus:ring-coop-gron-500 focus:ring-offset-1 disabled:opacity-50"
+              className="mt-2 w-full rounded-xl border border-coop-gray-300 bg-white px-4 py-3 text-base text-coop-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-coop-gron-500 focus-visible:ring-offset-1 transition-colors disabled:opacity-50"
               required
             >
               <option value="">Välj användare...</option>
@@ -283,7 +277,7 @@ function QuickLoginPage() {
           <Button
             type="submit"
             disabled={loading || !storeId || !userId || !pin || pin.length < 4}
-            className="w-full h-16 rounded-2xl text-xl font-bold shadow-lg bg-coop-gron-600 hover:bg-coop-gron-700 text-white transition-all duration-200 active:scale-[0.98]"
+            className="w-full h-16 rounded-2xl text-xl font-bold shadow-sm bg-coop-gron-600 hover:bg-coop-gron-700 text-white transition-all duration-200 active:scale-[0.98]"
           >
             {loading ? (
               <span className="animate-pulse">Loggar in...</span>

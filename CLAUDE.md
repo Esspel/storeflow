@@ -15,8 +15,6 @@
 - Isolerade ändringar i `.claude/worktrees/`.
 - **Worktrees: Ingen worktree ska användas.** Utför alla ändringar direkt i huvudcheckout (`main`), aldrig i `.claude/worktrees/`. Isolering görs genom git-stash eller temporära filer, aldrig genom worktree.
 
-## Projektstruktur (Kort)
-- TanStack Start + React + Supabase. Netlify deployment. Se `docs/adr/`, `docs/agents/`.
 
 ## Säkerhet & Kvalitet
 - Inga fake implementationer. Defensiv programmering (null-guards, loading/error). UUID-validering — aldrig mock-ID (`"demo-store-1"`). RLS på alla affärstabeller. Migrationer: unika tidsstämplar, `IF NOT EXISTS`, `DROP POLICY IF EXISTS`. Endast `@supabase/supabase-js`. Inga service-role-nycklar i klientkod.
@@ -32,6 +30,22 @@
 3. Följ TanStack Starts data-loading; undvik duplicerad hämtning.
 4. Efter ändringar: kör tester, typkontroll, bygg.
 
-## Verifiering
-- `npm run build` + `npx supabase gen types typescript` efter schemaändringar.
-- Kontrollera RLS och index vid databasändringar.
+
+### Code Intelligence
+
+Prefer LSP over Grep/Glob/Read for code navigation:
+- `goToDefinition` / `goToImplementation` to jump to source
+- `findReferences` to see all usages across the codebase
+- `workspaceSymbol` to find where something is defined
+- `documentSymbol` to list all symbols in a file
+- `hover` for type info without reading the file
+- `incomingCalls` / `outgoingCalls` for call hierarchy
+
+Before renaming or changing a function signature, use
+`findReferences` to find all call sites first.
+
+Use Grep/Glob only for text/pattern searches (comments,
+strings, config values) where LSP doesn't help.
+
+After writing or editing code, check LSP diagnostics before
+moving on. Fix any type errors or missing imports immediately.

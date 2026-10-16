@@ -121,7 +121,7 @@ function LoginPage() {
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-coop-gradient text-primary-foreground shadow-[var(--shadow-md)]">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-coop-gron-600 text-primary-foreground shadow-sm">
               <KeyRound className="h-7 w-7" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Byt lösenord</h1>
@@ -132,7 +132,7 @@ function LoginPage() {
 
           <form
             onSubmit={handleForceChangePw}
-            className="rounded-2xl border border-border/60 bg-coop-gray-100 p-8 shadow-[var(--shadow-md)]"
+            className="rounded-2xl border border-border/60 bg-coop-gray-100 p-8 shadow-sm"
           >
             <div className="space-y-5">
               <div className="rounded-lg bg-warning/15 px-4 py-3 text-sm text-warning-foreground">
@@ -220,7 +220,7 @@ function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-coop-gradient text-primary-foreground shadow-[var(--shadow-md)]">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-coop-gron-600 text-primary-foreground shadow-sm">
             <Sparkles className="h-7 w-7" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">StoreFlow</h1>
@@ -229,7 +229,7 @@ function LoginPage() {
 
         <form
           onSubmit={handleSubmit}
-          className="rounded-2xl border border-border/60 bg-coop-gray-100 p-8 shadow-[var(--shadow-md)]"
+          className="rounded-2xl border border-border/60 bg-coop-gray-100 p-8 shadow-sm"
         >
           <div className="space-y-5">
             <div className="space-y-2">
