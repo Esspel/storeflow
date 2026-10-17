@@ -1,6 +1,6 @@
 {
   "name": "storeflow",
   "main": "dist/index.html",
-  "assets": ["dist/"],
+  "assets": "dist/",
   "compatibility_date": "2026-12-01"
 }
