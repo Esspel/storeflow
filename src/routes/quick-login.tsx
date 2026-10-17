@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/quick-login")({
   component: QuickLoginPage,
@@ -13,7 +12,6 @@ export const Route = createFileRoute("/quick-login")({
 
 function QuickLoginPage() {
   const { quickSwitch } = useAuth();
-  const [storeId, setStoreId] = useState("");
   const [userId, setUserId] = useState("");
   const [pin, setPin] = useState("");
   const [stores, setStores] = useState<{ id: string; name: string; city?: string }[]>([]);
@@ -50,9 +48,9 @@ function QuickLoginPage() {
   // 2. Cookie-baserad butik
   // Sätt storeId från cookie vid init för att undvika setState i effekt
   // (automatisk butiksnamn-uppdatering hanteras i separat effekt nedan)
-  const [storeIdFromCookie, setStoreIdFromCookie] = useState(() => getCookieStoreId());
-
   // Initiera storeId från cookie (ingen setState i effekt)
+  const [storeIdFromCookie] = useState(() => getCookieStoreId());
+
   const [storeId, setStoreId] = useState(() => storeIdFromCookie || "");
 
   // Uppdatera autoStoreName när butiker laddas eller cookie-butik ändras
@@ -118,7 +116,7 @@ function QuickLoginPage() {
     })();
   }, [storeId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     if (!storeId) return setError("Välj en butik först.");
