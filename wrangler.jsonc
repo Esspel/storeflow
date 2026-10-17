@@ -1,6 +1,5 @@
 {
   "name": "storeflow",
-  "main": "dist/index.html",
-  "assets": {"directory": "dist/", "binding": "assets"},
+  "assets": {"directory": "dist/"},
   "compatibility_date": "2026-12-01"
 }
