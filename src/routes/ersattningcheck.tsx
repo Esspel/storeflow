@@ -623,9 +623,17 @@ function ErstatningsCheckPage() {
       column: "store_id",
       value: storeId,
     });
-    setProductsCache(data ?? []);
+    const deduped = new Map<string, any>();
+    for (const row of data ?? []) {
+      if (row.is_active === false) continue;
+      const key = String(row.sap_article_id ?? row.id ?? "");
+      if (!key || deduped.has(key)) continue;
+      deduped.set(key, row);
+    }
+    const result = Array.from(deduped.values());
+    setProductsCache(result);
     setProductsCacheStore(cacheKey);
-    return data ?? [];
+    return result;
   }
 
   function invalidateProductsCache() {
@@ -753,6 +761,14 @@ function ErstatningsCheckPage() {
   const [sapExtensionInstalled, setSapExtensionInstalled] = useState(false);
   const [reclamationStatuses, setReclamationStatuses] = useState<Map<string, string>>(new Map());
   const [sapExtensionChecked, setSapExtensionChecked] = useState(false);
+  const [sapFetchStatus, setSapFetchStatus] = useState<{
+    total: number;
+    fetched: number;
+    withShelfLife: number;
+    withoutShelfLife: number;
+    remaining: number;
+    visible: boolean;
+  } | null>(null);
   // Filter state for shelf life data (#6)
   const [shelfLifeStatusFilter, setShelfLifeStatusFilter] = useState<string[]>([]);
   const [brandFilter, setBrandFilter] = useState<string[]>([]);
@@ -1565,19 +1581,11 @@ function ErstatningsCheckPage() {
   }
 
   const importShelfLifeFromSap = async () => {
-    console.log("[importShelfLifeFromSap] Starting...");
     if (!activeStore) {
-      console.log("[importShelfLifeFromSap] No active store, aborting");
       return;
     }
 
     const useProxy = sapExtensionInstalled;
-    console.log(
-      "[importShelfLifeFromSap] useProxy:",
-      useProxy,
-      "sapExtensionInstalled:",
-      sapExtensionInstalled,
-    );
 
     const now = new Date();
 
@@ -1666,17 +1674,21 @@ function ErstatningsCheckPage() {
     let changedCount = 0;
     let missingInSapCount = 0;
 
-    // Statuslogg var 15 sekund i console — visa antal hämtade/med shelfLife/utan/kvar
+    // Uppdateringsintervall för popup (istället för console-logg)
     const statusInterval = setInterval(() => {
       const total = prioritizedEligible.length;
       const fetched = successCount + errorCount;
-      const withShelfLife = successCount - missingInSapCount;
-      const withoutShelfLife = missingInSapCount; // artiklar som saknas i SAP eller har ogiltig data
-      const remaining = total - fetched;
-      console.log(
-        `[SAP Status] Hämtade: ${fetched}/${total} | Med shelfLife: ${withShelfLife} | Utan: ${withoutShelfLife} | Kvar: ${remaining}`,
-      );
-    }, 15000);
+      const withShelfLife = Math.max(successCount - missingInSapCount, 0);
+      const withoutShelfLife = missingInSapCount;
+      const remaining = Math.max(total - fetched, 0);
+      setSapFetchStatus({ total, fetched, withShelfLife, withoutShelfLife, remaining, visible: true });
+    }, 2000);
+    const total = prioritizedEligible.length;
+    const fetched = successCount + errorCount;
+    const withShelfLife = Math.max(successCount - missingInSapCount, 0);
+    const withoutShelfLife = missingInSapCount;
+    const remaining = Math.max(total - fetched, 0);
+    setSapFetchStatus({ total, fetched, withShelfLife, withoutShelfLife, remaining, visible: true });
 
     // Förbered produkttabellen ( EAN-check) — hämta alla produkter som matchar
     // artiklarna vi ska hämta, så att vi tidigt kan se om artikeln redan har
@@ -1776,7 +1788,7 @@ function ErstatningsCheckPage() {
         continue;
       }
 
-      const { sapArticleId, data, success, type, error } = result.value;
+      const { sapArticleId, data, success } = result.value;
 
       if (!success) {
         // Handle failed fetch (network/proxy errors) — agg. status loggas ej per artikel
@@ -1861,9 +1873,7 @@ function ErstatningsCheckPage() {
       }
 
       // Vid proxy-/parse-fel: sätt kort cooldown så artikeln försöks igen snart
-      if (type === "proxy_failure" || type === "parse_error" || type === "no_json") {
-        cooldownDays = 3; // kort väntan vid transient fel
-      }
+      // (type från fetchResult kontrolleras inte här eftersom success=true redan filtrerat fel)
 
       const nextSapCheck = new Date();
       nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
@@ -1967,6 +1977,7 @@ function ErstatningsCheckPage() {
     }
 
     clearInterval(statusInterval);
+    setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
 
     // Uppdatera shelfLifeRecords direkt från existingMap utan att läsa om
     // alla 3 tabeller från Supabase (products, product_shelf_life,
@@ -4219,6 +4230,32 @@ function ErstatningsCheckPage() {
         </Alert>
       )}
 
+      {/* SAP Fetch Status Popup */}
+      {sapFetchStatus?.visible && (
+        <div className="mb-4 rounded-lg border-l-4 border-coop-blue-500 bg-coop-gray-50 p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-coop-blue-500" />
+              <span className="text-sm text-coop-gray-700">SAP-hämtning pågår</span>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="-mr-1 -mt-1 h-7 w-7 shrink-0"
+              onClick={() =>
+                setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null))
+              }
+              aria-label="Stäng SAP-status"
+              title="Stäng SAP-status"
+            >
+              <X size={14} />
+            </Button>
+          </div>
+          <SapFetchProgressBar status={sapFetchStatus} />
+        </div>
+      )}
+
       {step === "admin-test" && user!.role === "admin" && (
         <Card>
           <CardHeader>
@@ -6318,6 +6355,40 @@ function ErstatningsCheckPage() {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+interface SapFetchStatus {
+  total: number;
+  fetched: number;
+  withShelfLife: number;
+  withoutShelfLife: number;
+  remaining: number;
+  visible: boolean;
+}
+
+interface SapFetchProgressBarProps {
+  status: SapFetchStatus | null;
+}
+
+function SapFetchProgressBar({ status }: SapFetchProgressBarProps) {
+  if (!status) return null;
+  const percentage = Math.min((status.fetched / status.total) * 100, 100).toFixed(1);
+  return (
+    <div className="mt-2">
+      <div className="flex justify-between text-xs text-gray-500 mb-1">
+        <span>
+          {status.fetched}/{status.total} artiklar | {status.withShelfLife} med shelf-life, {status.withoutShelfLife} utan
+        </span>
+        <span>{status.remaining}</span>
+      </div>
+      <div className="h-2 rounded bg-gray-200 overflow-hidden">
+        <div
+          className="h-full bg-coop-blue-500 transition-all duration-300"
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
     </div>
   );
 }
