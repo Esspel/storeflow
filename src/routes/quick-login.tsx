@@ -121,7 +121,7 @@ function QuickLoginPage() {
     setError("");
     if (!storeId) return setError("Välj en butik först.");
     if (!userId) return setError("Välj en användare.");
-    if (pin.length < 4) return setError("PIN-koden måste vara minst 4 siffror.");
+    if (pin.length < 4) return setError("Ange PIN-koden.");
 
     setLoading(true);
     try {

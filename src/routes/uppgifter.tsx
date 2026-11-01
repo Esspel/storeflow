@@ -580,8 +580,8 @@ function TasksPage() {
     horizonRef.current = horizonDays;
     try {
       localStorage.setItem(RECURRENCE_HORIZON_KEY, String(horizonDays));
-    } catch {
-      // Ignore localStorage errors
+    } catch (err) {
+      console.error("Failed to save recurrence horizon:", err);
     }
   }, [horizonDays]);
 
@@ -664,10 +664,10 @@ function TasksPage() {
           assigneeGroupIds: parsed.assigneeGroupIds ?? base.assigneeGroupIds,
         };
       }
-    } catch {
-      // Ignore parsing errors, return empty form
+    } catch (err) {
+      console.error("Failed to prepare task form:", err);
+      return emptyForm(activeStore?.id ?? "");
     }
-    return emptyForm(activeStore?.id ?? "");
   });
 
   const setNewTask = (v: NewTaskForm | ((p: NewTaskForm) => NewTaskForm)) => {
@@ -883,6 +883,7 @@ function TasksPage() {
       } catch (err) {
         console.error("Error in confirmAssignees for task", taskId, err);
         errors.push(`Oväntat fel för uppgift ${taskId}`);
+        toast.error(`Fel vid bekräftelse av uppgift ${taskId}`);
       }
     }
 

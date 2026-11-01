@@ -1551,7 +1551,9 @@ function MallarPage() {
         } else {
           setScheduledUsersByDate({});
         }
-      } catch {
+      } catch (err) {
+        console.error("Failed to compute scheduled users:", err);
+        toast.error("Kunde inte beräkna schemaläggning. Försök igen.");
         setScheduledUsersByDate({});
       }
     }
@@ -1576,7 +1578,9 @@ function MallarPage() {
           }),
         );
         setTemplatesWithExistingTasks(withExisting);
-      } catch {
+      } catch (err) {
+        console.error("Failed to check existing tasks:", err);
+        toast.error("Kunde inte kontrollera tidigare skapa uppgifter. Försök igen.");
         setTemplatesWithExistingTasks(new Set());
       }
     } else {

@@ -1322,14 +1322,6 @@ function AccountsPage() {
           >
             Användare
           </TabsTrigger>
-          {isAdmin && (
-            <TabsTrigger
-              value="store-ips"
-              className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
-            >
-              Butik IP
-            </TabsTrigger>
-          )}
           <TabsTrigger
             value="stores"
             className="rounded-full px-4 text-sm data-[state=active]:bg-coop-gray-100 data-[state=active]:shadow-sm"
@@ -2127,18 +2119,7 @@ function AccountsPage() {
           </TabsContent>
         )}
 
-        {isAdmin && (
-          <TabsContent value="store-ips" className="mt-6 space-y-6">
-            <div>
-              <h2 className="text-xl font-semibold text-coop-gray-900">Butik IP-bindning</h2>
-              <p className="text-sm text-coop-gray-600">
-                Ta bort: fungerar ej bakom Cloudflare-proxy (IP ändras hela tiden). Använd
-                quick-login — den minns senaste butiken i en cookie på enheten.
-              </p>
-            </div>
-          </TabsContent>
-        )}
-      </Tabs>
+              </Tabs>
 
       {/* ──────────────────── DIALOGS ──────────────────── */}
 

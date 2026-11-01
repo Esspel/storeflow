@@ -45,9 +45,10 @@ function HubPage() {
     (async () => {
       const { data } = await supabase
         .from("app_users")
-        .select("id, display_name, username, quick_pin_hash")
+        .select("id, display_name, username, quick_pin_hash, is_active")
         .eq("store_id", activeStore.id)
-        .is("quick_pin_hash", null);
+        .is("quick_pin_hash", null)
+        .is("is_active", true);
       if (data) setMissingPinUsers(data as typeof missingPinUsers);
     })();
   }, [user, isManager, activeStore?.id]);
