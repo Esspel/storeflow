@@ -6735,7 +6735,7 @@ function TasksPage() {
                       else next.delete(entry.id);
                       setSelectedDeliveryIds(next);
                     }}
-                    className="h-4 w-4 accent-primary"
+                    className="h-3.5 w-3.5 cursor-pointer accent-primary"
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-coop-gray-900">{entry.supplier}</p>

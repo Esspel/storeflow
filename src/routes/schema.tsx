@@ -4527,7 +4527,7 @@ function SchemaPage() {
                                         },
                                       }))
                                     }
-                                    className="rounded accent-amber-600"
+                                    className="h-3.5 w-3.5 cursor-pointer rounded accent-amber-600"
                                   />
                                   <span className="text-[11px] font-medium text-coop-gray-900">
                                     Specialvecka

@@ -3241,7 +3241,7 @@ function KundrundaPage() {
                       role="checkbox"
                       aria-checked={isSelected}
                       className={cn(
-                        "flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors",
+                        "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-colors",
                         isSelected
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-border/60 bg-background hover:border-primary/60",
@@ -3259,7 +3259,7 @@ function KundrundaPage() {
                       {isSelected && <span className="text-[10px] font-bold leading-none">✓</span>}
                     </button>
                   )}
-                  {!canDelete && <div className="w-5 shrink-0" />}
+                  {!canDelete && <div className="w-3.5 shrink-0" />}
                   <BarChart3 className={cn("h-5 w-5 shrink-0", scoreColor)} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">

@@ -1,39 +1,57 @@
-// Post-build: prepare SPA for Netlify deployment.
-// TanStack Start generates _shell.html which needs to be index.html for Netlify.
-import { readFileSync, copyFileSync } from "fs";
+// Post-build: prepare SPA for Cloudflare Workers / Netlify deployment.
+// TanStack Start generates _shell.html which needs to be index.html.
+import { copyFileSync, existsSync, cpSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
-// Copy _shell.html to index.html for Netlify SPA routing
 const shellHtml = resolve("dist/client/_shell.html");
 const indexHtml = resolve("dist/client/index.html");
 const rootIndexHtml = resolve("dist/index.html");
-const clientAssetsDir = resolve("dist/client/assets");
-const rootAssetsDir = resolve("dist/assets");
+const notFoundHtml = resolve("dist/404.html");
+const clientNotFoundHtml = resolve("dist/client/404.html");
+const distClientDir = resolve("dist/client");
+const distRootDir = resolve("dist");
+const clientRedirects = resolve("dist/client/_redirects");
+const rootRedirects = resolve("dist/_redirects");
 
-try {
-  copyFileSync(shellHtml, indexHtml);
-  copyFileSync(indexHtml, rootIndexHtml);
-
-  // wrangler tjänar assets från dist/ (assets-directory i wrangler.jsonc)
+function safeCopy(src, dest) {
   try {
-    const { existsSync, mkdirSync } = await import("fs");
-    if (existsSync(clientAssetsDir) && !existsSync(rootAssetsDir)) {
-      mkdirSync(rootAssetsDir, { recursive: true });
+    if (existsSync(src)) {
+      copyFileSync(src, dest);
     }
-    const { cpSync } = await import("fs");
-    cpSync(clientAssetsDir, rootAssetsDir, { recursive: true, force: true });
-    console.log("[post-build] Copied _shell.html to index.html, index.html to dist/, and assets to dist/ for Netlify SPA routing and wrangler");
-  } catch (e3) {
-    console.warn("[post-build] index.html kopierades men assets-kopiering misslyckades:", e3.message);
+  } catch (e) {
+    console.warn(`[post-build] Could not copy ${src} -> ${dest}:`, e.message);
+  }
+}
+
+function safeWrite(dest, content) {
+  try {
+    writeFileSync(dest, content);
+  } catch (e) {
+    console.warn(`[post-build] Could not write ${dest}:`, e.message);
+  }
+}
+
+// 1. Ensure index.html in dist/client and dist/
+if (existsSync(shellHtml)) {
+  safeCopy(shellHtml, indexHtml);
+}
+safeCopy(indexHtml, rootIndexHtml);
+
+// 2. 404.html fallbacks for static hosts
+safeCopy(indexHtml, notFoundHtml);
+safeCopy(indexHtml, clientNotFoundHtml);
+
+// 3. Write _redirects for SPA routing (Netlify, Cloudflare Pages)
+const redirectsContent = "/*    /index.html   200\n";
+safeWrite(clientRedirects, redirectsContent);
+safeWrite(rootRedirects, redirectsContent);
+
+// 4. Copy all assets, sw.js, manifest.json, icons from dist/client to dist/ for wrangler
+try {
+  if (existsSync(distClientDir)) {
+    cpSync(distClientDir, distRootDir, { recursive: true, force: true });
+    console.log("[post-build] Successfully prepared dist/ and dist/client for SPA routing");
   }
 } catch (e) {
-  console.warn("[post-build] _shell.html not found, checking if index.html exists...");
-  try {
-    readFileSync(indexHtml, "utf8");
-    copyFileSync(indexHtml, rootIndexHtml);
-    console.log("[post-build] index.html copied to dist/ for wrangler");
-  } catch (e2) {
-    console.error("[post-build] Critical: No HTML shell found in dist/client!");
-    process.exit(1);
-  }
+  console.warn("[post-build] Warning copying client directory to dist root:", e.message);
 }

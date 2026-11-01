@@ -2,7 +2,7 @@
 // Strategy: Cache-First for static assets, Network-First for API/supabase calls.
 // Bump CACHE_VERSION on every production deploy to force a cache refresh and
 // trigger the update banner on all open tabs.
-const CACHE_VERSION = "v6";
+const CACHE_VERSION = "v7";
 const CACHE_NAME = `storeflow-shell-${CACHE_VERSION}`;
 
 // ── IndexedDB token access ───────────────────────────────────────────────────
@@ -117,7 +117,7 @@ self.addEventListener("message", (event) => {
 });
 
 // Static assets to pre-cache on install (app shell)
-const SHELL_URLS = ["/", "/login"];
+const SHELL_URLS = ["/"];
 
 self.addEventListener("install", (event) => {
   // Pre-cache the app shell. Do NOT skipWaiting here — the update banner in
@@ -154,11 +154,16 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          if (!res.ok && res.status === 404) {
+            return caches.match("/").then((cached) => cached ?? res);
+          }
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          }
           return res;
         })
-        .catch(() => caches.match("/").then((r) => r ?? Response.error())),
+        .catch(() => caches.match("/").then((r) => r ?? caches.match("/index.html") ?? Response.error())),
     );
     return;
   }
