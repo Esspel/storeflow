@@ -188,8 +188,9 @@ export async function isSessionLocallyExpired(): Promise<boolean> {
     return Date.now() >= expiresAt;
   }
 
-  // Fallback: if we can't read the expiry, treat as expired (safe default)
-  return true;
+  // Fallback: if we can't read the expiry but have a stored session,
+  // do not prematurely expire it — let background validation verify it.
+  return false;
 }
 
 // ─── Session refresh (sliding expiration) ────────────────────────────────────

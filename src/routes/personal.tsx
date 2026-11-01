@@ -860,17 +860,7 @@ function AccountsPage() {
       }
     }
     setSaving(true);
-    await supabase
-      .from("app_users")
-      .update({
-        display_name: "Gallrad användare",
-        username: `deleted_${deleteUser.id.slice(0, 8)}`,
-        is_active: false,
-        password_hash: "",
-      })
-      .eq("id", deleteUser.id);
-    await supabase.from("user_stores").delete().eq("user_id", deleteUser.id);
-    await supabase.from("user_group_members").delete().eq("user_id", deleteUser.id);
+    await supabase.from("app_users").delete().eq("id", deleteUser.id);
     logAudit(currentUser?.id ?? null, "user.delete", "app_users", deleteUser.id, {
       username: deleteUser.username,
     });
@@ -2118,8 +2108,7 @@ function AccountsPage() {
             )}
           </TabsContent>
         )}
-
-              </Tabs>
+      </Tabs>
 
       {/* ──────────────────── DIALOGS ──────────────────── */}
 
@@ -3127,8 +3116,9 @@ function AccountsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort konto</AlertDialogTitle>
             <AlertDialogDescription>
-              Är du säker på att du vill ta bort kontot för{" "}
-              <strong>{deleteUser?.display_name}</strong>? Åtgärden kan inte ångras.
+              Är du säker på att du vill permanent radera användaren
+              <strong>{deleteUser?.display_name}</strong>? Denna åtgärd kan inte ångras och
+              användaren raderas från systemet helt.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

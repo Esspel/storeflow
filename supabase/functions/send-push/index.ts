@@ -27,8 +27,7 @@ interface SendPushPayload {
 
 function normalizeVAPIDKey(key: string | null): string | null {
   if (!key) return null;
-  // Remove VITE_ prefix if present for backward compatibility
-  return key.startsWith("VITE_") ? key.replace("VITE_", "") : key;
+  return key.trim();
 }
 
 Deno.serve(async (req: Request) => {

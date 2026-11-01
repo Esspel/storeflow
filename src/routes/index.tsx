@@ -31,13 +31,6 @@ function HubPage() {
     { id: string; display_name: string; username: string }[]
   >([]);
 
-  // Omdirigera oinloggade användare till quick-login (PIN + butik)
-  useEffect(() => {
-    if (!user) {
-      navigate({ to: "/quick-login" });
-    }
-  }, [user, navigate]);
-
   // Varning för chefer/admin om användare utan PIN i aktuell butik
   const isManager = user?.role === "manager" || user?.role === "admin";
   useEffect(() => {

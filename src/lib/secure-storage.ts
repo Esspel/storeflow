@@ -12,14 +12,11 @@ const EXPIRY_KEY = "sf_session_expires_at";
 export const SESSION_LIFETIME_MS = 12 * 60 * 60 * 1000; // 12 hours absolute
 // AES-GCM encryption for IndexedDB token storage (STATE-01)
 async function getCryptoKey(): Promise<CryptoKey> {
-  const raw = await crypto.subtle.importKey(
-    "raw",
+  const hash = await crypto.subtle.digest(
+    "SHA-256",
     new TextEncoder().encode("storeflow-crypto-key-2026"),
-    "AES-GCM",
-    false,
-    ["encrypt", "decrypt"],
   );
-  return raw;
+  return crypto.subtle.importKey("raw", hash, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 
 export async function encryptToken(token: string): Promise<string> {
@@ -40,13 +37,14 @@ export async function encryptToken(token: string): Promise<string> {
 export async function decryptToken(encrypted: string): Promise<string | null> {
   try {
     const combined = Uint8Array.from(atob(encrypted), (c) => c.charCodeAt(0));
+    if (combined.length <= 12) return encrypted;
     const iv = combined.slice(0, 12);
     const cipher = combined.slice(12);
     const key = await getCryptoKey();
     const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
     return new TextDecoder().decode(plain);
   } catch {
-    return null;
+    return encrypted || null;
   }
 }
 
@@ -127,7 +125,8 @@ export async function secureSetSession(
 
   if (!isIDBAvailable()) {
     if (!isLocalStorageAvailable()) return;
-    localStorage.setItem("sf_session_token", token);
+    const encryptedToken = await encryptToken(token);
+    localStorage.setItem("sf_session_token", encryptedToken);
     localStorage.setItem("sf_user", JSON.stringify(user));
     localStorage.setItem("sf_session_expires_at", String(expiresAt));
     return;
@@ -146,8 +145,8 @@ export async function secureSetSession(
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
-  } catch {
-    // Silently fail — auth will just require re-login
+  } catch (err) {
+    console.error("[secure-storage] secureSetSession error:", err);
   }
 }
 

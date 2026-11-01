@@ -2,7 +2,7 @@
 // Strategy: Cache-First for static assets, Network-First for API/supabase calls.
 // Bump CACHE_VERSION on every production deploy to force a cache refresh and
 // trigger the update banner on all open tabs.
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const CACHE_NAME = `storeflow-shell-${CACHE_VERSION}`;
 
 // ── IndexedDB token access ───────────────────────────────────────────────────
@@ -191,13 +191,11 @@ self.addEventListener("sync", (event) => {
 // ── Web Push ─────────────────────────────────────────────────────────────────
 
 self.addEventListener("push", (event) => {
-  if (!event.data) return;
-
   let payload;
   try {
-    payload = event.data.json();
+    payload = event.data ? event.data.json() : {};
   } catch {
-    payload = { title: "StoreFlow", body: event.data.text() };
+    payload = { title: "StoreFlow", body: event.data ? event.data.text() : "" };
   }
 
   const title = payload.title ?? "StoreFlow";
@@ -216,14 +214,32 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      // Forward to visible window for in-app toast
-      for (const client of clients) {
-        if (client.visibilityState === "visible") {
-          client.postMessage({ type: "PUSH_RECEIVED", payload });
-          break;
+      // Check if any window tab is currently visible (foreground)
+      const hasVisibleClient = clients.some(
+        (client) => client.visibilityState === "visible",
+      );
+
+      if (hasVisibleClient) {
+        // App is in foreground — show in-app toast only, skip OS notification
+        // to avoid duplicate alerts
+        for (const client of clients) {
+          if (client.visibilityState === "visible") {
+            client.postMessage({ type: "PUSH_RECEIVED", payload });
+            break;
+          }
         }
+        // Must still show a notification per spec, but use silent options
+        // so the OS doesn't buzz the user twice. Using `silent: true` satisfies
+        // the "must show notification" requirement without disturbing the user.
+        return self.registration.showNotification(title, {
+          ...options,
+          silent: true,
+          vibrate: [],
+          requireInteraction: false,
+        });
       }
-      // Always show OS-level notification regardless of app visibility
+
+      // App is in background or closed — show full OS notification
       return self.registration.showNotification(title, options);
     }),
   );

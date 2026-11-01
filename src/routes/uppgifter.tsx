@@ -649,7 +649,8 @@ function TasksPage() {
   const [newTask, _setNewTask] = useState<NewTaskForm>(() => {
     try {
       const saved = localStorage.getItem(`sf-task-draft-${user?.id ?? ""}`);
-      if (saved) {
+      if (!saved) return emptyForm(activeStore?.id ?? "");
+      if (true) {
         const parsed = JSON.parse(saved) as NewTaskForm;
         const base = emptyForm(parsed.store_id ?? "");
         return {
