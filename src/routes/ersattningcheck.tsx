@@ -380,48 +380,49 @@ async function fetchAllRows(
   batchSize = 1000,
 ): Promise<any[]> {
   const all: any[] = [];
-  let from = 0;
-  const concurrency = 4;
+  let lastCursor: { orderValue: unknown; id: unknown } | null = null;
+  const isAscending = order?.ascending ?? false;
+  const orderColumn = order?.column ?? idColumn;
 
   const eqFilters = eq ? (Array.isArray(eq) ? eq : [eq]) : [];
 
   while (true) {
-    const results: { data: any[]; from: number }[] = [];
-    await Promise.all(
-      Array.from({ length: concurrency }, (_, i) => {
-        const batchFrom = from + i * batchSize;
-        return (async () => {
-          let query = supabaseClient
-            .from(table)
-            .select(select)
-            .range(batchFrom, batchFrom + batchSize - 1);
-          for (const f of eqFilters) query = query.eq(f.column, f.value);
-          if (order) query = query.order(order.column, { ascending: order.ascending ?? false });
-          // PostgREST .range() paginering kräver en deterministisk ORDER BY,
-          // annars kan rader hoppas över eller dupliceras mellan batchar.
-          query = query.order(idColumn, { ascending: true });
-          const { data, error } = await query;
-          if (error) throw error;
-          results.push({ data: data ?? [], from: batchFrom });
-        })();
-      }),
-    );
+    let query = supabaseClient.from(table).select(select).limit(batchSize);
 
-    results.sort((a, b) => a.from - b.from);
+    for (const f of eqFilters) query = query.eq(f.column, f.value);
 
-    let allEmpty = true;
-    let anyPartial = false;
-    for (const result of results) {
-      if (result.data.length > 0) {
-        all.push(...result.data);
-        allEmpty = false;
-        if (result.data.length < batchSize) anyPartial = true;
+    // Apply cursor-based pagination
+    if (lastCursor) {
+      const { orderValue, id } = lastCursor;
+      if (isAscending) {
+        query = query.or(
+          `${orderColumn}.gt.${orderValue},and(${orderColumn}.eq.${orderValue},${idColumn}.gt.${id})`,
+        );
+      } else {
+        query = query.or(
+          `${orderColumn}.lt.${orderValue},and(${orderColumn}.eq.${orderValue},${idColumn}.gt.${id})`,
+        );
       }
     }
 
-    if (allEmpty) break;
-    from += concurrency * batchSize;
-    if (anyPartial) break;
+    // Apply deterministic ordering
+    query = query.order(orderColumn, { ascending: isAscending });
+    query = query.order(idColumn, { ascending: true });
+
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    all.push(...data);
+
+    // Update cursor for next iteration
+    const lastRow = data[data.length - 1];
+    lastCursor = {
+      orderValue: lastRow[orderColumn],
+      id: lastRow[idColumn],
+    };
+
+    if (data.length < batchSize) break;
   }
   return all;
 }
