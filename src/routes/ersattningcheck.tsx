@@ -1481,7 +1481,15 @@ function ErstatningsCheckPage() {
             };
           }
         })();
-        return fetchPromise;
+        const resolved = await fetchPromise;
+        // Update counters incrementally so the status interval shows live progress
+        if (resolved?.success === true) {
+          successCount += 1;
+        } else {
+          errorCount += 1;
+          missingInSapCount += 1;
+        }
+        return resolved;
       },
       { concurrency: CONCURRENCY },
     );
@@ -1504,8 +1512,7 @@ function ErstatningsCheckPage() {
       if (type === "unexpected_error" && result.value.error === "UNAUTHORIZED") {
         clearInterval(statusInterval);
         setIsLoading(false);
-        setSapFetchDialogOpen(false);
-        setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
+        // Popup stays open — user dismisses manually via Dölj button
         return;
       }
 
@@ -1632,10 +1639,8 @@ function ErstatningsCheckPage() {
     }
 
     setIsLoading(false);
-    if (errorCount === 0) {
-      setSapFetchDialogOpen(false);
-      setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
-    } else {
+    // Popup never auto-closes — user dismisses manually via Dölj button
+    if (errorCount > 0) {
       setSapFetchStatus((prev) =>
         prev
           ? {
@@ -1880,7 +1885,15 @@ function ErstatningsCheckPage() {
             };
           }
         })();
-        return fetchPromise;
+        const resolved = await fetchPromise;
+        // Update counters incrementally so the status interval shows live progress
+        if (resolved?.success === true) {
+          successCount += 1;
+        } else {
+          errorCount += 1;
+          missingInSapCount += 1;
+        }
+        return resolved;
       },
       { concurrency: CONCURRENCY },
     );
@@ -1905,8 +1918,7 @@ function ErstatningsCheckPage() {
       if (type === "unexpected_error" && result.value.error === "UNAUTHORIZED") {
         clearInterval(statusInterval);
         setIsLoading(false);
-        setSapFetchDialogOpen(false);
-        setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
+        // Popup stays open — user dismisses manually via Dölj button
         return;
       }
 
@@ -2098,10 +2110,8 @@ function ErstatningsCheckPage() {
     }
 
     clearInterval(statusInterval);
-    if (errorCount === 0) {
-      setSapFetchDialogOpen(false);
-      setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
-    } else {
+    // Popup never auto-closes — user dismisses manually via Dölj button
+    if (errorCount > 0) {
       setSapFetchStatus((prev) =>
         prev
           ? {
