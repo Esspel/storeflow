@@ -1355,6 +1355,17 @@ function ErstatningsCheckPage() {
     let errorCount = 0;
     let missingInSapCount = 0;
 
+    const total = uniqueArticles.length;
+    setSapFetchStatus({
+      total,
+      fetched: 0,
+      withShelfLife: 0,
+      withoutShelfLife: 0,
+      errorCount: 0,
+      remaining: total,
+      visible: true,
+    });
+
     const statusInterval = setInterval(() => {
       const total = uniqueArticles.length;
       const fetched = successCount + errorCount;
@@ -1621,8 +1632,20 @@ function ErstatningsCheckPage() {
     }
 
     setIsLoading(false);
-    setSapFetchDialogOpen(false);
-    setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
+    if (errorCount === 0) {
+      setSapFetchDialogOpen(false);
+      setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
+    } else {
+      setSapFetchStatus((prev) =>
+        prev
+          ? {
+              ...prev,
+              visible: true,
+              errorMessage: `${errorCount} artikel${errorCount !== 1 ? "er" : ""} misslyckades`,
+            }
+          : null,
+      );
+    }
 
     if (errorCount > 0) {
       toast.error(
@@ -2075,8 +2098,20 @@ function ErstatningsCheckPage() {
     }
 
     clearInterval(statusInterval);
-    setSapFetchDialogOpen(false);
-    setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
+    if (errorCount === 0) {
+      setSapFetchDialogOpen(false);
+      setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
+    } else {
+      setSapFetchStatus((prev) =>
+        prev
+          ? {
+              ...prev,
+              visible: true,
+              errorMessage: `${errorCount} artikel${errorCount !== 1 ? "er" : ""} misslyckades`,
+            }
+          : null,
+      );
+    }
 
     // Uppdatera shelfLifeRecords direkt från existingMap utan att läsa om
     // alla 3 tabeller från Supabase (products, product_shelf_life,
@@ -4334,7 +4369,10 @@ function ErstatningsCheckPage() {
               <Button
                 variant="outline"
                 onClick={() => setSapFetchDialogOpen(false)}
-                disabled={!sapFetchStatus?.remaining || sapFetchStatus.remaining === 0}
+                disabled={
+                  !sapFetchStatus?.remaining ||
+                  (sapFetchStatus.remaining === 0 && sapFetchStatus.errorCount === 0)
+                }
               >
                 Dölj
               </Button>
