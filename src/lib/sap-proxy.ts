@@ -30,6 +30,7 @@ export interface ProxyResponse {
   status?: number;
   data?: string;
   error?: string;
+  unauthorized?: boolean;
 }
 
 interface SapProxyMessage {
@@ -119,11 +120,13 @@ export function fetchViaProxy(
           return reject(new Error("Inget svar från extensionen"));
         }
         if (resp.success) {
+          const status =
+            typeof resp.status === "number" ? resp.status : parseInt(String(resp.status), 10);
           resolve({
             success: true,
-            status:
-              typeof resp.status === "number" ? resp.status : parseInt(String(resp.status), 10),
+            status,
             data: resp.data,
+            unauthorized: status === 401,
           });
         } else {
           console.error("[SAP Proxy] Extension returned error:", resp.error);

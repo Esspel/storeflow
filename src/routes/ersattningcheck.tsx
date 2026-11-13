@@ -1280,6 +1280,337 @@ function ErstatningsCheckPage() {
     }
   }
 
+  // Admin only: fetch all articles with SAKNAS I SAP that are NOT in hidden categories
+  const fetchMissingSapArticles = async () => {
+    if (!activeStore || user?.role !== "admin") {
+      toast.error("Endast administratörer kan köra denna funktion.");
+      return;
+    }
+
+    const useProxy = sapExtensionInstalled;
+
+    // Get all hidden categories (local + global)
+    const localHidden = hiddenCategories.map((c) => c.toLowerCase());
+    const globalHidden = globalHiddenCategories.map((c) => c.toLowerCase());
+    const allHiddenCategories = new Set([...localHidden, ...globalHidden]);
+
+    // Fetch all articles from product_shelf_life with sap_data_missing = true
+    const { data: missingSapData, error: missingError } = await supabase
+      .from("product_shelf_life")
+      .select("sap_article_id, category, shelf_lifetime_days, next_sap_check")
+      .eq("sap_data_missing", true);
+
+    if (missingError) {
+      console.error("Error fetching missing SAP articles:", missingError);
+      toast.error("Kunde inte hämta artiklar med saknad SAP-data.");
+      return;
+    }
+
+    if (!missingSapData || missingSapData.length === 0) {
+      toast.info("Inga artiklar med SAKNAS I SAP hittades.");
+      return;
+    }
+
+    // Filter out articles in hidden categories
+    const eligibleArticles = missingSapData
+      .filter((item) => {
+        const cat = (item.category ?? "").toLowerCase();
+        return cat && !allHiddenCategories.has(cat);
+      })
+      .map((item) => item.sap_article_id);
+
+    if (eligibleArticles.length === 0) {
+      toast.info("Inga artiklar med SAKNAS I SAP utanför dolda kategorier.");
+      return;
+    }
+
+    // Remove duplicates
+    const uniqueArticles = [...new Set(eligibleArticles)];
+
+    toast.info(
+      `Hittade ${uniqueArticles.length} artiklar med SAKNAS I SAP (utanför dolda kategorier). Hämtar från SAP...`,
+    );
+
+    // Vänta på att Chrome Extension är redo
+    if (useProxy) {
+      console.log("[fetchMissingSapArticles] Waiting for Chrome Extension to be ready...");
+      const extensionReady = await ensureExtensionReady(10, 500);
+      if (!extensionReady) {
+        console.error("[fetchMissingSapArticles] Chrome Extension not ready after retries");
+        toast.error(
+          "Chrome Extension är inte redo. Kontrollera att 'Intern Proxy Bridge' är installerat och aktiverat.",
+        );
+        return;
+      }
+      console.log("[fetchMissingSapArticles] Chrome Extension is ready");
+    }
+
+    setIsLoading(true);
+    let successCount = 0;
+    let errorCount = 0;
+    let missingInSapCount = 0;
+
+    const statusInterval = setInterval(() => {
+      const total = uniqueArticles.length;
+      const fetched = successCount + errorCount;
+      const withShelfLife = Math.max(successCount - missingInSapCount, 0);
+      const withoutShelfLife = missingInSapCount;
+      const remaining = Math.max(total - fetched, 0);
+      setSapFetchStatus({
+        total,
+        fetched,
+        withShelfLife,
+        withoutShelfLife,
+        remaining,
+        visible: true,
+      });
+    }, 2000);
+
+    // Förbered produkttabellen ( EAN-check) — hämta alla produkter som matchar
+    // artiklarna vi ska hämta, så att vi tidigt kan se om artikeln redan har
+    // ett EAN. Detta undviker uppdateringar av EAN som redan finns i databasen
+    // och därmed unikvitetsfel från Supabase.
+    const BATCH_SIZE = 100;
+    const articleChunks = chunk(uniqueArticles, BATCH_SIZE);
+    const existingProducts: { ean?: string | null; sap_article_id?: string; store_id?: string }[] =
+      [];
+
+    for (const articleChunk of articleChunks) {
+      const { data, error } = await supabase
+        .from("products")
+        .select("ean, sap_article_id, store_id")
+        .in("sap_article_id", articleChunk);
+      if (error) throw error;
+      if (data) existingProducts.push(...data);
+    }
+    const existingProductsByArticle = new Map<string, { ean?: string | null; store_id?: string }>();
+    for (const p of existingProducts) {
+      if (p.sap_article_id) {
+        existingProductsByArticle.set(p.sap_article_id, p);
+      }
+    }
+
+    // Bounded-concurrency fetch
+    const CONCURRENCY = 6;
+    const fetchResults = await runWithConcurrencySettled(
+      uniqueArticles,
+      async (sapArticleId) => {
+        const fetchPromise: Promise<any> = (async () => {
+          try {
+            const sapData = useProxy
+              ? await (async () => {
+                  const proxyResponse = await retryFetchViaProxy(
+                    `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/ProductID('${encodeURIComponent(sapArticleId)}')?$format=json`,
+                    "GET",
+                    { Accept: "application/json" },
+                  );
+                  // Check for unauthorized (401) - stop and show popup
+                  if (proxyResponse.unauthorized) {
+                    toast.error(
+                      "SAP-autentisering misslyckades (401). Logga in i SAP igen eller kontakta administratör.",
+                    );
+                    throw new Error("UNAUTHORIZED");
+                  }
+                  if (!proxyResponse.success) {
+                    return {
+                      sapArticleId,
+                      error: proxyResponse.error,
+                      success: false,
+                      type: "proxy_failure",
+                    };
+                  }
+                  const json = proxyResponse.data ?? "";
+                  if (!json) {
+                    return { sapArticleId, error: "No JSON data", success: false, type: "no_json" };
+                  }
+                  let parsed;
+                  try {
+                    parsed = JSON.parse(json);
+                  } catch (e) {
+                    return {
+                      sapArticleId,
+                      error: "JSON parse error",
+                      success: false,
+                      type: "parse_error",
+                    };
+                  }
+                  const result = parsed.d || null;
+                  return { sapArticleId, data: result, success: true, type: "proxy_success" };
+                })()
+              : await fetchSapProductData(sapArticleId)
+                  .then((data) => ({ sapArticleId, data, success: true, type: "direct_success" }))
+                  .catch((error) => ({
+                    sapArticleId,
+                    error: error.message,
+                    success: false,
+                    type: "direct_error",
+                  }));
+
+            return sapData;
+          } catch (err) {
+            return {
+              sapArticleId,
+              error: err instanceof Error ? err.message : String(err),
+              success: false,
+              type: "unexpected_error",
+            };
+          }
+        })();
+        return fetchPromise;
+      },
+      { concurrency: CONCURRENCY },
+    );
+
+    // Process results — collect rows first, then batch the DB writes.
+    const UPSERT_BATCH_SIZE = 500;
+    const shelfLifeUpserts: Record<string, unknown>[] = [];
+    const eanUpdates: { sapArticleId: string; ean: string; updatedAt: string }[] = [];
+
+    for (const result of fetchResults) {
+      if (result.status === "rejected") {
+        errorCount += 1;
+        continue;
+      }
+
+      const { sapArticleId, data, success, type } = result.value;
+
+      // Check for unauthorized error - stop all processing
+      if (type === "unexpected_error" && result.value.error === "UNAUTHORIZED") {
+        clearInterval(statusInterval);
+        setIsLoading(false);
+        return;
+      }
+
+      if (!success) {
+        errorCount += 1;
+        missingInSapCount += 1;
+
+        const updatedAt = new Date().toISOString();
+        // Kort cooldown vid transient/proxy-fel så artikeln försöks igen
+        const cooldownDays = 3;
+        const nextSapCheck = new Date();
+        nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
+
+        shelfLifeUpserts.push({
+          sap_article_id: sapArticleId,
+          shelf_lifetime_days: 0,
+          sap_data_missing: true,
+          next_sap_check: nextSapCheck.toISOString(),
+          updated_at: updatedAt,
+        });
+        continue;
+      }
+
+      if (!data) {
+        // SAP returned HTTP 200 but no data (e.g. {"d":null}).
+        errorCount += 1;
+        missingInSapCount += 1;
+
+        const updatedAt = new Date().toISOString();
+        const cooldownDays = Math.floor(Math.random() * (90 - 60 + 1)) + 60;
+        const nextSapCheck = new Date();
+        nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
+
+        shelfLifeUpserts.push({
+          sap_article_id: sapArticleId,
+          shelf_lifetime_days: 0,
+          sap_data_missing: true,
+          next_sap_check: nextSapCheck.toISOString(),
+          updated_at: updatedAt,
+        });
+        continue;
+      }
+
+      // Successful fetch with data
+      successCount += 1;
+
+      // Check if we got shelf_lifetime_days from SAP
+      const shelfLifeDays = data.RemainingShelfLifeInDays
+        ? parseInt(data.RemainingShelfLifeInDays, 10)
+        : null;
+
+      if (!shelfLifeDays || shelfLifeDays <= 0) {
+        missingInSapCount += 1;
+        const updatedAt = new Date().toISOString();
+        const cooldownDays = Math.floor(Math.random() * (90 - 60 + 1)) + 60;
+        const nextSapCheck = new Date();
+        nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
+
+        shelfLifeUpserts.push({
+          sap_article_id: sapArticleId,
+          shelf_lifetime_days: 0,
+          sap_data_missing: true,
+          next_sap_check: nextSapCheck.toISOString(),
+          updated_at: updatedAt,
+        });
+        continue;
+      }
+
+      // Valid shelf life data from SAP
+      const updatedAt = new Date().toISOString();
+      const nextSapCheck = new Date();
+      nextSapCheck.setDate(nextSapCheck.getDate() + 14); // 2 weeks cooldown
+
+      shelfLifeUpserts.push({
+        sap_article_id: sapArticleId,
+        shelf_lifetime_days: shelfLifeDays,
+        sap_data_missing: false,
+        next_sap_check: nextSapCheck.toISOString(),
+        updated_at: updatedAt,
+      });
+
+      // Check if we need to update EAN in products table
+      const existingProduct = existingProductsByArticle.get(sapArticleId);
+      const sapEan = data.GlobalTradeItemNumber?.trim();
+      if (sapEan && existingProduct?.ean !== sapEan) {
+        eanUpdates.push({ sapArticleId, ean: sapEan, updatedAt });
+      }
+    }
+
+    clearInterval(statusInterval);
+
+    // Batch upsert shelf life records
+    if (shelfLifeUpserts.length > 0) {
+      for (let i = 0; i < shelfLifeUpserts.length; i += UPSERT_BATCH_SIZE) {
+        const batch = shelfLifeUpserts.slice(i, i + UPSERT_BATCH_SIZE);
+        const { error } = await supabase
+          .from("product_shelf_life")
+          .upsert(batch, { onConflict: "sap_article_id" });
+        if (error) {
+          console.error("Error upserting shelf life:", error);
+          toast.error("Kunde inte spara hållbarhetsdata.");
+        }
+      }
+    }
+
+    // Batch update EAN in products table
+    if (eanUpdates.length > 0) {
+      for (const update of eanUpdates) {
+        const { error } = await supabase
+          .from("products")
+          .update({ ean: update.ean, updated_at: update.updatedAt })
+          .eq("sap_article_id", update.sapArticleId);
+        if (error) {
+          console.error("Error updating EAN:", error);
+        }
+      }
+    }
+
+    setIsLoading(false);
+    setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
+
+    if (errorCount > 0) {
+      toast.error(
+        `Hämtad ${successCount}/${uniqueArticles.length}. ${errorCount} artiklar misslyckades.`,
+      );
+    } else {
+      toast.success(`Hämtad ${successCount}/${uniqueArticles.length} artiklar från SAP.`);
+    }
+
+    // Refresh data
+    await loadShelfLifeData();
+  };
+
   const importShelfLifeFromSap = async () => {
     if (!activeStore) {
       return;
@@ -1408,12 +1739,20 @@ function ErstatningsCheckPage() {
     // artiklarna vi ska hämta, så att vi tidigt kan se om artikeln redan har
     // ett EAN. Detta undviker uppdateringar av EAN som redan finns i databasen
     // och därmed unikvitetsfel från Supabase.
-    const productsResponse = await supabase
-      .from("products")
-      .select("ean, sap_article_id, store_id")
-      .in("sap_article_id", prioritizedEligible);
+    // Batch the .in() clause to avoid URL length limits (Supabase has ~2KB limit)
+    const BATCH_SIZE = 100;
+    const articleChunks = chunk(prioritizedEligible, BATCH_SIZE);
     const existingProducts: { ean?: string | null; sap_article_id?: string; store_id?: string }[] =
-      productsResponse.data ?? [];
+      [];
+
+    for (const articleChunk of articleChunks) {
+      const { data, error } = await supabase
+        .from("products")
+        .select("ean, sap_article_id, store_id")
+        .in("sap_article_id", articleChunk);
+      if (error) throw error;
+      if (data) existingProducts.push(...data);
+    }
     const existingProductsByArticle = new Map<string, { ean?: string | null; store_id?: string }>();
     for (const p of existingProducts) {
       if (p.sap_article_id) {
@@ -1437,6 +1776,13 @@ function ErstatningsCheckPage() {
                     "GET",
                     { Accept: "application/json" },
                   );
+                  // Check for unauthorized (401) - stop and show popup
+                  if (proxyResponse.unauthorized) {
+                    toast.error(
+                      "SAP-autentisering misslyckades (401). Logga in i SAP igen eller kontakta administratör.",
+                    );
+                    throw new Error("UNAUTHORIZED");
+                  }
                   if (!proxyResponse.success) {
                     // Per-artikel-fel loggas ej till console (endast aggregerad status vart 15e s)
                     return {
@@ -1502,7 +1848,14 @@ function ErstatningsCheckPage() {
         continue;
       }
 
-      const { sapArticleId, data, success } = result.value;
+      const { sapArticleId, data, success, type } = result.value;
+
+      // Check for unauthorized error - stop all processing
+      if (type === "unexpected_error" && result.value.error === "UNAUTHORIZED") {
+        clearInterval(statusInterval);
+        setIsLoading(false);
+        return;
+      }
 
       if (!success) {
         // Handle failed fetch (network/proxy errors) — agg. status loggas ej per artikel
@@ -4339,6 +4692,19 @@ function ErstatningsCheckPage() {
                   disabled={isLoading}
                 >
                   Hämta från SAP
+                </Button>
+              )}
+              {sapExtensionChecked && sapExtensionInstalled && user?.role === "admin" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-xl border-gray-300 px-3.5 text-sm font-medium"
+                  onClick={() => void fetchMissingSapArticles()}
+                  disabled={isLoading}
+                  title="Hämta alla artiklar med SAKNAS I SAP som inte är i dolda kategorier"
+                >
+                  Hämta SAKNAS I SAP
                 </Button>
               )}
             </div>
