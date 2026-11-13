@@ -677,6 +677,7 @@ function ErstatningsCheckPage() {
     remaining: number;
     visible: boolean;
   } | null>(null);
+  const [sapFetchDialogOpen, setSapFetchDialogOpen] = useState(false);
   // Filter state for shelf life data (#6)
   const [shelfLifeStatusFilter, setShelfLifeStatusFilter] = useState<string[]>([]);
   const [brandFilter, setBrandFilter] = useState<string[]>([]);
@@ -1295,16 +1296,37 @@ function ErstatningsCheckPage() {
     const allHiddenCategories = new Set([...localHidden, ...globalHidden]);
 
     // Fetch all articles from product_shelf_life with sap_data_missing = true
-    const { data: missingSapData, error: missingError } = await supabase
-      .from("product_shelf_life")
-      .select("sap_article_id, category, shelf_lifetime_days, next_sap_check")
-      .eq("sap_data_missing", true);
+    // Use pagination to avoid 400 errors from too many rows
+    const PAGE_SIZE = 1000;
+    let allMissingSapData: any[] = [];
+    let from = 0;
+    let hasMore = true;
 
-    if (missingError) {
-      console.error("Error fetching missing SAP articles:", missingError);
-      toast.error("Kunde inte hämta artiklar med saknad SAP-data.");
-      return;
+    while (hasMore) {
+      const { data: pageData, error: pageError } = await supabase
+        .from("product_shelf_life")
+        .select("sap_article_id, category, shelf_lifetime_days, next_sap_check")
+        .eq("sap_data_missing", true)
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (pageError) {
+        console.error("Error fetching missing SAP articles:", pageError);
+        toast.error("Kunde inte hämta artiklar med saknad SAP-data.");
+        return;
+      }
+
+      if (!pageData || pageData.length === 0) {
+        hasMore = false;
+      } else {
+        allMissingSapData.push(...pageData);
+        from += PAGE_SIZE;
+        if (pageData.length < PAGE_SIZE) {
+          hasMore = false;
+        }
+      }
     }
+
+    const missingSapData = allMissingSapData;
 
     if (!missingSapData || missingSapData.length === 0) {
       toast.info("Inga artiklar med SAKNAS I SAP hittades.");
@@ -1346,6 +1368,7 @@ function ErstatningsCheckPage() {
     }
 
     setIsLoading(true);
+    setSapFetchDialogOpen(true);
     let successCount = 0;
     let errorCount = 0;
     let missingInSapCount = 0;
@@ -1597,6 +1620,7 @@ function ErstatningsCheckPage() {
     }
 
     setIsLoading(false);
+    setSapFetchDialogOpen(false);
     setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
 
     if (errorCount > 0) {
@@ -1699,6 +1723,7 @@ function ErstatningsCheckPage() {
     }
 
     setIsLoading(true);
+    setSapFetchDialogOpen(true);
     let successCount = 0;
     let errorCount = 0;
     let firstTimeCount = 0;
@@ -2044,6 +2069,7 @@ function ErstatningsCheckPage() {
     }
 
     clearInterval(statusInterval);
+    setSapFetchDialogOpen(false);
     setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
 
     // Uppdatera shelfLifeRecords direkt från existingMap utan att läsa om
@@ -4249,15 +4275,50 @@ function ErstatningsCheckPage() {
       )}
 
       {/* SAP Fetch Status Popup */}
-      {sapFetchStatus?.visible && (
-        <div className="mb-4 rounded-lg border-l-4 border-coop-blue-500 bg-coop-gray-50 p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-center">
-              <Loader2 className="h-5 w-5 animate-spin text-coop-blue-500" />
-              <span className="text-sm text-coop-gray-700">Hämtar från sap..</span>
+      {sapFetchDialogOpen && sapFetchStatus && (
+        <Dialog open={sapFetchDialogOpen} onOpenChange={setSapFetchDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Hämtar artiklar från SAP</DialogTitle>
+              <DialogDescription>
+                {sapFetchStatus.fetched} / {sapFetchStatus.total} artiklar hämtade
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-5 w-5 animate-spin text-coop-blue-500" />
+                <span className="text-sm text-coop-gray-700">Hämtar från SAP...</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="bg-coop-gray-50 rounded-lg p-3 text-center">
+                  <div className="font-semibold text-coop-blue-600">
+                    {sapFetchStatus.withShelfLife}
+                  </div>
+                  <div className="text-coop-gray-600">Med hållbarhetsdata</div>
+                </div>
+                <div className="bg-coop-gray-50 rounded-lg p-3 text-center">
+                  <div className="font-semibold text-orange-600">
+                    {sapFetchStatus.withoutShelfLife}
+                  </div>
+                  <div className="text-coop-gray-600">SAKNAS I SAP</div>
+                </div>
+              </div>
+              <div className="bg-coop-gray-50 rounded-lg p-3 text-center text-sm">
+                <div className="font-semibold text-coop-gray-700">{sapFetchStatus.remaining}</div>
+                <div className="text-coop-gray-600">Återstår</div>
+              </div>
             </div>
-          </div>
-        </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setSapFetchDialogOpen(false)}
+                disabled={!sapFetchStatus?.remaining || sapFetchStatus.remaining === 0}
+              >
+                Dölj
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {step === "dashboard" && (
