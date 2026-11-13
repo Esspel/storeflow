@@ -674,6 +674,8 @@ function ErstatningsCheckPage() {
     fetched: number;
     withShelfLife: number;
     withoutShelfLife: number;
+    errorCount: number;
+    errorMessage?: string;
     remaining: number;
     visible: boolean;
   } | null>(null);
@@ -1356,7 +1358,7 @@ function ErstatningsCheckPage() {
     const statusInterval = setInterval(() => {
       const total = uniqueArticles.length;
       const fetched = successCount + errorCount;
-      const withShelfLife = Math.max(successCount - missingInSapCount, 0);
+      const withShelfLife = successCount;
       const withoutShelfLife = missingInSapCount;
       const remaining = Math.max(total - fetched, 0);
       setSapFetchStatus({
@@ -1364,6 +1366,7 @@ function ErstatningsCheckPage() {
         fetched,
         withShelfLife,
         withoutShelfLife,
+        errorCount,
         remaining,
         visible: true,
       });
@@ -1390,6 +1393,14 @@ function ErstatningsCheckPage() {
     for (const p of existingProducts) {
       if (p.sap_article_id) {
         existingProductsByArticle.set(p.sap_article_id, p);
+      }
+    }
+
+    // Build map for store-level EAN conflicts (different stores)
+    const eanToStoreMap = new Map<string, string>();
+    for (const p of existingProducts ?? []) {
+      if (p.ean && p.store_id && p.store_id !== activeStore!.id) {
+        eanToStoreMap.set(p.ean, p.store_id);
       }
     }
 
@@ -1472,6 +1483,7 @@ function ErstatningsCheckPage() {
     for (const result of fetchResults) {
       if (result.status === "rejected") {
         errorCount += 1;
+        missingInSapCount += 1;
         continue;
       }
 
@@ -1481,6 +1493,8 @@ function ErstatningsCheckPage() {
       if (type === "unexpected_error" && result.value.error === "UNAUTHORIZED") {
         clearInterval(statusInterval);
         setIsLoading(false);
+        setSapFetchDialogOpen(false);
+        setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
         return;
       }
 
@@ -1566,7 +1580,14 @@ function ErstatningsCheckPage() {
       const existingProduct = existingProductsByArticle.get(sapArticleId);
       const sapEan = data.GlobalTradeItemNumber?.trim();
       if (sapEan && existingProduct?.ean !== sapEan) {
-        eanUpdates.push({ sapArticleId, ean: sapEan, updatedAt });
+        // Skip if this EAN already exists in another store
+        if (eanToStoreMap.has(sapEan)) {
+          console.warn(
+            `EAN ${sapEan} already exists in store ${eanToStoreMap.get(sapEan)}, skipping update for article ${sapArticleId}`,
+          );
+        } else {
+          eanUpdates.push({ sapArticleId, ean: sapEan, updatedAt });
+        }
       }
     }
 
@@ -1714,7 +1735,7 @@ function ErstatningsCheckPage() {
     const statusInterval = setInterval(() => {
       const total = prioritizedEligible.length;
       const fetched = successCount + errorCount;
-      const withShelfLife = Math.max(successCount - missingInSapCount, 0);
+      const withShelfLife = successCount;
       const withoutShelfLife = missingInSapCount;
       const remaining = Math.max(total - fetched, 0);
       setSapFetchStatus({
@@ -1722,13 +1743,14 @@ function ErstatningsCheckPage() {
         fetched,
         withShelfLife,
         withoutShelfLife,
+        errorCount,
         remaining,
         visible: true,
       });
     }, 2000);
     const total = prioritizedEligible.length;
     const fetched = successCount + errorCount;
-    const withShelfLife = Math.max(successCount - missingInSapCount, 0);
+    const withShelfLife = successCount;
     const withoutShelfLife = missingInSapCount;
     const remaining = Math.max(total - fetched, 0);
     setSapFetchStatus({
@@ -1736,6 +1758,7 @@ function ErstatningsCheckPage() {
       fetched,
       withShelfLife,
       withoutShelfLife,
+      errorCount,
       remaining,
       visible: true,
     });
@@ -1848,8 +1871,8 @@ function ErstatningsCheckPage() {
 
     for (const result of fetchResults) {
       if (result.status === "rejected") {
-        // Promise.allSettled rejection — agg. loggas ej per artikel
         errorCount += 1;
+        missingInSapCount += 1;
         continue;
       }
 
@@ -1859,6 +1882,8 @@ function ErstatningsCheckPage() {
       if (type === "unexpected_error" && result.value.error === "UNAUTHORIZED") {
         clearInterval(statusInterval);
         setIsLoading(false);
+        setSapFetchDialogOpen(false);
+        setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null));
         return;
       }
 
@@ -2044,7 +2069,8 @@ function ErstatningsCheckPage() {
     }
 
     // Progress updates (less frequent now due to parallel processing)
-    if (successCount + (errorCount % 10) === 0) {
+    const processed = successCount + errorCount;
+    if (processed > 0 && processed % 10 === 0) {
       toast.info(`Hämtad ${successCount}/${prioritizedEligible.length}...`);
     }
 
@@ -4264,6 +4290,14 @@ function ErstatningsCheckPage() {
                 {sapFetchStatus.fetched} / {sapFetchStatus.total} artiklar hämtade
               </DialogDescription>
             </DialogHeader>
+            {sapFetchStatus.errorCount > 0 && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {sapFetchStatus.errorCount} artikel{sapFetchStatus.errorCount !== 1 ? "er" : ""}
+                  misslyckades. {sapFetchStatus.errorMessage ?? ""}
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Loader2 className="h-5 w-5 animate-spin text-coop-blue-500" />
@@ -4283,6 +4317,14 @@ function ErstatningsCheckPage() {
                   <div className="text-coop-gray-600">SAKNAS I SAP</div>
                 </div>
               </div>
+              {sapFetchStatus.errorCount > 0 && (
+                <div className="bg-red-50 rounded-lg p-3 text-center">
+                  <div className="font-semibold text-red-600">
+                    {sapFetchStatus.errorCount}
+                  </div>
+                  <div className="text-coop-gray-600">Misslyckade</div>
+                </div>
+              )}
               <div className="bg-coop-gray-50 rounded-lg p-3 text-center text-sm">
                 <div className="font-semibold text-coop-gray-700">{sapFetchStatus.remaining}</div>
                 <div className="text-coop-gray-600">Återstår</div>
