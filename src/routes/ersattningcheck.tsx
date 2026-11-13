@@ -1464,6 +1464,11 @@ function ErstatningsCheckPage() {
                     };
                   }
                   const result = parsed.d || null;
+                  if (parsed.error) {
+                    const sapMsg = parsed.error?.message?.value ?? parsed.error?.code ?? "Okänt SAP-fel";
+                    console.error(`[SAP fetch] SAP error for article ${sapArticleId}:`, parsed.error);
+                    return { sapArticleId, error: `SAP-fel: ${sapMsg}`, success: false, type: "sap_error" };
+                  }
                   if (!result) {
                     console.error(`[SAP fetch] No data from SAP for article ${sapArticleId}`, parsed);
                     return { sapArticleId, error: "No data from SAP", success: false, type: "no_data" };
@@ -1884,6 +1889,11 @@ function ErstatningsCheckPage() {
                     };
                   }
                   const result = parsed.d || null;
+                  if (parsed.error) {
+                    const sapMsg = parsed.error?.message?.value ?? parsed.error?.code ?? "Okänt SAP-fel";
+                    console.error(`[SAP fetch] SAP error for article ${sapArticleId}:`, parsed.error);
+                    return { sapArticleId, error: `SAP-fel: ${sapMsg}`, success: false, type: "sap_error" };
+                  }
                   if (!result) {
                     console.error(`[SAP fetch] No data from SAP for article ${sapArticleId}`, parsed);
                     return { sapArticleId, error: "No data from SAP", success: false, type: "no_data" };
