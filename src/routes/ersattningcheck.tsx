@@ -1460,10 +1460,13 @@ function ErstatningsCheckPage() {
                     };
                   }
                   const result = parsed.d || null;
+                  if (!result) {
+                    return { sapArticleId, error: "No data from SAP", success: false, type: "no_data" };
+                  }
                   return { sapArticleId, data: result, success: true, type: "proxy_success" };
                 })()
               : await fetchSapProductData(sapArticleId)
-                  .then((data) => ({ sapArticleId, data, success: true, type: "direct_success" }))
+                  .then((data) => (data ? { sapArticleId, data, success: true, type: "direct_success" } : { sapArticleId, error: "No data from SAP", success: false, type: "no_data" }))
                   .catch((error) => ({
                     sapArticleId,
                     error: error.message,
@@ -1494,6 +1497,23 @@ function ErstatningsCheckPage() {
       { concurrency: CONCURRENCY },
     );
 
+    // Final status update so the popup shows the correct "done" state
+    // (interval ticks may not align with the last task completing).
+    const fetched = successCount + errorCount;
+    setSapFetchStatus((prev) =>
+      prev
+        ? {
+            ...prev,
+            fetched,
+            withShelfLife: successCount,
+            withoutShelfLife: missingInSapCount,
+            remaining: Math.max(total - fetched, 0),
+            errorCount,
+            visible: true,
+          }
+        : null,
+    );
+
     // Process results — collect rows first, then batch the DB writes.
     const UPSERT_BATCH_SIZE = 500;
     const shelfLifeUpserts: Record<string, unknown>[] = [];
@@ -1501,8 +1521,6 @@ function ErstatningsCheckPage() {
 
     for (const result of fetchResults) {
       if (result.status === "rejected") {
-        errorCount += 1;
-        missingInSapCount += 1;
         continue;
       }
 
@@ -1517,9 +1535,6 @@ function ErstatningsCheckPage() {
       }
 
       if (!success) {
-        errorCount += 1;
-        missingInSapCount += 1;
-
         const updatedAt = new Date().toISOString();
         // Kort cooldown vid transient/proxy-fel så artikeln försöks igen
         const cooldownDays = 3;
@@ -1538,9 +1553,6 @@ function ErstatningsCheckPage() {
 
       if (!data) {
         // SAP returned HTTP 200 but no data (e.g. {"d":null}).
-        errorCount += 1;
-        missingInSapCount += 1;
-
         const updatedAt = new Date().toISOString();
         const cooldownDays = Math.floor(Math.random() * (90 - 60 + 1)) + 60;
         const nextSapCheck = new Date();
@@ -1556,16 +1568,12 @@ function ErstatningsCheckPage() {
         continue;
       }
 
-      // Successful fetch with data
-      successCount += 1;
-
       // Check if we got shelf_lifetime_days from SAP
       const shelfLifeDays = data.RemainingShelfLifeInDays
         ? parseInt(data.RemainingShelfLifeInDays, 10)
         : null;
 
       if (!shelfLifeDays || shelfLifeDays <= 0) {
-        missingInSapCount += 1;
         const updatedAt = new Date().toISOString();
         const cooldownDays = Math.floor(Math.random() * (90 - 60 + 1)) + 60;
         const nextSapCheck = new Date();
@@ -1864,10 +1872,13 @@ function ErstatningsCheckPage() {
                     };
                   }
                   const result = parsed.d || null;
+                  if (!result) {
+                    return { sapArticleId, error: "No data from SAP", success: false, type: "no_data" };
+                  }
                   return { sapArticleId, data: result, success: true, type: "proxy_success" };
                 })()
               : await fetchSapProductData(sapArticleId)
-                  .then((data) => ({ sapArticleId, data, success: true, type: "direct_success" }))
+                  .then((data) => (data ? { sapArticleId, data, success: true, type: "direct_success" } : { sapArticleId, error: "No data from SAP", success: false, type: "no_data" }))
                   .catch((error) => ({
                     sapArticleId,
                     error: error.message,
@@ -1898,6 +1909,22 @@ function ErstatningsCheckPage() {
       { concurrency: CONCURRENCY },
     );
 
+    // Final status update so the popup shows the correct "done" state
+    const finalFetched = successCount + errorCount;
+    setSapFetchStatus((prev) =>
+      prev
+        ? {
+            ...prev,
+            fetched: finalFetched,
+            withShelfLife: successCount,
+            withoutShelfLife: missingInSapCount,
+            remaining: Math.max(total - finalFetched, 0),
+            errorCount,
+            visible: true,
+          }
+        : null,
+    );
+
     // Process results — collect rows first, then batch the DB writes.
     // Per-article upserts inside the loop were a major bottleneck for large
     // article counts; batching turns N round-trips into N/500.
@@ -1907,8 +1934,6 @@ function ErstatningsCheckPage() {
 
     for (const result of fetchResults) {
       if (result.status === "rejected") {
-        errorCount += 1;
-        missingInSapCount += 1;
         continue;
       }
 
@@ -1924,7 +1949,6 @@ function ErstatningsCheckPage() {
 
       if (!success) {
         // Handle failed fetch (network/proxy errors) — agg. status loggas ej per artikel
-        errorCount += 1;
 
         const updatedAt = new Date().toISOString();
         const existing = existingMap.get(sapArticleId);
@@ -1955,7 +1979,6 @@ function ErstatningsCheckPage() {
         // SAP returned HTTP 200 but no data (e.g. {"d":null}).
         // Treat as missing — do NOT skip the article. Mark it as
         // SAKNAS I SAP and set cooldown so it isn't retried every run.
-        errorCount += 1;
         const updatedAt = new Date().toISOString();
         const existing = existingMap.get(sapArticleId);
         const isFirstTime =
@@ -1964,7 +1987,6 @@ function ErstatningsCheckPage() {
           Number.isNaN(existing.shelf_lifetime_days) ||
           existing.shelf_lifetime_days <= 0;
         if (isFirstTime) firstTimeCount += 1;
-        missingInSapCount += 1;
 
         const cooldownDays = Math.floor(Math.random() * (90 - 60 + 1)) + 60;
         const nextSapCheck = new Date();
@@ -1995,7 +2017,6 @@ function ErstatningsCheckPage() {
 
       if (isFirstTime) firstTimeCount += 1;
       if (hasChanged) changedCount += 1;
-      if (!hasValidSapData) missingInSapCount += 1;
 
       let cooldownDays: number;
       if (hasValidSapData) {
@@ -2872,7 +2893,12 @@ function ErstatningsCheckPage() {
       setShelfLifeRecords((prev) =>
         prev.map((r) =>
           r.sap_article_id === record.sap_article_id
-            ? { ...r, shelf_lifetime_days: days, updated_at: new Date().toISOString() }
+            ? {
+                ...r,
+                shelf_lifetime_days: days,
+                sap_data_missing: false,
+                updated_at: new Date().toISOString(),
+              }
             : r,
         ),
       );
@@ -4330,7 +4356,9 @@ function ErstatningsCheckPage() {
         <Dialog open={sapFetchDialogOpen} onOpenChange={setSapFetchDialogOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Hämtar artiklar från SAP</DialogTitle>
+              <DialogTitle>
+                {sapFetchStatus.remaining === 0 ? "Klar" : "Hämtar artiklar från SAP"}
+              </DialogTitle>
               <DialogDescription>
                 {sapFetchStatus.fetched} / {sapFetchStatus.total} artiklar hämtade
               </DialogDescription>
@@ -4343,11 +4371,25 @@ function ErstatningsCheckPage() {
                 </AlertDescription>
               </Alert>
             )}
+            {sapFetchStatus.remaining === 0 && sapFetchStatus.errorCount === 0 && (
+              <Alert>
+                <AlertDescription>
+                  Alla {sapFetchStatus.total} artiklar är hämtade.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-5 w-5 animate-spin text-coop-blue-500" />
-                <span className="text-sm text-coop-gray-700">Hämtar från SAP...</span>
-              </div>
+              {sapFetchStatus.remaining > 0 ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-coop-blue-500" />
+                  <span className="text-sm text-coop-gray-700">Hämtar från SAP...</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  <span className="text-sm text-emerald-600">Färdig</span>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="bg-coop-gray-50 rounded-lg p-3 text-center">
                   <div className="font-semibold text-coop-blue-600">
