@@ -347,8 +347,8 @@ interface SapProductData {
 }
 
 async function fetchSapProductData(
-  sapArticleId: string,
   storeId: string,
+  sapArticleId: string,
 ): Promise<SapProductData | null> {
   const url = `${SAP_BASE_URL}/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(storeId)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`;
 
@@ -1479,7 +1479,7 @@ function ErstatningsCheckPage() {
                   }
                   return { sapArticleId, data: result, success: true, type: "proxy_success" };
                 })()
-              : await fetchSapProductData(sapArticleId, activeStore!.id)
+              : await fetchSapProductData(activeStore!.id, sapArticleId)
                   .then((data) => (data ? { sapArticleId, data, success: true, type: "direct_success" } : { sapArticleId, error: "No data from SAP", success: false, type: "no_data" }))
                   .catch((error) => {
                     console.error(`[SAP fetch] Direct error for article ${sapArticleId}:`, error);
@@ -1904,7 +1904,7 @@ function ErstatningsCheckPage() {
                   }
                   return { sapArticleId, data: result, success: true, type: "proxy_success" };
                 })()
-              : await fetchSapProductData(sapArticleId, activeStore!.id)
+              : await fetchSapProductData(activeStore!.id, sapArticleId)
                   .then((data) => (data ? { sapArticleId, data, success: true, type: "direct_success" } : { sapArticleId, error: "No data from SAP", success: false, type: "no_data" }))
                   .catch((error) => {
                     console.error(`[SAP fetch] Direct error for article ${sapArticleId}:`, error);

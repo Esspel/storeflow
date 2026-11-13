@@ -275,8 +275,8 @@ export async function retryFetchViaProxy(
  * Uses 2 second interval to avoid rate limits.
  */
 export async function fetchSapProductData(
-  sapArticleId: string,
   storeId: string,
+  sapArticleId: string,
 ): Promise<SapProductData | null> {
   const url = `${SAP_BASE_URL}/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(storeId)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`;
   console.log("[SAP Proxy] URL:", url);
