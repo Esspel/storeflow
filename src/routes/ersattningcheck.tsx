@@ -1437,6 +1437,10 @@ function ErstatningsCheckPage() {
                     throw new Error("UNAUTHORIZED");
                   }
                   if (!proxyResponse.success) {
+                    console.error(
+                      `[SAP fetch] Proxy failure for article ${sapArticleId}:`,
+                      proxyResponse.error,
+                    );
                     return {
                       sapArticleId,
                       error: proxyResponse.error,
@@ -1461,21 +1465,26 @@ function ErstatningsCheckPage() {
                   }
                   const result = parsed.d || null;
                   if (!result) {
+                    console.error(`[SAP fetch] No data from SAP for article ${sapArticleId}`, parsed);
                     return { sapArticleId, error: "No data from SAP", success: false, type: "no_data" };
                   }
                   return { sapArticleId, data: result, success: true, type: "proxy_success" };
                 })()
               : await fetchSapProductData(sapArticleId)
                   .then((data) => (data ? { sapArticleId, data, success: true, type: "direct_success" } : { sapArticleId, error: "No data from SAP", success: false, type: "no_data" }))
-                  .catch((error) => ({
-                    sapArticleId,
-                    error: error.message,
-                    success: false,
-                    type: "direct_error",
-                  }));
+                  .catch((error) => {
+                    console.error(`[SAP fetch] Direct error for article ${sapArticleId}:`, error);
+                    return {
+                      sapArticleId,
+                      error: error.message,
+                      success: false,
+                      type: "direct_error",
+                    };
+                  });
 
             return sapData;
           } catch (err) {
+            console.error(`[SAP fetch] Unexpected error for article ${sapArticleId}:`, err);
             return {
               sapArticleId,
               error: err instanceof Error ? err.message : String(err),
@@ -1654,7 +1663,7 @@ function ErstatningsCheckPage() {
           ? {
               ...prev,
               visible: true,
-              errorMessage: `${errorCount} artikel${errorCount !== 1 ? "er" : ""} misslyckades`,
+              errorMessage: `${errorCount} artikel${errorCount === 1 ? "" : "lar"} misslyckades`,
             }
           : null,
       );
@@ -1848,7 +1857,10 @@ function ErstatningsCheckPage() {
                     throw new Error("UNAUTHORIZED");
                   }
                   if (!proxyResponse.success) {
-                    // Per-artikel-fel loggas ej till console (endast aggregerad status vart 15e s)
+                    console.error(
+                      `[SAP fetch] Proxy failure for article ${sapArticleId}:`,
+                      proxyResponse.error,
+                    );
                     return {
                       sapArticleId,
                       error: proxyResponse.error,
@@ -1873,21 +1885,26 @@ function ErstatningsCheckPage() {
                   }
                   const result = parsed.d || null;
                   if (!result) {
+                    console.error(`[SAP fetch] No data from SAP for article ${sapArticleId}`, parsed);
                     return { sapArticleId, error: "No data from SAP", success: false, type: "no_data" };
                   }
                   return { sapArticleId, data: result, success: true, type: "proxy_success" };
                 })()
               : await fetchSapProductData(sapArticleId)
                   .then((data) => (data ? { sapArticleId, data, success: true, type: "direct_success" } : { sapArticleId, error: "No data from SAP", success: false, type: "no_data" }))
-                  .catch((error) => ({
-                    sapArticleId,
-                    error: error.message,
-                    success: false,
-                    type: "direct_error",
-                  }));
+                  .catch((error) => {
+                    console.error(`[SAP fetch] Direct error for article ${sapArticleId}:`, error);
+                    return {
+                      sapArticleId,
+                      error: error.message,
+                      success: false,
+                      type: "direct_error",
+                    };
+                  });
 
             return sapData;
           } catch (err) {
+            console.error(`[SAP fetch] Unexpected error for article ${sapArticleId}:`, err);
             return {
               sapArticleId,
               error: err instanceof Error ? err.message : String(err),
@@ -1958,7 +1975,6 @@ function ErstatningsCheckPage() {
           Number.isNaN(existing.shelf_lifetime_days) ||
           existing.shelf_lifetime_days <= 0;
         if (isFirstTime) firstTimeCount += 1;
-        missingInSapCount += 1;
 
         // Kort cooldown vid transient/proxy-fel så artikeln försöks igen
         const cooldownDays = 3;
@@ -2060,8 +2076,6 @@ function ErstatningsCheckPage() {
           });
         }
       }
-
-      successCount += 1;
     }
 
     // Batched writes — much fewer round-trips than one-per-article.
@@ -2071,7 +2085,6 @@ function ErstatningsCheckPage() {
         .upsert(batch, { onConflict: "sap_article_id" });
       if (upsertError) {
         console.error("Error upserting shelf life batch:", upsertError);
-        errorCount += 1;
       }
     }
 
@@ -2138,7 +2151,7 @@ function ErstatningsCheckPage() {
           ? {
               ...prev,
               visible: true,
-              errorMessage: `${errorCount} artikel${errorCount !== 1 ? "er" : ""} misslyckades`,
+              errorMessage: `${errorCount} artikel${errorCount === 1 ? "" : "lar"} misslyckades`,
             }
           : null,
       );
@@ -4366,8 +4379,7 @@ function ErstatningsCheckPage() {
             {sapFetchStatus.errorCount > 0 && (
               <Alert variant="destructive">
                 <AlertDescription>
-                  {sapFetchStatus.errorCount} artikel{sapFetchStatus.errorCount !== 1 ? "er" : ""}
-                  misslyckades. {sapFetchStatus.errorMessage ?? ""}
+                  {sapFetchStatus.errorCount} artikel{sapFetchStatus.errorCount === 1 ? "" : "lar"} misslyckades. {sapFetchStatus.errorMessage ?? ""}
                 </AlertDescription>
               </Alert>
             )}
