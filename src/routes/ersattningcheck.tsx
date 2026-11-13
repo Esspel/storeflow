@@ -1305,7 +1305,7 @@ function ErstatningsCheckPage() {
     while (hasMore) {
       const { data: pageData, error: pageError } = await supabase
         .from("product_shelf_life")
-        .select("sap_article_id, category, shelf_lifetime_days, next_sap_check")
+        .select("sap_article_id, shelf_lifetime_days, next_sap_check")
         .eq("sap_data_missing", true)
         .range(from, from + PAGE_SIZE - 1);
 
@@ -1333,10 +1333,35 @@ function ErstatningsCheckPage() {
       return;
     }
 
+    // Fetch categories from products table for these articles
+    const sapArticleIds = [...new Set(missingSapData.map((item) => item.sap_article_id))];
+    const PRODUCT_BATCH_SIZE = 100;
+    const productArticleChunks = chunk(sapArticleIds, PRODUCT_BATCH_SIZE);
+    const productsByArticle = new Map<string, string>();
+
+    for (const articleChunk of productArticleChunks) {
+      const { data, error } = await supabase
+        .from("products")
+        .select("sap_article_id, category")
+        .in("sap_article_id", articleChunk);
+      if (error) {
+        console.error("Error fetching product categories:", error);
+        // Continue without categories
+        break;
+      }
+      if (data) {
+        for (const p of data) {
+          if (p.sap_article_id && p.category) {
+            productsByArticle.set(p.sap_article_id, p.category);
+          }
+        }
+      }
+    }
+
     // Filter out articles in hidden categories
     const eligibleArticles = missingSapData
       .filter((item) => {
-        const cat = (item.category ?? "").toLowerCase();
+        const cat = (productsByArticle.get(item.sap_article_id) ?? "").toLowerCase();
         return cat && !allHiddenCategories.has(cat);
       })
       .map((item) => item.sap_article_id);
