@@ -1281,7 +1281,7 @@ function ErstatningsCheckPage() {
     }
   }
 
-  // Admin only: fetch all articles with SAKNAS I SAP that are NOT in hidden categories
+  // Admin only: fetch all articles with SAKNAS I SAP
   const fetchMissingSapArticles = async () => {
     if (!activeStore || user?.role !== "admin") {
       toast.error("Endast administratörer kan köra denna funktion.");
@@ -1289,11 +1289,6 @@ function ErstatningsCheckPage() {
     }
 
     const useProxy = sapExtensionInstalled;
-
-    // Get all hidden categories (local + global)
-    const localHidden = hiddenCategories.map((c) => c.toLowerCase());
-    const globalHidden = globalHiddenCategories.map((c) => c.toLowerCase());
-    const allHiddenCategories = new Set([...localHidden, ...globalHidden]);
 
     // Fetch all articles from product_shelf_life with sap_data_missing = true
     // Use pagination to avoid 400 errors from too many rows
@@ -1333,50 +1328,10 @@ function ErstatningsCheckPage() {
       return;
     }
 
-    // Fetch categories from products table for these articles
-    const sapArticleIds = [...new Set(missingSapData.map((item) => item.sap_article_id))];
-    const PRODUCT_BATCH_SIZE = 100;
-    const productArticleChunks = chunk(sapArticleIds, PRODUCT_BATCH_SIZE);
-    const productsByArticle = new Map<string, string>();
-
-    for (const articleChunk of productArticleChunks) {
-      const { data, error } = await supabase
-        .from("products")
-        .select("sap_article_id, category")
-        .in("sap_article_id", articleChunk);
-      if (error) {
-        console.error("Error fetching product categories:", error);
-        // Continue without categories
-        break;
-      }
-      if (data) {
-        for (const p of data) {
-          if (p.sap_article_id && p.category) {
-            productsByArticle.set(p.sap_article_id, p.category);
-          }
-        }
-      }
-    }
-
-    // Filter out articles in hidden categories
-    const eligibleArticles = missingSapData
-      .filter((item) => {
-        const cat = (productsByArticle.get(item.sap_article_id) ?? "").toLowerCase();
-        return cat && !allHiddenCategories.has(cat);
-      })
-      .map((item) => item.sap_article_id);
-
-    if (eligibleArticles.length === 0) {
-      toast.info("Inga artiklar med SAKNAS I SAP utanför dolda kategorier.");
-      return;
-    }
-
     // Remove duplicates
-    const uniqueArticles = [...new Set(eligibleArticles)];
+    const uniqueArticles = [...new Set(missingSapData.map((item) => item.sap_article_id))];
 
-    toast.info(
-      `Hittade ${uniqueArticles.length} artiklar med SAKNAS I SAP (utanför dolda kategorier). Hämtar från SAP...`,
-    );
+    toast.info(`Hittade ${uniqueArticles.length} artiklar med SAKNAS I SAP. Hämtar från SAP...`);
 
     // Vänta på att Chrome Extension är redo
     if (useProxy) {
@@ -4788,7 +4743,7 @@ function ErstatningsCheckPage() {
                   className="h-9 rounded-xl border-gray-300 px-3.5 text-sm font-medium"
                   onClick={() => void fetchMissingSapArticles()}
                   disabled={isLoading}
-                  title="Hämta alla artiklar med SAKNAS I SAP som inte är i dolda kategorier"
+                  title="Hämta alla artiklar med SAKNAS I SAP"
                 >
                   Hämta SAKNAS I SAP
                 </Button>
