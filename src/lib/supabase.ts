@@ -51,8 +51,6 @@ export const ROLE_LABELS: Record<string, string> = {
 
 export const HIERARCHY_LABELS: Record<string, string> = {
   admin: "Admin",
-  hk: "Huvudkontor",
-  forening: "Förening",
   distrikt: "Distrikt",
   chef: "Butikschef",
   anvandare: "Användare",
@@ -346,17 +344,6 @@ export type TaskQuestionAnswer = {
   created_at: string;
 };
 
-export type Notification = {
-  id: string;
-  user_id: string;
-  type: string;
-  title: string;
-  body: string;
-  link: string;
-  is_read: boolean;
-  created_at: string;
-};
-
 export type UserGroup = {
   id: string;
   name: string;
@@ -452,100 +439,9 @@ export function errorToSwedish(err: unknown): string {
   return msg || "Något gick fel – försök igen";
 }
 
-const PUSH_EDGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-push`;
-const PUSH_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-export interface PushResult {
-  ok: boolean;
-  error?: string;
-  partialErrors?: string[];
-}
-
-async function firePush(
-  userIds: string[],
-  title: string,
-  body: string,
-  url: string,
-): Promise<PushResult> {
-  if (!userIds.length) return { ok: true };
-  try {
-    const res = await fetch(PUSH_EDGE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${PUSH_ANON_KEY}` },
-      body: JSON.stringify({ user_ids: userIds, title, body, url }),
-    });
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-      const errMsg = `firePush failed: ${res.status} ${json ? JSON.stringify(json) : ""}`;
-      console.error(errMsg);
-      return { ok: false, error: errMsg };
-    }
-    if (json?.errors?.length) {
-      const partial = json.errors as string[];
-      console.warn("firePush partial errors:", partial);
-      return { ok: true, partialErrors: partial };
-    }
-    return { ok: true };
-  } catch (err) {
-    const errMsg = `firePush network error: ${err}`;
-    console.error(errMsg);
-    return { ok: false, error: errMsg };
-  }
-}
-
-// Helper: create a notification
-export async function createNotification(
-  userId: string,
-  type: string,
-  title: string,
-  body = "",
-  link = "",
-): Promise<{ error?: string; pushResult?: PushResult }> {
-  const { error } = await supabase
-    .from("notifications")
-    .insert({ user_id: userId, type, title, body, link });
-  if (error) {
-    const errMsg = `createNotification insert failed: ${error.message}`;
-    console.error(errMsg);
-    return { error: errMsg };
-  }
-  const pushResult = await firePush([userId], title, body, link || "/");
-  return { pushResult };
-}
-
-// Helper: notify multiple users
-export async function notifyUsers(
-  userIds: string[],
-  type: string,
-  title: string,
-  body = "",
-  link = "",
-): Promise<{ errors: string[]; pushResult?: PushResult }> {
-  if (userIds.length === 0) return { errors: [] };
-  const rows = userIds.map((uid) => ({ user_id: uid, type, title, body, link }));
-  const { error } = await supabase.from("notifications").insert(rows);
-  const errors: string[] = [];
-  if (error) {
-    const errMsg = `notifyUsers insert failed: ${error.message}`;
-    console.error(errMsg);
-    errors.push(errMsg);
-  }
-  const pushResult = await firePush(userIds, title, body, link || "/");
-  if (!pushResult.ok) {
-    errors.push(pushResult.error!);
-  }
-  return { errors, pushResult };
-}
-
 // Helper: get public URL for a storage path
 export function getPublicUrl(path: string) {
   return supabase.storage.from("attachments").getPublicUrl(path).data.publicUrl;
-}
-
-// Helper: delete old notifications (>3 days) for a user
-export async function cleanOldNotifications(userId: string) {
-  const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-  await supabase.from("notifications").delete().eq("user_id", userId).lt("created_at", cutoff);
 }
 
 // Validate a file's true MIME type by inspecting its magic bytes.

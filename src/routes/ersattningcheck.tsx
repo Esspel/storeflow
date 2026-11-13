@@ -12,12 +12,12 @@ import {
   Upload,
   FileSpreadsheet,
   Table as TableIcon,
-  RefreshCw,
   Settings,
   Download,
   AlertTriangle,
   CheckCircle2,
   Clock,
+  Loader2,
   ChevronRight,
   ExternalLink,
   BarChart3,
@@ -38,7 +38,6 @@ import {
   Check,
   Ban,
   XCircle,
-  ArrowLeft,
   Calendar,
   Filter,
   Plus,
@@ -58,7 +57,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableBody,
@@ -102,7 +100,6 @@ import {
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { runWithConcurrencySettled, chunk } from "@/lib/async-utils";
-import { calculateRiskScore, calculateRisk } from "@/lib/productCatalogRisk";
 import {
   CartesianGrid,
   Line,
@@ -208,101 +205,6 @@ type Reclamation = {
   best_before_date?: string | null;
   amount?: number | null;
 };
-
-type CatalogProduct = {
-  sap_article_id: string;
-  name: string;
-  brand: string;
-  category: string | null;
-  ean: string | null;
-  bnr: string | null;
-  reclamationCount: number;
-  deliveryCount: number;
-  deliveryDates: string[];
-};
-
-function CatalogProductTable({
-  products,
-  onOpenProduct,
-}: {
-  products: CatalogProduct[];
-  onOpenProduct: (product: CatalogProduct) => void;
-}) {
-  return (
-    <div className="overflow-hidden rounded-xl border bg-coop-gray-100">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Produkt</TableHead>
-            <TableHead>SAP-ID</TableHead>
-            <TableHead>BNR</TableHead>
-            <TableHead>EAN</TableHead>
-            <TableHead className="text-right">Leveranser</TableHead>
-            <TableHead className="text-right">Reklamationer</TableHead>
-            <TableHead className="text-right">Risk</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {products.map((product) => {
-            const risk = calculateRisk({
-              reclamationCount: product.reclamationCount,
-              deliveryCount: product.deliveryCount,
-              uniqueDeliveryDates: product.deliveryDates.length,
-            });
-            return (
-              <TableRow
-                key={product.sap_article_id}
-                className="cursor-pointer hover:bg-white"
-                role="button"
-                tabIndex={0}
-                onClick={() => onOpenProduct(product)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onOpenProduct(product);
-                  }
-                }}
-              >
-                <TableCell>
-                  <div className="font-medium text-coop-gray-900">{product.name}</div>
-                  <div className="text-xs text-coop-gray-900/60">
-                    {product.brand || "Inget varumärke"}
-                  </div>
-                </TableCell>
-                <TableCell className="font-mono text-xs text-coop-gray-900/80">
-                  {product.sap_article_id}
-                </TableCell>
-                <TableCell className="text-xs text-coop-gray-900/80">
-                  {product.bnr || "—"}
-                </TableCell>
-                <TableCell className="text-xs text-coop-gray-900/80">
-                  {product.ean || "—"}
-                </TableCell>
-                <TableCell className="text-right text-xs font-medium text-coop-blue-700">
-                  {product.deliveryCount}{" "}
-                  <span className="font-normal text-coop-gray-900/50">
-                    {product.deliveryCount === 1 ? "leverans" : "leveranser"}
-                  </span>
-                </TableCell>
-                <TableCell className="text-right text-xs font-medium text-coop-gray-900">
-                  {product.reclamationCount}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <Progress value={risk.percentage} className="h-1.5 w-16" />
-                    <span className="w-9 text-right text-xs font-medium text-coop-gray-900">
-                      {risk.percentage}%
-                    </span>
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
 
 type HanteringsItem = {
   id: string;
@@ -444,11 +346,8 @@ interface SapProductData {
   GlobalTradeItemNumber: string;
 }
 
-async function fetchSapProductData(
-  storeId: string,
-  sapArticleId: string,
-): Promise<SapProductData | null> {
-  const url = `${SAP_BASE_URL}/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(storeId)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`;
+async function fetchSapProductData(sapArticleId: string): Promise<SapProductData | null> {
+  const url = `${SAP_BASE_URL}/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/ProductID('${encodeURIComponent(sapArticleId)}')?$format=json`;
 
   try {
     const resp = await fetch(url, {
@@ -475,29 +374,54 @@ async function fetchAllRows(
   supabaseClient: typeof supabase,
   table: string,
   select: string,
-  eq?: { column: string; value: unknown },
+  eq?: { column: string; value: unknown } | { column: string; value: unknown }[],
   order?: { column: string; ascending?: boolean },
   idColumn = "id",
   batchSize = 1000,
 ): Promise<any[]> {
   const all: any[] = [];
   let from = 0;
+  const concurrency = 4;
+
+  const eqFilters = eq ? (Array.isArray(eq) ? eq : [eq]) : [];
+
   while (true) {
-    let query = supabaseClient
-      .from(table)
-      .select(select)
-      .range(from, from + batchSize - 1);
-    if (eq) query = query.eq(eq.column, eq.value);
-    if (order) query = query.order(order.column, { ascending: order.ascending ?? false });
-    // PostgREST .range() paginering kräver en deterministisk ORDER BY,
-    // annars kan rader hoppas över eller dupliceras mellan batchar.
-    query = query.order(idColumn, { ascending: true });
-    const { data, error } = await query;
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-    all.push(...data);
-    if (data.length < batchSize) break;
-    from += batchSize;
+    const results: { data: any[]; from: number }[] = [];
+    await Promise.all(
+      Array.from({ length: concurrency }, (_, i) => {
+        const batchFrom = from + i * batchSize;
+        return (async () => {
+          let query = supabaseClient
+            .from(table)
+            .select(select)
+            .range(batchFrom, batchFrom + batchSize - 1);
+          for (const f of eqFilters) query = query.eq(f.column, f.value);
+          if (order) query = query.order(order.column, { ascending: order.ascending ?? false });
+          // PostgREST .range() paginering kräver en deterministisk ORDER BY,
+          // annars kan rader hoppas över eller dupliceras mellan batchar.
+          query = query.order(idColumn, { ascending: true });
+          const { data, error } = await query;
+          if (error) throw error;
+          results.push({ data: data ?? [], from: batchFrom });
+        })();
+      }),
+    );
+
+    results.sort((a, b) => a.from - b.from);
+
+    let allEmpty = true;
+    let anyPartial = false;
+    for (const result of results) {
+      if (result.data.length > 0) {
+        all.push(...result.data);
+        allEmpty = false;
+        if (result.data.length < batchSize) anyPartial = true;
+      }
+    }
+
+    if (allEmpty) break;
+    from += concurrency * batchSize;
+    if (anyPartial) break;
   }
   return all;
 }
@@ -619,13 +543,12 @@ function ErstatningsCheckPage() {
     if (productsCache && productsCacheStore === cacheKey) {
       return productsCache;
     }
-    const data = await fetchAllRows(supabase, "products", columns, {
-      column: "store_id",
-      value: storeId,
-    });
+    const data = await fetchAllRows(supabase, "products", columns, [
+      { column: "store_id", value: storeId },
+      { column: "is_active", value: true },
+    ]);
     const deduped = new Map<string, any>();
     for (const row of data ?? []) {
-      if (row.is_active === false) continue;
       const key = String(row.sap_article_id ?? row.id ?? "");
       if (!key || deduped.has(key)) continue;
       deduped.set(key, row);
@@ -642,13 +565,11 @@ function ErstatningsCheckPage() {
   const [step, setStep] = useState<
     | "dashboard"
     | "reclamations"
-    | "products"
     | "statistics"
     | "import"
     | "shelf-life"
     | "generate"
     | "category-mapping"
-    | "admin-test"
   >("dashboard");
 
   // Vyn Hantera varor state
@@ -684,30 +605,6 @@ function ErstatningsCheckPage() {
   const [addReclamationExpiryDate, setAddReclamationExpiryDate] = useState("");
   const [addReclamationDeliveryNumber, setAddReclamationDeliveryNumber] = useState("");
   const [addReclamationAmount, setAddReclamationAmount] = useState("");
-
-  // Vyn Produktkatalog state
-  const [catalogSearch, setCatalogSearch] = useState("");
-  const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<string | null>(null);
-  const [infoProduct, setInfoProduct] = useState<CatalogProduct | null>(null);
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [catalogRefreshKey, setCatalogRefreshKey] = useState(0);
-  const [catalogCategories, setCatalogCategories] = useState<
-    Array<{
-      name: string;
-      code: string;
-      displayTitle: string;
-      uniqueProductCount: number;
-      totalDeliveries: number;
-      activeReclamations: number;
-      riskScore: number;
-      riskPercentage: number;
-      riskLevel: string;
-      riskColor: string;
-      riskBg: string;
-    }>
-  >([]);
-  const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
 
   // Vyn Statistik state
   const [statsMode, setStatsMode] = useState<"spotlight" | "cockpit">("spotlight");
@@ -1119,7 +1016,6 @@ function ErstatningsCheckPage() {
 
       await loadShelfLifeData();
       invalidateProductsCache();
-      setCatalogRefreshKey((current) => current + 1);
       setStep("shelf-life");
       void refreshImportDates();
 
@@ -1173,213 +1069,6 @@ function ErstatningsCheckPage() {
       setTotalProductCount(count ?? 0);
     })();
   }, [activeStore?.id]);
-
-  // Load product catalog data for the Product Catalog view (runs once on mount)
-  useEffect(() => {
-    if (!activeStore?.id) return;
-    void (async () => {
-      setCatalogLoading(true);
-      setCatalogError(null);
-      setCatalogCategories([]);
-      setCatalogProducts([]);
-      try {
-        const [productsData, reclamationsData, deliveriesData] = await Promise.all([
-          fetchAllRows(
-            supabase,
-            "products",
-            "id, sap_article_id, name, brand, category, ean, bnr, is_active",
-            { column: "store_id", value: activeStore!.id },
-          ),
-          fetchAllRows(supabase, "reclamations", "sap_article_id, status, store_id", {
-            column: "store_id",
-            value: activeStore!.id,
-          }),
-          fetchAllRows(supabase, "store_product_deliveries", "sap_article_id, arrival_date", {
-            column: "store_id",
-            value: activeStore!.id,
-          }),
-        ]);
-
-        const activeProductsData = (productsData ?? []).filter(
-          (product) => product.is_active === true,
-        );
-
-        // Räkna antalet leveransrader per artikel (varje rad i store_product_deliveries
-        // representerar en importerad leverans, oavsett om datum upprepas).
-        // Separat karta med unika leveransdatum för visning i detaljvyn.
-        const deliveryCountsMap = new Map<string, number>();
-        const deliveryDateCountsMap = new Map<string, Set<string>>();
-        if (deliveriesData && deliveriesData.length > 0) {
-          for (const delivery of deliveriesData) {
-            const sapId = delivery.sap_article_id;
-            if (!sapId) continue;
-            deliveryCountsMap.set(sapId, (deliveryCountsMap.get(sapId) ?? 0) + 1);
-
-            const deliveryDate = getDeliveryDateKey(delivery.arrival_date);
-            if (deliveryDate) {
-              const dates = deliveryDateCountsMap.get(sapId) ?? new Set<string>();
-              dates.add(deliveryDate);
-              deliveryDateCountsMap.set(sapId, dates);
-            }
-          }
-        }
-
-        // Build lookup for reclamation counts from reclamations table
-        // Include reclamations for this store AND reclamations without store_id (global/legacy)
-        const reclamationCountsMap = new Map<string, number>();
-        if (reclamationsData && reclamationsData.length > 0) {
-          for (const reclamation of reclamationsData) {
-            const sapId = reclamation.sap_article_id ?? "";
-            const recStoreId = reclamation.store_id ?? null;
-            // Include if it's for this store or has no store_id (legacy/global)
-            if (recStoreId === activeStore!.id || recStoreId === null) {
-              reclamationCountsMap.set(sapId, (reclamationCountsMap.get(sapId) ?? 0) + 1);
-            }
-          }
-        }
-
-        // Build product map with reclamation info
-        const productMap = new Map<string, CatalogProduct>();
-
-        if (activeProductsData.length > 0) {
-          for (const product of activeProductsData) {
-            const sapId = product.sap_article_id ?? "";
-            const cat = product.category ?? null;
-            const ean = product.ean ?? null;
-            const bnr = product.bnr ?? null;
-            const existingReclamations = reclamationCountsMap.get(sapId) ?? 0;
-            const deliveryCount = deliveryCountsMap.get(sapId) ?? 0;
-            const deliveryDates = deliveryDateCountsMap.get(sapId);
-
-            productMap.set(sapId, {
-              sap_article_id: sapId,
-              name: product.name ?? "Okänd produkt",
-              brand: product.brand ?? "",
-              category: cat,
-              ean,
-              bnr,
-              reclamationCount: existingReclamations,
-              deliveryCount,
-              deliveryDates: Array.from(deliveryDates ?? []).sort(),
-            });
-          }
-        }
-
-        // Include products from reclamations that are not in products table
-        if (reclamationsData && reclamationsData.length > 0) {
-          for (const reclamation of reclamationsData) {
-            const sapId = reclamation.sap_article_id ?? "";
-            if (!sapId || productMap.has(sapId)) continue;
-            const existingReclamations = reclamationCountsMap.get(sapId) ?? 0;
-            const deliveryCount = deliveryCountsMap.get(sapId) ?? 0;
-            const deliveryDates = deliveryDateCountsMap.get(sapId);
-            productMap.set(sapId, {
-              sap_article_id: sapId,
-              name: sapId,
-              brand: "",
-              category: null,
-              ean: null,
-              bnr: null,
-              reclamationCount: existingReclamations,
-              deliveryCount,
-              deliveryDates: Array.from(deliveryDates ?? []).sort(),
-            });
-          }
-        }
-
-        // Build categories from product data
-        const categoriesMap = new Map<
-          string,
-          {
-            name: string;
-            code: string;
-            products: Set<string>;
-            deliveriesCount: number;
-            uniqueDeliveryDates: Set<string>;
-            activeReclamations: number;
-          }
-        >();
-
-        for (const [sapId, product] of productMap) {
-          const catName = product.category || "Övrigt";
-          const catCode = extractVarugrupp(catName, product.sap_article_id);
-          const entry = categoriesMap.get(catName) ?? {
-            name: catName,
-            code: catCode,
-            products: new Set<string>(),
-            deliveriesCount: 0,
-            uniqueDeliveryDates: new Set<string>(),
-            activeReclamations: 0,
-          };
-          entry.products.add(sapId);
-          entry.deliveriesCount += deliveryCountsMap.get(sapId) ?? 0;
-          entry.activeReclamations += product.reclamationCount;
-          // Add unique delivery dates for this product
-          const dates = deliveryDateCountsMap.get(sapId);
-          if (dates) {
-            for (const d of dates) entry.uniqueDeliveryDates.add(d);
-          }
-          categoriesMap.set(catName, entry);
-        }
-
-        // Calculate risk score for each category
-        const catalogCategories = Array.from(categoriesMap.values()).map((entry) => {
-          const riskScore = calculateRiskScore(
-            entry.activeReclamations,
-            entry.deliveriesCount,
-            entry.uniqueDeliveryDates.size,
-          );
-          const risk = calculateRisk({
-            reclamationCount: entry.activeReclamations,
-            deliveryCount: entry.deliveriesCount,
-            uniqueDeliveryDates: entry.uniqueDeliveryDates.size,
-          });
-          const riskLevel =
-            risk.level === "high"
-              ? "Hög risk"
-              : risk.level === "medium"
-                ? "Medel risk"
-                : "Låg risk";
-          const riskColor =
-            risk.level === "high"
-              ? "text-red-600"
-              : risk.level === "medium"
-                ? "text-amber-600"
-                : "text-green-600";
-          const riskBg =
-            risk.level === "high"
-              ? "bg-red-100"
-              : risk.level === "medium"
-                ? "bg-amber-50"
-                : "bg-green-50";
-
-          return {
-            name: entry.name,
-            code: entry.code,
-            displayTitle: `${entry.name} (${entry.code})`,
-            uniqueProductCount: entry.products.size,
-            totalDeliveries: entry.deliveriesCount,
-            activeReclamations: entry.activeReclamations,
-            riskScore,
-            riskPercentage: risk.percentage,
-            riskLevel,
-            riskColor,
-            riskBg,
-          };
-        });
-
-        setCatalogCategories(catalogCategories);
-        setCatalogProducts(Array.from(productMap.values()));
-        // Starta utan vald kategori för att visa ett tydligt kategorinät
-        setSelectedCatalogCategory(null);
-        setCatalogLoading(false);
-      } catch (error) {
-        console.error("Error loading catalog data:", error);
-        setCatalogError("Kunde inte ladda produktkatalog-data. Försök igen senare.");
-        setCatalogLoading(false);
-      }
-    })();
-  }, [activeStore?.id, catalogRefreshKey]);
 
   // Load shelf life data
   async function loadShelfLifeData() {
@@ -1681,14 +1370,28 @@ function ErstatningsCheckPage() {
       const withShelfLife = Math.max(successCount - missingInSapCount, 0);
       const withoutShelfLife = missingInSapCount;
       const remaining = Math.max(total - fetched, 0);
-      setSapFetchStatus({ total, fetched, withShelfLife, withoutShelfLife, remaining, visible: true });
+      setSapFetchStatus({
+        total,
+        fetched,
+        withShelfLife,
+        withoutShelfLife,
+        remaining,
+        visible: true,
+      });
     }, 2000);
     const total = prioritizedEligible.length;
     const fetched = successCount + errorCount;
     const withShelfLife = Math.max(successCount - missingInSapCount, 0);
     const withoutShelfLife = missingInSapCount;
     const remaining = Math.max(total - fetched, 0);
-    setSapFetchStatus({ total, fetched, withShelfLife, withoutShelfLife, remaining, visible: true });
+    setSapFetchStatus({
+      total,
+      fetched,
+      withShelfLife,
+      withoutShelfLife,
+      remaining,
+      visible: true,
+    });
 
     // Förbered produkttabellen ( EAN-check) — hämta alla produkter som matchar
     // artiklarna vi ska hämta, så att vi tidigt kan se om artikeln redan har
@@ -1719,7 +1422,7 @@ function ErstatningsCheckPage() {
             const sapData = useProxy
               ? await (async () => {
                   const proxyResponse = await retryFetchViaProxy(
-                    `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore.sap_site_id ?? activeStore!.id)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
+                    `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/ProductID('${encodeURIComponent(sapArticleId)}')?$format=json`,
                     "GET",
                     { Accept: "application/json" },
                   );
@@ -1750,7 +1453,7 @@ function ErstatningsCheckPage() {
                   const result = parsed.d || null;
                   return { sapArticleId, data: result, success: true, type: "proxy_success" };
                 })()
-              : await fetchSapProductData(activeStore.sap_site_id ?? activeStore!.id, sapArticleId)
+              : await fetchSapProductData(sapArticleId)
                   .then((data) => ({ sapArticleId, data, success: true, type: "direct_success" }))
                   .catch((error) => ({
                     sapArticleId,
@@ -4039,38 +3742,6 @@ function ErstatningsCheckPage() {
     return list;
   }, [reclamations, reclamationSort, deliveryStatistics, shelfLifeRecords]);
 
-  const catalogHasSearch = catalogSearch.trim().length > 0;
-  const visibleCatalogCategories = useMemo(() => {
-    const query = catalogSearch.trim().toLowerCase();
-    if (!query) return catalogCategories;
-    return catalogCategories.filter(
-      (category) =>
-        category.name.toLowerCase().includes(query) ||
-        category.code.toLowerCase().includes(query) ||
-        category.displayTitle.toLowerCase().includes(query),
-    );
-  }, [catalogCategories, catalogSearch]);
-
-  const visibleCatalogProducts = useMemo(() => {
-    const query = catalogSearch.trim().toLowerCase();
-    return catalogProducts.filter((product) => {
-      if (catalogHasSearch) {
-        return [
-          product.name,
-          product.brand,
-          product.sap_article_id,
-          product.bnr,
-          product.ean,
-          product.category,
-        ].some((value) => value?.toLowerCase().includes(query));
-      }
-      return (
-        product.category === selectedCatalogCategory ||
-        (selectedCatalogCategory === "Övrigt" && !product.category)
-      );
-    });
-  }, [catalogHasSearch, catalogProducts, catalogSearch, selectedCatalogCategory]);
-
   if (authLoading && !hasCheckedAuth) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -4154,14 +3825,6 @@ function ErstatningsCheckPage() {
           Reklamationsstatus
         </Button>
         <Button
-          variant={step === "products" ? "default" : "outline"}
-          onClick={() => setStep("products")}
-          className="flex items-center gap-2 font-medium"
-        >
-          <Package size={16} />
-          Produktkatalog
-        </Button>
-        <Button
           variant={step === "statistics" ? "default" : "outline"}
           onClick={() => {
             setStep("statistics");
@@ -4172,7 +3835,6 @@ function ErstatningsCheckPage() {
           <BarChart3 size={16} />
           Statistik
         </Button>
-
         <Button
           variant={step === "category-mapping" ? "default" : "outline"}
           onClick={() => {
@@ -4183,14 +3845,6 @@ function ErstatningsCheckPage() {
         >
           <Settings size={16} />
           Koppla flöden
-        </Button>
-        <Button
-          variant={step === "admin-test" ? "default" : "outline"}
-          onClick={() => setStep("admin-test")}
-          className="flex items-center gap-2"
-        >
-          <CheckCircle2 size={16} />
-          Testa flöden
         </Button>
       </div>
 
@@ -4234,154 +3888,14 @@ function ErstatningsCheckPage() {
       {sapFetchStatus?.visible && (
         <div className="mb-4 rounded-lg border-l-4 border-coop-blue-500 bg-coop-gray-50 p-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-coop-blue-500" />
-              <span className="text-sm text-coop-gray-700">SAP-hämtning pågår</span>
+            <div className="flex items-center gap-2 text-center">
+              <Loader2 className="h-5 w-5 animate-spin text-coop-blue-500" />
+              <span className="text-sm text-coop-gray-700">Hämtar från sap..</span>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="-mr-1 -mt-1 h-7 w-7 shrink-0"
-              onClick={() =>
-                setSapFetchStatus((prev) => (prev ? { ...prev, visible: false } : null))
-              }
-              aria-label="Stäng SAP-status"
-              title="Stäng SAP-status"
-            >
-              <X size={14} />
-            </Button>
           </div>
-          <SapFetchProgressBar status={sapFetchStatus} />
         </div>
       )}
 
-      {step === "admin-test" && user!.role === "admin" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Testa ersättningsflödet</CardTitle>
-            <CardDescription>
-              Skapar verklig, tydligt märkt testdata i den aktiva butiken så att admin kan prova
-              hantering och generering. Testdata kan rensas efteråt.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-3">
-              <Button
-                onClick={async () => {
-                  const sapArticleId = await createAdminTestFixture(true);
-                  if (sapArticleId) setStep("reclamations");
-                }}
-                disabled={isLoading}
-              >
-                Testa Hantera varor
-              </Button>
-              <Button onClick={testCompensationGeneration} disabled={isLoading} variant="secondary">
-                Testa generera ersättning
-              </Button>
-              {testFixtureSapId && (
-                <Button onClick={removeAdminTestFixture} disabled={isLoading} variant="destructive">
-                  Rensa testdata
-                </Button>
-              )}
-            </div>
-            {testFixtureSapId && (
-              <p className="text-sm text-coop-gray-900">
-                Aktiv testartikel: <span className="font-mono">{testFixtureSapId}</span>
-              </p>
-            )}
-          </CardContent>
-          <div className="pt-2 border-t mt-2">
-            <p className="text-xs font-medium text-coop-gray-900 mb-2">
-              Testa SAP-flöde för enskild artikel (materialnummer):
-            </p>
-            <div className="flex items-end gap-2">
-              <input
-                id="test-sap-id"
-                type="text"
-                placeholder="SAP materialnummer / artikel-ID"
-                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring w-64"
-                defaultValue={testFixtureSapId || ""}
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  const input = document.getElementById("test-sap-id") as HTMLInputElement | null;
-                  const sapArticleId = input?.value.trim();
-                  if (!sapArticleId) {
-                    toast.error("Ange ett SAP-product-ID / materialnummer.");
-                    return;
-                  }
-                  console.log("[Test SAP] Testing single article:", sapArticleId);
-                  try {
-                    const sapData = sapExtensionInstalled
-                      ? await (async () => {
-                          const proxyResponse = await retryFetchViaProxy(
-                            `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore?.sap_site_id ?? activeStore?.id ?? "")}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
-                            "GET",
-                            { Accept: "application/json" },
-                          );
-                          console.log("[Test SAP] Proxy response:", proxyResponse);
-                          if (!proxyResponse.success)
-                            throw new Error(proxyResponse.error || "Proxy failed");
-                          const jsonStr = proxyResponse.data ?? "";
-                          const parsed = JSON.parse(jsonStr);
-                          return parsed.d || null;
-                        })()
-                      : await fetchSapProductData(
-                          activeStore?.sap_site_id ?? activeStore?.id ?? "",
-                          sapArticleId,
-                        );
-                    console.log("[Test SAP] SAP data:", sapData);
-                    if (!sapData) {
-                      toast.error("Inga data från SAP för artikel: " + sapArticleId);
-                      return;
-                    }
-                    const shelfLifeDays = parseInt(sapData.RemainingShelfLifeInDays, 10);
-                    if (Number.isNaN(shelfLifeDays)) {
-                      toast.error("Ogiltigt hållbarhetsdatum från SAP.");
-                      return;
-                    }
-                    const hasValidSapData = Number.isFinite(shelfLifeDays) && shelfLifeDays > 0;
-                    const cooldownDays = hasValidSapData
-                      ? Math.floor(Math.random() * (60 - 14 + 1)) + 14
-                      : Math.floor(Math.random() * (90 - 60 + 1)) + 60;
-                    const nextSapCheck = new Date();
-                    nextSapCheck.setDate(nextSapCheck.getDate() + cooldownDays);
-                    const { error } = await supabase.from("product_shelf_life").upsert(
-                      {
-                        store_id: activeStore!.id,
-                        sap_article_id: sapArticleId,
-                        shelf_lifetime_days: hasValidSapData ? shelfLifeDays : 0,
-                        sap_data_missing: !hasValidSapData,
-                        next_sap_check: nextSapCheck.toISOString(),
-                        updated_at: new Date().toISOString(),
-                      },
-                      { onConflict: "sap_article_id" },
-                    );
-                    if (error) {
-                      console.error("[Test SAP] Supabase error:", error);
-                      toast.error("Kunde inte spara till Supabase.");
-                    } else {
-                      toast.success(
-                        "Sparade hållbarhetsdata (" + shelfLifeDays + " dagar) för " + sapArticleId,
-                      );
-                      console.log("[Test SAP] Saved to Supabase successfully");
-                    }
-                  } catch (err: any) {
-                    console.error("[Test SAP] Exception:", err);
-                    toast.error("Fel vid SAP-test: " + (err?.message || err));
-                  }
-                }}
-                disabled={isLoading}
-              >
-                Testa SAP → Supabase
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
       {step === "dashboard" && (
         <div className="space-y-6">
           <div>
@@ -5664,329 +5178,6 @@ function ErstatningsCheckPage() {
         </Card>
       )}
 
-      {/* Step 2: Product Catalog */}
-      {step === "products" && (
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b border-border/60 bg-coop-gray-100 px-6 py-5 sm:px-8">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <Badge variant="outline" className="mb-3">
-                  Produktkatalog
-                </Badge>
-                <CardTitle className="text-2xl font-semibold tracking-tight coop-font-heading-sm">
-                  Kategorier &amp; produkter
-                </CardTitle>
-                <CardDescription className="mt-1 max-w-2xl">
-                  Utforska produkter, importerade leveransdatum, reklamationer och risk per
-                  kategori.
-                </CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCatalogRefreshKey((current) => current + 1)}
-                disabled={catalogLoading}
-                className="shrink-0"
-              >
-                <RefreshCw size={16} className={catalogLoading ? "animate-spin" : ""} />
-                Uppdatera
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6 px-6 py-6 sm:px-8">
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-coop-gray-900/40" />
-                <Input
-                  aria-label="Sök i produktkatalogen"
-                  placeholder="Sök kategori, produkt, SAP-ID, BNR eller EAN..."
-                  value={catalogSearch}
-                  onChange={(e) => setCatalogSearch(e.target.value)}
-                  className="h-10 pl-9"
-                />
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setCatalogSearch("");
-                  setSelectedCatalogCategory(null);
-                  setInfoProduct(null);
-                }}
-                className="h-10"
-              >
-                <X size={16} className="mr-1" />
-                Rensa
-              </Button>
-            </div>
-
-            {catalogLoading ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {[1, 2, 3].map((item) => (
-                  <div
-                    key={item}
-                    className="rounded-xl border border-border/60 bg-coop-gray-100 p-5 shadow-[var(--shadow-sm)]"
-                  >
-                    <div className="h-4 w-24 animate-pulse rounded bg-coop-gray-200" />
-                    <div className="mt-3 h-3 w-32 animate-pulse rounded bg-coop-gray-200" />
-                    <div className="mt-4 h-2 w-full animate-pulse rounded bg-coop-gray-200" />
-                    <div className="mt-2 h-2 w-3/4 animate-pulse rounded bg-coop-gray-200" />
-                  </div>
-                ))}
-              </div>
-            ) : catalogError ? (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>{catalogError}</AlertDescription>
-              </Alert>
-            ) : catalogCategories.length === 0 ? (
-              <div className="rounded-xl border border-dashed bg-coop-gray-100 px-6 py-16 text-center">
-                <Package size={44} className="mx-auto mb-4 text-coop-gray-900/40" />
-                <p className="text-base font-semibold text-coop-gray-900">
-                  Inga kategorier hittades
-                </p>
-                <p className="mt-1 text-sm text-coop-gray-900/70">
-                  Kontrollera att det finns aktiva produkter registrerade i databasen.
-                </p>
-              </div>
-            ) : catalogHasSearch ? (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-base font-semibold tracking-tight text-coop-gray-900">
-                    Sökresultat
-                  </h3>
-                  <p className="mt-0.5 text-sm text-coop-gray-900/60">
-                    {visibleCatalogProducts.length}{" "}
-                    {visibleCatalogProducts.length === 1 ? "produkt" : "produkter"}
-                  </p>
-                </div>
-                {visibleCatalogProducts.length === 0 ? (
-                  <div className="rounded-xl border border-dashed bg-coop-gray-100 px-6 py-10 text-center text-coop-gray-900/70">
-                    Inga produkter matchar sökningen.
-                  </div>
-                ) : (
-                  <CatalogProductTable
-                    products={visibleCatalogProducts}
-                    onOpenProduct={setInfoProduct}
-                  />
-                )}
-              </div>
-            ) : visibleCatalogCategories.length === 0 ? (
-              <div className="rounded-xl border border-dashed bg-coop-gray-100 px-6 py-12 text-center text-coop-gray-900/70">
-                Inga kategorier matchar sökningen.
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {!selectedCatalogCategory && (
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-base font-semibold tracking-tight text-coop-gray-900">
-                        Kategorier
-                      </h3>
-                      <p className="mt-0.5 text-sm text-coop-gray-900/60">
-                        {visibleCatalogCategories.length}{" "}
-                        {visibleCatalogCategories.length === 1 ? "kategori" : "kategorier"}
-                      </p>
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                      {visibleCatalogCategories.map((category) => (
-                        <Card
-                          key={`${category.name}-${category.code}`}
-                          className="cursor-pointer transition-shadow hover:shadow-md"
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => setSelectedCatalogCategory(category.name)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              setSelectedCatalogCategory(category.name);
-                            }
-                          }}
-                        >
-                          <CardContent className="p-5">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold text-coop-gray-900">
-                                  {category.displayTitle}
-                                </div>
-                                <div className="mt-1.5 text-xs text-coop-gray-900/60">
-                                  {category.uniqueProductCount} produkter •{" "}
-                                  {category.totalDeliveries} leveranser •{" "}
-                                  {category.activeReclamations} reklamationer
-                                </div>
-                              </div>
-                              <Badge
-                                className={`${category.riskBg} ${category.riskColor} shrink-0`}
-                              >
-                                {category.riskLevel}
-                              </Badge>
-                            </div>
-                            <div className="mt-4 space-y-2">
-                              <div className="flex items-center justify-between text-xs text-coop-gray-900/70">
-                                <span>Riskindikator</span>
-                                <span className="font-medium">{category.riskPercentage}%</span>
-                              </div>
-                              <Progress value={category.riskPercentage} className="h-1.5" />
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedCatalogCategory && (
-                  <div className="space-y-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedCatalogCategory(null);
-                          setInfoProduct(null);
-                        }}
-                      >
-                        <ArrowLeft size={16} className="mr-1" />
-                        Tillbaka till kategorier
-                      </Button>
-                      <div>
-                        <h3 className="text-base font-semibold tracking-tight text-coop-gray-900">
-                          {selectedCatalogCategory}
-                        </h3>
-                        <p className="mt-0.5 text-sm text-coop-gray-900/60">
-                          {visibleCatalogProducts.length}{" "}
-                          {visibleCatalogProducts.length === 1 ? "produkt" : "produkter"}
-                        </p>
-                      </div>
-                    </div>
-
-                    {visibleCatalogProducts.length === 0 ? (
-                      <div className="rounded-xl border border-dashed bg-coop-gray-100 px-6 py-10 text-center text-coop-gray-900/70">
-                        Inga produkter matchar sökningen i denna kategori.
-                      </div>
-                    ) : (
-                      <CatalogProductTable
-                        products={visibleCatalogProducts}
-                        onOpenProduct={setInfoProduct}
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <Dialog
-              open={infoProduct !== null}
-              onOpenChange={(open) => {
-                if (!open) setInfoProduct(null);
-              }}
-            >
-              <DialogContent className="sm:max-w-lg">
-                {infoProduct && (
-                  <>
-                    <DialogHeader>
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-coop-blue-50 text-coop-blue-700">
-                          <Package size={20} />
-                        </div>
-                        <div className="min-w-0">
-                          <DialogTitle className="break-words text-lg font-semibold text-coop-gray-900">
-                            {infoProduct.name}
-                          </DialogTitle>
-                          <DialogDescription className="mt-0.5">
-                            {infoProduct.brand || "Produktinformation"}
-                          </DialogDescription>
-                        </div>
-                      </div>
-                    </DialogHeader>
-
-                    <div className="space-y-4">
-                      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div className="rounded-xl border bg-coop-gray-100 p-3">
-                          <dt className="text-xs text-coop-gray-900/60">SAP-ID</dt>
-                          <dd className="mt-1 font-mono text-sm font-medium text-coop-gray-900">
-                            {infoProduct.sap_article_id}
-                          </dd>
-                        </div>
-                        <div className="rounded-xl border bg-coop-gray-100 p-3">
-                          <dt className="text-xs text-coop-gray-900/60">Kategori</dt>
-                          <dd className="mt-1 text-sm font-medium text-coop-gray-900">
-                            {infoProduct.category || "Övrigt"}
-                          </dd>
-                        </div>
-                        <div className="rounded-xl border bg-coop-gray-100 p-3">
-                          <dt className="text-xs text-coop-gray-900/60">BNR</dt>
-                          <dd className="mt-1 text-sm font-medium text-coop-gray-900">
-                            {infoProduct.bnr || "—"}
-                          </dd>
-                        </div>
-                        <div className="rounded-xl border bg-coop-gray-100 p-3">
-                          <dt className="text-xs text-coop-gray-900/60">EAN</dt>
-                          <dd className="mt-1 text-sm font-medium text-coop-gray-900">
-                            {infoProduct.ean || "—"}
-                          </dd>
-                        </div>
-                      </dl>
-
-                      <div className="rounded-xl border bg-coop-gray-100 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <h4 className="text-sm font-semibold text-coop-gray-900">
-                            Leveransdatum
-                          </h4>
-                          <Badge variant="outline">{infoProduct.deliveryCount}</Badge>
-                        </div>
-                        {infoProduct.deliveryDates.length > 0 ? (
-                          <div className="mt-3 flex max-h-40 flex-wrap gap-2 overflow-auto">
-                            {infoProduct.deliveryDates.map((date) => (
-                              <Badge key={date} variant="secondary" className="whitespace-nowrap">
-                                {formatDeliveryDate(date)}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="mt-3 text-sm text-coop-gray-900/60">
-                            Inga importerade leveransdatum är kopplade till artikeln.
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="rounded-xl border border-border/60 bg-white p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-coop-gray-900">
-                              Reklamationsrisk
-                            </p>
-                            <p className="mt-0.5 text-xs text-coop-gray-900/60">
-                              {infoProduct.reclamationCount} reklamationer per{" "}
-                              {infoProduct.deliveryCount} importerade leveransdatum
-                            </p>
-                          </div>
-                          <Badge
-                            className={
-                              infoProduct.reclamationCount > 0
-                                ? "bg-amber-50 text-amber-700"
-                                : "bg-green-50 text-green-700"
-                            }
-                          >
-                            {infoProduct.reclamationCount > 0 ? "Notera" : "Ingen risk"}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setInfoProduct(null)}>
-                        Stäng
-                      </Button>
-                    </DialogFooter>
-                  </>
-                )}
-              </DialogContent>
-            </Dialog>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Step 5: Reclamation status / Hantera varor */}
       {step === "reclamations" && (
         <Card>
@@ -6355,40 +5546,6 @@ function ErstatningsCheckPage() {
           </CardContent>
         </Card>
       )}
-    </div>
-  );
-}
-
-interface SapFetchStatus {
-  total: number;
-  fetched: number;
-  withShelfLife: number;
-  withoutShelfLife: number;
-  remaining: number;
-  visible: boolean;
-}
-
-interface SapFetchProgressBarProps {
-  status: SapFetchStatus | null;
-}
-
-function SapFetchProgressBar({ status }: SapFetchProgressBarProps) {
-  if (!status) return null;
-  const percentage = Math.min((status.fetched / status.total) * 100, 100).toFixed(1);
-  return (
-    <div className="mt-2">
-      <div className="flex justify-between text-xs text-gray-500 mb-1">
-        <span>
-          {status.fetched}/{status.total} artiklar | {status.withShelfLife} med shelf-life, {status.withoutShelfLife} utan
-        </span>
-        <span>{status.remaining}</span>
-      </div>
-      <div className="h-2 rounded bg-gray-200 overflow-hidden">
-        <div
-          className="h-full bg-coop-blue-500 transition-all duration-300"
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
     </div>
   );
 }

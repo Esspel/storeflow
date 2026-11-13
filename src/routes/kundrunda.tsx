@@ -66,7 +66,6 @@ import {
   type KundrundaResponseImage,
   type AppUser,
   logAudit,
-  createNotification,
   mittCoopUrl,
   mittCoopSearchUrl,
   uploadAttachment,
@@ -105,8 +104,6 @@ type LocalVersionRecord = {
   central_version_pending: boolean;
   pending_central_version_id: number | null;
   parallel_choice: "central" | "local" | null;
-  defects_pending_hk_update: boolean;
-  pending_defects_snapshot: { id: string; label: string; sort_order: number }[] | null;
 };
 
 function scoreColorClass(pct: number): string {
@@ -320,7 +317,6 @@ function KundrundaPage() {
 
   const [importingCsv, setImportingCsv] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const [showDefectsMergeDialog, setShowDefectsMergeDialog] = useState(false);
 
   const [localVersion, setLocalVersion] = useState<LocalVersionRecord | null>(null);
   const [showVersionChoiceDialog, setShowVersionChoiceDialog] = useState(false);
@@ -1002,18 +998,6 @@ function KundrundaPage() {
           .maybeSingle();
         if (task) {
           taskId = task.id;
-          if (defectDialog.responsible_user_id !== user?.id) {
-            const { error, pushResult } = await createNotification(
-              defectDialog.responsible_user_id,
-              "task_assigned",
-              `Kundrunda-uppgift: ${zone?.name ?? ""}`,
-              defectDialog.defect_description.slice(0, 100),
-              "/uppgifter",
-            );
-            if (error) toast.error(`Notis misslyckades: ${error}`);
-            else if (pushResult?.partialErrors?.length)
-              toast.warning(`Push delvis misslyckades: ${pushResult.partialErrors.join(", ")}`);
-          }
         }
       }
       if (responseId) {
@@ -1372,19 +1356,6 @@ function KundrundaPage() {
   const allCheckpoints = editableZones.flatMap((z) =>
     z.checkpoints.map((cp) => ({ ...cp, zoneName: z.name })),
   );
-
-  const mergeHKDefects = async () => {
-    if (!activeStore || !localVersion?.pending_defects_snapshot) return;
-    await supabase
-      .from("kundrunda_local_versions")
-      .update({
-        defects_pending_hk_update: false,
-        pending_defects_snapshot: null,
-      })
-      .eq("id", localVersion.id);
-    setShowDefectsMergeDialog(false);
-    await fetchData();
-  };
 
   // CSV import: create zones/checkpoints in specified scope, optionally replacing all existing
   const handleCsvImport = async (result: ImportDialogResult) => {
@@ -2370,50 +2341,6 @@ function KundrundaPage() {
           </div>
         )}
 
-        {/* Defects merge pending banner */}
-        {isManager &&
-          localVersion?.defects_pending_hk_update &&
-          localVersion?.pending_defects_snapshot && (
-            <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-coop-orange-100 px-4 py-3 dark:border-amber-800/40 dark:bg-coop-orange-1000/20">
-              <Info className="h-4 w-4 shrink-0 text-coop-orange-700 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-coop-orange-900 dark:text-coop-orange-400">
-                  HK har uppdaterat sina vanliga avvikelser
-                </p>
-                <p className="mt-0.5 text-xs text-coop-orange-800 dark:text-coop-orange-500">
-                  Välj om du vill slå ihop HKs uppdateringar med din butiks lokala avvikelser.
-                </p>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="rounded-full text-xs h-8 border-amber-300 text-coop-orange-800 hover:bg-coop-orange-200"
-                  onClick={async () => {
-                    await supabase
-                      .from("kundrunda_local_versions")
-                      .update({ defects_pending_hk_update: false, pending_defects_snapshot: null })
-                      .eq("id", localVersion?.id ?? "");
-                    setLocalVersion((p) =>
-                      p
-                        ? { ...p, defects_pending_hk_update: false, pending_defects_snapshot: null }
-                        : null,
-                    );
-                  }}
-                >
-                  Ignorera
-                </Button>
-                <Button
-                  size="sm"
-                  className="rounded-full text-xs h-8"
-                  onClick={() => setShowDefectsMergeDialog(true)}
-                >
-                  <GitMerge className="h-3.5 w-3.5 mr-1" /> Slå ihop
-                </Button>
-              </div>
-            </div>
-          )}
-
         {/* Kundrunda CSV Import Dialog */}
         <ImportDialog
           open={showImportDialog}
@@ -2856,26 +2783,6 @@ function KundrundaPage() {
               >
                 Ta bort
               </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {/* Defects merge confirmation — must be in edit view since banner is here */}
-        <AlertDialog
-          open={showDefectsMergeDialog}
-          onOpenChange={(o) => !o && setShowDefectsMergeDialog(false)}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Slå ihop avvikelser med HK</AlertDialogTitle>
-              <AlertDialogDescription>
-                HKs nya avvikelser läggs till i din butiks lista. Befintliga lokala avvikelser
-                påverkas inte. Länkade avvikelser vars text ändrats hos HK uppdateras.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Avbryt</AlertDialogCancel>
-              <AlertDialogAction onClick={mergeHKDefects}>Slå ihop</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -3429,26 +3336,6 @@ function KundrundaPage() {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Defects merge confirmation */}
-      <AlertDialog
-        open={showDefectsMergeDialog}
-        onOpenChange={(o) => !o && setShowDefectsMergeDialog(false)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Slå ihop avvikelser med HK</AlertDialogTitle>
-            <AlertDialogDescription>
-              HKs nya avvikelser läggs till i din butiks lista. Befintliga lokala avvikelser
-              påverkas inte. Länkade avvikelser vars text ändrats hos HK uppdateras.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction onClick={mergeHKDefects}>Slå ihop</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Parallel version choice */}
       <Dialog

@@ -3,10 +3,8 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { SkipLink } from "@/components/ui/skip-link";
 import {
-  Bell,
   ClipboardList,
   FileText,
-  FlaskConical,
   Hop as Home,
   LogOut,
   MoreHorizontal,
@@ -15,7 +13,6 @@ import {
   TriangleAlert,
   CalendarDays,
   UserRound,
-  Trash2,
   User,
   Wifi,
   WifiOff,
@@ -28,16 +25,10 @@ import {
   Navigation,
   TriangleAlert as AlertTriangle,
 } from "lucide-react";
-import {
-  ROLE_LABELS,
-  HIERARCHY_LABELS,
-  supabase,
-  type Notification,
-  cleanOldNotifications,
-} from "@/lib/supabase";
+import { ROLE_LABELS, HIERARCHY_LABELS, supabase } from "@/lib/supabase";
 import { LockScreen } from "@/components/lock-screen";
 import { GlobalStoreSelector } from "@/components/global-store-selector";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -275,71 +266,8 @@ export function AppShell() {
     quickSwitch,
   } = useAuth();
 
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [notifOpen, setNotifOpen] = useState(false);
   const [simActive, setSimActive] = useState(() => isSimulationActive());
   const [moreOpen, setMoreOpen] = useState(false);
-
-  // Push subscription maintenance
-  useEffect(() => {
-    if (!user) return;
-    const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
-    if (!vapidKey || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
-    if (Notification.permission !== "granted") return;
-
-    const maintain = async () => {
-      try {
-        const reg = await navigator.serviceWorker.ready;
-        const sub = await reg.pushManager.getSubscription();
-        if (!sub) return;
-
-        const isDeprecated = sub.endpoint.includes("fcm.googleapis.com/fcm/send/");
-        if (isDeprecated) {
-          await supabase.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
-          await sub.unsubscribe();
-          const padding = "=".repeat((4 - (vapidKey.length % 4)) % 4);
-          const base64 = (vapidKey + padding).replace(/-/g, "+").replace(/_/g, "/");
-          const rawData = atob(base64);
-          const appServerKey = Uint8Array.from(rawData, (c) => c.charCodeAt(0));
-          const freshSub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: appServerKey,
-          });
-          await supabase.from("push_subscriptions").insert({
-            user_id: user.id,
-            endpoint: freshSub.endpoint,
-            subscription_json: freshSub.toJSON(),
-            user_agent: navigator.userAgent,
-          });
-          return;
-        }
-
-        const { data: existing } = await supabase
-          .from("push_subscriptions")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("endpoint", sub.endpoint)
-          .maybeSingle();
-
-        if (!existing) {
-          await supabase.from("push_subscriptions").upsert(
-            {
-              user_id: user.id,
-              endpoint: sub.endpoint,
-              subscription_json: sub.toJSON(),
-              user_agent: navigator.userAgent,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "endpoint" },
-          );
-        }
-      } catch (err) {
-        console.error("Push maintenance error:", err);
-      }
-    };
-
-    maintain();
-  }, [user]);
 
   // Sync simulation time updates
   useEffect(() => {
@@ -355,16 +283,19 @@ export function AppShell() {
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "manager" || isAdmin;
 
+  const isActive = (to: string) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
+
+  const moreRoutes = [
+    { to: "/kundrunda", label: "Kundrunda", Icon: UserRound },
+  ];
+  const isMoreActive = moreRoutes.some((r) => isActive(r.to));
+
   const nav = [
     { to: "/", label: "Översikt", mobileHidden: false, Icon: Home },
     { to: "/uppgifter", label: "Uppgifter", mobileHidden: false, Icon: ClipboardList },
     { to: "/schema", label: "Schema", mobileHidden: false, Icon: CalendarDays },
-    { to: "/avvikelser", label: "Avvikelser", mobileHidden: true, Icon: TriangleAlert },
     { to: "/kundrunda", label: "Kundrunda", mobileHidden: true, Icon: UserRound },
     { to: "/kundonskemal", label: "Kundönskemål", mobileHidden: false, Icon: ShoppingCart },
-    ...(isManager
-      ? [{ to: "/rapporter", label: "Rapporter", mobileHidden: true, Icon: FlaskConical }]
-      : []),
     {
       to: "/ersattningcheck",
       label: "Ersättningskontroll",
@@ -372,80 +303,6 @@ export function AppShell() {
       Icon: AlertTriangle,
     },
   ];
-
-  const fetchNotifications = useCallback(() => {
-    if (!user || document.hidden) return; // Pausa vid bakgrundsflik
-    supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(20)
-      .then(({ data }) => {
-        if (data) setNotifications(data as Notification[]);
-      });
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    fetchNotifications();
-    cleanOldNotifications(user.id);
-    const interval = setInterval(fetchNotifications, 30_000);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") fetchNotifications();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [user, fetchNotifications]);
-
-  // Uppdatera klockan direkt + visa toast när en OS-push anländer med appen i förgrunden
-  useEffect(() => {
-    if (!user || !("serviceWorker" in navigator)) return;
-    const onMessage = (event: MessageEvent) => {
-      const data = event.data as {
-        type?: string;
-        payload?: { title?: string; body?: string };
-      } | null;
-      if (!data || data.type !== "PUSH_RECEIVED") return;
-      const title = data.payload?.title;
-      if (title) toast(title, { description: data.payload?.body });
-      fetchNotifications();
-    };
-    navigator.serviceWorker.addEventListener("message", onMessage);
-    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
-  }, [user, fetchNotifications]);
-
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
-
-  const markAllRead = async () => {
-    if (!user || unreadCount === 0) return;
-    await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("user_id", user.id)
-      .eq("is_read", false);
-    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-  };
-
-  const deleteNotification = async (id: string) => {
-    await supabase.from("notifications").delete().eq("id", id);
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-  };
-
-  const isActive = (to: string) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
-
-  const moreRoutes = [
-    { to: "/avvikelser", label: "Avvikelser", Icon: TriangleAlert },
-    { to: "/kundrunda", label: "Kundrunda", Icon: UserRound },
-    { to: "/mallar", label: "Mallar", Icon: FileText },
-    ...(isManager ? [{ to: "/rapporter", label: "Rapporter", Icon: FlaskConical }] : []),
-  ];
-  const isMoreActive = moreRoutes.some((r) => isActive(r.to));
 
   const handleLogout = async () => {
     await logout();
@@ -476,28 +333,26 @@ export function AppShell() {
         className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-border/60 bg-coop-gray-100/85 backdrop-blur-sm pb-safe md:hidden"
         data-safe-bottom
       >
-        {nav
-          .filter((item) => !item.mobileHidden)
-          .map(({ to, label, Icon }) => (
-            <Link
-              key={to}
-              to={to}
+        {nav.filter((item) => !item.mobileHidden).map(({ to, label, Icon }) => (
+          <Link
+            key={to}
+            to={to}
+            className={cn(
+              "flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors touch-target",
+              isActive(to) ? "text-primary" : "text-coop-gray-900",
+            )}
+          >
+            <div
               className={cn(
-                "flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors touch-target",
-                isActive(to) ? "text-primary" : "text-coop-gray-900",
+                "flex h-6 w-10 items-center justify-center rounded-full transition-all",
+                isActive(to) ? "bg-primary/10" : "bg-transparent",
               )}
             >
-              <div
-                className={cn(
-                  "flex h-6 w-10 items-center justify-center rounded-full transition-all",
-                  isActive(to) ? "bg-primary/10" : "bg-transparent",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-              </div>
-              <span className="leading-none">{label}</span>
-            </Link>
-          ))}
+              <Icon className="h-4 w-4" />
+            </div>
+            <span className="leading-none">{label}</span>
+          </Link>
+        ))}
         <button
           onClick={() => setMoreOpen(true)}
           className={cn(
@@ -595,81 +450,6 @@ export function AppShell() {
           <div className="ml-auto shrink-0 flex items-center gap-1.5 md:gap-2">
             <GlobalStoreSelector />
 
-            {/* Notifications Popover */}
-            <Popover open={notifOpen} onOpenChange={setNotifOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="relative rounded-full border-border/80 h-9 w-9"
-                  aria-label="Notiser"
-                >
-                  <Bell className="h-4 w-4" />
-                  {unreadCount > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-                      {unreadCount > 9 ? "9+" : unreadCount}
-                    </span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-80 p-0">
-                <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
-                  <p className="text-sm font-semibold">Notiser</p>
-                  {unreadCount > 0 && (
-                    <button onClick={markAllRead} className="text-xs text-primary hover:underline">
-                      Markera alla som lästa
-                    </button>
-                  )}
-                </div>
-                <div className="max-h-72 overflow-y-auto">
-                  {notifications.length === 0 ? (
-                    <p className="px-4 py-8 text-center text-sm text-coop-gray-900">Inga notiser</p>
-                  ) : (
-                    notifications.map((n) => (
-                      <div
-                        key={n.id}
-                        className={cn(
-                          "group border-b border-border/40 px-4 py-3 last:border-0",
-                          !n.is_read && "bg-primary-soft/30",
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p
-                              className={cn(
-                                "text-sm font-medium leading-snug",
-                                !n.is_read && "text-primary",
-                              )}
-                            >
-                              {n.title}
-                            </p>
-                            {n.body && (
-                              <p className="mt-0.5 text-xs text-coop-gray-900 leading-relaxed">
-                                {n.body}
-                              </p>
-                            )}
-                            <p className="mt-1 text-xs text-coop-gray-900/70">
-                              {new Date(n.created_at).toLocaleString("sv-SE", {
-                                dateStyle: "short",
-                                timeStyle: "short",
-                              })}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => deleteNotification(n.id)}
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-coop-gray-900/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 active:opacity-100"
-                            aria-label="Ta bort notis"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
-
             {/* User Menu Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -720,14 +500,6 @@ export function AppShell() {
                     <Link to="/personal" className="cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
                       Administration
-                    </Link>
-                  </DropdownMenuItem>
-                )}
-                {isAdmin && (
-                  <DropdownMenuItem asChild>
-                    <Link to="/testpanel" className="cursor-pointer">
-                      <FlaskConical className="mr-2 h-4 w-4" />
-                      Testpanel
                     </Link>
                   </DropdownMenuItem>
                 )}

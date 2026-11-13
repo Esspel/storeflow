@@ -7,26 +7,21 @@ type Shortcut = {
   key: string;
   label: string;
   to: string;
-  /** Minimum role required: "all" = everyone, "manager" = chef+admin, "hk" = hk/admin */
-  access?: "all" | "manager" | "hk";
+  /** Minimum role required: "all" = everyone, "manager" = chef+admin */
+  access?: "all" | "manager";
 };
 
 // Order matches sidebar exactly:
-// Drift: Dashboard, Uppgifter, Schema, Avvikelser, Kundönskemål
-// then Möten, Kundrunda (accessible to all store users)
-// Operations: Rapporter
-// Admin: Personal, Inställningar
-// Special: Belastning (manager), Pulstavla
+// Drift: Dashboard, Uppgifter, Schema, Kundönskemål
+// then Kundrunda
 const ALL_SHORTCUTS: Shortcut[] = [
   { key: "1", label: "Dashboard", to: "/", access: "all" },
   { key: "2", label: "Uppgifter", to: "/uppgifter", access: "all" },
   { key: "3", label: "Schema", to: "/schema", access: "all" },
-  { key: "4", label: "Avvikelser", to: "/avvikelser", access: "all" },
-  { key: "5", label: "Kundönskemål", to: "/kundonskemal", access: "all" },
-  { key: "6", label: "Kundrunda", to: "/kundrunda", access: "all" },
-  { key: "7", label: "Rapporter", to: "/rapporter", access: "all" },
-  { key: "8", label: "Personal", to: "/personal", access: "manager" },
-  { key: "9", label: "Inställningar", to: "/installningar", access: "all" },
+  { key: "4", label: "Kundönskemål", to: "/kundonskemal", access: "all" },
+  { key: "5", label: "Kundrunda", to: "/kundrunda", access: "all" },
+  { key: "6", label: "Personal", to: "/personal", access: "manager" },
+  { key: "7", label: "Inställningar", to: "/installningar", access: "all" },
   { key: "b", label: "Medarbetarbelastning", to: "/belastning", access: "manager" },
 ];
 
@@ -36,11 +31,9 @@ export function KeyboardShortcuts() {
   const [showHelp, setShowHelp] = useState(false);
 
   const isManager = user?.role === "manager" || user?.role === "admin";
-  const isHK = user?.hierarchy_level === "hk" || user?.role === "admin";
 
   const visibleShortcuts = ALL_SHORTCUTS.filter((s) => {
     if (s.access === "manager") return isManager;
-    if (s.access === "hk") return isHK;
     return true;
   });
 

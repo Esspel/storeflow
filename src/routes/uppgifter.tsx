@@ -89,8 +89,6 @@ import {
   type TaskAssignee,
   type UserGroup,
   logAudit,
-  createNotification,
-  notifyUsers,
   uploadAttachment,
   getPublicUrl,
   deleteStorageFiles,
@@ -1647,19 +1645,6 @@ function TasksPage() {
         if (newStatus === "done") {
           await supabase.from("task_steps").update({ is_done: true }).eq("task_id", task.id);
           logAudit(user?.id ?? null, "task.complete", "tasks", task.id, { title: task.title });
-          const notifyIds = new Set<string>();
-          if (task.created_by && task.created_by !== user?.id) notifyIds.add(task.created_by);
-          task.assignees?.forEach((a) => {
-            if (a.user_id && a.user_id !== user?.id) notifyIds.add(a.user_id);
-          });
-          const { errors } = await notifyUsers(
-            [...notifyIds],
-            "task_done",
-            `Uppgift klar: ${task.title}`,
-            `Slutförd av ${user?.display_name}`,
-            "/uppgifter",
-          );
-          if (errors.length) toast.error(`Notis/push misslyckades: ${errors.join("; ")}`);
 
           const { data: krResponse } = await supabase
             .from("kundrunda_responses")
@@ -2450,30 +2435,6 @@ function TasksPage() {
         title: firstTask.title,
         slot_count: createdTasks.length,
       });
-
-      const notifyIds = new Set<string>();
-      newTask.assigneeUserIds.forEach((uid) => {
-        if (uid !== user?.id) notifyIds.add(uid);
-      });
-      if (newTask.assigneeGroupIds.length > 0) {
-        const { data: members } = await supabase
-          .from("user_group_members")
-          .select("user_id")
-          .in("group_id", newTask.assigneeGroupIds);
-        members?.forEach((m: { user_id: string }) => {
-          if (m.user_id !== user?.id) notifyIds.add(m.user_id);
-        });
-      }
-      if (notifyIds.size > 0) {
-        const { errors } = await notifyUsers(
-          [...notifyIds],
-          "task_assigned",
-          `Ny uppgift tilldelad: ${firstTask.title}`,
-          `Tilldelad av ${user?.display_name}`,
-          "/uppgifter",
-        );
-        if (errors.length) toast.error(`Notis/push misslyckades: ${errors.join("; ")}`);
-      }
 
       if (firstTask.recurrence_rule) {
         spawnRef.current = false;

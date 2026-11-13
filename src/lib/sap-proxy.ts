@@ -271,11 +271,8 @@ export async function retryFetchViaProxy(
  * Fetch product data from SAP via the Chrome Extension proxy.
  * Uses 2 second interval to avoid rate limits.
  */
-export async function fetchSapProductData(
-  storeId: string,
-  sapArticleId: string,
-): Promise<SapProductData | null> {
-  const url = `${SAP_BASE_URL}/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(storeId)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`;
+export async function fetchSapProductData(sapArticleId: string): Promise<SapProductData | null> {
+  const url = `${SAP_BASE_URL}/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/ProductID('${encodeURIComponent(sapArticleId)}')?$format=json`;
   console.log("[SAP Proxy] URL:", url);
 
   try {

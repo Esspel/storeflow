@@ -83,8 +83,6 @@ export const Route = createFileRoute("/personal")({
 // Hierarchy power order — higher index = higher privilege
 const HIERARCHY_ORDER: Record<string, number> = {
   admin: 5,
-  hk: 4,
-  forening: 3,
   distrikt: 2,
   chef: 1,
   anvandare: 0,
@@ -107,16 +105,14 @@ function hierarchyBadge(level: string | null | undefined) {
   const key = level ?? "anvandare";
   const label = HIERARCHY_LABELS[key] ?? key;
   if (key === "admin") return <Badge className="bg-destructive/10 text-destructive">{label}</Badge>;
-  if (key === "hk" || key === "forening" || key === "distrikt")
-    return <Badge className="bg-info/15 text-info">{label}</Badge>;
+  if (key === "distrikt") return <Badge className="bg-info/15 text-info">{label}</Badge>;
   if (key === "chef") return <Badge className="bg-warning/15 text-warning">{label}</Badge>;
   return <Badge variant="secondary">{label}</Badge>;
 }
 
 function hierarchyLevelToRole(level: string): "admin" | "manager" | "employee" {
   if (level === "admin") return "admin";
-  if (level === "hk" || level === "forening" || level === "distrikt" || level === "chef")
-    return "manager";
+  if (level === "distrikt" || level === "chef") return "manager";
   return "employee";
 }
 
@@ -262,10 +258,6 @@ function AccountsPage() {
   const [storeSortDir, setStoreSortDir] = useState<SortDir>("asc");
   const [groupSearch, setGroupSearch] = useState("");
 
-  // Hierarchy data
-  const [foreningar, setForeningar] = useState<Forening[]>([]);
-  const [distrikt, setDistrikt] = useState<Distrikt[]>([]);
-
   // User dialogs
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [editUser, setEditUser] = useState<
@@ -393,14 +385,12 @@ function AccountsPage() {
 
   async function load() {
     const managerStoreIds = currentUserStores.map((s) => s.id);
-    const [usersRes, storesRes, userStoresRes, foreningarRes, distriktRes] = await Promise.all([
+    const [usersRes, storesRes, userStoresRes] = await Promise.all([
       supabase.from("app_users").select("*").order("created_at"),
       isAdmin || managerStoreIds.length === 0
         ? supabase.from("stores").select("*").order("name")
         : supabase.from("stores").select("*").in("id", managerStoreIds).order("name"),
       supabase.from("user_stores").select("user_id, store_id"),
-      supabase.from("foreningar").select("*").order("name"),
-      supabase.from("distrikt").select("*").order("name"),
     ]);
     const rawUsers = (usersRes.data ?? []) as AppUser[];
     const storeAssignments = (userStoresRes.data ?? []) as { user_id: string; store_id: string }[];
@@ -417,8 +407,6 @@ function AccountsPage() {
     }
     setUsers(usersWithStores);
     setStores((storesRes.data ?? []) as Store[]);
-    setForeningar((foreningarRes.data ?? []) as Forening[]);
-    setDistrikt((distriktRes.data ?? []) as Distrikt[]);
     setLoading(false);
     loadGroups();
     loadStoreIps();
@@ -2183,8 +2171,6 @@ function AccountsPage() {
                     ...p,
                     hierarchy_level: v,
                     role: hierarchyLevelToRole(v),
-                    forening_id: "",
-                    distrikt_id: "",
                   }))
                 }
               >
@@ -2207,79 +2193,6 @@ function AccountsPage() {
                 </SelectContent>
               </Select>
             </div>
-            {/* Förening — shown for forening/distrikt/chef hierarchy, hidden for hk/admin */}
-            {newUser.hierarchy_level !== "hk" && newUser.hierarchy_level !== "admin" && (
-              <div className="space-y-1.5">
-                <Label>Förening {newUser.hierarchy_level === "forening" ? "*" : ""}</Label>
-                <Select
-                  value={newUser.forening_id || "__none__"}
-                  onValueChange={(v) =>
-                    setNewUser((p) => ({
-                      ...p,
-                      forening_id: v === "__none__" ? "" : v,
-                      distrikt_id: "",
-                      storeIds: [],
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Välj förening..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Ingen koppling</SelectItem>
-                    {foreningar.map((f) => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.name}
-                        {f.short_code ? ` (${f.short_code})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {/* Distrikt — shown for distrikt/chef hierarchy, hidden for forening/hk/admin */}
-            {newUser.hierarchy_level !== "hk" &&
-              newUser.hierarchy_level !== "admin" &&
-              newUser.hierarchy_level !== "forening" && (
-                <div className="space-y-1.5">
-                  <Label>Distrikt {newUser.hierarchy_level === "distrikt" ? "*" : ""}</Label>
-                  <Select
-                    value={newUser.distrikt_id || "__none__"}
-                    onValueChange={(v) => {
-                      const d = distrikt.find((x) => x.id === v);
-                      setNewUser((p) => ({
-                        ...p,
-                        distrikt_id: v === "__none__" ? "" : v,
-                        forening_id: d?.forening_id || p.forening_id,
-                        storeIds: [],
-                      }));
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Välj distrikt..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Inget distrikt</SelectItem>
-                      {distrikt
-                        .filter(
-                          (d) => !newUser.forening_id || d.forening_id === newUser.forening_id,
-                        )
-                        .map((d) => (
-                          <SelectItem key={d.id} value={d.id}>
-                            {d.name}
-                          </SelectItem>
-                        ))}
-                      {distrikt.filter(
-                        (d) => !newUser.forening_id || d.forening_id === newUser.forening_id,
-                      ).length === 0 && (
-                        <div className="px-3 py-2 text-xs text-coop-gray-900">
-                          Inga distrikt för vald förening.
-                        </div>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
             <div className="space-y-1.5">
               <Label>Anställningsgrupp</Label>
               <Input
@@ -2436,8 +2349,6 @@ function AccountsPage() {
                             ...u,
                             hierarchy_level: v as AppUser["hierarchy_level"],
                             role: hierarchyLevelToRole(v),
-                            forening_id: null,
-                            distrikt_id: null,
                           }
                         : null,
                     )
@@ -2460,87 +2371,7 @@ function AccountsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {/* Förening — shown for forening/distrikt/chef/anvandare hierarchy, hidden for hk/admin */}
-              {editUser.hierarchy_level !== "hk" && editUser.hierarchy_level !== "admin" && (
-                <div className="space-y-1.5">
-                  <Label>Förening {editUser.hierarchy_level === "forening" ? "*" : ""}</Label>
-                  <Select
-                    value={editUser.forening_id ?? "__none__"}
-                    onValueChange={(v) =>
-                      setEditUser((u) =>
-                        u
-                          ? {
-                              ...u,
-                              forening_id: v === "__none__" ? null : v,
-                              distrikt_id: null,
-                              assignedStoreIds: [],
-                            }
-                          : null,
-                      )
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Välj förening..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Ingen koppling</SelectItem>
-                      {foreningar.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>
-                          {f.name}
-                          {f.short_code ? ` (${f.short_code})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
               {/* Distrikt — shown for distrikt/chef/anvandare, hidden for forening/hk/admin */}
-              {editUser.hierarchy_level !== "hk" &&
-                editUser.hierarchy_level !== "admin" &&
-                editUser.hierarchy_level !== "forening" && (
-                  <div className="space-y-1.5">
-                    <Label>Distrikt {editUser.hierarchy_level === "distrikt" ? "*" : ""}</Label>
-                    <Select
-                      value={editUser.distrikt_id ?? "__none__"}
-                      onValueChange={(v) => {
-                        const d = distrikt.find((x) => x.id === v);
-                        setEditUser((u) =>
-                          u
-                            ? {
-                                ...u,
-                                distrikt_id: v === "__none__" ? null : v,
-                                forening_id: d?.forening_id ?? u.forening_id,
-                                assignedStoreIds: [],
-                              }
-                            : null,
-                        );
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Välj distrikt..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Ingen koppling</SelectItem>
-                        {distrikt
-                          .filter(
-                            (d) => !editUser.forening_id || d.forening_id === editUser.forening_id,
-                          )
-                          .map((d) => (
-                            <SelectItem key={d.id} value={d.id}>
-                              {d.name}
-                            </SelectItem>
-                          ))}
-                        {distrikt.filter(
-                          (d) => !editUser.forening_id || d.forening_id === editUser.forening_id,
-                        ).length === 0 && (
-                          <div className="px-3 py-2 text-xs text-coop-gray-900">
-                            Inga distrikt finns.
-                          </div>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
               <div className="space-y-1.5">
                 <Label>Anställningsgrupp</Label>
                 <Input

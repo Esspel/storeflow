@@ -100,24 +100,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const effectiveStore = activeStore;
 
   const loadUserStores = useCallback(async (userId: string, currentUser: AppUser) => {
-    const hierarchyLevel = currentUser.hierarchy_level;
-    const isAboveStore =
-      currentUser.role === "admin" ||
-      hierarchyLevel === "hk" ||
-      hierarchyLevel === "forening" ||
-      hierarchyLevel === "distrikt";
+    const isAboveStore = currentUser.role === "admin";
 
     if (isAboveStore) {
       let query = supabase
         .from("stores")
         .select("*, forening:foreningar(*), distrikt:distrikt(*)")
         .order("name");
-
-      if (hierarchyLevel === "forening" && currentUser.forening_id) {
-        query = query.eq("forening_id", currentUser.forening_id);
-      } else if (hierarchyLevel === "distrikt" && currentUser.distrikt_id) {
-        query = query.eq("distrikt_id", currentUser.distrikt_id);
-      }
 
       const { data, error } = await query;
       if (error) {

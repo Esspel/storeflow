@@ -10,8 +10,6 @@ const notFoundHtml = resolve("dist/404.html");
 const clientNotFoundHtml = resolve("dist/client/404.html");
 const distClientDir = resolve("dist/client");
 const distRootDir = resolve("dist");
-const clientRedirects = resolve("dist/client/_redirects");
-const rootRedirects = resolve("dist/_redirects");
 
 function safeCopy(src, dest) {
   try {
@@ -41,12 +39,7 @@ safeCopy(indexHtml, rootIndexHtml);
 safeCopy(indexHtml, notFoundHtml);
 safeCopy(indexHtml, clientNotFoundHtml);
 
-// 3. Write _redirects for SPA routing (Netlify, Cloudflare Pages)
-const redirectsContent = "/*    /index.html   200\n";
-safeWrite(clientRedirects, redirectsContent);
-safeWrite(rootRedirects, redirectsContent);
-
-// 4. Copy all assets, sw.js, manifest.json, icons from dist/client to dist/ for wrangler
+// 3. Copy all assets, sw.js, manifest.json, icons from dist/client to dist/ for wrangler
 try {
   if (existsSync(distClientDir)) {
     cpSync(distClientDir, distRootDir, { recursive: true, force: true });

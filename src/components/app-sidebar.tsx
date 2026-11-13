@@ -2,7 +2,6 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   ListChecks,
-  TriangleAlert,
   MessageSquare,
   ClipboardCheck,
   Monitor,
@@ -11,7 +10,6 @@ import {
   Settings,
   Sparkles,
   CalendarDays,
-  ChartBar,
   ShoppingCart,
   FileText,
 } from "lucide-react";
@@ -39,7 +37,6 @@ interface MenuItem {
 const mainRoutes: MenuItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Schema", url: "/schema", icon: CalendarDays },
-  { title: "Avvikelser", url: "/avvikelser", icon: TriangleAlert },
   { title: "Kundönskemål", url: "/kundonskemal", icon: ShoppingCart },
   { title: "Kommunikation", url: "/kommunikation", icon: MessageSquare },
 ];
@@ -48,7 +45,6 @@ const operationsRoutes: MenuItem[] = [
   { title: "Butiker", url: "/butiker", icon: Store },
   { title: "Revisioner", url: "/revisioner", icon: ClipboardCheck },
   { title: "Styrtavlor", url: "/styrtavlor", icon: Monitor },
-  { title: "Rapporter", url: "/rapporter", icon: ChartBar },
 ];
 
 const adminRoutes: MenuItem[] = [
@@ -62,7 +58,6 @@ export function AppSidebar() {
 
   const isActive = (path: string) => (path === "/" ? pathname === "/" : pathname.startsWith(path));
 
-  const hierarchyLevel = user?.hierarchy_level;
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "manager" || isAdmin;
 
@@ -89,18 +84,7 @@ export function AppSidebar() {
       .slice(0, 2)
       .toUpperCase() || "?";
 
-  const roleLabel =
-    hierarchyLevel === "hk"
-      ? "Huvudkontor"
-      : hierarchyLevel === "forening"
-        ? "Förening"
-        : hierarchyLevel === "distrikt"
-          ? "Distrikt"
-          : hierarchyLevel === "chef"
-            ? "Butikschef"
-            : isAdmin
-              ? "Admin"
-              : "Medarbetare";
+  const roleLabel = isAdmin ? "Admin" : isManager ? "Chef" : "Medarbetare";
 
   return (
     <Sidebar collapsible="icon">

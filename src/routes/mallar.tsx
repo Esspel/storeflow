@@ -63,7 +63,6 @@ import {
   type ChecklistTemplateItem,
   type ChecklistTemplateQuestion,
   type Store,
-  type Forening,
   type TemplateVersion,
   type TemplatePackage,
   type TemplatePackageItem,
@@ -238,7 +237,7 @@ type TemplateWithMeta = ChecklistTemplate & {
   questions: ChecklistTemplateQuestion[];
 };
 
-type HiddenEntry = { forening_id: string; template_id: string };
+type HiddenEntry = { template_id: string };
 
 type FormState = {
   title: string;
@@ -268,7 +267,6 @@ type FormState = {
   storeIds: string[];
   isGlobal: boolean;
   isLocked: boolean;
-  foreningId: string;
   changeSummary: string;
   event_trigger_description: string;
   event_trigger_user_id: string;
@@ -322,7 +320,6 @@ const emptyForm = (): FormState => ({
   storeIds: [],
   isGlobal: false,
   isLocked: false,
-  foreningId: "",
   changeSummary: "",
   event_trigger_description: "",
   event_trigger_user_id: "",
@@ -469,22 +466,15 @@ function MallarPage() {
   const { user, activeStore, userStores } = useAuth();
 
   const isAdmin = user?.role === "admin";
-  const isHK = user?.hierarchy_level === "hk" || isAdmin;
-  const isForening = user?.hierarchy_level === "forening";
   const isManager = user?.role === "manager" || isAdmin;
-  // Förening users can manage forening-scoped templates; HK/admin manage HK-scoped
-  const canCreateForening = isForening || isAdmin;
-  const canCreateHK = isHK; // admin counts as HK too
 
   const [templates, setTemplates] = useState<TemplateWithMeta[]>([]);
   const [allStores, setAllStores] = useState<Store[]>([]);
-  const [allForeningar, setAllForeningar] = useState<Forening[]>([]);
-  const [hiddenEntries, setHiddenEntries] = useState<HiddenEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const [showCreate, setShowCreate] = useState(false);
-  const [createScope, setCreateScope] = useState<"store" | "hk" | "forening">("store");
+  const [createScope, setCreateScope] = useState<"store">("store");
   const [deleteTarget, setDeleteTarget] = useState<TemplateWithMeta | null>(null);
   const [editTarget, setEditTarget] = useState<TemplateWithMeta | null>(null);
   const [saving, setSaving] = useState(false);
@@ -554,11 +544,6 @@ function MallarPage() {
   const [activatePackageTarget, setActivatePackageTarget] = useState<TemplatePackage | null>(null);
 
   // Merge: when a parent HK/forening template has been updated after a local variant was created
-  const [mergeTarget, setMergeTarget] = useState<{
-    variant: TemplateWithMeta;
-    parent: TemplateWithMeta;
-  } | null>(null);
-  const [merging, setMerging] = useState(false);
 
   // 24-month review system
   const [reviewTarget, setReviewTarget] = useState<TemplateWithMeta | null>(null);
@@ -587,8 +572,8 @@ function MallarPage() {
   const [deliveryMappingSaving, setDeliveryMappingSaving] = useState(false);
   const [deliveryFlowNames, setDeliveryFlowNames] = useState<string[]>([]);
 
-  // View filter: "all" | "hk" | "forening" | "store"
-  const [viewFilter, setViewFilter] = useState<"all" | "hk" | "forening" | "store">("all");
+  // View filter: "all" | "store"
+  const [viewFilter, setViewFilter] = useState<"all" | "store">("all");
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterPriority, setFilterPriority] = useState("");
@@ -668,24 +653,13 @@ function MallarPage() {
 
   async function load() {
     setLoading(true);
-    const [
-      templatesRes,
-      storesRes,
-      tsRes,
-      foreningarRes,
-      hiddenRes,
-      usersRes,
-      groupsRes,
-      packagesRes,
-    ] = await Promise.all([
+    const [templatesRes, storesRes, tsRes, usersRes, groupsRes, packagesRes] = await Promise.all([
       supabase
         .from("checklist_templates")
         .select("*, items:checklist_template_items(*), questions:checklist_template_questions(*)")
         .order("created_at", { ascending: false }),
       supabase.from("stores").select("*").order("name"),
       supabase.from("template_stores").select("template_id, store_id"),
-      supabase.from("foreningar").select("*").order("name"),
-      supabase.from("forening_hidden_templates").select("forening_id, template_id"),
       supabase.from("app_users").select("id, display_name, role, store_id").order("display_name"),
       supabase.from("user_groups").select("id, name, store_id").order("name"),
       supabase.from("template_packages").select("*, items:template_package_items(*)").order("name"),
@@ -699,45 +673,14 @@ function MallarPage() {
       questions: (t as typeof t & { questions?: ChecklistTemplateQuestion[] }).questions ?? [],
     }));
 
-    const hidden = (hiddenRes.data ?? []) as HiddenEntry[];
-
-    // Determine user's forening_id for filtering
-    const userForeningId = user?.forening_id ?? null;
     // Stores the user belongs to
     const userStoreIds = userStores.map((s) => s.id);
 
     const filtered = withMeta.filter((t) => {
-      const scope = t.hierarchy_scope;
+      const scope = t.hierarchy_scope ?? "store";
+      // Only store-scoped templates
+      if (scope !== "store" || t.is_global) return false;
 
-      // HK-scope templates (is_global=true or hierarchy_scope='hk')
-      if (scope === "hk" || t.is_global) {
-        // Check if hidden by user's förening
-        if (
-          userForeningId &&
-          hidden.some((h) => h.template_id === t.id && h.forening_id === userForeningId)
-        ) {
-          // Still show to forening users so they can manage the hide list
-          return isForening || isAdmin;
-        }
-        return true;
-      }
-
-      // Förening-scope templates
-      if (scope === "forening") {
-        if (!t.forening_id) return false;
-        if (isAdmin) return true;
-        if (isForening && user?.forening_id === t.forening_id) return true;
-        // Stores in the same förening see it
-        if (userForeningId && userForeningId === t.forening_id) return true;
-        // Direct store match via store's forening_id
-        const userStoreForeningIds = allStores
-          .filter((s) => userStoreIds.includes(s.id))
-          .map((s) => s.forening_id);
-        if (userStoreForeningIds.includes(t.forening_id)) return true;
-        return false;
-      }
-
-      // Store-scope templates
       // Admins see unassigned templates
       if (t.storeIds.length === 0) {
         if (isAdmin) return true;
@@ -752,8 +695,6 @@ function MallarPage() {
 
     setTemplates(filtered);
     setAllStores((storesRes.data ?? []) as Store[]);
-    setAllForeningar((foreningarRes.data ?? []) as Forening[]);
-    setHiddenEntries(hidden);
     setAllUsers((usersRes.data ?? []) as AppUser[]);
     setAllGroups((groupsRes.data ?? []) as UserGroup[]);
     setPackages((packagesRes.data ?? []) as TemplatePackage[]);
@@ -975,8 +916,8 @@ function MallarPage() {
         due_date_offset: source.due_date_offset ?? null,
         due_date_time: source.due_date_time ?? null,
         created_by: user?.id ?? null,
-        hierarchy_scope: source.hierarchy_scope ?? "store",
-        is_global: source.is_global,
+        hierarchy_scope: "store",
+        is_global: false,
         parent_template_id: isVariant ? source.id : null,
         inherit_mode: isVariant ? "variant" : "copy",
         version: 1,
@@ -1127,15 +1068,9 @@ function MallarPage() {
     await load();
   }
 
-  function openCreate(scope: "store" | "hk" | "forening") {
-    setCreateScope(scope);
+  function openCreate() {
+    setCreateScope("store");
     const f = emptyForm();
-    if (scope === "hk") {
-      f.isGlobal = true;
-    }
-    if (scope === "forening") {
-      f.foreningId = user?.forening_id ?? "";
-    }
     setForm(f);
     setError("");
     setShowCreate(true);
@@ -1147,10 +1082,7 @@ function MallarPage() {
       setError("Titel är obligatorisk.");
       return;
     }
-    if (createScope === "forening" && !form.foreningId) {
-      setError("Välj en förening.");
-      return;
-    }
+
     if (form.recurrence_rule) {
       const recurrenceError = validateRecurrenceRange(
         form.recurrence_rule,
@@ -1188,10 +1120,10 @@ function MallarPage() {
           form.due_date_offset !== "" ? parseInt(form.due_date_offset, 10) || null : null,
         due_date_time: form.due_date_time || null,
         sap_article_id: form.sap_article_id?.trim() || null,
-        is_global: createScope === "hk",
+        is_global: false,
         locked_by_admin: form.isLocked,
-        hierarchy_scope: createScope,
-        forening_id: createScope === "forening" ? form.foreningId : null,
+        hierarchy_scope: "store",
+        forening_id: null,
         template_type: form.template_type,
         template_mode: form.template_mode,
         is_critical: form.is_critical,
@@ -1237,14 +1169,12 @@ function MallarPage() {
       );
     }
 
-    if (createScope === "store") {
-      const storeList =
-        form.storeIds.length > 0 ? form.storeIds : activeStore ? [activeStore.id] : [];
-      if (storeList.length > 0) {
-        await supabase
-          .from("template_stores")
-          .insert(storeList.map((sid) => ({ template_id: tmpl.id, store_id: sid })));
-      }
+    const storeList =
+      form.storeIds.length > 0 ? form.storeIds : activeStore ? [activeStore.id] : [];
+    if (storeList.length > 0) {
+      await supabase
+        .from("template_stores")
+        .insert(storeList.map((sid) => ({ template_id: tmpl.id, store_id: sid })));
     }
 
     const validQuestions = form.questions.filter((q) => q.label.trim());
@@ -1998,7 +1928,6 @@ function MallarPage() {
       storeIds: t.storeIds,
       isGlobal: t.is_global ?? false,
       isLocked: t.locked_by_admin ?? false,
-      foreningId: t.forening_id ?? "",
       changeSummary: "",
       template_type: ((t as ChecklistTemplate & { template_type?: string }).template_type ??
         "regular") as "regular" | "base",
@@ -2069,7 +1998,6 @@ function MallarPage() {
         return;
       }
     }
-    const scope = editTarget.hierarchy_scope ?? "store";
     setSaving(true);
 
     await supabase
@@ -2096,7 +2024,7 @@ function MallarPage() {
         due_date_time: editForm.due_date_time || null,
         sap_article_id: editForm.sap_article_id?.trim() || null,
         time_slots: editForm.time_slots.length > 0 ? editForm.time_slots : null,
-        is_global: editForm.isGlobal,
+        is_global: false,
         locked_by_admin: editForm.isLocked,
         template_type: editForm.template_type,
         template_mode: editForm.template_mode,
@@ -2158,7 +2086,7 @@ function MallarPage() {
     }
 
     await supabase.from("template_stores").delete().eq("template_id", editTarget.id);
-    if (!editForm.isGlobal && scope === "store") {
+    {
       const storeList =
         editForm.storeIds.length > 0
           ? editForm.storeIds
@@ -2218,185 +2146,14 @@ function MallarPage() {
     setEditTarget(null);
   }
 
-  async function toggleHideHKTemplate(t: TemplateWithMeta) {
-    if (!user?.forening_id) return;
-    const alreadyHidden = hiddenEntries.some(
-      (h) => h.template_id === t.id && h.forening_id === user.forening_id,
-    );
-    if (alreadyHidden) {
-      await supabase
-        .from("forening_hidden_templates")
-        .delete()
-        .eq("template_id", t.id)
-        .eq("forening_id", user.forening_id);
-    } else {
-      await supabase.from("forening_hidden_templates").insert({
-        template_id: t.id,
-        forening_id: user.forening_id,
-        hidden_by: user.id,
-      });
-    }
-    await load();
-  }
-
   function canEdit(t: TemplateWithMeta): boolean {
     if (isAdmin) return !t.is_system_locked;
-    const scope = t.hierarchy_scope ?? "store";
-    // Forening admins can edit their own forening templates
-    if (scope === "forening") return isForening && t.created_by === user?.id;
-    // HK templates can never be edited by non-admins — they get a local variant via the pencil button
-    if (scope === "hk") return false;
-    // Store scope: managers can edit non-locked templates (includes local variants of HK/forening)
     return isManager && !t.locked_by_admin;
   }
 
   function canDelete(t: TemplateWithMeta): boolean {
     if (isAdmin) return !t.is_system_locked;
-    const scope = t.hierarchy_scope ?? "store";
-    // Managers can only delete store-scope templates they have edit rights on
-    if (scope === "hk" || scope === "forening") return false;
     return isManager && !t.locked_by_admin;
-  }
-
-  // When a manager tries to "edit" a HK/Forening template, we auto-create a local variant and open that
-  async function createLocalVariantAndEdit(source: TemplateWithMeta) {
-    const storeId = activeStore?.id ?? userStores[0]?.id ?? null;
-    const { data: tmpl, error: insertErr } = await supabase
-      .from("checklist_templates")
-      .insert({
-        title: source.title,
-        description: source.description ?? "",
-        category: source.category ?? "",
-        priority: source.priority ?? "Medel",
-        status: "active",
-        recurrence_rule: source.recurrence_rule ?? null,
-        recurrence_days: source.recurrence_days ?? null,
-        recurrence_interval: source.recurrence_interval ?? null,
-        due_date_offset: source.due_date_offset ?? null,
-        due_date_time: source.due_date_time ?? null,
-        time_slots: (source as ChecklistTemplate & { time_slots?: string[] }).time_slots ?? null,
-        created_by: user?.id ?? null,
-        hierarchy_scope: "store",
-        is_global: false,
-        parent_template_id: source.id,
-        inherit_mode: "variant",
-        version: 1,
-      })
-      .select("id")
-      .maybeSingle();
-    if (insertErr || !tmpl?.id) {
-      setError(insertErr?.message ?? "Kunde inte skapa lokal variant. Kontrollera behörigheter.");
-      return;
-    }
-
-    const validItems = (source.items ?? []).filter((it) => it.label.trim());
-    if (validItems.length > 0) {
-      await supabase.from("checklist_template_items").insert(
-        validItems.map((it, idx) => ({
-          template_id: tmpl.id,
-          label: it.label,
-          requires_photo: it.requires_photo,
-          sort_order: idx,
-        })),
-      );
-    }
-    const validQuestions = (source.questions ?? []).filter((q) => q.label.trim());
-    if (validQuestions.length > 0) {
-      await supabase.from("checklist_template_questions").insert(
-        validQuestions.map((q, idx) => ({
-          template_id: tmpl.id,
-          label: q.label,
-          question_type: q.question_type ?? "text",
-          is_required: q.is_required,
-          sort_order: idx,
-        })),
-      );
-    }
-    if (storeId) {
-      await supabase.from("template_stores").insert({ template_id: tmpl.id, store_id: storeId });
-    }
-
-    logAudit(user?.id ?? null, "template.variant.auto", "checklist_templates", tmpl.id, {
-      source_id: source.id,
-    });
-
-    // Fetch the newly created variant with all its relations and open it for editing
-    const { data: fresh } = await supabase
-      .from("checklist_templates")
-      .select("*, items:checklist_template_items(*), questions:checklist_template_questions(*)")
-      .eq("id", tmpl.id)
-      .maybeSingle();
-    await load();
-    if (fresh) {
-      const storeAssignments: { template_id: string; store_id: string }[] = storeId
-        ? [{ template_id: tmpl.id, store_id: storeId }]
-        : [];
-      const withMeta = {
-        ...(fresh as ChecklistTemplate),
-        storeIds: storeAssignments.map((a) => a.store_id),
-        questions:
-          (fresh as ChecklistTemplate & { questions?: ChecklistTemplateQuestion[] }).questions ??
-          [],
-        items: (fresh as ChecklistTemplate & { items?: ChecklistTemplateItem[] }).items ?? [],
-      } as TemplateWithMeta;
-      openEdit(withMeta);
-    }
-  }
-
-  // Merge changes from a parent HK/forening template into a local variant
-  async function mergeFromParent(variant: TemplateWithMeta, parent: TemplateWithMeta) {
-    setMerging(true);
-    // Update variant metadata to match parent (title, description, category, priority, recurrence)
-    await supabase
-      .from("checklist_templates")
-      .update({
-        title: parent.title,
-        description: parent.description ?? "",
-        category: parent.category ?? "",
-        priority: parent.priority ?? "Medel",
-        recurrence_rule: parent.recurrence_rule ?? null,
-        recurrence_days: parent.recurrence_days ?? null,
-        recurrence_interval: parent.recurrence_interval ?? null,
-        due_date_offset: parent.due_date_offset ?? null,
-        due_date_time: parent.due_date_time ?? null,
-      })
-      .eq("id", variant.id);
-
-    // Replace checklist items with parent's items
-    await supabase.from("checklist_template_items").delete().eq("template_id", variant.id);
-    const validItems = (parent.items ?? []).filter((it) => it.label.trim());
-    if (validItems.length > 0) {
-      await supabase.from("checklist_template_items").insert(
-        validItems.map((it, idx) => ({
-          template_id: variant.id,
-          label: it.label,
-          requires_photo: it.requires_photo,
-          sort_order: idx,
-        })),
-      );
-    }
-
-    // Replace questions with parent's questions
-    await supabase.from("checklist_template_questions").delete().eq("template_id", variant.id);
-    const validQuestions = (parent.questions ?? []).filter((q) => q.label.trim());
-    if (validQuestions.length > 0) {
-      await supabase.from("checklist_template_questions").insert(
-        validQuestions.map((q, idx) => ({
-          template_id: variant.id,
-          label: q.label,
-          question_type: q.question_type ?? "text",
-          is_required: q.is_required,
-          sort_order: idx,
-        })),
-      );
-    }
-
-    logAudit(user?.id ?? null, "template.variant.merge", "checklist_templates", variant.id, {
-      parent_id: parent.id,
-    });
-    setMerging(false);
-    setMergeTarget(null);
-    await load();
   }
 
   const displayStores = isAdmin ? allStores : userStores;
@@ -2657,44 +2414,7 @@ function MallarPage() {
       return;
     }
 
-    const importScope = isAdmin
-      ? String(result.options.scope ?? "store")
-      : isForening
-        ? String(result.options.scope ?? "forening")
-        : "store";
-
-    // Resolve forening_id for forening-scope imports: prefer dialog selection,
-    // then user's own forening_id, then look up from user_foreningar.
-    let resolvedForeningId: string | null = null;
-    if (importScope === "forening") {
-      const selectedForeningId =
-        result.options.foreningId && result.options.foreningId !== "__none"
-          ? String(result.options.foreningId)
-          : null;
-      if (selectedForeningId) {
-        resolvedForeningId = selectedForeningId;
-      } else {
-        resolvedForeningId = user?.forening_id ?? null;
-      }
-      if (!resolvedForeningId) {
-        const { data: uf } = await supabase
-          .from("user_foreningar")
-          .select("forening_id")
-          .eq("user_id", user?.id ?? "")
-          .eq("is_primary", true)
-          .maybeSingle();
-        resolvedForeningId = uf?.forening_id ?? null;
-        if (!resolvedForeningId) {
-          const { data: anyUf } = await supabase
-            .from("user_foreningar")
-            .select("forening_id")
-            .eq("user_id", user?.id ?? "")
-            .limit(1)
-            .maybeSingle();
-          resolvedForeningId = anyUf?.forening_id ?? null;
-        }
-      }
-    }
+    const importScope = "store";
 
     const rows = lines.slice(1).map((l) => parseCSVLine(l, ";"));
     // Track delivery templates for post-import supplier mapping
@@ -2823,7 +2543,7 @@ function MallarPage() {
           inherit_mode: inferredInheritMode,
           created_by: user?.id ?? null,
           hierarchy_scope: importScope,
-          is_global: importScope === "hk",
+          is_global: false,
           time_slots: timeSlotsRaw?.trim()
             ? timeSlotsRaw
                 .split("|")
@@ -2831,7 +2551,7 @@ function MallarPage() {
                 .filter(Boolean)
             : null,
           sap_article_id: sapArticleIdRaw?.trim() || null,
-          forening_id: importScope === "forening" ? resolvedForeningId : null,
+          forening_id: null,
           event_trigger_description: eventTriggerRaw?.trim() || null,
           event_trigger_user_id: eventTriggerUserIdRaw?.trim() || null,
           is_delivery_task: isDeliveryTask,
@@ -3101,54 +2821,7 @@ function MallarPage() {
     });
   }, [templates, search, filterCategory, filterPriority]);
 
-  // Templates grouped for display
-  // Local variants (inherit_mode='variant', parent_template_id set) are nested under their parent — exclude from store group
-  const variantTemplateIds = useMemo(
-    () =>
-      new Set(
-        filteredTemplates
-          .filter((t) => t.inherit_mode === "variant" && t.parent_template_id)
-          .map((t) => t.id),
-      ),
-    [filteredTemplates],
-  );
-  // Map from parent id → local variants owned by the current store
-  const variantsByParent = useMemo(() => {
-    const map = new Map<string, TemplateWithMeta[]>();
-    for (const t of filteredTemplates) {
-      if (t.inherit_mode === "variant" && t.parent_template_id) {
-        const arr = map.get(t.parent_template_id) ?? [];
-        arr.push(t);
-        map.set(t.parent_template_id, arr);
-      }
-    }
-    return map;
-  }, [filteredTemplates]);
-
-  const hkTemplates = filteredTemplates.filter(
-    (t) => t.hierarchy_scope === "hk" || (t.is_global && !t.hierarchy_scope),
-  );
-  const foreningTemplates = filteredTemplates.filter((t) => t.hierarchy_scope === "forening");
-  // Exclude variants that have a visible parent — they'll be nested under the parent
-  const parentIdsInView = useMemo(() => {
-    const ids = new Set<string>();
-    for (const t of filteredTemplates) {
-      if (t.hierarchy_scope === "hk" || t.is_global || t.hierarchy_scope === "forening")
-        ids.add(t.id);
-    }
-    return ids;
-  }, [filteredTemplates]);
-  const storeTemplates = filteredTemplates.filter((t) => {
-    if (t.hierarchy_scope && t.hierarchy_scope !== "store") return false;
-    // Hide variants whose parent is visible in hk/forening groups (they render inline)
-    if (
-      t.inherit_mode === "variant" &&
-      t.parent_template_id &&
-      parentIdsInView.has(t.parent_template_id)
-    )
-      return false;
-    return true;
-  });
+  const storeTemplates = filteredTemplates;
 
   const visibleGroups: {
     label: string;
@@ -3156,26 +2829,6 @@ function MallarPage() {
     badgeClass: string;
     items: TemplateWithMeta[];
   }[] = [];
-  if (viewFilter === "all" || viewFilter === "hk") {
-    if (hkTemplates.length > 0 || viewFilter === "hk") {
-      visibleGroups.push({
-        label: "HK-mallar",
-        badge: "HK",
-        badgeClass: "border-coop-blue-300 text-coop-blue-600",
-        items: hkTemplates,
-      });
-    }
-  }
-  if (viewFilter === "all" || viewFilter === "forening") {
-    if (foreningTemplates.length > 0 || viewFilter === "forening") {
-      visibleGroups.push({
-        label: "Föreningsmallar",
-        badge: "Förening",
-        badgeClass: "border-coop-gron-300 text-coop-gron-600",
-        items: foreningTemplates,
-      });
-    }
-  }
   if (viewFilter === "all" || viewFilter === "store") {
     if (storeTemplates.length > 0 || viewFilter === "store") {
       visibleGroups.push({
@@ -3187,17 +2840,7 @@ function MallarPage() {
     }
   }
 
-  const getTemplateBadge = (t: TemplateWithMeta) => {
-    const scope = t.hierarchy_scope ?? "store";
-    if (scope === "hk" || t.is_global)
-      return { label: "HK-mall", cls: "border-coop-blue-300 text-coop-blue-600" };
-    if (scope === "forening") {
-      const f = allForeningar.find((x) => x.id === t.forening_id);
-      return {
-        label: `${f?.name ?? "Förening"}-mall`,
-        cls: "border-coop-gron-300 text-coop-gron-600",
-      };
-    }
+  const getTemplateBadge = (_t: TemplateWithMeta) => {
     return null;
   };
 
@@ -3206,17 +2849,13 @@ function MallarPage() {
     return opt ?? TEMPLATE_STATUS_OPTIONS[0];
   };
 
-  const isHiddenForMyForening = (t: TemplateWithMeta) =>
-    !!(
-      user?.forening_id &&
-      hiddenEntries.some((h) => h.template_id === t.id && h.forening_id === user.forening_id)
-    );
+  const isHiddenForMyForening = (_t: TemplateWithMeta) => false;
 
   // Shared form panels rendered for both create and edit dialogs
   function renderFormContent(
     f: FormState,
     setF: React.Dispatch<React.SetStateAction<FormState>>,
-    scope: "store" | "hk" | "forening",
+    scope: "store",
   ) {
     return (
       <div className="flex overflow-hidden" style={{ maxHeight: "calc(92dvh - 56px)" }}>
@@ -4101,45 +3740,6 @@ function MallarPage() {
               )}
             </div>
 
-            {/* Förening selector — shown when scope is forening and user is admin */}
-            {scope === "forening" && isAdmin && (
-              <div className="px-4 py-3 space-y-1">
-                <span className="text-xs text-coop-gray-900">Publicera till förening</span>
-                <Select
-                  value={f.foreningId || "__none"}
-                  onValueChange={(v) =>
-                    setF((p) => ({ ...p, foreningId: v === "__none" ? "" : v }))
-                  }
-                >
-                  <SelectTrigger className="h-7 border border-border/60 text-xs">
-                    <SelectValue placeholder="Välj förening" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">Välj förening</SelectItem>
-                    {allForeningar.map((f2) => (
-                      <SelectItem key={f2.id} value={f2.id}>
-                        {f2.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Locked — admin only, for HK templates */}
-            {isAdmin && scope === "hk" && (
-              <div className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <span className="text-xs font-medium text-coop-gray-900">Låst</span>
-                  <p className="text-[10px] text-coop-gray-900/60">Chefer kan inte redigera</p>
-                </div>
-                <Switch
-                  checked={f.isLocked}
-                  onCheckedChange={(v) => setF((p) => ({ ...p, isLocked: v }))}
-                />
-              </div>
-            )}
-
             {/* Kritisk mall */}
             {f.template_type === "base" && f.recurrence_rule && (
               <div className="flex items-center justify-between px-4 py-3">
@@ -4416,54 +4016,11 @@ function MallarPage() {
                         key: "scope",
                         type: "select" as const,
                         label: "Malltyp",
-                        description:
-                          "Välj om mallarna ska skapas som HK-, förenings- eller butiksmallar",
-                        options: [
-                          { value: "store", label: "Butiksmall (aktiv butik)" },
-                          { value: "hk", label: "HK-mall (global)" },
-                          { value: "forening", label: "Föreningsmall" },
-                        ],
+                        options: [{ value: "store", label: "Butiksmall (aktiv butik)" }],
                         defaultValue: "store",
                       },
-                      {
-                        key: "foreningId",
-                        type: "select" as const,
-                        label: "Förening",
-                        description: "Vilken förening ska föreningsmallar publiceras till",
-                        options: [
-                          { value: "__none", label: "Välj förening..." },
-                          ...allForeningar.map((f) => ({ value: f.id, label: f.name })),
-                        ],
-                        defaultValue: "__none",
-                        showWhen: { key: "scope", value: "forening" },
-                      },
                     ]
-                  : isForening
-                    ? [
-                        {
-                          key: "scope",
-                          type: "select" as const,
-                          label: "Malltyp",
-                          options: [
-                            { value: "forening", label: "Föreningsmall" },
-                            { value: "store", label: "Butiksmall" },
-                          ],
-                          defaultValue: "forening",
-                        },
-                        {
-                          key: "foreningId",
-                          type: "select" as const,
-                          label: "Förening",
-                          description: "Vilken förening ska mallarna publiceras till",
-                          options: [
-                            { value: "__none", label: "Välj förening..." },
-                            ...allForeningar.map((f) => ({ value: f.id, label: f.name })),
-                          ],
-                          defaultValue: user?.forening_id ?? "__none",
-                          showWhen: { key: "scope", value: "forening" },
-                        },
-                      ]
-                    : []),
+                  : []),
               ]}
             />
             {isManager && (
@@ -4499,26 +4056,8 @@ function MallarPage() {
                 <Layers className="mr-2 h-4 w-4" /> Mallpaket
               </Button>
             )}
-            {canCreateHK && (
-              <Button
-                variant="outline"
-                className="hidden sm:flex rounded-full border-coop-blue-300 text-coop-blue-600 hover:bg-coop-blue-50"
-                onClick={() => openCreate("hk")}
-              >
-                <Plus className="mr-2 h-4 w-4" /> Ny HK-mall
-              </Button>
-            )}
-            {canCreateForening && (
-              <Button
-                variant="outline"
-                className="hidden sm:flex rounded-full border-coop-gron-300 text-coop-gron-600 hover:bg-coop-gron-50"
-                onClick={() => openCreate("forening")}
-              >
-                <Building2 className="mr-2 h-4 w-4" /> Ny föreningsmall
-              </Button>
-            )}
             {isManager && (
-              <Button className="hidden sm:flex rounded-full" onClick={() => openCreate("store")}>
+              <Button className="hidden sm:flex rounded-full" onClick={() => openCreate()}>
                 <Plus className="mr-2 h-4 w-4" /> Ny butiksmall
               </Button>
             )}
@@ -4570,8 +4109,6 @@ function MallarPage() {
         <div className="flex gap-1 rounded-xl border border-border/60 bg-muted/30 p-1">
           {[
             { key: "all", label: "Alla" },
-            { key: "hk", label: "HK" },
-            { key: "forening", label: "Förening" },
             { key: "store", label: "Butik" },
           ].map(({ key, label }) => (
             <button
@@ -4689,7 +4226,7 @@ function MallarPage() {
         <div className="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-coop-gray-100 py-16 text-center">
           <p className="text-sm font-medium text-coop-gray-900">Inga mallar ännu</p>
           {isManager && (
-            <Button className="mt-4 rounded-full" size="sm" onClick={() => openCreate("store")}>
+            <Button className="mt-4 rounded-full" size="sm" onClick={() => openCreate()}>
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Skapa mall
             </Button>
           )}
@@ -4889,14 +4426,12 @@ function MallarPage() {
                 <div className="space-y-3">
                   {group.items.map((t) => {
                     const scopeBadge = getTemplateBadge(t);
-                    const isHidden = isHiddenForMyForening(t);
-                    const nestedVariants = variantsByParent.get(t.id) ?? [];
+                    const isHidden = false;
                     return (
                       <div key={t.id}>
                         <div
                           className={cn(
                             "overflow-hidden rounded-2xl border border-border/60 bg-coop-gray-100 shadow-[var(--shadow-sm)]",
-                            isHidden && "opacity-60",
                           )}
                         >
                           <div className="flex w-full items-center justify-between hover:bg-muted/20">
@@ -4925,11 +4460,6 @@ function MallarPage() {
                               <div>
                                 <p className="font-medium">
                                   {t.title}
-                                  {isHidden && (
-                                    <span className="ml-2 text-xs text-coop-gray-900">
-                                      (dold för din förening)
-                                    </span>
-                                  )}
                                   {t.parent_template_id && (
                                     <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-coop-gray-900/70">
                                       <GitBranch className="h-3 w-3" />
@@ -4959,14 +4489,6 @@ function MallarPage() {
                                       className="text-xs border-coop-red-300 text-coop-red-600"
                                     >
                                       Kritisk
-                                    </Badge>
-                                  )}
-                                  {scopeBadge && (
-                                    <Badge
-                                      variant="outline"
-                                      className={cn("text-xs", scopeBadge.cls)}
-                                    >
-                                      {scopeBadge.label}
                                     </Badge>
                                   )}
                                   {(() => {
@@ -5019,34 +4541,6 @@ function MallarPage() {
                               >
                                 <Eye className="h-3.5 w-3.5" />
                               </Button>
-                              {/* Förening can toggle hide/show HK templates */}
-                              {isForening && (t.hierarchy_scope === "hk" || t.is_global) && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className={cn(
-                                    "rounded-full",
-                                    isHidden
-                                      ? "text-coop-orange-600 hover:text-coop-orange-700"
-                                      : "text-coop-gray-900 hover:text-coop-gray-900",
-                                  )}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleHideHKTemplate(t);
-                                  }}
-                                  title={
-                                    isHidden
-                                      ? "Visa HK-mall för din förening"
-                                      : "Dölj HK-mall för din förening"
-                                  }
-                                >
-                                  {isHidden ? (
-                                    <EyeOff className="h-3.5 w-3.5" />
-                                  ) : (
-                                    <Eye className="h-3.5 w-3.5" />
-                                  )}
-                                </Button>
-                              )}
                               {/* Version history */}
                               {isManager && (
                                 <Button
@@ -5062,26 +4556,6 @@ function MallarPage() {
                                   <History className="h-3.5 w-3.5" />
                                 </Button>
                               )}
-                              {/* For HK/Forening templates: non-admin managers get a pencil that auto-creates a local store variant */}
-                              {isManager &&
-                                !isAdmin &&
-                                !canEdit(t) &&
-                                (t.hierarchy_scope === "hk" ||
-                                  t.hierarchy_scope === "forening") && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="hidden sm:inline-flex rounded-full text-coop-gray-900 hover:text-primary"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      void createLocalVariantAndEdit(t);
-                                    }}
-                                    aria-label="Redigera (skapar lokal variant)"
-                                    title="Redigera — skapar lokal variant för din butik"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
                               {canEdit(t) && (
                                 <Button
                                   variant="ghost"
@@ -5331,145 +4805,6 @@ function MallarPage() {
                             </div>
                           )}
                         </div>
-
-                        {/* Nested local variants for this parent */}
-                        {nestedVariants.map((v) => {
-                          const isStale = v.created_at < t.updated_at;
-                          return (
-                            <div key={v.id} className="ml-6 mt-1.5">
-                              {/* Stale variant banner */}
-                              {isStale && (
-                                <div className="mb-1.5 flex items-center justify-between rounded-xl border border-coop-orange-200 bg-coop-orange-100 px-3 py-2 text-xs text-coop-orange-800 dark:border-amber-800 dark:bg-coop-orange-600/40 dark:text-coop-orange-500">
-                                  <span className="flex items-center gap-1.5">
-                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                                    Den centrala mallen har uppdaterats sedan din lokala variant
-                                    skapades.
-                                  </span>
-                                  <button
-                                    className="ml-3 shrink-0 font-medium underline underline-offset-2 hover:no-underline"
-                                    onClick={() => setMergeTarget({ variant: v, parent: t })}
-                                  >
-                                    Granska &amp; synka
-                                  </button>
-                                </div>
-                              )}
-                              <div className="overflow-hidden rounded-2xl border border-border/40 bg-coop-gray-100/80 shadow-[var(--shadow-sm)]">
-                                <div className="flex w-full items-center justify-between hover:bg-muted/20">
-                                  {isManager && (
-                                    <div
-                                      className="pl-4 shrink-0"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <Checkbox
-                                        checked={selectedTemplateIds.has(v.id)}
-                                        onCheckedChange={(checked) => {
-                                          const next = new Set(selectedTemplateIds);
-                                          if (checked) next.add(v.id);
-                                          else next.delete(v.id);
-                                          setSelectedTemplateIds(next);
-                                        }}
-                                      />
-                                    </div>
-                                  )}
-                                  <button
-                                    className="flex flex-1 items-center gap-3 px-5 py-3.5 text-left"
-                                    onClick={() => setExpanded(expanded === v.id ? null : v.id)}
-                                  >
-                                    {expanded === v.id ? (
-                                      <ChevronUp className="h-4 w-4 text-coop-gray-900" />
-                                    ) : (
-                                      <ChevronDown className="h-4 w-4 text-coop-gray-900" />
-                                    )}
-                                    <div>
-                                      <p className="font-medium text-sm">
-                                        {v.title}
-                                        <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-primary/70">
-                                          <GitBranch className="h-3 w-3" />
-                                          Lokal variant
-                                        </span>
-                                      </p>
-                                      <div className="mt-0.5 flex items-center gap-2 flex-wrap">
-                                        {v.category && (
-                                          <Badge variant="secondary" className="text-xs">
-                                            {v.category}
-                                          </Badge>
-                                        )}
-                                        <span className="text-xs text-coop-gray-900">
-                                          {v.items?.length ?? 0} steg
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </button>
-                                  <div className="mr-3 flex items-center gap-1">
-                                    {canEdit(v) && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="hidden sm:inline-flex rounded-full text-coop-gray-900 hover:text-primary"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openEdit(v);
-                                        }}
-                                        aria-label="Redigera lokal variant"
-                                        title="Redigera lokal variant"
-                                      >
-                                        <Pencil className="h-3.5 w-3.5" />
-                                      </Button>
-                                    )}
-                                    {canDelete(v) && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="hidden sm:inline-flex rounded-full text-coop-gray-900 hover:text-destructive"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setDeleteTarget(v);
-                                        }}
-                                        aria-label="Ta bort lokal variant"
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                </div>
-                                {expanded === v.id && (
-                                  <div className="border-t border-border/60 px-5 py-4 space-y-3">
-                                    {v.description && (
-                                      <p className="text-sm text-coop-gray-900">{v.description}</p>
-                                    )}
-                                    {(v.items?.length ?? 0) > 0 && (
-                                      <div>
-                                        <p className="mb-2 text-xs font-medium text-coop-gray-900 uppercase tracking-wide">
-                                          Checkpoints
-                                        </p>
-                                        <ol className="space-y-2">
-                                          {(v.items ?? [])
-                                            .sort((a, b) => a.sort_order - b.sort_order)
-                                            .map((item: ChecklistTemplateItem, idx: number) => (
-                                              <li
-                                                key={item.id}
-                                                className="flex items-center gap-2.5 text-sm"
-                                              >
-                                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-coop-gray-900">
-                                                  {idx + 1}
-                                                </span>
-                                                <span>{item.label}</span>
-                                                {item.requires_photo && (
-                                                  <Badge variant="secondary" className="text-xs">
-                                                    Foto krävs
-                                                  </Badge>
-                                                )}
-                                              </li>
-                                            ))}
-                                        </ol>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
                       </div>
                     );
                   })}
@@ -5489,22 +4824,10 @@ function MallarPage() {
         }}
       >
         <DialogContent className="max-h-[92dvh] w-full sm:max-w-4xl sm:max-h-[92vh] overflow-hidden p-0 gap-0">
-          <DialogTitle className="sr-only">
-            {createScope === "hk"
-              ? "Ny HK-mall"
-              : createScope === "forening"
-                ? "Ny föreningsmall"
-                : "Ny butiksmall"}
-          </DialogTitle>
+          <DialogTitle className="sr-only">Ny butiksmall</DialogTitle>
           <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 sm:px-5 sm:py-3.5">
             <GripVertical className="h-4 w-4 text-coop-gray-900" />
-            <span className="text-sm font-medium text-coop-gray-900">
-              {createScope === "hk"
-                ? "Ny HK-mall"
-                : createScope === "forening"
-                  ? "Ny föreningsmall"
-                  : "Ny butiksmall"}
-            </span>
+            <span className="text-sm font-medium text-coop-gray-900">Ny butiksmall</span>
             {form.title && (
               <span className="text-sm font-semibold text-coop-gray-900 truncate max-w-xs">
                 {form.title}
@@ -5558,12 +4881,7 @@ function MallarPage() {
               </Button>
             </div>
           </div>
-          {editTarget &&
-            renderFormContent(
-              editForm,
-              setEditForm,
-              (editTarget.hierarchy_scope as "store" | "hk" | "forening") ?? "store",
-            )}
+          {editTarget && renderFormContent(editForm, setEditForm, "store")}
         </DialogContent>
       </Dialog>
 
@@ -5656,38 +4974,6 @@ function MallarPage() {
               onClick={deleteTemplate}
             >
               Ta bort
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* MERGE DIALOG */}
-      <AlertDialog open={!!mergeTarget} onOpenChange={(o) => !o && setMergeTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Synka med central mall</AlertDialogTitle>
-            <AlertDialogDescription>
-              Den centrala mallen <strong>{mergeTarget?.parent.title}</strong> har uppdaterats sedan
-              din lokala variant skapades. Vill du ersätta din variants innehåll (titel,
-              beskrivning, checkpoints och frågor) med den senaste versionen från den centrala
-              mallen?
-              <br />
-              <br />
-              <span className="text-coop-orange-700 dark:text-coop-orange-500 font-medium">
-                Dina egna ändringar i varianten skrivs över.
-              </span>{" "}
-              Butikstilldelning och historik bevaras.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={merging}>Avbryt</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={merging}
-              onClick={() =>
-                mergeTarget && void mergeFromParent(mergeTarget.variant, mergeTarget.parent)
-              }
-            >
-              {merging ? "Synkar..." : "Synka nu"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -7025,7 +6311,7 @@ function MallarPage() {
           </div>
           <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6 pb-8">
             {/* Create / Edit form — only admins and HK users can manage packages */}
-            {(isAdmin || isHK) && (
+            {isAdmin && (
               <div className="rounded-2xl border border-border/60 bg-coop-gray-100 p-4 space-y-3">
                 <h3 className="text-sm font-semibold">
                   {editPackageTarget ? "Redigera paket" : "Skapa nytt paket"}
@@ -7097,7 +6383,7 @@ function MallarPage() {
                 </div>
               </div>
             )}{" "}
-            {/* end isAdmin || isHK create form */}
+            {/* end isAdmin create form */}
             {/* Existing packages */}
             {packages.length > 0 && (
               <div className="space-y-3">
@@ -7134,7 +6420,7 @@ function MallarPage() {
                           >
                             <ListChecks className="h-3 w-3 mr-1" /> Aktivera
                           </Button>
-                          {(isAdmin || isHK) && (
+                          {isAdmin && (
                             <>
                               <Button
                                 variant="ghost"

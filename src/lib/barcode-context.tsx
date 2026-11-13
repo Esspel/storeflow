@@ -77,7 +77,7 @@ export function BarcodeProvider({ children }: { children: React.ReactNode }) {
 
       if (incidentMatch) {
         label = incidentMatch.title;
-        navigate({ to: "/avvikelser" });
+        navigate({ to: "/uppgifter" });
         return;
       }
     } catch {

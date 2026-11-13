@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AnvandningsvillkorRouteImport } from './routes/anvandningsvillkor'
-import { Route as AvvikelserRouteImport } from './routes/avvikelser'
 import { Route as BelastningRouteImport } from './routes/belastning'
 import { Route as ButiksregisterRouteImport } from './routes/butiksregister'
 import { Route as ErsattningcheckRouteImport } from './routes/ersattningcheck'
@@ -27,9 +26,7 @@ import { Route as PersonalRouteImport } from './routes/personal'
 import { Route as QrKundonskemalRouteImport } from './routes/qr-kundonskemal'
 import { Route as QrKundonskemalFormRouteImport } from './routes/qr-kundonskemal-form'
 import { Route as QuickLoginRouteImport } from './routes/quick-login'
-import { Route as RapporterRouteImport } from './routes/rapporter'
 import { Route as SchemaRouteImport } from './routes/schema'
-import { Route as TestpanelRouteImport } from './routes/testpanel'
 import { Route as UppgifterRouteImport } from './routes/uppgifter'
 
 const IndexRoute = IndexRouteImport.update({
@@ -40,11 +37,6 @@ const IndexRoute = IndexRouteImport.update({
 const AnvandningsvillkorRoute = AnvandningsvillkorRouteImport.update({
   id: '/anvandningsvillkor',
   path: '/anvandningsvillkor',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AvvikelserRoute = AvvikelserRouteImport.update({
-  id: '/avvikelser',
-  path: '/avvikelser',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BelastningRoute = BelastningRouteImport.update({
@@ -122,19 +114,9 @@ const QuickLoginRoute = QuickLoginRouteImport.update({
   path: '/quick-login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RapporterRoute = RapporterRouteImport.update({
-  id: '/rapporter',
-  path: '/rapporter',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SchemaRoute = SchemaRouteImport.update({
   id: '/schema',
   path: '/schema',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TestpanelRoute = TestpanelRouteImport.update({
-  id: '/testpanel',
-  path: '/testpanel',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UppgifterRoute = UppgifterRouteImport.update({
@@ -146,7 +128,6 @@ const UppgifterRoute = UppgifterRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/anvandningsvillkor': typeof AnvandningsvillkorRoute
-  '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
   '/ersattningcheck': typeof ErsattningcheckRoute
@@ -162,15 +143,12 @@ export interface FileRoutesByFullPath {
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/quick-login': typeof QuickLoginRoute
-  '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
-  '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/anvandningsvillkor': typeof AnvandningsvillkorRoute
-  '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
   '/ersattningcheck': typeof ErsattningcheckRoute
@@ -186,16 +164,13 @@ export interface FileRoutesByTo {
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/quick-login': typeof QuickLoginRoute
-  '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
-  '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/anvandningsvillkor': typeof AnvandningsvillkorRoute
-  '/avvikelser': typeof AvvikelserRoute
   '/belastning': typeof BelastningRoute
   '/butiksregister': typeof ButiksregisterRoute
   '/ersattningcheck': typeof ErsattningcheckRoute
@@ -211,9 +186,7 @@ export interface FileRoutesById {
   '/qr-kundonskemal': typeof QrKundonskemalRoute
   '/qr-kundonskemal-form': typeof QrKundonskemalFormRoute
   '/quick-login': typeof QuickLoginRoute
-  '/rapporter': typeof RapporterRoute
   '/schema': typeof SchemaRoute
-  '/testpanel': typeof TestpanelRoute
   '/uppgifter': typeof UppgifterRoute
 }
 export interface FileRouteTypes {
@@ -221,7 +194,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/anvandningsvillkor'
-    | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
     | '/ersattningcheck'
@@ -237,15 +209,12 @@ export interface FileRouteTypes {
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
     | '/quick-login'
-    | '/rapporter'
     | '/schema'
-    | '/testpanel'
     | '/uppgifter'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/anvandningsvillkor'
-    | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
     | '/ersattningcheck'
@@ -261,15 +230,12 @@ export interface FileRouteTypes {
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
     | '/quick-login'
-    | '/rapporter'
     | '/schema'
-    | '/testpanel'
     | '/uppgifter'
   id:
     | '__root__'
     | '/'
     | '/anvandningsvillkor'
-    | '/avvikelser'
     | '/belastning'
     | '/butiksregister'
     | '/ersattningcheck'
@@ -285,16 +251,13 @@ export interface FileRouteTypes {
     | '/qr-kundonskemal'
     | '/qr-kundonskemal-form'
     | '/quick-login'
-    | '/rapporter'
     | '/schema'
-    | '/testpanel'
     | '/uppgifter'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AnvandningsvillkorRoute: typeof AnvandningsvillkorRoute
-  AvvikelserRoute: typeof AvvikelserRoute
   BelastningRoute: typeof BelastningRoute
   ButiksregisterRoute: typeof ButiksregisterRoute
   ErsattningcheckRoute: typeof ErsattningcheckRoute
@@ -310,9 +273,7 @@ export interface RootRouteChildren {
   QrKundonskemalRoute: typeof QrKundonskemalRoute
   QrKundonskemalFormRoute: typeof QrKundonskemalFormRoute
   QuickLoginRoute: typeof QuickLoginRoute
-  RapporterRoute: typeof RapporterRoute
   SchemaRoute: typeof SchemaRoute
-  TestpanelRoute: typeof TestpanelRoute
   UppgifterRoute: typeof UppgifterRoute
 }
 
@@ -330,13 +291,6 @@ declare module '@tanstack/react-router' {
       path: '/anvandningsvillkor'
       fullPath: '/anvandningsvillkor'
       preLoaderRoute: typeof AnvandningsvillkorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/avvikelser': {
-      id: '/avvikelser'
-      path: '/avvikelser'
-      fullPath: '/avvikelser'
-      preLoaderRoute: typeof AvvikelserRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/belastning': {
@@ -444,25 +398,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QuickLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/rapporter': {
-      id: '/rapporter'
-      path: '/rapporter'
-      fullPath: '/rapporter'
-      preLoaderRoute: typeof RapporterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/schema': {
       id: '/schema'
       path: '/schema'
       fullPath: '/schema'
       preLoaderRoute: typeof SchemaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/testpanel': {
-      id: '/testpanel'
-      path: '/testpanel'
-      fullPath: '/testpanel'
-      preLoaderRoute: typeof TestpanelRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/uppgifter': {
@@ -478,7 +418,6 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AnvandningsvillkorRoute: AnvandningsvillkorRoute,
-  AvvikelserRoute: AvvikelserRoute,
   BelastningRoute: BelastningRoute,
   ButiksregisterRoute: ButiksregisterRoute,
   ErsattningcheckRoute: ErsattningcheckRoute,
@@ -494,9 +433,7 @@ const rootRouteChildren: RootRouteChildren = {
   QrKundonskemalRoute: QrKundonskemalRoute,
   QrKundonskemalFormRoute: QrKundonskemalFormRoute,
   QuickLoginRoute: QuickLoginRoute,
-  RapporterRoute: RapporterRoute,
   SchemaRoute: SchemaRoute,
-  TestpanelRoute: TestpanelRoute,
   UppgifterRoute: UppgifterRoute,
 }
 export const routeTree = rootRouteImport
