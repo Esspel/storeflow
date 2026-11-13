@@ -1429,7 +1429,7 @@ function ErstatningsCheckPage() {
             const sapData = useProxy
               ? await (async () => {
                   const proxyResponse = await retryFetchViaProxy(
-                     `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore!.id)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
+                     `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore!.sap_site_id ?? activeStore!.id)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
                     "GET",
                     { Accept: "application/json" },
                   );
@@ -1479,7 +1479,7 @@ function ErstatningsCheckPage() {
                   }
                   return { sapArticleId, data: result, success: true, type: "proxy_success" };
                 })()
-              : await fetchSapProductData(activeStore!.id, sapArticleId)
+              : await fetchSapProductData(activeStore!.sap_site_id ?? activeStore!.id, sapArticleId)
                   .then((data) => (data ? { sapArticleId, data, success: true, type: "direct_success" } : { sapArticleId, error: "No data from SAP", success: false, type: "no_data" }))
                   .catch((error) => {
                     console.error(`[SAP fetch] Direct error for article ${sapArticleId}:`, error);
@@ -1854,7 +1854,7 @@ function ErstatningsCheckPage() {
             const sapData = useProxy
               ? await (async () => {
                   const proxyResponse = await retryFetchViaProxy(
-                     `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore!.id)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
+                     `https://s4r.sap.coop.se/sap/opu/odata/sap/RETAILSTORE_ORDER_PRODUCT_SRV/StoreProducts(StoreID='${encodeURIComponent(activeStore!.sap_site_id ?? activeStore!.id)}',ProductID='${encodeURIComponent(sapArticleId)}')?$format=json`,
                     "GET",
                     { Accept: "application/json" },
                   );
@@ -1904,7 +1904,7 @@ function ErstatningsCheckPage() {
                   }
                   return { sapArticleId, data: result, success: true, type: "proxy_success" };
                 })()
-              : await fetchSapProductData(activeStore!.id, sapArticleId)
+              : await fetchSapProductData(activeStore!.sap_site_id ?? activeStore!.id, sapArticleId)
                   .then((data) => (data ? { sapArticleId, data, success: true, type: "direct_success" } : { sapArticleId, error: "No data from SAP", success: false, type: "no_data" }))
                   .catch((error) => {
                     console.error(`[SAP fetch] Direct error for article ${sapArticleId}:`, error);
