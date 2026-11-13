@@ -16,8 +16,18 @@ export async function fetchAllRows(
 
   const eqFilters = eq ? (Array.isArray(eq) ? eq : [eq]) : [];
 
+  // Ensure select includes idColumn and orderColumn for cursor pagination
+  const selectColumns = select.split(",").map((c) => c.trim());
+  const requiredColumns = new Set([idColumn, orderColumn]);
+  for (const col of requiredColumns) {
+    if (!selectColumns.some((c) => c === col || c.startsWith(`${col}(`))) {
+      selectColumns.push(col);
+    }
+  }
+  const selectWithCursor = selectColumns.join(",");
+
   while (true) {
-    let query = supabaseClient.from(table).select(select).limit(batchSize);
+    let query = supabaseClient.from(table).select(selectWithCursor).limit(batchSize);
 
     for (const f of eqFilters) {
       query = query.eq(f.column, f.value);
